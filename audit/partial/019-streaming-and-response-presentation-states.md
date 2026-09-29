@@ -131,10 +131,7 @@ Code: `apps/mobile/src/features/chat/inFlightTurnRecovery.ts:68-68`
 
 - Done when: Work keeps running after the UI is closed and its result is there (or resumes) when the user returns.
 - Wave: 3
-- Already works on: web, desktop, chrome, api
+- Already works on: web, desktop, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Turns run inside the TUI process and end when it exits; only cloud tasks keep running without it. | states |
-
-Code: `apps/cli/src/tui/tui_app.rs:5240-5246`

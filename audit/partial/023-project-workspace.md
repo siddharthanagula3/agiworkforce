@@ -61,16 +61,13 @@ Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`, `apps/mo
 
 - Done when: A project keeps its own memories, and the user can choose whether the project also draws on account-wide memory.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The CLI keeps a per-workspace memory file (the project's CLAUDE.md in the memory hierarchy), but a directory linked to an account project never reads or writes that project's memories. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/memory.rs:86-97`, `apps/cli/src/memory.rs:194-208`
 
 ## S23.12: Project artifacts.
 
@@ -129,17 +126,15 @@ Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:165-175`, `a
 
 - Done when: A project can set which tools and Skills are on by default for chats in it.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The criterion is tools AND Skills. The cited evidence covers only the project skills directory; the tool allow/deny lists are set on the session from flags, and the only project-level config loader is annotated #[allow(dead_code)] and never called, so a project cannot set default tools. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/skills.rs:191-204`, `apps/cli/src/app_server/surfaces.rs:132-136`
 
 ## S23.20: Project search.
 
@@ -260,14 +255,12 @@ Code: `apps/cli/src/skills.rs:191-204`, `apps/cli/src/app_server/surfaces.rs:132
 
 - Done when: Where offered, one coordinating conversation can split work into parallel child threads and bring their results back together.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The session can fan a turn out to parallel subagents (the model calls the task tool; each runs on its own thread) and merges their results, but only inside one turn; the user cannot start, name or return to child threads. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/chat.rs:1716-1716`, `apps/cli/src/agent/chat.rs:1976-1985`, `apps/cli/src/subagent.rs:355-358`

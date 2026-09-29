@@ -12,6 +12,7 @@ pub mod agent;
 pub mod agent_events;
 pub mod agents;
 pub mod auth;
+pub mod background;
 pub mod broken_pipe;
 pub mod browser_bridge;
 pub mod claude_parity;
@@ -53,6 +54,7 @@ pub mod output_styles;
 pub mod path_security;
 pub mod permissions;
 pub mod plans;
+pub mod pr_feedback;
 pub(crate) mod process_tree;
 // plan_mode lives at features::plan::plan_mode; re-exported here so all
 // internal callers using `crate::plan_mode::*` continue to resolve unchanged.
@@ -855,6 +857,12 @@ enum Command {
         #[arg(long)]
         no_memory: bool,
     },
+    /// Run a prompt in the background so it keeps working after this terminal closes (alias: bg).
+    #[command(alias = "bg")]
+    Background {
+        #[command(subcommand)]
+        action: BackgroundSubcommand,
+    },
     /// Continue previous session, from this device or from your account.
     Resume {
         session_id: Option<String>,
@@ -1128,6 +1136,17 @@ enum CodeSubcommand {
         /// Session id, as `agi code list` prints it.
         id: String,
     },
+    /// List the approvals cloud Code sessions are waiting on.
+    Approvals {
+        /// Only this session. Omit to check every open session.
+        id: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Approve a waiting cloud Code step, by the handle `agi code approvals` prints.
+    Approve { handle: String },
+    /// Reject a waiting cloud Code step, by the handle `agi code approvals` prints.
+    Reject { handle: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1344,6 +1363,10 @@ enum MemorySubcommand {
         /// Optional category label.
         #[arg(long)]
         category: Option<String>,
+        /// Keep it with the account project this directory is linked to (`agi projects link`),
+        /// so only that project's conversations draw on it.
+        #[arg(long)]
+        project: bool,
     },
     /// Remove a memory from the account by id or exact text.
     Forget {
@@ -1523,6 +1546,195 @@ enum SchedulesSubcommand {
         #[arg(long)]
         json: bool,
     },
+    /// Start a schedule when an event arrives instead of, or as well as, on its clock.
+    Triggers {
+        #[command(subcommand)]
+        action: ScheduleTriggersSubcommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ScheduleTriggersSubcommand {
+    /// List the event triggers on a schedule.
+    List {
+        /// Schedule id, or its exact name.
+        schedule: String,
+        /// Maximum number of triggers to return.
+        #[arg(long, default_value_t = schedules::triggers::DEFAULT_TRIGGER_LIMIT)]
+        limit: u32,
+        /// Number of triggers to skip.
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run a schedule's task whenever an event arrives from GitHub, Slack, Gmail, Google Calendar or a connector.
+    Add {
+        /// Schedule id, or its exact name.
+        schedule: String,
+        /// Where the event comes from: github, slack, gmail, google_calendar or connector.
+        #[arg(long)]
+        source: String,
+        /// Event type to listen to, such as pull_request.opened. Repeatable or comma-separated. Defaults to every event the source sends.
+        #[arg(long = "event")]
+        events: Vec<String>,
+        /// What to listen to: a GitHub repository as owner/name, a Slack workspace id or a Gmail address.
+        #[arg(long)]
+        account: Option<String>,
+        /// Name shown for the trigger.
+        #[arg(long)]
+        name: Option<String>,
+        /// Only fire when this holds, written FIELD OPERATOR VALUE, such as "data.baseRef equals main". Repeatable; all must hold.
+        #[arg(long = "when")]
+        conditions: Vec<String>,
+        /// Ignore repeats of the event for this many seconds.
+        #[arg(long, default_value_t = 0)]
+        debounce: u32,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop a trigger from starting runs until it is resumed.
+    Pause {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Let a paused trigger start runs again.
+    Resume {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Register a Gmail trigger's mailbox watch again after it lapsed or failed.
+    Watch {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Delete a trigger. The schedule and its other triggers stay.
+    Remove {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+fn run_background_command(action: &BackgroundSubcommand) -> Result<()> {
+    match action {
+        BackgroundSubcommand::Start {
+            prompt,
+            model,
+            permission_mode,
+        } => {
+            let mode = permission_mode.and_then(|mode| {
+                clap::ValueEnum::to_possible_value(&mode).map(|value| value.get_name().to_string())
+            });
+            let run = background::start(background::StartRequest {
+                prompt: &prompt.join(" "),
+                resume_session: None,
+                model: model.as_deref(),
+                permission_mode: mode.as_deref(),
+                parent_session: None,
+            })?;
+            println!(
+                "Started background run {id}. It keeps going after this terminal closes.\n  agi background logs {id}    see its output\n  agi background attach {id}  continue the conversation when it is done\n  agi background stop {id}    stop it",
+                id = run.id
+            );
+            Ok(())
+        }
+        BackgroundSubcommand::List { json } => {
+            let runs = background::list()?;
+            if *json {
+                let rows: Vec<serde_json::Value> = runs
+                    .iter()
+                    .map(|run| {
+                        serde_json::json!({
+                            "id": run.id,
+                            "state": background::state(run).label(),
+                            "prompt": run.prompt,
+                            "cwd": run.cwd,
+                            "sessionId": run.session_id,
+                            "startedAt": run.started_at,
+                            "finishedAt": run.finished_at,
+                            "exitCode": run.exit_code,
+                        })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else if runs.is_empty() {
+                println!("No background runs. Start one with `agi background start <prompt>`.");
+            } else {
+                for run in &runs {
+                    println!("{}", background::describe(run));
+                }
+            }
+            Ok(())
+        }
+        BackgroundSubcommand::Logs { id } => {
+            let run = background::find(id)?;
+            let log = background::read_log(&run)?;
+            if log.is_empty() {
+                println!("Background run {} has written nothing yet.", run.id);
+            } else {
+                print!("{}", terminal_text::sanitize_terminal_text(&log));
+            }
+            Ok(())
+        }
+        BackgroundSubcommand::Stop { id } => {
+            let run = background::stop(id)?;
+            println!("Stopping background run {}.", run.id);
+            Ok(())
+        }
+        BackgroundSubcommand::Rm { id } => {
+            let run = background::remove(id)?;
+            println!("Removed background run {}.", run.id);
+            Ok(())
+        }
+        BackgroundSubcommand::Attach { id } => {
+            let run = background::find(id)?;
+            if background::state(&run) == background::RunState::Running {
+                println!(
+                    "Background run {} is still running. Its output so far:\n",
+                    run.id
+                );
+                print!(
+                    "{}",
+                    terminal_text::sanitize_terminal_text(&background::read_log(&run)?)
+                );
+                println!(
+                    "\nAttach again when it is done, or stop it with `agi background stop {}`.",
+                    run.id
+                );
+                return Ok(());
+            }
+            if runtime::session_control::load_managed_session(&run.session_id).is_err() {
+                anyhow::bail!(
+                    "Background run {} {} before it saved a conversation. `agi background logs {}` shows why.",
+                    run.id,
+                    background::state(&run).label(),
+                    run.id
+                );
+            }
+            let exe = std::env::current_exe().context("find the agi executable")?;
+            let status = std::process::Command::new(exe)
+                .args(["resume", &run.session_id])
+                .current_dir(&run.cwd)
+                .status()
+                .context("open the background run's conversation")?;
+            if !status.success() {
+                anyhow::bail!("agi resume exited with {status}");
+            }
+            Ok(())
+        }
+        BackgroundSubcommand::Supervise { id } => background::supervise(id),
+    }
 }
 
 fn invocation_requires_project_trust(cli: &Cli) -> bool {
@@ -1539,6 +1751,9 @@ fn invocation_requires_project_trust(cli: &Cli) -> bool {
                 | Command::AppServer { .. }
                 | Command::Resume { .. }
                 | Command::Fork { .. }
+                | Command::Background {
+                    action: BackgroundSubcommand::Start { .. }
+                }
                 | Command::Onboarding
         )
     )
@@ -1700,6 +1915,8 @@ enum PluginSubcommand {
     },
     /// Show one installed plugin's publisher, signature, version, links and source.
     Info { name: String },
+    /// Sign in to the remote connections an installed plugin bundles.
+    Login { name: String },
     /// Remove a plugin you installed.
     Remove { name: String },
     /// Turn an installed plugin back on.
@@ -1719,6 +1936,38 @@ enum PluginSubcommand {
         #[arg(long)]
         key_file: std::path::PathBuf,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum BackgroundSubcommand {
+    /// Start a prompt in the background in this directory.
+    Start {
+        #[arg(required = true, trailing_var_arg = true)]
+        prompt: Vec<String>,
+        /// Model for the run. Defaults to your configured model.
+        #[arg(short, long)]
+        model: Option<String>,
+        /// Permission mode for the run's tool use. Nobody is at the terminal to approve
+        /// a tool, so a tool that needs approval is refused unless this mode allows it.
+        #[arg(long, value_name = "MODE", value_enum)]
+        permission_mode: Option<cli_options::PermissionMode>,
+    },
+    /// List background runs, newest first.
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print what a background run has written so far.
+    Logs { id: String },
+    /// Stop a running background run.
+    Stop { id: String },
+    /// Delete a finished background run's record and log.
+    #[command(alias = "remove")]
+    Rm { id: String },
+    /// Continue a finished background run's conversation here.
+    Attach { id: String },
+    #[command(hide = true)]
+    Supervise { id: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1838,6 +2087,42 @@ enum KeysSubcommand {
 enum TriggersSubcommand {
     /// Show every trigger and its filter.
     List,
+    /// Add a trigger that runs a prompt on a schedule, a webhook event (GitHub, GitLab or
+    /// any sender) or a file change. `agi --daemon` runs it.
+    Add {
+        /// Trigger id: letters, digits, '-' and '_'.
+        id: String,
+        /// Instruction the agent runs when the trigger fires.
+        #[arg(long)]
+        prompt: String,
+        /// Five-field cron schedule, e.g. "0 9 * * 1-5".
+        #[arg(long, group = "trigger_kind")]
+        cron: Option<String>,
+        /// Webhook path the daemon listens on, e.g. github-prs.
+        #[arg(long, group = "trigger_kind")]
+        webhook: Option<String>,
+        /// Directory whose file changes fire the trigger.
+        #[arg(long, group = "trigger_kind")]
+        watch: Option<String>,
+        /// Glob that limits which watched files count, e.g. "*.rs".
+        #[arg(long, requires = "watch")]
+        glob: Option<String>,
+        /// Model for the run.
+        #[arg(long)]
+        model: Option<String>,
+        /// Event that may start it, as for `agi triggers filter`. Repeatable.
+        #[arg(long = "event")]
+        events: Vec<String>,
+        /// Webhook payload condition as /json/pointer=value. Repeatable; all must hold.
+        #[arg(long = "when")]
+        conditions: Vec<String>,
+    },
+    /// Remove a trigger.
+    Remove { id: String },
+    /// Turn a trigger back on.
+    Enable { id: String },
+    /// Turn a trigger off without removing it.
+    Disable { id: String },
     /// Narrow which events start a trigger.
     Filter {
         /// Trigger id from `agi triggers list`.
@@ -1917,6 +2202,13 @@ enum MarketplaceSubcommand {
     Sources,
     /// Remove a marketplace from your account by the id `agi marketplace sources` prints.
     Remove { id: String },
+    /// List the plugins a marketplace on your account offers.
+    Browse {
+        /// Marketplace id or name from `agi marketplace sources`. Omit for every marketplace.
+        source: Option<String>,
+    },
+    /// Install a plugin from a marketplace on your account, as `plugin@marketplace`.
+    Get { reference: String },
     /// Search the remote plugin marketplace.
     Search {
         /// Search query.
@@ -2374,6 +2666,75 @@ async fn handle_code_command(
                 *json,
                 output,
             )
+        }
+        CodeSubcommand::Approvals { id, json } => {
+            let sessions = match id {
+                Some(id) => vec![
+                    code_sessions::show(&client, id)
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?
+                        .session,
+                ],
+                None => code_sessions::list(&client, "open")
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?,
+            };
+            let mut pending = Vec::new();
+            for session in sessions {
+                let approvals = code_sessions::approvals(&client, &session.id)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                if !approvals.is_empty() {
+                    pending.push((session, approvals));
+                }
+            }
+            let value = serde_json::to_value(
+                pending
+                    .iter()
+                    .flat_map(|(session, approvals)| {
+                        approvals.iter().map(move |approval| {
+                            serde_json::json!({
+                                "handle": code_sessions::approval_handle(&session.id, approval),
+                                "sessionId": session.id,
+                                "approval": approval,
+                            })
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )?;
+            render_structured(
+                value,
+                code_sessions::render_approvals(&pending),
+                *json,
+                output,
+            )
+        }
+        CodeSubcommand::Approve { handle } | CodeSubcommand::Reject { handle } => {
+            let approve = matches!(action, CodeSubcommand::Approve { .. });
+            let (session, turn, step) =
+                code_sessions::parse_approval_handle(handle).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Use the handle `agi code approvals` prints, as <session>/<turn>/<step>."
+                    )
+                })?;
+            println!(
+                "{} the step; the session continues in the cloud, which can take a few minutes.",
+                if approve { "Approving" } else { "Rejecting" }
+            );
+            let outcome = code_sessions::decide_approval(&client, session, turn, step, approve)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let status = outcome
+                .get("status")
+                .or_else(|| outcome.get("stopReason"))
+                .and_then(|value| value.as_str())
+                .unwrap_or("recorded");
+            println!(
+                "{} ({}). `agi code show {session}` shows what it did next.",
+                if approve { "Approved" } else { "Rejected" },
+                terminal_text::sanitize_terminal_text(status)
+            );
+            Ok(())
         }
         CodeSubcommand::Show { id, json } => {
             let detail = code_sessions::show(&client, id)
@@ -3269,6 +3630,7 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 println!("Add one with `agi memory add <text>`.");
                 return Ok(());
             }
+            let linked = agent::linked_cloud_project();
             let mut topics: Vec<&str> = cache
                 .entries
                 .iter()
@@ -3290,7 +3652,12 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                     let pin = if entry.pinned { "*" } else { " " };
                     let origin = entry.source.as_deref().unwrap_or("web");
                     let updated = entry.updated_at.get(..10).unwrap_or(&entry.updated_at);
-                    println!("{pin} {}  [{origin}, updated {updated}]", entry.id);
+                    let scope = match entry.project_id.as_deref() {
+                        Some(project) if Some(project) == linked.as_deref() => ", this project",
+                        Some(_) => ", another project",
+                        None => "",
+                    };
+                    println!("{pin} {}  [{origin}{scope}, updated {updated}]", entry.id);
                     println!(
                         "    {}",
                         terminal_text::sanitize_terminal_text(&entry.content)
@@ -3423,10 +3790,35 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
             }
             Ok(())
         }
-        MemorySubcommand::Add { text, category } => {
+        MemorySubcommand::Add {
+            text,
+            category,
+            project,
+        } => {
             let content = text.join(" ");
             if content.trim().is_empty() {
                 anyhow::bail!("Usage: agi memory add <text>");
+            }
+            if *project {
+                let project_id = agent::linked_cloud_project().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "This directory is not linked to an account project. Link it with `agi projects link`, or drop --project to remember it account-wide."
+                    )
+                })?;
+                let merged =
+                    cloud::add_project_memory(privacy, &project_id, &content, category.as_deref())
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                let _ = cloud::refresh_memory(privacy).await;
+                println!(
+                    "{} in this project's memory; its conversations on every client draw on it.",
+                    if merged {
+                        "Merged with a memory already"
+                    } else {
+                        "Remembered"
+                    }
+                );
+                return Ok(());
             }
             let refusals = cloud::add_memory(privacy, &content, category.as_deref())
                 .await
@@ -3659,11 +4051,148 @@ async fn handle_schedules_command(
                 *json,
             )
         }),
+        SchedulesSubcommand::Triggers { action } => {
+            handle_schedule_triggers_command(&client, action, output).await
+        }
     };
 
     match result {
         Ok(()) => Ok(()),
         Err(error) => schedules_command_failure(error.to_string()),
+    }
+}
+
+async fn handle_schedule_triggers_command(
+    client: &schedules::SchedulesClient,
+    action: &ScheduleTriggersSubcommand,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use schedules::triggers;
+
+    let render = |value: serde_json::Value, text: String, json_flag: bool| -> Result<()> {
+        match structured_output(json_flag, output) {
+            StructuredOutput::Text => {
+                println!("{text}");
+                Ok(())
+            }
+            mode => print_structured(&value, mode),
+        }
+    };
+    let failed = |error: schedules::ScheduleError| anyhow::anyhow!("{error}");
+    if account_privacy_mode() == platform::runtime::session::PrivacyMode::Local {
+        return Err(failed(schedules::ScheduleError::LocalPrivacy));
+    }
+
+    match action {
+        ScheduleTriggersSubcommand::List {
+            schedule,
+            limit,
+            offset,
+            json,
+        } => {
+            let schedule_id = client.resolve_id(schedule).await.map_err(failed)?;
+            let rows = client
+                .triggers(&schedule_id, *limit, *offset)
+                .await
+                .map_err(failed)?;
+            render(
+                serde_json::to_value(&rows)?,
+                triggers::render_triggers(&schedule_id, &rows),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Add {
+            schedule,
+            source,
+            events,
+            account,
+            name,
+            conditions,
+            debounce,
+            json,
+        } => {
+            let parsed = conditions
+                .iter()
+                .map(|spec| triggers::parse_condition(spec))
+                .collect::<std::result::Result<Vec<_>, String>>()
+                .map_err(|message| anyhow::anyhow!(message))?;
+            let schedule_id = client.resolve_id(schedule).await.map_err(failed)?;
+            let request = triggers::trigger_create_request(
+                &schedule_id,
+                source,
+                events,
+                account.as_deref(),
+                name.as_deref(),
+                parsed,
+                *debounce,
+            );
+            let created = client.create_trigger(&request).await.map_err(failed)?;
+            let endpoint = client.api_url(&created.webhook_path);
+            let show_secrets = interactive::person_at_terminal(io::stdout().is_terminal());
+            let mut value = if show_secrets {
+                serde_json::to_value(&created)?
+            } else {
+                serde_json::to_value(triggers::withhold_secrets(&created))?
+            };
+            if !show_secrets && triggers::created_has_secrets(&created) {
+                value["secretsWithheld"] = serde_json::Value::String(
+                    triggers::withheld_secrets_notice(&created.trigger.id),
+                );
+            }
+            render(
+                value,
+                triggers::render_created_trigger(&created, &endpoint, show_secrets),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Pause { trigger, json }
+        | ScheduleTriggersSubcommand::Resume { trigger, json } => {
+            let enabled = matches!(action, ScheduleTriggersSubcommand::Resume { .. });
+            let updated = client
+                .set_trigger_enabled(trigger, enabled)
+                .await
+                .map_err(failed)?;
+            render(
+                serde_json::to_value(&updated)?,
+                triggers::render_triggers(&updated.task_id, std::slice::from_ref(&updated)),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Watch { trigger, json } => {
+            let updated = client
+                .register_trigger_watch(trigger)
+                .await
+                .map_err(failed)?;
+            render(
+                serde_json::to_value(&updated)?,
+                triggers::render_triggers(&updated.task_id, std::slice::from_ref(&updated)),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Remove { trigger, yes, json } => {
+            if let Some(refusal) = triggers::removal_refusal(
+                trigger,
+                interactive::can_prompt() && !interactive::spawned_by_agent(),
+            ) {
+                anyhow::bail!(refusal);
+            }
+            if !confirm_destructive(
+                &format!(
+                    "Delete trigger {trigger}? Its events stop starting runs of the schedule. \
+                     This cannot be undone."
+                ),
+                *yes,
+            ) {
+                println!("Left the trigger in place.");
+                return Ok(());
+            }
+            client.delete_trigger(trigger).await.map_err(failed)?;
+            render(
+                serde_json::json!({ "deleted": trigger }),
+                format!("Deleted trigger {trigger}."),
+                *json,
+            )
+        }
     }
 }
 
@@ -4239,16 +4768,25 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
         }
         McpSubcommand::Logout { name } => {
             let url = remote_server_url(&registry_file, name)?;
-            let had_token = crate::mcp::logout_from_remote_server(&url)?;
-            println!(
-                "{} '{}'.",
-                if had_token {
-                    "Removed the stored OAuth token for"
-                } else {
-                    "No OAuth token was stored for"
-                },
-                terminal_text::sanitize_terminal_text(name)
-            );
+            let config: Option<crate::mcp::McpServerConfig> = registry_file
+                .entry(name)
+                .cloned()
+                .and_then(|entry| serde_json::from_value(entry).ok());
+            let outcome = crate::mcp::logout_from_remote_server(&url, config.as_ref()).await?;
+            let shown = terminal_text::sanitize_terminal_text(name);
+            match outcome.revocation {
+                None => println!("No OAuth token was stored for '{shown}'."),
+                Some(crate::mcp::McpRevocation::Revoked) => println!(
+                    "Revoked the OAuth grant for '{shown}' at its provider and removed the stored token."
+                ),
+                Some(crate::mcp::McpRevocation::NotOffered) => println!(
+                    "Removed the stored OAuth token for '{shown}'. Its provider offers no revocation endpoint, so remove the app's access in the provider's own settings to end the grant there too."
+                ),
+                Some(crate::mcp::McpRevocation::Failed(reason)) => println!(
+                    "Removed the stored OAuth token for '{shown}', but the provider did not confirm revocation ({}). Remove the app's access in the provider's own settings to end the grant there too.",
+                    terminal_text::sanitize_terminal_text(&reason)
+                ),
+            }
             Ok(())
         }
         McpSubcommand::Remove { name } => {
@@ -5200,6 +5738,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }
                 }
             }
+            Command::Background { action } => run_background_command(action),
             Command::Resume {
                 session_id,
                 cloud,
@@ -5392,6 +5931,39 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Triggers { action } => {
                 let text = match action {
                     None | Some(TriggersSubcommand::List) => daemon::list_triggers()?,
+                    Some(TriggersSubcommand::Add {
+                        id,
+                        prompt,
+                        cron,
+                        webhook,
+                        watch,
+                        glob,
+                        model,
+                        events,
+                        conditions,
+                    }) => {
+                        let mut text = daemon::add_trigger(daemon::NewTrigger {
+                            id: id.clone(),
+                            prompt: prompt.clone(),
+                            model: model.clone(),
+                            cron: cron.clone(),
+                            webhook: webhook.clone(),
+                            watch: watch.clone(),
+                            glob: glob.clone(),
+                        })?;
+                        if !events.is_empty() || !conditions.is_empty() {
+                            daemon::set_trigger_filter(id, events, conditions, None, false)?;
+                            text.push_str("\nApplied the --event and --when filter.");
+                        }
+                        text
+                    }
+                    Some(TriggersSubcommand::Remove { id }) => daemon::remove_trigger(id)?,
+                    Some(TriggersSubcommand::Enable { id }) => {
+                        daemon::set_trigger_enabled(id, true)?
+                    }
+                    Some(TriggersSubcommand::Disable { id }) => {
+                        daemon::set_trigger_enabled(id, false)?
+                    }
                     Some(TriggersSubcommand::Filter {
                         id,
                         events,
@@ -5607,6 +6179,69 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                 anyhow::bail!("Failed: {}", error)
                             }
                         }
+                    }
+                    PluginSubcommand::Login { name } => {
+                        mgr.load_all(std::env::current_dir().ok().as_deref())?;
+                        let plugin = mgr
+                            .plugins()
+                            .iter()
+                            .find(|plugin| {
+                                plugin.config_name == *name
+                                    || plugin.manifest_name.as_deref() == Some(name.as_str())
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "No installed plugin named '{name}'. `agi plugin list` shows them."
+                                )
+                            })?;
+                        let shown = terminal_text::sanitize_terminal_text(name);
+                        if !plugin.enabled {
+                            anyhow::bail!(
+                                "Plugin '{shown}' is turned off. Turn it on with `agi plugin enable {shown}` first."
+                            );
+                        }
+                        let bundled: Vec<String> = plugin.mcp_servers.keys().cloned().collect();
+                        let configs = mgr.mcp_configs();
+                        let mut remote: Vec<(String, crate::mcp::McpServerConfig)> = bundled
+                            .into_iter()
+                            .filter_map(|server| {
+                                let config = configs.get(&server)?.clone();
+                                crate::mcp::is_remote_server(&config).then_some((server, config))
+                            })
+                            .collect();
+                        remote.sort_by(|a, b| a.0.cmp(&b.0));
+                        if remote.is_empty() {
+                            println!(
+                                "Plugin '{shown}' bundles no remote connections, so there is nothing to sign in to."
+                            );
+                            return Ok(());
+                        }
+                        let mut failed = 0usize;
+                        for (server, config) in &remote {
+                            let server_shown = terminal_text::sanitize_terminal_text(server);
+                            match crate::mcp::login_to_remote_server(server, config).await {
+                                Ok(()) => println!("Signed in to '{server_shown}'."),
+                                Err(error) => {
+                                    failed += 1;
+                                    eprintln!(
+                                        "Could not sign in to '{server_shown}': {}",
+                                        terminal_text::sanitize_terminal_text(&format!(
+                                            "{error:#}"
+                                        ))
+                                    );
+                                }
+                            }
+                        }
+                        if failed > 0 {
+                            anyhow::bail!(
+                                "{failed} of {} connections in plugin '{shown}' are not signed in. Run `agi plugin login {shown}` again to retry.",
+                                remote.len()
+                            );
+                        }
+                        println!(
+                            "Every connection in plugin '{shown}' is signed in. The tokens are stored in the OS credential store."
+                        );
+                        Ok(())
                     }
                     PluginSubcommand::Enable { name } => {
                         println!("{}", installs::set_plugin_enabled(name, true)?);
@@ -5958,6 +6593,11 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 Ok(())
             }
             Command::Connectors { action } => {
+                if let Some(refusal) =
+                    tier_cache::capability_refusal(tier_cache::CONNECTORS_CAPABILITY, "Connectors")
+                {
+                    anyhow::bail!(refusal);
+                }
                 let client = cloud::CloudClient::connect(account_privacy_mode())
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 match action {
@@ -6111,6 +6751,111 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
                         println!("Removed that marketplace from your account.");
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Browse { source } => {
+                        if let Some(refusal) = tier_cache::capability_refusal(
+                            tier_cache::MARKETPLACE_CAPABILITY,
+                            "The plugin marketplace",
+                        ) {
+                            anyhow::bail!(refusal);
+                        }
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let sources = cloud::marketplaces::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let entries = cloud::marketplaces::entries(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let chosen: Vec<&cloud::marketplaces::MarketplaceSource> = sources
+                            .iter()
+                            .filter(|candidate| {
+                                source.as_deref().is_none_or(|reference| {
+                                    cloud::marketplaces::source_matches(candidate, reference)
+                                })
+                            })
+                            .collect();
+                        if chosen.is_empty() {
+                            println!("{}", cloud::marketplaces::render(&sources));
+                            if source.is_some() {
+                                anyhow::bail!("No marketplace on your account matches that name.");
+                            }
+                            return Ok(());
+                        }
+                        let blocks: Vec<String> = chosen
+                            .into_iter()
+                            .map(|candidate| {
+                                let own: Vec<cloud::marketplaces::MarketplaceEntry> = entries
+                                    .iter()
+                                    .filter(|entry| entry.source_id == candidate.id)
+                                    .cloned()
+                                    .collect();
+                                cloud::marketplaces::render_entries(candidate, &own)
+                            })
+                            .collect();
+                        println!("{}", blocks.join("\n\n"));
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Get { reference } => {
+                        if let Some(refusal) = tier_cache::capability_refusal(
+                            tier_cache::MARKETPLACE_CAPABILITY,
+                            "The plugin marketplace",
+                        ) {
+                            anyhow::bail!(refusal);
+                        }
+                        let (plugin, marketplace_name) =
+                            reference.rsplit_once('@').ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Name the plugin as plugin@marketplace; `agi marketplace browse` lists them."
+                                )
+                            })?;
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let sources = cloud::marketplaces::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let source = sources
+                            .iter()
+                            .find(|candidate| {
+                                cloud::marketplaces::source_matches(candidate, marketplace_name)
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "No marketplace named {} on your account. Add it with `agi marketplace add <github url>`.",
+                                    terminal_text::sanitize_terminal_text(marketplace_name)
+                                )
+                            })?;
+                        let entries = cloud::marketplaces::entries(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let entry = entries
+                            .iter()
+                            .find(|entry| {
+                                entry.source_id == source.id
+                                    && entry.name.eq_ignore_ascii_case(plugin)
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "{} does not list a plugin named {}. `agi marketplace browse {}` lists them.",
+                                    terminal_text::sanitize_terminal_text(&source.name),
+                                    terminal_text::sanitize_terminal_text(plugin),
+                                    terminal_text::sanitize_terminal_text(&source.name)
+                                )
+                            })?;
+                        let installation = cloud::marketplaces::install(&client, &entry.id)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!(
+                            "Installed {} {} on your account from {}, as the web marketplace does; it is listed with your plugins on the web and desktop apps.",
+                            terminal_text::sanitize_terminal_text(&entry.name),
+                            installation
+                                .installed_version
+                                .as_deref()
+                                .map(terminal_text::sanitize_terminal_text)
+                                .unwrap_or_default(),
+                            terminal_text::sanitize_terminal_text(&source.name)
+                        );
                         Ok(())
                     }
                     MarketplaceSubcommand::Search { query } => {
@@ -6734,6 +7479,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
             });
 
     if let Some(ref prompt) = effective_prompt {
+        let oneshot_resume = match cli.session.as_ref().or(cli.resume.as_ref()) {
+            Some(reference) => resolve_resume_payload(reference, cli.fork_session)?.1,
+            None => None,
+        };
         return run_oneshot(
             &app_config,
             &model,
@@ -6754,6 +7503,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             file_context_result.images,
             cli.max_budget_usd,
             cli.session_id_override.clone(),
+            oneshot_resume,
             cli.json_events,
             cli.agent.clone(),
             model_fallback_chain.clone(),
@@ -7246,6 +7996,7 @@ pub async fn run_oneshot(
     image_attachments: Vec<ImageAttachment>,
     max_budget_usd: Option<f64>,
     session_id_override: Option<String>,
+    resume_session: Option<ManagedResumeSession>,
     json_events: bool,
     agent_name: Option<String>,
     fallback_chain: routing::fallback::FallbackChain,
@@ -7302,11 +8053,15 @@ pub async fn run_oneshot(
             }
         }
     }
+    let resuming = resume_session.is_some();
+    if let Some((managed, path)) = resume_session {
+        session.load_managed_conversation(managed, path)?;
+    }
     session.enable_managed_session()?;
     // Wire --session-id: override the auto-generated session UUID with the
     // caller-supplied one.  Must be called after enable_managed_session so
     // the managed session object exists.
-    if let Some(ref sid) = session_id_override {
+    if let Some(ref sid) = session_id_override.as_ref().filter(|_| !resuming) {
         session.override_session_id(sid)?;
     }
     if let Some(seed) = auto_route_seed {

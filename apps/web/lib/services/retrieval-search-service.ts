@@ -20,6 +20,7 @@ import {
   type SearchResidencyState,
   type SearchResponse,
   type SearchRetrievalStrategy,
+  type SearchSourceKind,
   type SemanticSearchState,
 } from '@agiworkforce/data-layer/search';
 import { DEFAULT_DATA_REGION, normaliseDataRegion } from '@agiworkforce/compliance';

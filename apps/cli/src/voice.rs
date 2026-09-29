@@ -954,7 +954,13 @@ async fn transcribe(
 
     let result = match backend {
         TranscriptionBackend::Managed(token) => {
-            transcribe_managed(&wav_path, language, token).await
+            match crate::tier_cache::capability_refusal(
+                crate::tier_cache::VOICE_CAPABILITY,
+                "Voice input",
+            ) {
+                Some(refusal) => Err(anyhow::anyhow!(refusal)),
+                None => transcribe_managed(&wav_path, language, token).await,
+            }
         }
         TranscriptionBackend::OpenAiApi => transcribe_openai_api(&wav_path, language).await,
         TranscriptionBackend::LocalBinary(binary_path) => {

@@ -604,6 +604,17 @@ pub async fn login_to_remote_server_for_client(
     Ok(credential_state(config))
 }
 
+fn remote_config_url(config: &McpServerConfig) -> Option<String> {
+    match config.as_transport() {
+        McpTransport::Stdio { .. } => None,
+        McpTransport::Sse { url, .. } | McpTransport::Http { url, .. } => Some(url),
+    }
+}
+
+pub fn is_remote_server(config: &McpServerConfig) -> bool {
+    !matches!(config.as_transport(), McpTransport::Stdio { .. })
+}
+
 /// Authorize a registered remote MCP server and leave its token in the store
 /// every later connection reads.
 pub async fn login_to_remote_server(name: &str, config: &McpServerConfig) -> Result<()> {
@@ -620,6 +631,14 @@ async fn sign_in(
 ) -> Result<()> {
     if matches!(config.as_transport(), McpTransport::Stdio { .. }) {
         bail!("MCP server '{name}' runs locally over stdio and has nothing to sign in to");
+    }
+    if let Some(refusal) = crate::cloud::workspace_policy::mcp_server_refusal(
+        name,
+        remote_config_url(config).as_deref(),
+    )
+    .await
+    {
+        bail!(refusal);
     }
     let hooks = build_client_hooks_with_browser(Arc::new(AutoDeclineHandler), browser);
     if let TransportConfig::Http {
@@ -708,15 +727,62 @@ fn remember_step_up(error: &anyhow::Error) -> Option<String> {
     Some(scope.to_string())
 }
 
-/// Forget the stored OAuth token for a remote MCP server. Returns whether a
-/// token was actually held.
-pub fn logout_from_remote_server(server_url: &str) -> Result<bool> {
-    let had_token = KeyringTokenStore.get(server_url).is_some();
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum McpRevocation {
+    Revoked,
+    NotOffered,
+    Failed(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpLogout {
+    pub had_token: bool,
+    pub revocation: Option<McpRevocation>,
+}
+
+pub async fn logout_from_remote_server(
+    server_url: &str,
+    config: Option<&McpServerConfig>,
+) -> Result<McpLogout> {
+    let token = KeyringTokenStore.get(server_url);
+    let revocation = match &token {
+        Some(token) => Some(revoke_at_provider(server_url, config, token).await),
+        None => None,
+    };
     McpServerOAuthStore::new()?.delete(server_url)?;
     let mut legacy = McpOAuthStore::load()?;
     legacy.remove(server_url);
     legacy.save()?;
-    Ok(had_token)
+    Ok(McpLogout {
+        had_token: token.is_some(),
+        revocation,
+    })
+}
+
+fn revocation_oauth_config(config: Option<&McpServerConfig>) -> OAuthConfig {
+    match config.map(to_transport_config) {
+        Some(TransportConfig::Http {
+            oauth: Some(oauth), ..
+        }) => oauth,
+        _ => OAuthConfig::default(),
+    }
+}
+
+async fn revoke_at_provider(
+    server_url: &str,
+    config: Option<&McpServerConfig>,
+    token: &OAuthToken,
+) -> McpRevocation {
+    let oauth = revocation_oauth_config(config);
+    let attempt = agiworkforce_mcp::oauth::revoke_token(token, &oauth, server_url);
+    match tokio::time::timeout(std::time::Duration::from_secs(30), attempt).await {
+        Ok(Ok(true)) => McpRevocation::Revoked,
+        Ok(Ok(false)) => McpRevocation::NotOffered,
+        Ok(Err(error)) => McpRevocation::Failed(format!("{error:#}")),
+        Err(_) => McpRevocation::Failed(
+            "the authorization server did not answer in 30 seconds".to_string(),
+        ),
+    }
 }
 
 /// Build the host capability bundle handed to `McpClient::connect`.
@@ -794,6 +860,14 @@ impl McpConnection {
         config: &McpServerConfig,
         elicitation: Arc<dyn ElicitationHandler>,
     ) -> Result<Self> {
+        if let Some(refusal) = crate::cloud::workspace_policy::mcp_server_refusal(
+            name,
+            remote_config_url(config).as_deref(),
+        )
+        .await
+        {
+            bail!(refusal);
+        }
         let transport = sandboxed_transport_config(config)
             .with_context(|| format!("MCP server '{name}' must run sandboxed"))?;
         let timeouts = McpTimeouts::default();
@@ -1921,6 +1995,24 @@ fn normalize_mcp_prompt_part(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn logout_revocation_needs_no_parsable_registry_entry() {
+        let fallback = super::revocation_oauth_config(None);
+        assert!(fallback.client_id.is_none() && fallback.token_url.is_none());
+        let config: super::McpServerConfig = serde_json::from_value(serde_json::json!({
+            "transport": "http",
+            "url": "https://mcp.example.com/mcp",
+            "auth": { "client_id": "cli-client" }
+        }))
+        .expect("http config");
+        assert_eq!(
+            super::revocation_oauth_config(Some(&config))
+                .client_id
+                .as_deref(),
+            Some("cli-client")
+        );
+    }
+
     use super::*;
 
     #[test]
