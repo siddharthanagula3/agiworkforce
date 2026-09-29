@@ -155,3 +155,84 @@ impl DispatchSession {
         Ok((kind.to_string(), payload))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const VECTORS: &str = include_str!(
+        "../../../../packages/platform/utils/src/__tests__/fixtures/dispatch-envelope-vectors.json"
+    );
+
+    fn vectors() -> Value {
+        serde_json::from_str(VECTORS).expect("vector fixture parses")
+    }
+
+    fn session(vectors: &Value) -> DispatchSession {
+        let key = derive_key(
+            vectors["pairingCode"].as_str().expect("code"),
+            vectors["sessionSalt"].as_str().expect("salt"),
+            vectors["pairingSecret"].as_str().expect("secret"),
+        )
+        .expect("key derives");
+        DispatchSession::new(key)
+    }
+
+    fn envelope(entry: &Value) -> Value {
+        json!({
+            "hmac": entry["hmac"],
+            "nonce": entry["nonce"],
+            "payload": entry["payload"],
+            "ts": entry["ts"],
+            "type": entry["type"],
+            "v": ENVELOPE_VERSION,
+        })
+    }
+
+    #[test]
+    fn derives_the_key_the_typescript_host_derives() {
+        let vectors = vectors();
+        assert_eq!(
+            crate::hex::encode(&session(&vectors).key),
+            vectors["key"].as_str().expect("key")
+        );
+    }
+
+    #[test]
+    fn signs_every_vector_byte_for_byte() {
+        let vectors = vectors();
+        let session = session(&vectors);
+        for entry in vectors["cases"].as_array().expect("cases") {
+            let input = canonical_json(&json!({
+                "nonce": entry["nonce"],
+                "payload": entry["payload"],
+                "ts": entry["ts"],
+                "type": entry["type"],
+                "v": ENVELOPE_VERSION,
+            }));
+            assert_eq!(input, entry["signingInput"].as_str().expect("input"));
+            let mac = session.mac(
+                entry["type"].as_str().expect("type"),
+                &entry["payload"],
+                entry["ts"].as_i64().expect("ts"),
+                entry["nonce"].as_str().expect("nonce"),
+            );
+            assert_eq!(mac, entry["hmac"].as_str().expect("hmac"));
+        }
+    }
+
+    #[test]
+    fn verifies_each_vector_and_refuses_it_once_tampered() {
+        let vectors = vectors();
+        for entry in vectors["cases"].as_array().expect("cases") {
+            let now = entry["ts"].as_i64().expect("ts");
+            assert!(session(&vectors).verify(&envelope(entry), now).is_ok());
+            let mut tampered = envelope(entry);
+            tampered["payload"]["injected"] = json!(true);
+            assert_eq!(
+                session(&vectors).verify(&tampered, now),
+                Err(VerifyError::HmacMismatch)
+            );
+        }
+    }
+}
