@@ -40,6 +40,7 @@ import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
+import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
 import { useThemeColors, type ColorScheme, elevation, zIndex, motion } from '@/src/ui/theme';
 import { fetchWorkspaceOverview } from '@/src/features/team/service';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -66,6 +67,10 @@ function formatCount(n: number): string {
   return `${n} memories`;
 }
 
+const CAPABILITIES_NAMESPACE = 'capabilities';
+
+type AccountMemoryCapability = 'memory' | 'searchPastChats' | 'generateFromHistory';
+
 export default function MemoryScreen() {
   const router = useRouter();
   const colors = useThemeColors();
@@ -90,13 +95,68 @@ export default function MemoryScreen() {
   const memoryEnabled = currentIsCloud ? cloudMemoryEnabled : localMemoryEnabled;
   const referencePastChats = currentIsCloud ? cloudReferencePastChats : localReferencePastChats;
   const generateMemoryFromHistory = currentIsCloud ? cloudGenerateMemory : localGenerateMemory;
-  const setMemoryEnabled = currentIsCloud ? setCloudMemoryEnabled : setLocalMemoryEnabled;
+  const saveAccountCapability = useCallback(
+    (
+      key: AccountMemoryCapability,
+      value: boolean,
+      previous: boolean,
+      apply: (enabled: boolean) => void,
+    ) => {
+      apply(value);
+      patchPreferenceNamespace(CAPABILITIES_NAMESPACE, { [key]: value }).catch(() => {
+        apply(previous);
+        Alert.alert(
+          'Not saved',
+          'This memory setting could not be saved to your account. Check your connection and try again.',
+        );
+      });
+    },
+    [],
+  );
+  const setMemoryEnabled = currentIsCloud
+    ? (value: boolean) =>
+        saveAccountCapability('memory', value, cloudMemoryEnabled, setCloudMemoryEnabled)
+    : setLocalMemoryEnabled;
   const setReferencePastChats = currentIsCloud
-    ? setCloudReferencePastChats
+    ? (value: boolean) =>
+        saveAccountCapability(
+          'searchPastChats',
+          value,
+          cloudReferencePastChats,
+          setCloudReferencePastChats,
+        )
     : setLocalReferencePastChats;
   const setGenerateMemoryFromHistory = currentIsCloud
-    ? setCloudGenerateMemory
+    ? (value: boolean) =>
+        saveAccountCapability(
+          'generateFromHistory',
+          value,
+          cloudGenerateMemory,
+          setCloudGenerateMemory,
+        )
     : setLocalGenerateMemory;
+
+  useEffect(() => {
+    if (!currentIsCloud || !clerkUserId) return;
+    let cancelled = false;
+    fetchPreferenceNamespace(CAPABILITIES_NAMESPACE)
+      .then((settings) => {
+        if (cancelled) return;
+        const stored = settings as Partial<Record<AccountMemoryCapability, unknown>>;
+        const cloud = useCloudSettingsStore.getState();
+        if (typeof stored.memory === 'boolean') cloud.setMemoryEnabled(stored.memory);
+        if (typeof stored.searchPastChats === 'boolean') {
+          cloud.setReferencePastChats(stored.searchPastChats);
+        }
+        if (typeof stored.generateFromHistory === 'boolean') {
+          cloud.setGenerateMemoryFromHistory(stored.generateFromHistory);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [clerkUserId, currentIsCloud]);
 
   const [searchText, setSearchText] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('All');

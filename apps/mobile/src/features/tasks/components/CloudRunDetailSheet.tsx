@@ -17,14 +17,12 @@ import {
   type CloudRunActivityTone,
   CLOUD_RUN_PLAN_STATUS_LABELS,
 } from '../runPresentation';
-import type { CloudRunDetail } from '../store';
 import { CloudRunSteerSection } from './CloudRunSteerSection';
+import { CloudRunInputForm } from './CloudRunInputForm';
+import { useCloudTaskStore, type CloudRunDetail } from '../store';
 
 const DEVICE_STEP_NOTE =
   'Open the AGI Cloud app on that computer to carry this out, or stop the task below.';
-
-const CONNECTOR_INPUT_NOTE =
-  'Connector questions are answered where the task was started. You can still stop it here.';
 
 function activityToneColor(tone: CloudRunActivityTone, colors: ColorScheme): string {
   if (tone === 'error') return colors.agentError;
@@ -79,6 +77,7 @@ export function CloudRunDetailSheet({
   onOpenConversation: (conversationId: string) => void;
 }) {
   const colors = useThemeColors();
+  const answerInput = useCloudTaskStore((state) => state.answerInput);
   const run = detail?.run ?? null;
   const busy = detail?.pendingAction != null;
   const conversationId = run?.conversationId ?? null;
@@ -268,19 +267,12 @@ export function CloudRunDetailSheet({
                 <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
                   Waiting for connector input
                 </Text>
-                {run.pendingInput.toolCalls.map((call) => (
-                  <View key={call.toolCallId} style={{ gap: 3 }}>
-                    <Text numberOfLines={1} style={{ color: colors.textPrimary, fontSize: 13 }}>
-                      {call.name}
-                    </Text>
-                    <Text numberOfLines={2} style={{ color: colors.textMuted, fontSize: 12 }}>
-                      {Object.keys(call.inputRequests).join(', ')}
-                    </Text>
-                  </View>
-                ))}
-                <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
-                  {CONNECTOR_INPUT_NOTE}
-                </Text>
+                <CloudRunInputForm
+                  key={run.pendingInput.requestedAt}
+                  pendingInput={run.pendingInput}
+                  busy={detail?.pendingAction === 'answer'}
+                  onSubmit={(answers) => void answerInput(answers)}
+                />
               </View>
             ) : null}
 

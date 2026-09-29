@@ -5,6 +5,7 @@ import { URL } from 'url';
 import type { DeviceAuthorizationStartResponse, TokenResponse } from '@agiworkforce/types';
 import {
   clearAccountToken,
+  getAccountRefreshToken,
   getAccountToken,
   getCloudGatewayOrigin,
   getCloudWebOrigin,
@@ -48,7 +49,8 @@ export type DeviceSessionRefreshResult =
   | { kind: 'renewed'; token: string; expiresAt: number; refreshToken: string }
   | { kind: 'unavailable' }
   | { kind: 'revoked' }
-  | { kind: 'terms-required'; acceptanceUrl: string | null };
+  | { kind: 'terms-required'; acceptanceUrl: string | null }
+  | { kind: 'account-unavailable'; message: string };
 
 /**
  * A remote window forwards openExternal to the local client, so the round trip
@@ -241,6 +243,16 @@ export async function refreshDeviceSession(
     return { kind: 'terms-required', acceptanceUrl: typeof url === 'string' ? url : null };
   }
   if (error === 'invalid_grant') return { kind: 'revoked' };
+  if (error === 'account_unavailable') {
+    const description = body['error_description'];
+    return {
+      kind: 'account-unavailable',
+      message:
+        typeof description === 'string' && description.trim() !== ''
+          ? description
+          : 'This AGI Cloud account cannot be used right now. Sign in on the web to see why.',
+    };
+  }
   if (response.status < 200 || response.status >= 300) return { kind: 'unavailable' };
 
   try {
@@ -259,15 +271,17 @@ export async function refreshDeviceSession(
 
 export async function revokeDeviceAuthorization(
   gatewayOrigin: string,
-  token: string,
+  credentials: { token?: string; refreshToken?: string },
   post: DeviceAuthPost = postJson,
 ): Promise<boolean> {
   try {
     const response = await post(
       `${new URL(gatewayOrigin).origin}/api/auth/logout`,
-      {},
+      credentials.refreshToken === undefined ? {} : { refresh_token: credentials.refreshToken },
       {
-        Authorization: `Bearer ${token}`,
+        ...(credentials.token === undefined
+          ? {}
+          : { Authorization: `Bearer ${credentials.token}` }),
         'X-Requested-With': 'XMLHttpRequest',
       },
     );
@@ -395,10 +409,18 @@ export async function signOutOfAgiCloud(
   post: DeviceAuthPost = postJson,
 ): Promise<boolean> {
   const token = await getAccountToken(secrets, { renew: false });
+  const refreshToken = await getAccountRefreshToken(secrets);
   const revoked =
-    token === undefined
+    token === undefined && refreshToken === undefined
       ? true
-      : await revokeDeviceAuthorization(getCloudGatewayOrigin(), token, post);
+      : await revokeDeviceAuthorization(
+          getCloudGatewayOrigin(),
+          {
+            ...(token === undefined ? {} : { token }),
+            ...(refreshToken === undefined ? {} : { refreshToken }),
+          },
+          post,
+        );
 
   await clearAccountToken(secrets);
 

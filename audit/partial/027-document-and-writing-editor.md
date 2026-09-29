@@ -100,10 +100,7 @@ nothing is left.
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Refactor Code sends a selection of any file with a coding prompt; on .md/.txt it replaces the selection only if the reply contains a fenced block in that language, otherwise it opens the reply in a new tab, so prose rewrite in place is best-effort, and there is no prose-specific rewrite. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/package.json:824-828`, `apps/extension-vscode/src/core/commandSetup.ts:972-975`, `apps/extension-vscode/src/core/runInlineCommand.ts:21-48`, `apps/extension-vscode/src/platform/applyEdit.ts:30-36`
 
 ## S27.21: Translate selection.
 

@@ -28,6 +28,8 @@ import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAccountUnavailableError } from '@/lib/api-auth';
+import { isPasskeyRequiredError } from '@/lib/server/account-security/gate';
 import { acceptedRequestParameters } from '../chat/completions/lib/request-parameters';
 
 type OpenAiCompatibleModel = {
@@ -213,6 +215,30 @@ async function handleListModels(request: NextRequest) {
       return NextResponse.json(
         {
           error: { message: error.message, type: 'invalid_request_error', code: 'ip_not_allowed' },
+        },
+        { status: 403, headers: getCorsHeaders(request) },
+      );
+    }
+    if (isPasskeyRequiredError(error)) {
+      return NextResponse.json(
+        {
+          error: {
+            message: error.message,
+            type: 'invalid_request_error',
+            code: 'passkey_required',
+          },
+        },
+        { status: 403, headers: getCorsHeaders(request) },
+      );
+    }
+    if (isAccountUnavailableError(error)) {
+      return NextResponse.json(
+        {
+          error: {
+            message: error.message,
+            type: 'invalid_request_error',
+            code: 'account_unavailable',
+          },
         },
         { status: 403, headers: getCorsHeaders(request) },
       );

@@ -8,7 +8,7 @@ version: 2.0.0
 
 Use this skill when a lead agent is deciding who does what on a substantial task.
 
-The team is Claude Opus 5.5 (`model: "opus"`) and Claude Sonnet 5.5 (`model: "sonnet"`) only. Never route to Fable (any version) or to previous-generation models (Opus 5, Sonnet 5, Haiku), and set `model` explicitly on every spawn.
+The team is Opus 5.5 (`model: "opus"`) and Sonnet 5.5 (`model: "sonnet"`) only. Never route to Fable (any version) or to any earlier Opus, Sonnet or Haiku generation, and set `model` explicitly on every spawn.
 
 1. Establish the requested end state and inspect enough context to name the work; the user's outcome is the scope, never widen it into cleanup or narrow it because it is hard.
 2. Form the dependency graph, separate independent from dependent branches, and give each branch one owner with explicit file boundaries; sequence any two branches that would write the same subsystem.

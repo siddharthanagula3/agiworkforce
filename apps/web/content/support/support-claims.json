@@ -119,7 +119,7 @@
     },
     {
       "doc": "search",
-      "sha256": "419f9da94eddf0b6f121834f1a97355a70392af4407ada1765b1ea612bef9c50"
+      "indexed": true
     },
     {
       "doc": "sharing-conversations",
@@ -164,6 +164,14 @@
     {
       "doc": "workspace-roles-and-groups",
       "sha256": "110f4d6032a6dbd15cd28826e2077ff2728304b193a0e1573b4885e0736b807a"
+    },
+    {
+      "doc": "configuration",
+      "indexed": true
+    },
+    {
+      "doc": "custom-instructions",
+      "indexed": true
     }
   ],
   "claims": [
@@ -958,130 +966,6 @@
           "kind": "test",
           "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.workspace-controls.test.ts",
           "name": "workspace"
-        }
-      ]
-    },
-    {
-      "id": "account-authenticator-temporarily-unavailable",
-      "doc": "account-security",
-      "section": "Second factors",
-      "kind": "prose",
-      "sentence": "Authenticator apps (TOTP) and backup codes are temporarily unavailable: Settings, Security shows **Temporarily unavailable** where you would set one up or replace your backup codes, and a workspace cannot start requiring multi-factor authentication until they return.",
-      "implementation": [
-        "apps/web/lib/authenticator-enrollment.ts",
-        "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
-        "apps/web/app/api/settings/organization/policy/route.ts"
-      ],
-      "proof": [
-        {
-          "kind": "copy",
-          "file": "apps/web/lib/authenticator-enrollment.ts",
-          "text": "'Authenticator apps and backup codes are temporarily unavailable.'"
-        },
-        {
-          "kind": "copy",
-          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
-          "text": "Temporarily unavailable"
-        },
-        {
-          "kind": "copy",
-          "file": "apps/web/app/api/settings/organization/policy/route.ts",
-          "text": "if (next.requireMfa && !current.policy.requireMfa && !authenticatorEnrollmentAvailable())"
-        }
-      ]
-    },
-    {
-      "id": "sessions-are-listed-with-their-own-fields",
-      "doc": "account-security",
-      "section": "Active sessions",
-      "kind": "prose",
-      "sentence": "Settings, Account lists every signed-in session with its device, browser, location, when it was created and when it was last active, and marks the one you are using.",
-      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/app/api/settings/sessions/route.test.ts",
-          "name": "gives the screen every field a session row shows, and no field it must not"
-        }
-      ]
-    },
-    {
-      "id": "sessions-revoke-ends-that-device",
-      "doc": "account-security",
-      "section": "Active sessions",
-      "kind": "prose",
-      "sentence": "**Revoke** signs that device out immediately; it has to sign in again to regain access.",
-      "implementation": ["apps/web/app/api/settings/sessions/[sessionId]/route.ts"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/app/api/settings/sessions/route.test.ts",
-          "name": "revokes other devices before ending the current session"
-        }
-      ]
-    },
-    {
-      "id": "sessions-log-out-everywhere-ends-this-one-too",
-      "doc": "account-security",
-      "section": "Active sessions",
-      "kind": "prose",
-      "sentence": "**Log out of all devices** ends every session including this one, so you will need to sign in again.",
-      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/app/api/settings/sessions/route.test.ts",
-          "name": "tells the account holder every session was ended, and counts what ended"
-        }
-      ]
-    },
-    {
-      "id": "sessions-absolute-lifetime-ends-a-session-in-use",
-      "doc": "account-security",
-      "section": "Active sessions",
-      "kind": "prose",
-      "sentence": "A session also ends on its own once it reaches its maximum age, counted from when you signed in rather than from your last request, so a session that is in constant use still ends and asks you to sign in again.",
-      "implementation": ["apps/web/lib/auth/session-policy.ts#hasOutlivedAbsoluteLifetime"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/app/api/settings/sessions/route.test.ts",
-          "name": "ends a session that has outlived the absolute lifetime and never returns it"
-        },
-        {
-          "kind": "test",
-          "file": "apps/web/lib/auth/__tests__/session-policy.test.ts",
-          "name": "names the absolute cap for a session older than policy allows"
-        }
-      ]
-    },
-    {
-      "id": "sessions-default-cap-is-thirty-days",
-      "doc": "account-security",
-      "section": "Active sessions",
-      "kind": "prose",
-      "sentence": "The maximum is 30 days.",
-      "implementation": ["apps/web/lib/auth/session-policy.ts#sessionAbsoluteLifetimeMs"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/lib/auth/__tests__/session-policy.test.ts",
-          "name": "caps a session at thirty days when nothing is configured"
-        }
-      ]
-    },
-    {
-      "id": "password-common-check-refuses",
-      "doc": "account-security",
-      "section": "Password",
-      "kind": "prose",
-      "sentence": "A password that fails the common-password check is refused with \"That password is too common.\" A forgotten password is reset from the sign-in screen with **Forgot password?**.",
-      "implementation": ["apps/web/features/auth/AuthNewPasswordStep.tsx"],
-      "proof": [
-        {
-          "kind": "copy",
-          "file": "apps/web/features/auth/__tests__/AuthNewPasswordStep.test.tsx",
-          "text": "That password is too common."
         }
       ]
     },
@@ -3232,6 +3116,304 @@
       ]
     },
     {
+      "id": "cli-installer-refuses-unverified-release",
+      "doc": "install-the-cli",
+      "section": "Getting the binary",
+      "kind": "prose",
+      "sentence": "It refuses anything it cannot verify, and says so when no signed release is published yet.",
+      "implementation": ["apps/web/public/install.sh"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "reads the provenance gate install.sh actually enforces"
+        }
+      ]
+    },
+    {
+      "id": "cli-no-npm-package-or-homebrew-tap",
+      "doc": "install-the-cli",
+      "section": "Getting the binary",
+      "kind": "prose",
+      "sentence": "There is no npm package or Homebrew tap.",
+      "implementation": [
+        "apps/extension-vscode/src/integrations/cliInstaller.ts#CLI_INSTALL_COMMAND"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/extension-vscode/src/__tests__/cliProtocolContract.test.ts",
+          "name": "points at the install command instead of a package manager"
+        },
+        {
+          "kind": "test",
+          "file": "apps/extension-vscode/src/__tests__/cliProtocolContract.test.ts",
+          "name": "ships no other install route anywhere in the extension source or readme"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/marketing-copy-regression.test.ts",
+          "name": "keeps public install commands aligned with the CLI release documentation"
+        }
+      ]
+    },
+    {
+      "id": "cli-bundled-in-desktop-and-offered-by-vscode",
+      "doc": "install-the-cli",
+      "section": "Getting the binary",
+      "kind": "prose",
+      "sentence": "AGI Cloud for desktop ships its own copy of `agi` for local coding sessions, and the VS Code extension offers **Install AGI CLI** when it cannot find one.",
+      "implementation": [
+        "apps/desktop/electron-builder.yml",
+        "apps/desktop/electron/runtime/developerSessionService.ts#BUNDLED_BINARY",
+        "apps/extension-vscode/src/integrations/cliInstaller.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/desktop/electron-builder.yml",
+          "text": "to: agi-cli/agi"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "text": "const BUNDLED_BINARY = path.join('agi-cli', 'agi');"
+        },
+        {
+          "kind": "test",
+          "file": "apps/extension-vscode/src/__tests__/cliProtocolContract.test.ts",
+          "name": "installs through the signed install script"
+        }
+      ]
+    },
+    {
+      "id": "cli-local-sessions-stay-on-device",
+      "doc": "install-the-cli",
+      "section": "Sessions",
+      "kind": "prose",
+      "sentence": "Local sessions never silently leave your device.",
+      "implementation": ["apps/cli/src/agent/chat.rs", "apps/cli/src/cloud/client.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/agent/chat.rs",
+          "name": "fn local_session_cloud_fallback_blocked_by_privacy_boundary"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/agent/mod.rs",
+          "name": "fn local_privacy_blocks_cloud_provider_until_explicit_byok"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/cloud/client.rs",
+          "name": "fn a_local_session_never_reaches_the_account"
+        }
+      ]
+    },
+    {
+      "id": "cli-byok-is-an-explicit-step",
+      "doc": "install-the-cli",
+      "section": "Trust boundaries in the terminal",
+      "kind": "prose",
+      "sentence": "In the terminal UI, `/privacy-mode` shows the active trust boundary, and moving to BYOK is an explicit `/continue-with-byok` step, never automatic.",
+      "implementation": ["apps/cli/src/claude_parity.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/claude_parity.rs",
+          "name": "fn privacy_mode_byok_blocks_direct_local_handoff"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/claude_parity.rs",
+          "name": "fn continue_with_byok_returns_reviewable_draft"
+        }
+      ]
+    },
+    {
+      "id": "cli-has-no-cloud-command",
+      "doc": "install-the-cli",
+      "section": "Trust boundaries in the terminal",
+      "kind": "prose",
+      "sentence": "There is no `agi cloud` command: managed runs use the normal model path and fail closed without an explicit route.",
+      "implementation": ["apps/cli/src/lib.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/lib.rs",
+          "name": "fn cli_does_not_advertise_an_unimplemented_cloud_task_surface"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "does not advertise an agi cloud command"
+        }
+      ]
+    },
+    {
+      "id": "cli-managed-cloud-needs-developer-surfaces",
+      "doc": "install-the-cli",
+      "section": "Managed cloud from the CLI",
+      "kind": "prose",
+      "sentence": "Managed cloud access from the CLI is part of the higher paid tiers.",
+      "implementation": [
+        "apps/web/lib/free-chat-surface-policy.ts#canUseManagedCloudChatSurface",
+        "packages/contracts/types/src/billing-catalog.ts#developer_surfaces: PRO_TIERS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/free-chat-surface-policy.test.ts",
+          "name": "requires the developer-surface capability on %s"
+        }
+      ]
+    },
+    {
+      "id": "cli-auth-status-lists-every-provider",
+      "doc": "install-the-cli",
+      "section": "When something is wrong",
+      "kind": "prose",
+      "sentence": "`agi auth-status` is the first check: it lists every configured provider, so a missing or expired credential shows up there rather than as a failed run.",
+      "implementation": ["apps/cli/src/auth.rs#pub fn auth_status"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/auth.rs",
+          "name": "fn test_auth_status_expired_oauth"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/auth.rs",
+          "name": "fn test_auth_status_api_key"
+        }
+      ]
+    },
+    {
+      "id": "account-authenticator-temporarily-unavailable",
+      "doc": "account-security",
+      "section": "Second factors",
+      "kind": "prose",
+      "sentence": "Authenticator apps (TOTP) and backup codes are temporarily unavailable: Settings, Security shows **Temporarily unavailable** where you would set one up or replace your backup codes, and a workspace cannot start requiring multi-factor authentication until they return.",
+      "implementation": [
+        "apps/web/lib/authenticator-enrollment.ts",
+        "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+        "apps/web/app/api/settings/organization/policy/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/authenticator-enrollment.ts",
+          "text": "'Authenticator apps and backup codes are temporarily unavailable.'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+          "text": "Temporarily unavailable"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/organization/policy/route.ts",
+          "text": "if (next.requireMfa && !current.policy.requireMfa && !authenticatorEnrollmentAvailable())"
+        }
+      ]
+    },
+    {
+      "id": "sessions-are-listed-with-their-own-fields",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "Settings, Account lists every signed-in session with its device, browser, location, when it was created and when it was last active, and marks the one you are using.",
+      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/sessions/route.test.ts",
+          "name": "gives the screen every field a session row shows, and no field it must not"
+        }
+      ]
+    },
+    {
+      "id": "sessions-revoke-ends-that-device",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "**Revoke** signs that device out immediately; it has to sign in again to regain access.",
+      "implementation": ["apps/web/app/api/settings/sessions/[sessionId]/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/sessions/route.test.ts",
+          "name": "revokes other devices before ending the current session"
+        }
+      ]
+    },
+    {
+      "id": "sessions-log-out-everywhere-ends-this-one-too",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "**Log out of all devices** ends every session including this one, so you will need to sign in again.",
+      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/sessions/route.test.ts",
+          "name": "tells the account holder every session was ended, and counts what ended"
+        }
+      ]
+    },
+    {
+      "id": "sessions-absolute-lifetime-ends-a-session-in-use",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "A session also ends on its own once it reaches its maximum age, counted from when you signed in rather than from your last request, so a session that is in constant use still ends and asks you to sign in again.",
+      "implementation": ["apps/web/lib/auth/session-policy.ts#hasOutlivedAbsoluteLifetime"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/sessions/route.test.ts",
+          "name": "ends a session that has outlived the absolute lifetime and never returns it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/auth/__tests__/session-policy.test.ts",
+          "name": "names the absolute cap for a session older than policy allows"
+        }
+      ]
+    },
+    {
+      "id": "sessions-default-cap-is-thirty-days",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "The maximum is 30 days.",
+      "implementation": ["apps/web/lib/auth/session-policy.ts#sessionAbsoluteLifetimeMs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/auth/__tests__/session-policy.test.ts",
+          "name": "caps a session at thirty days when nothing is configured"
+        }
+      ]
+    },
+    {
+      "id": "password-common-check-refuses",
+      "doc": "account-security",
+      "section": "Password",
+      "kind": "prose",
+      "sentence": "A password that fails the common-password check is refused with \"That password is too common.\" A forgotten password is reset from the sign-in screen with **Forgot password?**.",
+      "implementation": ["apps/web/features/auth/AuthNewPasswordStep.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/__tests__/AuthNewPasswordStep.test.tsx",
+          "text": "That password is too common."
+        }
+      ]
+    },
+    {
       "id": "password-change-requires-current-password",
       "doc": "account-security",
       "section": "Password",
@@ -3477,7 +3659,7 @@
       "doc": "account-security",
       "section": "Advanced Account Security",
       "kind": "prose",
-      "sentence": "We also email the address that got the code a link that turns it off, signs everyone out and resets your password, without a passkey, for 48 hours after it was turned on, in case it was not you.",
+      "sentence": "We also email the address that got the code a link that turns it off without a passkey, for 48 hours after it was turned on, in case it was not you.",
       "implementation": [
         "apps/web/lib/server/account-security/undo.ts",
         "apps/web/lib/server/account-security/store.ts"
@@ -3487,11 +3669,6 @@
           "kind": "copy",
           "file": "packages/contracts/cloud-contracts/src/account-security.ts",
           "text": "undoHours: 48"
-        },
-        {
-          "kind": "copy",
-          "file": "apps/web/lib/server/account-security/undo.ts",
-          "text": "await identity.setPassword(open.userId, newUnusablePassword());"
         }
       ]
     },
@@ -3559,11 +3736,11 @@
       ]
     },
     {
-      "id": "advanced-security-sign-ins-emailed-and-sessions-shorter",
+      "id": "advanced-security-sign-ins-emailed-and-weekly-check",
       "doc": "account-security",
       "section": "Advanced Account Security",
       "kind": "prose",
-      "sentence": "Every new sign-in is emailed to you, and sessions end sooner, so you confirm with your passkey or security key more often.",
+      "sentence": "Every new sign-in is emailed to you, and each session has to be confirmed with your passkey or security key again every 7 days.",
       "implementation": [
         "apps/web/lib/services/account-activity-notifications.ts",
         "apps/web/lib/server/account-security/gate.ts"
@@ -3584,15 +3761,43 @@
     {
       "id": "advanced-security-support-cannot-remove",
       "doc": "account-security",
-      "section": "Advanced Account Security",
+      "section": "What support can do with Advanced Account Security on",
       "kind": "prose",
-      "sentence": "AGI support cannot turn this off or add a sign-in method for you.",
-      "implementation": ["apps/web/lib/server/account-security/service.ts"],
+      "sentence": "AGI support cannot turn Advanced Account Security off, add a sign-in method, change the email address or restore access for you.",
+      "implementation": [
+        "apps/web/lib/support/tickets/recovery.ts",
+        "apps/web/lib/server/account-security/service.ts"
+      ],
       "proof": [
         {
           "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "Support cannot restore access to it; the owner recovers with a recovery key."
+        },
+        {
+          "kind": "copy",
           "file": "apps/web/features/account-security/components/AdvancedAccountSecurityPanel.tsx",
-          "text": "AGI support cannot turn this off or add a sign-in method for you."
+          "text": "AGI support cannot turn this off, add a sign-in method or restore access for you."
+        }
+      ]
+    },
+    {
+      "id": "advanced-security-support-recovery-not-acted-on",
+      "doc": "account-security",
+      "section": "What support can do with Advanced Account Security on",
+      "kind": "prose",
+      "sentence": "A recovery request sent to support for such an account is not acted on; you are told that it was made, and a recovery key is the only way back in.",
+      "implementation": ["apps/web/lib/support/tickets/recovery.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "if ((await readEnrolledAt(getNeonDb(), ticket.userId)) !== null) {"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "if ((await readEnrolledAt(getNeonDb(), profile.id)) !== null) {"
         }
       ]
     },
@@ -3683,190 +3888,406 @@
       ]
     },
     {
-      "id": "cli-installer-refuses-unverified-release",
-      "doc": "install-the-cli",
-      "section": "Getting the binary",
+      "id": "account-recovery-request-at-recover",
+      "doc": "account-security",
+      "section": "If you cannot sign in",
       "kind": "prose",
-      "sentence": "It refuses anything it cannot verify, and says so when no signed release is published yet.",
-      "implementation": ["apps/web/public/install.sh"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/__tests__/surface-page-claims.test.ts",
-          "name": "reads the provenance gate install.sh actually enforces"
-        }
-      ]
-    },
-    {
-      "id": "cli-no-npm-package-or-homebrew-tap",
-      "doc": "install-the-cli",
-      "section": "Getting the binary",
-      "kind": "prose",
-      "sentence": "There is no npm package or Homebrew tap.",
+      "sentence": "**Lost the authenticator and every backup code, or the email address.** Ask for account recovery at /recover.",
       "implementation": [
-        "apps/extension-vscode/src/integrations/cliInstaller.ts#CLI_INSTALL_COMMAND"
-      ],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/extension-vscode/src/__tests__/cliProtocolContract.test.ts",
-          "name": "points at the install command instead of a package manager"
-        },
-        {
-          "kind": "test",
-          "file": "apps/extension-vscode/src/__tests__/cliProtocolContract.test.ts",
-          "name": "ships no other install route anywhere in the extension source or readme"
-        },
-        {
-          "kind": "test",
-          "file": "apps/web/__tests__/marketing-copy-regression.test.ts",
-          "name": "keeps public install commands aligned with the CLI release documentation"
-        }
-      ]
-    },
-    {
-      "id": "cli-bundled-in-desktop-and-offered-by-vscode",
-      "doc": "install-the-cli",
-      "section": "Getting the binary",
-      "kind": "prose",
-      "sentence": "AGI Cloud for desktop ships its own copy of `agi` for local coding sessions, and the VS Code extension offers **Install AGI CLI** when it cannot find one.",
-      "implementation": [
-        "apps/desktop/electron-builder.yml",
-        "apps/desktop/electron/runtime/developerSessionService.ts#BUNDLED_BINARY",
-        "apps/extension-vscode/src/integrations/cliInstaller.ts"
+        "apps/web/app/recover/page.tsx",
+        "apps/web/lib/support/tickets/recovery.ts"
       ],
       "proof": [
         {
           "kind": "copy",
-          "file": "apps/desktop/electron-builder.yml",
-          "text": "to: agi-cli/agi"
+          "file": "apps/web/app/recover/page.tsx",
+          "text": "heading=\"Recover your account\""
+        }
+      ]
+    },
+    {
+      "id": "account-recovery-person-checks",
+      "doc": "account-security",
+      "section": "If you cannot sign in",
+      "kind": "prose",
+      "sentence": "A person checks that the account is yours before removing the second factor or changing the sign-in email, the account owner is told a recovery was requested, and every other session is signed out when access is restored.",
+      "implementation": ["apps/web/lib/support/tickets/recovery.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "await identity.removeSecondFactor(ticket.userId);"
         },
         {
           "kind": "copy",
-          "file": "apps/desktop/electron/runtime/developerSessionService.ts",
-          "text": "const BUNDLED_BINARY = path.join('agi-cli', 'agi');"
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "event: 'recovery_requested',"
         },
         {
-          "kind": "test",
-          "file": "apps/extension-vscode/src/__tests__/cliProtocolContract.test.ts",
-          "name": "installs through the signed install script"
+          "kind": "copy",
+          "file": "apps/web/lib/support/tickets/recovery.ts",
+          "text": "const sweep = await revokeEveryOtherSession(identity, ticket.userId, null);"
         }
       ]
     },
     {
-      "id": "cli-local-sessions-stay-on-device",
-      "doc": "install-the-cli",
-      "section": "Sessions",
+      "id": "advanced-security-lost-everything-support-cannot",
+      "doc": "account-security",
+      "section": "If you cannot sign in",
       "kind": "prose",
-      "sentence": "Local sessions never silently leave your device.",
-      "implementation": ["apps/cli/src/agent/chat.rs", "apps/cli/src/cloud/client.rs"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/cli/src/agent/chat.rs",
-          "name": "fn local_session_cloud_fallback_blocked_by_privacy_boundary"
-        },
-        {
-          "kind": "test",
-          "file": "apps/cli/src/agent/mod.rs",
-          "name": "fn local_privacy_blocks_cloud_provider_until_explicit_byok"
-        },
-        {
-          "kind": "test",
-          "file": "apps/cli/src/cloud/client.rs",
-          "name": "fn a_local_session_never_reaches_the_account"
-        }
-      ]
-    },
-    {
-      "id": "cli-byok-is-an-explicit-step",
-      "doc": "install-the-cli",
-      "section": "Trust boundaries in the terminal",
-      "kind": "prose",
-      "sentence": "In the terminal UI, `/privacy-mode` shows the active trust boundary, and moving to BYOK is an explicit `/continue-with-byok` step, never automatic.",
-      "implementation": ["apps/cli/src/claude_parity.rs"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/cli/src/claude_parity.rs",
-          "name": "fn privacy_mode_byok_blocks_direct_local_handoff"
-        },
-        {
-          "kind": "test",
-          "file": "apps/cli/src/claude_parity.rs",
-          "name": "fn continue_with_byok_returns_reviewable_draft"
-        }
-      ]
-    },
-    {
-      "id": "cli-has-no-cloud-command",
-      "doc": "install-the-cli",
-      "section": "Trust boundaries in the terminal",
-      "kind": "prose",
-      "sentence": "There is no `agi cloud` command: managed runs use the normal model path and fail closed without an explicit route.",
-      "implementation": ["apps/cli/src/lib.rs"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/cli/src/lib.rs",
-          "name": "fn cli_does_not_advertise_an_unimplemented_cloud_task_surface"
-        },
-        {
-          "kind": "test",
-          "file": "apps/web/__tests__/surface-page-claims.test.ts",
-          "name": "does not advertise an agi cloud command"
-        }
-      ]
-    },
-    {
-      "id": "cli-managed-cloud-needs-developer-surfaces",
-      "doc": "install-the-cli",
-      "section": "Managed cloud from the CLI",
-      "kind": "prose",
-      "sentence": "Managed cloud access from the CLI is part of the higher paid tiers.",
+      "sentence": "Support cannot do this for you, and the link that turns the setting off works only for 48 hours after it was turned on; after that a passkey, a security key or a recovery key is the only way in.",
       "implementation": [
-        "apps/web/lib/free-chat-surface-policy.ts#canUseManagedCloudChatSurface",
-        "packages/contracts/types/src/billing-catalog.ts#developer_surfaces: PRO_TIERS"
+        "apps/web/lib/support/tickets/recovery.ts",
+        "apps/web/lib/server/account-security/undo.ts"
       ],
       "proof": [
         {
-          "kind": "test",
-          "file": "apps/web/lib/free-chat-surface-policy.test.ts",
-          "name": "requires the developer-surface capability on %s"
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-security/undo.ts",
+          "text": "sign in with a passkey, a security key or a recovery key."
+        },
+        {
+          "kind": "copy",
+          "file": "packages/contracts/cloud-contracts/src/account-security.ts",
+          "text": "undoHours: 48"
         }
       ]
     },
     {
-      "id": "cli-auth-status-lists-every-provider",
-      "doc": "install-the-cli",
-      "section": "When something is wrong",
+      "id": "search-no-switch",
+      "doc": "search",
+      "section": "Searching the web from a chat",
       "kind": "prose",
-      "sentence": "`agi auth-status` is the first check: it lists every configured provider, so a missing or expired credential shows up there rather than as a failed run.",
-      "implementation": ["apps/cli/src/auth.rs#pub fn auth_status"],
+      "sentence": "There is no search switch to find.",
+      "implementation": ["apps/web/features/chat/components/Composer/ChatComposerNew.tsx"],
       "proof": [
         {
-          "kind": "test",
-          "file": "apps/cli/src/auth.rs",
-          "name": "fn test_auth_status_expired_oauth"
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+          "text": "setComposerToggles({ webSearchEnabled: modelSupportsSearch });"
+        }
+      ]
+    },
+    {
+      "id": "search-ambient",
+      "doc": "search",
+      "section": "Searching the web from a chat",
+      "kind": "prose",
+      "sentence": "Managed web search is ambient: it stays on whenever the selected model and deployment have a real search path, and turns off only when no such path exists.",
+      "implementation": ["apps/web/features/chat/components/Composer/ChatComposerNew.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+          "text": "if (webSearchEnabled !== modelSupportsSearch) {"
+        }
+      ]
+    },
+    {
+      "id": "search-workspace-site-rules",
+      "doc": "search",
+      "section": "Searching the web from a chat",
+      "kind": "prose",
+      "sentence": "Results from other sites are left out, and a page outside the allowed sites is not fetched.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+        "apps/web/app/api/llm/v1/chat/completions/lib/research-sources.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+          "text": "readWorkspaceWebDomainPolicy(scoped.db, scoped.organizationId)"
         },
         {
           "kind": "test",
-          "file": "apps/cli/src/auth.rs",
-          "name": "fn test_auth_status_api_key"
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/research-sources.test.ts",
+          "name": "admits a domain and its subdomains under an allowlist"
+        }
+      ]
+    },
+    {
+      "id": "search-deep-research-model-refusal",
+      "doc": "search",
+      "section": "Deep Research",
+      "kind": "prose",
+      "sentence": "It is not available on every model: choosing one that cannot do it says \"Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research.\" Availability also depends on your plan, and an ineligible plan shows \"Upgrade to use Deep Research\".",
+      "implementation": ["apps/web/features/chat/components/Composer/ChatComposerNew.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+          "text": "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+          "text": "'Upgrade to use Deep Research'"
+        }
+      ]
+    },
+    {
+      "id": "search-recent-searches-clear",
+      "doc": "search",
+      "section": "Finding your own conversations",
+      "kind": "prose",
+      "sentence": "Your recent searches are kept; clearing them warns that it cannot be undone.",
+      "implementation": ["apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+          "text": "This removes your recent searches. This cannot be undone."
+        }
+      ]
+    },
+    {
+      "id": "search-past-chats-setting",
+      "doc": "search",
+      "section": "Letting AGI search your past chats",
+      "kind": "prose",
+      "sentence": "Settings, Memory holds **Search past chats**: \"Let AGI look up excerpts from your other conversations when answering.\" It is never used in temporary chats.",
+      "implementation": ["apps/web/features/settings/sections/MemorySection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/MemorySection.tsx",
+          "text": "Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats."
+        }
+      ]
+    },
+    {
+      "id": "search-help-no-match",
+      "doc": "search",
+      "section": "Searching the help centre",
+      "kind": "prose",
+      "sentence": "If nothing matches, it says so rather than guessing, and points at contact@agiworkforce.com.",
+      "implementation": ["apps/web/features/support/components/HelpSearch.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/support/components/HelpSearch.tsx",
+          "text": "Nothing here covers that yet. Email contact@agiworkforce.com for support."
+        }
+      ]
+    },
+    {
+      "id": "config-user-file",
+      "doc": "configuration",
+      "section": "Where the settings live",
+      "kind": "prose",
+      "sentence": "The CLI keeps its settings in `~/.agiworkforce/config.toml` on every operating system.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "/// Top-level CLI configuration, loaded from ~/.agiworkforce/config.toml"
+        }
+      ]
+    },
+    {
+      "id": "config-project-file-trusted",
+      "doc": "configuration",
+      "section": "Where the settings live",
+      "kind": "prose",
+      "sentence": "It is read from the folder you start `agi` in and only applies once you trust that workspace.",
+      "implementation": ["apps/cli/src/config.rs", "apps/cli/src/trust/mod.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "/// Load project-level config from `.agiworkforce/config.toml` in the current directory."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/trust/mod.rs",
+          "text": "repository config and policy are not applied"
+        }
+      ]
+    },
+    {
+      "id": "config-default-route",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "`[default] model` and `provider` choose the default route; both start from the model catalog.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "crate::model_catalog::default_model().to_string()"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "crate::model_catalog::default_provider().to_string()"
+        }
+      ]
+    },
+    {
+      "id": "config-permission-mode-values",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "`[default] permission_mode` is `default`, `plan`, `acceptEdits` or `dontAsk`.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "`default`, `plan`, `acceptEdits` or `dontAsk`."
+        }
+      ]
+    },
+    {
+      "id": "config-bypass-not-storable",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "Skipping every approval cannot be saved as a default; it is only available for one run with a command-line flag.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "`bypassPermissions` is deliberately not storable here. A persisted"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "per-run flag or a per-turn choice."
+        }
+      ]
+    },
+    {
+      "id": "config-reasoning-effort-values",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "`[default] reasoning_effort` is `low`, `medium`, `high` or `max`.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "Reasoning effort chosen at onboarding: low, medium, high, max."
+        }
+      ]
+    },
+    {
+      "id": "config-token-and-temperature-bounds",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "`max_tokens` is between 1 and 200000 (8192 by default) and `temperature` between 0 and 1.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "if !(1..=200_000).contains(&self.default.max_tokens) {"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "temperature must be between 0.0 and 1.0, got {}"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "assert_eq!(config.default.max_tokens, 8192);"
+        }
+      ]
+    },
+    {
+      "id": "config-layer-order",
+      "doc": "configuration",
+      "section": "Which setting wins",
+      "kind": "prose",
+      "sentence": "Your organization's managed policy wins first, then the environment variables `AGIWORKFORCE_MODEL`, `AGIWORKFORCE_PROVIDER` and `AGIWORKFORCE_MAX_TOKENS`, then the repository's `.agiworkforce/config.toml`, then your own `config.toml`, then the defaults.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "/// The user's file, then the repository's, then the environment, then the"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "`AGIWORKFORCE_MAX_TOKENS` -> `default.max_tokens`"
+        }
+      ]
+    },
+    {
+      "id": "config-repository-mcp-trusted",
+      "doc": "configuration",
+      "section": "MCP servers and hooks",
+      "kind": "prose",
+      "sentence": "A repository's servers start only in a trusted workspace.",
+      "implementation": ["apps/cli/src/mcp/mod.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/mcp/mod.rs",
+          "text": "/// An untrusted workspace does not get servers started for it: `.mcp.json` is"
+        }
+      ]
+    },
+    {
+      "id": "instructions-rules-files",
+      "doc": "custom-instructions",
+      "section": "Files every session reads",
+      "kind": "prose",
+      "sentence": "Rules in `.agiworkforce/rules/*.md` in the repository and in `~/.agiworkforce/rules/*.md` are added too, some only for matching files.",
+      "implementation": ["apps/cli/src/memory.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/memory.rs",
+          "text": "/// Loads rules from `.agiworkforce/rules/` (project) and `~/.agiworkforce/rules/`."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/memory.rs",
+          "text": "/// A rule loaded from a `.md` file with optional YAML frontmatter `globs`"
+        }
+      ]
+    },
+    {
+      "id": "instructions-global-claude-md",
+      "doc": "custom-instructions",
+      "section": "Repository memory",
+      "kind": "prose",
+      "sentence": "Notes for every repository go in `~/.agiworkforce/CLAUDE.md`.",
+      "implementation": ["apps/cli/src/memory.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/memory.rs",
+          "text": "/// `~/.agiworkforce/CLAUDE.md`, user-wide defaults."
+        }
+      ]
+    },
+    {
+      "id": "instructions-vscode-workspace-replaces",
+      "doc": "custom-instructions",
+      "section": "Instructions set in VS Code",
+      "kind": "prose",
+      "sentence": "The workspace box replaces the general one when it has text, and whichever applies is sent with every message.",
+      "implementation": ["apps/extension-vscode/src/features/instructions/customInstructions.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/extension-vscode/src/features/instructions/customInstructions.ts",
+          "text": "effective: workspaceActive ? workspace : hostActive ? host : '',"
         }
       ]
     }
   ],
   "unproven": [
-    {
-      "id": "account-second-factors-offered",
-      "doc": "account-security",
-      "section": "Second factors",
-      "kind": "prose",
-      "sentence": "SMS MFA is not part of the current account contract, so it is not offered rather than silently ignored.",
-      "implementation": ["apps/web/features/auth"],
-      "reason": "Which second factors the identity provider offers is decided outside this repository, so nothing here can assert that SMS is absent. It stays unproven until the account contract enumerates the factors it accepts in code."
-    },
     {
       "id": "privacy-managed-encrypted-in-transit-and-at-rest",
       "doc": "privacy-controls",
@@ -3895,52 +4316,16 @@
       "reason": "The plan catalogue is founder-frozen for this program, so no assertion is added against it; the limit is read from the catalogue at runtime and the pricing page is its published source."
     },
     {
-      "id": "account-lost-every-factor-has-no-screen",
+      "id": "account-second-factors-offered",
       "doc": "account-security",
-      "section": "If you cannot sign in",
+      "section": "Second factors",
       "kind": "prose",
-      "sentence": "**Lost the authenticator and every backup code.** There is no self-serve way back in, and there is no screen from which support can remove a second factor.",
-      "implementation": ["apps/web/app/api/settings/2fa/route.ts"],
-      "reason": "No operator or support route touches user_two_factor: its writers are the holder's own routes under apps/web/app/api/settings/2fa, the registration of an earlier enrollment in apps/web/lib/server/step-up/second-factor.ts and account erasure. Nothing in the repository asserts that absence, so it stays unproven until a guard enumerates every writer of that table."
+      "sentence": "SMS MFA is not part of the current account contract, so it is not offered rather than silently ignored.",
+      "implementation": ["apps/web/features/auth"],
+      "reason": "Which second factors the identity provider offers is decided outside this repository, so nothing here can assert that SMS is absent. It stays unproven until the account contract enumerates the factors it accepts in code."
     }
   ],
   "narrative": [
-    {
-      "id": "account-check-spam-folder",
-      "doc": "account-security",
-      "section": "Signing in",
-      "kind": "prose",
-      "sentence": "If a sign-in or verification email has not arrived, check the spam folder before requesting another.",
-      "implementation": ["apps/web/features/auth"],
-      "why": "reader-instruction"
-    },
-    {
-      "id": "account-revoke-what-you-do-not-recognise",
-      "doc": "account-security",
-      "section": "Active sessions",
-      "kind": "prose",
-      "sentence": "Revoke anything you do not recognise.",
-      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
-      "why": "reader-instruction"
-    },
-    {
-      "id": "account-log-out-all-confirms",
-      "doc": "account-security",
-      "section": "Active sessions",
-      "kind": "prose",
-      "sentence": "It asks first and names that consequence.",
-      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
-      "why": "editorial-rule"
-    },
-    {
-      "id": "account-identifiers-are-not-secrets",
-      "doc": "account-security",
-      "section": "Your identifiers",
-      "kind": "prose",
-      "sentence": "Support asks for these when investigating an issue; they identify the account, they are not secrets that grant access.",
-      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
-      "why": "editorial-rule"
-    },
     {
       "id": "privacy-byok-surface-availability",
       "doc": "privacy-controls",
@@ -4068,6 +4453,42 @@
       "sentence": "The export is a self-service download from Settings, Privacy, and it cannot be run once the account is gone.",
       "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
       "why": "reader-instruction"
+    },
+    {
+      "id": "account-check-spam-folder",
+      "doc": "account-security",
+      "section": "Signing in",
+      "kind": "prose",
+      "sentence": "If a sign-in or verification email has not arrived, check the spam folder before requesting another.",
+      "implementation": ["apps/web/features/auth"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "account-revoke-what-you-do-not-recognise",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "Revoke anything you do not recognise.",
+      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "account-log-out-all-confirms",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "It asks first and names that consequence.",
+      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
+      "why": "editorial-rule"
+    },
+    {
+      "id": "account-identifiers-are-not-secrets",
+      "doc": "account-security",
+      "section": "Your identifiers",
+      "kind": "prose",
+      "sentence": "Support asks for these when investigating an issue; they identify the account, they are not secrets that grant access.",
+      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
+      "why": "editorial-rule"
     }
   ]
 }

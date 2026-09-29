@@ -40,7 +40,6 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 | --- | --- | --- | --- |
 | mobile | partial | Only shared text or an address arrives through the share sheet; there is no summarize-this-page action. | surface-only |
 | cli | partial | No summarize command: the user has to ask in chat and the agent calls browser_read_page. | ui |
-| vscode | partial | No summarize command: the user asks in chat and the local CLI runtime reads the page. | ui |
 
 Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`, `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`
 

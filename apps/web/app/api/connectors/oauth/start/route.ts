@@ -11,9 +11,7 @@ import {
   type ConnectorOAuthStartStatus,
 } from '@agiworkforce/cloud-contracts';
 
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { logger } from '@/lib/logger';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -153,7 +151,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   try {
     ({ db, userId, organizationId } = await getUserScopedDb(request));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     if (wantsJson) {

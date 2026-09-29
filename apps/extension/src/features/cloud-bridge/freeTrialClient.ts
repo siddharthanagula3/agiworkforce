@@ -879,6 +879,15 @@ interface GatewayErrorBody {
   recovery?: unknown;
 }
 
+function isGatewayPath(path: string): boolean {
+  if (!path.startsWith('/')) return false;
+  try {
+    return new URL(path, FREE_TRIAL_GATEWAY).origin === new URL(FREE_TRIAL_GATEWAY).origin;
+  } catch {
+    return false;
+  }
+}
+
 function readGatewayErrorBody(body: string): GatewayErrorBody {
   let parsed: unknown;
   try {
@@ -901,9 +910,7 @@ function readGatewayErrorBody(body: string): GatewayErrorBody {
   return {
     ...(code ? { code } : {}),
     ...(message ? { message } : {}),
-    ...(recoveryPath && recoveryPath.startsWith('/') && !recoveryPath.startsWith('//')
-      ? { recoveryPath }
-      : {}),
+    ...(recoveryPath && isGatewayPath(recoveryPath) ? { recoveryPath } : {}),
     recovery: record['recovery'],
   };
 }

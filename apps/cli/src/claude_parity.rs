@@ -27,6 +27,10 @@ pub enum ParityCommandResult {
         destination: PrivacyMode,
         provider: String,
     },
+    Feedback {
+        kind: crate::cloud::feedback::FeedbackKind,
+        message: String,
+    },
 }
 
 #[cfg(test)]
@@ -142,9 +146,25 @@ pub fn handle_shared_command(
         "/route" => ParityCommandResult::SystemMessage(session.routing_profile(arg)),
         "/replay" => ParityCommandResult::SystemMessage(render_replay()),
         "/insights" => ParityCommandResult::SystemMessage(render_insights(session)),
-        "/feedback" | "/bug" => ParityCommandResult::SystemMessage(
-            "Report issues at: https://github.com/agiworkforce/agiworkforce/issues".to_string(),
-        ),
+        "/feedback" | "/bug" if arg.trim().is_empty() => {
+            ParityCommandResult::SystemMessage(crate::cloud::feedback::USAGE.to_string())
+        }
+        "/feedback" | "/bug" => {
+            let request = arg.trim();
+            let feature = (command == "/feedback")
+                .then(|| request.strip_prefix("feature "))
+                .flatten();
+            ParityCommandResult::Feedback {
+                kind: if command == "/bug" {
+                    crate::cloud::feedback::FeedbackKind::Bug
+                } else if feature.is_some() {
+                    crate::cloud::feedback::FeedbackKind::Feature
+                } else {
+                    crate::cloud::feedback::FeedbackKind::Feedback
+                },
+                message: feature.unwrap_or(request).trim().to_string(),
+            }
+        }
         "/focus" => ParityCommandResult::SystemMessage(
             "Focus mode is not implemented. Use /statusline to choose which status fields render."
                 .to_string(),
@@ -1748,6 +1768,14 @@ pub mod connectors {
 
     #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
     #[serde(rename_all = "camelCase")]
+    pub struct WorkspaceToolRule {
+        pub connector_id: String,
+        pub tool_name: String,
+        pub level: String,
+    }
+
+    #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+    #[serde(rename_all = "camelCase")]
     pub struct ConnectorAccessPolicy {
         #[serde(default)]
         pub allowed_connectors: Vec<String>,
@@ -1761,6 +1789,8 @@ pub mod connectors {
         pub blocked_plugins: Vec<String>,
         #[serde(default)]
         pub allowed_mcp_hosts: Vec<String>,
+        #[serde(default)]
+        pub tool_rules: Vec<WorkspaceToolRule>,
     }
 
     fn default_true() -> bool {
@@ -1777,6 +1807,7 @@ pub mod connectors {
                 allowed_plugins: Vec::new(),
                 blocked_plugins: Vec::new(),
                 allowed_mcp_hosts: Vec::new(),
+                tool_rules: Vec::new(),
             }
         }
     }
@@ -1993,6 +2024,33 @@ pub mod connectors {
         Ok(policy)
     }
 
+    pub fn prefetch_workspace_policy(privacy: PrivacyMode) {
+        if privacy != PrivacyMode::Managed {
+            return;
+        }
+        tokio::spawn(async move {
+            let _ = fetch_workspace_policy(privacy).await;
+        });
+    }
+
+    fn describe_tool_rule(rule: &WorkspaceToolRule) -> String {
+        let tools = match rule.tool_name.as_str() {
+            "*read_only" => "read-only tools".to_string(),
+            "*write" => "write tools".to_string(),
+            name => name.to_string(),
+        };
+        let level = match rule.level.as_str() {
+            "allow" => "always allowed",
+            "ask" => "need approval",
+            "deny" => "blocked",
+            other => other,
+        };
+        format!(
+            "{} {tools}: {level}",
+            rule.connector_id.replace(['-', '_'], " ")
+        )
+    }
+
     pub fn availability(privacy: PrivacyMode) -> String {
         match privacy {
             PrivacyMode::Managed => "Your account's connectors\n  Connectors you connected at https://agiworkforce.com/connectors, such as Google Drive, Slack and Notion, are offered to this session's turns. Each call asks first unless you allowed that tool there.".to_string(),
@@ -2029,7 +2087,19 @@ pub mod connectors {
             list(&policy.allowed_mcp_hosts),
             list(&policy.allowed_plugins),
             list(&policy.blocked_plugins),
-        )
+        ) + &if policy.tool_rules.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n  tool rules: {}",
+                policy
+                    .tool_rules
+                    .iter()
+                    .map(describe_tool_rule)
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )
+        }
     }
 }
 
@@ -2751,6 +2821,7 @@ mod connector_contract_tests {
                 "mcp.example.com".to_string(),
                 "*.internal.example".to_string(),
             ],
+            tool_rules: vec![],
         }
     }
 

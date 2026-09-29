@@ -561,7 +561,7 @@ async function dispatchChatCompletions(
       const researchToolApprovalPolicy =
         processed.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
       const researchConnectorPermissions = await timePhase(CHAT_TURN_PHASE.toolPermissions, () =>
-        loadConnectorToolPermissions(requestDb, userId),
+        loadConnectorToolPermissions(requestDb, userId, processed.organizationId ?? null),
       );
       processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
         approvalRequired: !hostedToolRunsUnasked(
@@ -805,6 +805,7 @@ async function dispatchChatCompletions(
       connectorPermissionsRequired || toolApprovalPolicyRequired
         ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () => {
             return loadTurnToolPermissions(requestDb, userId, {
+              organizationId: processed.organizationId ?? null,
               modelSupportsTools,
               connectorPermissionsRequired,
               toolApprovalPolicyRequired,

@@ -377,12 +377,12 @@ function ToolCallTimelineRow({
                       marginBottom: 4,
                     }}
                   >
-                    Request
+                    {executedCode(tool) === undefined ? 'Request' : 'Code'}
                   </Text>
                   <Text
                     style={{ fontFamily: 'monospace', fontSize: 11.5, color: colors.textPrimary }}
                   >
-                    {tool.command ?? tool.input}
+                    {tool.command ?? executedCode(tool) ?? tool.input}
                   </Text>
                 </View>
               ) : null}
@@ -398,7 +398,7 @@ function ToolCallTimelineRow({
                       marginBottom: 4,
                     }}
                   >
-                    Response
+                    {executedCode(tool) === undefined ? 'Response' : 'Output'}
                   </Text>
                   <Text
                     numberOfLines={12}
@@ -432,6 +432,22 @@ function ToolCallTimelineRow({
 }
 
 const FULLSCREEN_OUTPUT_THRESHOLD = 600;
+
+const CODE_EXECUTION_TOOLS: ReadonlySet<string> = new Set([
+  'code_execution',
+  'execute_code',
+  'code_interpreter',
+]);
+
+function executedCode(tool: ToolCall): string | undefined {
+  if (!CODE_EXECUTION_TOOLS.has(tool.name) || !tool.input) return undefined;
+  try {
+    const parsed = JSON.parse(tool.input) as { code?: unknown };
+    return typeof parsed.code === 'string' && parsed.code.trim() !== '' ? parsed.code : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function needsFullScreen(tool: ToolCall): boolean {
   const size =

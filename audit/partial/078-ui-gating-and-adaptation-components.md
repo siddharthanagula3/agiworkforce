@@ -68,9 +68,8 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:269-269`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | No member-readable endpoint names the workspace's residency region (only /api/admin/data-region, platform admin), so the CLI cannot show or explain a regional restriction. | ui |
-| vscode | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 
-Code: `apps/cli/src/provider.rs:341-341`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`, `apps/extension-vscode/src/utils/api.ts:581-586`, `packages/ai/routing/src/auto.ts:1024-1034`
+Code: `apps/cli/src/provider.rs:341-341`
 
 ## S78.13: Required-connection detection.
 
@@ -95,18 +94,6 @@ Code: `apps/cli/src/provider.rs:341-341`, `apps/extension-vscode/src/features/mo
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S78.16: Unsupported versus temporarily unavailable distinction.
-
-- Done when: The surface tells apart a feature that is unsupported here from one that is only temporarily unavailable.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Settings says account details or plan usage are temporarily unavailable, but the model picker does not distinguish a temporarily unavailable model from an unsupported one. | ui |
-
-Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:2029-2031`
 
 ## S78.20: Connect-account explanation.
 
