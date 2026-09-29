@@ -131,15 +131,17 @@ describe('evaluateConnectorPolicyForUser', () => {
     const decision = await evaluateConnectorPolicyForUser({
       db,
       userId: USER,
-      organizationId: null,
+      organizationId: ORG,
       connectorId: 'github',
+      surface: 'web',
     });
 
     expect(decision).toMatchObject({ allowed: false, code: 'connectors_unavailable' });
     expect(connectorsAllowed).toHaveBeenCalledWith({
       userId: USER,
-      organizationId: null,
+      organizationId: ORG,
       planTier: 'pro',
+      surface: 'web',
     });
   });
 
