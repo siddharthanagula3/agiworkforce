@@ -4239,16 +4239,27 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
         }
         McpSubcommand::Logout { name } => {
             let url = remote_server_url(&registry_file, name)?;
-            let had_token = crate::mcp::logout_from_remote_server(&url)?;
-            println!(
-                "{} '{}'.",
-                if had_token {
-                    "Removed the stored OAuth token for"
-                } else {
-                    "No OAuth token was stored for"
-                },
-                terminal_text::sanitize_terminal_text(name)
-            );
+            let entry = registry_file
+                .entry(name)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("no MCP server named '{name}' in the registry"))?;
+            let config: crate::mcp::McpServerConfig = serde_json::from_value(entry)
+                .with_context(|| format!("registry entry for '{name}' is not a server config"))?;
+            let outcome = crate::mcp::logout_from_remote_server(&url, &config).await?;
+            let shown = terminal_text::sanitize_terminal_text(name);
+            match outcome.revocation {
+                None => println!("No OAuth token was stored for '{shown}'."),
+                Some(crate::mcp::McpRevocation::Revoked) => println!(
+                    "Revoked the OAuth grant for '{shown}' at its provider and removed the stored token."
+                ),
+                Some(crate::mcp::McpRevocation::NotOffered) => println!(
+                    "Removed the stored OAuth token for '{shown}'. Its provider offers no revocation endpoint, so remove the app's access in the provider's own settings to end the grant there too."
+                ),
+                Some(crate::mcp::McpRevocation::Failed(reason)) => println!(
+                    "Removed the stored OAuth token for '{shown}', but the provider did not confirm revocation ({}). Remove the app's access in the provider's own settings to end the grant there too.",
+                    terminal_text::sanitize_terminal_text(&reason)
+                ),
+            }
             Ok(())
         }
         McpSubcommand::Remove { name } => {
