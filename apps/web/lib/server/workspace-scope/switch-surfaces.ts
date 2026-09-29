@@ -260,7 +260,7 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
   {
     surface: 'devices',
     effect: 'partitioned',
-    tables: ['device_registrations', 'device_refresh_tokens'],
+    tables: ['device_registrations', 'device_refresh_tokens', 'mobile_intent_tokens'],
     transferable: false,
     copyable: false,
     exportable: false,

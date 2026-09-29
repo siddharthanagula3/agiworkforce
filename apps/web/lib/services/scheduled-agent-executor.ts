@@ -686,8 +686,17 @@ async function selectScheduledRoute(
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
 ): Promise<ScheduledRunRoute> {
+  return selectUnattendedRoute(scope, task.model ?? 'auto', taskType, subscriptionTier);
+}
+
+export async function selectUnattendedRoute(
+  scope: { db: Parameters<typeof sideCallRoutingRequest>[0]; userId: string },
+  selection: string,
+  taskType: ReturnType<typeof classifyTaskLocally>['type'],
+  subscriptionTier: string,
+): Promise<ScheduledRunRoute> {
   const baseRouting: AutoRoutingRequest = {
-    selection: task.model ?? 'auto',
+    selection,
     taskType,
     subscriptionTier,
     trustMode: 'managed_cloud',

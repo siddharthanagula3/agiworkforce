@@ -49,6 +49,7 @@ const CUSTOMER_CONTENT = [
   'media_assets',
   'message_bookmarks',
   'message_reactions',
+  'mobile_intent_tokens',
   'notebook_runs',
   'notifications',
   'organization_plugin_files',

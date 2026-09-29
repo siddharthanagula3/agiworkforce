@@ -177,6 +177,16 @@ const desktopDeviceExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const mobileIntentTokenExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  install_id: z.string(),
+  capability: z.string(),
+  created_at: timestampSchema,
+  last_used_at: timestampSchema.nullable(),
+  revoked_at: timestampSchema.nullable(),
+});
+
 const deviceRegistrationExportSchema = z.object({
   id: z.string(),
   organization_id: z.string().nullable(),
@@ -2323,6 +2333,18 @@ async function collectUserData(
     ledger,
   });
   if (registeredDeviceRows.length > 0) exportData['device_registrations'] = registeredDeviceRows;
+
+  const intentTokenRows = await queryExportRows({
+    db,
+    sql: `select id, organization_id, install_id, capability, created_at, last_used_at, revoked_at
+          from mobile_intent_tokens where user_id = $1`,
+    values: [user.id],
+    schema: mobileIntentTokenExportSchema,
+    section: 'mobile_intent_tokens',
+    userId: user.id,
+    ledger,
+  });
+  if (intentTokenRows.length > 0) exportData['mobile_intent_tokens'] = intentTokenRows;
 
   const installationRows = await queryExportRows({
     db,

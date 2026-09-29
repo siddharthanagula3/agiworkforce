@@ -1269,6 +1269,7 @@
         "device_registrations",
         "desktop_devices",
         "mobile_devices",
+        "mobile_intent_tokens",
         "device_refresh_tokens",
         "device_authorization_codes"
       ],
@@ -1476,6 +1477,11 @@
     }
   ],
   "columnExemptions": [
+    {
+      "table": "mobile_intent_tokens",
+      "exempt": [],
+      "why": "a hashed Ask from Siri credential its owner's app requests for one install; it is never edited, only revoked or replaced by the next rotation, so there is no creator distinct from the owner and nothing to version"
+    },
     {
       "table": "billing_disputes",
       "exempt": [],

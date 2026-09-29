@@ -81,6 +81,7 @@
     "apps/web/app/api/media/video/openrouter-webhook/route.ts": "the provider callback signature is the principal for an asynchronous media job",
     "apps/web/app/api/mobile/iap/apple-notifications/route.ts": "an App Store server notification signed by Apple is the principal",
     "apps/web/app/api/mobile/iap/google-notifications/route.ts": "a Google Play Pub/Sub push identity token is the principal",
+    "apps/web/app/api/mobile/intent/ask/route.ts": "a hashed per-install Ask from Siri token is the principal; the route reads the owner's account status, terms, plan and kill switch before answering",
     "apps/web/app/api/scim/v2/Groups/[groupId]/route.ts": "a workspace SCIM bearer token is the principal, and it refuses a locked-down workspace at authentication",
     "apps/web/app/api/scim/v2/Groups/route.ts": "a workspace SCIM bearer token is the principal, and it refuses a locked-down workspace at authentication",
     "apps/web/app/api/scim/v2/ResourceTypes/route.ts": "a workspace SCIM bearer token is the principal, and it refuses a locked-down workspace at authentication",
