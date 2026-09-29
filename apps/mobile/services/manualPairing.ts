@@ -193,14 +193,18 @@ export async function claimManualPairingToken(rawCode: string): Promise<ManualPa
           'That pairing code belongs to a different account. Sign in as that account on Desktop.',
         );
       }
+      // The workspace gate answers {error: "sentence"}, others {error: {message}}.
+      // A bare code is not a sentence to show, so only one with words is used.
       const message =
-        error &&
-        typeof error === 'object' &&
-        typeof (error as { message?: unknown }).message === 'string'
-          ? (error as { message: string }).message
-          : typeof refusal?.message === 'string'
-            ? refusal.message
-            : null;
+        typeof error === 'string' && /\s/.test(error.trim())
+          ? error.trim()
+          : error &&
+              typeof error === 'object' &&
+              typeof (error as { message?: unknown }).message === 'string'
+            ? (error as { message: string }).message
+            : typeof refusal?.message === 'string'
+              ? refusal.message
+              : null;
       throw new ManualPairingClaimError(
         message ??
           'AGI Cloud did not allow this phone to pair. Check with your workspace administrator.',
