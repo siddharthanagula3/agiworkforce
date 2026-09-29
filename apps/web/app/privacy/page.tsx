@@ -615,10 +615,18 @@ const BASIS_LEDGER: readonly LedgerRow[] = [
     label: 'Product analytics',
     value: (
       <>
-        <strong>Data used:</strong> aggregated page views.
+        <strong>Data used:</strong> aggregated page views on this site, and product usage events
+        from the AGI apps on web, desktop, mobile, Chrome, VS Code and the command line, recorded
+        against your account: that a response was stopped or regenerated, that a suggested edit was
+        accepted or dismissed, and similar product steps, with fixed labels such as your plan or the
+        model provider. They never carry your messages, code, files or file names.
         <br />
-        <strong>Basis:</strong> <strong>your consent.</strong> Nothing loads until you give it, and
-        the gate fails closed: if your choice cannot be read, analytics stays off.
+        <strong>Basis:</strong> <strong>your consent.</strong> Nothing loads or is recorded until
+        you give it, and the gate fails closed: if your choice cannot be read, analytics stays off.
+        A consent given under a version of this notice older than 2026-09-29 covered page views
+        only, so the app events need you to allow analytics again. Change it any time from Settings
+        in any AGI app or on the data rights page; a workspace administrator can also turn it off
+        for every member.
       </>
     ),
   },

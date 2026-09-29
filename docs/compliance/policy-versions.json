@@ -83,7 +83,7 @@
           "date": "2026-09-29",
           "digest": "85f1c06b4c989919",
           "note": "Adds a Google user data section stating how the Gmail, Calendar, Drive and Contacts connectors access, use, store and share Google data, and that this follows the Google API Services User Data Policy including Limited Use. It describes existing practice and narrows no right.",
-          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements."
+          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements. Product analytics now also covers usage events from the AGI apps recorded against your account, so a consent given under an earlier version covers page views only."
         },
         {
           "date": "2026-09-29",
@@ -99,6 +99,11 @@
           "date": "2026-09-29",
           "digest": "4cbe9937d3461d21",
           "note": "Same-day revision before release: the memory row now also covers search and research results from chats holding Google data and files imported from Google. The date stays because the 2026-09-29 version has not shipped."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "a5112f1e720aea66",
+          "note": "Same-day revision before release, and material: product analytics now discloses per-account product usage events from web, desktop, mobile, Chrome, VS Code and the CLI (stop, regenerate, suggestion accepted or dismissed; no content), the Settings control on every surface and the workspace switch that turns it off. Because it widens what the product_analytics consent covers, the server honours only consents recorded under this notice version or later (PRODUCT_ANALYTICS_NOTICE_VERSION); earlier consents keep covering page views only. The date stays because the 2026-09-29 version has not shipped."
         }
       ]
     },
