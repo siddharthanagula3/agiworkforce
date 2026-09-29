@@ -10,18 +10,17 @@ nothing is left.
 
 - Done when: The assistant can call a tool that opens a cited source or document (PDF, Office file or page) by reference and reads its text.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval quality signal (packages/ai/model-registry/catalog/routing-policies.json:161) | handler |
 | desktop | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval quality signal (packages/ai/model-registry/catalog/routing-policies.json:161) | handler |
 | mobile | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval signal; server-only, the phone uses the same completions path | handler |
-| vscode | partial | Needs the CLI read_file PDF/Office reader (pdf-extract/lopdf/calamine approved for w-desktop/c-cli); VS Code inherits it with no extension change. | handler |
 | chrome | partial | Same as web: url_fetch reads PDF and Office files by URL (d67ced36f), but the served tool description is still v1 until tool.url_fetch_description@2 advances to stable; uploaded files and connector sources are still not opened by reference. | handler |
 | api | partial | release step: tool.url_fetch_description@2 is on internal and needs a canary advance with an eval quality signal (lead). Uploaded files and connector sources are still reached only through search_files excerpts, not opened whole by reference | handler |
 
-Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-registry/catalog/routing-policies.json:161-161`, `apps/cli/src/features/exec/tools/mod.rs:365-372`, `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`
+Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-registry/catalog/routing-policies.json:161-161`, `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`
 
 ## S57.05: File-read tool.
 
