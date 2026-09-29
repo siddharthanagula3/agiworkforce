@@ -1,9 +1,11 @@
+import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
+import { MAX_TEXT_READ_BYTES, type WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
 import {
+  WriteConflict,
   createDirectory,
   globFiles,
   grepFiles,
@@ -13,6 +15,10 @@ import {
   writeTextFile,
 } from '../runtime/filesystemService';
 import { PathRefused } from '../runtime/pathGuard';
+
+function sha256(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex');
+}
 
 let sandbox: string;
 let root: WorkspaceRoot;
@@ -72,6 +78,18 @@ describe('readTextFile', () => {
   it('refuses a directory', async () => {
     await expect(readTextFile(root, 'src')).rejects.toBeInstanceOf(PathRefused);
   });
+
+  it('returns the SHA-256 of the bytes it read', async () => {
+    const content = await readTextFile(root, 'src/index.ts');
+    expect(content.sha256).toBe(sha256('export const needle = 1;\n'));
+  });
+
+  it('returns no SHA-256 for a file it truncated', async () => {
+    await fs.writeFile(path.join(sandbox, 'large.txt'), 'a'.repeat(MAX_TEXT_READ_BYTES + 1));
+    const content = await readTextFile(root, 'large.txt');
+    expect(content.truncated).toBe(true);
+    expect(content.sha256).toBeUndefined();
+  });
 });
 
 describe('writeTextFile', () => {
@@ -90,6 +108,63 @@ describe('writeTextFile', () => {
 
   it('refuses to write outside the root', async () => {
     await expect(writeTextFile(root, '../escaped.txt', 'x')).rejects.toBeInstanceOf(PathRefused);
+  });
+
+  it('writes over the version it read and returns the SHA-256 of what it wrote', async () => {
+    await fs.writeFile(path.join(sandbox, 'edited.ts'), 'const version = 1;\n');
+    const read = await readTextFile(root, 'edited.ts');
+
+    const write = await writeTextFile(root, 'edited.ts', 'const version = 2;\n', read.sha256);
+
+    expect(write.sha256).toBe(sha256('const version = 2;\n'));
+    expect(await fs.readFile(path.join(sandbox, 'edited.ts'), 'utf8')).toBe('const version = 2;\n');
+  });
+
+  it('refuses to write over a change made after the read, and leaves that change on disk', async () => {
+    await fs.writeFile(path.join(sandbox, 'contested.ts'), 'const version = 1;\n');
+    const read = await readTextFile(root, 'contested.ts');
+    await fs.writeFile(path.join(sandbox, 'contested.ts'), 'const agent = true;\n');
+
+    await expect(
+      writeTextFile(root, 'contested.ts', 'const version = 2;\n', read.sha256),
+    ).rejects.toBeInstanceOf(WriteConflict);
+    expect(await fs.readFile(path.join(sandbox, 'contested.ts'), 'utf8')).toBe(
+      'const agent = true;\n',
+    );
+  });
+
+  it('refuses to write a file deleted after the read, and creates nothing', async () => {
+    await fs.mkdir(path.join(sandbox, 'gone'), { recursive: true });
+    await fs.writeFile(path.join(sandbox, 'gone', 'file.ts'), 'const version = 1;\n');
+    const read = await readTextFile(root, 'gone/file.ts');
+    await fs.rm(path.join(sandbox, 'gone'), { recursive: true });
+
+    await expect(
+      writeTextFile(root, 'gone/file.ts', 'const version = 2;\n', read.sha256),
+    ).rejects.toBeInstanceOf(WriteConflict);
+    await expect(fs.stat(path.join(sandbox, 'gone'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('refuses to write over a file that became a directory after the read', async () => {
+    await fs.writeFile(path.join(sandbox, 'swapped.ts'), 'const version = 1;\n');
+    const read = await readTextFile(root, 'swapped.ts');
+    await fs.rm(path.join(sandbox, 'swapped.ts'));
+    await fs.mkdir(path.join(sandbox, 'swapped.ts'));
+
+    await expect(
+      writeTextFile(root, 'swapped.ts', 'const version = 2;\n', read.sha256),
+    ).rejects.toBeInstanceOf(WriteConflict);
+    expect((await fs.stat(path.join(sandbox, 'swapped.ts'))).isDirectory()).toBe(true);
+  });
+
+  it('replaces a file whole when no version is given', async () => {
+    await fs.writeFile(path.join(sandbox, 'replaced.ts'), 'const version = 1;\n');
+
+    await writeTextFile(root, 'replaced.ts', 'const version = 3;\n');
+
+    expect(await fs.readFile(path.join(sandbox, 'replaced.ts'), 'utf8')).toBe(
+      'const version = 3;\n',
+    );
   });
 });
 

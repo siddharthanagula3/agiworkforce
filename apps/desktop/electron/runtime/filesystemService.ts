@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import {
@@ -11,6 +12,7 @@ import {
   type FileStat,
   type FileTextContent,
   type FileTextEdit,
+  type FileTextWrite,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
 import {
@@ -28,6 +30,10 @@ import { assertNotDeniedFile, PathRefused, resolveWithinRoot } from './pathGuard
 
 function toPosix(value: string): string {
   return toPosixPath(value.split(path.sep).join('/'));
+}
+
+function sha256Of(bytes: Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function kindOf(stat: { isSymbolicLink(): boolean; isDirectory(): boolean }): FileEntry['kind'] {
@@ -130,17 +136,19 @@ export async function readTextFile(
   const handle = await fs.open(resolved.absolute, 'r');
   try {
     const length = Math.min(stat.size, MAX_TEXT_READ_BYTES);
-    const buffer = Buffer.alloc(length);
-    await handle.read(buffer, 0, length, 0);
-    if (looksBinary(buffer.subarray(0, Math.min(BINARY_SNIFF_BYTES, length)))) {
+    const { bytesRead, buffer } = await handle.read(Buffer.alloc(length), 0, length, 0);
+    const bytes = buffer.subarray(0, bytesRead);
+    if (looksBinary(bytes.subarray(0, Math.min(BINARY_SNIFF_BYTES, bytesRead)))) {
       throw new PathRefused('io-error', `${resolved.relative} is a binary file.`);
     }
+    const truncated = stat.size > MAX_TEXT_READ_BYTES;
     return {
       path: toPosix(resolved.relative),
-      text: buffer.toString('utf8'),
+      text: bytes.toString('utf8'),
       sizeBytes: stat.size,
       modifiedAtMs: stat.mtimeMs,
-      truncated: stat.size > MAX_TEXT_READ_BYTES,
+      truncated,
+      ...(truncated ? {} : { sha256: sha256Of(bytes) }),
     };
   } finally {
     await handle.close();
@@ -171,16 +179,49 @@ export async function readBinaryFile(
   };
 }
 
+export class WriteConflict extends Error {}
+
+async function assertUnchangedSinceRead(
+  absolute: string,
+  relative: string,
+  expectedSha256: string,
+): Promise<void> {
+  let stat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stat = await fs.stat(absolute);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      throw new WriteConflict(`${relative} was deleted since it was read.`);
+    }
+    throw error;
+  }
+  if (
+    !stat.isFile() ||
+    stat.size > MAX_TEXT_READ_BYTES ||
+    sha256Of(await fs.readFile(absolute)) !== expectedSha256
+  ) {
+    throw new WriteConflict(`${relative} changed on disk since it was read.`);
+  }
+}
+
 export async function writeTextFile(
   root: WorkspaceRoot,
   relativePath: string,
   text: string,
-): Promise<FileStat> {
+  expectedSha256?: string,
+): Promise<FileTextWrite> {
   const resolved = await resolveWithinRoot(root, relativePath);
   assertNotDeniedFile(resolved.absolute);
-  await fs.mkdir(path.dirname(resolved.absolute), { recursive: true });
-  await fs.writeFile(resolved.absolute, text, 'utf8');
-  return statPath(root, relativePath);
+  if (expectedSha256 === undefined) {
+    await fs.mkdir(path.dirname(resolved.absolute), { recursive: true });
+  } else {
+    await assertUnchangedSinceRead(resolved.absolute, resolved.relative, expectedSha256);
+  }
+  const bytes = Buffer.from(text, 'utf8');
+  await fs.writeFile(resolved.absolute, bytes);
+  const stat = await statPath(root, relativePath);
+  return bytes.length > MAX_TEXT_READ_BYTES ? stat : { ...stat, sha256: sha256Of(bytes) };
 }
 
 export class TextEditRefused extends Error {}
@@ -222,7 +263,7 @@ export async function editTextFile(
   const next = replaceAll
     ? current.text.split(oldText).join(newText)
     : current.text.replace(oldText, () => newText);
-  const stat = await writeTextFile(root, relativePath, next);
+  const stat = await writeTextFile(root, relativePath, next, current.sha256);
   return { path: current.path, replacements: occurrences, sizeBytes: stat.sizeBytes };
 }
 

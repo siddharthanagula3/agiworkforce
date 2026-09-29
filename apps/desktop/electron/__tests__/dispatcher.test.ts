@@ -39,6 +39,8 @@ const runLocalChat = vi.fn();
 const cancelLocalChat = vi.fn();
 const readLocalModelSettings = vi.fn();
 const writeLocalModelSettings = vi.fn();
+const writeTextFile = vi.fn();
+class WriteConflict extends Error {}
 const send = vi.fn();
 
 const showMessageBox = vi.fn();
@@ -134,6 +136,7 @@ vi.mock('../runtime/appsService', () => ({
 vi.mock('../runtime/clipboardService', () => ({ readClipboard }));
 vi.mock('../runtime/filesystemService', () => ({
   TextEditRefused: class extends Error {},
+  WriteConflict,
   createDirectory: vi.fn(),
   editTextFile: vi.fn(),
   globFiles: vi.fn(),
@@ -142,7 +145,7 @@ vi.mock('../runtime/filesystemService', () => ({
   readBinaryFile: vi.fn(),
   readTextFile: vi.fn(),
   statPath: vi.fn(),
-  writeTextFile: vi.fn(),
+  writeTextFile,
 }));
 vi.mock('../runtime/gitService', () => ({ readWorkspaceGit: vi.fn() }));
 const reportShellIdentity = vi.fn();
@@ -339,6 +342,60 @@ describe('dispatch, local command gating', () => {
       timeoutMs: 'soon',
     });
     expect(response).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+  });
+});
+
+describe('dispatch, writing a file over the version the caller read', () => {
+  const expectedSha256 = 'e'.repeat(64);
+
+  it('hands the version to the write', async () => {
+    writeTextFile.mockResolvedValue({ path: 'a.ts', sha256: 'f'.repeat(64) });
+
+    const response = await dispatch(window, 'file_write_text', {
+      rootId: root.id,
+      path: 'a.ts',
+      text: 'x',
+      expectedSha256,
+    });
+
+    expect(response.ok).toBe(true);
+    expect(writeTextFile).toHaveBeenCalledWith(root, 'a.ts', 'x', expectedSha256);
+  });
+
+  it('writes with no precondition when the caller sends no version', async () => {
+    writeTextFile.mockResolvedValue({ path: 'a.ts' });
+
+    await dispatch(window, 'file_write_text', { rootId: root.id, path: 'a.ts', text: 'x' });
+
+    expect(writeTextFile).toHaveBeenCalledWith(root, 'a.ts', 'x', undefined);
+  });
+
+  it('refuses a version that is not a SHA-256 digest before touching the disk', async () => {
+    const response = await dispatch(window, 'file_write_text', {
+      rootId: root.id,
+      path: 'a.ts',
+      text: 'x',
+      expectedSha256: 'stale',
+    });
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    expect(writeTextFile).not.toHaveBeenCalled();
+  });
+
+  it('answers a write refused over a newer version with the conflict code', async () => {
+    writeTextFile.mockRejectedValue(new WriteConflict('a.ts changed on disk since it was read.'));
+
+    const response = await dispatch(window, 'file_write_text', {
+      rootId: root.id,
+      path: 'a.ts',
+      text: 'x',
+      expectedSha256,
+    });
+
+    expect(response).toEqual({
+      ok: false,
+      error: { code: 'conflict', message: 'a.ts changed on disk since it was read.' },
+    });
   });
 });
 
