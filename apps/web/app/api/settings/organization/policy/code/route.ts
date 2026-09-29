@@ -122,6 +122,7 @@ function policyInputFrom(
     requireMfa: policy.requireMfa,
     monthlySpendCapCents: policy.monthlySpendCapCents,
     zeroDataRetentionOnly: policy.zeroDataRetentionOnly,
+    allowProductAnalytics: policy.allowProductAnalytics,
     ipAllowList: [...policy.ipAllowList],
     controls: policy.controls,
     metadata: withWorkspaceCodeControls(policy.metadata, code),

@@ -69,6 +69,7 @@ const PolicyPatchSchema = z
     requireMfa: z.boolean(),
     monthlySpendCapCents: z.number().int().positive().nullable(),
     zeroDataRetentionOnly: z.boolean(),
+    allowProductAnalytics: z.boolean(),
     ipAllowList: IpAllowListSchema,
     controls: ControlsPatchSchema,
   })
@@ -252,6 +253,8 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
         : current.policy.monthlySpendCapCents,
     zeroDataRetentionOnly:
       parsed.data.zeroDataRetentionOnly ?? current.policy.zeroDataRetentionOnly,
+    allowProductAnalytics:
+      parsed.data.allowProductAnalytics ?? current.policy.allowProductAnalytics,
     ipAllowList: parsed.data.ipAllowList ?? current.policy.ipAllowList,
     controls: mergeControls(current.policy.controls, parsed.data.controls),
     metadata: current.policy.metadata ?? {},
