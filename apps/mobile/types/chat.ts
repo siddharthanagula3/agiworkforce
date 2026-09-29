@@ -50,6 +50,7 @@ export interface ToolCall {
   searchResults?: ToolSearchResult[];
   requiresApproval?: boolean;
   approvalDecision?: 'approved' | 'rejected';
+  approvalGuidance?: string;
   approvalRiskLevel?: RiskLevel;
   toolCallId?: string;
 }
@@ -96,6 +97,7 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   imageUrl?: string;
   imageGenPersisted?: boolean;
   revisedPrompt?: string;
+  imageAspectRatio?: string;
   isGeneratingImage?: boolean;
   imageGenProgress?: number;
   imageGenStatus?: 'pending' | 'generating' | 'completed' | 'failed';

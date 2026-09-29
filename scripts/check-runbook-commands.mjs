@@ -154,28 +154,54 @@ function existsOnDisk(root, relative) {
   return fs.existsSync(parent);
 }
 
+function settingFiles(root) {
+  if (fs.existsSync(path.join(root, '.git'))) {
+    const output = execFileSync(
+      'git',
+      ['ls-files', '-c', '-o', '--exclude-standard', '-z', '--', ...SETTING_ROOTS],
+      { cwd: root, encoding: 'utf8' },
+    );
+    return output
+      .split('\0')
+      .filter(Boolean)
+      .map((relative) => path.join(root, relative));
+  }
+
+  const files = [];
+  const visit = (directory) => {
+    if (!fs.existsSync(directory)) return;
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(target);
+      else if (entry.isFile()) files.push(target);
+    }
+  };
+  for (const directory of SETTING_ROOTS) visit(path.join(root, directory));
+  return files;
+}
+
 /** Settings each root mentions, read once rather than per name. */
 function mentionedSettings(root, names) {
   if (names.length === 0) return new Set();
-  const args = ['grep', '--no-index', '-h', '-I', '-w', '-E', `(${names.join('|')})`, '--'];
-  for (const dir of SETTING_ROOTS) {
-    if (fs.existsSync(path.join(root, dir))) args.push(dir);
-  }
-  let out;
+  let files;
   try {
-    out = execFileSync('git', args, {
-      cwd: root,
-      encoding: 'utf8',
-      maxBuffer: 256 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-  } catch (error) {
-    if (error?.status !== 1) return null;
-    out = '';
+    files = settingFiles(root);
+  } catch {
+    return null;
   }
   const found = new Set();
-  for (const name of names) {
-    if (new RegExp(`\\b${name}\\b`).test(out)) found.add(name);
+  const pattern = new RegExp(`\\b(?:${names.join('|')})\\b`, 'g');
+  for (const file of files) {
+    if (!fs.existsSync(file)) continue;
+    let source;
+    try {
+      source = fs.readFileSync(file, 'utf8');
+    } catch {
+      return null;
+    }
+    if (source.includes('\0')) continue;
+    for (const match of source.matchAll(pattern)) found.add(match[0]);
+    if (found.size === names.length) break;
   }
   return found;
 }

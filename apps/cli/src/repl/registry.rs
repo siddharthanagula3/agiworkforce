@@ -713,6 +713,11 @@ fn permissions_tab(tab: &str) -> CommandOutcome {
 }
 
 fn mutate_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
+    if scope != "deny" {
+        if let Some(message) = crate::permissions::open_ended_allow_error(rule) {
+            return CommandOutcome::Error(message);
+        }
+    }
     let mut store = match crate::permissions::PermissionStore::load() {
         Ok(store) => store,
         Err(e) => return CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),

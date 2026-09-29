@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   assertingHelpers,
@@ -20,6 +25,22 @@ function unit(body) {
 function scan(body, file = 'apps/web/lib/subject.test.ts') {
   return scanTestFile(file, unit(body));
 }
+
+test('the whole-tree scan ignores other worktrees', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'test-integrity-'));
+  try {
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    fs.writeFileSync(path.join(root, '.gitignore'), '.worktrees/\n');
+    fs.writeFileSync(path.join(root, 'clean.test.ts'), unit(`${EXPECT}(answer()).toBe(42);`));
+    fs.mkdirSync(path.join(root, '.worktrees'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.worktrees', 'ignored.test.ts'), unit('doNothing();'));
+    const guard = fileURLToPath(new URL('./check-test-integrity.mjs', import.meta.url));
+    const output = execFileSync(process.execPath, [guard], { cwd: root, encoding: 'utf8' });
+    assert.match(output, /scanned 1 test file/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('a test that checks nothing is a finding', () => {
   const findings = scan('  doTheThing();');

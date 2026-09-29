@@ -426,7 +426,7 @@ pub(super) async fn approve_command(
                 }));
             }
             Decision::Prompt if evaluation.matched_rule => require_confirmation = true,
-            Decision::Allow if evaluation.every_segment_matched_rule => {
+            Decision::Allow if policy_waives_confirmation(&evaluation, command) => {
                 require_confirmation = false
             }
             Decision::Prompt | Decision::Allow => {}
@@ -439,7 +439,7 @@ pub(super) async fn approve_command(
         if !matches!(safety, CommandSafety::Safe) {
             let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
 
-            match perms.check_command_allowing_hook_bypass(command) {
+            match saved_command_decision(&perms, command, safety) {
                 Some(true) => {
                     // Previously allowed, skip prompt
                 }
@@ -661,6 +661,24 @@ async fn sandbox_network_policy(
         crate::sandbox::NetworkPolicy::AllowExternal
     } else {
         crate::sandbox::NetworkPolicy::Deny
+    }
+}
+
+fn policy_waives_confirmation(
+    evaluation: &crate::features::exec::exec_policy::CommandEvaluation,
+    command: &str,
+) -> bool {
+    evaluation.every_segment_matched_rule && classify_command(command) != CommandSafety::Dangerous
+}
+
+pub(super) fn saved_command_decision(
+    perms: &crate::permissions::PermissionStore,
+    command: &str,
+    safety: CommandSafety,
+) -> Option<bool> {
+    match perms.check_command_allowing_hook_bypass(command) {
+        Some(true) if safety == CommandSafety::Dangerous => None,
+        decision => decision,
     }
 }
 
@@ -908,5 +926,44 @@ mod tests {
                 command: "rm -rf /tmp/agiworkforce-callback-test".to_string()
             })
         );
+    }
+
+    #[test]
+    fn a_saved_allow_does_not_skip_the_prompt_for_a_dangerous_command() {
+        let mut perms = crate::permissions::PermissionStore::default();
+        perms.allow_always("rm");
+        perms.allow_always("cargo");
+        let dangerous = "rm -rf build";
+        assert_eq!(classify_command(dangerous), CommandSafety::Dangerous);
+        assert_eq!(
+            saved_command_decision(&perms, dangerous, classify_command(dangerous)),
+            None
+        );
+        assert_eq!(
+            saved_command_decision(&perms, "cargo build", CommandSafety::Unknown),
+            Some(true)
+        );
+        perms.deny_always("rm");
+        assert_eq!(
+            saved_command_decision(&perms, dangerous, CommandSafety::Dangerous),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn an_exec_policy_allow_does_not_skip_the_prompt_for_a_dangerous_command() {
+        use crate::features::exec::exec_policy::evaluate_command;
+        use agiworkforce_execpolicy::{Decision, Policy};
+        let mut policy = Policy::empty();
+        for prefix in [["rm", "-rf"], ["cargo", "build"]] {
+            policy
+                .add_prefix_rule(&prefix.map(str::to_string), Decision::Allow)
+                .expect("allow rule");
+        }
+        let dangerous = evaluate_command(&policy, "rm -rf build");
+        assert_eq!(dangerous.decision, Decision::Allow);
+        assert!(!policy_waives_confirmation(&dangerous, "rm -rf build"));
+        let routine = evaluate_command(&policy, "cargo build");
+        assert!(policy_waives_confirmation(&routine, "cargo build"));
     }
 }

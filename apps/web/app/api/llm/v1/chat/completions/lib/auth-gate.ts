@@ -38,7 +38,6 @@ import {
   type TermsStanding,
 } from '@/lib/server/terms';
 import { recordFailure } from '@/lib/observability/metrics';
-import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 const ENTERPRISE_PLAN_TIER = 'enterprise';
 
@@ -127,13 +126,6 @@ function enforceManagedCloudSurface(
   };
 }
 
-/**
- * Surfaces whose client cannot yet record an acceptance or show the refusal.
- * The mobile app gains both after the Codex iOS work lands; until then a
- * refusal there would be a dead end, so mobile only receives the notice.
- */
-const TERMS_GATE_EXEMPT_SURFACES: ReadonlySet<CloudChatSurface> = new Set(['mobile']);
-
 function termsRefusal(
   request: NextRequest,
   standing: Extract<TermsStanding, { kind: 'required' }>,
@@ -171,7 +163,6 @@ function termsRefusal(
 async function checkTermsStanding(
   request: NextRequest,
   userId: string,
-  surface: CloudChatSurface,
 ): Promise<{ refusal: NextResponse } | { notice?: Record<string, string> }> {
   let standing: TermsStanding;
   try {
@@ -182,14 +173,10 @@ async function checkTermsStanding(
     return {};
   }
   if (standing.kind === 'current') return {};
-  if (standing.kind === 'required' && !TERMS_GATE_EXEMPT_SURFACES.has(surface)) {
+  if (standing.kind === 'required') {
     return { refusal: termsRefusal(request, standing) };
   }
-  const notice =
-    standing.kind === 'notice'
-      ? termsNoticeHeaders(standing)
-      : termsNoticeHeaders({ kind: 'notice', acceptedVersion: null, requiredFrom: null });
-  return { notice };
+  return { notice: termsNoticeHeaders(standing) };
 }
 
 export async function runAuthGate(request: NextRequest): Promise<AuthGateResult> {
@@ -330,11 +317,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   if (userRateLimitResponse) return { ok: false, response: userRateLimitResponse };
 
   if (!apiKeyId) {
-    const terms = await checkTermsStanding(
-      request,
-      userId,
-      resolveAuthenticatedSurface(request, { token, ...credential }),
-    );
+    const terms = await checkTermsStanding(request, userId);
     if ('refusal' in terms) return { ok: false, response: terms.refusal };
     if (terms.notice) credential.termsNotice = terms.notice;
   }

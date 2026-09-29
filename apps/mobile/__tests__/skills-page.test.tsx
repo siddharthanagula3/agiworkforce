@@ -7,6 +7,9 @@ const mockReplace = jest.fn();
 const mockBack = jest.fn();
 const mockSetAppMode = jest.fn();
 const mockFetchManagedSkills = jest.fn();
+const mockFetchInstalledSkillNames = jest.fn();
+const mockInstallSkill = jest.fn();
+const mockUninstallSkill = jest.fn();
 
 let mockAppMode: 'local' | 'cloud' = 'cloud';
 let mockAuthState = {
@@ -116,10 +119,26 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
   isCloudAccountEpochCurrent: () => Boolean(mockAuthState.clerkUserId),
 }));
 
+jest.mock('@/services/api', () => {
+  class ApiHttpError extends Error {
+    readonly status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.status = status;
+    }
+  }
+  return { api: {}, ApiHttpError };
+});
+
 jest.mock('@/src/features/skills/service', () => ({
-  fetchManagedSkills: (...args: unknown[]) => mockFetchManagedSkills(...args),
+  ...jest.requireActual('@/src/features/skills/service'),
+  fetchSkillCatalog: (...args: unknown[]) => mockFetchManagedSkills(...args),
+  fetchInstalledSkillNames: (...args: unknown[]) => mockFetchInstalledSkillNames(...args),
+  installSkill: (...args: unknown[]) => mockInstallSkill(...args),
+  uninstallSkill: (...args: unknown[]) => mockUninstallSkill(...args),
 }));
 
+import { ApiHttpError } from '@/services/api';
 import { SkillsScreen } from '@/src/features/skills/SkillsScreen';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 
@@ -148,6 +167,7 @@ describe('Mobile Skills screen', () => {
         downloadable: false,
       },
     ]);
+    mockFetchInstalledSkillNames.mockResolvedValue(new Set(['Documents']));
     useMobileSkillSelectionStore.setState({ selection: null });
   });
 
@@ -200,9 +220,9 @@ describe('Mobile Skills screen', () => {
     expect(await screen.findByText('Documents')).toBeTruthy();
     expect(screen.getByText('Built in')).toBeTruthy();
     expect(screen.getByText('Workspace')).toBeTruthy();
-    expect(screen.getByLabelText('Documents status: Included')).toBeTruthy();
+    expect(screen.getByLabelText('Documents status: Installed')).toBeTruthy();
     expect(screen.getByLabelText('Release helper status: Coming later')).toBeTruthy();
-    expect(screen.getByLabelText('1 skill available')).toBeTruthy();
+    expect(screen.getByLabelText('1 skill installed')).toBeTruthy();
 
     fireEvent.changeText(screen.getByLabelText('Search skills'), 'production');
 
@@ -223,6 +243,78 @@ describe('Mobile Skills screen', () => {
     });
     expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
     expect(screen.queryByLabelText('Use Release helper in chat')).toBeNull();
+  });
+
+  it('installs a catalog Skill and then offers it in chat', async () => {
+    mockFetchInstalledSkillNames.mockResolvedValueOnce(new Set());
+    mockInstallSkill.mockResolvedValueOnce(new Set(['Documents']));
+    const screen = render(<SkillsScreen />);
+
+    expect(await screen.findByLabelText('Documents status: Not installed')).toBeTruthy();
+    expect(screen.queryByLabelText('Use Documents in chat')).toBeNull();
+    expect(screen.queryByLabelText('Install Release helper')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Install Documents'));
+
+    await waitFor(() => expect(mockInstallSkill).toHaveBeenCalledWith('Documents'));
+    expect(await screen.findByLabelText('Use Documents in chat')).toBeTruthy();
+    expect(screen.getByLabelText('Documents status: Installed')).toBeTruthy();
+    expect(screen.getByLabelText('Uninstall Documents')).toBeTruthy();
+  });
+
+  it('uninstalls a Skill and drops it from the chat selection', async () => {
+    useMobileSkillSelectionStore.setState({ selection: { ownerId: 'user-1', name: 'Documents' } });
+    mockUninstallSkill.mockResolvedValueOnce(new Set());
+    const screen = render(<SkillsScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Uninstall Documents'));
+
+    await waitFor(() => expect(mockUninstallSkill).toHaveBeenCalledWith('Documents'));
+    expect(await screen.findByLabelText('Documents status: Not installed')).toBeTruthy();
+    expect(useMobileSkillSelectionStore.getState().selection).toBeNull();
+  });
+
+  it('shows the server refusal on the Skill it refused', async () => {
+    mockFetchInstalledSkillNames.mockResolvedValueOnce(new Set());
+    mockInstallSkill.mockRejectedValueOnce(
+      new ApiHttpError('Skills are turned off by your workspace admin.', 403),
+    );
+    const screen = render(<SkillsScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Install Documents'));
+
+    expect(await screen.findByText('Skills are turned off by your workspace admin.')).toBeTruthy();
+    expect(screen.getByLabelText('Documents status: Not installed')).toBeTruthy();
+  });
+
+  it('falls back to the web copy when the failure is not a refusal', async () => {
+    mockFetchInstalledSkillNames.mockResolvedValueOnce(new Set());
+    mockInstallSkill.mockRejectedValueOnce(new ApiHttpError('upstream stack trace', 502));
+    const screen = render(<SkillsScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Install Documents'));
+
+    expect(await screen.findByText('Could not install this skill. Try again.')).toBeTruthy();
+    expect(screen.queryByText('upstream stack trace')).toBeNull();
+  });
+
+  it('leaves a plugin-owned Skill to its plugin', async () => {
+    mockFetchManagedSkills.mockResolvedValueOnce([
+      {
+        name: 'Slides',
+        description: 'Build a deck.',
+        source: 'extra',
+        lifecycle: 'included',
+        downloadable: false,
+        origin: { kind: 'catalog', pluginId: 'office', pluginName: 'Office' },
+      },
+    ]);
+    mockFetchInstalledSkillNames.mockResolvedValueOnce(new Set(['Slides']));
+    const screen = render(<SkillsScreen />);
+
+    expect(await screen.findByText('Controlled by its plugin installation.')).toBeTruthy();
+    expect(screen.queryByLabelText('Uninstall Slides')).toBeNull();
+    expect(screen.getByLabelText('Use Slides in chat')).toBeTruthy();
   });
 
   it('teaches the next step when the deployment has no Skills', async () => {
@@ -255,16 +347,22 @@ describe('Mobile Skills screen', () => {
 
     fireEvent.press(screen.getByLabelText('Sign in to AGI Cloud'));
 
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-skills' },
+    });
     expect(mockFetchManagedSkills).not.toHaveBeenCalled();
   });
 
   it('shows a retryable error without leaking raw response content', async () => {
-    mockFetchManagedSkills.mockRejectedValueOnce(new Error('Skills are temporarily unavailable.'));
+    mockFetchManagedSkills.mockRejectedValueOnce(new Error('internal upstream token and URL'));
     const screen = render(<SkillsScreen />);
 
     expect(await screen.findByText('Could not load Skills')).toBeTruthy();
-    expect(screen.getByText('Skills are temporarily unavailable.')).toBeTruthy();
+    expect(
+      screen.getByText('Could not load Skills. Check your connection and try again.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('internal upstream token and URL')).toBeNull();
 
     mockFetchManagedSkills.mockResolvedValueOnce([]);
     fireEvent.press(screen.getByLabelText('Try again'));

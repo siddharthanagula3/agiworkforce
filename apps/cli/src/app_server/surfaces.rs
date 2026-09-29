@@ -1108,7 +1108,7 @@ pub fn remove_saved_permission(
         .into_iter()
         .find(|(target, _)| saved_permission_id(MCP_RULE_SCOPE, target) == id);
     if let Some((target, _)) = mcp_rule {
-        crate::platform::policy::set_user_mcp_rule(&target, None).map_err(internal)?;
+        crate::platform::policy::remove_user_mcp_rule(&target).map_err(internal)?;
         return list_saved_permissions();
     }
     let removed = if let Some((deny, rule)) = stored {
@@ -1235,11 +1235,8 @@ pub fn add_permission(
                 PermissionRuleDecision::Ask => crate::platform::policy::PolicyDecision::Ask,
                 PermissionRuleDecision::Deny => crate::platform::policy::PolicyDecision::Deny,
             };
-            crate::platform::policy::set_user_mcp_rule(
-                &crate::platform::policy::mcp_rule_target(server, tool),
-                Some(decision),
-            )
-            .map_err(internal)?;
+            crate::platform::policy::set_user_mcp_rule(server, tool, Some(decision))
+                .map_err(internal)?;
         }
         PermissionRuleKind::Command | PermissionRuleKind::Domain => {
             let rule = if params.kind == PermissionRuleKind::Domain {
@@ -1248,12 +1245,22 @@ pub fn add_permission(
                         "A site rule names a host such as example.com or *.example.com",
                     ));
                 }
+                if params.decision == PermissionRuleDecision::Allow {
+                    if let Some(message) = crate::permissions::website_allow_error(target) {
+                        return Err(invalid(message));
+                    }
+                }
                 format!(
                     "{}{}",
                     crate::permissions::DOMAIN_RULE_PREFIX,
                     target.to_ascii_lowercase()
                 )
             } else {
+                if params.decision == PermissionRuleDecision::Allow {
+                    if let Some(message) = crate::permissions::open_ended_allow_error(target) {
+                        return Err(invalid(message));
+                    }
+                }
                 target.to_string()
             };
             let mut store = crate::permissions::PermissionStore::load().map_err(internal)?;
@@ -1570,5 +1577,38 @@ mod tests {
             );
         }
         assert!(crate::cli_options::persisted_permission_mode("bypassPermissions").is_none());
+    }
+
+    #[test]
+    fn an_allow_for_a_bare_interpreter_is_refused_before_anything_is_saved() {
+        for target in ["bash", "python3", "npm exec", "/usr/bin/env"] {
+            let error = add_permission(PermissionsAddParams {
+                kind: PermissionRuleKind::Command,
+                target: target.to_string(),
+                decision: PermissionRuleDecision::Allow,
+            })
+            .expect_err(target);
+            assert!(
+                error.to_string().contains("without asking"),
+                "{target}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_site_allow_for_a_metadata_address_is_refused() {
+        for target in ["169.254.169.254", "localhost", "*"] {
+            let error = add_permission(PermissionsAddParams {
+                kind: PermissionRuleKind::Domain,
+                target: target.to_string(),
+                decision: PermissionRuleDecision::Allow,
+            })
+            .expect_err(target);
+            assert!(
+                error.to_string().contains("cannot be allowed")
+                    || error.to_string().contains("names a host"),
+                "{target}: {error}"
+            );
+        }
     }
 }

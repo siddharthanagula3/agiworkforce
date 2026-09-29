@@ -88,12 +88,9 @@ describe('Apple Reminder review screen', () => {
   });
 
   it('shows a settings recovery action when Reminders permission is denied', async () => {
-    mockCreateIOSReminder.mockRejectedValue(
-      new ReminderCreationError(
-        'permission-denied',
-        'Allow Reminders access in Settings to create this reminder.',
-      ),
-    );
+    const denied = new ReminderCreationError('permission-denied');
+    denied.message = 'Provider internal diagnostics';
+    mockCreateIOSReminder.mockRejectedValue(denied);
     const alert = jest.spyOn(Alert, 'alert');
     const screen = render(<ReminderReviewScreen />);
 

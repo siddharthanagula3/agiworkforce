@@ -777,6 +777,10 @@ impl PluginsManager {
         let mut out = HashMap::new();
         for p in self.enabled_plugins() {
             for (name, cfg) in &p.mcp_servers {
+                if let Err(error) = crate::mcp::registry::ensure_no_rule_separator(name) {
+                    eprintln!("[plugins] {error}, skipping");
+                    continue;
+                }
                 let transport_kind = cfg
                     .extra
                     .get("transport")

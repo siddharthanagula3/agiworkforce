@@ -168,17 +168,15 @@ Code: `apps/cli/src/tui/tui_app.rs:3663-3680`, `apps/cli/src/agents.rs:55-76`
 
 - Done when: An assistant's configuration selects which connectors it can use.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Only individual MCP tool names can be allowed or denied in the tools lists; an agent cannot pick which connectors/MCP servers it gets. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:67-78`
 
 ## S52.31: Private access.
 

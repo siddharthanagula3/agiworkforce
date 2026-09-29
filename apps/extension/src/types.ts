@@ -62,6 +62,8 @@ export type NativeMessageType =
   | 'STOP_RECORDING'
   | 'GET_RECORDED_ACTIONS'
   | 'SELECT_OPTION'
+  | 'FIND_ELEMENTS'
+  | 'FILL_FIELDS'
   | 'CHECK'
   | 'UNCHECK'
   | 'FOCUS'
@@ -659,6 +661,16 @@ export interface RecordingResponse {
   error?: string;
 }
 
+export interface FindElementsMessage extends BaseMessage {
+  type: 'FIND_ELEMENTS';
+  query?: string;
+}
+
+export interface FillFieldsMessage extends BaseMessage {
+  type: 'FILL_FIELDS';
+  fields: Array<{ selector: string; value: string }>;
+}
+
 export interface SelectOptionMessage extends BaseMessage {
   type: 'SELECT_OPTION';
   selector: string;
@@ -1089,6 +1101,8 @@ export type ExtensionMessage =
   | StopRecordingMessage
   | GetRecordedActionsMessage
   | SelectOptionMessage
+  | FindElementsMessage
+  | FillFieldsMessage
   | CheckMessage
   | UncheckMessage
   | FocusMessage

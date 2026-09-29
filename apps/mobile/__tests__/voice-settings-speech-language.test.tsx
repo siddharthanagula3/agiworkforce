@@ -50,10 +50,7 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-const mockGetAvailableLanguages = jest.fn();
-
 jest.mock('@/src/features/voice/services/tts', () => ({
-  getAvailableLanguages: (...args: unknown[]) => mockGetAvailableLanguages(...args),
   getVoicesForLanguage: jest.fn().mockResolvedValue([]),
   speak: jest.fn().mockResolvedValue(undefined),
 }));
@@ -63,16 +60,11 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-
-const LANGUAGES = [
-  { code: 'en', label: 'English', locale: 'en-US' },
-  { code: 'fr', label: 'French', locale: 'fr-FR' },
-];
+import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
 
 describe('Voice settings, speech language', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetAvailableLanguages.mockResolvedValue(LANGUAGES);
     useChatAppModeStore.setState({ appMode: 'local' });
     useSettingsStore.setState({
       voiceEnabled: true,
@@ -83,6 +75,24 @@ describe('Voice settings, speech language', () => {
     });
     useLocalSettingsStore.setState({ speechLanguage: 'en' });
     useCloudSettingsStore.setState({ speechLanguage: 'en' });
+  });
+
+  it('shows Automatic for an account that never picked a language', async () => {
+    useLocalSettingsStore.setState({ speechLanguage: SPEECH_LANGUAGE_AUTO });
+    const { getByLabelText } = render(<VoiceSettingsScreen />);
+
+    await waitFor(() => expect(getByLabelText('Speech language. Automatic')).toBeTruthy());
+  });
+
+  it('offers Automatic and the web dictation languages, and goes back to Automatic', async () => {
+    const { getByLabelText, getByText } = render(<VoiceSettingsScreen />);
+
+    fireEvent.press(await waitFor(() => getByLabelText('Speech language. English')));
+    expect(getByText('Français')).toBeTruthy();
+    expect(getByLabelText('Hindi speech language')).toBeTruthy();
+    fireEvent.press(getByLabelText('Automatic speech language'));
+
+    expect(useLocalSettingsStore.getState().speechLanguage).toBe(SPEECH_LANGUAGE_AUTO);
   });
 
   it('shows the current speech language on a reachable row', async () => {

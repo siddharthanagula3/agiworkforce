@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -129,6 +130,19 @@ test('helpers read what they claim to read', () => {
   assert.equal(suiteRetries('this.retries(2);').length, 1);
   assert.equal(configRetries('retries: 2,').length, 1);
   assert.equal(configRetries('maxRetries: 2,').length, 0);
+});
+
+test('ignored worktrees do not add retries to the measured test corpus', () => {
+  const root = fixture({ files: { 'a.test.ts': "it('works', () => {});\n" } });
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  fs.writeFileSync(path.join(root, '.gitignore'), '.worktrees/\n');
+  fs.mkdirSync(path.join(root, '.worktrees'), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, '.worktrees', 'ignored.test.ts'),
+    "it.only('focused', () => {});\n",
+  );
+  assert.deepEqual(testFiles(root), ['a.test.ts']);
+  assert.deepEqual(checkTestHygiene(root).failures, []);
 });
 
 test('the repository itself passes and the walk finds its whole test corpus', () => {

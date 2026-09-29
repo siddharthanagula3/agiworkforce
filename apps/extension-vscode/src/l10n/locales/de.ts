@@ -534,6 +534,18 @@ const de = {
   'savedApprovals.removeAllowed':
     'AGI fragt wieder, wenn es das nächste Mal Folgendes tun will: {label}',
   'savedApprovals.removeDenied': 'AGI darf wieder fragen, statt abgelehnt zu werden: {label}',
+  'pullRequest.titlePrompt': 'Titel des Pull Requests',
+  'pullRequest.basePrompt': 'Ziel-Branch für das Mergen',
+  'pullRequest.confirmPush':
+    '{count} Commit(s) von {branch} nach {remote} pushen und einen Pull Request nach {base} öffnen?',
+  'pullRequest.confirmOpen': 'Einen Pull Request von {branch} nach {base} öffnen?',
+  'pullRequest.confirmAction': 'Pushen und öffnen',
+  'pullRequest.openAction': 'Pull Request öffnen',
+  'pullRequest.created': 'AGI Workforce: Pull Request geöffnet.',
+  'pullRequest.finishOnGitHub': 'AGI Workforce: {note}.',
+  'pullRequest.view': 'Anzeigen',
+  'pullRequest.blocked': 'AGI Workforce: Es kann kein Pull Request geöffnet werden: {reason}.',
+  'pullRequest.failed': 'AGI Workforce: {reason}',
   'savedApprovals.noun': 'gespeicherte Genehmigungen',
   'webview.alwaysAllow': 'Immer erlauben',
   'webview.alwaysAllowHint':

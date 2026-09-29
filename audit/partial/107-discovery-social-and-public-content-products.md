@@ -70,11 +70,8 @@ nothing is left.
 
 - Done when: Third-party publishers can get their plugins or content in front of users: a submission path or a user-added publisher source, with the publisher named.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Plugins install from any git URL and search one fixed registry, but the TUI "+ Add Marketplace" row is static text with no handler and there is no submission path. | handler |
-
-Code: `apps/cli/src/tui/widgets/screen_renderers.rs:560-564`, `apps/cli/src/lib.rs:2909-2912`, `apps/cli/src/marketplace.rs:138-140`

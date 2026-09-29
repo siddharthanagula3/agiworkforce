@@ -167,18 +167,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S39.26: Organization knowledge distinct from personal Memory.
-
-- Done when: Organization or workspace knowledge is kept apart from personal memory: work memories never appear in personal chats and vice versa, and the user can tell which is which.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
-
-Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`
-
 ## S39.27: Memory-used indication.
 
 - Done when: When saved memory or past chats shaped a reply, the reply shows it (and which memories), so the user can tell remembered facts from invented ones.

@@ -355,6 +355,7 @@ fn capabilities() -> AppServerCapabilities {
         provider_keys: false,
         questions: false,
         plan_decisions: false,
+        pull_requests: false,
     }
 }
 
@@ -1568,6 +1569,60 @@ async fn account_token_is_refused_on_a_connection_that_did_not_prove_header_auth
         .process(request(3, method::ACCOUNT_STATUS, serde_json::json!({})))
         .await;
     assert!(status.error.is_none(), "only credential minting is refused");
+}
+
+#[tokio::test]
+async fn rules_keys_and_trust_are_not_changed_over_a_connection_that_did_not_prove_header_auth() {
+    let mut processor = DeveloperSessionProcessor::new_with_trust(
+        Arc::new(SurfaceHost::new()),
+        capabilities(),
+        DeveloperConnectionTrust::Untrusted,
+    );
+    processor.process(initialize()).await;
+
+    for (id, method, params) in [
+        (
+            2,
+            method::PERMISSIONS_ADD,
+            serde_json::json!({ "kind": "command", "target": "git status", "decision": "allow" }),
+        ),
+        (
+            6,
+            method::GIT_PULL_REQUEST,
+            serde_json::json!({ "threadId": "thread-1" }),
+        ),
+        (
+            4,
+            method::PROVIDERS_REMOVE_KEY,
+            serde_json::json!({ "provider": "openai" }),
+        ),
+        (
+            5,
+            method::TRUST_REVOKE,
+            serde_json::json!({ "path": "/tmp/project" }),
+        ),
+        (
+            3,
+            method::PROVIDERS_SET_KEY,
+            serde_json::json!({ "provider": "openai", "apiKey": "sk-test" }),
+        ),
+    ] {
+        let refused = processor.process(request(id, method, params)).await;
+        let error = refused.error.expect("the write must be refused");
+        assert_eq!(error.code, -32006, "{method}");
+        assert!(refused.result.is_none(), "{method}");
+    }
+    let plan = processor
+        .process(request(
+            7,
+            method::GIT_PULL_REQUEST_PLAN,
+            serde_json::json!({}),
+        ))
+        .await;
+    assert!(
+        plan.error.is_none_or(|error| error.code != -32006),
+        "planning a pull request only reads, so it stays open"
+    );
 }
 
 #[tokio::test]

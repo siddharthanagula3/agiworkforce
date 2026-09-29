@@ -160,7 +160,7 @@ function makeSections(input: {
           tone: 'cloud',
           label: 'Web search',
           description: FEATURES.webSearch
-            ? 'Let supported Cloud models search the web automatically when they need current information.'
+            ? 'Let supported Cloud models search the web automatically when they need current information. Turning this off may produce outdated answers.'
             : 'Web search is not available in this mobile release.',
           value: FEATURES.webSearch ? cloudValue : 'Off',
           ...(FEATURES.webSearch ? { toggle: 'webSearch' as const } : {}),

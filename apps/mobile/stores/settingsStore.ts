@@ -73,6 +73,7 @@ export interface SettingsState {
   dictationOnboardingSeen: boolean;
   audioRoute: AudioRoute;
   isTemporaryChat: boolean;
+  temporaryChatPersonalized: boolean;
   capabilities: Capabilities;
 
   setToolApprovalPolicy: (policy: ToolApprovalPolicy) => void;
@@ -91,6 +92,7 @@ export interface SettingsState {
   setDictationOnboardingSeen: (seen: boolean) => void;
   setAudioRoute: (route: AudioRoute) => void;
   setTemporaryChat: (enabled: boolean) => void;
+  setTemporaryChatPersonalized: (personalized: boolean) => void;
   setCapability: (key: keyof Capabilities, value: boolean) => void;
 }
 
@@ -146,6 +148,7 @@ export const useSettingsStore = create<SettingsState>()(
       dictationOnboardingSeen: false,
       audioRoute: 'auto',
       isTemporaryChat: false,
+      temporaryChatPersonalized: true,
       capabilities: {
         webSearch: true,
         imageGen: true,
@@ -173,6 +176,8 @@ export const useSettingsStore = create<SettingsState>()(
       setDictationOnboardingSeen: (seen) => set({ dictationOnboardingSeen: seen }),
       setAudioRoute: (route) => set({ audioRoute: route }),
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
+      setTemporaryChatPersonalized: (personalized) =>
+        set({ temporaryChatPersonalized: personalized }),
       setCapability: (key, value) => set({ capabilities: { ...get().capabilities, [key]: value } }),
     }),
     {

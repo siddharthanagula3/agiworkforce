@@ -178,7 +178,7 @@ describe('cloud task list', () => {
     await useCloudTaskStore.getState().load('initial');
 
     expect(useCloudTaskStore.getState().status).toBe('error');
-    expect(useCloudTaskStore.getState().error).toBe('offline');
+    expect(useCloudTaskStore.getState().error).toBe('Cloud tasks could not be loaded');
   });
 });
 
@@ -228,7 +228,7 @@ describe('following one cloud run', () => {
     await useCloudTaskStore.getState().openRun(RUN_ID);
 
     expect(useCloudTaskStore.getState().detail?.status).toBe('error');
-    expect(useCloudTaskStore.getState().detail?.error).toBe('HTTP 503: upstream');
+    expect(useCloudTaskStore.getState().detail?.error).toBe('This task could not be opened');
   });
 });
 

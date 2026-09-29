@@ -4508,8 +4508,8 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 McpSubcommand::Block { .. } => Some(PolicyDecision::Deny),
                 _ => None,
             };
-            let target = crate::platform::policy::mcp_rule_target(server, tool.as_deref());
-            let path = crate::platform::policy::set_user_mcp_rule(&target, decision)?;
+            let path =
+                crate::platform::policy::set_user_mcp_rule(server, tool.as_deref(), decision)?;
             let subject = match tool {
                 Some(tool) => format!(
                     "'{}' from '{}'",
@@ -4608,6 +4608,9 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
             Ok(())
         }
         ApprovalsSubcommand::Allow { rule } => {
+            if let Some(message) = permissions::open_ended_allow_error(rule) {
+                anyhow::bail!(message);
+            }
             store.allow_always(rule);
             store.save()?;
             println!("Always allow: {}", rule.trim());

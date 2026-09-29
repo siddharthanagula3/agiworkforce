@@ -35,7 +35,13 @@ work around signing errors. Reconcile the remote credential with these values.
 4. Put the Google Play service-account JSON at
    `apps/mobile/secrets/google-play-service-account.json`.
 5. Configure the environment variables listed in `apps/mobile/.env.example`
-   in the matching EAS environment.
+   in the matching EAS environment. Export the same `EXPO_PUBLIC_API_URL` in the
+   local release shell. The preflight requires the Terms status and
+   provider-funded Free catalogue routes on that origin to return an
+   authentication challenge before a beta or production build. For iOS, enable
+   the Apple connection in the production Clerk instance, register the app in
+   Apple Developer, and set `EXPO_PUBLIC_AGI_AUTH_PROVIDERS` to include `apple`.
+   Test account creation and returning sign-in on a signed device.
 6. Run the platform-specific release command from the repository root:
 
    ```bash
@@ -62,6 +68,8 @@ Configure these values on the protected environment:
 | Kind     | Name                                         | Purpose                                                    |
 | -------- | -------------------------------------------- | ---------------------------------------------------------- |
 | Variable | `ASC_APP_ID`                                 | Numeric App Store Connect Apple ID                         |
+| Variable | `EXPO_PUBLIC_API_URL`                        | HTTPS Cloud origin matching the EAS production environment |
+| Variable | `EXPO_PUBLIC_AGI_AUTH_PROVIDERS`             | iOS login providers; include Apple after Clerk setup       |
 | Variable | `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`          | Live public Clerk key used by the production app           |
 | Variable | `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS` | Real Play App Signing SHA-256 fingerprint matching Web     |
 | Secret   | `EXPO_TOKEN`                                 | Token for non-interactive access to the linked EAS project |
@@ -72,7 +80,12 @@ Configure these values on the protected environment:
 
 Also configure the public production variables from `apps/mobile/.env.example`
 in the EAS `production` environment. The GitHub Clerk variable and its EAS
-counterpart must be identical.
+counterpart must be identical. Set `EXPO_PUBLIC_API_URL` as a repository Actions
+variable for tag validation and give the protected release environment the same
+value; it must match the EAS production value. Set
+`EXPO_PUBLIC_AGI_AUTH_PROVIDERS` in Actions and EAS to the same verified provider
+list. The release check confirms the configured iOS bundle includes Apple; it
+cannot establish that the remote Clerk connection works.
 
 The workflow pins EAS CLI, materializes credentials only into the ignored
 `apps/mobile/secrets/` directory, and deletes them even when a job fails. Before

@@ -14,6 +14,9 @@ export const CONSENT_SIGNALS = 'apps/web/lib/consent-signals.ts';
 export const COOKIE_CONSENT = 'apps/web/shared/lib/cookie-consent.ts';
 export const CONSENT_CENTRE = 'apps/web/app/privacy/requests/ConsentCentre.tsx';
 export const DISCLOSURE = 'apps/web/lib/compliance/free-plan-training-disclosure.ts';
+export const SHARED_DISCLOSURE =
+  'packages/contracts/compliance/src/free-plan-training-disclosure.ts';
+export const COMPLIANCE_ENTRYPOINT = 'packages/contracts/compliance/src/index.ts';
 export const PRICING_PAGE = 'apps/web/app/pricing/page.tsx';
 export const CHAT_NOTICE = 'apps/web/features/chat/components/FreePlanTrainingNotice.tsx';
 export const STORAGE_TABLE_TEST = 'apps/web/app/cookies/device-storage-table.test.ts';
@@ -161,10 +164,24 @@ export function runPrivacyClaimsCheck(root) {
     }
   }
 
-  const disclosure = read(root, DISCLOSURE, failures);
+  const disclosure = read(root, SHARED_DISCLOSURE, failures);
   const shared = disclosure ? readStringConstant(disclosure, DISCLOSURE_CONSTANT) : null;
   if (disclosure && !shared) {
-    failures.push(`${DISCLOSURE} no longer exports a ${DISCLOSURE_CONSTANT} string`);
+    failures.push(`${SHARED_DISCLOSURE} no longer exports a ${DISCLOSURE_CONSTANT} string`);
+  }
+  const entrypoint = read(root, COMPLIANCE_ENTRYPOINT, failures);
+  if (entrypoint && !entrypoint.includes(DISCLOSURE_CONSTANT)) {
+    failures.push(`${COMPLIANCE_ENTRYPOINT} no longer exports ${DISCLOSURE_CONSTANT}`);
+  }
+  const webDisclosure = read(root, DISCLOSURE, failures);
+  if (
+    webDisclosure &&
+    (!webDisclosure.includes(DISCLOSURE_CONSTANT) ||
+      !webDisclosure.includes("from '@agiworkforce/compliance'"))
+  ) {
+    failures.push(
+      `${DISCLOSURE} no longer re-exports ${DISCLOSURE_CONSTANT} from the shared package`,
+    );
   }
 
   if (shared) {
@@ -178,7 +195,7 @@ export function runPrivacyClaimsCheck(root) {
         );
       } else if (!usesShared && pricingValue !== shared) {
         failures.push(
-          `${PRICING_PAGE} states "${pricingValue}" where ${DISCLOSURE} states "${shared}"; one sentence changed without the other`,
+          `${PRICING_PAGE} states "${pricingValue}" where ${SHARED_DISCLOSURE} states "${shared}"; one sentence changed without the other`,
         );
       }
     }

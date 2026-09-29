@@ -8,7 +8,7 @@ interface ErrorBoundaryProps {
   retry: () => void;
 }
 
-export default function RootErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+export default function RootErrorBoundary({ retry }: ErrorBoundaryProps) {
   const router = useRouter();
   const colors = useThemeColors();
 
@@ -27,13 +27,7 @@ export default function RootErrorBoundary({ error, retry }: ErrorBoundaryProps) 
         <Text style={[styles.description, { color: colors.textSecondary }]}>
           An unexpected error occurred. Please try again.
         </Text>
-        {__DEV__ ? (
-          <Text style={[styles.errorText, { color: colors.textMuted }]} numberOfLines={3}>
-            {error.message}
-          </Text>
-        ) : (
-          <View style={styles.errorSpacer} />
-        )}
+        <View style={styles.errorSpacer} />
 
         <Pressable
           onPress={retry}
@@ -92,12 +86,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 16,
-    marginBottom: 32,
   },
   retryButton: {
     flexDirection: 'row',

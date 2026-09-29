@@ -29,14 +29,20 @@ jest.mock('@/services/api', () => ({
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import React from 'react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { managedCloudProjectKnowledgePath } from '@agiworkforce/cloud-contracts';
 import { getInfoAsync, readAsStringAsync } from 'expo-file-system/legacy';
 import { api } from '@/services/api';
 import { guardedFetch } from '@/lib/egressGuard';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
-import { useProjectStore } from '@/src/features/projects/store';
-import { PROJECT_SOURCE_MIME_TYPES } from '../components/ProjectSourcesTab';
+import { ProjectSourceError, useProjectStore } from '@/src/features/projects/store';
+import {
+  PROJECT_SOURCE_MIME_TYPES,
+  ProjectSourcesTab,
+  projectSourceErrorMessage,
+} from '../components/ProjectSourcesTab';
 
 const CLOUD_PROJECT_ID = '01920000-0000-7000-8000-000000000001';
 const STORAGE_KEY = `knowledge-files/projects/${CLOUD_PROJECT_ID}/notes.md`;
@@ -250,5 +256,59 @@ describe('the document picker filter', () => {
       'utf8',
     );
     expect(source).toContain('type: [...PROJECT_SOURCE_MIME_TYPES]');
+  });
+});
+
+describe('project source failure copy', () => {
+  it('keeps service diagnostics private while preserving local validation guidance', () => {
+    expect(projectSourceErrorMessage(new Error('private storage URL'), 'Try again.')).toBe(
+      'Try again.',
+    );
+    expect(
+      projectSourceErrorMessage(
+        new ProjectSourceError('This file type is not supported.'),
+        'Try again.',
+      ),
+    ).toBe('This file type is not supported.');
+  });
+
+  it('offers a retry after a failed Cloud source load', async () => {
+    (api.get as jest.Mock)
+      .mockRejectedValueOnce(new Error('private storage path'))
+      .mockResolvedValueOnce({ files: [] });
+
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+
+    await waitFor(() => expect(screen.getByText('Could not load sources')).toBeTruthy());
+    expect(screen.queryByText('private storage path')).toBeNull();
+    fireEvent.press(screen.getByLabelText('Retry loading project sources'));
+
+    await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+    expect(api.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a stale source failure after changing projects', async () => {
+    const otherProjectId = '01920000-0000-7000-8000-000000000002';
+    useCloudProjectStore.setState({
+      projects: [cloudProject(), cloudProject({ id: otherProjectId })],
+    });
+    let rejectPrevious!: (reason: Error) => void;
+    (api.get as jest.Mock)
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectPrevious = reject;
+          }),
+      )
+      .mockResolvedValueOnce({ files: [] });
+
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    screen.rerender(React.createElement(ProjectSourcesTab, { projectId: otherProjectId }));
+    await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+
+    await act(async () => rejectPrevious(new Error('previous account details')));
+
+    expect(screen.queryByText('Could not load sources')).toBeNull();
+    expect(screen.getByText('No sources added yet')).toBeTruthy();
   });
 });

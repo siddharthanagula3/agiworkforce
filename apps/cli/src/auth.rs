@@ -763,7 +763,10 @@ pub async fn get_copilot_api_token(github_token: &str) -> Result<(String, i64)> 
     let resp = client
         .get("https://api.github.com/copilot_internal/v2/token")
         .header("Authorization", format!("token {}", github_token))
-        .header("User-Agent", "agiworkforce-cli/0.1.0")
+        .header(
+            "User-Agent",
+            concat!("agiworkforce-cli/", env!("CARGO_PKG_VERSION")),
+        )
         .send()
         .await
         .context("Failed to fetch Copilot API token")?;

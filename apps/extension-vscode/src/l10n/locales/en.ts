@@ -482,6 +482,18 @@ const en = {
   'savedApprovals.removeTitle': 'Remove this saved approval?',
   'savedApprovals.removeAllowed': 'AGI asks again the next time it wants to do this: {label}',
   'savedApprovals.removeDenied': 'AGI may ask to do this again instead of being refused: {label}',
+  'pullRequest.titlePrompt': 'Pull request title',
+  'pullRequest.basePrompt': 'Branch to merge into',
+  'pullRequest.confirmPush':
+    'Push {count} commit(s) from {branch} to {remote} and open a pull request into {base}?',
+  'pullRequest.confirmOpen': 'Open a pull request from {branch} into {base}?',
+  'pullRequest.confirmAction': 'Push and Open',
+  'pullRequest.openAction': 'Open Pull Request',
+  'pullRequest.created': 'AGI Workforce: pull request opened.',
+  'pullRequest.finishOnGitHub': 'AGI Workforce: {note}.',
+  'pullRequest.view': 'View',
+  'pullRequest.blocked': 'AGI Workforce: no pull request can be opened: {reason}.',
+  'pullRequest.failed': 'AGI Workforce: {reason}',
   'savedApprovals.noun': 'saved approvals',
   'webview.alwaysAllow': 'Always allow',
   'webview.alwaysAllowHint':
