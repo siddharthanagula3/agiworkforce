@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import { addCustomConnector, type CustomConnectorResult } from '@/services/connectors';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -147,7 +147,7 @@ export function AddCustomConnectorModal({
             backgroundColor: colors.surfaceBase,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
-            paddingHorizontal: 20,
+            paddingHorizontal: dialogPadding,
             paddingTop: 20,
             paddingBottom: 20 + insets.bottom,
             gap: 12,

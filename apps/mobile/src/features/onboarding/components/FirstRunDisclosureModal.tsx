@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useThemeColors, elevation } from '@/src/ui/theme';
+import { useThemeColors, elevation, dialogPadding } from '@/src/ui/theme';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import type { ChineseHqProviderId, DisclosureCopy } from '@agiworkforce/compliance';
 
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: dialogPadding,
     paddingTop: 16,
     paddingBottom: 8,
   },
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   actions: {
-    paddingHorizontal: 24,
+    paddingHorizontal: dialogPadding,
     paddingTop: 12,
     paddingBottom: 32,
     borderTopWidth: 1,

@@ -14,7 +14,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { hasAcknowledgedContinuityOnboarding } from '@/src/features/continuity/continuity-onboarding';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 
 function canOfferToAccount(account: CloudAccountEpoch | null): account is CloudAccountEpoch {
   return (
@@ -131,7 +131,7 @@ export function AppLockOffer() {
           style={{
             backgroundColor: colors.surfaceElevated,
             borderRadius: 20,
-            padding: 24,
+            padding: dialogPadding,
             alignItems: 'center',
             gap: 16,
           }}

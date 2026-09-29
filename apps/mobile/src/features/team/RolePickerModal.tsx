@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import type { WorkspaceMember, WorkspaceRole } from './service';
 
 interface RolePickerModalProps {
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
     borderRadius: 14,
     borderWidth: 1,
-    padding: 20,
+    padding: dialogPadding,
     gap: 12,
   },
   title: { fontSize: 17, fontWeight: '600' },

@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { ApiHttpError } from '@/services/apiErrors';
 import {
@@ -132,7 +132,7 @@ export function ConnectorApiKeySheet({
             backgroundColor: colors.surfaceBase,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
-            paddingHorizontal: 20,
+            paddingHorizontal: dialogPadding,
             paddingTop: 20,
             paddingBottom: 20 + insets.bottom,
             gap: 12,

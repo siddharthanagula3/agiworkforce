@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check } from 'lucide-react-native';
 import { CONVERSATION_TITLE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import type {
   ConversationMenuAction,
   ConversationMenuState,
@@ -80,7 +80,7 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
               style={{
                 fontSize: 12,
                 color: colors.textMuted,
-                paddingHorizontal: 20,
+                paddingHorizontal: dialogPadding,
                 paddingBottom: 8,
               }}
               numberOfLines={1}
@@ -102,7 +102,7 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: 12,
-                    paddingHorizontal: 20,
+                    paddingHorizontal: dialogPadding,
                     borderBottomWidth: index < menu.actions.length - 1 ? 1 : 0,
                     borderBottomColor: colors.border,
                   }}
@@ -129,7 +129,7 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
               style={{
                 minHeight: 52,
                 justifyContent: 'center',
-                paddingHorizontal: 20,
+                paddingHorizontal: dialogPadding,
                 borderTopWidth: 1,
                 borderTopColor: colors.border,
               }}
@@ -183,7 +183,7 @@ export function RenameConversationModal({
                 width: '100%',
                 backgroundColor: colors.surfaceElevated,
                 borderRadius: 14,
-                padding: 20,
+                padding: dialogPadding,
                 borderWidth: 1,
                 borderColor: colors.border,
               }}

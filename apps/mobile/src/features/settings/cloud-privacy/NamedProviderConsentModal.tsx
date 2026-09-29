@@ -1,7 +1,7 @@
 import { Modal, View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { PRIVACY_POLICY_URL } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import type { ChineseHqProviderId } from '@/services/providerConsent';
@@ -42,7 +42,7 @@ export function NamedProviderConsentModal({ providerId, onConfirm, onCancel }: P
             borderRadius: 20,
             borderWidth: 1,
             borderColor: colors.border,
-            padding: 22,
+            padding: dialogPadding,
             gap: 16,
           }}
         >
