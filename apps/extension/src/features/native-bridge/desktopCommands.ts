@@ -10,6 +10,9 @@ import { authorizeBrowserToolTab, authorizeBrowserToolUrl } from '../browser-too
 import { screenshot as captureTabThroughDebugger } from '../computer-use/cdpDriver';
 
 export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
+export const MAX_DESKTOP_FILL_FIELDS = 50;
+const MAX_DESKTOP_FILL_VALUE_CHARS = 10_000;
+const MAX_DESKTOP_FIND_QUERY_CHARS = 200;
 
 /**
  * A desktop-issued page action, carried out here.
@@ -24,6 +27,7 @@ export interface DesktopCommandContext {
   listTabs: () => Promise<BrowserTabSummary[]>;
   send: (tabId: number, message: Record<string, unknown>) => Promise<Record<string, unknown>>;
   navigate: (tabId: number, url: string) => Promise<void>;
+  history: (tabId: number, direction: 'back' | 'forward') => Promise<void>;
   capture: (tabId: number) => Promise<string>;
 }
 
@@ -55,6 +59,29 @@ function httpUrl(value: unknown): string {
     throw new Error('Only http and https addresses are supported.');
   }
   return parsed.toString();
+}
+
+function fillFields(value: unknown): Array<{ selector: string; value: string }> {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error('List the fields to fill, each with a CSS selector and a value.');
+  }
+  if (value.length > MAX_DESKTOP_FILL_FIELDS) {
+    throw new Error(`Fill at most ${MAX_DESKTOP_FILL_FIELDS} fields in one call.`);
+  }
+  return value.map((field) => {
+    const record = field && typeof field === 'object' ? (field as Record<string, unknown>) : {};
+    const selector = record['selector'];
+    const text = record['value'];
+    if (typeof selector !== 'string' || selector.trim().length === 0) {
+      throw new Error('Each field needs a CSS selector.');
+    }
+    if (typeof text !== 'string' || text.length > MAX_DESKTOP_FILL_VALUE_CHARS) {
+      throw new Error(
+        `Each field needs a text value of at most ${MAX_DESKTOP_FILL_VALUE_CHARS} characters.`,
+      );
+    }
+    return { selector, value: text };
+  });
 }
 
 function requireSelector(args: Record<string, unknown>): string {
@@ -139,6 +166,38 @@ async function execute(
         await context.send(tabId, { type: 'READ_PAGE_NETWORK', ...args }),
       );
       return { origin: response['origin'], network: response['network'] };
+    }
+    case 'browser_find': {
+      const query = args['query'];
+      if (
+        query !== undefined &&
+        (typeof query !== 'string' || query.length > MAX_DESKTOP_FIND_QUERY_CHARS)
+      ) {
+        throw new Error(
+          `A search term is text of at most ${MAX_DESKTOP_FIND_QUERY_CHARS} characters.`,
+        );
+      }
+      const response = requireSuccess(
+        await context.send(tabId, {
+          type: 'FIND_ELEMENTS',
+          ...(query === undefined ? {} : { query }),
+        }),
+      );
+      return { elements: response['elements'] };
+    }
+    case 'browser_fill_form': {
+      const response = requireSuccess(
+        await context.send(tabId, { type: 'FILL_FIELDS', fields: fillFields(args['fields']) }),
+      );
+      return { filled: response['filled'], failed: response['failed'] };
+    }
+    case 'browser_history': {
+      const direction = args['direction'];
+      if (direction !== 'back' && direction !== 'forward') {
+        throw new Error('Say whether to go back or forward.');
+      }
+      await context.history(tabId, direction);
+      return { direction };
     }
     case 'browser_download': {
       const response = requireSuccess(
