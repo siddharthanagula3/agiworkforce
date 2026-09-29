@@ -83,6 +83,7 @@ export async function readResearchConnectorSources(input: {
   connectorIds: readonly string[];
   queries: readonly string[];
   isToolDenied: (connectorId: string, toolName: string) => boolean;
+  googleUserDataRouted: boolean;
   signal?: AbortSignal;
 }): Promise<ResearchConnectorRead[]> {
   const queries = [...new Set(input.queries.map((query) => query.trim()).filter(Boolean))].slice(
@@ -94,6 +95,7 @@ export async function readResearchConnectorSources(input: {
     planTier: input.planTier,
     organizationId: input.organizationId,
     isToolDenied: input.isToolDenied,
+    googleUserDataRouted: input.googleUserDataRouted,
   });
   const labels = new Map<string, string>();
   for (const tool of catalog.tools) {

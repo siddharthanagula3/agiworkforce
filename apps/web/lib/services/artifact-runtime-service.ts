@@ -32,6 +32,11 @@ import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/to
 import { runToolLoop } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { classifyToolLoopInputs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-routing';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import {
+  GOOGLE_USER_DATA_ARTIFACT_NO_MODEL_MESSAGE,
+  toolsReachGoogleUserData,
+} from '@/lib/connectors/google-user-data-runs';
+import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
@@ -86,9 +91,20 @@ export interface ArtifactRuntimeRoute {
 }
 
 export class ArtifactRuntimeRouteUnavailableError extends Error {
-  constructor() {
-    super('No model on your plan can answer this app right now.');
+  constructor(message = 'No model on your plan can answer this app right now.') {
+    super(message);
     this.name = 'ArtifactRuntimeRouteUnavailableError';
+  }
+}
+
+/**
+ * The run can reach a Google connector, and no model that keeps inputs out of
+ * training can serve it. Google API Limited Use forbids the alternative.
+ */
+export class ArtifactRuntimeGoogleUserDataRouteError extends ArtifactRuntimeRouteUnavailableError {
+  constructor() {
+    super(GOOGLE_USER_DATA_ARTIFACT_NO_MODEL_MESSAGE);
+    this.name = 'ArtifactRuntimeGoogleUserDataRouteError';
   }
 }
 
@@ -226,20 +242,33 @@ export async function selectArtifactRuntimeRoute(
   userId: string,
   prompt: string,
   planTier: string,
-  options: { needsTools?: boolean } = {},
+  options: { needsTools?: boolean; googleUserData?: boolean } = {},
 ): Promise<ArtifactRuntimeRoute> {
-  const routing = await sideCallRoutingRequest(db, userId, {
-    selection: 'auto',
-    taskType: classifyTaskLocally(prompt, []).type,
-    subscriptionTier: planTier,
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-    ...(options.needsTools ? { requiredCapabilities: ['functionCalling'] as const } : {}),
-  });
-  if (!routing) throw new ArtifactRuntimeRouteUnavailableError();
+  const googleUserData = options.googleUserData === true;
+  const unavailable = () =>
+    googleUserData
+      ? new ArtifactRuntimeGoogleUserDataRouteError()
+      : new ArtifactRuntimeRouteUnavailableError();
+  const routing = await sideCallRoutingRequest(
+    db,
+    userId,
+    {
+      selection: 'auto',
+      taskType: classifyTaskLocally(prompt, []).type,
+      subscriptionTier: planTier,
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+      ...(options.needsTools ? { requiredCapabilities: ['functionCalling'] as const } : {}),
+    },
+    { forceNoTraining: googleUserData },
+  );
+  if (!routing) throw unavailable();
   const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable' || route.harnessId.endsWith('/media')) {
-    throw new ArtifactRuntimeRouteUnavailableError();
+    throw unavailable();
+  }
+  if (googleUserData && !modelKeepsInputsOutOfTraining(route.modelKey)) {
+    throw new ArtifactRuntimeGoogleUserDataRouteError();
   }
   return {
     provider: route.provider,
@@ -546,6 +575,15 @@ export async function completeArtifactPrompt(input: {
     MAX_OUTPUT_TOKENS,
   );
   const plan = input.plan && input.plan.mcpTools.length > 0 ? input.plan : null;
+  // Fail closed whatever route the caller picked: a run offered any Google
+  // connector tool only runs on a model that keeps inputs out of training.
+  if (
+    plan &&
+    toolsReachGoogleUserData(plan.mcpTools) &&
+    !modelKeepsInputsOutOfTraining(route.modelKey)
+  ) {
+    throw new ArtifactRuntimeGoogleUserDataRouteError();
+  }
   const identity = {
     kind: 'artifact_runtime_completion',
     publishedArtifactId: input.artifact.publishedArtifactId,

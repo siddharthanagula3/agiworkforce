@@ -502,6 +502,19 @@ pub struct ThreadSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub writer: Option<DeveloperSessionWriter>,
+    /// Where the thread runs. Absent for a thread on this machine; `cloud`
+    /// for a cloud Code session listed beside the local ones.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub location: Option<ThreadLocation>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum ThreadLocation {
+    Local,
+    Cloud,
 }
 
 /// A time-bounded claim on the right to append turns to a thread.
@@ -973,6 +986,10 @@ pub struct ThreadListParams {
     pub cwd: Option<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub include_archived: bool,
+    /// Also list the account's open cloud Code sessions, after the local
+    /// threads on the first page.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub include_cloud: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

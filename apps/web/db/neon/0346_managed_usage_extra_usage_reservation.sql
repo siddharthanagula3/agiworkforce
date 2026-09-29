@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0347: reserve a request on extra usage alone
+-- Migration 0346: reserve a request on extra usage alone
 --
 -- Why    : fast mode is billed from usage credits even while the plan's
 --          included usage remains, as Claude does. 0281's admission sends a

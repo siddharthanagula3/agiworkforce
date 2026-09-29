@@ -144,6 +144,8 @@ function NewCodeSession() {
   );
 }
 
+const CLOUD_SESSION_LABEL = 'Cloud, read-only';
+
 const REMOTE_SESSION_ORIGIN_LABELS = {
   cli: 'CLI',
   vscode: 'VS Code',
@@ -233,6 +235,7 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
                   </Text>
                   <Text className="text-xs text-white/45" numberOfLines={1}>
                     {[
+                      session.location === 'cloud' ? CLOUD_SESSION_LABEL : null,
                       session.origin ? REMOTE_SESSION_ORIGIN_LABELS[session.origin] : null,
                       session.folder,
                       session.branch,

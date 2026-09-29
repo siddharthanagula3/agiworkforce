@@ -303,6 +303,7 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
       customConnectorLimit: 25,
       planTier: 'pro',
       isToolDenied: expect.any(Function),
+      googleUserDataRouted: false,
     });
     expect(workflowMocks.start).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -279,6 +279,7 @@ async function handleToolInputResume(
                   getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
                 planTier: processed.subscriptionTier,
                 isToolDenied: permissions.isConnectorToolDenied,
+                googleUserDataRouted: processed.googleUserData === true,
               })
             : Promise.resolve([]),
         ]);

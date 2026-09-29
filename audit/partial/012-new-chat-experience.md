@@ -30,18 +30,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S12.05: Task-category shortcuts.
-
-- Done when: The new-chat screen offers one-tap task-category shortcuts (e.g. write, research, image) that set up the next message.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Add task commands for research and writing and list them on the welcome screen; today only /image (and /review for code) set up a task type, found by typing "/". | ui, handler |
-
-Code: `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiworkforce-command-registry/src/lib.rs:193-199`, `apps/cli/src/tui/tui_app.rs:4676-4690`
-
 ## S12.08: Recommended Skills.
 
 - Done when: The new-chat screen recommends Skills relevant to the user, which can be applied to the next message.
@@ -50,22 +38,7 @@ Code: `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiwork
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Recommend a skill for a new session; today /skills only browses the installed list. | handler, ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `crates/agiworkforce-command-registry/src/lib.rs:248-248`
-
-## S12.09: Recommended connected apps.
-
-- Done when: The new-chat screen recommends apps/connectors worth connecting or using for the next message.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Recommend MCP servers to connect; today /mcp only lists what is configured. | handler, ui |
-
-Code: `crates/agiworkforce-command-registry/src/lib.rs:247-247`
 
 ## S12.10: Search entry.
 

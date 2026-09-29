@@ -109,6 +109,7 @@ import {
   showArchivedSessions,
   showSessionsHistory,
 } from '../features/trees/sessionPickers';
+import { isCloudThread } from '../features/trees/cloudSessions';
 import { managePersonalization } from '../features/personalization/personalization';
 import { manageMemoryExclusions } from '../memory/memoryExclusions';
 import {
@@ -721,7 +722,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
    * surface it already appeared to be.
    */
   const pickDeveloperSession = async (placeHolder: string) => {
-    const threads = await conversationTreeProvider.getThreads();
+    const threads = (await conversationTreeProvider.getThreads()).filter(
+      (thread) => !isCloudThread(thread),
+    );
     if (threads.length === 0) {
       vscode.window.showInformationMessage('AGI Workforce: No developer sessions in this window.');
       return undefined;

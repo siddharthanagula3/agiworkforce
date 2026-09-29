@@ -160,7 +160,7 @@
     "check:report-retention": "node scripts/check-report-retention.mjs",
     "check:non-md-artifacts": "node scripts/check-non-md-artifacts.mjs",
     "check:neon-migrations": "node --test scripts/check-neon-migrations.test.mjs && node scripts/check-neon-migrations.mjs && node --test scripts/neon-migrate.test.mjs",
-    "check:unaudited-db-writes": "node --test scripts/check-unaudited-db-writes.test.mjs scripts/reencrypt.test.mjs && node scripts/check-unaudited-db-writes.mjs",
+    "check:unaudited-db-writes": "node --test scripts/check-unaudited-db-writes.test.mjs scripts/reencrypt.test.mjs scripts/backfill-google-user-data-mark.test.mjs && node scripts/check-unaudited-db-writes.mjs",
     "check:release-artifact-integrity": "node --test scripts/check-release-artifact-integrity.test.mjs && node scripts/check-release-artifact-integrity.mjs",
     "check:vercel-cost-loops": "node --test scripts/check-vercel-cost-loops.test.mjs && node scripts/check-vercel-cost-loops.mjs",
     "check:protocol-parity": "node --test scripts/check-protocol-types.test.mjs && node scripts/check-protocol-types.mjs",

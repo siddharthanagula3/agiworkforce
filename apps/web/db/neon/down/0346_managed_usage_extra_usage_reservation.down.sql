@@ -1,6 +1,6 @@
--- Reversal of 0347 : a request can no longer be reserved on extra usage alone.
+-- Reversal of 0346 : a request can no longer be reserved on extra usage alone.
 --
--- WHAT THIS COSTS: fast mode requests are refused until 0347 is applied again,
+-- WHAT THIS COSTS: fast mode requests are refused until 0346 is applied again,
 -- because the gateway reserves them only on extra usage.
 
 begin;
@@ -10,6 +10,6 @@ drop function if exists public.reserve_managed_usage_request_on_extra_usage_micr
 );
 
 delete from public.schema_migrations
- where filename = '0347_managed_usage_extra_usage_reservation.sql';
+ where filename = '0346_managed_usage_extra_usage_reservation.sql';
 
 commit;

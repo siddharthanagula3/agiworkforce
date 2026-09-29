@@ -4,10 +4,11 @@ import { RETRIEVAL_EMBEDDING_DIMENSIONS } from '@agiworkforce/data-layer/search'
 
 const mocks = vi.hoisted(() => ({ embed: vi.fn() }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/services/retrieval-embedding-service', async () => {
+vi.mock('@/lib/services/retrieval-embedding-service', async (importOriginal) => {
   class RetrievalEmbeddingError extends Error {
     constructor(
       message: string,
@@ -16,7 +17,11 @@ vi.mock('@/lib/services/retrieval-embedding-service', async () => {
       super(message);
     }
   }
-  return { embedTextsMetered: mocks.embed, RetrievalEmbeddingError };
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    embedTextsMetered: mocks.embed,
+    RetrievalEmbeddingError,
+  };
 });
 
 const {
@@ -49,12 +54,16 @@ const TEXT = Array.from({ length: 30 }, (_, index) => `Paragraph ${index} about 
 interface FakeOptions {
   claimed?: Record<string, unknown> | null;
   file?: Record<string, unknown> | null;
+  googleSource?: boolean;
 }
 
 function fakeDb(options: FakeOptions = {}) {
   const statements: Array<{ sql: string; params: unknown[] }> = [];
   const run = async (sql: string, params: unknown[] = []) => {
     statements.push({ sql, params });
+    if (sql.includes('external_resource_references')) {
+      return [{ google: options.googleSource === true }];
+    }
     if (sql.includes("set status = 'indexing'")) {
       return options.claimed === undefined ? [DOCUMENT] : options.claimed ? [options.claimed] : [];
     }
@@ -136,6 +145,28 @@ describe('indexRetrievalDocument', () => {
       expect.arrayContaining([true, 3, 'embedding-model', null, DOCUMENT.user_id]),
     );
   });
+
+  it.each([
+    ['a file imported from a Google connector', true],
+    ['an uploaded file', false],
+  ])(
+    'embeds %s with providers that keep inputs out of training only when it came from Google',
+    async (_label, googleSource) => {
+      mocks.embed.mockImplementation(async ({ texts }: { texts: string[] }) => ({
+        vectors: texts.map(() => vector()),
+        model: 'embedding-model',
+        routeId: 'route',
+      }));
+      const { db } = fakeDb({ googleSource });
+
+      await indexRetrievalDocument(db, DOCUMENT.id, 'run-1');
+
+      expect(mocks.embed).toHaveBeenCalled();
+      for (const [input] of mocks.embed.mock.calls) {
+        expect(input).toMatchObject({ purpose: 'document', forceNoTraining: googleSource });
+      }
+    },
+  );
 
   it('stores chunks for keyword search and schedules a retry when embedding is refused', async () => {
     mocks.embed.mockRejectedValue(new RetrievalEmbeddingError('limit', 'billing_refused'));

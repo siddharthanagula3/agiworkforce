@@ -101,6 +101,7 @@ import {
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
 import { SHOW_ARCHIVED_SESSIONS_COMMAND } from '../trees/sessionPickers';
+import { isCloudThread, showCloudSession } from '../trees/cloudSessions';
 import { rememberTypedText, typedTextFor } from './typedMessages';
 import {
   CONTINUE_IN_CLOUD_COMMAND,
@@ -1971,7 +1972,9 @@ export class ChatStateManager {
 
   private async _pushSessions(source: SessionListSource): Promise<void> {
     if (source === 'local') {
-      const threads = (await this._conversationTreeProvider?.getThreads()) ?? [];
+      const threads = ((await this._conversationTreeProvider?.getThreads()) ?? []).filter(
+        (thread) => !isCloudThread(thread),
+      );
       const inputs: SessionRowInput[] = threads.map((thread) => ({
         id: thread.id,
         title: thread.title,
@@ -2167,6 +2170,10 @@ export class ChatStateManager {
       }
 
       const listed = resolved.response.thread;
+      if (isCloudThread(listed)) {
+        void showCloudSession(resolved.response);
+        return false;
+      }
       const statusError = resumeStatusError(listed);
       if (statusError !== undefined) return this._rejectResume(statusError, RUNTIME_REFUSAL);
       if (listed.trustMode === 'unknown') {

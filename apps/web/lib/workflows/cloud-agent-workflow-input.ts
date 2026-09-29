@@ -238,6 +238,7 @@ const McpToolSchema = z
     origin: z.enum(['operator', 'connector']).optional(),
     serverLabel: z.string().optional(),
     inputSchema: z.record(z.string(), z.unknown()),
+    googleUserData: z.literal(true).optional(),
   })
   .strict();
 const mcpToolSchemaCoversWebMcpToolDef: SameKeys<

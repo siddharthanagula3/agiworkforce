@@ -4,10 +4,12 @@ import { createHash } from 'node:crypto';
 const mocks = vi.hoisted(() => ({ query: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
   getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mocks.query(...args) })),
 }));
-vi.mock('@/lib/custom-connector-crypto', () => ({
+vi.mock('@/lib/custom-connector-crypto', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/custom-connector-crypto')>()),
   encryptConnectorToken: (value: string, purpose: string) => `sealed(${purpose}):${value}`,
   decryptConnectorToken: (value: string, purpose: string) => {
     const prefix = `sealed(${purpose}):`;
@@ -15,7 +17,8 @@ vi.mock('@/lib/custom-connector-crypto', () => ({
     return value.slice(prefix.length);
   },
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-app')>()),
   generateGitHubInstallState: vi.fn(() => 'a'.repeat(64)),
 }));
 

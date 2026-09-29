@@ -29,6 +29,11 @@ import {
   getTierPolicy,
   isModelLive,
 } from '@agiworkforce/types';
+import {
+  GOOGLE_USER_DATA_VOICE_MESSAGE,
+  storedConversationCarriesGoogleUserData,
+} from '@/lib/connectors/google-user-data';
+import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import { isManagedProviderId, providerApiUrl } from '@/lib/server/provider-endpoints';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
@@ -206,6 +211,19 @@ async function handleCreateLiveSession(request: NextRequest) {
       'voice_conversation_required',
       'Live voice needs a conversation to record the session in.',
     );
+  }
+  if (
+    !(
+      modelKeepsInputsOutOfTraining(liveModel.id) && modelKeepsInputsOutOfTraining(backendModel.id)
+    ) &&
+    (await storedConversationCarriesGoogleUserData(
+      scoped.db,
+      userId,
+      scoped.organizationId,
+      conversationId,
+    ))
+  ) {
+    return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
   }
   let storeReady = false;
   try {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
-import type { DispatchTaskPendingStep } from '@agiworkforce/types';
+import type { DispatchTaskPendingStep, DispatchTaskReplyErrorCode } from '@agiworkforce/types';
 
 const mockReply = jest.fn();
 
@@ -11,6 +11,7 @@ jest.mock('@/services/companion', () => ({
 import {
   DispatchTaskReply,
   dispatchFieldError,
+  replyErrorCopy,
 } from '@/src/features/companion/components/DispatchTaskReply';
 
 const STEP: DispatchTaskPendingStep = {
@@ -84,14 +85,46 @@ describe('answering a dispatched task on the phone', () => {
         steps={[STEP]}
         replyError={{
           toolCallId: 'call-input',
-          message: 'Room: Choose one of the options offered.',
+          message: 'relayed <b>text</b> from the computer',
+          fieldId: 'room',
+          code: 'not_an_option',
         }}
       />,
     );
-    expect(
-      await findByText('The computer did not accept that answer. Check it and send it again.'),
-    ).toBeTruthy();
-    expect(queryByText('Room: Choose one of the options offered.')).toBeNull();
+    expect(await findByText('Room: choose one of the options offered.')).toBeTruthy();
+    expect(queryByText(/relayed/)).toBeNull();
     expect(getByLabelText('Email')).toBeTruthy();
+  });
+});
+
+describe('replyErrorCopy', () => {
+  it('writes its own copy for each code with the field label it already holds', () => {
+    const at = (code: DispatchTaskReplyErrorCode, fieldId = 'email') =>
+      replyErrorCopy({ toolCallId: 'call-input', message: 'ignored', fieldId, code }, [STEP]);
+    expect(at('required')).toBe('Email: this is required.');
+    expect(at('required', 'room')).toBe('Room: choose an option.');
+    expect(at('not_an_option', 'room')).toBe('Room: choose one of the options offered.');
+    expect(at('bad_format')).toBe('Email: enter an email address.');
+    expect(at('too_long')).toBe('Email: use at most 40 characters.');
+    expect(at('expired')).toBe('This question is no longer waiting for an answer.');
+  });
+
+  it('falls back to generic copy and never echoes the relayed message', () => {
+    const generic = 'The computer did not accept that answer. Check it and send it again.';
+    expect(replyErrorCopy({ toolCallId: 'call-input', message: 'secret detail' }, [STEP])).toBe(
+      generic,
+    );
+    expect(
+      replyErrorCopy(
+        { toolCallId: 'call-input', message: 'secret detail', fieldId: 'nope', code: 'required' },
+        [STEP],
+      ),
+    ).toBe(generic);
+    expect(
+      replyErrorCopy(
+        { toolCallId: 'other', message: 'secret detail', fieldId: 'email', code: 'required' },
+        [STEP],
+      ),
+    ).toBe(generic);
   });
 });

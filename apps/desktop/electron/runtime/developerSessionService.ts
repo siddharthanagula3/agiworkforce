@@ -810,6 +810,7 @@ function toSession(rootId: string, raw: unknown): LocalDeveloperSession | null {
     createdAt: readString(raw, 'createdAt') ?? '',
     updatedAt: readString(raw, 'updatedAt') ?? '',
     origin: (readString(raw, 'createdBy') ?? 'cli') as DeveloperSessionSource,
+    ...(readString(raw, 'location') === 'cloud' ? { location: 'cloud' as const } : {}),
   };
 }
 
@@ -819,7 +820,10 @@ function requireSession(rootId: string, raw: unknown): LocalDeveloperSession {
   return session;
 }
 
-async function listForRoot(root: WorkspaceRoot): Promise<DeveloperSessionGroup> {
+async function listForRoot(
+  root: WorkspaceRoot,
+  includeCloud: boolean,
+): Promise<DeveloperSessionGroup> {
   const git = await readWorkspaceGit(root);
   const group: DeveloperSessionGroup = {
     rootId: root.id,
@@ -831,7 +835,10 @@ async function listForRoot(root: WorkspaceRoot): Promise<DeveloperSessionGroup> 
 
   try {
     const server = await readyServer(root);
-    const result = await request(server, 'thread/list', { cwd: root.path });
+    const result = await request(server, 'thread/list', {
+      cwd: root.path,
+      ...(includeCloud ? { includeCloud } : {}),
+    });
     const threads = isRecord(result) ? result['threads'] : null;
     if (Array.isArray(threads)) {
       group.sessions = threads
@@ -931,8 +938,12 @@ export async function readDeveloperModels(
   };
 }
 
-export async function listDeveloperSessions(): Promise<DeveloperSessionList> {
-  const groups = await Promise.all(listRoots().map(listForRoot));
+export async function listDeveloperSessions(
+  options: { includeCloud?: boolean } = {},
+): Promise<DeveloperSessionList> {
+  const groups = await Promise.all(
+    listRoots().map((root) => listForRoot(root, options.includeCloud === true)),
+  );
   return { groups };
 }
 

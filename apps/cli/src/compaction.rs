@@ -160,8 +160,30 @@ pub fn instruction_sources(cwd: &Path) -> (Vec<InstructionSource>, bool) {
     (sources, truncated)
 }
 
+#[cfg(test)]
+thread_local! {
+    static TEST_CONFIG_HOME: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) fn with_config_home<T>(home: &Path, run: impl FnOnce() -> T) -> T {
+    let previous = TEST_CONFIG_HOME.with(|cell| cell.replace(Some(home.to_path_buf())));
+    let result = run();
+    TEST_CONFIG_HOME.with(|cell| cell.replace(previous));
+    result
+}
+
+fn config_home() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(home) = TEST_CONFIG_HOME.with(|cell| cell.borrow().clone()) {
+        return Some(home);
+    }
+    crate::config::CliConfig::config_dir().ok()
+}
+
 fn global_instructions() -> Option<(std::path::PathBuf, String)> {
-    let home = crate::config::CliConfig::config_dir().ok()?;
+    let home = config_home()?;
     ["instructions.md", "INSTRUCTIONS.md"]
         .iter()
         .map(|name| home.join(name))

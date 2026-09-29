@@ -33,7 +33,7 @@ pub struct SessionSnapshot {
     pub messages: Vec<TurnMessage>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConversationPushItem {
     pub id: String,
@@ -43,7 +43,7 @@ pub struct ConversationPushItem {
     pub base_version: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MessagePushItem {
     pub id: String,
@@ -56,7 +56,7 @@ pub struct MessagePushItem {
     pub base_version: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatPushRequest {
     pub protocol_version: u8,

@@ -15,15 +15,3 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-
-## S82.22: Estimated task cost.
-
-- Done when: Before or while a task runs, the user sees an estimate of what it will cost.
-- Wave: 3
-- Already works on: web, desktop, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The cited 'estimate' is a retrospective session cost (estimated because it is priced locally), not an estimate of what a task will cost; during a turn the status line reuses the pre-turn total. |  |
-
-Code: `apps/cli/src/usage_summary.rs:382-396`, `apps/cli/src/tui/tui_app.rs:3897-3911`

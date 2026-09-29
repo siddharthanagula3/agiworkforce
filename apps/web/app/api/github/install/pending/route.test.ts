@@ -14,18 +14,28 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-app')>()),
   getGitHubInstallationAccount: (...args: unknown[]) => mocks.account(...args),
 }));
-vi.mock('@/lib/github-install-app-return', () => ({
+vi.mock('@/lib/github-install-app-return', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-install-app-return')>()),
   pendingAppInstallation: (...args: unknown[]) => mocks.pending(...args),
 }));
 

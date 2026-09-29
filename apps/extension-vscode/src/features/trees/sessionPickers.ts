@@ -7,6 +7,7 @@ import {
   type SessionListingFailure,
   type SessionSearchHit,
 } from './conversationTreeProvider';
+import { isCloudThread } from './cloudSessions';
 
 export const SHOW_ARCHIVED_SESSIONS_COMMAND = 'agi-workforce.showArchivedSessions';
 
@@ -31,9 +32,11 @@ function reportFailures(failures: readonly SessionListingFailure[]): void {
 }
 
 function sessionItem(thread: ThreadSummary): SessionPickItem {
+  const cloud = isCloudThread(thread);
+  const updated = formatRelativeTime(Date.parse(thread.updatedAt));
   return {
-    label: `$(comment) ${thread.title}`,
-    description: formatRelativeTime(Date.parse(thread.updatedAt)),
+    label: `$(${cloud ? 'cloud' : 'comment'}) ${thread.title}`,
+    description: cloud ? `${t('conversationTree.cloudLabel')} · ${updated}` : updated,
     detail: [thread.model, thread.cwd].filter((part) => part !== undefined).join(' · '),
     threadId: thread.id,
   };
