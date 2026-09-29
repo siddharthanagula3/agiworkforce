@@ -111,6 +111,28 @@ pub fn domain_pattern_matches(pattern: &str, host: &str) -> bool {
     }
 }
 
+pub fn website_allow_error(pattern: &str) -> Option<String> {
+    let pattern = normalize_domain(pattern);
+    let host = pattern.strip_prefix("*.").unwrap_or(&pattern);
+    let literal = host.trim_matches(|c| c == '[' || c == ']');
+    if host.is_empty() || host.contains('*') {
+        return Some(
+            "A site allow rule names a host such as example.com or *.example.com".to_string(),
+        );
+    }
+    if literal.parse::<std::net::IpAddr>().is_ok()
+        || host.parse::<u32>().is_ok()
+        || crate::safety::network_target::is_internal_host(host)
+        || host == "metadata.google"
+    {
+        return Some(format!(
+            "{host} is an address on this computer, its private network or a cloud metadata \
+             service, so it cannot be allowed ahead of time. Approve each fetch when asked."
+        ));
+    }
+    None
+}
+
 pub fn url_blocked_by_domain_rule(url: &str) -> Option<String> {
     let host = reqwest::Url::parse(url).ok()?.host_str()?.to_string();
     let store = PermissionStore::load().ok()?;
@@ -466,7 +488,8 @@ impl PermissionStore {
             .iter()
             .chain(self.session_allow.iter())
             .filter_map(|rule| rule.strip_prefix(DOMAIN_RULE_PREFIX))
-            .any(|pattern| !pattern.contains('*') && normalize_domain(pattern) == host)
+            .filter(|pattern| website_allow_error(pattern).is_none())
+            .any(|pattern| domain_pattern_matches(pattern, &host))
     }
 
     /// Check a path-scoped file mutation rule. File rules use exact keys so
@@ -1221,5 +1244,42 @@ mod tests {
         ] {
             assert!(open_ended_allow_error(rule).is_none(), "{rule}");
         }
+    }
+
+    #[test]
+    fn website_allows_refuse_addresses_and_internal_hosts() {
+        for pattern in [
+            "169.254.169.254",
+            "127.0.0.1",
+            "10.0.0.5",
+            "[::1]",
+            "::1",
+            "2130706433",
+            "localhost",
+            "dev.localhost",
+            "*.localhost",
+            "metadata.google.internal",
+            "*",
+            "*.*.example.com",
+            "",
+        ] {
+            assert!(website_allow_error(pattern).is_some(), "{pattern:?}");
+        }
+        for pattern in ["example.com", "*.example.com", "intranet.corp.example"] {
+            assert!(website_allow_error(pattern).is_none(), "{pattern}");
+        }
+    }
+
+    #[test]
+    fn saved_site_allows_skip_addresses_and_honour_wildcards() {
+        let mut store = PermissionStore::default();
+        store.allow_always("domain:169.254.169.254");
+        store.allow_always("domain:*");
+        store.allow_always("domain:*.corp.example");
+        assert!(!store.names_domain("169.254.169.254"));
+        assert!(!store.names_domain("localhost"));
+        assert!(store.names_domain("wiki.corp.example"));
+        assert!(!store.names_domain("corp.example"));
+        assert!(!store.names_domain("wiki.other.example"));
     }
 }

@@ -1245,6 +1245,11 @@ pub fn add_permission(
                         "A site rule names a host such as example.com or *.example.com",
                     ));
                 }
+                if params.decision == PermissionRuleDecision::Allow {
+                    if let Some(message) = crate::permissions::website_allow_error(target) {
+                        return Err(invalid(message));
+                    }
+                }
                 format!(
                     "{}{}",
                     crate::permissions::DOMAIN_RULE_PREFIX,
@@ -1585,6 +1590,23 @@ mod tests {
             .expect_err(target);
             assert!(
                 error.to_string().contains("without asking"),
+                "{target}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_site_allow_for_a_metadata_address_is_refused() {
+        for target in ["169.254.169.254", "localhost", "*"] {
+            let error = add_permission(PermissionsAddParams {
+                kind: PermissionRuleKind::Domain,
+                target: target.to_string(),
+                decision: PermissionRuleDecision::Allow,
+            })
+            .expect_err(target);
+            assert!(
+                error.to_string().contains("cannot be allowed")
+                    || error.to_string().contains("names a host"),
                 "{target}: {error}"
             );
         }
