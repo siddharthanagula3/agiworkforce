@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import {
   Check,
@@ -11,11 +12,17 @@ import {
   Square,
   X,
 } from 'lucide-react-native';
-import { REMOTE_CODE_LIMITS, type RemoteCodeToolRecord } from '@agiworkforce/types';
+import {
+  REMOTE_CODE_LIMITS,
+  managedUsageBucketLabel,
+  type RemoteCodeToolRecord,
+} from '@agiworkforce/types';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Text } from '@/components/ui/text';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useThemeColors } from '@/src/ui/theme';
 import {
   answerCodeApproval,
@@ -98,6 +105,46 @@ function ToolRow({ tool }: { tool: RemoteCodeToolRecord }) {
   );
 }
 
+function PlanUsageLine() {
+  const colors = useThemeColors();
+  const router = useRouter();
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
+  const ownerId = useCloudUsageStore((state) => state.ownerId);
+  const cached = useCloudUsageStore((state) => state.snapshot);
+  const refresh = useCloudUsageStore((state) => state.refresh);
+  const snapshot = clerkUserId && ownerId === clerkUserId ? cached : null;
+
+  useEffect(() => {
+    if (clerkUserId) void refresh();
+  }, [clerkUserId, refresh]);
+
+  if (!snapshot) return null;
+  const parts = [
+    snapshot.sessionResetAt !== null
+      ? `${managedUsageBucketLabel('session')} ${Math.round(snapshot.sessionUsagePercentage)}%`
+      : null,
+    snapshot.weeklyResetAt !== null
+      ? `${managedUsageBucketLabel('weekly')} ${Math.round(snapshot.weeklyUsagePercentage)}%`
+      : null,
+    `${managedUsageBucketLabel('period')} ${Math.round(snapshot.usagePercentage)}%`,
+  ].filter((part): part is string => part !== null);
+
+  return (
+    <Pressable
+      onPress={() =>
+        router.push('/(app)/settings/cloud-usage' as Parameters<typeof router.push>[0])
+      }
+      accessibilityRole="link"
+      accessibilityLabel={`Plan usage: ${parts.join(', ')}. See detailed usage`}
+      style={{ minHeight: 32, justifyContent: 'center' }}
+    >
+      <Text className="text-[11px]" style={{ color: colors.textMuted }} numberOfLines={1}>
+        {`Plan usage · ${parts.join(' · ')}`}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessionViewProps) {
   const colors = useThemeColors();
   const thread = useRemoteCodeStore(
@@ -172,6 +219,8 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           color={codeSessionStatusColor(thread.status)}
         />
       </View>
+
+      <PlanUsageLine />
 
       {thread.hostMessage ? (
         <Text className="text-xs" style={{ color: colors.agentError }} accessibilityRole="alert">
