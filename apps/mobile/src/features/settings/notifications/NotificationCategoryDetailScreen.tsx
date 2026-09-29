@@ -9,15 +9,21 @@ import {
   SettingsSwitchRow,
 } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
-import { isNotificationCategory, NOTIFICATION_CATEGORY_COPY } from './categories';
+import { NOTIFICATION_CATEGORY_COPY, resolveNotificationCategory } from './categories';
 import { View } from 'react-native';
 
-export default function NotificationCategoryDetailScreen({ category }: { category: string }) {
+export default function NotificationCategoryDetailScreen({
+  category: requestedCategory,
+}: {
+  category: string;
+}) {
   const colors = useThemeColors();
   const categoryEnabled = useNotificationPrefsStore((state) => state.categoryEnabled);
   const setCategoryEnabled = useNotificationPrefsStore((state) => state.setCategoryEnabled);
 
-  if (!isNotificationCategory(category)) {
+  const category = resolveNotificationCategory(requestedCategory);
+
+  if (!category) {
     return (
       <SettingsScreenShell title="Notification" backHref="/(app)/settings/notifications">
         <SettingsInfo
