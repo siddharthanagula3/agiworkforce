@@ -12,6 +12,18 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 
+/** Each stored field is read on its own, so one invalid value never hides the rest. */
+function readStoredPreferences(value: unknown): RoutingPreferences {
+  if (!value || typeof value !== 'object') return {};
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(RoutingPreferencesSchema.shape).flatMap(([key, field]) => {
+      const parsed = field.safeParse(record[key]);
+      return parsed.success && parsed.data !== undefined ? [[key, parsed.data]] : [];
+    }),
+  ) as RoutingPreferences;
+}
+
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
@@ -23,9 +35,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       'select routing_preferences from profiles where id = $1 limit 1',
       [userId],
     );
-    const stored = RoutingPreferencesSchema.safeParse(row?.routing_preferences);
-    const preferences: RoutingPreferences = stored.success ? stored.data : {};
-    return NextResponse.json(preferences);
+    return NextResponse.json(readStoredPreferences(row?.routing_preferences));
   } catch (error) {
     logger.warn(
       { userId, error: error instanceof Error ? error.message : String(error) },
