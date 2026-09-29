@@ -85,13 +85,16 @@ async function imageJobs(
         and jobs.organization_id is not distinct from $2::uuid
         and not exists (
           select 1 from public.web_conversations c
-           where c.id = jobs.conversation_id and coalesce(c.is_temporary, false)
+           where c.id = jobs.conversation_id
+             and (coalesce(c.is_temporary, false) or c.deleted_at is not null)
         )
         and (
           not jobs.temporary_chat
           or exists (
             select 1 from public.web_conversations c
-             where c.id = jobs.conversation_id and not coalesce(c.is_temporary, false)
+             where c.id = jobs.conversation_id
+               and not coalesce(c.is_temporary, false)
+               and c.deleted_at is null
           )
         )
       group by jobs.id
@@ -133,13 +136,16 @@ async function videoJobs(
         and jobs.organization_id is not distinct from $2::uuid
         and not exists (
           select 1 from public.web_conversations c
-           where c.id = jobs.conversation_id and coalesce(c.is_temporary, false)
+           where c.id = jobs.conversation_id
+             and (coalesce(c.is_temporary, false) or c.deleted_at is not null)
         )
         and (
           not jobs.temporary_chat
           or exists (
             select 1 from public.web_conversations c
-             where c.id = jobs.conversation_id and not coalesce(c.is_temporary, false)
+             where c.id = jobs.conversation_id
+               and not coalesce(c.is_temporary, false)
+               and c.deleted_at is null
           )
         )
       order by jobs.created_at desc

@@ -99,30 +99,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
-## S20.22: Partially streamed Markdown.
-
-- Done when: While a reply streams, the partial text renders as formatted Markdown progressively rather than raw syntax until completion.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | While streaming the TUI shows the raw Markdown tail (last 40 lines) and only formats the answer once the turn ends. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:1590-1590`, `apps/cli/src/tui/tui_app.rs:1530-1530`
-
-## S20.23: Incomplete code-fence handling.
-
-- Done when: An unclosed ``` fence mid-stream renders as a code block (not prose) until the closing fence arrives.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Mid-stream the TUI prints raw text, so an open fence is shown as literal backticks; formatting applies only after the turn ends. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:1590-1590`, `apps/cli/src/tui/tui_app.rs:1530-1530`
-
 ## S20.26: Text selection across rendered blocks.
 
 - Done when: A reader can drag-select text continuously across paragraphs, lists and code in one answer.
