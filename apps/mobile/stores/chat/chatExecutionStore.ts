@@ -1738,15 +1738,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const memoryReadsEnabled =
       accountMemoryAllowed && memorySettings.memoryEnabled && !isTemporaryChat;
 
+    const serverAssemblesContext = executionMode === 'cloud';
     try {
       const [memFacts, pastChatContext] = await Promise.all([
-        memoryReadsEnabled ? retrieveMemoryContext(content, 5) : [],
-        retrievePastChatContext({
-          executionMode,
-          query: content,
-          currentConversationId: conversationId,
-          enabled: accountMemoryAllowed && memorySettings.referencePastChats && !isTemporaryChat,
-        }),
+        memoryReadsEnabled && !serverAssemblesContext ? retrieveMemoryContext(content, 5) : [],
+        serverAssemblesContext
+          ? null
+          : retrievePastChatContext({
+              executionMode,
+              query: content,
+              currentConversationId: conversationId,
+              enabled:
+                accountMemoryAllowed && memorySettings.referencePastChats && !isTemporaryChat,
+            }),
       ]);
       if (!isTurnAccountCurrent()) return false;
       const blocks = buildPersonalContextBlocks({

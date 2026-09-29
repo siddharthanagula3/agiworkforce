@@ -44,6 +44,8 @@ export interface MemoryFact {
   source?: MemoryFactSource | null;
   category?: string | null;
   source_conversation_title?: string | null;
+  project_id?: string | null;
+  project_name?: string | null;
   superseded_by?: string | null;
 }
 
