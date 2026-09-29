@@ -14,47 +14,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Deferred under D-2026-09-28-26 until Codex's projects rework lands; CloudProject has no defaultModelId on mobile yet. | codex |
+| mobile | partial | CloudProject on mobile has no defaultModelId and new project chats do not take a project default model. | codex |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
-
-## S79.05: Speed-first profile.
-
-- Done when: A speed-first routing profile can be applied that prefers the fastest eligible route.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates a805b3efe moved speedFirstSlots into @agiworkforce/routing so the device resolver can prefer the fastest slots. Picker rows and the on-device routing_profile mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch; the Instant fastest-slot preference is in post-codex/chat-gates-s79.05-mobile-speed-first.patch (applies after it). ModelPickerSheet.tsx, chatExecutionStore.ts and cloudDispatchRouting.ts are Codex-held. | ui |
-
-Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`
-
-## S79.06: Quality-first profile.
-
-- Done when: A quality-first routing profile can be applied that prefers the most capable eligible route.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Same post-codex patch as S79.05. | ui |
-
-Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`
-
-## S79.07: Cost-first profile.
-
-- Done when: A cost-first routing profile can be applied that prefers the cheapest eligible route.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Same post-codex patch as S79.05. | ui |
-
-Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`
 
 ## S79.17: Provider lock.
 
@@ -78,18 +42,6 @@ Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S79.21: Explicit model-switch offer.
-
-- Done when: When another model would work better, the user is offered an explicit one-click switch.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A one-tap 'Use <model>' switch to the first edit-capable image model the registry lists is in post-codex/chat-gates-s79.21-mobile-image-model-switch.patch; both chat screens that raise the blocked alert are Codex-held. | ui |
-
-Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:150-150`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:184-184`
 
 ## S79.23: Specialist worker selection.
 
@@ -118,14 +70,11 @@ Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest
 
 - Done when: The user can see why Auto chose (or moved to) a model.
 - Wave: 3
-- Already works on: web, desktop, cli, chrome, api
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Auto chose <model>' on assistant turns is in post-codex/chat-gates-s79.26-mobile-routing-receipt.patch (MessageBubble.tsx is Codex-held). | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`
 
 ## S79.27: Actual-model attribution.
 

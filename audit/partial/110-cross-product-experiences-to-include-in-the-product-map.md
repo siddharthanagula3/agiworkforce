@@ -29,7 +29,7 @@ Code: `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 | --- | --- | --- | --- |
 | web | partial | owner: provision the antivirus scanner endpoint and set UPLOAD_SCAN_WEBHOOK_URL (and UPLOAD_SCAN_WEBHOOK_TOKEN if needed); production refuses uploads without it (apps/web/lib/security/upload-scan.ts:264-282) | switch-on |
 | desktop | partial | owner: provision the antivirus scanner endpoint and set UPLOAD_SCAN_WEBHOOK_URL (and UPLOAD_SCAN_WEBHOOK_TOKEN if needed); production refuses uploads without it (apps/web/lib/security/upload-scan.ts:264-282) | switch-on |
-| mobile | partial | The office-file tool can build a .pptx from the chat's text; no deck action or editor. | ui |
+| mobile | partial | No deck action or editor; only the office-file tool can build a .pptx from chat text. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -44,7 +44,7 @@ Code: `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/stores/chat/c
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1, E2B_API_KEY, AGI_E2B_CHAT_TEMPLATE and UPLOAD_SCAN_WEBHOOK_URL; then live-check a chart-into-docx prompt on an uploaded xlsx (template has python-docx and matplotlib) | switch-on, live-check |
 | desktop | partial | switch-on: set AGI_E2B_EXECUTION=1, E2B_API_KEY, AGI_E2B_CHAT_TEMPLATE and UPLOAD_SCAN_WEBHOOK_URL; then live-check a chart-into-docx prompt on an uploaded xlsx (template has python-docx and matplotlib) | switch-on, live-check |
-| mobile | partial | Chart artifacts render as text in the mobile artifact viewer and the report tool cannot embed a chart. | ui |
+| mobile | partial | Chart artifacts render as text in the artifact viewer and the report tool cannot embed a chart. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -72,7 +72,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/component
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | agi_work is unreachable from live voice; the user must switch to text and start a task from the Tasks screen, carrying no voice context. | handler |
+| mobile | partial | agi_work is unreachable from live voice; a task must be started from the Tasks screen without voice context. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -98,7 +98,7 @@ Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:331-331`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The share extension drafts an ordinary chat, never an AGI Work task; Gmail reaches mobile only when the operator configured the connector. | flag-off, handler |
+| mobile | partial | The share extension drafts an ordinary chat, never an AGI Work task from an email thread. | flag-off, handler |
 | cli | partial | Managed-cloud turns get the account's Gmail connector when configured, but Always-allow tools run silently and there is no email intake command. | flag-off, ui, states |
 | vscode | partial | Turns run through the local CLI and inherit its limits: operator-gated Gmail, Always-allow tools only, no email intake. | flag-off, ui, states |
 | chrome | missing | Not built on this surface. |  |
@@ -128,7 +128,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | ui, flag-off |
-| mobile | partial | The phone can steer an existing desktop Code session and download the design source as text; no design-to-code handoff. | ui |
+| mobile | partial | No design-to-code handoff from the phone; only steering an existing desktop Code session and downloading design source. | ui |
 | cli | partial | agi artifacts show --out writes the design into the repo for the agent to implement; no spec handoff or Figma import. | ui |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:435-435`, `apps/cli/src/lib.rs:2391-2391`
@@ -171,7 +171,7 @@ Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:42-42`, `apps/web/app/api/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The request now runs on the paired computer, but the phone never shows the result (the task list shows status only, dispatch.task.status has no notification action, and the session view clears the reply text when the turn finishes), and it always runs in the first approved folder. | handler |
+| mobile | partial | Dispatch tasks show status only in DispatchTaskComposer; the result text stored in dispatchTaskStore is never rendered and the task always runs in the first approved folder. | handler |
 | cli | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:41-41`, `apps/mobile/services/companion.ts:115-115`, `apps/mobile/services/companionNotifications.ts:26-26`
@@ -212,7 +212,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/extension-vscode/src/features/clou
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A selected project adds only its instructions locally; the stream request carries no conversation or project id, so the server never loads the project's sources. | handler |
+| mobile | partial | A selected project adds only its instructions locally (chatExecutionStore); the stream request carries no project id so the server never loads the project sources. | handler |
 | cli | partial | agi projects link binds the folder to a project and its instructions reach every managed-cloud turn, but no knowledge-file content grounds a turn (the ledger's 'missing' is stale). |  |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/services/streaming.ts:186-186`, `apps/cli/src/lib.rs:1057-1057`, `apps/cli/src/agent/mod.rs:2031-2031`
@@ -230,18 +230,6 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/se
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S110.26: Usage exhaustion → alternative eligible path.
-
-- Done when: When the user runs out of usage, the product offers an eligible alternative (named eligible model, reset wait, or purchase) that the user can take in one step and continue.
-- Wave: 2
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The paywall sheet names no model and no reset time, and in-app purchase is off (MOBILE_IAP_ENABLED unset); post-codex/no-yearly-s82-mobile-chat-usage.patch adds the model choice and reset line. | ui, flag-off |
-
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:41-41`, `apps/web/lib/server/mobile-iap-catalog.ts:25-25`
-
 ## S110.27: Disconnected integration → reconnect and resume.
 
 - Done when: When a connected integration expires mid-task, the user is prompted to reconnect and the interrupted turn or run continues from where it stopped once reauthorized.
@@ -250,7 +238,7 @@ Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:41-41`, `
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Reconnect works in Settings, but chat never recognises an authorization-required tool result, and there is no resume. | ui, states |
+| mobile | partial | Chat never recognises an authorization-required tool result and there is no resume after reconnect. | ui, states |
 | cli | partial | An expired account connector now prints its reconnect link (dc4299a638) and the next message continues the task; resuming the interrupted turn itself needs a server resume path after reconnect, the same gap as web | handler |
 
 Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-318`, `apps/cli/src/cloud/connectors.rs:53-53`, `apps/cli/src/models/streaming.rs:619-619`, `crates/agiworkforce-llm/src/stream.rs:845-845`
@@ -259,15 +247,12 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.
 
 - Done when: A published output is updated in place: the user changes it, republishes to the same link, and the new version is recorded and reversible.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Republish and restore-then-republish work, but mobile cannot edit an artifact and has no publish history. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:414-414`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:579-579`
 
 ## S110.29: Public creation → private fork.
 
