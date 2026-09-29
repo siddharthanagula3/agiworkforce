@@ -42,6 +42,7 @@ export interface Personalization {
   preferredLength?: PreferredLength;
   technicalLevel?: TechnicalLevel;
   responseLanguage?: string;
+  nameOptedOut?: boolean;
 }
 
 interface Capabilities {
