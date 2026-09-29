@@ -174,14 +174,6 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/gate.ts:20-20`, `apps/
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
-## S57.18: Video-generation tool.
-
-- Done when: The assistant can call a video-generation tool and the generated video appears in the conversation.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S57.22: Calendar tool.
 
 - Done when: The assistant can call a calendar tool to read or create events in the user's calendar.

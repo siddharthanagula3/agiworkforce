@@ -116,7 +116,9 @@ describe('a modal holds the page behind it still', () => {
 });
 
 const HAND_ROLLED_ROOTS = ['apps/web/app', 'apps/web/features', 'apps/web/shared', 'packages/ui'];
-const LOCKS_ITSELF = /document\.body\.style\.overflow\s*=\s*['"]hidden['"]|<RemoveScroll\b/;
+// A portalled reader locks the body of the document it renders into, which it
+// reaches as ownerDocument.body rather than the global document.body.
+const LOCKS_ITSELF = /\bbody\.style\.overflow\s*=\s*['"]hidden['"]|<RemoveScroll\b/;
 const OWNS_KEYBOARD_CONTRACT = /\b(useDialogKeyboard|useOverlayDialog)\s*\(/;
 
 /**

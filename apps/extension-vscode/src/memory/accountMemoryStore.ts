@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
 import { classifyMemoryCategory, normalizeMemoryKey } from '@agiworkforce/agent-core';
+import {
+  applyMemoryDeltas,
+  mapMemoryWireDelta,
+  selectNextCursor,
+  type SyncMemoryRecord,
+} from '@agiworkforce/sync';
 import { getAccountToken, getAccountAuthState, getCloudWebOrigin } from '../utils/api';
 import {
   AccountMemoryUnauthorizedError,
@@ -19,6 +25,7 @@ export const ACCOUNT_MEMORY_CURSOR_KEY = 'agiWorkforce.accountMemoryCursor';
 export const ACCOUNT_MEMORY_OWNER_KEY = 'agiWorkforce.accountMemoryOwner';
 export const ACCOUNT_MEMORY_SCOPE_KEY = 'agiWorkforce.accountMemoryScope';
 export const ACCOUNT_MEMORY_VERSIONS_KEY = 'agiWorkforce.accountMemoryVersions';
+export const ACCOUNT_MEMORY_UNSCOPED_KEY = 'agiWorkforce.accountMemoryUnscoped';
 export const WORKSPACE_MEMORY_ADOPTED_KEY = 'agiWorkforce.workspaceMemoryAdopted';
 
 export type AccountMemoryStatus = 'ready' | 'signed-out' | 'unreachable';
@@ -42,18 +49,36 @@ interface CachedVersions {
   [id: string]: string;
 }
 
-function toFact(delta: MemoryDelta): MemoryFact {
+const PINNED_IMPORTANCE = 9;
+
+function toFact(record: SyncMemoryRecord): MemoryFact {
   return {
-    id: delta.id,
-    text: delta.content,
-    createdAt: delta.created_at,
-    updatedAt: delta.updated_at,
-    category: classifyMemoryCategory(delta.content),
-    importance: delta.pinned ? 9 : 5,
-    ...(delta.source ? { source: delta.source } : {}),
-    ...(delta.source_conversation_title
-      ? { sourceConversationTitle: delta.source_conversation_title }
+    id: record.id,
+    text: record.content,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    category: classifyMemoryCategory(record.content),
+    importance: record.pinned ? PINNED_IMPORTANCE : 5,
+    ...(record.origin ? { source: record.origin } : {}),
+    ...(record.sourceConversationTitle
+      ? { sourceConversationTitle: record.sourceConversationTitle }
       : {}),
+  };
+}
+
+function toRecord(fact: MemoryFact, serverVersion: string | undefined): SyncMemoryRecord {
+  return {
+    id: fact.id,
+    content: fact.text,
+    category: null,
+    source: 'web',
+    pinned: (fact.importance ?? 0) >= PINNED_IMPORTANCE,
+    isDeleted: false,
+    createdAt: fact.createdAt,
+    updatedAt: fact.updatedAt ?? fact.createdAt,
+    ...(serverVersion === undefined ? {} : { serverVersion }),
+    origin: fact.source ?? null,
+    sourceConversationTitle: fact.sourceConversationTitle ?? null,
   };
 }
 
@@ -107,6 +132,13 @@ export class AccountMemoryStore {
     );
   }
 
+  turnFacts(): MemoryFact[] {
+    if (this.scope() === undefined || this.storage.get<boolean>(ACCOUNT_MEMORY_UNSCOPED_KEY)) {
+      return [];
+    }
+    return this.cachedFacts();
+  }
+
   async signedOut(): Promise<boolean> {
     return (await getAccountAuthState(this.secrets)).status !== 'signed-in';
   }
@@ -126,8 +158,13 @@ export class AccountMemoryStore {
       await this.discardAnotherWorkspacesCache(await this.client.readScope());
       const cursor = this.storage.get<string>(ACCOUNT_MEMORY_CURSOR_KEY) ?? INITIAL_CURSOR;
       const page = await this.client.pullAll(cursor);
+      if (this.storage.get<boolean>(ACCOUNT_MEMORY_UNSCOPED_KEY)) {
+        await this.storage.update(ACCOUNT_MEMORY_CACHE_KEY, []);
+        await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, {});
+      }
       await this.applyDeltas(page.memories);
-      await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, page.cursor);
+      await this.storage.update(ACCOUNT_MEMORY_UNSCOPED_KEY, false);
+      await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, selectNextCursor(cursor, page.cursor));
       await this.adoptWorkspaceFacts();
       this.changed.fire();
       return { status: 'ready', facts: this.cachedFacts() };
@@ -246,7 +283,6 @@ export class AccountMemoryStore {
       if (conflict.current !== null) versions[conflict.id] = conflict.current.server_version;
     }
     await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, versions);
-    await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, response.cursor);
   }
 
   private async applyLocalWrites(items: MemoryPushItem[]): Promise<void> {
@@ -270,17 +306,13 @@ export class AccountMemoryStore {
   }
 
   private async applyDeltas(deltas: MemoryDelta[]): Promise<void> {
-    const byId = new Map(this.cachedFacts().map((fact) => [fact.id, fact]));
     const versions = { ...(this.storage.get<CachedVersions>(ACCOUNT_MEMORY_VERSIONS_KEY) ?? {}) };
-    for (const delta of deltas) {
-      versions[delta.id] = delta.server_version;
-      if (delta.is_deleted) {
-        byId.delete(delta.id);
-        continue;
-      }
-      byId.set(delta.id, toFact(delta));
-    }
-    await this.storage.update(ACCOUNT_MEMORY_CACHE_KEY, sortFacts([...byId.values()]));
+    const records = applyMemoryDeltas(
+      this.cachedFacts().map((fact) => toRecord(fact, versions[fact.id])),
+      deltas.map(mapMemoryWireDelta),
+    );
+    for (const delta of deltas) versions[delta.id] = delta.server_version;
+    await this.storage.update(ACCOUNT_MEMORY_CACHE_KEY, sortFacts(records.map(toFact)));
     await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, versions);
   }
 
@@ -305,7 +337,11 @@ export class AccountMemoryStore {
   }
 
   private async discardAnotherWorkspacesCache(scope: MemoryScope): Promise<void> {
-    if (this.scope()?.organizationId !== scope.organizationId) {
+    const recorded = this.scope();
+    if (recorded === undefined && this.cachedFacts().length > 0) {
+      await this.storage.update(ACCOUNT_MEMORY_UNSCOPED_KEY, true);
+      await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, INITIAL_CURSOR);
+    } else if (recorded !== undefined && recorded.organizationId !== scope.organizationId) {
       await this.storage.update(ACCOUNT_MEMORY_CACHE_KEY, []);
       await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, {});
       await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, INITIAL_CURSOR);

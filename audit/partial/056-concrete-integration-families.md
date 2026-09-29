@@ -451,19 +451,6 @@ Code: `apps/web/lib/connectors/account-url-connectors.ts:12-12`, `apps/web/lib/c
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S56.44: Native messaging applications.
-
-- Done when: The assistant can read or send messages in native messaging apps (iMessage, SMS, WhatsApp, Telegram) on the user's behalf.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S56.45: Local notes and calendars.
 
 - Done when: The assistant can read and add to the notes and calendars stored on the user's own device.
@@ -499,10 +486,10 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:234-234`, `apps/web/lib/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
-| desktop | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
-| mobile | partial | Hosted Link from the phone is built (link token bound to the user as a pending authorization, completed through /link/token/get). Left: per-account disconnect needs multi-item storage (today one Plaid item per user, replaced on relink; web has no per-account removal either), and owner Plaid steps (agreement, production transactions, compliance, PLAID_CLIENT_ID/SECRET/ENV); device check of the auth session | ui, flag-off |
+| web | partial | code complete (partials/mobile-features deeb0742ae): Hosted Link from the phone, several banks per account (migration 0349_bank_account_items), per-bank removal and per-account include switches on web and mobile, Hosted Link ownership hardening. Left: owner Plaid steps (agreement, production transactions, compliance, PLAID_CLIENT_ID/SECRET/ENV), migration apply, device check of the auth session | flag-off |
+| desktop | partial | code complete (partials/mobile-features deeb0742ae): Hosted Link from the phone, several banks per account (migration 0349_bank_account_items), per-bank removal and per-account include switches on web and mobile, Hosted Link ownership hardening. Left: owner Plaid steps (agreement, production transactions, compliance, PLAID_CLIENT_ID/SECRET/ENV), migration apply, device check of the auth session | flag-off |
+| mobile | partial | code complete (partials/mobile-features deeb0742ae): Hosted Link from the phone, several banks per account (migration 0349_bank_account_items), per-bank removal and per-account include switches on web and mobile, Hosted Link ownership hardening. Left: owner Plaid steps (agreement, production transactions, compliance, PLAID_CLIENT_ID/SECRET/ENV), migration apply, device check of the auth session | ui, flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | partials/mcp-web ca04fbda2 and 0bd9bccf0: Bank accounts connect through Plaid Link (plaid.com/docs/link/web and /docs/api, read 2026-09-28), as in ChatGPT's personal finance experience: live balances from /accounts/balance/get and transactions from /transactions/get as declared read tools, transactions product only, United States banks only, results fenced, save_memory refused for the rest of a turn that read bank data, and /item/remove on every disconnect and on account erasure. It stays unavailable until the owner signs Plaid's agreement, gets production access for transactions, completes the Dashboard compliance center details OAuth banks need, has a lawyer confirm whether the GLBA Safeguards Rule applies, and sets PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV. Extension chats read it once it is connected in the web app. | flag-off |
 
-Code: `apps/web/lib/connectors/plaid-config.ts:32-32`, `apps/web/lib/connectors/bank-accounts.ts:175-175`, `apps/web/lib/connectors/bank-accounts.ts:217-217`, `apps/mobile/services/connectors.ts:279-279`
+Code: `apps/web/lib/connectors/bank-accounts.ts:385-386`, `apps/web/lib/connectors/bank-accounts.ts:401-404`, `apps/web/features/finance/components/LinkedBanks.tsx:31-31`, `apps/mobile/src/features/settings/cloud-connectors/LinkedBanks.tsx:16-16`

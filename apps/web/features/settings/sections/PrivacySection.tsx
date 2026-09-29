@@ -32,6 +32,7 @@ import {
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { SaveStatusLine } from '../components/SaveStatusLine';
 import { UsOnlyRoutingPanel } from '../components/UsOnlyRoutingPanel';
+import { ProductAnalyticsConsentRow } from '../components/ProductAnalyticsConsentRow';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 const NAMESPACE = 'privacy';
@@ -59,9 +60,9 @@ interface ToggleSpec {
 const TOGGLES: ReadonlyArray<ToggleSpec> = [
   {
     id: 'shareTelemetry',
-    label: 'Share crash and usage telemetry',
+    label: 'Share crash and error reports',
     description:
-      'Allow browser error reports and consent-gated usage counts so we can fix problems faster. Sensitive request fields are removed from error reports before they are sent.',
+      'Allow browser error reports and counts of failed requests so we can fix problems faster. Sensitive request fields are removed from error reports before they are sent.',
     defaultValue: false,
   },
   {
@@ -544,9 +545,9 @@ export function PrivacySection() {
 
         <ExpandableSection title="How we use your data">
           <p style={{ margin: '0 0 var(--space-2)' }}>
-            Browser crash reports and consent-gated usage counts help us fix bugs faster. Sensitive
-            request fields are removed before error reports are sent. This setting does not control
-            server operational logs.
+            Browser crash reports help us fix bugs faster, and product analytics, when you allow it,
+            shows which parts of the product work. Sensitive request fields are removed before error
+            reports are sent. Neither setting controls server operational logs.
           </p>
           {/*
             The "opt into model-improvement sharing" paragraph that used to sit
@@ -609,6 +610,7 @@ export function PrivacySection() {
             />
           </div>
         ))}
+        <ProductAnalyticsConsentRow />
       </div>
 
       <UsOnlyRoutingPanel />

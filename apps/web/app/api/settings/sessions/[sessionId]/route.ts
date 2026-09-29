@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { resolveSessionsPrincipal } from '../session-principal';
 import { getIdentityProvider } from '@/lib/server/identity';
+import { revokeSessionMobileIntentTokens } from '@/lib/server/mobile-intent-tokens';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { handleIdentitySecurityEvent } from '@/lib/services/identity-events';
 import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
@@ -46,6 +47,7 @@ async function handleRevoke(
   if (target.status === SESSION_STATUS_ACTIVE) {
     await identity.revokeSession(target.id);
   }
+  await revokeSessionMobileIntentTokens(getNeonDb(), userId, target.id);
 
   const isCurrent = currentSessionId !== null && target.id === currentSessionId;
   logger.info({ userId, sessionId: target.id, isCurrent }, 'Account session revoked');

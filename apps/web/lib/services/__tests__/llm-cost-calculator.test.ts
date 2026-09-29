@@ -949,3 +949,34 @@ describe('list price billing, registry-sourced', () => {
     ).toBeNull();
   });
 });
+
+describe('fast tier billing', () => {
+  const fastModel = listCanonicalModels().find((model) => model.fastTier);
+  const standardModel = listCanonicalModels().find(
+    (model) => model.provider === 'anthropic' && !model.fastTier,
+  );
+  const usage = {
+    promptTokens: 200_000,
+    completionTokens: 50_000,
+    totalTokens: 250_000,
+    cacheReadInputTokens: 40_000,
+  };
+
+  it('bills every token of a fast call at the tier multiple of the list price', () => {
+    if (!fastModel?.fastTier) throw new Error('The catalogue declares no fast tier to exercise');
+    const standard = LLMCostCalculator.calculateListCost(fastModel.id, usage);
+    const fast = LLMCostCalculator.calculateListCost(fastModel.id, { ...usage, speed: 'fast' });
+    expect(standard).toBeGreaterThan(0);
+    expect(fast).toBeCloseTo(standard! * fastModel.fastTier.priceMultiplier, 10);
+    expect(LLMCostCalculator.calculateListCost(fastModel.id, { ...usage, speed: 'standard' })).toBe(
+      standard,
+    );
+  });
+
+  it('refuses to price a fast call on a model with no fast tier', () => {
+    if (!standardModel) throw new Error('The catalogue declares no standard Anthropic model');
+    expect(() =>
+      LLMCostCalculator.calculateListCost(standardModel.id, { ...usage, speed: 'fast' }),
+    ).toThrow(UnpricedModelError);
+  });
+});

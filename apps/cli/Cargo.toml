@@ -101,7 +101,7 @@ two-face = "0.5"
 pulldown-cmark = "0.13"
 arboard = "3"
 tempfile = "3"
-keyring = "3"
+keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native"] }
 tokio-tungstenite = "0.29"
 
 [target.'cfg(unix)'.dependencies]

@@ -33,10 +33,25 @@ pub struct CliConfig {
     pub source: ConfigSource,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TelemetryConfig {
     #[serde(default)]
     pub crash_reports: bool,
+    #[serde(default = "product_analytics_default")]
+    pub product_analytics: bool,
+}
+
+fn product_analytics_default() -> bool {
+    true
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            crash_reports: false,
+            product_analytics: product_analytics_default(),
+        }
+    }
 }
 
 impl TelemetryConfig {
@@ -1054,6 +1069,9 @@ impl CliConfig {
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
                 Some(self.telemetry.crash_reports.to_string())
             }
+            "product-analytics" | "telemetry.product-analytics" | "telemetry.product_analytics" => {
+                Some(self.telemetry.product_analytics.to_string())
+            }
             _ => key
                 .strip_prefix("ui.keybindings.")
                 .or_else(|| key.strip_prefix("keybindings."))
@@ -1168,6 +1186,12 @@ impl CliConfig {
                     .parse::<bool>()
                     .context("crash-reports must be true or false")?;
             }
+            "product-analytics" | "telemetry.product-analytics" | "telemetry.product_analytics" => {
+                self.telemetry.product_analytics = value
+                    .trim()
+                    .parse::<bool>()
+                    .context("product-analytics must be true or false")?;
+            }
             _ => {
                 if let Some(action) = key
                     .strip_prefix("ui.keybindings.")
@@ -1179,7 +1203,7 @@ impl CliConfig {
                     self.ui.keybindings = candidate;
                 } else {
                     bail!(
-                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, theme, reduced-motion, crash-reports, and ui.keybindings.<action>",
+                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, theme, reduced-motion, crash-reports, product-analytics, and ui.keybindings.<action>",
                         key
                     );
                 }
@@ -1265,9 +1289,14 @@ fn ensure_config_dir(dir: &std::path::Path) -> Result<()> {
     if !dir.exists() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("Failed to create config directory {}", dir.display()))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let open_to_others = std::fs::metadata(dir)
+            .map(|meta| meta.permissions().mode() & 0o077 != 0)
+            .unwrap_or(false);
+        if open_to_others {
             let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
         }
     }

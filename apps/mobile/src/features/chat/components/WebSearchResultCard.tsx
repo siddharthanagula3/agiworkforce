@@ -1,4 +1,5 @@
-import { Alert, View, Pressable } from 'react-native';
+import { Alert, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Globe } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
@@ -40,7 +41,7 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
   };
 
   return (
-    <Pressable
+    <PressableBox
       onPress={handlePress}
       accessibilityRole="link"
       accessibilityLabel={[result.title, `web page on ${hostname}`, published]
@@ -112,6 +113,6 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
           </View>
         </View>
       )}
-    </Pressable>
+    </PressableBox>
   );
 }

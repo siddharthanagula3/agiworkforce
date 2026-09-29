@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -102,7 +103,7 @@ export function ModeSwitchModal({
           <View
             style={{ marginTop: 18, flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}
           >
-            <Pressable
+            <PressableBox
               onPress={handleCancel}
               accessibilityRole="button"
               style={{
@@ -123,8 +124,8 @@ export function ModeSwitchModal({
               >
                 Cancel
               </Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               onPress={handleConfirm}
               accessibilityRole="button"
               style={{
@@ -140,7 +141,7 @@ export function ModeSwitchModal({
               >
                 {targetsCloud ? 'Continue' : 'Switch'}
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </View>

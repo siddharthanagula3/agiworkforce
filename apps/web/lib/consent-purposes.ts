@@ -29,9 +29,9 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
   },
   {
     id: 'product_analytics',
-    label: 'Allow aggregated usage analytics.',
+    label: 'Allow product analytics.',
     description:
-      'Aggregated page views via Google Analytics 4, used to understand which parts of the product get used. Off unless you turn it on. This is the same choice as the analytics switch in the cookie banner.',
+      'Aggregated page views on this site via Google Analytics 4, and product usage events from the AGI apps on web, desktop, mobile, Chrome, VS Code and the command line, recorded against your account: that a response was stopped or regenerated, or that a suggested edit was accepted or dismissed, with fixed labels such as your plan or the model provider. Never your messages, code, files or file names. Used to understand which parts of the product work. Off unless you turn it on, and a workspace administrator can turn it off for every member. This is the same choice as the analytics switch in the cookie banner.',
     necessaryForRequest: false,
   },
 ] as const;
@@ -67,6 +67,8 @@ export const CONSENT_SURFACES = [
   'web-waitlist-modal',
   'web-consent-centre',
   'web-cookie-banner',
+  'web-settings',
+  'mobile-settings',
 ] as const;
 
 export type ConsentSurface = (typeof CONSENT_SURFACES)[number];

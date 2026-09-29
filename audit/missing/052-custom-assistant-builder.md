@@ -12,6 +12,12 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
+## S52.05: Live test/preview pane.
+
+- Done when: While configuring an assistant the user can try it in a preview/test chat that reflects unsaved changes.
+- Wave: 4
+- Build on: web, desktop, mobile, vscode, chrome
+
 ## S52.07: Avatar or icon.
 
 - Done when: An assistant can carry an avatar, icon or colour that identifies it.
@@ -149,6 +155,12 @@ nothing is left.
 - Done when: A user can duplicate or fork an assistant to make their own copy.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
+
+## S52.39: Export or migration.
+
+- Done when: A user can export an assistant or migrate assistants in from/out to another product.
+- Wave: 4
+- Build on: web, desktop, mobile, vscode, chrome
 
 ## S52.40: Deprecation notice.
 

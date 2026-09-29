@@ -27,6 +27,7 @@ pub mod library;
 pub mod marketplaces;
 pub mod memory;
 pub mod personalization;
+pub mod product_analytics;
 pub mod projects;
 pub mod referrals;
 pub mod shares;

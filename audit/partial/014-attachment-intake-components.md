@@ -60,18 +60,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S14.09: Cloud-file picker.
-
-- Done when: The user can browse a cloud drive (Google Drive, OneDrive, Dropbox) from the composer and attach a file from it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S14.10: Library-file picker.
 
 - Done when: The user can pick a file already in their product Library and attach it to a message.

@@ -11,6 +11,7 @@ import {
   type ManagedCloudScheduleTask,
   type ManagedCloudScheduleTemplate,
 } from '@agiworkforce/cloud-contracts';
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
 import {
   createChromeSchedule,
@@ -376,7 +377,9 @@ function weekdayLabel(day: number): string {
   );
 }
 
-function badgeTone(schedule: ManagedCloudScheduleTask): string {
+function badgeTone(
+  schedule: ManagedCloudScheduleTask,
+): Extract<LifecycleStatus, 'failed' | 'idle'> | 'active' {
   if (schedule.status === 'failed') return 'failed';
   return schedule.isEnabled && schedule.status === 'active' ? 'active' : 'idle';
 }

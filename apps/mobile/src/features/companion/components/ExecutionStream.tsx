@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { View, ScrollView, Pressable } from 'react-native';
+import { View, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useRecyclingState } from '@shopify/flash-list';
 import Animated, {
   FadeIn,
@@ -302,7 +303,7 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
       {toolCalls.length > 0 ? (
         <View>
           {hiddenCount > 0 && (
-            <Pressable
+            <PressableBox
               onPress={() => setVisibleCount((count) => count + EXECUTION_STREAM_PAGE_SIZE)}
               accessibilityRole="button"
               accessibilityLabel={`Showing ${visibleCalls.length} of ${toolCalls.length} tool calls, show ${revealCount} earlier`}
@@ -319,7 +320,7 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
                 Show {revealCount} earlier
               </Text>
               <ChevronUp size={10} color={colors.agentActive} />
-            </Pressable>
+            </PressableBox>
           )}
 
           <ScrollView

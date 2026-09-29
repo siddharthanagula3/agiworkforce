@@ -6,30 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S104.T09: xterm.js (Browser/desktop terminal UI)
-
-- Done when: A terminal UI (xterm.js or equivalent) is shown inside the browser or desktop product.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S104.05: Spreadsheet grid engine.
-
-- Done when: Tabular data opens in an interactive spreadsheet grid that supports editing and formulas.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S104.08: Video playback and editing engine.
-
-- Done when: Videos play in-product and can be edited (trim, cut, combine) by a video engine.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S104.24: Sandbox provider.
 
 - Done when: Cloud code runs in a hosted sandbox provider.

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Monitor, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -91,7 +92,7 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
           }}
         >
           <Monitor size={18} color={colors.teal} />
-          <Pressable
+          <PressableBox
             onPress={onPairDesktop}
             style={{ flex: 1 }}
             accessibilityLabel="Pair your desktop"
@@ -103,15 +104,15 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
             <Text style={{ fontSize: typeScale.caption, color: colors.textMuted, marginTop: 1 }}>
               Scan QR to connect
             </Text>
-          </Pressable>
-          <Pressable
+          </PressableBox>
+          <PressableBox
             onPress={dismissBanner}
             hitSlop={12}
             accessibilityLabel="Dismiss pairing banner"
             accessibilityRole="button"
           >
             <X size={16} color={colors.textMuted} />
-          </Pressable>
+          </PressableBox>
         </Animated.View>
       )}
 

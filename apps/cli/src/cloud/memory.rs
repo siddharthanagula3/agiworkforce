@@ -263,7 +263,6 @@ pub fn apply_push_response(response: &MemoryPushResponse, state: &mut SyncState)
             state.memories.record(&conflict.id, &current.server_version);
         }
     }
-    state.memories.advance(&response.cursor);
 }
 
 pub fn apply_pull_response(response: &MemoryPullResponse, state: &mut SyncState) {
@@ -517,6 +516,58 @@ mod tests {
         };
         apply_push_response(&response, &mut state);
         assert_eq!(state.memories.base_version("m1"), "31");
+    }
+
+    #[test]
+    fn a_push_leaves_the_pull_cursor_so_another_devices_delete_is_still_pulled() {
+        let mut state = SyncState::default();
+        apply_pull_response(
+            &MemoryPullResponse {
+                memories: vec![
+                    delta("m1", "one", "5", false),
+                    delta("m2", "two", "5", false),
+                ],
+                cursor: "5".to_string(),
+                has_more: false,
+                memory_enabled: None,
+            },
+            &mut state,
+        );
+        apply_push_response(
+            &MemoryPushResponse {
+                applied: vec![AppliedRow {
+                    id: "m1".to_string(),
+                    server_version: "7".to_string(),
+                }],
+                conflicts: Vec::new(),
+                rejected: Vec::new(),
+                cursor: "7".to_string(),
+            },
+            &mut state,
+        );
+        assert_eq!(state.memories.cursor, "5");
+        assert_eq!(state.memories.base_version("m1"), "7");
+
+        let pulled = MemoryPullResponse {
+            memories: vec![
+                delta("m2", "two", "6", true),
+                delta("m1", "one", "7", false),
+            ],
+            cursor: "7".to_string(),
+            has_more: false,
+            memory_enabled: None,
+        };
+        assert!(pulled
+            .memories
+            .iter()
+            .filter(|memory| super::super::state::version_greater(
+                &memory.server_version,
+                &state.memories.cursor
+            ))
+            .any(|memory| memory.id == "m2" && memory.is_deleted));
+        apply_pull_response(&pulled, &mut state);
+        assert_eq!(state.memories.base_version("m2"), "6");
+        assert_eq!(state.memories.cursor, "7");
     }
 
     #[test]

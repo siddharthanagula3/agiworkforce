@@ -1,6 +1,7 @@
 import {
   pollDeviceAuthorization,
   requestDeviceAuthorization,
+  slowedDevicePollIntervalMs,
   type DeviceAuthorizationPost,
 } from '@agiworkforce/client-runtime';
 import { WEB_APP_URL, desktopRequestHeaders } from '../api/config';
@@ -292,10 +293,16 @@ export async function exchangeClerkSessionForCloudCredential(
   await approveOwnDeviceCode(authorization.userCode, clerkSessionToken, signal);
 
   let lastPending = false;
+  let pollDelayMs = APPROVED_POLL_DELAY_MS;
   for (let attempt = 0; attempt < APPROVED_POLL_ATTEMPTS; attempt += 1) {
-    if (attempt > 0) await delay(APPROVED_POLL_DELAY_MS, signal);
+    if (attempt > 0) await delay(pollDelayMs, signal);
 
     const result = await pollDeviceAuthorization(WEB_APP_URL, authorization.deviceCode, post);
+    if (result.kind === 'slow_down') {
+      pollDelayMs = slowedDevicePollIntervalMs(pollDelayMs, result);
+      lastPending = true;
+      continue;
+    }
     if (result.kind === 'approved') {
       return {
         accessToken: result.token,

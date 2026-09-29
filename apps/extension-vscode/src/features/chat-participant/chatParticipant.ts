@@ -346,7 +346,7 @@ export function createChatHandler(
     const memoryInput =
       workspaceState === undefined
         ? undefined
-        : buildMemoryContextInput(getAccountMemoryStore()?.cachedFacts() ?? []);
+        : buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
     const historicalAuthority = localThreadAuthorityFromHistory(context);
     let threadId = historicalAuthority?.id;
     let threadAuthority: LocalThreadAuthorityMetadata | undefined;
@@ -411,6 +411,7 @@ export function createChatHandler(
         return;
       }
       if (turnId !== undefined && event.turnId !== turnId) return;
+      if (event.type === 'agent_event') return;
       if (event.type === 'output_delta') {
         stream.markdown(event.delta);
       } else if (event.type === 'progress_update') {

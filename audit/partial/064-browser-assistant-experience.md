@@ -29,17 +29,6 @@ nothing is left.
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 
-## S64.13: Organize tabs.
-
-- Done when: The assistant groups, sorts or tidies the user's open tabs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
 ## S64.14: Website search.
 
 - Done when: The assistant runs a search on a website and reads the results back.

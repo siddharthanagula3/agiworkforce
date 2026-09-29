@@ -90,18 +90,6 @@ nothing is left.
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 
-## S27.16: Rewrite selection.
-
-- Done when: The user can select text in a document and ask for that selection to be rewritten in place.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S27.21: Translate selection.
 
 - Done when: The user can translate a selected passage into another language.
@@ -162,26 +150,6 @@ nothing is left.
 - Done when: A document can be exported as a PDF.
 - Wave: 3
 - Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-## S27.39: Email draft presentation.
-
-- Done when: An email the assistant drafts is presented as an email (subject, recipients, body) rather than plain text.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-## S27.40: Recipient, subject, and attachment fields.
-
-- Done when: An email draft has editable recipient, subject and attachment fields.
-- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

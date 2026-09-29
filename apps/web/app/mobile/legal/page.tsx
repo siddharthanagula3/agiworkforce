@@ -57,6 +57,18 @@ const DATA_CATEGORIES: readonly LedgerRow[] = [
     ),
   },
   {
+    label: 'Product usage events',
+    value: (
+      <>
+        Only in managed-cloud mode and only after you allow product analytics in Settings, Privacy,
+        which is off by default: event names such as a stopped or regenerated response, recorded
+        against your account. No message, file or file name is included, a workspace administrator
+        can turn it off for every member, and Local mode sends none. Collected to understand which
+        parts of the app work.
+      </>
+    ),
+  },
+  {
     label: 'Biometric data',
     value: (
       <>
@@ -309,12 +321,12 @@ export default function MobileLegalPage() {
               </strong>{' '}
               AGI Mobile ships <strong>no crash-reporting SDK and no analytics SDK</strong>. Until
               2026-08-14 this page declared both, along with health data. There is no
-              crash-monitoring provider and no analytics provider in the app: a local event queue
-              exists in the code, but nothing writes to it and nothing sends it, so no usage event
-              is produced and none leaves your device. <strong>HealthKit is not used at all</strong>
-              . The feature was removed from the app, the iOS privacy manifest carries no HealthKit
-              declaration, and a test enforces that. If a future build adds any of these, this table
-              gains a row in the same change.
+              crash-monitoring provider and no analytics provider in the app. The only usage events
+              are the first-party product usage events in the table above, sent to AGI Cloud and
+              only with your consent. <strong>HealthKit is not used at all</strong>. The feature was
+              removed from the app, the iOS privacy manifest carries no HealthKit declaration, and a
+              test enforces that. If a future build adds any of these, this table gains a row in the
+              same change.
             </Prose>
 
             <Stack gap="tight">

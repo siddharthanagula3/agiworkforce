@@ -25,6 +25,17 @@ export const MeFeatureFlagsSchema = z
   // Forward-compat: the server may add flags before clients know about them.
   .catchall(z.unknown());
 
+export const ME_ROUTING_PREFERENCES_PATH = '/api/me/routing-preferences';
+
+export const ROUTING_GEO_OVERLAYS = ['auto', 'us', 'in', 'cn'] as const;
+
+/** What the routing preferences route stores and returns; unknown keys are dropped. */
+export const RoutingPreferencesSchema = z.object({
+  us_only: z.boolean().optional(),
+  geo_overlay: z.enum(ROUTING_GEO_OVERLAYS).optional(),
+});
+export type RoutingPreferences = z.infer<typeof RoutingPreferencesSchema>;
+
 export const MeRoutingPreferencesSchema = z
   .object({
     us_only: z.boolean().optional(),

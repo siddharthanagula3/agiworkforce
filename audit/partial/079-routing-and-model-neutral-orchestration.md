@@ -29,17 +29,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S79.18: Route lock.
-
-- Done when: The user can lock requests to one specific provider route.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S79.23: Specialist worker selection.
 
 - Done when: Work is delegated to specialist workers that can use their own models.

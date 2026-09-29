@@ -3,6 +3,7 @@ import { Config } from '../platform/config';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { applyLlmEdit } from '../platform/applyEdit';
 import * as telemetry from './telemetry';
+import { trackProductEvent } from '../features/analytics/productAnalytics';
 import { showCloudUtilityErrorActions } from './cloudUtilityErrorActions';
 import { describeOutboundRefusal } from './outboundContentGuard';
 
@@ -95,22 +96,24 @@ export async function runInlineCommand(
 
       try {
         progress.report({ increment: 0 });
-        telemetry.logEvent(telemetry.TelemetryEvents.INLINE_COMMAND_EXECUTED, {
-          command,
-          language: lang,
-        });
         const result = await chatCompletion(context.secrets, messages, cancelSource.token);
         cancelSource.dispose();
 
         progress.report({ increment: 100 });
 
-        await applyLlmEdit(
+        const resolution = await applyLlmEdit(
           editor,
           new vscode.Selection(explicitRange.start, explicitRange.end),
           result,
           commandLabel(command),
           { autoApply: autoApplyFixes && command === 'fix' },
         );
+        if (resolution) {
+          trackProductEvent('code_suggestion_resolved', 'managed', {
+            outcome: resolution,
+            properties: { kind: command, source: 'inline_command' },
+          });
+        }
         return undefined;
       } catch (err) {
         cancelSource.dispose();

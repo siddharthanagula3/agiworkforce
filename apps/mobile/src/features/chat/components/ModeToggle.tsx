@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Cloud, Cpu } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -73,7 +74,7 @@ export function ModeToggle({
       accessibilityRole="tablist"
       accessibilityLabel="Chat execution mode"
     >
-      <Pressable
+      <PressableBox
         testID="chat.mode-toggle.local"
         onPress={onTapLocal}
         disabled={!onTapLocal}
@@ -109,9 +110,9 @@ export function ModeToggle({
             Local
           </Text>
         </View>
-      </Pressable>
+      </PressableBox>
 
-      <Pressable
+      <PressableBox
         testID="chat.mode-toggle.cloud"
         onPress={onTapCloud}
         hitSlop={8}
@@ -146,7 +147,7 @@ export function ModeToggle({
             {cloudLabel}
           </Text>
         </View>
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

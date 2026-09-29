@@ -79,7 +79,7 @@ describe('PrivacySection row density', () => {
     await waitFor(() => expect(screen.queryByText(/loading account settings/i)).toBeNull());
     expect(screen.queryByRole('status')).toBeNull();
 
-    await userEvent.click(screen.getByRole('switch', { name: /Share crash and usage telemetry/i }));
+    await userEvent.click(screen.getByRole('switch', { name: /Share crash and error reports/i }));
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
   });

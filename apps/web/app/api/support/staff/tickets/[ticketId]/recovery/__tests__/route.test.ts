@@ -20,8 +20,11 @@ const mocks = vi.hoisted(() => {
     readEnrolledAt: vi.fn(),
     removeSecondFactor: vi.fn(),
     addEmailAddress: vi.fn(),
+    getUser: vi.fn(),
+    emitIdentitySecurityEvent: vi.fn(),
     setPrimaryEmailAddress: vi.fn(),
     revokeEveryOtherSession: vi.fn(),
+    finishIntentRevocation: vi.fn(),
     recordAuditEvent: vi.fn(),
     query: vi.fn(),
   };
@@ -75,8 +78,13 @@ vi.mock('@/lib/server/identity', () => ({
   getIdentityProvider: () => ({
     removeSecondFactor: mocks.removeSecondFactor,
     addEmailAddress: mocks.addEmailAddress,
+    getUser: mocks.getUser,
     setPrimaryEmailAddress: mocks.setPrimaryEmailAddress,
   }),
+}));
+vi.mock('@/lib/services/identity-events', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/identity-events')>()),
+  emitIdentitySecurityEvent: mocks.emitIdentitySecurityEvent,
 }));
 vi.mock('@/lib/support/tickets/service', () => ({
   EmptyEscalationSummaryError: class EmptyEscalationSummaryError extends Error {},
@@ -132,10 +140,10 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
   getNeonDb: () => ({ query: mocks.query }),
 }));
-vi.mock('@/lib/server/session-revocation', () => ({
-  listActiveIdentitySessions: vi.fn(),
-  revokeInBatches: vi.fn(),
+vi.mock('@/lib/server/session-revocation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/session-revocation')>()),
   revokeEveryOtherSession: mocks.revokeEveryOtherSession,
+  finishIntentRevocation: mocks.finishIntentRevocation,
 }));
 vi.mock('@/lib/security-audit', () => ({
   BLOCK_APPEAL_PATH: '/support',
@@ -207,6 +215,7 @@ beforeEach(() => {
   });
   mocks.readEnrolledAt.mockResolvedValue(null);
   mocks.revokeEveryOtherSession.mockResolvedValue({ ended: ['sess_1', 'sess_2'] });
+  mocks.finishIntentRevocation.mockResolvedValue(true);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -284,6 +293,48 @@ describe('POST /api/support/staff/tickets/[ticketId]/recovery', () => {
 
     expect(response.status).toBe(403);
     expect(mocks.getClerkAuthUser).not.toHaveBeenCalled();
+  });
+
+  it('does not report a finished recovery while an Ask from Siri token may still be live', async () => {
+    mocks.finishIntentRevocation.mockResolvedValueOnce(false);
+    const response = await POST(request({ action: 'remove_second_factor' }), context());
+
+    expect(response.status).toBe(400);
+    expect(mocks.finishIntentRevocation).toHaveBeenCalledWith(
+      { ended: ['sess_1', 'sess_2'] },
+      CUSTOMER,
+    );
+  });
+
+  it('adds the new sign-in email and makes it primary', async () => {
+    mocks.getUser.mockResolvedValue({ emailAddresses: [] });
+    mocks.addEmailAddress.mockResolvedValue({ id: 'idn_new', emailAddress: 'new@example.com' });
+
+    const response = await POST(
+      request({ action: 'replace_email', email: 'New@Example.com' }),
+      context(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.addEmailAddress).toHaveBeenCalledWith(CUSTOMER, 'new@example.com');
+    expect(mocks.setPrimaryEmailAddress).toHaveBeenCalledWith(CUSTOMER, 'idn_new');
+    expect(mocks.emitIdentitySecurityEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the address a failed earlier attempt already added', async () => {
+    mocks.getUser.mockResolvedValue({
+      emailAddresses: [{ id: 'idn_new', emailAddress: 'new@example.com', verified: true }],
+    });
+
+    const response = await POST(
+      request({ action: 'replace_email', email: 'new@example.com' }),
+      context(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.addEmailAddress).not.toHaveBeenCalled();
+    expect(mocks.setPrimaryEmailAddress).toHaveBeenCalledWith(CUSTOMER, 'idn_new');
+    expect(mocks.emitIdentitySecurityEvent).not.toHaveBeenCalled();
   });
 
   it('removes the second factor for an operator, ends sessions and audits under the operator', async () => {

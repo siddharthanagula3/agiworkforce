@@ -18,6 +18,12 @@ nothing is left.
 - Wave: 5
 - Build on: mobile
 
+## S109.08: Selected-text rewrite shortcut.
+
+- Done when: Text selected in any app can be rewritten by AGI with a shortcut and the result put back in place.
+- Wave: 5
+- Build on: desktop
+
 ## S109.12: Wearable voice access.
 
 - Done when: The user can talk to AGI from a smartwatch or other wearable.

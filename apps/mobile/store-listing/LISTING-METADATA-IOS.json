@@ -78,10 +78,17 @@
         "purpose": "App Functionality",
         "optional": true,
         "collected_when": "Only after sign-in: the account identifier on every authenticated cloud request, and an app-generated device UUID registered with the push token so notifications reach the right install. No advertising identifier is collected."
+      },
+      {
+        "category": "Usage Data",
+        "data_types": ["Product Interaction"],
+        "purpose": "Analytics",
+        "optional": true,
+        "collected_when": "Only in AGI Cloud and only after the user allows product analytics in Settings, Privacy (off by default; a workspace administrator can also turn it off): event names such as a stopped or regenerated response, recorded against the account. No message, file or file name is included. Local Mode sends none."
       }
     ],
     "data_not_linked_to_you": [],
-    "note": "Local Mode collects no personal data by default and uploads nothing. Signing in to AGI Cloud (public alpha, open to any signed-in user) collects account email, optional name, account and device identifiers, and the conversation content and attachments the user sends. Conversation content is processed by the model-provider subprocessors listed at https://agiworkforce.com/subprocessors on AGI's behalf; it is never used to track the user across other companies' apps or websites."
+    "note": "Local Mode collects no personal data by default and uploads nothing. Signing in to AGI Cloud (public alpha, open to any signed-in user) collects account email, optional name, account and device identifiers, and the conversation content and attachments the user sends; product interaction events are added only when the user allows product analytics. Conversation content is processed by the model-provider subprocessors listed at https://agiworkforce.com/subprocessors on AGI's behalf; it is never used to track the user across other companies' apps or websites."
   },
   "urls": {
     "privacy_policy": "https://agiworkforce.com/privacy",

@@ -14,7 +14,8 @@
  * Title: "EU AI Act, Article 50"
  * Linked from: /legal route in the drawer + privacy policy footer.
  */
-import { ScrollView, View, Pressable, Linking } from 'react-native';
+import { ScrollView, View, Linking } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ARTICLE_50_1_VERBATIM,
@@ -188,7 +189,7 @@ export default function Article50Screen() {
               </View>
             ))}
           </View>
-          <Pressable
+          <PressableBox
             testID="article-50-manage-providers"
             onPress={openProviderSettings}
             accessibilityRole="button"
@@ -199,10 +200,10 @@ export default function Article50Screen() {
             <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}>
               Change these in Settings, Privacy
             </Text>
-          </Pressable>
+          </PressableBox>
         </Section>
 
-        <Pressable
+        <PressableBox
           onPress={openSource}
           accessibilityRole="link"
           accessibilityLabel="Open the canonical EU AI Act Article 50 page in your browser"
@@ -212,7 +213,7 @@ export default function Article50Screen() {
           <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}>
             Read the full Article 50 on artificialintelligenceact.eu
           </Text>
-        </Pressable>
+        </PressableBox>
 
         <Text
           style={{

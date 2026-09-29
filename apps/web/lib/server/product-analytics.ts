@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   PRODUCT_ANALYTICS_CONSENT_PURPOSE,
+  coversProductAnalytics,
   isProductAnalyticsSurface,
   normalizeProductAnalyticsEvent,
   requiresProductAnalyticsOutcome,
@@ -16,8 +17,9 @@ import type { NextRequest } from 'next/server';
 
 import { readSurfaceHint } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
-import { hasConsent } from '@/lib/server/consent-records';
+import { readLatestConsent } from '@/lib/server/consent-records';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { workspacesPermitProductAnalytics } from '@/lib/services/organization-policy-gate';
 
 export interface ProductAnalyticsSubject {
   readonly userId: string;
@@ -26,7 +28,9 @@ export interface ProductAnalyticsSubject {
 
 export async function isProductAnalyticsAllowed(userId: string): Promise<boolean> {
   try {
-    return await hasConsent(userId, PRODUCT_ANALYTICS_CONSENT_PURPOSE);
+    const consent = await readLatestConsent(userId, PRODUCT_ANALYTICS_CONSENT_PURPOSE);
+    if (consent?.granted !== true || !coversProductAnalytics(consent.noticeVersion)) return false;
+    return await workspacesPermitProductAnalytics(getNeonDb(), userId);
   } catch (error) {
     logger.warn({ error }, '[product-analytics] consent could not be read; collecting nothing');
     return false;

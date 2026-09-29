@@ -69,6 +69,8 @@ export interface AnthropicAdapterConfig extends ProviderAdapterConfig {
   extraHeaders?: Record<string, string>;
 }
 
+export const ANTHROPIC_FAST_MODE_BETA = 'fast-mode-2026-02-01';
+
 export function createAnthropicAdapter(config: AnthropicAdapterConfig = {}): ProviderAdapter {
   const defaultHeaders = {
     ...(config.betaFeatures && config.betaFeatures.length > 0
@@ -121,7 +123,16 @@ export function createAnthropicAdapter(config: AnthropicAdapterConfig = {}): Pro
       try {
         const sdkStream = sdk.messages.stream(
           translated as unknown as Anthropic.MessageStreamParams,
-          { signal },
+          translated.speed === 'fast'
+            ? {
+                signal,
+                headers: {
+                  'anthropic-beta': [...(config.betaFeatures ?? []), ANTHROPIC_FAST_MODE_BETA].join(
+                    ',',
+                  ),
+                },
+              }
+            : { signal },
         );
         const watched = withStreamIdleWatchdog(translateAnthropicStream(sdkStream));
         for await (const chunk of watched) {

@@ -55,15 +55,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S63.10: Model/effort selection.
-
-- Done when: Per routine, the user picks the model and the reasoning effort the run uses.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | missing | Not built on this surface. |  |
-
 ## S63.11: One-time schedule.
 
 - Done when: A routine can be set to run once at a chosen future date and time.
@@ -170,15 +161,6 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S63.30: Notification preferences.
-
-- Done when: Per routine, the user chooses how (or whether) they are notified about its runs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
 
 ## S63.31: Budget controls.
 

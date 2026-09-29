@@ -161,6 +161,17 @@ export const ArtifactWireDeltaSchema = z.object({
 });
 export type ArtifactWireDelta = z.infer<typeof ArtifactWireDeltaSchema>;
 
+export const CHAT_SYNC_PATH = '/api/chat/sync';
+export const CHAT_SYNC_CONVERSATIONS_SCOPE = 'conversations';
+
+export function chatSyncPullPath(
+  since: string,
+  scope?: typeof CHAT_SYNC_CONVERSATIONS_SCOPE,
+): string {
+  const query = new URLSearchParams({ since, ...(scope ? { scope } : {}) });
+  return `${CHAT_SYNC_PATH}?${query.toString()}`;
+}
+
 export const ChatSyncPullResponseSchema = z.object({
   conversations: z.array(ConversationWireDeltaSchema),
   messages: z.array(MessageWireDeltaSchema),

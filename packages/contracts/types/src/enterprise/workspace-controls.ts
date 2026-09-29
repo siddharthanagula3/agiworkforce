@@ -14,17 +14,25 @@ export const WORKSPACE_FEATURES = [
   'event_triggers',
   'projects',
   'artifact_connectors',
+  'fast_mode',
 ] as const;
 
 export type WorkspaceFeature = (typeof WORKSPACE_FEATURES)[number];
 
 export type WorkspaceFeatureAccess = Readonly<Record<WorkspaceFeature, boolean>>;
 
+/**
+ * Features a workspace starts without until an administrator turns them on,
+ * the way Claude holds fast mode off for Team and Enterprise until an Owner
+ * enables it. Only the workspace layer can turn one on; overrides still only
+ * narrow.
+ */
+export const OPT_IN_WORKSPACE_FEATURES: readonly WorkspaceFeature[] = Object.freeze(['fast_mode']);
+
 export const DEFAULT_WORKSPACE_FEATURE_ACCESS: WorkspaceFeatureAccess = Object.freeze(
-  Object.fromEntries(WORKSPACE_FEATURES.map((feature) => [feature, true])) as Record<
-    WorkspaceFeature,
-    boolean
-  >,
+  Object.fromEntries(
+    WORKSPACE_FEATURES.map((feature) => [feature, !OPT_IN_WORKSPACE_FEATURES.includes(feature)]),
+  ) as Record<WorkspaceFeature, boolean>,
 );
 
 export const WORKSPACE_FEATURE_LABELS: Readonly<Record<WorkspaceFeature, string>> = Object.freeze({
@@ -41,6 +49,7 @@ export const WORKSPACE_FEATURE_LABELS: Readonly<Record<WorkspaceFeature, string>
   event_triggers: 'Event triggers',
   projects: 'Projects',
   artifact_connectors: 'Connected apps in artifacts',
+  fast_mode: 'Fast mode',
 });
 
 export const WORKSPACE_REASONING_EFFORTS = [
@@ -320,8 +329,16 @@ export function resolveWorkspaceControls(
   revision = 0,
 ): EffectiveWorkspacePolicy {
   const blockingRules: WorkspacePolicyBlockingRule[] = [];
+  const optedIn = Object.fromEntries(
+    OPT_IN_WORKSPACE_FEATURES.filter((feature) => base.featureAccess[feature] === true).map(
+      (feature) => [feature, true],
+    ),
+  );
   let resolved = narrowWithLayer(
-    DEFAULT_WORKSPACE_CONTROLS,
+    {
+      ...DEFAULT_WORKSPACE_CONTROLS,
+      featureAccess: { ...DEFAULT_WORKSPACE_CONTROLS.featureAccess, ...optedIn },
+    },
     baseAsLayer(base),
     { scope: 'workspace', overrideId: null, subjectId: null },
     blockingRules,

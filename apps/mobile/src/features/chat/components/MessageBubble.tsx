@@ -1,4 +1,5 @@
-import { View, Pressable, useWindowDimensions, Alert, Modal, Platform } from 'react-native';
+import { View, useWindowDimensions, Alert, Modal, Platform } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { readConnectorConnectRequest, type ConnectorConnectRequest } from '@agiworkforce/types';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
 import { useRouter } from 'expo-router';
@@ -146,7 +147,7 @@ function MessageActionSheet({
       onDismiss={onDismissed}
       accessibilityViewIsModal
     >
-      <Pressable
+      <PressableBox
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
         onPress={onClose}
         accessibilityLabel="Dismiss message actions"
@@ -154,7 +155,7 @@ function MessageActionSheet({
         accessible={false}
       >
         <SafeAreaView edges={['bottom']} style={{ width: '100%' }}>
-          <Pressable
+          <PressableBox
             style={{
               backgroundColor: colors.surfaceElevated,
               borderTopLeftRadius: 20,
@@ -166,7 +167,7 @@ function MessageActionSheet({
             accessible={false}
           >
             {actions.map((action, index) => (
-              <Pressable
+              <PressableBox
                 key={action.key}
                 testID={`message-action-${action.key}`}
                 onPress={() => onSelect(action)}
@@ -188,9 +189,9 @@ function MessageActionSheet({
                 >
                   {action.label}
                 </Text>
-              </Pressable>
+              </PressableBox>
             ))}
-            <Pressable
+            <PressableBox
               testID="message-action-cancel"
               onPress={onClose}
               accessibilityRole="button"
@@ -212,10 +213,10 @@ function MessageActionSheet({
               >
                 Cancel
               </Text>
-            </Pressable>
-          </Pressable>
+            </PressableBox>
+          </PressableBox>
         </SafeAreaView>
-      </Pressable>
+      </PressableBox>
     </Modal>
   );
 }
@@ -268,7 +269,7 @@ function TurnNotice({
         {message}
       </Text>
       {actionLabel && onAction ? (
-        <Pressable
+        <PressableBox
           onPress={onAction}
           accessibilityRole="button"
           accessibilityLabel={actionAccessibilityLabel}
@@ -279,10 +280,10 @@ function TurnNotice({
           >
             {actionLabel}
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
       {secondaryLabel && onSecondary ? (
-        <Pressable
+        <PressableBox
           onPress={onSecondary}
           accessibilityRole="button"
           accessibilityLabel={secondaryAccessibilityLabel ?? secondaryLabel}
@@ -293,7 +294,7 @@ function TurnNotice({
           >
             {secondaryLabel}
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -336,7 +337,7 @@ function VariantPager({
       style={{ flexDirection: 'row', alignItems: 'center' }}
       accessibilityLabel={`${noun === 'response' ? 'Response' : 'Version'} ${variant.index + 1} of ${variant.total}`}
     >
-      <Pressable
+      <PressableBox
         onPress={previousId ? () => onSelect(previousId) : undefined}
         disabled={!previousId}
         accessibilityRole="button"
@@ -344,11 +345,11 @@ function VariantPager({
         style={{ width: 32, height: 44, alignItems: 'center', justifyContent: 'center' }}
       >
         <ChevronLeft size={16} color={previousId ? colors.textSecondary : colors.textMuted} />
-      </Pressable>
+      </PressableBox>
       <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
         {variant.index + 1} / {variant.total}
       </Text>
-      <Pressable
+      <PressableBox
         onPress={nextId ? () => onSelect(nextId) : undefined}
         disabled={!nextId}
         accessibilityRole="button"
@@ -356,7 +357,7 @@ function VariantPager({
         style={{ width: 32, height: 44, alignItems: 'center', justifyContent: 'center' }}
       >
         <ChevronRight size={16} color={nextId ? colors.textSecondary : colors.textMuted} />
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }
@@ -491,7 +492,7 @@ function MessageActionButton({
   color: string;
 }) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -499,7 +500,7 @@ function MessageActionButton({
       style={{ padding: 6, borderRadius: 8 }}
     >
       <Icon size={16} color={color} />
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -1121,7 +1122,7 @@ export const MessageBubble = memo(function MessageBubble({
       }
       className="px-4 py-4"
     >
-      <Pressable
+      <PressableBox
         onLongPress={handleLongPress}
         delayLongPress={400}
         accessible={!canonicalActivity}
@@ -1182,7 +1183,7 @@ export const MessageBubble = memo(function MessageBubble({
                   {message.attachments
                     .filter((a) => a.mimeType.startsWith('image/'))
                     .map((attachment, idx) => (
-                      <Pressable
+                      <PressableBox
                         key={`att-${idx}`}
                         onPress={() => handleImagePress(attachment.url)}
                         className="rounded-lg overflow-hidden"
@@ -1199,7 +1200,7 @@ export const MessageBubble = memo(function MessageBubble({
                           contentFit="cover"
                           transition={200}
                         />
-                      </Pressable>
+                      </PressableBox>
                     ))}
                 </View>
 
@@ -1403,7 +1404,7 @@ export const MessageBubble = memo(function MessageBubble({
             onRetryMessage &&
             !message.isGeneratingVideo &&
             (message.videoGenStatus === 'failed' || message.videoGenStatus === 'timeout') ? (
-              <Pressable
+              <PressableBox
                 onPress={handleRetryGeneration}
                 accessibilityRole="button"
                 accessibilityLabel="Retry video generation"
@@ -1427,7 +1428,7 @@ export const MessageBubble = memo(function MessageBubble({
                 >
                   Retry
                 </Text>
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {/* Generated video */}
@@ -1443,7 +1444,7 @@ export const MessageBubble = memo(function MessageBubble({
             {isAssistant &&
             message.imageGenPersisted === false &&
             typeof message.imageGenError === 'string' ? (
-              <Pressable
+              <PressableBox
                 onPress={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
                 disabled={!onRetryMessage}
                 accessibilityRole={onRetryMessage ? 'button' : 'text'}
@@ -1485,7 +1486,7 @@ export const MessageBubble = memo(function MessageBubble({
                     </Text>
                   </>
                 ) : null}
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {/* Interactive cards (map search). Placed AFTER the prose that
@@ -1599,7 +1600,7 @@ export const MessageBubble = memo(function MessageBubble({
                 left exactly as it streamed; this only adds a visible notice
                 below it. */}
             {isAssistant && !message.isStreaming && hasMessageStreamError(message) && (
-              <Pressable
+              <PressableBox
                 onPress={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
                 disabled={!onRetryMessage}
                 accessibilityRole={onRetryMessage ? 'button' : 'text'}
@@ -1641,7 +1642,7 @@ export const MessageBubble = memo(function MessageBubble({
                   </>
                 )}
                 {onSwitchModel && offersModelSwitch(getMessageStreamErrorCode(message)) && (
-                  <Pressable
+                  <PressableBox
                     onPress={onSwitchModel}
                     accessibilityRole="button"
                     accessibilityLabel="Switch model"
@@ -1657,9 +1658,9 @@ export const MessageBubble = memo(function MessageBubble({
                     >
                       Switch model
                     </Text>
-                  </Pressable>
+                  </PressableBox>
                 )}
-              </Pressable>
+              </PressableBox>
             )}
 
             {stoppedByUser ? (
@@ -1756,7 +1757,7 @@ export const MessageBubble = memo(function MessageBubble({
             )}
           </View>
         </View>
-      </Pressable>
+      </PressableBox>
 
       {/* Assistant action row (ChatGPT-style, always visible). These actions were
           previously only reachable via a hidden 400ms long-press sheet (copy/retry/

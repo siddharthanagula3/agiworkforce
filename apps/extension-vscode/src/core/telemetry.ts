@@ -1,59 +1,21 @@
 import * as vscode from 'vscode';
-import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
+import { redactWithPolicy } from '@agiworkforce/utils/secret-redaction';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
 
-export const TelemetryEvents = {
-  EXTENSION_ACTIVATED: 'extension/activated',
-  INLINE_COMMAND_EXECUTED: 'inlineCommand/executed',
-  MODEL_SELECTED: 'model/selected',
-  ERROR_OCCURRED: 'error/occurred',
-} as const;
-
-type TelemetryEventName = (typeof TelemetryEvents)[keyof typeof TelemetryEvents];
-
-const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
-  [
-    /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g,
-    '[REDACTED]',
-  ], // PEM private key block
-  [/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+/g, '[REDACTED]'], // JWT
-  [/Bearer\s+[A-Za-z0-9._\-+/=]{8,}/gi, '[REDACTED]'], // Bearer tokens
-  [/sk-ant-[A-Za-z0-9_-]{20,}/g, '[REDACTED]'], // Anthropic API key
-  [/sk-proj-[A-Za-z0-9_-]{20,}/g, '[REDACTED]'], // OpenAI project key
-  [/sk-[A-Za-z0-9]{20,}/g, '[REDACTED]'], // Generic OpenAI sk-
-  [/(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9_]{16,}/g, '[REDACTED]'], // Stripe + AGI live/test keys
-  [/gsk_[A-Za-z0-9]{48,}/g, '[REDACTED]'], // Groq API key
-  [/xai-[A-Za-z0-9]{20,}/g, '[REDACTED]'], // xAI API key
-  [/xox[baprs]-[A-Za-z0-9-]{10,}/g, '[REDACTED]'], // Slack tokens
-  [/github_pat_[A-Za-z0-9_]{22,}/g, '[REDACTED]'], // GitHub fine-grained PAT
-  [/gh[pousr]_[A-Za-z0-9]{30,}/g, '[REDACTED]'], // GitHub classic PAT / OAuth / refresh
-  [/AIza[A-Za-z0-9_-]{30,}/g, '[REDACTED]'], // Google API key
-  [/A(?:KIA|SIA)[A-Z0-9]{16}/g, '[REDACTED]'], // AWS access / session key id
-  [/\b([a-z][a-z0-9+.-]*):\/\/[^\s:@/]+:[^\s@/]+@/gi, '$1://[REDACTED]@'], // credentials in a URL (DATABASE_URL et al)
-  [
-    /\b([A-Za-z0-9_]{0,32}(?:password|passwd|api[_-]?key|apikey|secret[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|refresh[_-]?token))["']?\s*[=:]\s*["']?[^\s,'"}]{8,}/gi,
-    '$1=[REDACTED]',
-  ], // named credential assignment
-];
-
 /**
- * Returns a copy of the input with any matched secret replaced by `[REDACTED]`.
- * Exported for unit tests; safe to call on any string (never throws).
+ * Returns a copy of the input with any matched secret replaced by `[REDACTED]`,
+ * under the shared telemetry redaction policy. Safe to call on any string.
  */
-export function redactSecrets(input: string): string {
+export function redactTelemetryText(input: string): string {
   if (typeof input !== 'string' || input.length === 0) return input;
-  let out = input;
-  for (const [pattern, replacement] of SECRET_PATTERNS) {
-    out = out.replace(pattern, replacement);
-  }
-  return out;
+  return redactWithPolicy(input, 'telemetry');
 }
 
 function redactProperties(props: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(props)) {
-    out[k] = typeof v === 'string' ? redactSecrets(v) : v;
+    out[k] = typeof v === 'string' ? redactTelemetryText(v) : v;
   }
   return out;
 }
@@ -218,27 +180,7 @@ export function activate(context: vscode.ExtensionContext): vscode.Disposable {
     },
   };
 
-  logEvent(TelemetryEvents.EXTENSION_ACTIVATED, {
-    model: normalizeConfiguredModelId(Config.model()),
-  });
-
   return composite;
-}
-
-export function logEvent(eventName: TelemetryEventName, properties?: Record<string, string>): void {
-  try {
-    if (logger === undefined) return;
-    if (!isExtensionTelemetryEnabled()) return;
-
-    const merged = {
-      ...getCommonProperties(),
-      ...redactProperties(properties ?? {}),
-    };
-
-    logger.logUsage(eventName, merged);
-  } catch {
-    // Telemetry must never throw or block the caller
-  }
 }
 
 export function logError(error: Error | string, properties?: Record<string, string>): void {
@@ -247,7 +189,7 @@ export function logError(error: Error | string, properties?: Record<string, stri
     if (!isExtensionTelemetryEnabled()) return;
 
     const sourceMessage = typeof error === 'string' ? error : error.message;
-    const redactedMessage = redactSecrets(sourceMessage);
+    const redactedMessage = redactTelemetryText(sourceMessage);
     const err = new Error(redactedMessage);
     if (typeof error !== 'string' && error.name) err.name = error.name;
 

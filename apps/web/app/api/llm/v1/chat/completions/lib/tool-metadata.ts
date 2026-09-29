@@ -184,6 +184,13 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     declared: true,
     autoInReadOnlyMode: true,
   },
+  run_command: {
+    actionClass: 'execute',
+    reversible: false,
+    acceptsUntrustedContent: true,
+    createsEgressPath: true,
+    declared: true,
+  },
   write_file: {
     actionClass: 'write',
     reversible: false,

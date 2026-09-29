@@ -289,6 +289,7 @@
         "user_connectors",
         "user_custom_connectors",
         "connector_oauth_grants",
+        "bank_account_items",
         "connector_tool_permissions"
       ],
       "writeFunctions": [],
@@ -1269,6 +1270,7 @@
         "device_registrations",
         "desktop_devices",
         "mobile_devices",
+        "mobile_intent_tokens",
         "device_refresh_tokens",
         "device_authorization_codes"
       ],
@@ -1476,6 +1478,16 @@
     }
   ],
   "columnExemptions": [
+    {
+      "table": "bank_account_items",
+      "exempt": [],
+      "why": "a Plaid item its owner linked; only the owner's own link, relink, account choice and removal write it, so there is no creator distinct from the owner, and no client edits it under an If-Match precondition"
+    },
+    {
+      "table": "mobile_intent_tokens",
+      "exempt": [],
+      "why": "a hashed Ask from Siri credential its owner's app requests for one install; it is never edited, only revoked or replaced by the next rotation, so there is no creator distinct from the owner and nothing to version"
+    },
     {
       "table": "billing_disputes",
       "exempt": [],

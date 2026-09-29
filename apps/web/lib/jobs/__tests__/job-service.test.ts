@@ -5,7 +5,12 @@ vi.mock('server-only', () => ({}));
 
 import { runWithTraceContext } from '@/lib/observability/trace-context';
 
-import { computeJobBackoffSeconds, JOB_QUEUE_POLICIES } from '../job-queues';
+import {
+  computeJobBackoffSeconds,
+  JOB_QUEUE_NAMES,
+  JOB_QUEUE_POLICIES,
+  type JobQueueName,
+} from '../job-queues';
 import {
   PermanentJobError,
   claimJobs,
@@ -270,6 +275,30 @@ describe('lease reaping and pruning', () => {
     const [sql] = execute.mock.calls[0] as unknown as [string];
     expect(sql).toContain("status in ('succeeded', 'cancelled')");
     expect(sql).toContain('limit $3');
+  });
+
+  it('deletes dead letters once their review window has passed, per queue', async () => {
+    const execute = vi.fn(async () => 2);
+    await pruneFinishedJobs(database(vi.fn(), execute));
+
+    const calls = execute.mock.calls as unknown as [string, unknown[]][];
+    const dead = calls.filter(([sql]) => sql.includes("status = 'dead'"));
+    expect(dead).toHaveLength(JOB_QUEUE_NAMES.length);
+    for (const [sql, params] of dead) {
+      expect(sql).toContain('dead_lettered_at < now() - make_interval(days => $2)');
+      expect(sql).toContain('limit $3');
+      const queue = params[0] as JobQueueName;
+      expect(params[1]).toBe(JOB_QUEUE_POLICIES[queue].retainDeadDays);
+    }
+    expect(dead.map(([, params]) => params[0]).sort()).toEqual([...JOB_QUEUE_NAMES].sort());
+  });
+
+  it('never keeps a dead letter longer than 30 days, since one can carry Google user data', () => {
+    for (const queue of JOB_QUEUE_NAMES) {
+      const { retainDeadDays } = JOB_QUEUE_POLICIES[queue];
+      expect(retainDeadDays, queue).toBeGreaterThan(0);
+      expect(retainDeadDays, queue).toBeLessThanOrEqual(30);
+    }
   });
 });
 

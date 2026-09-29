@@ -230,8 +230,9 @@ export const CookieConsent = () => {
                   Analytics
                 </Label>
                 <p className="text-sm text-muted-foreground" id="cookie-analytics-description">
-                  Aggregated page views (Google Analytics 4), with no personally identifying
-                  information. Off by default.
+                  Aggregated page views (Google Analytics 4) and, when you are signed in, product
+                  usage events from the AGI apps recorded against your account, such as a stopped
+                  response. Never your messages or files. Off by default.
                   {optedOutBySignal
                     ? ' Your browser is sending Global Privacy Control, so this stays off here and the switch cannot be turned on.'
                     : ''}

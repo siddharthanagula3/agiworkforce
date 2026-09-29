@@ -49,18 +49,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S44.06: Prompt enhancement with user control.
-
-- Done when: User can have the product rewrite/enhance the image prompt and review or reject the rewrite before generating.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S44.07: Aspect-ratio selector.
 
 - Done when: User picks the aspect ratio of the generated image from ratios the model supports.

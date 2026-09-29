@@ -16,11 +16,3 @@ nothing is left.
 | platform | partial | partials/mcp-web c2d16c71d: a built-in Microsoft Graph v1.0 adapter serves Outlook (search and read mail, list events, send mail, create events), OneDrive and SharePoint (search, read documents as text through the pre-authenticated download link) and Teams (read chats, list teams and channels); send_mail and create_event are external sends, so they ask under every policy. Stays off until the owner registers an Entra app and adds the outlook, onedrive, sharepoint and teams descriptors with CONNECTOR_OAUTH_<ID>_CLIENT_ID/_CLIENT_SECRET (setup guide). Saving drafts to Outlook needs Mail.ReadWrite, which the ceiling excludes like gmail.modify: owner decision. | flag-off |
 
 Code: `apps/web/lib/connectors/microsoft-graph.ts:297-297`, `apps/web/lib/connectors/microsoft-graph.ts:406-406`, `apps/web/lib/connectors/microsoft-graph.ts:444-444`, `apps/web/lib/connectors/microsoft-graph.ts:505-505`
-
-## S98.26: Publisher identity service.
-
-- Done when: Publishers have verified identities and installs check a package came from its publisher.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |

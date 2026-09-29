@@ -12,6 +12,12 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
+## S39.07: Profile summary.
+
+- Done when: The user can read a summary of what the assistant has learned about them as a person (a profile summary).
+- Wave: 4
+- Build on: web, desktop, cli, vscode, chrome
+
 ## S39.08: Preference summary.
 
 - Done when: The user can read a summary of the preferences the assistant has learned from memory.

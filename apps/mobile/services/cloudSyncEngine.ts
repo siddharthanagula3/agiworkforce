@@ -96,6 +96,7 @@ const conversationPort: ConversationStorePort = {
       updatedAt: c.updatedAt,
       messageCount: c.messageCount,
       pinned: c.pinned,
+      ...(c.starred !== undefined ? { starred: c.starred } : {}),
       model: c.model,
       projectId: c.projectId,
       serverVersion: c.serverVersion,
@@ -110,6 +111,7 @@ const conversationPort: ConversationStorePort = {
       updatedAt: record.updatedAt,
       messageCount: record.messageCount,
       pinned: record.pinned,
+      ...(record.starred !== undefined ? { starred: record.starred } : {}),
       model: record.model,
       projectId: record.projectId,
       ...(record.activeLeafMessageId !== undefined

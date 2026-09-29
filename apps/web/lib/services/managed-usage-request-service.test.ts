@@ -53,6 +53,7 @@ import {
   reserveManagedUsageProviderStep,
   reserveManagedUsageRequest,
   resolveManagedQuotaRecovery,
+  usageCreditsEnabled,
 } from './managed-usage-request-service';
 
 function fakeDb(rows: Record<string, unknown>[]): DatabaseAdapter {
@@ -166,7 +167,6 @@ describe('managed usage request service', () => {
         PRO_WEEKLY_MICROUSD,
         PRO_FLAGSHIP_WEEKLY_MICROUSD,
         true,
-        0,
       ],
     );
   });
@@ -419,7 +419,6 @@ describe('managed usage request service', () => {
         PRO_WEEKLY_MICROUSD,
         PRO_FLAGSHIP_WEEKLY_MICROUSD,
         true,
-        0,
       ],
     );
   });
@@ -478,6 +477,14 @@ describe('managed usage request service', () => {
     const sql = vi.mocked(db.query).mock.calls[0]?.[0] ?? '';
     expect(sql.match(/\$1::text/g)).toHaveLength(1);
     expect(sql).toMatch(/\$7::jsonb\s*\)/);
+  });
+});
+
+describe('usage credits switch for fast mode', () => {
+  it('is on only when the subscription turned usage credits on', async () => {
+    await expect(usageCreditsEnabled(fakeDb([{ enabled: true }]), 'user-1')).resolves.toBe(true);
+    await expect(usageCreditsEnabled(fakeDb([{ enabled: false }]), 'user-1')).resolves.toBe(false);
+    await expect(usageCreditsEnabled(fakeDb([]), 'user-1')).resolves.toBe(false);
   });
 });
 

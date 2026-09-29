@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
-  Pressable,
   RefreshControl,
   ScrollView,
   SectionList,
   View,
   type AppStateStatus,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, BellOff, Bot, Cloud, Plus, RefreshCw } from 'lucide-react-native';
@@ -60,7 +60,7 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
         gap: 8,
       }}
     >
-      <Pressable
+      <PressableBox
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Go back"
@@ -68,7 +68,7 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
         style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
       >
         <ArrowLeft size={20} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
       <View style={{ flex: 1 }}>
         <Text variant="subheading" style={{ color: colors.textPrimary }}>
           {SCREEN_TITLE}
@@ -98,7 +98,7 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
         </Text>
       </View>
       {onStartWork ? (
-        <Pressable
+        <PressableBox
           onPress={onStartWork}
           accessibilityRole="button"
           accessibilityLabel="New task"
@@ -115,7 +115,7 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
           }}
         >
           <Plus size={20} color={colors.textPrimary} />
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -202,7 +202,7 @@ function ScopeNote({ onOpenRemote }: { onOpenRemote: () => void }) {
       <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
         {SCOPE_NOTE}
       </Text>
-      <Pressable
+      <PressableBox
         onPress={onOpenRemote}
         accessibilityRole="button"
         accessibilityLabel={`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
@@ -214,7 +214,7 @@ function ScopeNote({ onOpenRemote }: { onOpenRemote: () => void }) {
         >
           {`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
         </Text>
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }
@@ -223,7 +223,7 @@ function BackgroundAlertsNote({ onOpenSettings }: { onOpenSettings: () => void }
   const colors = useThemeColors();
 
   return (
-    <Pressable
+    <PressableBox
       onPress={onOpenSettings}
       accessibilityRole="button"
       accessibilityLabel="Open notification settings"
@@ -250,7 +250,7 @@ function BackgroundAlertsNote({ onOpenSettings }: { onOpenSettings: () => void }
       >
         {BACKGROUND_ALERTS_OFF_NOTE}
       </Text>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -463,7 +463,7 @@ export function CloudTasksScreen() {
         {CLOUD_RUN_FILTERS.map((item) => {
           const selected = item.key === filter;
           return (
-            <Pressable
+            <PressableBox
               key={item.key}
               onPress={() => setFilter(item.key)}
               accessibilityRole="button"
@@ -489,7 +489,7 @@ export function CloudTasksScreen() {
               >
                 {item.label}
               </Text>
-            </Pressable>
+            </PressableBox>
           );
         })}
       </ScrollView>
@@ -547,7 +547,7 @@ export function CloudTasksScreen() {
           ListEmptyComponent={<EmptyState filtered={filter !== CLOUD_RUN_FILTERS[0].key} />}
           ListFooterComponent={
             nextCursor ? (
-              <Pressable
+              <PressableBox
                 onPress={() => void loadMore()}
                 disabled={loadingMore}
                 accessibilityRole="button"
@@ -559,7 +559,7 @@ export function CloudTasksScreen() {
                 ) : (
                   <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Load more</Text>
                 )}
-              </Pressable>
+              </PressableBox>
             ) : null
           }
           refreshControl={

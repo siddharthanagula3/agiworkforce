@@ -44,19 +44,3 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-## S50.04: Download generated speech.
-
-- Done when: Generated speech can be downloaded as an audio file.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S50.31: Custom-voice creation as a separately governed product.
-
-- Done when: Custom voices (cloned or designed) are a separate, governed product with its own consent and access rules.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |

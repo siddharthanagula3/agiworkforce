@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Code2 } from 'lucide-react-native';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ export function CloudCodeGate({ signedIn, onBack, onContinue }: CloudCodeGatePro
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
       <View style={{ minHeight: 52, justifyContent: 'center', paddingHorizontal: 10 }}>
-        <Pressable
+        <PressableBox
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -26,7 +27,7 @@ export function CloudCodeGate({ signedIn, onBack, onContinue }: CloudCodeGatePro
           style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       </View>
       <View
         style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}

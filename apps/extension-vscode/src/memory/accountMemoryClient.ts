@@ -5,6 +5,7 @@ import {
   type MemorySyncPushItem,
   type MemoryWireDelta,
 } from '@agiworkforce/cloud-contracts';
+import { selectNextCursor } from '@agiworkforce/sync';
 import { z } from 'zod';
 import { platformRequestHeaders } from '../platform/platformHeaders';
 
@@ -140,8 +141,9 @@ export function createAccountMemoryClient(config: AccountMemoryClientConfig): Ac
       for (;;) {
         const page = await pull(cursor);
         memories.push(...page.memories);
-        const advanced = page.cursor !== cursor;
-        cursor = page.cursor;
+        const next = selectNextCursor(cursor, page.cursor);
+        const advanced = next !== cursor;
+        cursor = next;
         if (!page.hasMore || !advanced) return { memories, cursor, hasMore: false };
       }
     },

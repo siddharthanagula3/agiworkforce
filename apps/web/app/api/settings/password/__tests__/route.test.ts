@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   requireStepUp: vi.fn(),
   factors: vi.fn(),
   revoke: vi.fn(),
+  finishIntent: vi.fn(),
   announce: vi.fn(),
   logAuthFailure: vi.fn(),
 }));
@@ -74,10 +75,10 @@ vi.mock('@/lib/server/step-up/second-factor', () => ({
   stepUpLevelFor: vi.fn(),
   readSecondFactorStatus: mocks.factors,
 }));
-vi.mock('@/lib/server/session-revocation', () => ({
-  listActiveIdentitySessions: vi.fn(),
-  revokeInBatches: vi.fn(),
+vi.mock('@/lib/server/session-revocation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/session-revocation')>()),
   revokeEveryOtherSession: mocks.revoke,
+  finishIntentRevocation: mocks.finishIntent,
 }));
 vi.mock('@/lib/server/two-factor-security-events', () => ({
   announceTwoFactorChange: mocks.announce,
@@ -129,6 +130,7 @@ describe('POST /api/settings/password', () => {
     mocks.verifyPassword.mockResolvedValue(true);
     mocks.setPassword.mockResolvedValue(undefined);
     mocks.revoke.mockResolvedValue({ ended: ['a', 'b'], failed: ['c'] });
+    mocks.finishIntent.mockResolvedValue(true);
   });
 
   it('returns the CSRF refusal before resolving the caller', async () => {
@@ -228,6 +230,13 @@ describe('POST /api/settings/password', () => {
         detail: { source: 'current_password', count: 2 },
       }),
     );
+  });
+
+  it('refuses to report success while an Ask from Siri token may still be live', async () => {
+    mocks.finishIntent.mockResolvedValueOnce(false);
+    const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }));
+    expect(response.status).toBe(503);
+    expect(mocks.announce).toHaveBeenCalled();
   });
 
   it('sets a first password after step-up for an account without one', async () => {

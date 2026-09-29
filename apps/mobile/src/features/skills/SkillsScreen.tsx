@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  RefreshControl,
-  TextInput,
-  View,
-  type ListRenderItemInfo,
-} from 'react-native';
+import { FlatList, RefreshControl, TextInput, View, type ListRenderItemInfo } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, BookOpen, Cloud, RefreshCw, Search, Sparkles, X } from 'lucide-react-native';
@@ -74,7 +68,7 @@ function SkillsHeader({ onBack }: { onBack: () => void }) {
         gap: 10,
       }}
     >
-      <Pressable
+      <PressableBox
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Go back"
@@ -82,7 +76,7 @@ function SkillsHeader({ onBack }: { onBack: () => void }) {
         style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
       >
         <ArrowLeft size={21} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
       <Text
         style={{
           flex: 1,
@@ -217,7 +211,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
         style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body, paddingVertical: 0 }}
       />
       {value.length > 0 ? (
-        <Pressable
+        <PressableBox
           onPress={() => onChange('')}
           accessibilityRole="button"
           accessibilityLabel="Clear skill search"
@@ -225,7 +219,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
           style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
         >
           <X size={16} color={colors.textMuted} />
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -442,7 +436,7 @@ function CatalogRefreshError({ message, onRetry }: { message: string; onRetry: (
       >
         Refresh failed: {message}
       </Text>
-      <Pressable
+      <PressableBox
         onPress={onRetry}
         accessibilityRole="button"
         accessibilityLabel="Retry refreshing Skills"
@@ -452,7 +446,7 @@ function CatalogRefreshError({ message, onRetry }: { message: string; onRetry: (
         <Text style={{ color: colors.agentError, fontSize: typeScale.caption, fontWeight: '700' }}>
           Retry
         </Text>
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

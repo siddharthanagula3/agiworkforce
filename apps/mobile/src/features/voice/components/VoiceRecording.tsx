@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -117,22 +118,22 @@ export function VoiceRecording({
 
       {/* Action buttons */}
       <View style={styles.actions}>
-        <Pressable
+        <PressableBox
           onPress={handleCancel}
           style={styles.cancelBtn}
           accessibilityLabel="Cancel recording"
           accessibilityRole="button"
         >
           <X size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Pressable
+        </PressableBox>
+        <PressableBox
           onPress={handleSend}
           style={[styles.sendBtn, { backgroundColor: colors.terraCotta }]}
           accessibilityLabel="Stop and send recording"
           accessibilityRole="button"
         >
           <Send size={22} color={colors.accentText} />
-        </Pressable>
+        </PressableBox>
       </View>
     </Animated.View>
   );

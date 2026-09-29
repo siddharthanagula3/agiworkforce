@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  PRODUCT_ANALYTICS_CONSENT_PATH,
+  PRODUCT_ANALYTICS_CONSENT_PURPOSE,
   PRODUCT_ANALYTICS_EVENT_NAMES,
+  PRODUCT_ANALYTICS_INGEST_PATH,
   PRODUCT_ANALYTICS_MAX_BATCH,
+  PRODUCT_ANALYTICS_NOTICE_VERSION,
   PRODUCT_ANALYTICS_OUTCOME_EVENTS,
   PRODUCT_METRIC_KEYS,
+  coversProductAnalytics,
+  createAccountProductAnalytics,
   createProductAnalyticsEmitter,
   normalizeProductAnalyticsEvent,
+  readProductAnalyticsConsent,
   requiresProductAnalyticsOutcome,
   type ProductAnalyticsEvent,
 } from '../product-analytics';
@@ -132,5 +139,43 @@ describe('the emitter every surface shares', () => {
     }
 
     expect(emitter.pending()).toBeLessThanOrEqual(PRODUCT_ANALYTICS_MAX_BATCH);
+  });
+});
+
+describe('consent under the analytics notice', () => {
+  function consents(noticeVersion: string) {
+    return {
+      consents: [{ purpose: PRODUCT_ANALYTICS_CONSENT_PURPOSE, granted: true, noticeVersion }],
+    };
+  }
+
+  it('is its own identifier, not a privacy notice date', () => {
+    expect(PRODUCT_ANALYTICS_NOTICE_VERSION).not.toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+  });
+
+  it('counts only a grant recorded under the current analytics notice', () => {
+    expect(readProductAnalyticsConsent(consents(PRODUCT_ANALYTICS_NOTICE_VERSION))).toBe(true);
+    for (const old of ['2026-09-29', '2026-09-01', '9999-12-31', 'product-analytics-v0']) {
+      expect(coversProductAnalytics(old)).toBe(false);
+      expect(readProductAnalyticsConsent(consents(old))).toBe(false);
+    }
+  });
+
+  it('sends nothing for an account whose grant predates the notice', async () => {
+    const calls: string[] = [];
+    const analytics = createAccountProductAnalytics({
+      surface: 'cli',
+      isEnabled: () => true,
+      request: async (path) => {
+        calls.push(path);
+        return path === PRODUCT_ANALYTICS_CONSENT_PATH ? consents('2026-09-29') : null;
+      },
+    });
+
+    analytics.track('first_chat');
+    await analytics.flush();
+
+    expect(calls).toEqual([PRODUCT_ANALYTICS_CONSENT_PATH]);
+    expect(calls).not.toContain(PRODUCT_ANALYTICS_INGEST_PATH);
   });
 });

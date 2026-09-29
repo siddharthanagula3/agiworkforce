@@ -14,6 +14,17 @@ import {
 } from '@agiworkforce/client-runtime';
 import * as WebBrowser from 'expo-web-browser';
 import {
+  BANK_ACCOUNTS_EXCHANGE_PATH,
+  BANK_ACCOUNTS_HOSTED_LINK_RETURN_URL,
+  BANK_ACCOUNTS_ITEMS_PATH,
+  BANK_ACCOUNTS_LINK_PATH,
+  BankAccountsExchangeResponseSchema,
+  BankAccountsItemRemoveResponseSchema,
+  BankAccountsItemUpdateResponseSchema,
+  BankAccountsItemsResponseSchema,
+  BankAccountsLinkResponseSchema,
+  bankAccountsItemPath,
+  type BankAccountsItem,
   CONNECTOR_CALLS_PATH,
   ConnectorCallLogResponseSchema,
   type ConnectorCallEntry,
@@ -270,29 +281,46 @@ export async function fetchConnectorCalls(connectorId: string): Promise<Connecto
   return ConnectorCallLogResponseSchema.parse(body).calls;
 }
 
-const BANK_LINK_PATH = '/api/connectors/bank-accounts/link';
-const BANK_EXCHANGE_PATH = '/api/connectors/bank-accounts/exchange';
-const BANK_LINK_RETURN_URL = 'agiworkforce://connectors/bank-complete';
-
 export type BankLinkOutcome = 'connected' | 'dismissed';
 
 export async function linkBankAccountsInApp(): Promise<BankLinkOutcome> {
-  const created = (await api.post<{ linkToken?: unknown; hostedLinkUrl?: unknown }>(
-    BANK_LINK_PATH,
-    { hostedLink: true },
-  )) as { linkToken?: unknown; hostedLinkUrl?: unknown };
-  if (typeof created.linkToken !== 'string' || typeof created.hostedLinkUrl !== 'string') {
+  const created = BankAccountsLinkResponseSchema.safeParse(
+    await api.post<unknown>(BANK_ACCOUNTS_LINK_PATH, { hostedLink: true }),
+  );
+  if (!created.success || !created.data.hostedLinkUrl) {
     throw new ConnectorResponseError('The bank link could not be started.');
   }
-  const hostedLinkUrl = new URL(created.hostedLinkUrl);
+  const hostedLinkUrl = new URL(created.data.hostedLinkUrl);
   if (hostedLinkUrl.protocol !== 'https:' || !/(^|\.)plaid\.com$/.test(hostedLinkUrl.hostname)) {
     throw new ConnectorResponseError('The bank link could not be started.');
   }
   const session = await WebBrowser.openAuthSessionAsync(
     hostedLinkUrl.toString(),
-    BANK_LINK_RETURN_URL,
+    BANK_ACCOUNTS_HOSTED_LINK_RETURN_URL,
   );
   if (session.type !== 'success') return 'dismissed';
-  await api.post<unknown>(BANK_EXCHANGE_PATH, { linkToken: created.linkToken });
+  BankAccountsExchangeResponseSchema.parse(
+    await api.post<unknown>(BANK_ACCOUNTS_EXCHANGE_PATH, { linkToken: created.data.linkToken }),
+  );
   return 'connected';
+}
+
+export async function fetchBankItems(): Promise<BankAccountsItem[]> {
+  return BankAccountsItemsResponseSchema.parse(await api.get<unknown>(BANK_ACCOUNTS_ITEMS_PATH))
+    .items;
+}
+
+export async function setBankItemExcludedAccounts(
+  itemId: string,
+  excludedAccountIds: readonly string[],
+): Promise<void> {
+  BankAccountsItemUpdateResponseSchema.parse(
+    await api.patch<unknown>(bankAccountsItemPath(itemId), { excludedAccountIds }),
+  );
+}
+
+export async function removeBankItem(itemId: string): Promise<void> {
+  BankAccountsItemRemoveResponseSchema.parse(
+    await api.delete<unknown>(bankAccountsItemPath(itemId)),
+  );
 }
