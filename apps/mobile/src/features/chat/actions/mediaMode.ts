@@ -2,6 +2,7 @@ import {
   getModelMetadataById,
   getRoutingSlotModel,
   getVideoAspectOptionsForModel,
+  getVideoDurationOptionsForModel,
   getVideoQualityOptionsForModel,
   isModelLive,
   modelsCatalog,
@@ -79,21 +80,30 @@ function resolveSlotMediaModelId(kind: MediaKind): string | null {
 export interface VideoOutputSelection {
   aspectRatio: string;
   resolution: string;
+  durationOptions: number[];
+  durationSecs: number | undefined;
 }
 
 export function resolveVideoOutputSelection(
   modelId: string | null | undefined,
   aspectRatio: string,
   resolution: string,
+  durationSecs?: number | null,
 ): VideoOutputSelection {
   const aspects = getVideoAspectOptionsForModel(modelId ?? undefined).map((option) => option.id);
   const effectiveAspect = aspects.includes(aspectRatio) ? aspectRatio : (aspects[0] ?? aspectRatio);
-  const qualities = getVideoQualityOptionsForModel(modelId ?? undefined, effectiveAspect).map(
-    (option) => option.id,
-  );
+  const qualityOptions = getVideoQualityOptionsForModel(modelId ?? undefined, effectiveAspect);
+  const quality =
+    qualityOptions.find((option) => option.id === resolution) ?? qualityOptions[0] ?? undefined;
+  const durationOptions = getVideoDurationOptionsForModel(modelId ?? undefined, quality);
   return {
     aspectRatio: effectiveAspect,
-    resolution: qualities.includes(resolution) ? resolution : (qualities[0] ?? resolution),
+    resolution: quality?.id ?? resolution,
+    durationOptions,
+    durationSecs:
+      durationSecs != null && durationOptions.includes(durationSecs)
+        ? durationSecs
+        : durationOptions[0],
   };
 }
 

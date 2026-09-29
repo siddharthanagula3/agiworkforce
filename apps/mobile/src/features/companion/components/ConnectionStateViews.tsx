@@ -10,17 +10,16 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react-native';
-import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { PairingRiskDisclosure } from './PairingRiskDisclosure';
 
 export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
   const colors = useThemeColors();
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-1 items-center justify-center px-8"
     >
       <View className="w-20 h-20 rounded-2xl bg-amber-500/10 items-center justify-center mb-6">
@@ -45,10 +44,16 @@ export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
   );
 }
 
-export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
+export function DisconnectedView({
+  onScanPress,
+  onShowSetupSteps,
+}: {
+  onScanPress: () => void;
+  onShowSetupSteps?: () => void;
+}) {
   const colors = useThemeColors();
   return (
-    <Animated.View entering={FadeIn.duration(300)} className="flex-1">
+    <Animated.View entering={FadeIn.duration(motion.moved)} className="flex-1">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: 32,
@@ -98,7 +103,7 @@ export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
           className="mb-8"
           steps={[
             'Open Desktop in Managed Cloud',
-            'Go to Settings and select "Connections"',
+            'Go to Settings, select Capabilities and choose "Pair a phone"',
             'Generate and scan the short-lived code',
           ]}
         />
@@ -110,6 +115,17 @@ export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
           onPress={onScanPress}
           className="w-full"
         />
+
+        {onShowSetupSteps ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Show desktop setup steps again"
+            onPress={onShowSetupSteps}
+            style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ color: colors.teal }}>Show desktop setup steps again</Text>
+          </Pressable>
+        ) : null}
 
         <PairingRiskDisclosure className="mt-4" />
       </ScrollView>
@@ -148,7 +164,7 @@ export function ConnectingView({ onCancel }: { onCancel: () => void }) {
   const colors = useThemeColors();
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-1 items-center justify-center px-8"
     >
       <View className="w-20 h-20 rounded-2xl bg-amber-500/10 items-center justify-center mb-6">
@@ -171,12 +187,10 @@ export function ConnectingView({ onCancel }: { onCancel: () => void }) {
 export function ErrorView({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   const colors = useThemeColors();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const { user } = useUser();
-  const accountEmail = user?.primaryEmailAddress?.emailAddress ?? null;
 
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-1 items-center justify-center px-8"
     >
       <View className="w-20 h-20 rounded-2xl bg-red-500/10 items-center justify-center mb-6">
@@ -192,10 +206,9 @@ export function ErrorView({ error, onRetry }: { error: string | null; onRetry: (
 
       <PairingChecklist
         steps={[
-          'Dispatch is turned on in Desktop → Settings → Connections',
-          accountEmail
-            ? `You're signed in as ${accountEmail}`
-            : "You're signed in on Desktop with the account you use here",
+          'Remote Control is on in Desktop → Settings → Capabilities',
+          'Desktop is signed in and in Managed Cloud',
+          'Use a new pairing code from Desktop; phone and Desktop accounts do not need to match',
           'Desktop is open and up to date',
         ]}
       />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import {
   AlertCircle,
   Check,
@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Pause,
   Play,
+  Plus,
   RefreshCw,
   Search,
   Square,
@@ -27,7 +28,10 @@ import {
   type ResearchRunState,
 } from '@/src/features/chat/utils/researchRunState';
 
-export type ResearchPlanDecision = 'start' | 'cancel';
+export type ResearchPlanDecision = 'start' | 'cancel' | { steps: ResearchStep[] };
+
+const MAX_PLAN_STEPS = 6;
+const MAX_STEP_CHARS = 300;
 
 const STEP_STATUS_LABELS: Record<ResearchStep['status'], string> = {
   pending: 'Queued',
@@ -161,6 +165,81 @@ function ActionButton({
   );
 }
 
+function PlanEditor({
+  steps,
+  onChange,
+}: {
+  steps: ResearchStep[];
+  onChange: (steps: ResearchStep[]) => void;
+}) {
+  const colors = useThemeColors();
+  const edit = (id: string, description: string) =>
+    onChange(steps.map((step) => (step.id === id ? { ...step, description } : step)));
+  const remove = (id: string) => onChange(steps.filter((step) => step.id !== id));
+  const add = () =>
+    onChange([
+      ...steps,
+      {
+        id: `draft-${steps.length}-${Date.now()}`,
+        type: 'search',
+        description: '',
+        status: 'pending',
+      },
+    ]);
+  return (
+    <View
+      testID="research-plan-editor"
+      accessibilityLabel="Research plan, editable"
+      style={{ borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: 6, gap: 6 }}
+    >
+      <Text style={{ fontSize: 11, color: colors.textMuted }}>
+        Edit any step before it runs. What you start here is exactly what gets searched.
+      </Text>
+      {steps.map((step, index) => (
+        <View key={step.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <TextInput
+            value={step.description}
+            onChangeText={(text) => edit(step.id, text)}
+            maxLength={MAX_STEP_CHARS}
+            multiline
+            accessibilityLabel={`Step ${index + 1}`}
+            placeholder="Describe what to search"
+            placeholderTextColor={colors.textMuted}
+            style={{
+              flex: 1,
+              fontSize: 12,
+              lineHeight: 17,
+              color: colors.textPrimary,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: radii.md,
+              paddingHorizontal: 8,
+              paddingVertical: 6,
+            }}
+          />
+          <Pressable
+            onPress={() => remove(step.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove step ${index + 1}`}
+            hitSlop={8}
+            style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <X size={14} color={colors.textMuted} />
+          </Pressable>
+        </View>
+      ))}
+      {steps.length < MAX_PLAN_STEPS ? (
+        <ActionButton
+          label="Add a step"
+          icon={Plus}
+          onPress={add}
+          testID="research-plan-add-step"
+        />
+      ) : null}
+    </View>
+  );
+}
+
 interface ResearchRunCardProps {
   research: ResearchRunState;
   isStreaming: boolean;
@@ -183,6 +262,7 @@ export function ResearchRunCard({
   const colors = useThemeColors();
   const active = isStreaming && isResearchRunActive(research);
   const [pauseRequested, setPauseRequested] = useState(false);
+  const [draftSteps, setDraftSteps] = useState<ResearchStep[] | null>(null);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -210,6 +290,10 @@ export function ResearchRunCard({
   const gaps = research.gaps ?? [];
   const canDecide = Boolean(onPlanDecision) && awaitingApproval && !isStreaming;
   const canRetry = Boolean(onRetry) && (failed || interrupted || paused) && !isStreaming;
+  const canRunAgain = Boolean(onRetry) && complete && !isStreaming;
+  const editedSteps =
+    draftSteps ?? steps.filter((step) => step.type === 'search' && step.status === 'pending');
+  const planReady = editedSteps.some((step) => step.description.trim() !== '');
   const canStop = Boolean(onStop) && active;
   const canPause = Boolean(onPause) && active && research.phase !== 'synthesizing';
 
@@ -280,7 +364,7 @@ export function ResearchRunCard({
         <Text style={{ fontSize: 11, color: colors.textSecondary }}>{research.error}</Text>
       ) : null}
 
-      {steps.length > 0 ? (
+      {steps.length > 0 && !canDecide ? (
         <View
           testID="research-run-plan"
           accessibilityLabel="Research plan"
@@ -295,6 +379,8 @@ export function ResearchRunCard({
           ))}
         </View>
       ) : null}
+
+      {canDecide ? <PlanEditor steps={editedSteps} onChange={setDraftSteps} /> : null}
 
       {gaps.length > 0 ? (
         <View
@@ -328,7 +414,7 @@ export function ResearchRunCard({
         </View>
       ) : null}
 
-      {canDecide || canRetry || canStop || canPause ? (
+      {canDecide || canRetry || canRunAgain || canStop || canPause ? (
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           {canDecide ? (
             <>
@@ -336,8 +422,18 @@ export function ResearchRunCard({
                 label={isResuming ? 'Starting…' : 'Approve plan'}
                 icon={Play}
                 emphasis
-                disabled={isResuming}
-                onPress={() => onPlanDecision?.('start')}
+                disabled={isResuming || !planReady}
+                onPress={() =>
+                  onPlanDecision?.(
+                    draftSteps === null
+                      ? 'start'
+                      : {
+                          steps: draftSteps
+                            .map((step) => ({ ...step, description: step.description.trim() }))
+                            .filter((step) => step.description !== ''),
+                        },
+                  )
+                }
                 testID="research-plan-approve"
               />
               <ActionButton
@@ -375,6 +471,14 @@ export function ResearchRunCard({
               disabled={isResuming}
               onPress={() => onRetry?.()}
               testID="research-run-retry"
+            />
+          ) : null}
+          {canRunAgain ? (
+            <ActionButton
+              label="Run again"
+              icon={RefreshCw}
+              onPress={() => onRetry?.()}
+              testID="research-run-again"
             />
           ) : null}
         </View>

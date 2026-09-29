@@ -57,14 +57,16 @@ jest.mock('../lib/mmkv', () => ({
 
 import { streamChat, type StreamCallbacks } from '../services/streaming';
 import { managedCloudChat } from '../services/managedCloudChat';
-import { deleteCloudMessagesRemote } from '../src/features/chat/services/cloudMessageMutations';
-import { useChatExecutionStore } from '../stores/chat/chatExecutionStore';
+import {
+  deleteCloudMessagesRemote,
+  setCloudMessageReactionRemote,
+} from '../src/features/chat/services/cloudMessageMutations';
+import { clearCloudExecutionState, useChatExecutionStore } from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
-import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
-import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { requireFreeMobileCloudModel } from '../test-utils/modelFixtures';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -78,13 +80,16 @@ const mockSaveMessage = managedCloudChat.saveMessage as jest.MockedFunction<
 const mockDeleteRemote = deleteCloudMessagesRemote as jest.MockedFunction<
   typeof deleteCloudMessagesRemote
 >;
+const mockSetReactionRemote = setCloudMessageReactionRemote as jest.MockedFunction<
+  typeof setCloudMessageReactionRemote
+>;
 
 const CONV_ID = '0190a000-0000-7000-8000-0000000000d1';
 const U1 = '0190a000-0000-7000-8000-000000000091';
 const A1 = '0190a000-0000-7000-8000-0000000000a1';
 const U2 = '0190a000-0000-7000-8000-0000000000b2';
 const A2 = '0190a000-0000-7000-8000-0000000000c2';
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const CLOUD_MODEL = requireFreeMobileCloudModel().id;
 
 function message(
   id: string,
@@ -290,7 +295,11 @@ describe('a pre-threading server keeps the replacing behaviour', () => {
     useChatExecutionStore.getState().retryMessage(CONV_ID, A1);
     await waitFor(() => mockDeleteRemote.mock.calls.length > 0);
 
-    expect(mockDeleteRemote).toHaveBeenCalledWith(CONV_ID, [U1, A1]);
+    expect(mockDeleteRemote).toHaveBeenCalledWith(
+      CONV_ID,
+      [U1, A1],
+      expect.objectContaining({ ownerId: 'cloud-variants-test-user' }),
+    );
     expect(mockSaveMessage).not.toHaveBeenCalled();
   });
 
@@ -305,7 +314,172 @@ describe('a pre-threading server keeps the replacing behaviour', () => {
     useChatExecutionStore.getState().editMessage(CONV_ID, U2, 'revised question');
     await waitFor(() => mockDeleteRemote.mock.calls.length > 0);
 
-    expect(mockDeleteRemote).toHaveBeenCalledWith(CONV_ID, [U2, A2]);
+    expect(mockDeleteRemote).toHaveBeenCalledWith(
+      CONV_ID,
+      [U2, A2],
+      expect.objectContaining({ ownerId: 'cloud-variants-test-user' }),
+    );
     expect(mockSaveMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not resend or trim another account after a pending edit delete completes', async () => {
+    seedConversation({}, [
+      message(U1, 'user', 'first account prompt', '2026-06-01T00:00:00.000Z'),
+      message(A1, 'assistant', 'first account answer', '2026-06-01T00:00:01.000Z'),
+    ]);
+    let finishDelete: (() => void) | undefined;
+    mockDeleteRemote.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDelete = resolve;
+        }),
+    );
+
+    useChatExecutionStore.getState().editMessage(CONV_ID, U1, 'old account revision');
+    await waitFor(() => finishDelete !== undefined);
+
+    activateCloudAccount('cloud-variants-second-user');
+    clearCloudExecutionState();
+    useChatCloudMessageStore.getState().clearCloudData();
+    seedConversation({}, [
+      message(U2, 'user', 'second account prompt', '2026-06-01T00:00:02.000Z'),
+      message(A2, 'assistant', 'second account answer', '2026-06-01T00:00:03.000Z'),
+    ]);
+    finishDelete?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(rows().map((row) => row.content)).toEqual([
+      'second account prompt',
+      'second account answer',
+    ]);
+    expect(mockStreamChat).not.toHaveBeenCalled();
+    expect(useChatExecutionStore.getState().error).toBeNull();
+    expect(useChatExecutionStore.getState().isEditing).toBe(false);
+  });
+
+  it('does not retry an old response after the account changes during deletion', async () => {
+    seedConversation({}, [
+      message(U1, 'user', 'first account prompt', '2026-06-01T00:00:00.000Z'),
+      message(A1, 'assistant', 'first account answer', '2026-06-01T00:00:01.000Z'),
+    ]);
+    let finishDelete: (() => void) | undefined;
+    mockDeleteRemote.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDelete = resolve;
+        }),
+    );
+
+    useChatExecutionStore.getState().retryMessage(CONV_ID, A1);
+    await waitFor(() => finishDelete !== undefined);
+
+    activateCloudAccount('cloud-variants-second-user');
+    clearCloudExecutionState();
+    useChatCloudMessageStore.getState().clearCloudData();
+    seedConversation({}, [
+      message(U2, 'user', 'second account prompt', '2026-06-01T00:00:02.000Z'),
+      message(A2, 'assistant', 'second account answer', '2026-06-01T00:00:03.000Z'),
+    ]);
+    finishDelete?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(rows().map((row) => row.content)).toEqual([
+      'second account prompt',
+      'second account answer',
+    ]);
+    expect(mockStreamChat).not.toHaveBeenCalled();
+    expect(useChatExecutionStore.getState().error).toBeNull();
+  });
+});
+
+describe('Cloud message ratings', () => {
+  beforeEach(() => {
+    seedConversation({}, [
+      message(U1, 'user', 'question', '2026-06-01T00:00:00.000Z'),
+      message(A1, 'assistant', 'answer', '2026-06-01T00:00:01.000Z'),
+    ]);
+  });
+
+  it('persists an optimistic rating under the active account', async () => {
+    await useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsUp');
+
+    expect(rows()[1]?.metadata?.reaction).toBe('thumbsUp');
+    expect(mockSetReactionRemote).toHaveBeenCalledWith(
+      CONV_ID,
+      A1,
+      'thumbsUp',
+      expect.objectContaining({ ownerId: 'cloud-variants-test-user' }),
+    );
+  });
+
+  it('restores the previous rating and reports a failed Cloud write', async () => {
+    mockSetReactionRemote.mockRejectedValueOnce(new Error('provider token must not appear'));
+
+    await expect(
+      useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsDown'),
+    ).rejects.toThrow('Could not save your rating');
+
+    expect(rows()[1]?.metadata?.reaction).toBeNull();
+  });
+
+  it('does not restore an old rating into the next account', async () => {
+    let failWrite: ((error: Error) => void) | undefined;
+    mockSetReactionRemote.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          failWrite = reject;
+        }),
+    );
+    const pending = useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsUp');
+    await waitFor(() => failWrite !== undefined);
+
+    activateCloudAccount('cloud-variants-second-user');
+    useChatCloudMessageStore.getState().clearCloudData();
+    seedConversation({}, [
+      message(U2, 'user', 'new question', '2026-06-01T00:00:02.000Z'),
+      message(A2, 'assistant', 'new answer', '2026-06-01T00:00:03.000Z'),
+    ]);
+    failWrite?.(new Error('old account write failed'));
+    await expect(pending).resolves.toBeUndefined();
+
+    expect(rows().map((row) => row.content)).toEqual(['new question', 'new answer']);
+  });
+
+  it('does not roll back a newer rating when an older write fails', async () => {
+    let failFirstWrite: ((error: Error) => void) | undefined;
+    mockSetReactionRemote.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          failFirstWrite = reject;
+        }),
+    );
+    const first = useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsUp');
+    await waitFor(() => failFirstWrite !== undefined);
+    const second = useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsDown');
+    failFirstWrite?.(new Error('older write failed'));
+    await expect(first).resolves.toBeUndefined();
+    await expect(second).resolves.toBeUndefined();
+    expect(rows()[1]?.metadata?.reaction).toBe('thumbsDown');
+  });
+
+  it('rolls two failed consecutive ratings back to the last confirmed value', async () => {
+    let failFirstWrite: ((error: Error) => void) | undefined;
+    mockSetReactionRemote
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            failFirstWrite = reject;
+          }),
+      )
+      .mockRejectedValueOnce(new Error('second write failed'));
+
+    const first = useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsUp');
+    await waitFor(() => failFirstWrite !== undefined);
+    const second = useChatMessageStore.getState().setMessageReaction(CONV_ID, A1, 'thumbsDown');
+    failFirstWrite?.(new Error('first write failed'));
+
+    await expect(first).resolves.toBeUndefined();
+    await expect(second).rejects.toThrow('Could not save your rating');
+    expect(rows()[1]?.metadata?.reaction).toBeNull();
   });
 });

@@ -1,8 +1,10 @@
+import * as Localization from 'expo-localization';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { AudioRoute } from '@/src/features/voice/services/audioRoute';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
+import { chosenSpeechLanguage } from '@/src/features/voice/speechLanguage';
 
 export interface SpeechSettings {
   voice: string | undefined;
@@ -12,10 +14,20 @@ export interface SpeechSettings {
 }
 
 /** The speech language is per trust domain, like the rest of the voice settings. */
-export function activeSpeechLanguage(): string {
-  return useChatAppModeStore.getState().appMode === 'cloud'
-    ? useCloudSettingsStore.getState().speechLanguage
-    : useLocalSettingsStore.getState().speechLanguage;
+export function activeSpeechLanguage(): string | undefined {
+  return chosenSpeechLanguage(
+    useChatAppModeStore.getState().appMode === 'cloud'
+      ? useCloudSettingsStore.getState().speechLanguage
+      : useLocalSettingsStore.getState().speechLanguage,
+  );
+}
+
+export function deviceSpeechLocale(): string {
+  try {
+    return Localization.getLocales()[0]?.languageTag ?? 'en-US';
+  } catch {
+    return 'en-US';
+  }
 }
 
 export function autoListenEnabled(): boolean {
@@ -39,6 +51,6 @@ export function speechSettings(): SpeechSettings {
     voice: selectedVoiceId ?? undefined,
     rate: speechRate,
     pitch: speechPitch,
-    language: activeSpeechLanguage(),
+    language: activeSpeechLanguage() ?? deviceSpeechLocale(),
   };
 }

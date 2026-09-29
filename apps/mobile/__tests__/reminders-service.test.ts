@@ -4,7 +4,7 @@ const mockGetRemindersPermissions = jest.fn();
 const mockRequestRemindersPermissions = jest.fn();
 const mockCreateReminder = jest.fn();
 
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   getRemindersPermissionsAsync: () => mockGetRemindersPermissions(),
   requestRemindersPermissionsAsync: () => mockRequestRemindersPermissions(),
   createReminderAsync: (calendarId: string | null, reminder: unknown) =>

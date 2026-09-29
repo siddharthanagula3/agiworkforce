@@ -1,6 +1,9 @@
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+
+const SERVER_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface PublishArtifactInput {
   artifactId: string;
@@ -8,6 +11,7 @@ export interface PublishArtifactInput {
   kind: string;
   language?: string;
   content: string;
+  conversationId?: string;
 }
 
 export async function publishArtifact(input: PublishArtifactInput): Promise<string> {
@@ -17,6 +21,11 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<stri
     kind: input.kind,
     ...(input.language ? { language: input.language } : {}),
     content: input.content,
+    ...(input.conversationId &&
+    useChatAppModeStore.getState().appMode === 'cloud' &&
+    SERVER_CONVERSATION_ID.test(input.conversationId)
+      ? { conversationId: input.conversationId }
+      : {}),
   });
 
   const shareUrl = typeof response.shareUrl === 'string' ? response.shareUrl.trim() : '';

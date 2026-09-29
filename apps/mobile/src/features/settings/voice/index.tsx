@@ -1,9 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Modal, ScrollView, View } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
-import { Check, Globe, Hand, Headphones, Lock, Mic, Play, Volume2, X } from 'lucide-react-native';
+import { SUPPORTED_LANGUAGES } from '@agiworkforce/i18n';
+import {
+  Bot,
+  Check,
+  Globe,
+  Hand,
+  Headphones,
+  Lock,
+  Mic,
+  Play,
+  Volume2,
+  X,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -18,7 +30,12 @@ import {
 } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
 import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';
-import * as TTS from '@/src/features/voice/services/tts';
+import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
+import { useModelStore } from '@/src/features/model-picker/store';
+import { useModelInstallStore } from '@/src/features/model-picker/installStore';
+import { DEFAULT_LOCAL_MODEL_ID, getDisplayName } from '@/src/features/model-picker/service';
+import { useTierStore } from '@/src/features/billing/store';
+import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
 
 const CONVERSATION_MODES = [
   {
@@ -40,8 +57,24 @@ const CONVERSATION_MODES = [
 interface SpeechLanguageOption {
   code: string;
   label: string;
-  locale: string;
+  name: string;
+  detail: string | null;
 }
+
+const SPEECH_LANGUAGE_OPTIONS: readonly SpeechLanguageOption[] = [
+  {
+    code: SPEECH_LANGUAGE_AUTO,
+    label: 'Automatic',
+    name: 'Automatic',
+    detail: 'Uses your device language',
+  },
+  ...SUPPORTED_LANGUAGES.map((language) => ({
+    code: language.code,
+    label: language.nativeName,
+    name: language.name,
+    detail: language.name === language.nativeName ? null : language.name,
+  })),
+];
 
 function languageDisplayName(code: string): string {
   const DisplayNamesConstructor = Intl.DisplayNames;
@@ -135,15 +168,11 @@ function VoiceSlider({
 
 function SpeechLanguageModal({
   visible,
-  options,
-  loading,
   selectedCode,
   onSelect,
   onClose,
 }: {
   visible: boolean;
-  options: SpeechLanguageOption[];
-  loading: boolean;
   selectedCode: string;
   onSelect: (code: string) => void;
   onClose: () => void;
@@ -186,9 +215,9 @@ function SpeechLanguageModal({
                 accessibilityRole="button"
                 accessibilityLabel="Close speech language picker"
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -197,53 +226,38 @@ function SpeechLanguageModal({
               </Pressable>
             </View>
 
-            {loading ? (
-              <View style={{ paddingVertical: 32, alignItems: 'center' }}>
-                <ActivityIndicator color={colors.teal} />
-              </View>
-            ) : options.length === 0 ? (
-              <View style={{ paddingHorizontal: 18, paddingVertical: 24 }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
-                  No speech languages returned
-                </Text>
-                <Text
-                  style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16, marginTop: 4 }}
-                >
-                  Install a voice in your device settings, then reopen this list.
-                </Text>
-              </View>
-            ) : (
-              <ScrollView>
-                {options.map((option, index) => {
-                  const selected = option.code === selectedCode;
-                  return (
-                    <Pressable
-                      key={option.code}
-                      onPress={() => onSelect(option.code)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      accessibilityLabel={`${option.label} speech language`}
-                      style={({ pressed }) => ({
-                        minHeight: 52,
-                        paddingHorizontal: 18,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 12,
-                        borderTopWidth: index === 0 ? 0 : 1,
-                        borderTopColor: colors.border,
-                        backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-                      })}
-                    >
-                      <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
-                        {option.label}
-                      </Text>
-                      <Text style={{ color: colors.textMuted, fontSize: 12 }}>{option.locale}</Text>
-                      {selected ? <Check size={17} color={colors.teal} /> : null}
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
+            <ScrollView>
+              {SPEECH_LANGUAGE_OPTIONS.map((option, index) => {
+                const selected = option.code === selectedCode;
+                return (
+                  <Pressable
+                    key={option.code}
+                    onPress={() => onSelect(option.code)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`${option.name} speech language`}
+                    style={({ pressed }) => ({
+                      minHeight: 52,
+                      paddingHorizontal: 18,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                      borderTopWidth: index === 0 ? 0 : 1,
+                      borderTopColor: colors.border,
+                      backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                    })}
+                  >
+                    <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+                      {option.label}
+                    </Text>
+                    {option.detail ? (
+                      <Text style={{ color: colors.textMuted, fontSize: 12 }}>{option.detail}</Text>
+                    ) : null}
+                    {selected ? <Check size={17} color={colors.teal} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
         </Pressable>
       </Pressable>
@@ -254,7 +268,23 @@ function SpeechLanguageModal({
 export default function VoiceSettingsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const isCloud = appMode === 'cloud';
+  const selectedModel = useModelStore((s) => s.selectedModel);
+  const subscriptionTier = useTierStore((s) => s.tier);
+  const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
+  const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
+  const defaultLocalModelDownloading = useModelInstallStore(
+    (s) => s.jobs[DEFAULT_LOCAL_MODEL_ID]?.status === 'downloading',
+  );
+  const answerModel = resolveNewConversationModel({
+    selectedModel,
+    mode: appMode,
+    subscriptionTier,
+    installedModelIds,
+    readySystemModelIds,
+    defaultLocalModelDownloading,
+  });
 
   const voiceEnabled = useSettingsStore((s) => s.voiceEnabled);
   const setVoiceEnabled = useSettingsStore((s) => s.setVoiceEnabled);
@@ -283,34 +313,13 @@ export default function VoiceSettingsScreen() {
   const speechLanguage = isCloud ? cloudSpeechLanguage : localSpeechLanguage;
   const setSpeechLanguage = isCloud ? cloudSetSpeechLanguage : localSetSpeechLanguage;
 
-  const [languageOptions, setLanguageOptions] = useState<SpeechLanguageOption[]>([]);
-  const [languagesLoading, setLanguagesLoading] = useState(false);
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false);
-
-  useEffect(() => {
-    if (!languagePickerOpen) return;
-    let cancelled = false;
-    setLanguagesLoading(true);
-    TTS.getAvailableLanguages()
-      .then((items) => {
-        if (!cancelled) setLanguageOptions(items);
-      })
-      .catch(() => {
-        if (!cancelled) setLanguageOptions([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLanguagesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [languagePickerOpen]);
 
   const speechLanguageLabel = useMemo(
     () =>
-      languageOptions.find((option) => option.code === speechLanguage)?.label ??
+      SPEECH_LANGUAGE_OPTIONS.find((option) => option.code === speechLanguage)?.label ??
       languageDisplayName(speechLanguage),
-    [languageOptions, speechLanguage],
+    [speechLanguage],
   );
 
   const handleSelectSpeechLanguage = useCallback(
@@ -361,6 +370,12 @@ export default function VoiceSettingsScreen() {
 
       <SettingsGroup>
         <SettingsRow
+          label="Answer model"
+          icon={Bot}
+          value={answerModel ? getDisplayName(answerModel) : 'Unavailable'}
+          onPress={() => router.push('/(app)/models' as Parameters<typeof router.push>[0])}
+        />
+        <SettingsRow
           label="Speech language"
           icon={Globe}
           value={speechLanguageLabel}
@@ -379,7 +394,8 @@ export default function VoiceSettingsScreen() {
             is stated here as a caption instead of offered as a choice. */}
         <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
           <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
-            Spoken by the system speech engine, using voices installed on this device.
+            Voice replies use the current chat model. Cloud Mode sends your transcript to AGI Cloud.
+            Speech plays through voices installed on this device.
           </Text>
         </View>
       </SettingsGroup>
@@ -469,8 +485,6 @@ export default function VoiceSettingsScreen() {
 
       <SpeechLanguageModal
         visible={languagePickerOpen}
-        options={languageOptions}
-        loading={languagesLoading}
         selectedCode={speechLanguage}
         onSelect={handleSelectSpeechLanguage}
         onClose={() => setLanguagePickerOpen(false)}

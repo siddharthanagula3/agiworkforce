@@ -1,13 +1,24 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { MAX_AVATAR_BYTES } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
-const mockSetProfileImage = jest.fn(async () => ({ id: 'img_1' }));
+const mockSetProfileImage = jest.fn(async () => ({
+  id: 'img_1',
+  publicUrl: 'https://img.clerk.example/updated.jpg',
+}));
 const mockLaunchImageLibraryAsync = jest.fn();
+
+jest.mock('@/stores/connectionStore', () => ({
+  useConnectionStore: (selector: (state: { status: string }) => unknown) =>
+    selector({ status: 'disconnected' }),
+}));
 
 const mockClerkState: {
   user: null | {
+    id?: string;
     imageUrl?: string | null;
     fullName?: string | null;
     firstName?: string | null;
@@ -95,6 +106,11 @@ import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useTierStore } from '../src/features/billing/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
+import { api } from '../services/api';
+import {
+  activateCloudAccount,
+  invalidateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const blankPersonalization = {
   fullName: '',
@@ -109,10 +125,12 @@ const blankPersonalization = {
 };
 
 function signInWithPhoto(imageUrl: string | null) {
+  activateCloudAccount('user-1');
   useChatAppModeStore.setState({ appMode: 'cloud' });
-  useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true });
+  useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user-1' });
   useWaitlistStore.setState({ cloudUnlocked: true });
   mockClerkState.user = {
+    id: 'user-1',
     imageUrl,
     fullName: 'Ada Lovelace',
     firstName: 'Ada',
@@ -126,6 +144,8 @@ function signInWithPhoto(imageUrl: string | null) {
 describe('PAR-M43, profile photo', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    invalidateCloudAccount();
+    jest.spyOn(api, 'patch').mockResolvedValue({} as never);
     mockClerkState.user = null;
     mockClerkState.isLoaded = true;
     useChatAppModeStore.setState({ appMode: 'local' });
@@ -138,6 +158,8 @@ describe('PAR-M43, profile photo', () => {
     });
     useTierStore.setState({ tier: 'free', billingTier: 'free', billingStatus: 'none' } as never);
   });
+
+  afterEach(() => jest.restoreAllMocks());
 
   it('renders the Clerk photo in the settings header when the account has one', () => {
     signInWithPhoto('https://img.clerk.example/ada.jpg');
@@ -178,7 +200,7 @@ describe('PAR-M43, profile photo', () => {
     expect(header.getByText('Ada Lovelace')).toBeTruthy();
   });
 
-  it('offers a photo badge that writes the picked image to the Clerk account', async () => {
+  it('syncs a picked account photo to the profile read by web', async () => {
     signInWithPhoto(null);
     mockLaunchImageLibraryAsync.mockResolvedValue({
       canceled: false,
@@ -195,9 +217,49 @@ describe('PAR-M43, profile photo', () => {
     expect(mockSetProfileImage).toHaveBeenCalledWith({
       file: 'data:image/png;base64,QUJD',
     });
+    expect(api.patch).toHaveBeenCalledWith('/api/me', {
+      avatar_url: 'https://img.clerk.example/updated.jpg',
+    });
     expect(mockLaunchImageLibraryAsync).toHaveBeenCalledWith(
       expect.objectContaining({ base64: true, allowsMultipleSelection: false }),
     );
+  });
+
+  it('reports a partial profile sync instead of claiming the photo is unchanged', async () => {
+    signInWithPhoto(null);
+    mockLaunchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///tmp/pick.jpg', base64: 'QUJD', mimeType: 'image/jpeg' }],
+    });
+    jest.spyOn(api, 'patch').mockRejectedValueOnce(new Error('unavailable'));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation();
+
+    const { getByLabelText } = render(<SettingsTabScreen />);
+    await act(async () => fireEvent.press(getByLabelText('Change profile photo')));
+
+    expect(mockSetProfileImage).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith(
+      'Photo may not have synced',
+      expect.stringContaining('could not be synced across devices'),
+    );
+  });
+
+  it('does not patch the current account after the photo upload changes account', async () => {
+    signInWithPhoto(null);
+    mockLaunchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///tmp/pick.jpg', base64: 'QUJD', mimeType: 'image/jpeg' }],
+    });
+    mockSetProfileImage.mockImplementationOnce(async () => {
+      invalidateCloudAccount();
+      activateCloudAccount('user-2');
+      return { id: 'img_2', publicUrl: 'https://img.clerk.example/previous.jpg' };
+    });
+
+    const { getByLabelText } = render(<SettingsTabScreen />);
+    await act(async () => fireEvent.press(getByLabelText('Change profile photo')));
+
+    expect(api.patch).not.toHaveBeenCalled();
   });
 
   it('writes nothing when the picker is cancelled', async () => {
@@ -209,6 +271,39 @@ describe('PAR-M43, profile photo', () => {
     await act(async () => {
       fireEvent.press(getByLabelText('Change profile photo'));
     });
+
+    expect(mockSetProfileImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unsupported picked image before uploading it', async () => {
+    signInWithPhoto(null);
+    mockLaunchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///tmp/pick.svg', base64: 'QUJD', mimeType: 'image/svg+xml' }],
+    });
+
+    const { getByLabelText } = render(<SettingsTabScreen />);
+    await act(async () => fireEvent.press(getByLabelText('Change profile photo')));
+
+    expect(mockSetProfileImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects a picked image over the shared avatar limit', async () => {
+    signInWithPhoto(null);
+    mockLaunchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///tmp/pick.jpg',
+          base64: 'QUJD',
+          mimeType: 'image/jpeg',
+          fileSize: MAX_AVATAR_BYTES + 1,
+        },
+      ],
+    });
+
+    const { getByLabelText } = render(<SettingsTabScreen />);
+    await act(async () => fireEvent.press(getByLabelText('Change profile photo')));
 
     expect(mockSetProfileImage).not.toHaveBeenCalled();
   });

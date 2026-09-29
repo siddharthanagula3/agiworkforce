@@ -179,6 +179,10 @@ export function termsNoticeHeaders(standing: TermsStanding): Record<string, stri
   };
 }
 
+export async function hasAcceptedAnyTerms(userId: string): Promise<boolean> {
+  return (await readTermsAcceptance(userId)) !== null;
+}
+
 export async function recordTermsAcceptance(
   userId: string,
   surface: TermsAcceptanceSurface,

@@ -43,6 +43,11 @@ jest.mock('lucide-react-native', () => {
   return { ArrowLeft: icon, Baby: icon, ChevronRight: icon, Lock: icon, Shield: icon };
 });
 
+jest.mock('@/src/features/auth/store', () => ({
+  useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ isClerkSignedIn: false, signOut: jest.fn() }),
+}));
+
 jest.mock('../stores/settingsStore', () => ({
   useSettingsStore: (selector: (state: { hapticsEnabled: boolean }) => unknown) =>
     selector({ hapticsEnabled: false }),
@@ -92,7 +97,7 @@ describe('minor-safe mode cannot be cleared by the device it protects', () => {
 
     expect(queryByTestId('age-gate-input')).toBeNull();
     expect(queryByTestId('age-gate-continue-btn')).toBeNull();
-    expect(getByTestId('age-gate-minor-locked')).toBeTruthy();
+    expect(getByTestId('age-gate-refused')).toBeTruthy();
   });
 
   it('shows the age input while no minor record exists', () => {

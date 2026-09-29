@@ -30,6 +30,7 @@ import { lucideRNToolIcon } from './toolIconRN';
 import {
   CloudToolApprovalControls,
   parseToolArguments,
+  type AllowCloudToolForChat,
   type ResolveCloudToolApproval,
 } from './CloudToolApprovalControls';
 import { RunSteerInput } from './RunSteerInput';
@@ -44,6 +45,7 @@ export interface AgentActivityTimelineProps {
   defaultExpanded?: boolean;
   nowMs?: number;
   onResolveApproval?: ResolveCloudToolApproval;
+  onAllowApprovalForChat?: AllowCloudToolForChat;
   approvalExpired?: boolean;
   onResendApproval?: () => void;
   steerRunId?: string;
@@ -158,6 +160,7 @@ function ToolRow({
   expanded,
   onToggle,
   onResolveApproval,
+  onAllowApprovalForChat,
   approvalExpired,
   onResendApproval,
   codeRunConversationId,
@@ -166,6 +169,7 @@ function ToolRow({
   expanded: boolean;
   onToggle: () => void;
   onResolveApproval?: AgentActivityTimelineProps['onResolveApproval'];
+  onAllowApprovalForChat?: AgentActivityTimelineProps['onAllowApprovalForChat'];
   approvalExpired: boolean;
   codeRunConversationId?: string;
   onResendApproval?: () => void;
@@ -272,6 +276,7 @@ function ToolRow({
               args={parseToolArguments(entry.input)}
               riskLevel={entry.approval?.riskLevel}
               onResolve={onResolveApproval}
+              onAllowForChat={onAllowApprovalForChat}
             />
           )}
         </View>
@@ -450,6 +455,7 @@ export function AgentActivityTimeline({
   defaultExpanded = false,
   nowMs,
   onResolveApproval,
+  onAllowApprovalForChat,
   approvalExpired = false,
   onResendApproval,
   steerRunId,
@@ -570,6 +576,7 @@ export function AgentActivityTimeline({
                     setExpandedToolId((current) => (current === entry.id ? null : entry.id))
                   }
                   onResolveApproval={onResolveApproval}
+                  onAllowApprovalForChat={onAllowApprovalForChat}
                   approvalExpired={approvalExpired}
                   onResendApproval={onResendApproval}
                   codeRunConversationId={codeRunConversationId}

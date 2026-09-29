@@ -45,8 +45,8 @@ jest.mock('expo-haptics', () => ({
 }));
 
 jest.mock('@/stores/settingsStore', () => ({
-  useSettingsStore: (sel: (s: { hapticsEnabled: boolean; voiceEnabled: boolean }) => unknown) =>
-    sel({ hapticsEnabled: false, voiceEnabled: true }),
+  useSettingsStore: (sel: (s: Record<string, unknown>) => unknown) =>
+    sel({ hapticsEnabled: false, voiceEnabled: true, dictationOnboardingSeen: true }),
 }));
 
 jest.mock('react-native-reanimated', () => {
@@ -203,6 +203,7 @@ describe('Composer, voice scaffolding snapshots', () => {
       await waitFor(() => {
         expect(onError).toHaveBeenCalledWith(
           'Voice input needs microphone and speech access. You can keep typing instead.',
+          true,
         );
       });
       expect(onRecordingStart).not.toHaveBeenCalled();

@@ -7,6 +7,7 @@ import {
   makeDirectoryAsync,
   EncodingType,
 } from 'expo-file-system/legacy';
+import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { localDeviceManagedFile, type FileLineage, type ManagedFile } from '@agiworkforce/types';
@@ -28,7 +29,7 @@ async function ensureExportsDir(): Promise<void> {
   }
 }
 
-export type ExportFormat = 'pdf' | 'text' | 'markdown';
+export type ExportFormat = 'pdf' | 'text' | 'markdown' | 'source';
 
 export interface ExportResult {
   uri: string;
@@ -203,6 +204,25 @@ export async function exportToText(
   return { uri: destUri, format: 'text', fileName, file: exportedFile(destUri, fileName, lineage) };
 }
 
+export async function exportSourceFile(
+  content: string,
+  title: string,
+  extension: string,
+  lineage: Partial<FileLineage> = {},
+): Promise<ExportResult> {
+  if (!content.trim()) throw new Error('Cannot export empty content');
+  await ensureExportsDir();
+  const fileName = `${sanitizeFileName(title)}.${extension.replace(/[^a-z0-9]/gi, '') || 'txt'}`;
+  const destUri = `${EXPORTS_DIR}${fileName}`;
+  await writeAsStringAsync(destUri, content, { encoding: EncodingType.UTF8 });
+  return {
+    uri: destUri,
+    format: 'source',
+    fileName,
+    file: exportedFile(destUri, fileName, lineage),
+  };
+}
+
 export async function exportPngImage(base64Png: string, title: string): Promise<string> {
   await ensureExportsDir();
   const destUri = `${EXPORTS_DIR}${sanitizeFileName(title)}.png`;
@@ -233,6 +253,7 @@ export async function shareFile(uri: string): Promise<void> {
     csv: 'public.comma-separated-values-text',
     json: 'public.json',
     html: 'public.html',
+    svg: 'public.svg-image',
     png: 'public.png',
     jpg: 'public.jpeg',
     jpeg: 'public.jpeg',
@@ -247,6 +268,7 @@ export async function shareFile(uri: string): Promise<void> {
     csv: 'text/csv',
     json: 'application/json',
     html: 'text/html',
+    svg: 'image/svg+xml',
     png: 'image/png',
     jpg: 'image/jpeg',
     jpeg: 'image/jpeg',
@@ -428,6 +450,18 @@ export async function shareGeneratedImage(
     mimeType: imageType.mimeType,
     dialogTitle: 'Share generated image',
   });
+}
+
+export async function copyGeneratedImage(imagePath: string): Promise<void> {
+  const url = resolveGeneratedImageUri(imagePath);
+  if (!url) {
+    throw new Error('Only saved AGI Cloud images can be copied.');
+  }
+  const downloaded = await fetchGeneratedFileBytes(url);
+  if (!downloaded.contentType || !SHAREABLE_IMAGE_TYPES[downloaded.contentType]) {
+    throw new Error('The saved image format cannot be copied.');
+  }
+  await Clipboard.setImageAsync(downloaded.base64);
 }
 
 export async function exportToMarkdown(

@@ -1,4 +1,3 @@
-
 import {
   getDefaultModel as getCatalogDefaultModel,
   getShippableModels as getCatalogShippableModels,
@@ -9,8 +8,8 @@ import {
   evaluateModelEnvironment,
   getDefaultModelFor,
   getModelMetadataById,
-  getAllowedModelsForTier,
   getMinimumRequiredTier,
+  getProviderOffering,
   normalizeBillingPlanTier,
   normalizeModelId,
   type EnvironmentAvailability,
@@ -25,6 +24,13 @@ import {
   type AutoModeDef as MobileAutoModeDef,
   type ModelDef as CloudModelDef,
 } from '@/lib/models';
+import {
+  getFreeQuotaChatOffering,
+  getReadyFreeQuotaChatOffering,
+  useFreeQuotaCatalogueStore,
+} from './freeQuotaCatalogue';
+import type { FreeQuotaCatalogue, FreeQuotaModel } from '@agiworkforce/cloud-contracts';
+import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAccountSession';
 
 export type ModelTier = PickerModelTier;
 export type ModelSurface = 'local' | 'cloud_managed';
@@ -70,17 +76,10 @@ function tierUpgradeLockReason(modelId: string): string {
     : 'Upgrade your plan to use this model.';
 }
 
-const FREE_TIER_ECONOMY_MODEL_IDS = new Set(getAllowedModelsForTier('economy'));
-
 export function canAccessCloudModelForTier(modelId: string, subscriptionTier: string): boolean {
   const canonicalModelId = normalizeModelId(modelId) ?? modelId;
-  if (subscriptionTier.toLowerCase() !== 'free') {
-    return getCloudModelsForTier(subscriptionTier).some((model) => model.id === canonicalModelId);
-  }
-  return FREE_TIER_ECONOMY_MODEL_IDS.has(canonicalModelId);
+  return getCloudModelsForTier(subscriptionTier).some((model) => model.id === canonicalModelId);
 }
-
-// SAFETY: no current model sets `requiresEnvironment`, so Phase A is a
 
 export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
   return { configured: false };
@@ -287,7 +286,11 @@ export function getSelectableModelById(id: string): ModelDef | undefined {
 }
 
 export function isCloudManagedModelId(id: string): boolean {
-  return cloudModelSourceMap.has(id);
+  const offering = getProviderOffering(id);
+  return (
+    cloudModelSourceMap.has(id) ||
+    (offering?.category === 'chat' && offering.quotaProbeProtocol === 'chat')
+  );
 }
 
 export function isSelectableModelId(id: string): boolean {
@@ -295,7 +298,10 @@ export function isSelectableModelId(id: string): boolean {
 }
 
 export function isSelectableModelIdForCloudAccess(id: string, cloudUnlocked: boolean): boolean {
-  return isSelectableModelId(id) || (cloudUnlocked && isCloudManagedModelId(id));
+  if (isSelectableModelId(id)) return true;
+  if (!cloudUnlocked) return false;
+  if (getProviderOffering(id)) return getReadyFreeQuotaChatOffering(id) !== null;
+  return isCloudManagedModelId(id);
 }
 
 export function isSelectableModelIdForAccess(
@@ -304,6 +310,7 @@ export function isSelectableModelIdForAccess(
   subscriptionTier: string,
 ): boolean {
   if (isSelectableModelId(id)) return true;
+  if (getProviderOffering(id)) return cloudUnlocked && getReadyFreeQuotaChatOffering(id) !== null;
   return (
     cloudUnlocked && isCloudManagedModelId(id) && canAccessCloudModelForTier(id, subscriptionTier)
   );
@@ -318,20 +325,57 @@ export function getModelByIdForCloudAccess(
   cloudUnlocked: boolean,
   subscriptionTier?: string,
 ): ModelDef | undefined {
+  const freeOffering = cloudUnlocked ? getReadyFreeQuotaChatOffering(id) : null;
+  if (freeOffering) return toFreeQuotaModelDef(freeOffering);
   const cloudModel = cloudModelSourceMap.get(id);
   if (cloudModel) return toCloudModelDef(cloudModel, cloudUnlocked, subscriptionTier);
   return getModelById(id);
 }
 
+function toFreeQuotaModelDef(model: FreeQuotaModel): ModelDef | undefined {
+  const offering = getProviderOffering(model.key);
+  if (!offering || offering.category !== 'chat' || offering.quotaProbeProtocol !== 'chat')
+    return undefined;
+  const providerLabel = getCloudProviderById(offering.provider)?.name ?? offering.provider;
+  const metadata = getModelMetadataById(offering.providerModelId);
+  return {
+    id: model.key,
+    name: model.displayName,
+    provider: offering.provider,
+    providerLabel,
+    contextWindow: metadata?.contextWindow ?? 0,
+    maxOutput: metadata?.maxOutputTokens ?? 0,
+    supportsVision: offering.quotaChatImageInput === true,
+    supportsThinking: false,
+    tier: 'economy',
+    surface: 'cloud_managed',
+    availability: 'ready',
+    runtimeLabel: 'Provider-funded Free',
+    detailLabel: `${providerLabel} promotional quota`,
+    description: 'Available while the provider-funded quota lasts.',
+  };
+}
+
 export function getModelListForCloudAccess(
   cloudUnlocked: boolean,
   subscriptionTier?: string,
+  freeQuotaCatalogue: FreeQuotaCatalogue | null = useFreeQuotaCatalogueStore.getState().catalogue,
 ): ModelDef[] {
   if (!cloudUnlocked) return MODEL_LIST;
   const cloudDefs = Array.from(cloudModelSourceMap.values()).map((model) =>
     toCloudModelDef(model, true, subscriptionTier),
   );
-  return [...LOCAL_MODEL_LIST, ...cloudDefs];
+  const state = useFreeQuotaCatalogueStore.getState();
+  const currentCatalogue =
+    freeQuotaCatalogue === state.catalogue && isCloudAccountEpochCurrent(state.account)
+      ? freeQuotaCatalogue
+      : null;
+  const freeOfferings =
+    currentCatalogue?.models
+      .filter((model) => model.category === 'chat' && model.status === 'ready')
+      .map(toFreeQuotaModelDef)
+      .filter((model): model is ModelDef => model !== undefined) ?? [];
+  return [...LOCAL_MODEL_LIST, ...freeOfferings, ...cloudDefs];
 }
 
 export function getModelsByProvider(providerId: string): ModelDef[] {
@@ -347,6 +391,8 @@ export function isAutoMode(id: string): boolean {
 }
 
 export function getDisplayName(id: string): string {
+  const freeOffering = getFreeQuotaChatOffering(id);
+  if (freeOffering) return freeOffering.displayName;
   const autoMode = autoModeMap.get(id);
   if (autoMode) return autoMode.name;
   return cloudModelSourceMap.get(id)?.name ?? getModelById(id)?.name ?? id;
@@ -355,6 +401,8 @@ export function getDisplayName(id: string): string {
 export function getManagedDisplayName(id: string | null | undefined): string {
   const normalizedId = id?.trim() ?? '';
   if (!normalizedId) return 'Unavailable model';
+  const freeOffering = getFreeQuotaChatOffering(normalizedId);
+  if (freeOffering) return freeOffering.displayName;
   const autoMode = autoModeMap.get(normalizedId);
   if (autoMode) return autoMode.name;
   return cloudModelSourceMap.get(normalizedId)?.name ?? 'Unavailable model';

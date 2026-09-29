@@ -386,9 +386,8 @@ export default function PerformanceScreen() {
         `Benchmark complete: ${Math.round(result.tokensPerSecond)} tokens per second, ` +
           `${result.firstTokenLatencyMs} ms first token latency.`,
       );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      AccessibilityInfo.announceForAccessibility(`Benchmark failed: ${msg}`);
+    } catch {
+      AccessibilityInfo.announceForAccessibility('Benchmark failed. Try again.');
     } finally {
       setIsBenchmarking(false);
     }

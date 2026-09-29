@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-21
+Last updated: 2026-09-27
 
 The single product completeness register: what separates the shipped AGI
 Workforce surfaces from a polished production assistant. It records the gap
@@ -110,7 +110,7 @@ possible, so most web cells are 🟡 or ? even where the source reads well.
 | Projects       | 🟡  | 🔴     | ?       | ⚪     | ⚪      | ⚪  |
 | Models         | 🟡  | 🟡     | 🔴      | ?      | 🟡      | 🔴  |
 | Tools          | 🟡  | ?      | ?       | 🔴     | 🟡      | 🔴  |
-| Connectors     | 🟡  | 🔴     | 🔴      | ⚪     | ⚪      | ?   |
+| Connectors     | 🟡  | 🟡     | 🔴      | ⚪     | ⚪      | ?   |
 | Billing        | 🟡  | 🟡     | 🟡      | ⚪     | 🟡      | ?   |
 | Settings       | 🟡  | 🔴     | 🟡      | 🟡     | 🔴      | 🟡  |
 | Theme          | 🟡  | ?      | 🔴      | ✅     | 🟡      | 🟡  |
@@ -123,8 +123,8 @@ Cell notes, by column:
   (`PG-WEB-03`, Done). Keyboard 🔴 because the
   shortcut set is inert on every shell route except `/chat` (`PG-WEB-01`).
 - **Mobile**: Loading, Errors, Projects and Settings 🔴 for invisible failure
-  (`PG-MOB-01` to `PG-MOB-04`, `PG-MOB-08`). Connectors 🔴 by
-  `CUSTOM-CONNECTORS-DESKTOP-MOBILE-GAP-01`.
+  (`PG-MOB-01` to `PG-MOB-04`, `PG-MOB-08`). Connectors 🟡: custom remote MCP
+  add, list, and delete are implemented, but live cross-surface validation remains open.
 - **Desktop**: Accessibility and Theme 🔴 for the literal-colour and
   reduced-motion debt with no guard (`PG-SHARED-01` to `PG-SHARED-04`,
   `PG-SHARED-07`); Models 🔴 for the vanishing local-model section
@@ -168,7 +168,7 @@ Cell notes, by column:
 | Tooltips           | Radix tooltip primitive, shortcut labels in menus                                                                                                   | Account menu advertises ⌘/ on routes where it does nothing (`PG-WEB-01`)                                                                                                                                                    |
 | Keyboard shortcuts | One registry on web, desktop shortcut catalogue, VS Code keybindings, CLI REPL                                                                      | Web registry inert off `/chat`; VS Code Escape rejects a far-away diff unconfirmed (`PG-VSCODE-02`). Chrome capture is intentionally unbound at install and its options UI explains how to assign it (`PG-CHROME-10`, Done) |
 | Responsive         | `Dialog` width is viewport-relative; public pages clean at 375px (verified)                                                                         | `100vh` in the dialog primitive; no virtual-keyboard handling on web (`PG-SHARED-12/13`); iPad multitasking on with portrait lock (`PG-MOB-10`)                                                                             |
-| Reduced motion     | Web blanket rule plus in-app toggle; `Spinner` primitive correct                                                                                    | Desktop has no blanket rule and 215 bare spinners; mobile 0 of 51 Reanimated components read `useReduceMotion` (`PG-SHARED-07`, `PG-MOB-07`)                                                                                |
+| Reduced motion     | Web blanket rule plus in-app toggle; `Spinner` primitive correct                                                                                    | Desktop has no blanket rule and 215 bare spinners; Mobile Reanimated uses the system preference, but device behavior remains unverified (`PG-SHARED-07`, `PG-MOB-07`)                                                       |
 | Retry / recovery   | Web stream error keeps the partial and offers Continue; settings exposes save retry; mobile `SendErrorBanner`                                       | Stopped turn cannot Continue (`PG-CHAT-07`); expired connector has no Reconnect (`PG-WEBSET-04`)                                                                                                                            |
 | Optimistic updates | Web send, project pin, settings toggles all roll back                                                                                               | Sidebar row mutations roll back silently (`PG-WEB-07`)                                                                                                                                                                      |
 | Connection state   | Web banner, mobile banner, CLI bounded timeouts (runtime)                                                                                           | Mobile cloud-sync error state has no renderer (`PG-MOB-02`); CLI proxy failure reads "builder error" (`PG-CLI-12`)                                                                                                          |
@@ -511,7 +511,7 @@ Severity: P3
 Surface: Web
 Area: Chat / Voice
 Status: Broken (raw error to user)
-Evidence: `apps/web/features/chat/stores/voice-input-store.ts:280` returns `Microphone error: ${err.message}` and `:283` `Unexpected error: ${String(err)}`; `startListening` never checks `MediaRecorder`. The live voice path is correct (`live-voice-session.ts:111`). `audit/baselines/raw-error-to-user.json` reports `total: 0`, so that scanner does not see interpolated strings and is stale for this path.
+Evidence: `apps/web/features/chat/stores/voice-input-store.ts:280` returns `Microphone error: ${err.message}` and `:283` `Unexpected error: ${String(err)}`; `startListening` never checks `MediaRecorder`. The live voice path is correct (`live-voice-session.ts:111`). The raw-error scanner now covers Mobile but still does not see every indirect state-object or template-literal path.
 Recommended fix: fall through to `toUserMessage`, and guard `MediaRecorder` and `navigator.mediaDevices` with the wording already in `LIVE_SESSION_MESSAGE`.
 Verification: store test with `navigator.mediaDevices` deleted; the message contains no "TypeError". Extend the raw-error scanner to template literals.
 
@@ -608,16 +608,14 @@ Actual: the user must Disconnect, losing per-tool permissions, then find the con
 Recommended fix: thread `needsReauthorization` into both detail views; `connectConnector` already handles the 409 to `oauthStartPath` probe.
 Verification: render the detail with a warning status and assert a Reconnect button.
 
-### [PG-WEBSET-05] `POST /api/connectors` skips the org connector-policy gate its siblings run
+### [PG-WEBSET-05] `POST /api/connectors` enforces the org connector-policy gate
 
 Severity: P2
 Surface: Web
 Area: Connectors / Workspace policy
-Status: Broken
-Evidence: `apps/web/app/api/connectors/oauth/start/route.ts:203`, `apps/web/app/api/connectors/[connectorId]/credentials/route.ts:124` and `apps/web/app/api/connectors/custom/route.ts:85` call `evaluateConnectorPolicyForUser`; `apps/web/app/api/connectors/route.ts` `handleCreateConnector` does not, and inserts an active row for operator-mapped connectors. Hypothesis on the live effect; verified on the code path.
-Recommended fix: the same gate at the top of `handleCreateConnector`.
-Overlaps: `CONN-ROUTE-ORG-CONNECTOR-POLICY-CHECKED-01` is right that the hole exists but cites the wrong file and function name; repoint it at `apps/web/app/api/connectors/route.ts`.
-Verification: route test asserting 403 for a policy-blocked operator-mapped connector.
+Status: Done in source; live deployment unverified
+Evidence: `apps/web/app/api/connectors/route.ts` now checks workspace policy before connecting a catalog connector or probing a directory MCP endpoint. The shared gate and tool catalog withhold connector access when the workspace policy cannot be read.
+Verification: four focused Web route and policy suites pass 93 tests, including 403 responses for blocked catalog and directory connectors; three related coverage suites pass 27 tests.
 
 ### [PG-WEBSET-06] Deleted chats are kept forever with no permanent delete and no deletion date
 
@@ -1061,7 +1059,7 @@ Overlaps: `DESKTOP-GIT-PANEL-UNREACHABLE-01`, `DESKTOP-PR-AUTOMATION-DEAD-CODE-0
 
 The mobile app is mature on the states a checklist usually finds missing: safe
 areas in 82 files, keyboard avoidance on 20 screens, an offline banner and
-account-scoped queue, permission deep links on every denied surface except the
+account-scoped queue, permission deep links on denied surfaces including the
 microphone, a paywall that says plan changes are not available in the app
 rather than a dead upgrade button, and a global Android back policy. The gaps
 concentrate in failure visibility.
@@ -1073,130 +1071,115 @@ Register corrections from spot-checks: `GAP-161`, `GAP-177`, `GAP-192`, `GAP-141
 Severity: P1
 Surface: Mobile
 Area: Chat / Media generation
-Status: Broken (misleading success)
-Evidence: `apps/mobile/app/(app)/chat/[id].tsx:382` and `:432` pass `onUnexpectedError: console.warn` (verified). `apps/mobile/src/features/chat/actions/runImageGenerationTurn.ts:83` returns `{ status: 'failed', assistantMessageId: null }` when the account epoch is missing or changed, without creating a message (verified); `runVideoGenerationTurn.ts:79` is the same shape. The screen returns `true` (`chat/[id].tsx:440`), and `apps/mobile/src/features/chat/components/ChatInput.tsx:320` clears the draft on anything not `false` (verified).
-Reproduction: cloud mode, image mode, let the session lapse or switch account between typing and send.
-Expected: the composer keeps the text and a banner names the cause with a sign-in action.
-Actual: composer clears, nothing in the transcript, a `console.warn` invisible in release.
-Root cause: verified (RC-2).
-Recommended fix: call the existing `setSendError` (already wired to `SendErrorBanner`) from both handlers and return `false` for the failed-with-no-message case so the draft is restored.
-Verification: mock `captureCloudAccountEpoch` to null, send, assert the banner and unchanged text.
+Status: Fixed locally; live mobile build unverified
+Evidence: `runImageGenerationTurn` and `runVideoGenerationTurn` now invoke `onStarted` only after an account-owned message begins. The chat screen returns `false` before that point, retains the draft through `ChatInput`, and sends account failures to `SendErrorBanner`. Missing sessions use the shared sign-in message and action. Both media turn tests cover rejected account admission; the composer test covers draft retention on `false`. Provider failures now write fixed recovery copy into the assistant transcript rather than returning raw diagnostics; tests cover both returned and thrown provider failures.
 
 ### [PG-MOB-02] Cloud sync failure is tracked but rendered nowhere
 
 Severity: P1
 Surface: Mobile
 Area: Chat / Projects / Settings / Memory
-Status: Missing
-Evidence: `apps/mobile/stores/chat/cloudSyncStateStore.ts` models `idle | syncing | error` with `lastError`; `apps/mobile/services/cloudSyncEngine.ts:861` sets `error` on throw; zero `.tsx` files import the store (verified by grep).
-Expected: a stale badge, banner or settings row naming the last failure with a retry.
-Actual: settings toggles look saved (local MMKV) while never reaching the account; the user discovers it on another device.
-Root cause: verified (RC-1, RC-2).
-Recommended fix: a dismissible banner in the `OfflineBanner` slot of `apps/mobile/app/_layout.tsx` on `error`, plus a "Last synced" row on the cloud account screen.
-Verification: force `pushSettings` to reject; the banner renders and retry re-runs the engine.
+Status: Fixed locally; live mobile build unverified
+Evidence: a dismissible Cloud sync error banner now appears beside the global offline banner for signed-in Cloud users and retries `syncNow`. The Cloud account screen shows the last successful sync and an error retry. `CloudSyncErrorBanner.test.tsx` verifies visibility, retry, dismissal and Local/offline isolation. The sync engine already records failures from settings and other Cloud domains.
 
 ### [PG-MOB-03] `loadConversations` swallows every error, so a failed history fetch renders "No chats yet"
 
 Severity: P2
 Surface: Mobile
 Area: Chat / Navigation
-Status: Broken
-Evidence: `apps/mobile/stores/chat/chatMessageStore.ts:184` has a bare `catch { return; }`; `apps/mobile/src/features/chat/ChatsListScreen.tsx:147` never reads `isLoadingConversations` or `error`, so `ListEmptyComponent` at `:466` renders for network failure, expired session and an empty account alike.
-Recommended fix: set the error in the catch; branch on loading (the existing `MessageSkeleton`) and error before the empty state (RC-1).
-Verification: reject `listConversations`; the list shows an error state.
+Status: Fixed locally; live mobile build unverified
+Evidence: the message store now records a failed Cloud history refresh and clears that state on retry. The Chats list shows loading, a retryable error, or an empty account as distinct states. A rejected managed-cloud fetch and its successful retry are covered in `cloud-chat-shared-client.test.ts`; the list error and Retry action are covered in `chats-list-screen.test.tsx`.
 
 ### [PG-MOB-04] The Chats and Projects lists have no pull-to-refresh, loading or error state
 
 Severity: P2
 Surface: Mobile
 Area: Chat / Projects
-Status: Missing
-Evidence: `ChatsListScreen.tsx:433` and `apps/mobile/app/(app)/(tabs)/projects.tsx` mount no `RefreshControl`; seven sibling screens do. Projects never triggers a fetch; cloud projects arrive only from the sync engine's pull.
-Recommended fix: `RefreshControl` on both, reusing `apps/mobile/src/features/library/index.tsx`.
+Status: Fixed locally; awaiting signed-in device validation
+Evidence: `ChatsListScreen.tsx` refreshes Cloud history through its existing account-scoped loader. `apps/mobile/app/(app)/(tabs)/projects.tsx` starts Cloud sync on entry, supports pull-to-refresh for populated and empty lists, shows loading while sync runs, and offers retry when sync fails. Local lists retain local-only behavior.
+Recommended fix: Verify both gestures, offline retry, and account switching on a signed-in device after the Terms status endpoint is deployed.
 
 ### [PG-MOB-05] The in-chat Chinese-HQ provider consent banner records consent without stating what is consented to
 
 Severity: P2
 Surface: Mobile
 Area: Chat / Compliance
-Status: UX Gap
-Evidence: `apps/mobile/src/features/chat/components/ProviderConsentBanner.tsx:27` writes `setChineseHqProviderConsent(providerId, true)` on one tap of "Turn on"; the copy from `apps/mobile/src/features/chat/utils/providerConsentRecovery.ts:39` names no jurisdiction; `apps/mobile/services/providerConsent.ts:14` stamps `disclosureVersion: 'unrecorded'` when no disclosure was read. The onboarding and privacy paths are correct.
-Recommended fix: "Turn on" opens the existing disclosure sheet and consent is recorded from its confirm; never stamp `'unrecorded'` on an accepted consent.
+Status: Fixed locally; awaiting release validation
+Evidence: `ProviderConsentBanner.tsx` and `ChineseHqProviderConsentGroup.tsx` now open `NamedProviderConsentModal.tsx` before enabling a China-headquartered provider. The modal names the provider and jurisdiction, describes text, image, and file routing, links the privacy policy, and offers Cancel. `providerConsent.ts` refuses acceptance without an accepted disclosure; `mmkvRoutingConsentLedger` refuses stale or `'unrecorded'` accepted consent while the stored record stays available for data export. Focused tests verify cancellation, confirmation, and the send-time gate.
+Recommended fix: Verify the modal and provider retry on a signed-in iOS device after the Terms status endpoint is deployed.
 Overlaps: `AGI-22` is the missing server-side record; this is the client capture.
 Verification: `recordNamedProviderConsent` is not called before the disclosure is acknowledged.
 
-### [PG-MOB-06] Local runtime failures fall through to raw native error text as the assistant message
+### [PG-MOB-06] Raw inference and router diagnostics reach Mobile chat
 
 Severity: P2
 Surface: Mobile
 Area: Chat / Local models
-Status: UX Gap
-Evidence: `apps/mobile/stores/chat/chatExecutionStore.ts:496` `localSetupMessage` matches five error strings and otherwise returns `raw`; `:2105` writes it into the assistant message body. `:975` shows internal router reason codes verbatim. `audit/baselines/raw-error-to-user.json` has no mobile entries.
-Recommended fix: typed errors from `apps/mobile/src/features/model-picker/localModelRuntime.ts` (as `VoiceCaptureError` already does), map by code, route the CTA to `/(app)/models`.
+Status: Fixed locally; device failure flows unverified
+Evidence: `localSetupMessage` already maps local native errors and its unknown case to actionable copy, so the original local-runtime claim was stale. The remaining Cloud route failure joined internal `reasons` into the composer error. Mobile now maps the routing code to user-facing recovery copy without exposing provider diagnostics. `cloud-dispatch-routing.test.ts` injects a diagnostic reason and verifies it is absent from the message.
+Verification: Exercise unavailable Local and Cloud models on device and confirm the transcript and error banner show only recovery copy.
 
-### [PG-MOB-07] Reduced motion is ignored by every Reanimated component
+### [PG-MOB-07] Verify reduced motion across Mobile animations
 
 Severity: P3
 Surface: Mobile
 Area: Accessibility
-Status: Accessibility
-Evidence: `apps/mobile/src/ui/theme/useReduceMotion.ts` is correct and has two consumers; 51 files import Reanimated and none imports it; 14 run unbounded `withRepeat` loops (voice orb, waveform, skeleton, generation progress, pairing status).
-Recommended fix: adopt the hook in the 14 loops first (RC-10). Name `useReduceMotion` in the colour-and-interaction rule as the mobile counterpart of `Spinner`.
+Status: Needs device validation
+Evidence: The earlier finding inferred behavior from imports of the app's `useReduceMotion` hook. The installed Reanimated 4.5.1 runtime applies the system Reduce Motion setting by default when starting animations, including `withRepeat`; VoiceOrb, VideoGenProgress and RecordingOverlay also read Reanimated's `useReducedMotion`. A static import count does not establish that those loops ignore the setting.
+Verification: Enable Reduce Motion on iOS and Android, exercise the voice orb, waveform, loading skeleton, generation progress and pairing status, and check animations both on entry and after changing the system setting while the app is open.
 
 ### [PG-MOB-08] Project detail claims "Local project" when a cloud fetch fails, and the fetch is dead under shipped flags
 
 Severity: P2
 Surface: Mobile
 Area: Projects
-Status: Broken / Inconsistent
-Evidence: `apps/mobile/lib/v1FeatureFlags.ts:30` ships `crossDeviceSync: false`; `apps/mobile/app/(app)/projects/[id].tsx:170` renders `LocalOnlyFallback` ("Local project. Details, chats, and sources stay on this device.") for both `local-only` and `fetch-failed`, with no retry. `apps/mobile/src/features/projects/service.ts:5` `fetchProject` is unreachable while the flag is off.
-Recommended fix: split the two states; give `fetch-failed` a retry; gate or delete the unreachable success path (RC-1).
+Status: Fixed locally; signed-in device flow unverified
+Evidence: `apps/mobile/app/(app)/projects/[id].tsx` now displays "Loading Cloud project" for an unsynced Cloud ID, an explicit retry on fetch failure, and "Local project" only for IDs found in the Local store. `apps/mobile/src/features/projects/service.ts` fetches missing Cloud projects with an account-scoped epoch. `apps/mobile/__tests__/project-detail-screen.snapshot.test.tsx` covers the loading, success, failure, and retry paths. The shipped feature flags no longer contain `crossDeviceSync`.
+Verification: Run the project-detail screen test and then open an unsynced Cloud project on a signed-in device after the production Terms route is deployed.
 
-### [PG-MOB-09] Microphone-denied copy tells the user to open Settings but offers no way to
+### [PG-MOB-09] Microphone-denied voice capture lacked a Settings action
 
 Severity: P3
 Surface: Mobile
 Area: Voice / Permissions
-Status: UX Gap
-Evidence: `apps/mobile/src/features/voice/hooks/useVoiceConversation.ts:31` and `apps/mobile/src/features/chat/components/VoiceInputButton.tsx:123` return a plain string; every other denied surface calls `Linking.openSettings()`.
-Recommended fix: an Alert with Open Settings, as `apps/mobile/src/features/reminders/index.tsx:64` does.
+Status: Fixed locally; device permission flow unverified
+Evidence: Chat dictation and the full voice screen now use `apps/mobile/src/features/voice/components/voicePermissionAlert.ts` for microphone-denied errors. Its alert offers "Open Settings" and handles a failed Settings deep link.
+Verification: Run the permission alert test; deny microphone access on a device and verify both entry points open system Settings.
 
-### [PG-MOB-10] iPad multitasking is enabled while the app is locked to portrait
+### [PG-MOB-10] iPad multitasking orientation audit
 
 Severity: P2 (hypothesis)
 Surface: Mobile
 Area: Platform
-Status: Inconsistent
-Evidence: `apps/mobile/app.config.js:60` `orientation: 'portrait'` with `supportsTablet: true` and `requireFullScreen: false`, asserted by `apps/mobile/__tests__/ipad-multitasking-config.test.ts`. Apple requires all four iPad orientations when full screen is not required, and nothing has a wide layout. Not verified with a build.
-Recommended fix: `requireFullScreen: true`, or declare the iPad orientations and give the primary screens a wide layout; change the test to assert the chosen pair.
-Verification: `expo prebuild` then Xcode Validate App.
+Status: Done locally; device resize behavior unverified
+Evidence: The 2026-09-27 Expo config introspection and generated `apps/mobile/ios/AGIWorkforce/Info.plist` both declare all four orientations for iPad, portrait orientations for iPhone, `UIRequiresFullScreen = false`, and `UILaunchStoryboardName = SplashScreen`. The earlier finding inferred native iPad orientations from `orientation: 'portrait'` alone and was incorrect. The app shell uses `useTabletLayout` to derive its drawer and size class from window dimensions; chat rows use a bounded reading column.
+Verification: Rotate and resize the current iPad build in Stage Manager and Split View, then run Xcode Validate App on the signed archive. Static config evidence alone does not prove those interactions.
 
-### [PG-MOB-11] Three modals drift from the house modal pattern
+### [PG-MOB-11] Modal accessibility and Android Back handling
 
 Severity: P3
 Surface: Mobile
 Area: Accessibility
-Status: Accessibility
-Evidence: `apps/mobile/app/(app)/chat/[id].tsx:1467` rename modal lacks `accessibilityViewIsModal` and scrim suppression; `apps/mobile/src/features/chat/components/ModeSwitchModal.tsx:89` buttons have no `accessibilityRole`; `apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx` mounts `<Modal>` with no `onRequestClose`, so Android back is inert (state whether that is intentional).
-Recommended fix: extract the pattern from `apps/mobile/src/features/settings/notifications/index.tsx:163` into a `ModalShell` and migrate the three.
+Status: Fixed locally; screen-reader and Android device behavior unverified
+Evidence: The rename modal already has `accessibilityViewIsModal`, so that part of the earlier finding was stale. The mode-switch actions now declare button roles. The first-run disclosure handles Android Back through the same decline path as its visible decline action.
+Verification: Use a screen reader on the three dialogs and press Android Back on the first-run disclosure. The provider-consent dialog also gained `accessibilityViewIsModal` after the modal semantics guard exposed its omission.
 
 ### [PG-MOB-12] `loadConversations` paginates the entire cloud history before first paint
 
 Severity: P3
 Surface: Mobile
 Area: Chat / Performance
-Status: Performance
-Evidence: `chatMessageStore.ts:187` loops `while (hasMore)` sequentially and writes the store once at the end; the screen shows the empty state for the whole duration (`PG-MOB-03`).
-Recommended fix: write the first page immediately; page the rest behind `onEndReached`.
+Status: Fixed locally; signed-device scrolling unverified
+Evidence: `apps/mobile/src/features/chat/ChatsListScreen.tsx` requests the first Cloud page on focus and loads older pages near the list end, with a visible fallback action. `apps/mobile/stores/chat/chatMessageStore.ts` checks the captured account epoch and request version before every page write. Other callers retain full-history loading. Focused store and list tests cover the first page and demand-driven next page.
+Verification: Scroll a large signed-in Cloud history on device, including an account switch during a pending page request.
 
 ### [PG-MOB-13] A client for three deleted API routes still ships
 
 Severity: P4
 Surface: Mobile
 Area: Dead code
-Status: Unreachable
-Evidence: `apps/mobile/services/autotag.ts` posts to `/api/autotag/*`, which `apps/web/app/api/__tests__/autotag-surface-removed.test.ts` asserts are gone; nothing imports it; `apps/mobile/lib/tagUtils.ts` carries eight hex colours.
-Recommended fix: delete both and extend the web test to assert the mobile client is gone.
+Status: Fixed locally
+Evidence: the unused Mobile auto-tag client and tag utility were removed. `apps/web/app/api/__tests__/autotag-surface-removed.test.ts` now checks that neither Mobile file nor any of the three retired Web routes exists.
 
 ## 8. Chrome extension findings
 
@@ -1523,11 +1506,11 @@ What the existing registers hold, and what to do with them.
 
 **47 Open rows are decisions, not gaps.** Their own titles read "is declined until X exists" (`GAP-023`, `024`, `025`, `027`, `029`, `036`, `040`, `043`, `047`, `049`, `052`, `054`, `055`, `059`, `061`, `062`, `063`, `065`, `066`, `067`, `069`, `070`, `072`, `078`, `079`, `080`, `081`, `082`, `084`, `087`, `089`, `091`, `093`, `094`, `095`, `097`, `098`, `099`, `100`, `102`, `105`, `108`, `113`, `115`, `116`, `128`, `131`, `133`, `134`, `135`, `137`), and `GAP-160` and `GAP-280` are locked product rules. They account for nearly every Open P1. Re-statusing them to Not Planned or Deferred is guard-safe (`check:ui-gaps --monotonic` fails only when the unresolved count rises) and takes the honest Open count from 219 to about 161 with Open P1 near zero. This file excludes all of them.
 
-**`known-flaws.md` rows to delete or repoint**, with the evidence in this file: `DESKTOP-SINGLE-INSTANCE-MISSING-01`, `DESKTOP-SETTINGS-SYNC-GAP-01`, `DESKTOP-SHORTCUTS-DEFAULTS-DUPLICATE-AND-DISCONNECTED-01`, `DESKTOP-MEMORY-DECAY-BRIDGE-HARDCODED-01`, `DESKTOP-NOTIFICATIONS-SETTINGS-IGNORED-AND-CENTER-UNREACHABLE-01` (fixed), `CONNECTOR-PERMISSIONS-CLIENT-ONLY-01` (stale: permissions persist to `connector_tool_permissions` and the tool loop reads them at `apps/web/app/api/llm/v1/chat/completions/route.ts`), `DESKTOP-ICON-BUTTON-ARIA-LABEL-GAP-01` (repoint to `PG-SHARED-09`), `DESKTOP-REGENERATE-NO-COMPLETION-01` (narrow to Local mode), `CONN-ROUTE-ORG-CONNECTOR-POLICY-CHECKED-01` (repoint to `apps/web/app/api/connectors/route.ts`).
+**`known-flaws.md` rows to delete or repoint**, with the evidence in this file: `DESKTOP-SINGLE-INSTANCE-MISSING-01`, `DESKTOP-SETTINGS-SYNC-GAP-01`, `DESKTOP-SHORTCUTS-DEFAULTS-DUPLICATE-AND-DISCONNECTED-01`, `DESKTOP-MEMORY-DECAY-BRIDGE-HARDCODED-01`, `DESKTOP-NOTIFICATIONS-SETTINGS-IGNORED-AND-CENTER-UNREACHABLE-01` (fixed), `CONNECTOR-PERMISSIONS-CLIENT-ONLY-01` (stale: permissions persist to `connector_tool_permissions` and the tool loop reads them at `apps/web/app/api/llm/v1/chat/completions/route.ts`), `DESKTOP-ICON-BUTTON-ARIA-LABEL-GAP-01` (repoint to `PG-SHARED-09`), `DESKTOP-REGENERATE-NO-COMPLETION-01` (narrow to Local mode). The connector-route policy row was removed after its fourth writer was fixed.
 
 **`audit/prior-audits/active-issues-register.md` rows that are user-visible and still open**: `AGI-3`, `AGI-16`, `AGI-17`, `AGI-20`, `AGI-23`, `AGI-29`, `AGI-30`, `AGI-34`; the rest are internal, code-fixed awaiting live validation, or blocked on decisions. Two of its "Needs live validation" notes are user-visible and belong on the launch list: the public pages that claimed things the code does not do, and every published release predating its own signing.
 
-**`audit/baselines/raw-error-to-user.json` is stale in its premise.** It reports zero because the scanner does not see template-literal interpolation; `PG-CHAT-06`, `PG-MOB-06`, `PG-CHROME-06` and `PG-CHROME-09` are raw strings it cannot see. Extend the scanner before trusting the ratchet.
+**`audit/baselines/raw-error-to-user.json` now covers Mobile native alerts, Android toasts, JSX content, and error setters.** The 2026-09-27 scan found two candidate sinks in the Apple Reminders screen, where typed app-owned validation and permission messages are shown. The baseline prevents new sinks after the native purchase, media-generation, account-security, billing, connector, usage, task-start, memory-import, archived-chat, workspace, voice, report, Reflect, Skills, settings, export, Library, account, and error-boundary paths were repaired. Camera and Scan now retain captured content when the message store refuses a send. The scanner still misses some object fields and indirect data flows, and Chrome remains outside its roots; a passing guard is not proof that every surface is safe.
 
 **Documents folded into this file.** `docs/development/ui-truth-map.md` (2026-09-05 route classification) is deleted with this commit; its still-true content is the route inventory in section 0 and `PG-WEB-05`, `PG-WEB-13` to `PG-WEB-16`. Every "fix in flight" deep link it listed now has an e2e spec (`apps/web/e2e/settings-deep-links.spec.ts`). `audit/prior-audits/chat-parity-gap-matrix-2026-09-04.md` stays as dated research because a skill pins it; its two still-open rows are `PG-SHARED-14` and the vendor-branch capability flag (`supportsCodeExecution` has zero matches repo-wide). The 2026-08-30 chat UI parity measurement, superseded by `docs/research/leader-ui-measurements-2026-09-04.md`, was deleted on 2026-09-27 after a code check found all six of its gaps fixed or obsolete; it remains in git history. `audit/prior-audits/release-readiness-2026-08-25.md` is self-licensed for deletion by `docs/work/README.md` once their branch and phase close.
 
@@ -1571,13 +1554,13 @@ verification lines pass, not when its code lands.
 2. `PG-SHARED-05` invert the memory reset guard to fail closed; then the seven `confirm()` sites (RC-9).
 3. `PG-MOB-01` generation failure must not clear the composer (RC-2).
 4. `PG-VSCODE-01` memory scope copy (RC-13). Same pass: `VSCODE-CLOUDONLY-DESC-CONFLICT-01`, `PG-CLI-02`, `PG-WEBSET-07`.
-5. `PG-WEBSET-05` connector policy gate on the fourth writer; repoint the known-flaws row.
+5. `PG-WEBSET-05` is fixed in source; verify its deployment with a governed account.
 
 **Phase 1, broken core workflows.** 6. RC-3 the web shell: `PG-WEB-06` first, which retires `PG-WEB-01` and `PG-WEB-09`; then `PG-WEB-05` and `PG-WEB-16`. 7. RC-4 ⌘K ownership: `PG-WEB-02`, `PG-WEB-04`, `PG-WEB-11`. 8. `PG-WEBSET-01` project by id. `PG-WEBSET-02` full name in the flush. 9. RC-5 attachments: `PG-CHAT-01`, `PG-CHAT-03`, `PG-CHAT-02`. 10. `PG-DESK-13`, `PG-DESK-03` (RC-11), `PG-DESK-04`, `PG-DESK-01`. 11. `PG-CHROME-01`, `PG-CHROME-03`, `PG-CHROME-04`. `PG-VSCODE-02`. 12. `PG-CLI-03`, `PG-CLI-04`, `PG-CLI-05`.
 
 **Phase 2, misleading, failure and recovery states.** 13. RC-1 and RC-2 as one sweep: `PG-WEB-07`, `PG-WEBSET-03`, `PG-WEBSET-11`, `PG-MOB-02`, `PG-MOB-03`, `PG-MOB-08`, `PG-CHROME-05`, `PG-CHROME-06`, `PG-VSCODE-03`, `PG-DESK-07`. 14. `PG-WEBSET-04` Reconnect and `PG-CHAT-07` Continue. 15. Raw strings: `PG-CHAT-06`, `PG-MOB-06`, `PG-CHROME-09`; extend the raw-error scanner to template literals. 16. `PG-WEBSET-06` deleted chats, `PG-WEBSET-12` consequence copy, `PG-MOB-05` consent capture.
 
-**Phase 3, cross-app inconsistencies.** 18. RC-8 `SonnerToaster` defaults (`PG-SHARED-06`); RC-9 one confirm primitive. 19. `PG-SHARED-08` copy primitive, unified-chat first. `PG-SHARED-11` dates, then `PG-WEBSET-09`. `PG-WEBSET-08` placeholder constant. 20. `CUSTOM-CONNECTORS-DESKTOP-MOBILE-GAP-01`, `PG-WEBSET-14`, `PG-WEBSET-15`, `PG-WEBSET-16`.
+**Phase 3, cross-app inconsistencies.** 18. RC-8 `SonnerToaster` defaults (`PG-SHARED-06`); RC-9 one confirm primitive. 19. `PG-SHARED-08` copy primitive, unified-chat first. `PG-SHARED-11` dates, then `PG-WEBSET-09`. `PG-WEBSET-08` placeholder constant. 20. Desktop custom-connector support (`CUSTOM-CONNECTORS-DESKTOP-MOBILE-GAP-01`), `PG-WEBSET-14`, `PG-WEBSET-15`, `PG-WEBSET-16`.
 
 **Phase 4, loading, empty, offline and system states.** 21. RC-12 `PG-DESK-05`, `PG-DESK-06`. `PG-DESK-09`, `PG-DESK-02`, `PG-DESK-11`. 22. `PG-MOB-04`, `PG-MOB-12`. `PG-CLI-07`, `PG-CLI-10`, `PG-CLI-06`, `PG-CLI-09`, `PG-CLI-11`, `PG-CLI-12`. 23. `PG-WEB-14`, `PG-WEB-15`, `PG-CHROME-08`, `PG-VSCODE-04`, `PG-VSCODE-05`.
 

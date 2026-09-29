@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, elevation } from '@/src/ui/theme';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import type { ChineseHqProviderId, DisclosureCopy } from '@agiworkforce/compliance';
 
@@ -54,6 +54,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
       animationType="slide"
       statusBarTranslucent
       accessibilityViewIsModal
+      onRequestClose={onDecline}
     >
       <View style={[styles.scrim, { backgroundColor: colors.scrim }]}>
         <View
@@ -61,11 +62,8 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
             styles.sheet,
             {
               backgroundColor: colors.surfaceBase,
-              shadowColor: colors.black,
-              shadowOffset: { width: 0, height: -8 },
-              shadowOpacity: 0.18,
-              shadowRadius: 24,
-              elevation: 24,
+              ...elevation.e4,
+              shadowOffset: { width: 0, height: -elevation.e4.shadowOffset.height },
             },
           ]}
         >

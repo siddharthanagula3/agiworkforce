@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import {
   diffSkipRatchet,
+  gitFiles,
   scanSkipSites,
   summarizeSkipCensus,
   unjustifiedByPath,
@@ -15,6 +18,30 @@ const RATCHET_PATH = path.join(process.cwd(), 'scripts/config/skipped-test-ratch
 
 const skipCall = ['it', '.skip'].join('');
 const ignoreAttr = ['#[', 'ignore', ']'].join('');
+
+test('whole-tree discovery includes new source and excludes ignored worktrees', () => {
+  const repository = mkdtempSync(path.join(os.tmpdir(), 'agi-llm-failure-files-'));
+  try {
+    execFileSync('git', ['init', '-q'], { cwd: repository });
+    writeFileSync(path.join(repository, '.gitignore'), '.worktrees/\n');
+    writeFileSync(path.join(repository, 'tracked.ts'), 'export const tracked = true;\n');
+    execFileSync('git', ['add', '.gitignore', 'tracked.ts'], { cwd: repository });
+    writeFileSync(path.join(repository, 'new.ts'), 'export const fresh = true;\n');
+    mkdirSync(path.join(repository, '.worktrees'));
+    writeFileSync(
+      path.join(repository, '.worktrees', 'other.test.ts'),
+      'export const other = true;\n',
+    );
+
+    const files = gitFiles('ls-files -c -o --exclude-standard', repository).map((file) =>
+      path.relative(repository, file),
+    );
+
+    assert.deepEqual(files.sort(), ['.gitignore', 'new.ts', 'tracked.ts']);
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+});
 
 test('counts a rust ignore that carries an inline reason as justified', () => {
   const sites = scanSkipSites(

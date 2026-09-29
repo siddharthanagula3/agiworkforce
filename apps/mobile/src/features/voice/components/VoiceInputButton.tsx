@@ -15,6 +15,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import { VoiceCaptureError } from '@/src/features/voice/services/voiceInput';
+import { VoiceOnboardingSheet } from './VoiceOnboardingSheet';
 
 /**
  * Unified mic button for the chat input bar.
@@ -34,8 +35,10 @@ interface VoiceInputButtonProps {
   onRecordingStop?: () => void;
   onMetering?: (event: VoiceMeteringEvent) => void;
   onLongPress?: () => void;
-  onError?: (error: string) => void;
+  onError?: (error: string, permissionDenied?: boolean) => void;
+  onFailure?: () => void;
   resetSignal?: number;
+  startSignal?: number;
   disabled?: boolean;
 }
 
@@ -53,13 +56,17 @@ export function VoiceInputButton({
   onMetering,
   onLongPress,
   onError,
+  onFailure,
   resetSignal = 0,
+  startSignal = 0,
   disabled = false,
 }: VoiceInputButtonProps) {
   const colors = useThemeColors();
   const [state, setState] = useState<VoiceState>('idle');
+  const [introVisible, setIntroVisible] = useState(false);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const voiceInputEnabled = useSettingsStore((s) => s.voiceEnabled);
+  const dictationOnboardingSeen = useSettingsStore((s) => s.dictationOnboardingSeen);
 
   const ringScale = useSharedValue(1);
   const ringOpacity = useSharedValue(0);
@@ -124,13 +131,19 @@ export function VoiceInputButton({
   const reportError = useCallback(
     (err: unknown) => {
       if (err instanceof VoiceCaptureError && err.code === 'mic-permission-denied') {
-        onError?.('Voice input needs microphone and speech access. You can keep typing instead.');
+        onError?.(
+          'Voice input needs microphone and speech access. You can keep typing instead.',
+          true,
+        );
         return;
       }
-      const message = err instanceof Error ? err.message : 'Voice capture failed';
-      onError?.(message);
+      if (err instanceof VoiceCaptureError && err.code === 'on-device-recognition-unavailable') {
+        onError?.(err.message);
+        return;
+      }
+      onFailure?.();
     },
-    [onError],
+    [onError, onFailure],
   );
 
   const startTapRecording = useCallback(async () => {
@@ -160,12 +173,17 @@ export function VoiceInputButton({
       const result = await VoiceService.transcribe('');
 
       setState('idle');
-      if (result.text.trim()) onTranscription(result.text.trim());
+      const transcript = result.text.trim();
+      if (transcript) {
+        onTranscription(transcript);
+      } else {
+        onFailure?.();
+      }
     } catch (err) {
       setState('idle');
       reportError(err);
     }
-  }, [hapticsEnabled, onRecordingStop, onTranscription, reportError]);
+  }, [hapticsEnabled, onFailure, onRecordingStop, onTranscription, reportError]);
 
   const stopPTTRecording = useCallback(async () => {
     isPTTRef.current = false;
@@ -178,12 +196,17 @@ export function VoiceInputButton({
       const result = await VoiceService.transcribe('');
 
       setState('idle');
-      if (result.text.trim()) onTranscription(result.text.trim());
+      const transcript = result.text.trim();
+      if (transcript) {
+        onTranscription(transcript);
+      } else {
+        onFailure?.();
+      }
     } catch (err) {
       setState('idle');
       reportError(err);
     }
-  }, [hapticsEnabled, onRecordingStop, onTranscription, reportError]);
+  }, [hapticsEnabled, onFailure, onRecordingStop, onTranscription, reportError]);
 
   const startPTTRecording = useCallback(async () => {
     try {
@@ -238,6 +261,7 @@ export function VoiceInputButton({
     pressStartRef.current = Date.now();
     isLongPressRef.current = false;
     isPTTRef.current = false;
+    if (!dictationOnboardingSeen) return;
 
     pttTimerRef.current = setTimeout(() => {
       pttTimerRef.current = null;
@@ -245,7 +269,7 @@ export function VoiceInputButton({
         startPTTRecording();
       }
     }, PTT_THRESHOLD_MS);
-  }, [clearPTTTimer, disabled, state, startPTTRecording]);
+  }, [clearPTTTimer, dictationOnboardingSeen, disabled, state, startPTTRecording]);
 
   const handlePressOut = useCallback(() => {
     clearPTTTimer();
@@ -271,12 +295,24 @@ export function VoiceInputButton({
       return;
     }
 
+    if (state === 'idle' && !dictationOnboardingSeen) {
+      setIntroVisible(true);
+      return;
+    }
+
     if (holdMs < PTT_THRESHOLD_MS) {
       if (state === 'idle') {
         startTapRecording();
       }
     }
-  }, [clearPTTTimer, state, stopPTTRecording, startTapRecording, stopTapRecording]);
+  }, [
+    clearPTTTimer,
+    dictationOnboardingSeen,
+    state,
+    stopPTTRecording,
+    startTapRecording,
+    stopTapRecording,
+  ]);
 
   const cancelActiveRecording = useCallback(() => {
     if (state === 'starting') {
@@ -302,13 +338,30 @@ export function VoiceInputButton({
     };
   }, []);
 
+  const handledStartSignalRef = useRef(startSignal);
+  useEffect(() => {
+    if (startSignal === handledStartSignalRef.current) return;
+    handledStartSignalRef.current = startSignal;
+    startTapRecording();
+  }, [startSignal, startTapRecording]);
+
   const handleLongPress = useCallback(() => {
+    if (!onLongPress) return;
     isLongPressRef.current = true;
     pressStartRef.current = 0;
     cancelActiveRecording();
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    onLongPress?.();
+    onLongPress();
   }, [hapticsEnabled, onLongPress, cancelActiveRecording]);
+
+  const handleIntroContinue = useCallback(() => {
+    setIntroVisible(false);
+    startTapRecording();
+  }, [startTapRecording]);
+
+  const handleIntroDismiss = useCallback(() => {
+    setIntroVisible(false);
+  }, []);
 
   const isActive = state === 'recording' || state === 'ptt';
   const isProcessing = state === 'processing' || state === 'starting';
@@ -356,7 +409,7 @@ export function VoiceInputButton({
         testID="voice-input-button"
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        onLongPress={handleLongPress}
+        onLongPress={onLongPress ? handleLongPress : undefined}
         delayLongPress={LONG_PRESS_DELAY_MS}
         disabled={isDisabled}
         hitSlop={8}
@@ -381,6 +434,16 @@ export function VoiceInputButton({
           <Mic size={20} color={iconColor} />
         )}
       </AnimatedPressable>
+
+      {introVisible ? (
+        <VoiceOnboardingSheet
+          visible
+          mode="on-device"
+          purpose="dictation"
+          onContinue={handleIntroContinue}
+          onDismiss={handleIntroDismiss}
+        />
+      ) : null}
     </View>
   );
 }

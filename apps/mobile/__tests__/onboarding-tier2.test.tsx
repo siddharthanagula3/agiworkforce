@@ -313,7 +313,10 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
     });
     await waitFor(() => {
       const errEl = getByTestId('download-error');
-      expect(errEl.props.children).toContain('Network error downloading model shard');
+      expect(errEl.props.children).toContain(
+        'Download failed. You can try again or continue without the model.',
+      );
+      expect(errEl.props.children).not.toContain('model shard');
     });
   });
 

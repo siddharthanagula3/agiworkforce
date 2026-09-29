@@ -748,7 +748,7 @@ pub fn print_divider() {
 
 /// Print a one-line compact header shown on every interactive launch.
 ///
-/// Format: `agiworkforce 0.1.0 · provider: anthropic · credentials: OS keyring`
+/// Format: `agiworkforce 0.0.1 · provider: anthropic · credentials: OS keyring`
 pub fn print_compact_header(provider: &str) {
     let version = env!("CARGO_PKG_VERSION");
 

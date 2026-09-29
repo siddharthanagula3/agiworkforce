@@ -69,6 +69,7 @@ jest.mock('@/src/features/settings/StorageScopeNotice', () => ({
 }));
 
 import { listInstalledModels } from '@/storage/installedModels';
+import { wipeAllLocalData } from '@/services/dsarExport';
 import StorageManagerScreen from '@/app/(app)/settings/storage';
 
 function pressDestructiveAlertButton() {
@@ -138,4 +139,32 @@ describe('the download policy is visible and editable in Storage', () => {
     const { getByTestId } = render(<StorageManagerScreen />);
     await waitFor(() => expect(getByTestId('storage-free-space')).toBeTruthy());
   });
+});
+
+it('hides internal diagnostics when the local wipe fails', async () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  (listInstalledModels as jest.Mock).mockResolvedValue([]);
+  (wipeAllLocalData as jest.Mock).mockRejectedValueOnce(new Error('private storage key'));
+
+  const { getByLabelText } = render(<StorageManagerScreen />);
+  await waitFor(() => getByLabelText('Delete all local data'));
+  fireEvent.press(getByLabelText('Delete all local data'));
+  await act(async () => {
+    const firstButtons = alertSpy.mock.calls.at(-1)?.[2] as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
+    firstButtons.find((button) => button.text === 'Delete Everything')?.onPress?.();
+    const secondButtons = alertSpy.mock.calls.at(-1)?.[2] as Array<{
+      text: string;
+      onPress?: () => Promise<void>;
+    }>;
+    await secondButtons.find((button) => button.text === 'Yes, delete everything')?.onPress?.();
+  });
+
+  expect(alertSpy).toHaveBeenCalledWith(
+    'Wipe failed',
+    'Could not delete all local data. Try again.',
+  );
+  alertSpy.mockRestore();
 });
