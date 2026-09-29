@@ -15,6 +15,7 @@ import {
   MODEL_CONTEXT_LIMITS,
   providerDisplayLabel,
   routingProfileForModel,
+  isAutoPickerModelId,
   UNKNOWN_PROVIDER_BRAND_COLOR,
   type ModelRoute,
 } from '../model-picker/modelConstants';
@@ -27,7 +28,6 @@ import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   canAccessManualModelSelection,
   getBillingPlanPricing,
-  isAutoModeModelId,
   managedUsageBucketLabel,
   modelDisplayNameById,
   type AgentEventApprovalRiskLevel,
@@ -1480,7 +1480,7 @@ export class ChatStateManager {
             models: allItems
               .filter(
                 (item): item is typeof item & { modelId: string } =>
-                  item.modelId !== undefined && isAutoModeModelId(item.modelId),
+                  item.modelId !== undefined && isAutoPickerModelId(item.modelId),
               )
               .map((item) => ({
                 id: item.modelId,
@@ -1532,7 +1532,7 @@ export class ChatStateManager {
           | undefined;
 
         for (const item of allItems) {
-          if (item.modelId !== undefined && isAutoModeModelId(item.modelId)) continue;
+          if (item.modelId !== undefined && isAutoPickerModelId(item.modelId)) continue;
           if (item.kind === vscode.QuickPickItemKind.Separator) {
             if (item.label !== '') {
               const reachableOnBoundary =
@@ -3540,12 +3540,14 @@ export class ChatStateManager {
           ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),
           ...(isAutoRoutingModel(requestedModel)
             ? {
-                model: requestedModel,
+                model: routingProfile === undefined ? requestedModel : 'auto',
                 routingTaskType: classifyDeveloperTurn(routingText, [
                   ...mentionInputs,
                   ...attachmentInputs,
                 ]),
-                ...(routingProfile === undefined ? {} : { routingProfile }),
+                ...(routingProfile === undefined || routingProfile === 'auto'
+                  ? {}
+                  : { routingProfile }),
               }
             : { model: requestedModel }),
         });

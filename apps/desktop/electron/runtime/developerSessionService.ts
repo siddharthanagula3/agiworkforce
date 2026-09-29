@@ -2,6 +2,7 @@ import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:ch
 import { accessSync, constants as fsConstants, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { messageKindForAgentEvent } from '@agiworkforce/types';
 import type {
   DeveloperApprovalAnswer,
   DeveloperFileChange,
@@ -349,6 +350,8 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
   const turnId = readString(params, 'turnId');
   const event = params['event'];
   if (!threadId || !turnId || !isRecord(event)) return;
+  const kind = messageKindForAgentEvent(readString(event, 'type') ?? '');
+  if (kind !== 'tool_call' && kind !== 'tool_result') return;
 
   if (event['type'] === 'turn-diff') {
     emit(server.root.id, {
