@@ -1,13 +1,23 @@
 import {
-  MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
+  CHAT_SYNC_CONVERSATIONS_SCOPE,
+  ChatSyncPullResponseSchema,
   ManagedCloudChatHttpError,
+  chatSyncPullPath,
+  type ChatSyncPullResponse,
 } from '@agiworkforce/cloud-contracts';
+import {
+  applyConversationDeltas,
+  selectNextCursor,
+  type ConversationStorePort,
+  type SyncConversationRecord,
+} from '@agiworkforce/sync';
 import {
   blockCloudPersistence,
   claimCloudConversationBinding,
   cloudMessageSyncFingerprint,
   conversationFlagsNeedSync,
   conversationProjectNeedsSync,
+  deleteConversation,
   getConversation,
   isCloudPersistenceEligible,
   listConversations,
@@ -21,7 +31,8 @@ import {
 } from '../background/conversation-history';
 import { logger } from '../../utils';
 import { readCloudMirroringEnabled } from '../privacy/cloudMirroring';
-import { getManagedCloudAuthContext } from './freeTrialClient';
+import { FREE_TRIAL_GATEWAY, getManagedCloudAuthContext } from './freeTrialClient';
+import { platformRequestHeaders } from '../../platformHeaders';
 import {
   buildExtensionCloudMessageMetadata,
   createExtensionCloudChatClient,
@@ -36,6 +47,9 @@ import {
 
 export const CLOUD_SYNC_TOMBSTONE_KEY = 'agi_cloud_sync_tombstones_v1';
 export const SYNC_SWEEP_ALARM = 'agi-conversation-sync-sweep';
+export const CONVERSATION_SYNC_CURSOR_KEY = 'agi_cloud_conversation_cursor_v1';
+
+const INITIAL_SYNC_CURSOR = '0';
 
 const SYNC_DEBOUNCE_MS = 2_500;
 const MAX_MESSAGES_PER_FLUSH = 25;
@@ -548,56 +562,123 @@ async function readTombstones(): Promise<CloudSyncTombstone[]> {
   }
 }
 
+async function readConversationCursor(owner: ManagedCloudOwner): Promise<string> {
+  const stored = await chrome.storage.local.get([CONVERSATION_SYNC_CURSOR_KEY]);
+  const cursors = stored[CONVERSATION_SYNC_CURSOR_KEY] as Record<string, unknown> | undefined;
+  const value = cursors?.[owner.accountId];
+  return typeof value === 'string' && /^\d+$/.test(value) ? value : INITIAL_SYNC_CURSOR;
+}
+
+async function writeConversationCursor(owner: ManagedCloudOwner, cursor: string): Promise<void> {
+  const stored = await chrome.storage.local.get([CONVERSATION_SYNC_CURSOR_KEY]);
+  const cursors =
+    (stored[CONVERSATION_SYNC_CURSOR_KEY] as Record<string, unknown> | undefined) ?? {};
+  await chrome.storage.local.set({
+    [CONVERSATION_SYNC_CURSOR_KEY]: { ...cursors, [owner.accountId]: cursor },
+  });
+}
+
+async function pullConversationDeltas(
+  owner: ManagedCloudOwner,
+  since: string,
+): Promise<ChatSyncPullResponse> {
+  const context = await getManagedCloudAuthContext();
+  if (!context) throw new ManagedCloudSignedOutError();
+  if (!sameManagedCloudOwner(context.owner, owner)) throw new ManagedCloudOwnerChangedError();
+  const response = await fetch(
+    `${FREE_TRIAL_GATEWAY}${chatSyncPullPath(since, CHAT_SYNC_CONVERSATIONS_SCOPE)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${context.token}`,
+        'X-Requested-With': 'XMLHttpRequest',
+        ...platformRequestHeaders(),
+      },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    },
+  );
+  if (!response.ok)
+    throw new Error(`Reading account chat changes failed (HTTP ${response.status}).`);
+  return ChatSyncPullResponseSchema.parse(await response.json());
+}
+
+function toSyncRecord(cloudId: string, entry: ConversationEntry): SyncConversationRecord {
+  const savedAt = new Date(entry.savedAt).toISOString();
+  return {
+    id: cloudId,
+    title: entry.customTitle ?? entry.title,
+    createdAt: savedAt,
+    updatedAt: savedAt,
+    messageCount: entry.messages.length,
+    pinned: entry.pinned === true,
+    archived: entry.archived === true,
+  };
+}
+
 export async function pullCloudConversationFlags(owner: ManagedCloudOwner): Promise<boolean> {
-  const byOrganization = new Map<string | null, Map<string, ConversationEntry>>();
+  const bound = new Map<string, ConversationEntry>();
   for (const entry of await listConversations(owner)) {
     const cloudId = entry.cloudSync?.conversationId;
-    const organizationId = entry.cloudSync?.organizationId;
-    if (!cloudId || organizationId === undefined || entry.cloudSync?.createAcknowledged !== true) {
-      continue;
-    }
-    const bound = byOrganization.get(organizationId) ?? new Map<string, ConversationEntry>();
-    bound.set(cloudId, entry);
-    byOrganization.set(organizationId, bound);
+    if (cloudId && entry.cloudSync?.createAcknowledged === true) bound.set(cloudId, entry);
   }
-  const client = createExtensionCloudChatClient(owner);
+  const dirty = [...bound]
+    .filter(([, entry]) => conversationFlagsNeedSync(entry))
+    .map(([cloudId]) => cloudId);
+  const flags = new Map<string, { pinned: boolean; archived: boolean }>();
+  const deleted = new Set<string>();
+  const port: ConversationStorePort = {
+    get: (cloudId) => {
+      const entry = bound.get(cloudId);
+      return entry ? toSyncRecord(cloudId, entry) : undefined;
+    },
+    insert: () => {},
+    patch: (cloudId, record) => {
+      if (dirty.includes(cloudId)) return;
+      flags.set(cloudId, { pinned: record.pinned === true, archived: record.archived === true });
+    },
+    remove: (cloudId) => {
+      if (bound.has(cloudId)) deleted.add(cloudId);
+    },
+  };
+
+  let cursor = await readConversationCursor(owner);
+  for (let page = 0; page < FLAG_PULL_MAX_PAGES; page += 1) {
+    const result = await pullConversationDeltas(owner, cursor);
+    applyConversationDeltas(port, result.conversations, dirty);
+    const next = selectNextCursor(cursor, result.cursor);
+    const advanced = next !== cursor;
+    cursor = next;
+    if (!result.hasMore || !advanced) break;
+  }
+
   let changed = false;
-  for (const [organizationId, bound] of byOrganization) {
-    let offset = 0;
-    for (let page = 0; page < FLAG_PULL_MAX_PAGES && bound.size > 0; page += 1) {
-      const result = await client.listConversations(
-        { archived: 'include', limit: MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE, offset },
-        { organizationId },
-      );
-      for (const conversation of result.conversations) {
-        const entry = bound.get(conversation.id);
-        if (!entry) continue;
-        bound.delete(conversation.id);
-        if (conversationFlagsNeedSync(entry)) continue;
-        if (
-          (entry.pinned === true) !== conversation.pinned ||
-          (entry.archived === true) !== conversation.archived
-        ) {
-          await updateConversationEntry(owner, entry.id, {
-            pinned: conversation.pinned,
-            archived: conversation.archived,
-          });
-          changed = true;
-        }
-        if (
-          entry.cloudSync?.syncedPinned !== conversation.pinned ||
-          entry.cloudSync?.syncedArchived !== conversation.archived
-        ) {
-          await recordCloudSyncState(owner, entry.id, {
-            syncedPinned: conversation.pinned,
-            syncedArchived: conversation.archived,
-          });
-        }
-      }
-      if (!result.hasMore) break;
-      offset = result.nextOffset;
+  for (const cloudId of deleted) {
+    const entry = bound.get(cloudId);
+    if (!entry) continue;
+    await deleteConversation(owner, entry.id);
+    flags.delete(cloudId);
+    changed = true;
+  }
+  for (const [cloudId, conversation] of flags) {
+    const entry = bound.get(cloudId);
+    if (!entry) continue;
+    if (
+      (entry.pinned === true) !== conversation.pinned ||
+      (entry.archived === true) !== conversation.archived
+    ) {
+      await updateConversationEntry(owner, entry.id, conversation);
+      changed = true;
+    }
+    if (
+      entry.cloudSync?.syncedPinned !== conversation.pinned ||
+      entry.cloudSync?.syncedArchived !== conversation.archived
+    ) {
+      await recordCloudSyncState(owner, entry.id, {
+        syncedPinned: conversation.pinned,
+        syncedArchived: conversation.archived,
+      });
     }
   }
+  await writeConversationCursor(owner, cursor);
   return changed;
 }
 
