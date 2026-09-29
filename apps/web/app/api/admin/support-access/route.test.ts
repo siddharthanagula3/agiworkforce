@@ -65,6 +65,7 @@ const grant = {
   revokedByUserId: null,
   reason: REASON,
   ticketRef: 'SUP-1',
+  purpose: 'support',
   scopes: ['conversations'],
   status: 'pending',
   requestedAt: '2026-09-17T09:00:00.000Z',
@@ -111,6 +112,7 @@ describe('the break-glass control plane is operator-only', () => {
         organizationId: ORG,
         reason: REASON,
         ticketRef: 'SUP-1',
+        purpose: 'support',
         scopes: ['conversations'],
       }),
     );
@@ -126,6 +128,7 @@ describe('requesting', () => {
         organizationId: ORG,
         reason: REASON,
         ticketRef: 'SUP-1',
+        purpose: 'support',
         scopes: ['conversations'],
       }),
     );
@@ -146,6 +149,7 @@ describe('requesting', () => {
         organizationId: ORG,
         reason: 'debug',
         ticketRef: 'SUP-1',
+        purpose: 'support',
         scopes: ['conversations'],
       }),
     );
@@ -160,10 +164,65 @@ describe('requesting', () => {
         organizationId: ORG,
         reason: REASON,
         ticketRef: 'SUP-1',
+        purpose: 'support',
         scopes: ['everything'],
       }),
     );
     expect(response.status).toBe(400);
+  });
+});
+
+describe('the purpose of a request', () => {
+  it('refuses a request that names no purpose', async () => {
+    const response = await POST(
+      post({
+        action: 'request',
+        organizationId: ORG,
+        reason: REASON,
+        ticketRef: 'SUP-1',
+        scopes: ['conversations'],
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.requestSupportAccess).not.toHaveBeenCalled();
+  });
+
+  it('refuses a purpose this build does not define', async () => {
+    const response = await POST(
+      post({
+        action: 'request',
+        organizationId: ORG,
+        reason: REASON,
+        ticketRef: 'SUP-1',
+        purpose: 'curiosity',
+        scopes: ['conversations'],
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.requestSupportAccess).not.toHaveBeenCalled();
+  });
+
+  it('passes the purpose to the grant and records it in the audit detail', async () => {
+    mocks.requestSupportAccess.mockResolvedValue({ ...grant, purpose: 'security' });
+    const response = await POST(
+      post({
+        action: 'request',
+        organizationId: ORG,
+        reason: REASON,
+        ticketRef: 'SUP-1',
+        purpose: 'security',
+        scopes: ['conversations'],
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.requestSupportAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: 'security' }),
+    );
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: expect.objectContaining({ purpose: 'security' }) }),
+    );
+    await expect(response.json()).resolves.toMatchObject({ grant: { purpose: 'security' } });
   });
 });
 

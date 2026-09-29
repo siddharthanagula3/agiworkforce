@@ -438,6 +438,18 @@ export async function completeJob(
 
 export type JobFailureOutcome = 'retry' | 'dead' | 'stale';
 
+const DEAD_REASON_MESSAGE_SEPARATOR = ': ';
+
+/**
+ * A dead reason is a platform headline followed by the failure message, and the
+ * message can quote the tenant's content. This is the headline alone.
+ */
+export function deadReasonHeadline(deadReason: string | null): string | null {
+  if (deadReason === null) return null;
+  const cut = deadReason.indexOf(DEAD_REASON_MESSAGE_SEPARATOR);
+  return cut < 0 ? deadReason : deadReason.slice(0, cut);
+}
+
 export async function failJob(
   db: DatabaseAdapter,
   job: SettlingJob<'id' | 'queue' | 'attempts' | 'maxAttempts'>,
@@ -452,8 +464,8 @@ export async function failJob(
 
   if (permanent || exhausted) {
     const reason = permanent
-      ? `Permanent failure: ${message}`
-      : `Gave up after ${job.attempts} attempts: ${message}`;
+      ? `Permanent failure${DEAD_REASON_MESSAGE_SEPARATOR}${message}`
+      : `Gave up after ${job.attempts} attempts${DEAD_REASON_MESSAGE_SEPARATOR}${message}`;
     const affected = await db.execute(
       `update public.background_jobs
           set status = 'dead', last_error = $2, retry_reason = $5, dead_reason = $3,

@@ -5,6 +5,7 @@ vi.mock('server-only', () => ({}));
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import {
+  GOOGLE_USER_DATA_WITHHELD,
   MAX_SUPPORT_ACCESS_TTL_MS,
   SupportAccessDeniedError,
   SupportAccessRequestError,
@@ -19,6 +20,7 @@ import {
   revokeSupportAccess,
   verifySupportAccessTrail,
   withSupportAccess,
+  type SupportAccessPurpose,
   type SupportAccessScope,
   type SupportAccessStatus,
 } from './support-access-service';
@@ -37,6 +39,7 @@ interface GrantRecord {
   revoked_by_user_id: string | null;
   reason: string;
   ticket_ref: string;
+  purpose: string;
   scopes: string[];
   status: SupportAccessStatus;
   requested_at: string;
@@ -63,8 +66,14 @@ interface EventRecord {
 // The fake enforces the two properties 0229 enforces with check constraints, a
 // second approver and an eight-hour ceiling, so a pass here is not a pass
 // bought by a fake more permissive than the database.
+const CONSENT_TICKET = '33333333-3333-4333-8333-333333333333';
+const CONSENTING_MEMBER = 'user_member_1';
+
 function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
   const grants: GrantRecord[] = [];
+  const consentTickets = new Map<string, { userId: string; organizationId: string }>([
+    [CONSENT_TICKET, { userId: CONSENTING_MEMBER, organizationId: ORG }],
+  ]);
   const events: EventRecord[] = [];
   let clock = startedAt;
   let nextGrant = 0;
@@ -82,6 +91,7 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
       reason: params[2] as string,
       ticket_ref: params[3] as string,
       scopes: params[4] as string[],
+      purpose: params[5] as string,
       status: 'pending',
       requested_at: now(),
       decided_at: null,
@@ -109,6 +119,12 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
   }
 
   const query = vi.fn(async (sql: string, params: unknown[] = []) => {
+    if (sql.includes('from public.support_tickets as ticket')) {
+      const ticket = consentTickets.get(params[0] as string);
+      return (
+        ticket && ticket.organizationId === params[1] ? [{ user_id: ticket.userId }] : []
+      ) as never[];
+    }
     if (sql.includes('insert into public.support_access_grants')) {
       return [insertGrant(params)] as never[];
     }
@@ -221,13 +237,15 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
 async function approvedGrant(
   h: ReturnType<typeof harness>,
   scopes: SupportAccessScope[] = ['conversations'],
+  purpose: SupportAccessPurpose = 'support',
 ) {
   const requested = await requestSupportAccess({
     db: h.db,
     organizationId: ORG,
     requestedByUserId: REQUESTER,
     reason: REASON,
-    ticketRef: TICKET,
+    ticketRef: purpose === 'customer_consent' ? CONSENT_TICKET : TICKET,
+    purpose,
     scopes,
   });
   return approveSupportAccess({ db: h.db, grantId: requested.id, actorUserId: APPROVER });
@@ -246,6 +264,7 @@ describe('requesting a grant', () => {
       requestedByUserId: REQUESTER,
       reason: REASON,
       ticketRef: TICKET,
+      purpose: 'support',
       scopes: ['conversations'],
     });
 
@@ -264,6 +283,7 @@ describe('requesting a grant', () => {
         requestedByUserId: REQUESTER,
         reason: 'debugging',
         ticketRef: TICKET,
+        purpose: 'support',
         scopes: ['conversations'],
       }),
     ).rejects.toBeInstanceOf(SupportAccessRequestError);
@@ -279,6 +299,7 @@ describe('requesting a grant', () => {
         requestedByUserId: REQUESTER,
         reason: REASON,
         ticketRef: TICKET,
+        purpose: 'support',
         scopes: [],
       }),
     ).rejects.toThrow(/at least one scope/i);
@@ -294,6 +315,7 @@ describe('approval needs a second operator', () => {
       requestedByUserId: REQUESTER,
       reason: REASON,
       ticketRef: TICKET,
+      purpose: 'support',
       scopes: ['conversations'],
     });
 
@@ -321,6 +343,7 @@ describe('approval needs a second operator', () => {
       requestedByUserId: REQUESTER,
       reason: REASON,
       ticketRef: TICKET,
+      purpose: 'support',
       scopes: ['conversations'],
     });
     await expect(
@@ -621,4 +644,177 @@ describe('an operator listing that spans workspaces', () => {
 
     expect([...grants.keys()]).toEqual([ORG]);
   });
+});
+
+describe('every grant names its purpose', () => {
+  it('refuses a request that names no purpose', async () => {
+    const h = harness();
+    await expect(
+      requestSupportAccess({
+        db: h.db,
+        organizationId: ORG,
+        requestedByUserId: REQUESTER,
+        reason: REASON,
+        ticketRef: TICKET,
+        purpose: undefined as unknown as SupportAccessPurpose,
+        scopes: ['conversations'],
+      }),
+    ).rejects.toThrow(/purpose/i);
+    expect(h.grants).toHaveLength(0);
+    expect(h.events).toHaveLength(0);
+  });
+
+  it('refuses a purpose this build does not define', async () => {
+    const h = harness();
+    await expect(
+      requestSupportAccess({
+        db: h.db,
+        organizationId: ORG,
+        requestedByUserId: REQUESTER,
+        reason: REASON,
+        ticketRef: TICKET,
+        purpose: 'curiosity' as SupportAccessPurpose,
+        scopes: ['conversations'],
+      }),
+    ).rejects.toBeInstanceOf(SupportAccessRequestError);
+  });
+
+  it('records the purpose on the grant and in the requested and approved trail entries', async () => {
+    const h = harness();
+    const grant = await approvedGrant(h, ['background_jobs'], 'security');
+
+    expect(grant.purpose).toBe('security');
+    expect(h.grants[0]?.purpose).toBe('security');
+    expect(h.events[0]).toMatchObject({
+      event: 'requested',
+      detail: expect.objectContaining({ purpose: 'security', ticketRef: TICKET }),
+    });
+    expect(h.events[1]).toMatchObject({
+      event: 'approved',
+      detail: expect.objectContaining({ purpose: 'security' }),
+    });
+    await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({ intact: true });
+  });
+
+  it('records the purpose on every read taken under the grant', async () => {
+    const h = harness();
+    await approvedGrant(h, ['conversations'], 'legal');
+    await withSupportAccess(
+      {
+        db: h.db,
+        organizationId: ORG,
+        actorUserId: REQUESTER,
+        scope: 'conversations',
+        resourceType: 'web_conversations',
+      },
+      async () => [],
+    );
+
+    expect(h.events.at(-1)).toMatchObject({
+      event: 'accessed',
+      detail: { ticketRef: TICKET, purpose: 'legal' },
+    });
+  });
+});
+
+describe('customer consent needs the customer’s ticket', () => {
+  it('refuses a consent grant whose ticket reference is not a support ticket id', async () => {
+    const h = harness();
+    await expect(
+      requestSupportAccess({
+        db: h.db,
+        organizationId: ORG,
+        requestedByUserId: REQUESTER,
+        reason: REASON,
+        ticketRef: TICKET,
+        purpose: 'customer_consent',
+        scopes: ['background_jobs'],
+      }),
+    ).rejects.toThrow(/support ticket/i);
+    expect(h.grants).toHaveLength(0);
+  });
+
+  it('refuses a consent grant whose ticket no member of the workspace raised', async () => {
+    const h = harness();
+    await expect(
+      requestSupportAccess({
+        db: h.db,
+        organizationId: OTHER_ORG,
+        requestedByUserId: REQUESTER,
+        reason: REASON,
+        ticketRef: CONSENT_TICKET,
+        purpose: 'customer_consent',
+        scopes: ['background_jobs'],
+      }),
+    ).rejects.toBeInstanceOf(SupportAccessRequestError);
+    expect(h.grants).toHaveLength(0);
+  });
+
+  it('records which member raised the consenting ticket', async () => {
+    const h = harness();
+    await approvedGrant(h, ['background_jobs'], 'customer_consent');
+
+    expect(h.events[0]?.detail).toMatchObject({
+      purpose: 'customer_consent',
+      ticketRef: CONSENT_TICKET,
+      consentFrom: CONSENTING_MEMBER,
+    });
+  });
+});
+
+interface GoogleRow extends OperatorRow {
+  google: boolean;
+}
+
+function googleListing(h: ReturnType<typeof harness>) {
+  const records: GoogleRow[] = [
+    { id: 'gmail', organizationId: ORG, google: true, payload: { snippet: 'the inbox said' } },
+    { id: 'slack', organizationId: ORG, google: false, payload: { text: 'slack words' } },
+  ];
+  return readOperatorContentUnderGrants<GoogleRow>({
+    db: h.db,
+    actorUserId: REQUESTER,
+    scope: 'background_jobs',
+    resourceType: 'background_job',
+    records,
+    organizationIdOf: (row) => row.organizationId,
+    withoutContent: (row) => ({ ...row, payload: {} }),
+    googleUserData: {
+      carries: (row) => row.google,
+      withhold: (row) => ({ ...row, payload: { withheld: GOOGLE_USER_DATA_WITHHELD } }),
+    },
+  });
+}
+
+describe('Google user data under a grant', () => {
+  it('withholds it from a support grant and says why, while serving the rest', async () => {
+    const h = harness();
+    await approvedGrant(h, ['background_jobs'], 'support');
+
+    const view = await googleListing(h);
+
+    expect(view.records[0]?.payload).toEqual({ withheld: GOOGLE_USER_DATA_WITHHELD });
+    expect(GOOGLE_USER_DATA_WITHHELD).toMatch(/Google user data/);
+    expect(view.records[1]?.payload).toEqual({ text: 'slack words' });
+    expect(view.googleUserDataWithheldCount).toBe(1);
+    expect(view.redactedCount).toBe(0);
+    expect(h.events.at(-1)).toMatchObject({
+      event: 'accessed',
+      detail: { purpose: 'support', googleUserDataWithheld: 1 },
+    });
+  });
+
+  it.each(['security', 'abuse', 'legal', 'customer_consent'] as const)(
+    'shows it under a %s grant',
+    async (purpose) => {
+      const h = harness();
+      await approvedGrant(h, ['background_jobs'], purpose);
+
+      const view = await googleListing(h);
+
+      expect(view.records[0]?.payload).toEqual({ snippet: 'the inbox said' });
+      expect(view.googleUserDataWithheldCount).toBe(0);
+      expect(h.events.at(-1)).toMatchObject({ event: 'accessed', detail: { purpose } });
+    },
+  );
 });
