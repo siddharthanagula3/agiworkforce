@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/text';
 import { cancelDispatchTask, sendDispatchTask } from '@/services/companion';
 import { useDispatchTaskStore } from '@/stores/dispatchTaskStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { DispatchTaskReply } from './DispatchTaskReply';
 
 const TERMINAL_STATUSES = new Set([
   'ready_for_review',
@@ -122,6 +123,8 @@ export function DispatchTaskComposer() {
             {visibleTasks.map((task) => {
               const isTerminal = TERMINAL_STATUSES.has(task.status);
               const isError = task.status === 'failed' || task.status === 'rejected';
+              const pending =
+                task.status === 'awaiting_input' && task.pending?.length ? task.pending : null;
               return (
                 <View
                   key={task.requestId}
@@ -150,7 +153,14 @@ export function DispatchTaskComposer() {
                       </Pressable>
                     )}
                   </View>
-                  {(task.error || task.message) && (
+                  {pending ? (
+                    <DispatchTaskReply
+                      taskRequestId={task.requestId}
+                      steps={pending}
+                      {...(task.replyError ? { replyError: task.replyError } : {})}
+                    />
+                  ) : null}
+                  {!pending && (task.error || task.message) && (
                     <Text
                       className={`mt-1 text-xs ${isError ? 'text-red-300' : 'text-white/40'}`}
                       numberOfLines={2}

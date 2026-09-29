@@ -38,6 +38,7 @@ export const CODE_SESSION_CONTROL_ACTIONS = [
 export const DISPATCH_TASK_CONTROL_ACTIONS = [
   'dispatch.task.create',
   'dispatch.task.cancel',
+  'dispatch.task.reply',
   'dispatch.task.status',
 ] as const;
 
