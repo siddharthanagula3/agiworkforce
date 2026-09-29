@@ -466,10 +466,14 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
                 .await
             {
                 Ok(document) => {
-                    let mut output = truncate_output_with_save("read_file", document.text);
-                    if let Some(note) = document.note {
-                        output.push_str(&format!("\n{note}"));
-                    }
+                    let text = match document.note {
+                        Some(note) => format!("{}\n{note}", document.text),
+                        None => document.text,
+                    };
+                    let output = truncate_output_with_save(
+                        "read_file",
+                        crate::documents::untrusted(path, &text),
+                    );
                     ToolResult {
                         tool_name: "read_file".to_string(),
                         success: true,

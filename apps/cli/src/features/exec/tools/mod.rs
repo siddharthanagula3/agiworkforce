@@ -80,6 +80,7 @@ impl ToolResult {
         let output = self.output.trim_start();
         output.starts_with("<web_fetch_result untrusted=\"true\"")
             || output.starts_with("<skill_result untrusted=\"true\"")
+            || output.starts_with("<document_result untrusted=\"true\"")
     }
 
     /// This result expressed as the cross-surface tool primitive (decision
