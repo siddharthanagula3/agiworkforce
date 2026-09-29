@@ -72,7 +72,7 @@ export function DesktopInfoCard({
 
       {Array.isArray(desktopMetadata?.capabilities) &&
       desktopMetadata.capabilities.includes('code-sessions') ? (
-        <CodeSessionsCard />
+        <CodeSessionsCard canStart={desktopMetadata.capabilities.includes('code-session-start')} />
       ) : null}
 
       <DispatchTaskComposer />
