@@ -79,6 +79,12 @@ export function planBrowserCommand(
   });
 
   switch (command) {
+    case 'browser_list_tabs':
+      return plan(
+        {},
+        'List the tabs open in the paired browser?',
+        'The titles and addresses of the tabs in the paired browser window are copied into this conversation.',
+      );
     case 'browser_read_page':
       return plan(
         {},
