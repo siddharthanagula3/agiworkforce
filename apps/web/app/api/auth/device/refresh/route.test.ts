@@ -207,7 +207,7 @@ describe('POST /api/auth/device/refresh', () => {
     await expect(response.json()).resolves.toEqual({ error: 'invalid_grant' });
   });
 
-  it('withholds a token from an account that has not accepted the live revision', async () => {
+  it('withholds a token from an account with no terms acceptance on record', async () => {
     mocks.query.mockResolvedValueOnce([
       {
         id: '11111111-1111-4111-8111-111111111111',
@@ -219,8 +219,8 @@ describe('POST /api/auth/device/refresh', () => {
         revoked_at: null,
         owner_missing: false,
         owner_deletion_scheduled_for: null,
-        owner_terms_version: '1970-01-01',
-        owner_terms_accepted_at: new Date().toISOString(),
+        owner_terms_version: null,
+        owner_terms_accepted_at: null,
       },
     ]);
 

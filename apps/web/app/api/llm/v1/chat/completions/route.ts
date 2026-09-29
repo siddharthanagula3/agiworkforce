@@ -1449,12 +1449,23 @@ async function admitAndDispatchTurn(request: NextRequest): Promise<NextResponse 
   const authResult = await timePhase(CHAT_TURN_PHASE.authGate, () => runAuthGate(request));
   if (!authResult.ok) return authResult.response;
 
-  return timePhase(CHAT_TURN_PHASE.turnSlot, () =>
+  const response = await timePhase(CHAT_TURN_PHASE.turnSlot, () =>
     withManagedTurnSlot(
       { userId: authResult.userId, planTier: authResult.subscription.plan_tier },
       () => dispatchChatCompletions(request, authResult),
     ),
   );
+  if (authResult.termsNotice) attachHeaders(response, authResult.termsNotice);
+  return response;
+}
+
+/** A response built from a fetch keeps immutable headers; the notice is advisory, so skip it there. */
+function attachHeaders(response: NextResponse | Response, headers: Record<string, string>): void {
+  try {
+    for (const [name, value] of Object.entries(headers)) response.headers.set(name, value);
+  } catch {
+    // Immutable headers: the turn itself is unaffected.
+  }
 }
 
 export const POST = withCorsRoute(
