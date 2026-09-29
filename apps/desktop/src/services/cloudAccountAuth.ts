@@ -988,9 +988,11 @@ class CloudAccountAuthService {
         if (controller.signal.aborted || this.sessionGeneration !== generation) {
           return { error: authError };
         }
-        await this.invalidateSession(
-          'Your AGI Cloud session could not be renewed. Please connect again.',
-        );
+        if (authError.code === 'invalid_refresh_token') {
+          await this.invalidateSession(
+            'Your AGI Cloud session could not be renewed. Please connect again.',
+          );
+        }
         return { error: authError };
       }
     })();
@@ -1031,10 +1033,28 @@ class CloudAccountAuthService {
     });
 
     if (!response.ok) {
+      const refusal = (await response.json().catch(() => null)) as {
+        error?: unknown;
+        error_description?: unknown;
+      } | null;
+      // Only a 400 invalid_grant ends the session. A terms or account refusal
+      // keeps the credential so the device resumes once the account acts on the
+      // web, and a throttled or failed server is simply tried again later.
+      if (response.status === 400) {
+        throw new AuthError(
+          'AGI Cloud rejected the saved refresh credential.',
+          response.status,
+          'invalid_refresh_token',
+        );
+      }
       throw new AuthError(
-        'AGI Cloud rejected the saved refresh credential.',
+        typeof refusal?.error_description === 'string'
+          ? refusal.error_description
+          : response.status === 429 || response.status >= 500
+            ? 'AGI Cloud could not renew your session right now. It will try again.'
+            : 'AGI Cloud did not renew your session.',
         response.status,
-        'invalid_refresh_token',
+        typeof refusal?.error === 'string' ? refusal.error : 'refresh_unavailable',
       );
     }
     const payload = (await response.json()) as unknown;
