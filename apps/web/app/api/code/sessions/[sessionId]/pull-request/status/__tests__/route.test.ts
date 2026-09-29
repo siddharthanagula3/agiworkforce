@@ -78,7 +78,7 @@ describe('GET /api/code/sessions/[sessionId]/pull-request/status', () => {
 
   it.each([
     [new CloudCodeValidationError('bad id'), 400],
-    [new CloudCodeNotFoundError('not yours'), 404],
+    [new CloudCodeNotFoundError(), 404],
     [new CloudCodeUnavailableError('down'), 503],
   ])('maps %s to %i', async (error, status) => {
     mocks.readCloudCodeSessionPullRequestStatus.mockRejectedValue(error);
