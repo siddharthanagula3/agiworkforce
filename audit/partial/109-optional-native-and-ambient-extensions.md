@@ -15,9 +15,6 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The auditor scoped every mobile search to apps/mobile/app, which excludes apps/mobile/native where the iOS App Shortcuts provider lives. AGIAppShortcuts registers one-tap actions (Start Chat, Ask AGI, Scan, Summarize...) that iOS surfaces in Spotlight, the Shortcuts app and Siri, each opening the app on the right screen via agiworkforce://intent/<verb>; the config plugin ships those files. That is the phone equivalent of a quick-action menu, and the same auditor credited exactly this code as partial for S109.11 and done for S109.07. Still partial: no home-screen quick actions (UIApplicationShortcutItems) and nothing on Android. |  |
-| chrome | partial | Quick actions (ask, explain, translate, summarize) live only in the page right-click menu; the toolbar button just opens the side panel with no quick-action list. | ui |
-
-Code: `apps/extension/src/background.ts:4526-4533`, `apps/extension/src/background.ts:4602-4617`
 
 ## S109.05: Compact floating assistant.
 
@@ -51,9 +48,8 @@ Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mob
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
 | mobile | partial | On Android, selected text can be sent to AGI and opens in a chat review screen, but nothing rewrites it and puts it back; iOS has no selected-text action. | handler |
-| chrome | partial | Right-click on a selection offers Ask, Explain and Translate in the side panel, but there is no rewrite action, no keyboard shortcut and nothing replaces the text on the page. | handler |
 
-Code: `apps/mobile/app.config.js:182-186`, `apps/mobile/native/android/withAGIShareIntent.cjs:48-52`, `apps/extension/src/background.ts:4526-4529`, `apps/extension/src/background.ts:4602-4617`
+Code: `apps/mobile/app.config.js:182-186`, `apps/mobile/native/android/withAGIShareIntent.cjs:48-52`
 
 ## S109.09: Screenshot-to-chat shortcut.
 

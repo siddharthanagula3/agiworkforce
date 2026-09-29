@@ -44,7 +44,6 @@ Code: `apps/mobile/src/features/model-picker/localModelRuntime.ts:60-62`, `apps/
 | --- | --- | --- | --- |
 | cli | partial | billing/no-yearly d75b94c7b4: the server half is done. /api/media/availability now publishes per model aspect_ratios and max_images (image, read from the tables the unsupported_aspect_ratio and unsupported_image_count refusals use) and output_sizes (video: resolution, aspect_ratio, width, height, duration_secs per requestable and priced pair) plus supports_audio. The cli cell closes when agi image narrows --aspect-ratio and -n from the admission before the request (p-mcp-rust); chrome stays missing until the extension has a media surface (p-chrome). | handler |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | billing/no-yearly d75b94c7b4: the server half is done. /api/media/availability now publishes per model aspect_ratios and max_images (image, read from the tables the unsupported_aspect_ratio and unsupported_image_count refusals use) and output_sizes (video: resolution, aspect_ratio, width, height, duration_secs per requestable and priced pair) plus supports_audio. The cli cell closes when agi image narrows --aspect-ratio and -n from the admission before the request (p-mcp-rust); chrome stays missing until the extension has a media surface (p-chrome). | handler |
 
 Code: `packages/contracts/cloud-contracts/src/managed-media.ts:188-188`, `packages/contracts/cloud-contracts/src/managed-media.ts:211-211`, `packages/contracts/cloud-contracts/src/managed-media.ts:214-214`, `packages/contracts/cloud-contracts/src/managed-media.ts:215-215`
 
@@ -70,7 +69,6 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:269-269`
 | --- | --- | --- | --- |
 | cli | partial | No member-readable endpoint names the workspace's residency region (only /api/admin/data-region, platform admin), so the CLI cannot show or explain a regional restriction. | ui |
 | vscode | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
-| chrome | partial | Server routing applies the workspace residency region to this surface's requests, but the surface never shows or explains a regional restriction. | ui |
 
 Code: `apps/cli/src/provider.rs:341-341`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts:239-249`, `apps/extension-vscode/src/utils/api.ts:581-586`, `packages/ai/routing/src/auto.ts:1024-1034`
 
@@ -98,18 +96,6 @@ Code: `apps/cli/src/provider.rs:341-341`, `apps/extension-vscode/src/features/mo
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S78.15: Required-runtime detection.
-
-- Done when: The surface detects whether the runtime a feature needs (sandbox, local model runtime, CLI) is available and gates the feature on it.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome only detects whether the desktop bridge is connected; it has no check for model runtimes or execution environments. | handler |
-
-Code: `apps/extension/src/side_panel.ts:2387-2395`
-
 ## S78.16: Unsupported versus temporarily unavailable distinction.
 
 - Done when: The surface tells apart a feature that is unsupported here from one that is only temporarily unavailable.
@@ -119,9 +105,8 @@ Code: `apps/extension/src/side_panel.ts:2387-2395`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | Settings says account details or plan usage are temporarily unavailable, but the model picker does not distinguish a temporarily unavailable model from an unsupported one. | ui |
-| chrome | partial | A failed send says AGI Cloud is temporarily unavailable, but models the server marks temporarily unavailable simply vanish from the picker like unsupported ones. | ui |
 
-Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:2029-2031`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:918-919`
+Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:2029-2031`
 
 ## S78.20: Connect-account explanation.
 
@@ -134,7 +119,6 @@ Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:202
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Upgrade to partial (miss ui, handler; surface-only per R-a): the cloud-runs panel names the connector a paused run is waiting on (call.connectorId) and the side panel links out to the web connectors page, so part of the explanation exists natively. Remaining: Chrome never tells the user which account to connect for a feature before it runs and cannot connect one itself; the link opens agiworkforce.com/connectors. |  |
 
 ## S78.23: Continue-on-another-device action.
 

@@ -561,6 +561,7 @@ export async function runAgentLoop(
     // The run holds the capture open so read_console and read_network answer
     // for the whole run, not only for the moment the tool was called.
     await startPageWatch(tabId, 'run').catch(() => undefined);
+    await cdp.keepPageFocused(tabId, options.signal).catch(() => undefined);
     const gatewayBase = await runOwnedOperation(options, resolveGatewayBase);
 
     await runOwnedOperation(options, () => waitForStable(tabId, { signal: options.signal }));

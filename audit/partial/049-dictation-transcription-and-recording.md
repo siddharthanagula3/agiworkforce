@@ -70,7 +70,6 @@ Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `a
 | mobile | partial | A failure is shown as an alert and the recording is dropped; the user must tap the mic and speak again. | ui, handler |
 | cli | partial | A failed transcription prints an error and returns to the SPACE prompt to record again; the audio is not retried. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Errors show a message; the user clicks the mic and speaks again. No retry of the same audio. | ui, handler |
 
 Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:607-607`, `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:207-207`
 

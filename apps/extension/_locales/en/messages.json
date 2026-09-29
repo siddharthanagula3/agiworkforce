@@ -219,6 +219,10 @@
     "message": "AGI Account",
     "description": "Account row label before, or in place of, a display name"
   },
+  "spAccountUnavailableAction": {
+    "message": "Open account",
+    "description": "Button that opens the web page explaining why the account is suspended, locked or closed"
+  },
   "spCloudAccountUnavailable": {
     "message": "Account unavailable",
     "description": "Account tier row when entitlements could not be read"
