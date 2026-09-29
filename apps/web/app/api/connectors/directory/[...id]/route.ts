@@ -28,7 +28,7 @@ async function handleGet(
   if (rateLimited) return rateLimited;
 
   const { id } = await context.params;
-  const connectorId = id.map((segment) => decodeURIComponent(segment)).join('/');
+  const connectorId = id.join('/');
   if (!connectorId) throw createError.validation('Connector directory id is required');
 
   const records = await getSnapshotRecords();
