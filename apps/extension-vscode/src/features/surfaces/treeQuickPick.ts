@@ -39,12 +39,9 @@ export function surfaceSectionItem(label: string): vscode.TreeItem {
   return item;
 }
 
-const ROW_TYPES = new WeakMap<vscode.TreeItem, string>();
-
 export function composeSurfaceSections(
   sections: readonly {
     label: string;
-    rowType?: string;
     provider: Pick<vscode.TreeDataProvider<vscode.TreeItem>, 'getChildren'> & {
       onDidChangeTreeData?: vscode.Event<vscode.TreeItem | undefined | null | void>;
     };
@@ -55,9 +52,6 @@ export function composeSurfaceSections(
       const groups = await Promise.all(
         sections.map(async (section) => {
           const children = (await section.provider.getChildren()) ?? [];
-          if (section.rowType !== undefined) {
-            for (const child of children) ROW_TYPES.set(child, section.rowType);
-          }
           return [surfaceSectionItem(section.label), ...children];
         }),
       );
@@ -98,14 +92,7 @@ export function buildSurfaceRows(
     }
     const icon = iconName(item);
     const label = treeItemLabel(item);
-    const rowType = ROW_TYPES.get(item);
-    const ownDescription = treeItemDescription(item);
-    const description =
-      rowType === undefined
-        ? ownDescription
-        : ownDescription === undefined
-          ? rowType
-          : `${rowType} · ${ownDescription}`;
+    const description = treeItemDescription(item);
     const detail = treeItemDetail(item);
     const contextValue = item.contextValue ?? '';
     const buttons = rowActions

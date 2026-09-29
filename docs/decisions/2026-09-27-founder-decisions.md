@@ -409,6 +409,23 @@ S10.39, S12.05, S13.25, S19.12, S21.16, S27.16, S34.32, S37.38, S42.25, S55.04,
 S55.29, S64.05, S67.36, S68.21, S78.11, S78.16, S81.21, S82.22; S110.22 is met
 at parity once cloud sessions are switched on.
 
+## D-2026-09-28-27 Mobile sends web-billed plan management to the web
+
+The lead's ruling of 2026-09-28. A plan billed on the web is managed on the
+web: the mobile app links out to web billing for the card, billing address,
+tax identifier, a failed-payment retry, cancelling, coupon and promotion
+codes and billing discrepancy reports, and has no in-app form for any of
+them. This matches the App Store and Google Play rules for purchases made
+outside the store and how the ChatGPT and Claude apps send web subscribers
+to the web. A pre-run cost estimate and a global command palette are not
+built on mobile. A connection-status indicator, in-place rename, a saved
+default effort, a profile photo, a guided import and first-run name, use
+case, personalization and memory steps are built on mobile only where the
+web has them, and are otherwise not applicable. Cells (mobile): S83.09,
+S83.10, S83.11, S83.12, S83.15, S83.21, S81.18, S81.19, S83.07, S82.33 (link
+out); S82.22, S5.26 (declined); S5.32, S5.21, S84.11, S85.01, S88.15, S3.21,
+S3.23, S3.24, S3.25 (built where the web has them).
+
 ## D-2026-09-28-28 The mobile app matches the leaders' phone apps in voice, connectors, tasks and routines
 
 Checked 2026-09-28 against Claude's help pages (support.claude.com/en/articles/10065434,

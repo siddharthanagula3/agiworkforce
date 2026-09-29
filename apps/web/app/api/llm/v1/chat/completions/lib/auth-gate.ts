@@ -31,6 +31,14 @@ import { timePhase } from '@/lib/observability/phase-timer';
 import { developerProjectSpendRefusal } from '@/lib/developer-api/project-spend';
 import { resolveAuthenticatedSurface } from './request-surface';
 import { CHAT_TURN_PHASE } from './turn-phases';
+import {
+  CURRENT_TERMS_VERSION,
+  readTermsStanding,
+  termsNoticeHeaders,
+  type TermsStanding,
+} from '@/lib/server/terms';
+import { recordFailure } from '@/lib/observability/metrics';
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 const ENTERPRISE_PLAN_TIER = 'enterprise';
 
@@ -60,6 +68,8 @@ export type AuthGateSuccess = {
   surfaceClass?: AuthenticatedSurfaceClass;
   boundSurface?: BoundSurface;
   apiKeyId?: string;
+  /** Headers telling the client a newer Terms of Service version is published. */
+  termsNotice?: Record<string, string>;
 };
 
 type AuthGateFailure = {
@@ -115,6 +125,71 @@ function enforceManagedCloudSurface(
       { status: 403 },
     ),
   };
+}
+
+/**
+ * Surfaces whose client cannot yet record an acceptance or show the refusal.
+ * The mobile app gains both after the Codex iOS work lands; until then a
+ * refusal there would be a dead end, so mobile only receives the notice.
+ */
+const TERMS_GATE_EXEMPT_SURFACES: ReadonlySet<CloudChatSurface> = new Set(['mobile']);
+
+function termsRefusal(
+  request: NextRequest,
+  standing: Extract<TermsStanding, { kind: 'required' }>,
+): NextResponse {
+  const acceptanceUrl = new URL('/login/complete', new URL(request.url).origin);
+  acceptanceUrl.searchParams.set('redirectTo', '/chat');
+  const message =
+    standing.reason === 'never_accepted'
+      ? `Accept the Terms of Service at ${acceptanceUrl.toString()} to start using AGI Workforce, then try again.`
+      : `The Terms of Service were updated. Accept the updated terms at ${acceptanceUrl.toString()} to keep using AGI Workforce, then try again.`;
+  return NextResponse.json(
+    {
+      error: {
+        message,
+        type: 'invalid_request_error',
+        code: 'terms_acceptance_required',
+        acceptance_url: acceptanceUrl.toString(),
+      },
+      terms_version: CURRENT_TERMS_VERSION,
+      acceptance_url: acceptanceUrl.toString(),
+    },
+    { status: 403 },
+  );
+}
+
+/**
+ * Terms acceptance is a notice requirement, not a safety kill switch. A call
+ * made with an API key runs under the commercial terms its owner already
+ * agreed to and is never refused per call. Any other caller with no acceptance
+ * on record, or one past the effective date of a material revision it has not
+ * accepted, is refused with a link to accept; a caller on an older but still
+ * valid version passes with a notice. When the acceptance cannot be read the
+ * turn is allowed, logged and counted rather than locking every account out.
+ */
+async function checkTermsStanding(
+  request: NextRequest,
+  userId: string,
+  surface: CloudChatSurface,
+): Promise<{ refusal: NextResponse } | { notice?: Record<string, string> }> {
+  let standing: TermsStanding;
+  try {
+    standing = await readTermsStanding(userId);
+  } catch (error) {
+    logger.error({ error, userId }, '[auth-gate] terms acceptance unreadable; allowing the turn');
+    recordFailure('database', 'terms_acceptance_unreadable');
+    return {};
+  }
+  if (standing.kind === 'current') return {};
+  if (standing.kind === 'required' && !TERMS_GATE_EXEMPT_SURFACES.has(surface)) {
+    return { refusal: termsRefusal(request, standing) };
+  }
+  const notice =
+    standing.kind === 'notice'
+      ? termsNoticeHeaders(standing)
+      : termsNoticeHeaders({ kind: 'notice', acceptedVersion: null, requiredFrom: null });
+  return { notice };
 }
 
 export async function runAuthGate(request: NextRequest): Promise<AuthGateResult> {
@@ -231,7 +306,10 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  const credential = {
+  const credential: Pick<
+    AuthGateSuccess,
+    'surfaceClass' | 'boundSurface' | 'apiKeyId' | 'termsNotice'
+  > = {
     ...(surfaceClass ? { surfaceClass } : {}),
     ...(boundSurface ? { boundSurface } : {}),
     ...(apiKeyId ? { apiKeyId } : {}),
@@ -250,6 +328,16 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     withRateLimit(request, 'llm-completion', `user:${userId}`),
   );
   if (userRateLimitResponse) return { ok: false, response: userRateLimitResponse };
+
+  if (!apiKeyId) {
+    const terms = await checkTermsStanding(
+      request,
+      userId,
+      resolveAuthenticatedSurface(request, { token, ...credential }),
+    );
+    if ('refusal' in terms) return { ok: false, response: terms.refusal };
+    if (terms.notice) credential.termsNotice = terms.notice;
+  }
 
   if (apiKeyId) {
     const spendRefusal = await developerProjectSpendRefusal({ userId, apiKeyId });

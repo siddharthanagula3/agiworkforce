@@ -21,7 +21,12 @@ import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { finishFamilyAsCompromised } from '@/lib/server/refresh-token-family';
 import { notifyDeviceCredentialCompromised } from '@/lib/services/account-activity-notifications';
-import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
+import {
+  CURRENT_TERMS_VERSION,
+  termsNoticeHeaders,
+  termsStandingFor,
+  type TermsStanding,
+} from '@/lib/server/terms';
 
 export const runtime = 'nodejs';
 
@@ -56,6 +61,7 @@ function termsAcceptanceUrl(request: NextRequest, returnTo = '/'): string {
 type RotationResult =
   | {
       kind: 'rotated';
+      termsStanding: TermsStanding;
       accessToken: string;
       accessExpiresIn: number;
       refreshToken: string;
@@ -149,10 +155,17 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       };
     }
 
-    // A terms revision is a consent gate, not a compromise signal: withhold the token but leave
-    // the family intact and unused so the same device resumes once the account re-accepts on web.
+    // The chat gateway's rule: an owner with no acceptance on record, or one past the effective
+    // date of a material revision, has to accept first; an older but valid version is renewed with
+    // a notice. A refusal is a consent gate, not a compromise signal: withhold the token but leave
+    // the family intact and unused so the same device resumes once the account accepts on web.
     // Revoking here makes every published terms bump destroy every live device session.
-    if (current.owner_terms_version !== CURRENT_TERMS_VERSION || !current.owner_terms_accepted_at) {
+    const termsStanding = termsStandingFor(
+      current.owner_terms_version && current.owner_terms_accepted_at
+        ? { version: current.owner_terms_version }
+        : null,
+    );
+    if (termsStanding.kind === 'required') {
       return { kind: 'terms_required' };
     }
 
@@ -192,6 +205,7 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
     );
     return {
       kind: 'rotated',
+      termsStanding,
       accessToken,
       accessExpiresIn: expiresIn,
       refreshToken: nextCredential.token,
@@ -285,7 +299,7 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       expires_in: result.accessExpiresIn,
       refresh_token_expires_in: DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
     },
-    { headers: { 'Cache-Control': 'no-store' } },
+    { headers: { 'Cache-Control': 'no-store', ...termsNoticeHeaders(result.termsStanding) } },
   );
 }
 
