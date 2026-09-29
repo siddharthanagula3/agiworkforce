@@ -43,6 +43,15 @@ pub fn history(detail: &CodeSessionDetail) -> Vec<Message> {
     messages
 }
 
+fn git_without_hooks(args: &[&str]) -> Result<String, String> {
+    let no_hooks =
+        std::env::temp_dir().join(format!("agi-teleport-no-hooks-{}", std::process::id()));
+    let hooks_setting = format!("core.hooksPath={}", no_hooks.display());
+    let mut full = vec!["-c", hooks_setting.as_str()];
+    full.extend_from_slice(args);
+    git(&full)
+}
+
 fn matching_remote(full_name: &str) -> Result<String, String> {
     let remotes = git(&["remote"]).map_err(|_| {
         "Run `agi resume --teleport` inside a checkout of the session's repository.".to_string()
@@ -94,7 +103,14 @@ pub fn check_out(session: &CodeSession) -> Result<Teleported, String> {
             changed.join(", ")
         ));
     }
-    git(&["fetch", "--quiet", &remote, &branch]).map_err(|_| {
+    git_without_hooks(&[
+        "fetch",
+        "--quiet",
+        "--no-recurse-submodules",
+        &remote,
+        &branch,
+    ])
+    .map_err(|_| {
         format!(
             "`{branch}` is not on GitHub yet. Commit and push it from the cloud session first, \
              then run `agi resume --teleport` again."
@@ -109,15 +125,15 @@ pub fn check_out(session: &CodeSession) -> Result<Teleported, String> {
     ])
     .is_ok();
     if exists {
-        git(&["checkout", "--quiet", &branch])?;
-        git(&["merge", "--ff-only", "--quiet", &tracking]).map_err(|_| {
+        git_without_hooks(&["checkout", "--quiet", &branch])?;
+        git_without_hooks(&["merge", "--ff-only", "--quiet", &tracking]).map_err(|_| {
             format!(
                 "Your local `{branch}` has commits the cloud session does not. Rename or reset \
                  it, then run `agi resume --teleport` again."
             )
         })?;
     } else {
-        git(&["checkout", "--quiet", "-b", &branch, "--track", &tracking])?;
+        git_without_hooks(&["checkout", "--quiet", "-b", &branch, "--track", &tracking])?;
     }
     Ok(Teleported {
         remote,
