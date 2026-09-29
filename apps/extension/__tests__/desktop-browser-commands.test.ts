@@ -68,6 +68,7 @@ function context(
     send,
     navigate,
     history: vi.fn(() => Promise.resolve()),
+    tabUrl: vi.fn(() => Promise.resolve(`${SITE}/page`)),
     capture: () => Promise.resolve('iVBORw0KGgo='),
   };
 }
@@ -112,6 +113,7 @@ describe('desktop-issued browser commands', () => {
       send: vi.fn(),
       navigate: vi.fn(),
       history: vi.fn(),
+      tabUrl: vi.fn(),
       capture: vi.fn(),
     });
     expect(result.ok).toBe(false);
@@ -155,6 +157,7 @@ describe('desktop-issued browser commands', () => {
       send: vi.fn(),
       navigate: vi.fn(),
       history: vi.fn(),
+      tabUrl: vi.fn(),
       capture,
     });
     expect(capture).toHaveBeenCalledWith(TAB_ID);
@@ -171,6 +174,7 @@ describe('desktop-issued browser commands', () => {
       send,
       navigate: vi.fn(),
       history: vi.fn(),
+      tabUrl: vi.fn(),
       capture: () => Promise.reject(new Error('activeTab required')),
     });
     expect((result.value as { dataUrl: string }).dataUrl).toBe('data:image/png;base64,zzz');
@@ -183,6 +187,7 @@ describe('desktop-issued browser commands', () => {
       send: vi.fn(async () => ({ success: false, error: 'activeTab required' })),
       navigate: vi.fn(),
       history: vi.fn(),
+      tabUrl: vi.fn(),
       capture: () => Promise.reject(new Error('activeTab required')),
     });
     expect(result.ok).toBe(false);
@@ -228,6 +233,51 @@ describe('desktop-issued browser commands', () => {
     );
     expect(result.ok).toBe(true);
     expect(navigate).toHaveBeenCalledWith(TAB_ID, `${SITE}/next`);
+  });
+
+  it('goes back and reports the page it landed on', async () => {
+    approveSite();
+    const base = context(vi.fn());
+    const result = await runDesktopBrowserCommand(
+      request('browser_history', { direction: 'back' }),
+      {
+        ...base,
+        tabUrl: vi.fn(() => Promise.resolve(`${SITE}/previous`)),
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(base.history).toHaveBeenCalledWith(TAB_ID, 'back');
+    expect(result.value).toEqual({ direction: 'back', url: `${SITE}/previous` });
+  });
+
+  it('undoes a history step that lands on a site that is not approved', async () => {
+    approveSite();
+    const base = context(vi.fn());
+    const result = await runDesktopBrowserCommand(
+      request('browser_history', { direction: 'back' }),
+      {
+        ...base,
+        tabUrl: vi.fn(() => Promise.resolve('https://collector.example/')),
+      },
+    );
+    expect(result.ok).toBe(false);
+    expect(base.history).toHaveBeenNthCalledWith(1, TAB_ID, 'back');
+    expect(base.history).toHaveBeenNthCalledWith(2, TAB_ID, 'forward');
+  });
+
+  it('refuses more fields than one fill may carry', async () => {
+    approveSite();
+    const send = vi.fn();
+    const fields = Array.from({ length: 51 }, (_, index) => ({
+      selector: `#f${index}`,
+      value: 'x',
+    }));
+    const result = await runDesktopBrowserCommand(
+      request('browser_fill_form', { fields }),
+      context(send),
+    );
+    expect(result.ok).toBe(false);
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('refuses to navigate an approved tab to a site that is not approved', async () => {
