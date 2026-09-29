@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/text';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useChatStore } from '@/stores/chatStore';
 import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 
 interface ProjectOption {
@@ -76,14 +77,17 @@ function ProjectDropdownItem({ project, isActive, colors, onSelect }: ProjectDro
 
 interface ProjectSelectorBarProps {
   openSignal?: number;
+  conversation?: { id: string; projectId?: string; executionMode: 'local' | 'cloud' };
 }
 
-export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {}) {
+export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelectorBarProps = {}) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
 
-  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const appModeIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const isCloud = conversation ? conversation.executionMode === 'cloud' : appModeIsCloud;
+  const setConversationProject = useChatStore((s) => s.setConversationProject);
   const localProjects = useProjectStore((s) => s.projects);
   const localActiveId = useProjectStore((s) => s.activeProjectId);
   const setLocalActive = useProjectStore((s) => s.setActiveProject);
@@ -104,8 +108,20 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
           })),
     [isCloud, cloudProjects, localProjects],
   );
-  const activeProjectId = isCloud ? cloudActiveId : localActiveId;
-  const setActiveProject = isCloud ? setCloudActive : setLocalActive;
+  const activeProjectId = conversation
+    ? (conversation.projectId ?? null)
+    : isCloud
+      ? cloudActiveId
+      : localActiveId;
+  const setGlobalActiveProject = isCloud ? setCloudActive : setLocalActive;
+  const conversationId = conversation?.id;
+  const setActiveProject = useCallback(
+    (id: string | null) => {
+      setGlobalActiveProject(id);
+      if (conversationId) void setConversationProject(conversationId, id);
+    },
+    [conversationId, setConversationProject, setGlobalActiveProject],
+  );
 
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const isSheetDriven = openSignal !== undefined;

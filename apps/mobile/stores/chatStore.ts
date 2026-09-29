@@ -71,6 +71,7 @@ export interface CombinedChatState {
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   setConversationModel: (id: string, model: string) => Promise<boolean>;
+  setConversationProject: (id: string, projectId: string | null) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
   keepTemporaryConversation: (id: string) => Promise<void>;
@@ -200,6 +201,7 @@ function buildCombinedState(
     loadMessages: msg.loadMessages,
     renameConversation: msg.renameConversation,
     setConversationModel: msg.setConversationModel,
+    setConversationProject: msg.setConversationProject,
     pinConversation: msg.pinConversation,
     makeConversationPermanent: msg.makeConversationPermanent,
     keepTemporaryConversation: msg.keepTemporaryConversation,
