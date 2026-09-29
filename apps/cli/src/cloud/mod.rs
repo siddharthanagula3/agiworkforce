@@ -14,6 +14,7 @@ pub mod code_teleport;
 pub mod connectors;
 pub mod data_export;
 pub mod devices;
+pub mod feedback;
 pub mod handshake;
 pub mod image;
 pub mod image_provenance;
@@ -220,6 +221,23 @@ pub async fn sync_session(
     chat::apply_push_response(&response, &mut session.state);
     session.persist();
     Ok(response.applied.messages.len())
+}
+
+/// Send a bug report or product feedback to the team's feedback store and say
+/// what happened, including why it could not be sent.
+pub async fn send_feedback(kind: feedback::FeedbackKind, message: &str) -> String {
+    let client = match CloudClient::connect_managed() {
+        Ok(client) => client,
+        Err(error) => {
+            return format!(
+                "Feedback needs a signed-in AGI Workforce account ({error}). Sign in with `agi login`, then send it again."
+            )
+        }
+    };
+    match feedback::submit(&client, kind, message).await {
+        Ok(confirmation) => confirmation,
+        Err(error) => format!("Feedback was not sent: {error}"),
+    }
 }
 
 /// The account's conversations, newest first, with the cached cursor advanced.

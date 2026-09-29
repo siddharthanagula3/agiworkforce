@@ -3935,6 +3935,7 @@ enum SlashResult {
     RunAttachUrl(String),
     RunPersonalize(String),
     RunBtw(String),
+    RunFeedback(crate::cloud::feedback::FeedbackKind, String),
 }
 
 const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
@@ -4331,10 +4332,6 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/login" => SlashResult::RunLogin,
 
         "/logout" => SlashResult::RunLogout,
-
-        "/feedback" | "/bug" => {
-            SlashResult::SystemMessage("Report issues at: https://github.com/agiworkforce/agiworkforce/issues".to_string())
-        }
 
         "/help" | "/h" | "/?" => {
             SlashResult::SystemMessage(crate::command_registry::format_command_help(
@@ -5021,6 +5018,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                             crate::agent::PrivacyMode::Local => "Local",
                         }
                     ))
+                }
+                crate::claude_parity::ParityCommandResult::Feedback { kind, message } => {
+                    SlashResult::RunFeedback(kind, message)
                 }
                 crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
             }
@@ -5850,6 +5850,13 @@ async fn run_event_loop(
                                         result.after.used_tokens,
                                         (result.after.used_fraction * 100.0) as u32
                                     ),
+                                });
+                            }
+                            SlashResult::RunFeedback(kind, message) => {
+                                let text = crate::cloud::send_feedback(kind, &message).await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
                                 });
                             }
                             SlashResult::RunLogout => {
