@@ -10,7 +10,7 @@ use agiworkforce_protocol::developer_session::{
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
     PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
-    PermissionsRemoveParams, PlanDecisionParams, PluginInstallParams, PluginListResponse,
+    PermissionsRemoveParams, PlanDecideParams, PluginInstallParams, PluginListResponse,
     PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
     ProtocolVersionUnsupportedData, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
     SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
@@ -443,9 +443,9 @@ pub trait DeveloperSessionHost: Send + Sync {
 
     async fn decide_plan(
         &self,
-        _params: PlanDecisionParams,
+        _params: PlanDecideParams,
     ) -> Result<(), DeveloperSessionHostError> {
-        Err(unsupported(method::THREAD_PLAN_DECISION))
+        Err(unsupported(method::PLAN_DECIDE))
     }
 
     async fn list_provider_keys(&self) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
@@ -1210,8 +1210,8 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(serde_json::to_value)
             }
-            method::THREAD_PLAN_DECISION => {
-                let params = match parse_params::<PlanDecisionParams>(&request) {
+            method::PLAN_DECIDE => {
+                let params = match parse_params::<PlanDecideParams>(&request) {
                     Ok(params) => params,
                     Err(response) => return *response,
                 };

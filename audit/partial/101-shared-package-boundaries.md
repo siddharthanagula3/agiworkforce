@@ -24,9 +24,9 @@ Code: `packages/contracts/cloud-contracts/src/connectors.ts:89-89`, `packages/co
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform 3a3fa544aa: both web readers classify events through the shared mappings (messageKindForAgentEvent; new messageKindForDeveloperSessionEvent for local sessions) and left BLOCK_KIND_READERS_PENDING. Left: 10 pending modules on mobile, Chrome, VS Code and desktop (surface phases), which can reuse the developer-session table. | mobile, chrome, vscode, desktop |
+| platform | partial | partials/platform d24632e016, 4e2ba53927: VS Code, the Chrome run journal and approval handling, and the Electron developer-session forwarder classify agent events through messageKindForAgentEvent; pending readers 10 to 5. Left: mobile streaming.ts and runPresentation.ts (post-codex), Chrome chat-state.ts (a persistence filter, exhaustive switch), desktop CloudRuntime.ts and localInferenceService.ts (the latter reads provider-adapter chunks, not agent events; needs a guard ruling). | mobile, chrome, desktop |
 
-Code: `apps/web/lib/hooks/useChatStream.ts:2523-2523`, `apps/web/features/code/hooks/use-local-session.ts:111-111`, `packages/contracts/local-runtime/src/developer-sessions.ts:275-275`
+Code: `apps/extension-vscode/src/integrations/localRuntimeClient.ts:945-945`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:924-924`, `apps/extension/src/side_panel.ts:16219-16219`, `apps/desktop/electron/runtime/developerSessionService.ts:353-353`
 
 ## S101.06: Shared model metadata.
 
@@ -46,9 +46,9 @@ Code: `apps/web/features/media/services/media-api-service.ts:18-18`, `apps/web/f
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | The cli gap is closed (034deed768: capability_handshake read and cached with the tier, check-capability-consumption records cli as a reader); Chrome and VS Code remain recorded gaps | handler |
+| platform | partial | partials/platform 4e2ba53927: Chrome and VS Code read the served capability document and check-capability-consumption records 0 gaps. Left: the two recorded mobile exceptions (capabilities.tsx matrix rule, billing store deployment flag), fixed by post-codex patch p-platform-S78.01-mobile-capability-document.patch. | mobile |
 
-Code: `scripts/check-capability-consumption.mjs:69-69`, `apps/cli/src/tier_cache.rs:384-384`
+Code: `apps/extension/src/features/cloud-bridge/capabilityDocument.ts:37-37`, `apps/extension-vscode/src/utils/api.ts:787-787`, `scripts/check-capability-consumption.mjs:104-104`
 
 ## S101.09: Shared policy contracts.
 
@@ -79,9 +79,9 @@ Code: `packages/client/client-runtime/src/deviceAuthorization.ts:13-15`, `apps/e
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Shared managed-cloud clients cover chat, projects, knowledge, attachments, settings, schedules and agent runs; Electron uses none, CLI is Rust, and idempotency keys are recorded gaps on VS Code and Chrome. | surface-only |
+| platform | partial | Idempotency keys are no longer a gap on VS Code or Chrome (check-idempotency passes; both send keys on chat, schedules, cloud runs). Left: the Electron main process uses no shared managed-cloud client and the CLI is Rust. | desktop, cli |
 
-Code: `packages/contracts/cloud-contracts/src/managed-cloud-chat-client.ts:223-227`, `scripts/config/client-sdk-contract.json:89-92`, `scripts/check-client-sdk-usage.mjs:3-7`
+Code: `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:144-144`, `apps/extension/src/features/computer-use/cloudAgentClient.ts:373-373`
 
 ## S101.12: Shared streaming client.
 
@@ -90,9 +90,9 @@ Code: `packages/contracts/cloud-contracts/src/managed-cloud-chat-client.ts:223-2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform 3a3fa544aa: web reads both chat streams through the shared ServerSentEventDecoder/readServerSentEvents and left the pending list; Chrome already adopted. Left: mobile streaming.ts (post-codex patch saved), VS Code utils/api.ts, desktop cloudApi.ts (surface phases). | mobile, vscode, desktop |
+| platform | partial | partials/platform d24632e016, 4e2ba53927: VS Code and the desktop renderer read cloud chat streams through the shared ServerSentEventDecoder (desktop keeps its renderer limit and error); the SSE pending list is down to one. Left: mobile services/streaming.ts, post-codex patch p-platform-S101.12-mobile-sse-reader.patch. | mobile |
 
-Code: `apps/web/lib/hooks/useChatStream.ts:1173-1173`, `apps/web/lib/hooks/useChatStream.ts:2325-2325`, `scripts/check-sse-readers.mjs:54-54`
+Code: `apps/extension-vscode/src/utils/api.ts:557-557`, `apps/desktop/src/api/cloudApi.ts:1021-1021`, `scripts/check-sse-readers.mjs:54-54`
 
 ## S101.13: Shared conversation-state logic.
 
@@ -123,9 +123,9 @@ Code: `packages/contracts/cloud-contracts/src/sync.ts:110-110`, `apps/web/app/ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | @agiworkforce/artifacts is used by web, mobile and VS Code; Chrome has no artifact model import and the CLI hand-writes ArtifactIndexEntry. | surface-only |
+| platform | partial | Chrome now derives artifacts through @agiworkforce/artifacts (ledger stale). Left: the CLI hand-writes ArtifactIndexEntry in Rust; needs a wire-parity entry (CLI phase). | cli |
 
-Code: `apps/cli/src/cloud/artifacts.rs:50-58`
+Code: `apps/extension/src/features/cloud-bridge/artifactsClient.ts:1-1`, `apps/cli/src/cloud/artifacts.rs:50-50`
 
 ## S101.18: Shared source/citation models.
 
@@ -137,17 +137,6 @@ Code: `apps/cli/src/cloud/artifacts.rs:50-58`
 | platform | partial | partials/platform df36f1085b: the last web source-record copies extend AgentEventSource; web and mobile are done. Left: Chrome and VS Code adoption patches (surface phases). | chrome, vscode |
 
 Code: `apps/web/shared/types/common.ts:203-203`, `apps/web/features/chat/utils/research-plan.ts:116-116`
-
-## S101.19: Shared Memory contracts.
-
-- Done when: Memory records and controls share one contract across server and clients.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Memory request and response bodies, limits and the CLI's Rust structs now all follow the shared contract; the Chrome memory client patch (p-chrome) and VS Code's MemorySyncRejectionSchema adoption (p-sessions) have not landed. | surface-only |
-
-Code: `packages/contracts/types/src/memory-wire.ts:495-495`, `apps/web/app/api/memory/route.ts:118-118`, `scripts/check-cli-wire-parity.mjs:21-21`
 
 ## S101.20: Shared tool definitions.
 
@@ -167,9 +156,9 @@ Code: `packages/contracts/types/src/tool-primitive.ts:4-7`, `scripts/check-tool-
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Approval policy and resume contracts are used by web and mobile; Chrome and VS Code import neither. | surface-only |
+| platform | partial | Chrome and VS Code now use the shared resume contracts (ToolApprovalResumeRequestSchema; ManagedCloudAgentRunClient.resumeRun and the protocol ApprovalResponseParams). Left: neither reads the shared approval policy (TOOL_APPROVAL_POLICIES) from packages/contracts/types/src/tool-approval-policy.ts. | chrome, vscode |
 
-Code: `packages/contracts/cloud-contracts/src/tool-events.ts:18-24`
+Code: `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:1203-1203`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:6-6`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1448-1448`
 
 ## S101.23: Shared Skill/Plugin manifests.
 
@@ -247,17 +236,6 @@ Code: `packages/ui/ui/package.json:2-5`
 | platform | partial | partials/platform 861d417184, 533e89d0cd: check:mobile-primitives fails a mobile module that imports Text, Pressable or a Touchable from react-native outside components/ui. 129 existing modules are recorded in a baseline that only shrinks, and moving them is mobile work (post-codex) | states |
 
 Code: `scripts/check-mobile-primitives.mjs:20-20`, `scripts/check-mobile-primitives.mjs:84-84`, `scripts/config/mobile-primitives-baseline.json:1-2`, `package.json:134-134`
-
-## S101.32: Shared Markdown/content transformations.
-
-- Done when: Markdown and content transformations run through one shared implementation on every surface.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | normalizeMarkdownSource is shared by unified-chat, mobile and Chrome; the VS Code webview renders markdown without it. | surface-only |
-
-Code: `packages/platform/utils/src/markdownSource.ts:125-127`, `apps/extension/src/features/side-panel/markdown.ts:2-3`
 
 ## S101.33: Platform-specific renderers.
 

@@ -27,13 +27,13 @@ Code: `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A document becomes a .pptx through the office-file tool; a deck viewer or editor is declined by D-2026-09-27-02 (no slide editor at ChatGPT or Claude). Left: UPLOAD_SCAN_WEBHOOK_URL so uploaded source documents are admitted. | switch-on |
-| desktop | partial | A document becomes a .pptx through the office-file tool; a deck viewer or editor is declined by D-2026-09-27-02 (no slide editor at ChatGPT or Claude). Left: UPLOAD_SCAN_WEBHOOK_URL so uploaded source documents are admitted. | switch-on |
+| web | partial | owner: provision the antivirus scanner endpoint and set UPLOAD_SCAN_WEBHOOK_URL (and UPLOAD_SCAN_WEBHOOK_TOKEN if needed); production refuses uploads without it (apps/web/lib/security/upload-scan.ts:264-282) | switch-on |
+| desktop | partial | owner: provision the antivirus scanner endpoint and set UPLOAD_SCAN_WEBHOOK_URL (and UPLOAD_SCAN_WEBHOOK_TOKEN if needed); production refuses uploads without it (apps/web/lib/security/upload-scan.ts:264-282) | switch-on |
 | mobile | partial | The office-file tool can build a .pptx from the chat's text; no deck action or editor. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/managed-office-file-service.ts:513-513`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
+Code: `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`, `apps/web/lib/services/managed-office-file-service.ts:513-513`
 
 ## S110.03: Spreadsheet → chart → report.
 
@@ -42,14 +42,14 @@ Code: `apps/web/lib/services/managed-office-file-service.ts:513-513`, `apps/mobi
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Chart-into-report runs through sandbox code execution, as Claude's file creation does; switch on AGI_E2B_EXECUTION (office template AGI_E2B_CHAT_TEMPLATE) and UPLOAD_SCAN_WEBHOOK_URL, then live-check that the template has python-docx and matplotlib. | switch-on, live-check |
-| desktop | partial | Chart-into-report runs through sandbox code execution, as Claude's file creation does; switch on AGI_E2B_EXECUTION (office template AGI_E2B_CHAT_TEMPLATE) and UPLOAD_SCAN_WEBHOOK_URL, then live-check that the template has python-docx and matplotlib. | switch-on, live-check |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1, E2B_API_KEY, AGI_E2B_CHAT_TEMPLATE and UPLOAD_SCAN_WEBHOOK_URL; then live-check a chart-into-docx prompt on an uploaded xlsx (template has python-docx and matplotlib) | switch-on, live-check |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1, E2B_API_KEY, AGI_E2B_CHAT_TEMPLATE and UPLOAD_SCAN_WEBHOOK_URL; then live-check a chart-into-docx prompt on an uploaded xlsx (template has python-docx and matplotlib) | switch-on, live-check |
 | mobile | partial | Chart artifacts render as text in the mobile artifact viewer and the report tool cannot embed a chart. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/e2b/execution-tools.ts:62-62`, `apps/web/scripts/build-e2b-office-template.mjs:4-4`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:792-792`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:792-792`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
 
 ## S110.05: Research → interactive page.
 
@@ -112,13 +112,13 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:93-93`, `apps/cli/src/mo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Since 7563a9e6e an @agi-workforce mention on an issue or pull request opens a Cloud Code session, commits, opens a pull request and reports back, but it runs only with AGI_E2B_EXECUTION=1 (off by default), the managed-compute private beta, and a GitHub installation with review enabled and verified ownership. A Slack mention still starts a saved routine, not a coding session. | handler, flag-off |
-| desktop | partial | Since 7563a9e6e an @agi-workforce mention on an issue or pull request opens a Cloud Code session, commits, opens a pull request and reports back, but it runs only with AGI_E2B_EXECUTION=1 (off by default), the managed-compute private beta, and a GitHub installation with review enabled and verified ownership. A Slack mention still starts a saved routine, not a coding session. | handler, flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | handler, flag-off |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | handler, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/github/webhook/route.ts:223-223`, `apps/web/lib/services/cloud-code-github-task.ts:204-204`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S110.12: Design → implementation.
 
@@ -127,11 +127,11 @@ Code: `apps/web/app/api/github/webhook/route.ts:223-223`, `apps/web/lib/services
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The design source can be viewed and downloaded, a dedicated spec handoff was declined (D-2026-09-27-02), and cloud Code needs AGI_E2B_EXECUTION=1 and edits files only through approved shell commands. | ui, flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | ui, flag-off |
 | mobile | partial | The phone can steer an existing desktop Code session and download the design source as text; no design-to-code handoff. | ui |
 | cli | partial | agi artifacts show --out writes the design into the repo for the agent to implement; no spec handoff or Figma import. | ui |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1533-1533`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:111-111`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:435-435`, `apps/cli/src/lib.rs:2391-2391`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:435-435`, `apps/cli/src/lib.rs:2391-2391`
 
 ## S110.14: Completed task → reusable Skill.
 
@@ -141,8 +141,8 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1533-1533
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Asking the assistant to turn finished work into a skill offers draft_plugin and a 'Save as a skill' card that creates a real skill, but it is off by default (AGI_USER_SKILL_AUTHORING=0) and needs the ask phrasing; there is no one-click action on a finished task. The ledger's S60.28 web/desktop 'missing' predates this. |  |
-| desktop | partial | Asking the assistant to turn finished work into a skill offers draft_plugin and a 'Save as a skill' card that creates a real skill, but it is off by default (AGI_USER_SKILL_AUTHORING=0) and needs the ask phrasing; there is no one-click action on a finished task. The ledger's S60.28 web/desktop 'missing' predates this. |  |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first |  |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first |  |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -198,11 +198,11 @@ Code: `apps/cli/src/claude_parity.rs:178-180`, `apps/cli/src/app_server/develope
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Continue in VS Code hands the cloud branch to VS Code, which pulls it into the checkout after a review and an overwrite check; it needs VS Code with the extension and AGI_E2B_EXECUTION=1 for cloud sessions to exist. | flag-off, handler |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Bring the branch in pulls a cloud session's branch after review; needs AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/web/features/code/code-surface.ts:412-414`, `apps/extension-vscode/src/features/context-handoff/index.ts:235-235`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:266-266`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:266-266`
 
 ## S110.24: Existing notebook → main assistant context.
 

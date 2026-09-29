@@ -1,4 +1,5 @@
 import markdownit from 'markdown-it';
+import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import DOMPurify, { type Config } from 'dompurify';
 import { findPathReferences } from '../utils/pathReferences';
 
@@ -130,7 +131,7 @@ function linkifyPathReferences(root: DocumentFragment): void {
 
 function render(markdown: string): string {
   if (typeof markdown !== 'string') return '';
-  const html = md.render(markdown);
+  const html = md.render(normalizeMarkdownSource(markdown));
   const sanitized = DOMPurify.sanitize(html, PURIFY_CONFIG);
   const template = document.createElement('template');
   template.innerHTML = sanitized;

@@ -260,6 +260,7 @@ pub async fn run_repl(
                         SlashResult::Login => {
                             let login_result =
                                 crate::auth::interactive_login_for_provider(None).await;
+                            crate::claude_parity::connectors::forget_local_tool_policy();
                             if let Err(e) = login_result {
                                 output::print_error(&format!("Login failed: {:#}", e));
                             }
@@ -271,6 +272,7 @@ pub async fn run_repl(
                                 );
                             }
                             dialogs::handle_logout();
+                            crate::claude_parity::connectors::forget_local_tool_policy();
                         }
                         SlashResult::Voice(lang) => {
                             eprintln!(

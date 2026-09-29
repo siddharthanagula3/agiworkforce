@@ -25,6 +25,7 @@ vi.mock('@/lib/server/developer-token', () => ({
 vi.mock('@/lib/server/terms', () => ({
   CURRENT_TERMS_VERSION: '2026-09-01',
   hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
+  mustAcceptTerms: async (userId: string) => !(await mocks.hasAcceptedCurrentTerms(userId)),
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: (...args: unknown[]) => mocks.resolveActiveOrganizationId(...args),

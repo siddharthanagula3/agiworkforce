@@ -22,7 +22,7 @@ use agiworkforce_protocol::developer_session::{
     McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse, McpServerParams,
     McpServerTestResponse, McpServerToolsResponse, MemoryAddParams, MemoryAddResponse,
     ModelListParams, PendingApprovalSnapshot, PermissionRulesResponse, PermissionsAddParams,
-    PermissionsListResponse, PermissionsRemoveParams, PlanDecision, PlanDecisionParams,
+    PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams, PlanDecision,
     PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
     PluginUpdateResponse, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
     RewindSkippedFile, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
@@ -91,6 +91,7 @@ const MAX_IMAGE_INPUT_BYTES: usize = 10_000_000;
 const MAX_TOTAL_IMAGE_INPUT_BYTES: usize = 20_000_000;
 const MAX_IMAGE_DATA_URL_HEADER_BYTES: usize = 256;
 const MAX_IMAGE_MIME_BYTES: usize = 127;
+const MAX_PLAN_FEEDBACK_CHARS: usize = 4_000;
 const MAX_IMAGE_INPUT_ENCODED_BYTES: usize = MAX_IMAGE_INPUT_BYTES.div_ceil(3) * 4;
 const MAX_STEER_QUEUE_DEPTH: usize = 20;
 // The VS Code JSONL client rejects any single line above 4 MiB. Reserve ample
@@ -445,9 +446,9 @@ impl CliDeveloperSessionHost {
             permission_rules: true,
             trust: true,
             turn_tool_filters: true,
-            plan_decision: true,
             provider_keys: true,
             questions: true,
+            plan_decisions: true,
         }
     }
 
@@ -3559,24 +3560,79 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .map_err(internal_error)?
     }
 
-    async fn decide_plan(
-        &self,
-        params: PlanDecisionParams,
-    ) -> Result<(), DeveloperSessionHostError> {
+    async fn decide_plan(&self, params: PlanDecideParams) -> Result<(), DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        let session = self.load_agent(&params.thread_id).await?;
-        let mut agent = session.try_lock().map_err(|_| {
-            DeveloperSessionHostError::invalid_request(
-                "A turn is running on this thread; decide on the plan when it ends",
-            )
-        })?;
-        let decided = match params.decision {
-            PlanDecision::Approve => agent.approve_plan(),
+        if self
+            .running_turns
+            .lock()
+            .await
+            .contains_key(&params.thread_id)
+        {
+            return Err(DeveloperSessionHostError::conflict(
+                "Wait for the running turn to finish before deciding on its plan",
+            ));
+        }
+        let feedback = match params.decision {
+            PlanDecision::Approve => None,
             PlanDecision::Reject => {
-                agent.reject_plan(params.feedback.as_deref().unwrap_or_default())
+                let feedback = params
+                    .feedback
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|feedback| !feedback.is_empty())
+                    .ok_or_else(|| {
+                        DeveloperSessionHostError::invalid_request(
+                            "Rejecting a plan needs feedback for the next attempt",
+                        )
+                    })?;
+                if feedback.chars().count() > MAX_PLAN_FEEDBACK_CHARS {
+                    return Err(DeveloperSessionHostError::invalid_request(format!(
+                        "Plan feedback is limited to {MAX_PLAN_FEEDBACK_CHARS} characters"
+                    )));
+                }
+                Some(feedback.to_string())
             }
         };
-        decided.map_err(DeveloperSessionHostError::invalid_request)
+        let session = self.load_agent(&params.thread_id).await?;
+        {
+            let mut agent = session.lock().await;
+            if !matches!(
+                agent.permission_mode,
+                crate::cli_options::PermissionMode::Plan
+            ) {
+                return Err(DeveloperSessionHostError::conflict(
+                    "This thread is not in plan mode",
+                ));
+            }
+            if agent.current_plan.is_none() {
+                return Err(DeveloperSessionHostError::conflict(
+                    "This thread has no plan to decide on yet",
+                ));
+            }
+            match feedback {
+                None => {
+                    agent.plan_approved = true;
+                }
+                Some(feedback) => {
+                    agent.plan_rejection_feedback = Some(feedback);
+                    agent.current_plan = None;
+                    agent.current_plan_path = None;
+                    agent.plan_approved = false;
+                }
+            }
+        }
+        if params.decision == PlanDecision::Reject {
+            self.emit(
+                agiworkforce_protocol::developer_session::method::THREAD_PLAN,
+                serde_json::to_value(ThreadPlanNotification {
+                    thread_id: params.thread_id,
+                    plan: Some(Vec::new()),
+                    todos: None,
+                })
+                .map_err(internal_error)?,
+            );
+        }
+        Ok(())
     }
 
     async fn list_provider_keys(&self) -> Result<ProvidersListResponse, DeveloperSessionHostError> {

@@ -26,11 +26,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Desktop cloud sessions are the hosted /code; switching model per turn matches Claude Remote Control (a model picked from a connected device applies to the session, code.claude.com/docs/en/remote-control, 2026-09-28). | switch-on |
-| desktop | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Desktop cloud sessions are the hosted /code; switching model per turn matches Claude Remote Control (a model picked from a connected device applies to the session, code.claude.com/docs/en/remote-control, 2026-09-28). | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | cli | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
 
-Code: `apps/web/lib/services/cloud-code-agent-service.ts:799-799`, `apps/cli/src/agent/prompt.rs:396-398`, `apps/cli/src/lib.rs:829-835`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/agent/prompt.rs:396-398`, `apps/cli/src/lib.rs:829-835`
 
 ## S68.07: Same task plan and checkpoints.
 
@@ -52,10 +52,10 @@ Code: `apps/web/lib/services/cloud-code-agent-service.ts:799-799`, `apps/cli/src
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | cli | partial | The TUI runs turns in its own process with a per-turn approval broker; another client on the same thread cannot see or answer them until a cross-process transport exists (TUI turns through the app-server, or Remote Control for local threads). | handler |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/cli/src/tui/tui_app.rs:5940-5940`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/tui/tui_app.rs:5940-5940`
 
 ## S68.09: Same tool activity.
 
@@ -65,10 +65,10 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/cli/src/tu
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | cli | partial | Tool events of a TUI-run turn reach only that terminal (and the JSON stream); streaming them to other attached clients needs the same cross-process transport as S68.08. | handler |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/cli/src/agent/chat.rs:2835-2835`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/agent/chat.rs:2835-2835`
 
 ## S68.12: Execution-owner indicator.
 
@@ -90,10 +90,10 @@ Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`, `apps/cli/src/ag
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
-| desktop | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. | switch-on |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/lib/services/cloud-code-agent-loop.ts:401-401`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S68.16: Move work to cloud through an explicit handoff.
 
@@ -180,12 +180,12 @@ Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Code done; SIGNALING_HTTP_URL and SIGNALING_INTERNAL_SECRET are set in Vercel Production and take effect at the next website deploy. Live check: pair a phone and a browser against signaling.agiworkforce.com after deploy. | live-check |
-| desktop | partial | Parity: Claude Remote Control serves one remote connection per process and a browser on another computer connects (code.claude.com/docs/en/remote-control, 2026-09-28); ours pairs one phone or one browser (/code/computer). Live check after the website deploy, as the web cell. | live-check |
+| web | partial | live-check after the website deploy: open /code/computer on web and in Electron and pair a phone or browser; claim returns 200 (not 503 'Pairing is not configured') and the device shows online | live-check |
+| desktop | partial | live-check after the website deploy: open /code/computer on web and in Electron and pair a phone or browser; claim returns 200 (not 503 'Pairing is not configured') and the device shows online | live-check |
 | mobile | partial | Scans the desktop's code to pair; only phone-to-desktop. | surface-only |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/pair/claim/route.ts:72-72`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:81-81`, `apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx:75-75`, `apps/mobile/app/(app)/companion/index.tsx:248-248`
+Code: `apps/web/app/api/pair/claim/route.ts:70-70`, `apps/mobile/app/(app)/companion/index.tsx:248-248`, `apps/mobile/stores/connectionStore.ts:236-239`
 
 ## S68.23: Pairing revocation.
 

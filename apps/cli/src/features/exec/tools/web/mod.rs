@@ -7,6 +7,10 @@ use anyhow::Result;
 use super::common::{print_tool_status, truncate_output_with_save, SCRIPT_RE, STYLE_RE};
 use super::ToolResult;
 
+mod site_rules;
+pub(super) use site_rules::refusal_for as workspace_site_refusal;
+use site_rules::SiteRules;
+
 const BLOCKED_HOSTS: &[&str] = &[
     "169.254.169.254",
     "metadata.google.internal",
@@ -184,10 +188,16 @@ async fn read_body_capped(mut resp: reqwest::Response) -> std::result::Result<St
 
 /// Fetch `url`, following redirects manually so every hop is re-validated AND
 /// pinned to the addresses that validation saw.
-async fn fetch_with_pinned_hops(url: &str) -> std::result::Result<String, String> {
+async fn fetch_with_pinned_hops(
+    url: &str,
+    site_rules: Option<&SiteRules>,
+) -> std::result::Result<String, String> {
     let mut current = url.to_string();
     for hop in 0..=WEB_FETCH_MAX_REDIRECTS {
         if let Some(reason) = crate::permissions::url_blocked_by_domain_rule(&current) {
+            return Err(reason);
+        }
+        if let Some(reason) = site_rules.and_then(|rules| rules.refusal(&current)) {
             return Err(reason);
         }
         let addrs = validate_hop(&current)
@@ -360,6 +370,17 @@ pub(super) async fn execute_web_search(args: &HashMap<String, String>) -> Result
         .unwrap_or(5)
         .clamp(1, 20);
 
+    let site_rules = match site_rules::current().await {
+        Ok(rules) => rules,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "web_search".to_string(),
+                success: false,
+                output: reason,
+            });
+        }
+    };
+
     print_tool_status("web_search", &format!("WebSearch({})", query));
 
     let failed = |output: String| {
@@ -405,7 +426,23 @@ pub(super) async fn execute_web_search(args: &HashMap<String, String>) -> Result
         ));
     }
     let body: serde_json::Value = response.json().await.unwrap_or(serde_json::Value::Null);
-    let found = search_results(&body, max_results);
+    let mut found = search_results(&body, max_results);
+    // The search engine cannot be told the workspace's site rules, so the
+    // results they refuse are dropped before the model sees them.
+    if let Some(rules) = site_rules {
+        let before = found.len();
+        found.retain(|source| rules.refusal(&source.url).is_none());
+        if before > 0 && found.is_empty() {
+            return Ok(ToolResult {
+                tool_name: "web_search".to_string(),
+                success: true,
+                output: format!(
+                    "Every result for \"{}\" was on a website your workspace administrator does not allow the assistant to read. Answer without web sources and say so.",
+                    query.replace('"', "'")
+                ),
+            });
+        }
+    }
     if found.is_empty() {
         return Ok(ToolResult {
             tool_name: "web_search".to_string(),
@@ -480,9 +517,27 @@ pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<
         });
     }
 
+    let site_rules = match site_rules::current().await {
+        Ok(rules) => rules,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "web_fetch".to_string(),
+                success: false,
+                output: reason,
+            });
+        }
+    };
+    if let Some(reason) = site_rules.as_ref().and_then(|rules| rules.refusal(url)) {
+        return Ok(ToolResult {
+            tool_name: "web_fetch".to_string(),
+            success: false,
+            output: reason,
+        });
+    }
+
     print_tool_status("web_fetch", &format!("WebFetch({})", url));
 
-    match fetch_with_pinned_hops(url).await {
+    match fetch_with_pinned_hops(url, site_rules.as_ref()).await {
         Ok(body) => {
             crate::sources::record([crate::sources::source(
                 url,

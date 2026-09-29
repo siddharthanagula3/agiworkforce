@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import * as vscode from 'vscode';
-import {
-  isAutoModeModelId,
-  type ThreadReadResponse,
-  type ThreadSummary,
-} from '@agiworkforce/types';
+import { type ThreadReadResponse, type ThreadSummary } from '@agiworkforce/types';
 import {
   ChatStateManager,
   type ExtToWebviewMessage,
@@ -18,6 +14,7 @@ import {
   MODEL_PICKER_OPTIONS,
   buildGroupedQuickPickItems,
   getModelProviderInfo,
+  isAutoPickerModelId,
 } from '../features/model-picker/modelConstants';
 import {
   LocalRuntimeProtocolError,
@@ -1500,7 +1497,7 @@ describe('ChatStateManager local turn lifecycle', () => {
       .find((message) => message.type === 'attachFilesAck') as
       Extract<ExtToWebviewMessage, { type: 'attachFilesAck' }> | undefined;
     const attachmentId = attachmentAck?.payload.added[0]?.id;
-    const catalogModel = MODEL_PICKER_OPTIONS.find((option) => !isAutoModeModelId(option.id))!;
+    const catalogModel = MODEL_PICKER_OPTIONS.find((option) => !isAutoPickerModelId(option.id))!;
     await harness.manager.handleMessage({
       type: 'selectModel',
       payload: { modelId: catalogModel.id },
@@ -2236,7 +2233,7 @@ describe('ChatStateManager local turn lifecycle', () => {
   it('keeps the same runtime thread when a model changes within one catalog provider', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
-    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => !isAutoModeModelId(option.id));
+    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => !isAutoPickerModelId(option.id));
     const firstModel = manualModels.find(
       (option) => getModelProviderInfo(option.id).providerId !== null,
     );
@@ -2293,7 +2290,7 @@ describe('ChatStateManager local turn lifecycle', () => {
   it('keeps the developer session when the model changes inside a managed session', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
-    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => !isAutoModeModelId(option.id));
+    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => !isAutoPickerModelId(option.id));
     const firstModel = manualModels.find(
       (option) => getModelProviderInfo(option.id).providerId !== null,
     );
@@ -2363,7 +2360,7 @@ describe('ChatStateManager local turn lifecycle', () => {
   it('starts a fresh runtime thread when catalog providers change', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
-    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => !isAutoModeModelId(option.id));
+    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => !isAutoPickerModelId(option.id));
     const firstModel = manualModels.find(
       (option) => getModelProviderInfo(option.id).providerId !== null,
     );
@@ -2461,7 +2458,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     await harness.context.globalState.update('tierStatus.cachedTier', 'local');
     const lockedModel = buildGroupedQuickPickItems('local').find(
       (item) =>
-        item.modelId !== undefined && !isAutoModeModelId(item.modelId) && item.disabled === true,
+        item.modelId !== undefined && !isAutoPickerModelId(item.modelId) && item.disabled === true,
     );
     expect(lockedModel).toBeDefined();
 
@@ -3439,7 +3436,7 @@ describe('ChatStateManager context usage reporting', () => {
   it('reports the runtime-measured turn tokens against the catalog context window', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
-    const model = MODEL_PICKER_OPTIONS.filter((option) => !isAutoModeModelId(option.id)).find(
+    const model = MODEL_PICKER_OPTIONS.filter((option) => !isAutoPickerModelId(option.id)).find(
       (option) => MODEL_CONTEXT_LIMITS[option.id] !== undefined,
     );
     expect(model).toBeDefined();

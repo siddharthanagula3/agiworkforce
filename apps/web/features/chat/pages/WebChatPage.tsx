@@ -5105,6 +5105,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedMessages, getToken],
   );
 
+  const handleSubmitPrompt = useCallback(
+    (prompt: string) => {
+      handleSend(prompt);
+    },
+    [handleSend],
+  );
+
   const sendResearchGuidanceAsMessage = useCallback(
     async (id: string, guidance: string): Promise<boolean> => {
       const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
@@ -6477,6 +6484,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                                 onResumeVideo={handleResumeVideo}
                                 onRetryVideo={handleRetryVideo}
                                 onSendMessage={setComposerPrefill}
+                                onSubmitPrompt={handleSubmitPrompt}
                                 onPaywallUpgrade={handlePaywallRecovery}
                                 onPaywallDismiss={handlePaywallDismiss}
                                 onRegenerateWithModel={handleRegenerateWithModel}
