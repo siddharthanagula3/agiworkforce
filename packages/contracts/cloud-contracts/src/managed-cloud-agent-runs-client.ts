@@ -66,6 +66,7 @@ export interface ManagedCloudAgentRunListOptions {
   requestId?: string;
   limit?: number;
   cursor?: string;
+  projectId?: string;
   signal?: AbortSignal;
 }
 
@@ -325,12 +326,14 @@ export function createManagedCloudAgentRunClient(
         .parse(options.states ?? []);
       const requestId = ManagedCloudAgentRunRequestIdSchema.optional().parse(options.requestId);
       const cursor = z.string().min(1).max(512).optional().parse(options.cursor);
+      const projectId = z.string().uuid().optional().parse(options.projectId);
       const limit = Math.min(100, Math.max(1, Math.trunc(options.limit ?? 25)));
       const params = new URLSearchParams();
       for (const state of states) params.append('state', state);
       params.set('limit', String(limit));
       if (requestId) params.set('requestId', requestId);
       if (cursor) params.set('cursor', cursor);
+      if (projectId) params.set('projectId', projectId);
       const response = await request(`${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}?${params.toString()}`, {
         headers: await readHeaders(),
         signal: options.signal,
