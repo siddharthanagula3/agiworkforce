@@ -103,6 +103,13 @@ export interface ToolMetadata {
 }
 
 export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  agi_reconnect: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
   web_search: {
     actionClass: 'read',
     reversible: true,
@@ -448,14 +455,6 @@ const CONNECTOR_TOOL_METADATA: Readonly<Record<string, Readonly<Record<string, T
     gmail: GMAIL_TOOL_METADATA,
   });
 
-const CONNECTOR_RECONNECT_METADATA: ToolMetadata = Object.freeze({
-  actionClass: 'read',
-  reversible: true,
-  acceptsUntrustedContent: false,
-  createsEgressPath: false,
-  declared: true,
-});
-
 export const UNKNOWN_TOOL_METADATA: ToolMetadata = Object.freeze({
   actionClass: 'write',
   reversible: false,
@@ -470,7 +469,9 @@ export function resolveToolMetadata(name: string): ToolMetadata {
 
   const parsed = parseQualifiedToolName(name);
   if (parsed) {
-    if (parsed.toolName === CONNECTOR_RECONNECT_TOOL_NAME) return CONNECTOR_RECONNECT_METADATA;
+    if (parsed.toolName === CONNECTOR_RECONNECT_TOOL_NAME) {
+      return PLATFORM_TOOL_METADATA[CONNECTOR_RECONNECT_TOOL_NAME] ?? UNKNOWN_TOOL_METADATA;
+    }
     const connector = CONNECTOR_TOOL_METADATA[parsed.serverId]?.[parsed.toolName];
     if (connector) return connector;
   }
