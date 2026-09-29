@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ManagedCloudScheduleShareResponse } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -17,7 +18,8 @@ async function handleGetSharedSchedule(request: NextRequest, context: RouteConte
   const { token } = await context.params;
   const share = await getSharedSchedule(getNeonDb(), token);
   if (!share) throw createError.notFound('This shared schedule link is not available');
-  return NextResponse.json({ share });
+  const shared: ManagedCloudScheduleShareResponse = { share };
+  return NextResponse.json(shared);
 }
 
 export const GET = withErrorHandler(handleGetSharedSchedule);

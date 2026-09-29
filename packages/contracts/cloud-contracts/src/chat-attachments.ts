@@ -170,6 +170,9 @@ export const ManagedCloudChatAttachmentCompleteResponseSchema = z.object({
 });
 
 export type ManagedCloudChatAttachment = z.infer<typeof ManagedCloudChatAttachmentSchema>;
+export type ManagedCloudChatAttachmentCompleteResponse = z.input<
+  typeof ManagedCloudChatAttachmentCompleteResponseSchema
+>;
 
 /**
  * The canonical reference to an uploaded attachment. A text-like upload is
