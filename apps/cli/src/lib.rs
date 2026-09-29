@@ -1766,6 +1766,34 @@ enum McpSubcommand {
         /// Registry name of the server to show.
         name: String,
     },
+    /// Let a server's tools, or one tool, run without asking.
+    Allow {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for all of its tools.
+        tool: Option<String>,
+    },
+    /// Ask before a server's tools, or one tool, run.
+    Ask {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for all of its tools.
+        tool: Option<String>,
+    },
+    /// Never run a server's tools, or one tool.
+    Block {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for all of its tools.
+        tool: Option<String>,
+    },
+    /// Drop your allow, ask or block setting for a server or one tool.
+    Unset {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for the server-wide setting.
+        tool: Option<String>,
+    },
     /// Authorize a remote MCP server over OAuth and store the token.
     Login {
         /// Registry name of the remote server to authorize.
@@ -4039,6 +4067,27 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 terminal_text::sanitize_terminal_text(&row.target)
             );
             println!("{:<10} {}", "file", McpRegistry::default_path()?.display());
+            let prefix = crate::platform::policy::mcp_rule_target(name, None);
+            for (target, decision) in crate::platform::policy::user_mcp_rules()
+                .into_iter()
+                .filter(|(target, _)| {
+                    target == &prefix || target.starts_with(&format!("{prefix}__"))
+                })
+            {
+                let scope = target
+                    .strip_prefix(&format!("{prefix}__"))
+                    .map_or_else(|| "all tools".to_string(), str::to_string);
+                println!(
+                    "{:<10} {} {}",
+                    "rule",
+                    terminal_text::sanitize_terminal_text(&scope),
+                    match decision {
+                        crate::platform::policy::PolicyDecision::Allow => "runs without asking",
+                        crate::platform::policy::PolicyDecision::Ask => "asks first",
+                        crate::platform::policy::PolicyDecision::Deny => "blocked",
+                    }
+                );
+            }
             if !row.enabled {
                 println!("\nTurn it on with `agi mcp enable {name}` to see what it offers.");
                 return Ok(());
@@ -4106,6 +4155,45 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 Err(error) => println!("\nIts tools could not be listed: {error:#}"),
             }
             let _ = connection.shutdown().await;
+            Ok(())
+        }
+        McpSubcommand::Allow { server, tool }
+        | McpSubcommand::Ask { server, tool }
+        | McpSubcommand::Block { server, tool }
+        | McpSubcommand::Unset { server, tool } => {
+            use crate::platform::policy::PolicyDecision;
+            let decision = match action {
+                McpSubcommand::Allow { .. } => Some(PolicyDecision::Allow),
+                McpSubcommand::Ask { .. } => Some(PolicyDecision::Ask),
+                McpSubcommand::Block { .. } => Some(PolicyDecision::Deny),
+                _ => None,
+            };
+            let target = crate::platform::policy::mcp_rule_target(server, tool.as_deref());
+            let path = crate::platform::policy::set_user_mcp_rule(&target, decision)?;
+            let subject = match tool {
+                Some(tool) => format!(
+                    "'{}' from '{}'",
+                    terminal_text::sanitize_terminal_text(tool),
+                    terminal_text::sanitize_terminal_text(server)
+                ),
+                None => format!(
+                    "every tool from '{}'",
+                    terminal_text::sanitize_terminal_text(server)
+                ),
+            };
+            println!(
+                "{} ({})",
+                match decision {
+                    Some(PolicyDecision::Allow) => format!("{subject} now runs without asking"),
+                    Some(PolicyDecision::Ask) => format!("{subject} now asks before it runs"),
+                    Some(PolicyDecision::Deny) => format!("{subject} is now blocked"),
+                    None => format!("Your setting for {subject} is removed"),
+                },
+                path.display()
+            );
+            println!(
+                "A workspace administrator's managed rules still come first, and a project's policy.toml applies once you trust the project."
+            );
             Ok(())
         }
         McpSubcommand::Login { name } => {

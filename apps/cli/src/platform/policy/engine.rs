@@ -306,7 +306,7 @@ fn best_rule<'a>(
     let mut best: Option<(&PolicyRule, u16)> = None;
     for compiled in rules {
         let rule = &compiled.rule;
-        if rule.tool != "*" && rule.tool != tool_name {
+        if !rule_names_tool(&rule.tool, tool_name) {
             continue;
         }
         // The regex was compiled once at load time, no per-call recompilation
@@ -322,6 +322,92 @@ fn best_rule<'a>(
         }
     }
     best.map(|(rule, _)| rule)
+}
+
+fn rule_names_tool(rule_tool: &str, tool_name: &str) -> bool {
+    if rule_tool == "*" || rule_tool == tool_name {
+        return true;
+    }
+    let server = rule_tool.strip_suffix("__*").unwrap_or(rule_tool);
+    server.starts_with(MCP_TOOL_PREFIX)
+        && !server[MCP_TOOL_PREFIX.len()..].contains("__")
+        && tool_name
+            .strip_prefix(server)
+            .is_some_and(|rest| rest.starts_with("__"))
+}
+
+const MCP_TOOL_PREFIX: &str = "mcp__";
+const MCP_SERVER_RULE_PRIORITY: u16 = 10;
+const MCP_TOOL_RULE_PRIORITY: u16 = 20;
+
+pub fn mcp_rule_target(server: &str, tool: Option<&str>) -> String {
+    match tool {
+        Some(tool) => format!("{MCP_TOOL_PREFIX}{server}__{tool}"),
+        None => format!("{MCP_TOOL_PREFIX}{server}"),
+    }
+}
+
+pub fn set_user_mcp_rule(target: &str, decision: Option<PolicyDecision>) -> Result<PathBuf> {
+    let path = user_policy_path().context("No config directory for the user policy")?;
+    let mut policy: WorkspacePolicy = if path.exists() {
+        let contents = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))?
+    } else {
+        WorkspacePolicy::default()
+    };
+    policy
+        .rules
+        .retain(|rule| !(rule.tool == target && rule.pattern.is_none()));
+    if let Some(decision) = decision {
+        let server_wide = !target[MCP_TOOL_PREFIX.len()..].contains("__");
+        policy.rules.push(PolicyRule {
+            tool: target.to_string(),
+            pattern: None,
+            decision: match decision {
+                PolicyDecision::Allow => "allow",
+                PolicyDecision::Deny => "deny",
+                PolicyDecision::Ask => "ask",
+            }
+            .to_string(),
+            priority: if server_wide {
+                MCP_SERVER_RULE_PRIORITY
+            } else {
+                MCP_TOOL_RULE_PRIORITY
+            },
+            reason: None,
+            locked: false,
+        });
+    }
+    let rendered = toml::to_string_pretty(&policy).context("Failed to write the user policy")?;
+    compile_rules(policy.rules, &path.display().to_string())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, rendered)
+        .with_context(|| format!("Failed to write {}", path.display()))?;
+    Ok(path)
+}
+
+pub fn user_mcp_rules() -> Vec<(String, PolicyDecision)> {
+    let Some(path) = user_policy_path().filter(|path| path.exists()) else {
+        return Vec::new();
+    };
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|contents| toml::from_str::<WorkspacePolicy>(&contents).ok())
+        .map(|policy| {
+            policy
+                .rules
+                .into_iter()
+                .filter(|rule| rule.pattern.is_none() && rule.tool.starts_with(MCP_TOOL_PREFIX))
+                .map(|rule| {
+                    let decision = decision_of(&rule);
+                    (rule.tool, decision)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn workspace_policy_path(workspace_root: &Path) -> PathBuf {

@@ -1091,7 +1091,7 @@ pub(crate) fn workspace_policy_is_trusted(workspace_root: &std::path::Path) -> b
     crate::trust::is_trusted(workspace_root)
 }
 
-fn effective_workspace_policy_decision(
+pub(crate) fn effective_workspace_policy_decision(
     resolution: crate::platform::policy::PolicyResolution,
     workspace_is_trusted: bool,
 ) -> crate::platform::policy::PolicyDecision {

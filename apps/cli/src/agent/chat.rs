@@ -2109,6 +2109,12 @@ impl TurnHostAdapter<'_> {
         } else if call.name.starts_with("mcp_") {
             let approval_callback = self.session.recorded_approval_callback();
             let require_confirmation = !self.session.skips_approval();
+            let workspace_root = self
+                .session
+                .managed_session
+                .as_ref()
+                .and_then(|session| session.workspace_root.clone())
+                .or_else(|| std::env::current_dir().ok());
             match execute_mcp_tool(
                 &mut self.session.mcp_manager,
                 &call.name,
@@ -2116,6 +2122,7 @@ impl TurnHostAdapter<'_> {
                 self.session.privacy_mode,
                 require_confirmation,
                 approval_callback,
+                workspace_root.as_deref(),
             )
             .await
             {
