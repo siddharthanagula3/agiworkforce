@@ -14,7 +14,12 @@ let mockSignedIn = false;
 
 let mockSearchParams: { id?: string } = { id: 'proj_snapshot' };
 let mockLocalProjects = [{ id: 'proj_snapshot', name: 'Snapshot project', sources: [] }];
-let mockCloudProjects: Array<{ id: string; name: string; deletedAt: string | null }> = [];
+let mockCloudProjects: Array<{
+  id: string;
+  name: string;
+  deletedAt: string | null;
+  updatedAt?: string;
+}> = [];
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -43,6 +48,7 @@ jest.mock('expo-document-picker', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
   SafeAreaView: ({ children, ...rest }: { children: React.ReactNode; [key: string]: unknown }) => {
     const { View } = require('react-native');
     return <View {...rest}>{children}</View>;
@@ -67,7 +73,40 @@ jest.mock('lucide-react-native', () => {
     Plus: factory('plus'),
     SquarePen: factory('square-pen'),
     Trash2: factory('trash-2'),
+    Type: factory('type'),
     Users: factory('users'),
+    Check: factory('check'),
+    ...Object.fromEntries(
+      [
+        'BookOpen',
+        'Brain',
+        'Calendar',
+        'CalendarClock',
+        'Camera',
+        'Code',
+        'Code2',
+        'Database',
+        'FileCode',
+        'FileSpreadsheet',
+        'FolderOpen',
+        'GitBranch',
+        'GitFork',
+        'Globe',
+        'Image',
+        'LayoutList',
+        'LibraryBig',
+        'ListChecks',
+        'Monitor',
+        'Palette',
+        'Plug',
+        'ShieldCheck',
+        'Sparkles',
+        'Star',
+        'Terminal',
+        'TerminalSquare',
+        'Video',
+      ].map((name) => [name, factory(name)]),
+    ),
   };
 });
 
@@ -105,7 +144,11 @@ jest.mock('@/src/features/projects/store', () => ({
 
 jest.mock('@/stores/projects/cloudProjectStore', () => ({
   useCloudProjectStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ projects: mockCloudProjects, setActiveCloudProject: mockSetActiveCloud }),
+    selector({
+      projects: mockCloudProjects,
+      details: {},
+      setActiveCloudProject: mockSetActiveCloud,
+    }),
 }));
 
 jest.mock('@/stores/chatStore', () => ({
@@ -122,6 +165,7 @@ jest.mock('@/src/features/auth/store', () => ({
 
 jest.mock('@/src/features/projects/service', () => ({
   loadMissingCloudProject: (...args: unknown[]) => mockLoadMissingCloudProject(...args),
+  refreshCloudProjectDetails: jest.fn(async () => undefined),
 }));
 
 import ProjectDetailScreen from '@/app/(app)/projects/[id]';
@@ -165,7 +209,14 @@ describe('Mobile project-detail screen snapshots (round-17)', () => {
 
   it('requires an explicit switch before opening a Cloud project from Local mode', async () => {
     mockLocalProjects = [];
-    mockCloudProjects = [{ id: 'proj_snapshot', name: 'Cloud project', deletedAt: null }];
+    mockCloudProjects = [
+      {
+        id: 'proj_snapshot',
+        name: 'Cloud project',
+        deletedAt: null,
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
+    ];
     const { getByLabelText, getByTestId, queryByLabelText } = render(<ProjectDetailScreen />);
     expect(getByTestId('project-detail-cloud-header')).toBeTruthy();
     expect(queryByLabelText('New chat in this project')).toBeNull();
@@ -196,7 +247,14 @@ describe('Mobile project-detail screen snapshots (round-17)', () => {
       () =>
         new Promise<void>((resolve) => {
           finishLoad = () => {
-            mockCloudProjects = [{ id: 'proj_snapshot', name: 'Remote project', deletedAt: null }];
+            mockCloudProjects = [
+              {
+                id: 'proj_snapshot',
+                name: 'Remote project',
+                deletedAt: null,
+                updatedAt: '2026-09-01T00:00:00.000Z',
+              },
+            ];
             resolve();
           };
         }),

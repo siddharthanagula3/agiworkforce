@@ -4,7 +4,11 @@ import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { bankAccountsUnavailableReason, connectBankAccounts } from '@/lib/connectors/bank-accounts';
+import {
+  bankAccountsUnavailableReason,
+  completeBankAccountsHostedLink,
+  connectBankAccounts,
+} from '@/lib/connectors/bank-accounts';
 import { BANK_ACCOUNTS_CONNECTOR_ID } from '@/lib/connectors/plaid-config';
 import { sensitiveDataRegionRefusal } from '@/lib/connectors/sensitive-data-connectors';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -22,10 +26,13 @@ const RATE_LIMIT_BUCKET = 'chat-conversation';
 const PUBLIC_TOKEN_MAX_LENGTH = 512;
 const INSTITUTION_NAME_MAX_LENGTH = 200;
 
-const BodySchema = z.object({
-  publicToken: z.string().trim().min(1).max(PUBLIC_TOKEN_MAX_LENGTH),
-  institutionName: z.string().trim().min(1).max(INSTITUTION_NAME_MAX_LENGTH).optional(),
-});
+const BodySchema = z.union([
+  z.object({
+    publicToken: z.string().trim().min(1).max(PUBLIC_TOKEN_MAX_LENGTH),
+    institutionName: z.string().trim().min(1).max(INSTITUTION_NAME_MAX_LENGTH).optional(),
+  }),
+  z.object({ linkToken: z.string().trim().min(1).max(PUBLIC_TOKEN_MAX_LENGTH) }).strict(),
+]);
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request);
@@ -50,9 +57,21 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   if (!policy.allowed) throw createError.forbidden(policy.reason).asUserSafe();
 
   const parsed = BodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) throw createError.validation('publicToken is required');
+  if (!parsed.success) throw createError.validation('publicToken or linkToken is required');
 
-  await connectBankAccounts(userId, parsed.data.publicToken, parsed.data.institutionName ?? null);
+  if ('linkToken' in parsed.data) {
+    const outcome = await completeBankAccountsHostedLink(userId, parsed.data.linkToken);
+    if (outcome === 'not_finished') {
+      throw createError
+        .conflict('The bank link was not finished. Start linking again.')
+        .asUserSafe();
+    }
+    if (outcome === 'not_found') {
+      throw createError.notFound('This bank link has expired. Start linking again.').asUserSafe();
+    }
+  } else {
+    await connectBankAccounts(userId, parsed.data.publicToken, parsed.data.institutionName ?? null);
+  }
   await recordAuditEvent({
     userId,
     eventType: 'connector_added',

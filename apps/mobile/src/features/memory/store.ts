@@ -22,6 +22,7 @@ import {
   isAccountScopedUiStateCurrent,
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
+import { prohibitedMemoryMessage } from '@agiworkforce/context';
 
 export type { MemoryFact };
 
@@ -202,6 +203,10 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       } else {
         const result = await writeLocalMemoryFact({ fact: fact.trim(), source: 'typed' });
         if (!isMemoryOperationScopeCurrent(operationScope)) return;
+        if (result.refusedCategory) {
+          set({ error: prohibitedMemoryMessage(result.refusedCategory) });
+          return;
+        }
         if (result.outcome === 'already_known' || !result.fact) {
           set({ error: ALREADY_SAVED_MESSAGE });
           return;
