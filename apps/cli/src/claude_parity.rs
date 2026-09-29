@@ -401,6 +401,9 @@ pub fn render_privacy_settings(session: &AgentSession) -> String {
         "  Attached files: never included in BYOK handoff drafts automatically".to_string(),
         "  Telemetry: CLI-local unless managed cloud features are enabled".to_string(),
         "  Sync: opt-in with agi sync".to_string(),
+        "  History: a Managed Cloud chat stays in your account history until you delete it; Local and BYOK sessions stay on this computer".to_string(),
+        "  Model training: AGI Workforce does not train its own models on your prompts, responses or files, so there is no training opt-in; on the Free plan the providers' free models may train on what you send unless you turn on Only use models that do not train on your chats in Settings > Privacy".to_string(),
+        "  Retention: a deleted chat stays in Recently deleted for 30 days, then is deleted for good; a temporary chat and its attachments are removed after 30 days".to_string(),
     ]
     .join("\n")
 }
