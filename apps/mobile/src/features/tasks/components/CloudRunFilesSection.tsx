@@ -23,11 +23,8 @@ export function CloudRunFilesSection({ files }: { files: CloudRunProducedFile[] 
         file.name,
       );
       await shareFile(localUri);
-    } catch (error) {
-      Alert.alert(
-        'Could not open this file',
-        error instanceof Error ? error.message : 'The file could not be downloaded.',
-      );
+    } catch {
+      Alert.alert('Could not open this file', 'The file could not be downloaded.');
     } finally {
       setOpeningId(null);
     }

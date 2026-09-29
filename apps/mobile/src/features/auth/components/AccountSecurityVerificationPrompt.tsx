@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 
 import { onPasskeyRequired } from '@/src/features/auth/services/accountSecurityEvents';
 import { verifyAccountSecurityInBrowser } from '@/src/features/auth/services/accountSecurityVerification';
+import { toUserMessage } from '@/services/userMessage';
 
 export function AccountSecurityVerificationPrompt() {
   const open = useRef(false);
@@ -30,9 +31,7 @@ export function AccountSecurityVerificationPrompt() {
                   .catch((error: unknown) => {
                     Alert.alert(
                       'Verification did not finish',
-                      error instanceof Error && error.message
-                        ? error.message
-                        : 'Try again from any screen.',
+                      toUserMessage(error, 'Try again from any screen.'),
                     );
                   })
                   .finally(() => {

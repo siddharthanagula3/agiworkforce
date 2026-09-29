@@ -9,9 +9,26 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/rate-limit', () => ({ getClientIpForRateLimit: vi.fn(() => '203.0.113.7') }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  getClientIpForRateLimit: vi.fn(() => '203.0.113.7'),
+}));
 vi.mock('@/lib/connectors/directory/ingest', () => ({
   ingestBudgetForMaxDuration: vi.fn(() => mocks.budget),
   ingestConnectorDirectory: mocks.ingestConnectorDirectory,

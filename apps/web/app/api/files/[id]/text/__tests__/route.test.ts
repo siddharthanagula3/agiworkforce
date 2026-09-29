@@ -11,15 +11,70 @@ const mocks = vi.hoisted(() => ({
   readStoredMedia: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
 vi.mock('@/lib/server/media-assets', () => ({
+  TEMPORARY_CHAT_RETENTION_DAYS: vi.fn(),
+  TEMPORARY_FILE_RETENTION_CLAIM: vi.fn(),
+  TemporaryChatFilePurge: vi.fn(),
+  deleteVideoMediaAsset: vi.fn(),
+  getMediaAssetByContentHash: vi.fn(),
+  getMediaAssetById: vi.fn(),
+  getMediaAssetByStoragePathname: vi.fn(),
+  insertMediaAsset: vi.fn(),
+  insertMediaAssetsAtomically: vi.fn(),
+  isMediaAssetStoreReady: vi.fn(),
+  latestConversationImageAssetId: vi.fn(),
+  listLibraryAssets: vi.fn(),
+  listMediaAssets: vi.fn(),
+  permanentlyDeleteMediaAsset: vi.fn(),
+  purgeTemporaryChatFiles: vi.fn(),
+  restoreMediaAsset: vi.fn(),
+  saveTemporaryChatAssetToLibrary: vi.fn(),
+  softDeleteMediaAsset: vi.fn(),
+  upsertVideoMediaAsset: vi.fn(),
   getActiveWorkspaceMediaAssetById: mocks.getActiveWorkspaceMediaAssetById,
 }));
 vi.mock('@/lib/server/media-storage', () => ({
+  authenticatedMediaUrl: vi.fn(),
+  bytesFromBase64: vi.fn(),
+  bytesFromUrl: vi.fn(),
+  deleteStoredMedia: vi.fn(),
+  deleteStoredMediaObjects: vi.fn(),
+  extForMime: vi.fn(),
+  isGeneratedMediaStorageConfigured: vi.fn(),
+  isImageStorageConfigured: vi.fn(),
+  isVideoStorageConfigured: vi.fn(),
+  sealedChatAttachmentPathname: vi.fn(),
+  storeMedia: vi.fn(),
+  storeMediaFile: vi.fn(),
+  streamStoredMedia: vi.fn(),
+  videoStoragePathname: vi.fn(),
   isMediaStorageConfigured: mocks.isMediaStorageConfigured,
   readStoredMedia: mocks.readStoredMedia,
 }));

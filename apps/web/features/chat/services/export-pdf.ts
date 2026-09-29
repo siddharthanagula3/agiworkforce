@@ -11,6 +11,10 @@ import {
 import { texToLinearMath, type LinearMathPiece } from './export-math';
 
 type Rgb = readonly [number, number, number];
+
+function canvasColor(color: Rgb): string {
+  return `#${color.map((channel) => Math.round(channel).toString(16).padStart(2, '0')).join('')}`;
+}
 type PdfFont = 'helvetica' | 'courier' | 'symbol' | 'zapfdingbats';
 type LineAlign = 'left' | 'center' | 'right';
 
@@ -570,7 +574,7 @@ class PdfTextKit {
     context.scale(RASTER_SCALE, RASTER_SCALE);
     context.font = font;
     context.textBaseline = 'alphabetic';
-    context.fillStyle = `rgb(${style.color.join(',')})`;
+    context.fillStyle = canvasColor(style.color);
     context.fillText(text, 0, ascent);
     return { url: canvas.toDataURL('image/png'), width, height: ascent + descent, ascent };
   }

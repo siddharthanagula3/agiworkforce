@@ -37,11 +37,8 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
     try {
       await ensurePlayer();
       setPlayerOpen(true);
-    } catch (error) {
-      Alert.alert(
-        'Could not play the video',
-        error instanceof Error ? error.message : 'Check your connection and try again.',
-      );
+    } catch {
+      Alert.alert('Could not play the video', 'Check your connection and try again.');
     } finally {
       setLoading(null);
     }
@@ -53,11 +50,8 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
     try {
       const prepared = await ensurePlayer();
       await shareFile(prepared.videoUri);
-    } catch (error) {
-      Alert.alert(
-        'Could not save the video',
-        error instanceof Error ? error.message : 'Check your connection and try again.',
-      );
+    } catch {
+      Alert.alert('Could not save the video', 'Check your connection and try again.');
     } finally {
       setLoading(null);
     }

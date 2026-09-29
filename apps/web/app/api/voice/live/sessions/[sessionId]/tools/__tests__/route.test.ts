@@ -15,23 +15,97 @@ const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/api-auth', () => ({
+  assertAccountActive: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
+  getClerkAuthUser: mocks.getClerkAuthUser,
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/cors', () => ({
+  appendVary: vi.fn(),
+  isOriginAllowed: vi.fn(),
+  jsonResponseWithCors: vi.fn(),
+  requireValidOrigin: vi.fn(),
+  withCorsAndSecurityHeaders: vi.fn(),
+  withCorsRoute: vi.fn(),
   handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  SECURITY_EVENT_ACTIVITY_REDIS_KEY: 'agi-security-audit:pending-anomaly-check',
+  auditEnvelopeFields: vi.fn(),
+  auditRetentionClassFor: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
+  getClientIp: vi.fn(),
+  logAuthFailure: vi.fn(),
+  logAuthorizationFailure: vi.fn(),
+  logCsrfFailure: vi.fn(),
+  logInvalidSignature: vi.fn(),
+  logRateLimitExceeded: vi.fn(),
+  logSecurityEvent: vi.fn(),
+  logSuspiciousActivity: vi.fn(),
+  sanitizeAuditDetail: vi.fn(),
+  recordAuditEvent: mocks.recordAuditEvent,
+}));
 vi.mock('@/lib/voice/live-voice-tool-runner', () => ({
   handleLiveVoiceToolCall: mocks.handleLiveVoiceToolCall,
 }));
 vi.mock('../../../lib/voice-session-store', () => ({
+  VOICE_PACE_DEFAULT: 1,
+  VOICE_PACE_MAX: 4,
+  VOICE_PACE_MIN: 0.25,
+  clampVoicePace: vi.fn(),
+  closeExpiredVoiceSessions: vi.fn(),
+  closeVoiceSession: vi.fn(),
+  closeVoiceSessionsForConversation: vi.fn(),
+  createVoiceSession: vi.fn(),
+  getActiveVoiceSessionForConversation: vi.fn(),
+  getVoiceSessionByProviderId: vi.fn(),
+  listVoiceSessionHistory: vi.fn(),
+  meteredVoiceSessionSeconds: vi.fn(),
+  updateVoiceSessionSettings: vi.fn(),
   isVoiceSessionStoreReady: mocks.isVoiceSessionStoreReady,
   touchVoiceSession: mocks.touchVoiceSession,
 }));

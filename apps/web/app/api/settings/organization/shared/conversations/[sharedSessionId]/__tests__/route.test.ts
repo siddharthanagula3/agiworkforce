@@ -11,13 +11,52 @@ const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
 vi.mock('@/lib/services/organization-permission-service', () => ({
+  SHARE_INTO_WORKSPACE_DENIED_MESSAGE:
+    'Your workspace role is read-only, so you cannot share into this workspace. Ask a workspace admin to change your role.',
+  requireMemberPermission: vi.fn(),
+  requireOrganizationPermission: vi.fn(),
+  requirePermission: vi.fn(),
+  resolveActiveOrganizationAccess: vi.fn(),
+  resolveOrganizationAccess: vi.fn(),
   resolveOrganizationPermissions: vi.fn(async () => new Set()),
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
@@ -25,9 +64,33 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   resolveOrgMembership: mocks.resolveOrgMembership,
 }));
 vi.mock('@/lib/services/org-shared-session-service', () => ({
+  SHARED_SESSION_VISIBILITIES: vi.fn(),
+  SHARE_TOKEN_REGEX: vi.fn(),
+  getOrgReadableSessionByToken: vi.fn(),
+  getPublicSharedSessionByToken: vi.fn(),
+  isConversationSharingSchemaUnavailable: vi.fn(),
+  isSharedSessionVisibility: vi.fn(),
+  listSharedSessions: vi.fn(),
+  readSharedSessionSharerName: vi.fn(),
+  resolveSessionShareTarget: vi.fn(),
+  setSharedSessionVisibility: vi.fn(),
+  shareSessionWithOrganization: vi.fn(),
+  toSharedSessionVisibility: vi.fn(),
   unshareSessionFromOrganization: mocks.unshare,
 }));
 vi.mock('@/lib/security-audit', () => ({
+  SECURITY_EVENT_ACTIVITY_REDIS_KEY: 'agi-security-audit:pending-anomaly-check',
+  auditEnvelopeFields: vi.fn(),
+  auditRetentionClassFor: vi.fn(),
+  consumePendingSecurityAnomalyCheck: vi.fn(),
+  getClientIp: vi.fn(),
+  logAuthFailure: vi.fn(),
+  logAuthorizationFailure: vi.fn(),
+  logCsrfFailure: vi.fn(),
+  logInvalidSignature: vi.fn(),
+  logSecurityEvent: vi.fn(),
+  logSuspiciousActivity: vi.fn(),
+  sanitizeAuditDetail: vi.fn(),
   recordAuditEvent: mocks.recordAuditEvent,
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),

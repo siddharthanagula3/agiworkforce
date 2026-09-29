@@ -50,6 +50,11 @@ import {
 import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
 import { useCloudProfilePhoto } from './useCloudProfilePhoto';
 import { useCloudProfileStore } from './cloudProfileStore';
+import { toUserMessage } from '@/services/userMessage';
+
+const ACCOUNT_DELETE_FAILED =
+  'We could not delete your account. Check your connection and try again, ' +
+  'or contact support@agiworkforce.com.';
 
 export default function CloudAccountScreen() {
   const colors = useThemeColors();
@@ -306,9 +311,8 @@ export default function CloudAccountScreen() {
                 is401
                   ? 'Your session expired. Please sign in again and retry.'
                   : err instanceof ApiHttpError && err.status === 409
-                    ? err.message
-                    : 'We could not delete your account. Check your connection and try again, ' +
-                      'or contact support@agiworkforce.com.',
+                    ? toUserMessage(err, ACCOUNT_DELETE_FAILED)
+                    : ACCOUNT_DELETE_FAILED,
               );
             })
             .finally(() => setDeleting(false));

@@ -17,22 +17,72 @@ const mocks = vi.hoisted(() => ({
   neonDb: { query: vi.fn() },
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.neonDb }));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => mocks.neonDb,
+}));
 vi.mock('@/lib/server/data-region', () => ({
+  CustomerKeyRegionError: class CustomerKeyRegionError extends Error {},
+  RegionMoveNotRequestedError: class RegionMoveNotRequestedError extends Error {},
+  assertCustomerKeyRegion: vi.fn(),
+  completeOrganizationRegionMove: vi.fn(),
+  getRegionDb: vi.fn(),
+  keyManagementRegions: vi.fn(),
+  listPendingRegionMoves: vi.fn(),
+  managedCloudDataRegion: vi.fn(),
+  provisionedRegions: vi.fn(),
+  regionExcludedTransports: vi.fn(),
+  regionInfrastructure: vi.fn(),
+  regionRuntime: vi.fn(),
   readOrganizationRegion: mocks.readOrganizationRegion,
   requestOrganizationRegionMove: mocks.requestOrganizationRegionMove,
   cancelOrganizationRegionMove: mocks.cancelOrganizationRegionMove,
   isRegionProvisioned: mocks.isRegionProvisioned,
 }));
 vi.mock('@/lib/services/org-entitlements', () => ({
+  getOrganizationEntitlements: vi.fn(),
+  getSharedConnectorLimitDenial: vi.fn(),
+  getSharedConnectorLimitErrorMessage: vi.fn(),
+  getSharedProjectLimitDenial: vi.fn(),
+  getSharedProjectLimitErrorMessage: vi.fn(),
+  isOrgResourceLimitError: vi.fn(),
+  resolveUserPersonalPlanTier: vi.fn(),
   resolveOrganizationEntitlementPlan: mocks.resolveOrganizationEntitlementPlan,
 }));
 vi.mock('@/app/api/settings/organization/workspace-access', () => ({
+  resolveWorkspaceConsoleAccess: vi.fn(),
   requireWorkspaceConsolePermission: mocks.requireWorkspaceConsolePermission,
 }));
 

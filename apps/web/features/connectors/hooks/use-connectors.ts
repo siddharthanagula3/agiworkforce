@@ -447,7 +447,7 @@ export function useConnectors(): ConnectorStatus {
               if (await connectBankAccountsWithPlaid(plaidRoutes)) {
                 setConnectedIds((prev) => new Set([...prev, id]));
                 invalidateConnectorsCache();
-                announceBankConnected();
+                announceBankConnected((href) => router.push(href));
               }
             } catch (caught) {
               toast.error(toUserMessage(caught, BANK_CONNECT_FAILED));
