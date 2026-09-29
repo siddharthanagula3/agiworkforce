@@ -58,9 +58,9 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | partial | owner: run OPENAI_API_KEY=<server key> node scripts/generate-voice-samples.mjs from the repo root and commit apps/web/public/voice-samples (the manifest is empty, so Play sample stays hidden) | ui |
 | desktop | partial | owner: run OPENAI_API_KEY=<server key> node scripts/generate-voice-samples.mjs from the repo root and commit apps/web/public/voice-samples (the manifest is empty, so Play sample stays hidden) | ui |
-| mobile | partial | Live voices still have no preview: Settings previews on-device voices only and no sample clip or preview endpoint exists for the live voices. | handler |
+| mobile | partial | Play sample is built and reads the web manifest; same owner step as web: run scripts/generate-voice-samples.mjs and commit apps/web/public/voice-samples | handler |
 
-Code: `apps/web/public/voice-samples/manifest.json:2-2`, `apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts:152-152`, `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:84-84`, `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:110-110`
+Code: `apps/web/public/voice-samples/manifest.json:2-2`, `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:270-270`
 
 ## S48.18: Input-device selection.
 
