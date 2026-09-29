@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ManagedCloudEventTriggerResponse } from '@agiworkforce/cloud-contracts';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -52,7 +53,8 @@ async function handleRegisterWatch(
         changedKeys: ['watch'],
       },
     });
-    return NextResponse.json({ trigger });
+    const payload: ManagedCloudEventTriggerResponse = { trigger };
+    return NextResponse.json(payload);
   } catch (error) {
     rethrowTriggerError(error);
   }

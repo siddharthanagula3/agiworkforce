@@ -2,6 +2,7 @@ import {
   MANAGED_CLOUD_GITHUB_TRIGGER_EVENT_TYPES,
   MANAGED_CLOUD_GMAIL_TRIGGER_EVENT_TYPES,
   MANAGED_CLOUD_GOOGLE_CALENDAR_TRIGGER_EVENT_TYPES,
+  MANAGED_CLOUD_TRIGGER_DELIVERY_OUTCOMES,
   MANAGED_CLOUD_TRIGGER_SOURCES,
 } from '@agiworkforce/cloud-contracts';
 import type { FieldCondition } from '@/lib/automation/field-conditions';
@@ -79,8 +80,7 @@ export interface EventTrigger {
   updatedAt: string;
 }
 
-export type TriggerEventOutcome =
-  'received' | 'filtered' | 'debounced' | 'enqueued' | 'fired' | 'failed' | 'dead';
+export type TriggerEventOutcome = (typeof MANAGED_CLOUD_TRIGGER_DELIVERY_OUTCOMES)[number];
 
 export interface EventTriggerDelivery {
   id: string;
