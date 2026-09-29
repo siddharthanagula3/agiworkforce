@@ -52,6 +52,18 @@ describe('routing-preferences route reads and writes under row-level security', 
     expect(ownerDb).not.toHaveBeenCalled();
   });
 
+  it('GET drops only an invalid stored field and keeps us_only', async () => {
+    scopedDb.query.mockResolvedValue([
+      { routing_preferences: { us_only: true, geo_overlay: 'mars', legacy: 1 } },
+    ]);
+
+    const response = await GET(
+      new NextRequest('https://agiworkforce.com/api/me/routing-preferences'),
+    );
+
+    expect(await response.json()).toEqual({ us_only: true });
+  });
+
   it('PUT writes routing_preferences through the policy-scoped client', async () => {
     const response = await PUT(jsonRequest({ us_only: true }));
 
