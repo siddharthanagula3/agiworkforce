@@ -265,6 +265,43 @@ describe('runToolLoop, device step boundary', () => {
     });
   });
 
+  it('always asks on the phone before adding a calendar event, even with no untrusted content', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      deviceCallStream(
+        { title: 'Dentist', start: '2026-10-02T15:00', end: '2026-10-02T16:00' },
+        'device_calendar_create_event',
+      ),
+    );
+    const processed = makeProcessed(true);
+    const onThePhone = {
+      ...processed,
+      chatSurface: 'mobile',
+      deviceHost: {
+        ...DECLARATION,
+        deviceName: 'iPhone',
+        platform: 'ios',
+        capabilities: ['calendar.write'],
+        roots: [],
+      },
+    } as unknown as ProcessedRequest;
+
+    const output = await drain(
+      runToolLoop(onThePhone, {
+        onDeviceCheckpoint: vi.fn(async () => undefined),
+        toolExecutor: vi.fn(),
+        eventSessionId: 'session-1',
+        eventTurnId: 'turn-1',
+      }),
+    );
+
+    const requested = agentEvents(output).find(
+      (envelope) => envelope.event.type === 'device-step-requested',
+    );
+    expect(requested?.event).toMatchObject({
+      input: { review: expect.stringContaining('Dentist') },
+    });
+  });
+
   it('asks before a local command once the turn could carry private data out', async () => {
     mockBuildToolLoopStream.mockResolvedValueOnce(
       deviceCallStream(

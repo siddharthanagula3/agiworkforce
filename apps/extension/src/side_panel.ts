@@ -7660,6 +7660,7 @@ function handleStreamError(
       ![
         'auth_required',
         'account_suspended',
+        'terms_required',
         'plan_required',
         'quota_exceeded',
         'cancelled',

@@ -11,7 +11,7 @@ import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 import { attributeReferralFromRequest } from '@/lib/services/referral-attribution';
 
 const AcceptTermsSchema = z.object({
-  surface: z.enum(['web-signup', 'web-login']),
+  surface: z.enum(['web-signup', 'web-login', 'mobile-auth']),
   version: z.string().min(1).max(32),
 });
 
