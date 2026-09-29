@@ -8,7 +8,7 @@ import {
   type DispatchTaskReportStatus,
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
-import { REMOTE_CODE_LIMITS } from '@agiworkforce/types';
+import { REMOTE_CODE_LIMITS, parseDispatchTaskPendingSteps } from '@agiworkforce/types';
 import { CLOUD_APP_ORIGIN } from '../config';
 import { deviceIdentity } from '../runtime/deviceIdentity';
 import {
@@ -169,6 +169,11 @@ export function reportDispatchTask(
   const message = reportText(args, 'message');
   const result = reportText(args, 'result');
   const error = reportText(args, 'error');
+  const pending =
+    args['pending'] === undefined ? undefined : parseDispatchTaskPendingSteps(args['pending']);
+  if (pending === null) {
+    throw new RemoteControlRefused('"pending" must list the steps waiting for an answer.');
+  }
   const report: DispatchTaskReport = {
     requestId,
     status,
@@ -176,6 +181,7 @@ export function reportDispatchTask(
     ...(message === undefined ? {} : { message }),
     ...(result === undefined ? {} : { result }),
     ...(error === undefined ? {} : { error }),
+    ...(pending === undefined ? {} : { pending }),
   };
   return { accepted: host?.reportDispatchTask(contents.id, report) ?? false };
 }
