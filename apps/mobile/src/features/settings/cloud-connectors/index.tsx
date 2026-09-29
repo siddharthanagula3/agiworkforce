@@ -25,8 +25,7 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { API_URL } from '@/lib/constants';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { toUserMessage } from '@/services/userMessage';
 import { AddCustomConnectorModal } from './AddCustomConnectorModal';
 import { ConnectorLogo } from './ConnectorLogo';
 import { connectionStatus, formatConnectorName } from './connectorStatus';
@@ -45,6 +44,7 @@ import {
   browseConnectorListings,
   connectorListingIconUrl,
   fetchConnectorDirectory,
+  linkBankAccountsInApp,
   type ConnectedConnector,
   type ConnectorDirectory,
   type ConnectorListing,
@@ -52,10 +52,9 @@ import {
 } from '@/services/connectors';
 
 const BANK_ACCOUNTS_CONNECTOR_ID = 'bank-accounts';
-const BANK_LINK_WEB_URL = `${API_URL}/chat?settings=connectors`;
-const BANK_LINK_LABEL = 'Link a bank account on the web';
+const BANK_LINK_LABEL = 'Link a bank account';
 const BANK_LINK_HINT =
-  'Bank linking runs in the AGI web app. Your linked accounts then work in chats on this phone.';
+  'Read-only balances and transactions from US banks, linked through Plaid. Nothing can move money.';
 
 const ALL_FILTER = 'All';
 const CONNECTED_FILTER = 'Connected';
@@ -442,12 +441,15 @@ export default function CloudConnectorsScreen({
     !(connections ?? []).some((c) => c.connectorId === BANK_ACCOUNTS_CONNECTOR_ID);
 
   const openBankLinking = useCallback(async () => {
-    const opened = await openUntrustedUrlInAppBrowser(BANK_LINK_WEB_URL);
-    if (!opened) {
-      Alert.alert('Could not open the web app', 'No browser was available to open the link.');
-      return;
+    try {
+      const outcome = await linkBankAccountsInApp();
+      if (outcome === 'connected') await load();
+    } catch (error) {
+      Alert.alert(
+        'Bank not linked',
+        toUserMessage(error, 'The bank link did not finish. Try again.'),
+      );
     }
-    await load();
   }, [load]);
 
   const connectionFor = useCallback(

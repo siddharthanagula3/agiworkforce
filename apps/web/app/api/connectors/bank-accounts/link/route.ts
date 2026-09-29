@@ -3,8 +3,10 @@ import 'server-only';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { z } from 'zod';
 import {
   bankAccountsUnavailableReason,
+  createBankAccountsHostedLink,
   createBankAccountsLinkToken,
 } from '@/lib/connectors/bank-accounts';
 import { BANK_ACCOUNTS_CONNECTOR_ID } from '@/lib/connectors/plaid-config';
@@ -21,6 +23,8 @@ import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-
 export const runtime = 'nodejs';
 
 const RATE_LIMIT_BUCKET = 'chat-conversation';
+
+const BodySchema = z.object({ hostedLink: z.literal(true).optional() }).strict();
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request);
@@ -44,13 +48,22 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   });
   if (!policy.allowed) throw createError.forbidden(policy.reason).asUserSafe();
 
-  const link = await createBankAccountsLinkToken(userId);
+  const body = await request.json().catch(() => ({}));
+  const parsed = BodySchema.safeParse(body ?? {});
+  if (!parsed.success) throw createError.validation('Unknown bank link option');
+  const link = parsed.data.hostedLink
+    ? await createBankAccountsHostedLink(userId)
+    : await createBankAccountsLinkToken(userId);
   await recordAuditEvent({
     userId,
     organizationId,
     eventType: 'connector_authorization_started',
     request,
-    detail: { resourceType: 'connector', connectorId: BANK_ACCOUNTS_CONNECTOR_ID, source: 'plaid' },
+    detail: {
+      resourceType: 'connector',
+      connectorId: BANK_ACCOUNTS_CONNECTOR_ID,
+      source: parsed.data.hostedLink ? 'plaid_hosted_link' : 'plaid',
+    },
   });
   return NextResponse.json(link, { headers: { 'Cache-Control': 'private, no-store' } });
 }
