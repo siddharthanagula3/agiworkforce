@@ -1119,6 +1119,22 @@ enum CodeSubcommand {
         #[arg(long)]
         json: bool,
     },
+    /// Continue a local session in a new cloud Code session: its objective,
+    /// plan, decisions and changed files travel with the pushed branch.
+    Handoff {
+        /// Local session id. Defaults to the latest session in this folder.
+        session: Option<String>,
+        /// Model for the cloud session. Defaults to `default.cloud_model`, then
+        /// to a coding model your plan includes.
+        #[arg(long)]
+        model: Option<String>,
+        /// Hand off without the review prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// List cloud Code sessions.
     List {
         /// Which sessions to list.
@@ -2662,6 +2678,23 @@ async fn handle_code_command(
             yes,
             json,
         } => handle_code_start(&client, config, task, model.as_deref(), *yes, *json, output).await,
+        CodeSubcommand::Handoff {
+            session,
+            model,
+            yes,
+            json,
+        } => {
+            handle_code_handoff(
+                &client,
+                config,
+                session.as_deref(),
+                model.as_deref(),
+                *yes,
+                *json,
+                output,
+            )
+            .await
+        }
         CodeSubcommand::List { status, json } => {
             let sessions = code_sessions::list(&client, status)
                 .await
@@ -2771,26 +2804,13 @@ async fn handle_code_command(
     }
 }
 
-async fn handle_code_start(
-    client: &cloud::CloudClient,
-    config: &config::CliConfig,
-    task: &str,
-    model: Option<&str>,
-    yes: bool,
-    json: bool,
-    output: Option<OutputFormat>,
-) -> Result<()> {
-    use cloud::code_handoff;
-    use cloud::code_sessions;
-
-    let task = code_handoff::validate_task(task).map_err(anyhow::Error::msg)?;
-    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
-    let model = match model
+async fn cloud_code_model(config: &config::CliConfig, model: Option<&str>) -> Result<String> {
+    match model
         .or(config.default.cloud_model.as_deref())
         .map(str::trim)
         .filter(|model| !model.is_empty())
     {
-        Some(model) => model_catalog::canonical_model_id(model),
+        Some(model) => Ok(model_catalog::canonical_model_id(model)),
         None => model_catalog::resolve_auto_model(
             "auto",
             agiworkforce_model_registry::RoutingTaskType::Coding,
@@ -2802,8 +2822,101 @@ async fn handle_code_start(
             anyhow::anyhow!(
                 "No coding model your plan includes could be chosen ({error}). Name one with --model."
             )
-        })?,
-    };
+        }),
+    }
+}
+
+async fn handle_code_handoff(
+    client: &cloud::CloudClient,
+    config: &config::CliConfig,
+    session: Option<&str>,
+    model: Option<&str>,
+    yes: bool,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::{code_handoff, code_push};
+
+    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
+    if checkout.unpushed_commits > 0 {
+        anyhow::bail!(
+            "{} has {} commit(s) that are not pushed. The cloud session clones the pushed branch, so push first, then hand off.",
+            checkout.branch,
+            checkout.unpushed_commits
+        );
+    }
+    let local =
+        code_push::local_session(session, &std::env::current_dir()?).map_err(anyhow::Error::msg)?;
+    let model = cloud_code_model(config, model).await?;
+    let access = code_handoff::repository_access(client, &checkout.full_name)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let review = code_handoff::review(&checkout, &access, &model, client.base());
+    let title = local
+        .title
+        .clone()
+        .unwrap_or_else(|| local.session_id.clone());
+    eprintln!(
+        "{}\n",
+        code_handoff::render_review(&review, &format!("Continue \"{title}\" in the cloud"))
+    );
+    match resolve_destructive_decision(yes, interactive::can_prompt()) {
+        DestructiveDecision::Proceed => {}
+        DestructiveDecision::Refuse => anyhow::bail!(
+            "Nothing was handed off: this run cannot ask for confirmation. Re-run with --yes."
+        ),
+        DestructiveDecision::Prompt => {
+            if !dialoguer::Confirm::new()
+                .with_prompt("Hand this session to the cloud?")
+                .default(false)
+                .interact()
+                .unwrap_or(false)
+            {
+                println!("Nothing was handed off.");
+                return Ok(());
+            }
+        }
+    }
+    let record = code_push::record(&local);
+    let pushed = code_push::submit(client, &code_push::body(&record, &access))
+        .await
+        .map_err(|error| anyhow::anyhow!("The cloud did not take the session: {error}"))?;
+    for warning in &pushed.warnings {
+        output::print_warn(&code_push::warning_text(warning));
+    }
+    run_first_cloud_turn(
+        client,
+        &pushed.session,
+        &pushed.seed_prompt,
+        &model,
+        &checkout.remote,
+        serde_json::json!({
+            "repository": checkout.full_name,
+            "branch": checkout.branch,
+            "review": review,
+            "handedOffFrom": local.session_id,
+            "warnings": pushed.warnings,
+        }),
+        json,
+        output,
+    )
+    .await
+}
+
+async fn handle_code_start(
+    client: &cloud::CloudClient,
+    config: &config::CliConfig,
+    task: &str,
+    model: Option<&str>,
+    yes: bool,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::code_handoff;
+
+    let task = code_handoff::validate_task(task).map_err(anyhow::Error::msg)?;
+    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
+    let model = cloud_code_model(config, model).await?;
     let access = code_handoff::repository_access(client, &checkout.full_name)
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -2841,8 +2954,47 @@ async fn handle_code_start(
     let session = code_handoff::create(client, &body)
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?;
+    run_first_cloud_turn(
+        client,
+        &session,
+        &task,
+        &model,
+        &checkout.remote,
+        serde_json::json!({
+            "repository": checkout.full_name,
+            "branch": checkout.branch,
+            "review": review,
+        }),
+        json,
+        output,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_first_cloud_turn(
+    client: &cloud::CloudClient,
+    session: &cloud::code_sessions::CodeSession,
+    task: &str,
+    model: &str,
+    remote: &str,
+    details: serde_json::Value,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::code_handoff;
+    use cloud::code_sessions;
+
+    let with_details = |mut value: serde_json::Value| {
+        if let (Some(target), Some(extra)) = (value.as_object_mut(), details.as_object()) {
+            for (key, item) in extra {
+                target.insert(key.clone(), item.clone());
+            }
+        }
+        value
+    };
     let url = code_sessions::page_url(client.base(), &session.id);
-    let session_text = code_handoff::render_session(&session, &checkout.remote, &url);
+    let session_text = code_handoff::render_session(session, remote, &url);
     if session.state == "failed" {
         anyhow::bail!(
             "The cloud session could not be set up: {}\n{session_text}",
@@ -2854,10 +3006,10 @@ async fn handle_code_start(
     }
     eprintln!(
         "Working on it in the cloud with {}. Follow along at {url}\nCtrl-C stops the turn; the session stays open.",
-        model_catalog::display_name(&model)
+        model_catalog::display_name(model)
     );
     let outcome = tokio::select! {
-        outcome = code_handoff::start_turn(client, &session.id, &task, &model) => Some(outcome),
+        outcome = code_handoff::start_turn(client, &session.id, task, model) => Some(outcome),
         _ = code_interrupt() => None,
     };
     let Some(outcome) = outcome else {
@@ -2878,17 +3030,14 @@ async fn handle_code_start(
                 .collect::<Vec<_>>()
                 .join("\n\n");
             render_structured(
-                serde_json::json!({
+                with_details(serde_json::json!({
                     "ok": true,
                     "sessionId": session.id,
                     "url": url,
-                    "repository": checkout.full_name,
-                    "branch": checkout.branch,
                     "workingBranch": session.working_branch,
                     "model": model,
-                    "review": review,
                     "turn": turn,
-                }),
+                })),
                 text,
                 json,
                 output,
@@ -2898,16 +3047,15 @@ async fn handle_code_start(
             status: 409,
             message,
         }) => render_structured(
-            serde_json::json!({
+            with_details(serde_json::json!({
                 "ok": true,
                 "sessionId": session.id,
                 "url": url,
                 "workingBranch": session.working_branch,
                 "model": model,
-                "review": review,
                 "turn": null,
                 "note": message,
-            }),
+            })),
             format!("{message}\n\n{session_text}"),
             json,
             output,

@@ -10,6 +10,7 @@ pub mod attachments;
 pub mod chat;
 pub mod client;
 pub mod code_handoff;
+pub mod code_push;
 pub mod code_sessions;
 pub mod code_teleport;
 pub mod connectors;
