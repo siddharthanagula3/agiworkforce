@@ -70,8 +70,8 @@
       "reason": "feedback is reachable from Local mode with no cloud account, so user_id is nullable by design and a null owner cannot satisfy any WITH CHECK; the insert carries the server-derived user id and reads nothing back"
     },
     {
-      "path": "apps/web/app/api/github/oauth/callback/route.ts",
-      "reason": "the installation_id conflict target may hold an unverified row belonging to another account, and claiming it once ownership is proven is the point of the flow, so the upsert cannot be constrained to rows the caller can already see"
+      "path": "apps/web/lib/github-install-app-return.ts",
+      "reason": "the installation_id conflict target may hold an unverified row belonging to another account, and claiming it once ownership is proven is the point of the flow, so the upsert cannot be constrained to rows the caller can already see; the upsert moved here from the oauth callback so the phone completion shares it"
     },
     {
       "path": "apps/web/app/api/github/webhook/route.ts",
