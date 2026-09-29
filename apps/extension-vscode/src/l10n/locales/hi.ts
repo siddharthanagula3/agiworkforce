@@ -448,6 +448,8 @@ const hi = {
   'webview.resendMessage': 'फिर से भेजें',
   'webview.resendMessageLabel': 'यह संदेश फिर से भेजें',
   'webview.branchFromMessage': 'शाखा बनाएँ',
+  'webview.branchFromAnswer': 'यहाँ से शाखा बनाएँ',
+  'webview.branchFromAnswerLabel': 'नया सत्र शुरू करें जिसमें इस उत्तर तक की बातचीत रहेगी',
   'webview.branchFromMessageLabel': 'यहीं से नया सत्र शुरू करें, यह संदेश बदलने के लिए तैयार रहेगा',
   'localServers.running_one': '{provider} चल रहा है · {count} मॉडल',
   'localServers.running_other': '{provider} चल रहा है · {count} मॉडल',

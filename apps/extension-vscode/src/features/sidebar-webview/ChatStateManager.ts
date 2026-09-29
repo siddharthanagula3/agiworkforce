@@ -321,7 +321,7 @@ export type WebviewToExtMessage =
   | { type: 'openArchivedSessions' }
   | {
       type: 'messageAction';
-      payload: { action: 'resend' | 'branch'; text: string; occurrence: number };
+      payload: { action: 'resend' | 'branch' | 'branchAnswer'; text: string; occurrence: number };
     }
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
@@ -3569,7 +3569,7 @@ export class ChatStateManager {
   }
 
   private async _messageAction(action: {
-    action: 'resend' | 'branch';
+    action: 'resend' | 'branch' | 'branchAnswer';
     text: string;
     occurrence: number;
   }): Promise<void> {
@@ -3583,8 +3583,9 @@ export class ChatStateManager {
       void vscode.window.showWarningMessage(t('messageActions.stopFirst'));
       return;
     }
+    const role = action.action === 'branchAnswer' ? 'assistant' : 'user';
     const target = loaded.messages
-      .filter((message) => message.role === 'user' && message.text === action.text)
+      .filter((message) => message.role === role && message.text === action.text)
       .at(action.occurrence);
     if (target === undefined) {
       void vscode.window.showWarningMessage(t('messageActions.notFound'));
@@ -3596,7 +3597,9 @@ export class ChatStateManager {
     }
     try {
       if (action.action === 'resend') await this._resendMessage(thread, target.index, target.text);
-      else await this._branchFromMessage(thread, loaded.title, target.index, target.text);
+      else if (action.action === 'branchAnswer') {
+        await this._branchFromAnswer(thread, loaded.title, target.index);
+      } else await this._branchFromMessage(thread, loaded.title, target.index, target.text);
     } catch (error) {
       void vscode.window.showErrorMessage(
         t('messageActions.failed', {
@@ -3634,6 +3637,24 @@ export class ChatStateManager {
     if (await this.resumeConversation(thread.id)) {
       this._post({ type: 'composerDraft', payload: { text, references: [], submit: true } });
     }
+  }
+
+  private async _branchFromAnswer(
+    thread: DeveloperThreadState,
+    title: string,
+    messageIndex: number,
+  ): Promise<void> {
+    if (!(await thread.runtime.offers('forkAtMessage'))) {
+      void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
+      return;
+    }
+    const forked = await thread.runtime.forkThread(
+      thread.id,
+      t('messageActions.branchTitle', { title }),
+      messageIndex,
+    );
+    this._conversationTreeProvider?.refresh();
+    await this.resumeConversation(forked.id);
   }
 
   private async _branchFromMessage(
