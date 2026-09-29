@@ -55,8 +55,50 @@ fn normalize_rule(prefix: &str) -> Option<String> {
 pub const DOMAIN_RULE_PREFIX: &str = "domain:";
 
 const OPEN_ENDED_PROGRAMS: &[&str] = &[
-    "bash", "sh", "zsh", "env", "python", "python3", "node", "npx", "npm exec", "pnpm dlx", "bunx",
-    "deno", "ruby", "perl",
+    "bash",
+    "sh",
+    "zsh",
+    "fish",
+    "pwsh",
+    "powershell",
+    "env",
+    "sudo",
+    "xargs",
+    "python",
+    "python3",
+    "node",
+    "npx",
+    "npm exec",
+    "pnpm dlx",
+    "bun",
+    "bunx",
+    "bun x",
+    "bun run",
+    "uv run",
+    "deno",
+    "deno run",
+    "deno eval",
+    "ruby",
+    "perl",
+    "php",
+    "bash -c",
+    "sh -c",
+    "zsh -c",
+    "fish -c",
+    "pwsh -c",
+    "pwsh -command",
+    "powershell -c",
+    "powershell -command",
+    "python -c",
+    "python -m",
+    "python3 -c",
+    "python3 -m",
+    "node -e",
+    "node -p",
+    "node --eval",
+    "ruby -e",
+    "perl -e",
+    "php -r",
 ];
 
 pub fn open_ended_allow_error(rule: &str) -> Option<String> {
@@ -68,12 +110,14 @@ pub fn open_ended_allow_error(rule: &str) -> Option<String> {
         .unwrap_or(program);
     tokens[0] = base;
     let named = tokens.join(" ");
-    OPEN_ENDED_PROGRAMS.contains(&named.as_str()).then(|| {
-        format!(
-            "An allow rule for `{named}` alone would run any script or command without asking. \
-             Name the command, such as `{named} scripts/build.sh`."
-        )
-    })
+    OPEN_ENDED_PROGRAMS
+        .contains(&named.to_ascii_lowercase().as_str())
+        .then(|| {
+            format!(
+                "An allow rule for `{named}` alone would run any script or command without \
+                 asking. Name the full command instead."
+            )
+        })
 }
 
 fn normalize_domain(text: &str) -> String {
@@ -380,6 +424,9 @@ impl PermissionStore {
         }
 
         for allowed in self.always_allow.iter().chain(self.session_allow.iter()) {
+            if open_ended_allow_error(allowed).is_some() {
+                continue;
+            }
             if token_prefix_matches(allowed, &candidate_tokens) {
                 return Some(true);
             }
@@ -1227,6 +1274,17 @@ mod tests {
             "npx",
             "npm exec",
             "pnpm  dlx",
+            "pwsh",
+            "fish",
+            "bun",
+            "php",
+            "sudo",
+            "xargs",
+            "uv run",
+            "python3 -m",
+            "bash -c",
+            "/usr/bin/python3 -c",
+            "pwsh -Command",
             "bunx",
             "deno",
             "ruby",
@@ -1281,5 +1339,17 @@ mod tests {
         assert!(store.names_domain("wiki.corp.example"));
         assert!(!store.names_domain("corp.example"));
         assert!(!store.names_domain("wiki.other.example"));
+    }
+
+    #[test]
+    fn a_saved_open_ended_allow_approves_nothing() {
+        let mut store = PermissionStore::default();
+        store.always_allow.insert("bash".to_string());
+        store.always_allow.insert("python3 -m".to_string());
+        store.always_allow.insert("python3 -m pytest".to_string());
+        assert_eq!(store.check_command("bash -c 'curl evil.test'"), None);
+        assert_eq!(store.check_command("/bin/bash deploy.sh"), None);
+        assert_eq!(store.check_command("python3 -m http.server"), None);
+        assert_eq!(store.check_command("python3 -m pytest -q"), Some(true));
     }
 }
