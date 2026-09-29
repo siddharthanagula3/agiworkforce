@@ -24,14 +24,13 @@ Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
 
 - Done when: A speed-first routing profile can be applied that prefers the fastest eligible route.
 - Wave: 3
-- Already works on: web, desktop, cli, api
+- Already works on: web, desktop, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | partials/chat-gates a805b3efe moved speedFirstSlots into @agiworkforce/routing so the device resolver can prefer the fastest slots. Picker rows and the on-device routing_profile mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch; the Instant fastest-slot preference is in post-codex/chat-gates-s79.05-mobile-speed-first.patch (applies after it). ModelPickerSheet.tsx, chatExecutionStore.ts and cloudDispatchRouting.ts are Codex-held. | ui |
-| vscode | partial | turn/start routingProfile speed now resolves with the fastest slots first and keeps that preference (ccf4744297); VS Code adds its Fastest row to ROUTING_PROFILE_BY_AUTO_PROFILE (p-sessions) | handler |
 
-Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/app_server/developer_host.rs:2354-2354`, `apps/cli/src/app_server/developer_host.rs:1200-1200`
+Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`
 
 ## S79.06: Quality-first profile.
 
