@@ -647,10 +647,10 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         ),
         RegistryCommand::builtin_slash(
             "pr-comments",
-            "Inspect pull request review comments",
+            "Fix a pull request's open review comments and failing checks (/autofix-pr [pr] [instruction])",
             true,
             true,
-            vec![],
+            vec!["autofix-pr"],
         ),
         RegistryCommand::builtin_slash(
             "privacy-settings",
