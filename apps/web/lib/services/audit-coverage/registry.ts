@@ -172,9 +172,10 @@ export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = 
     eventTypes: ['code_session_lifecycle_changed'],
   },
   { route: 'github/install/complete/route.ts', eventTypes: ['connector_added'] },
+  { route: 'share/route.ts', eventTypes: ['share_link_created'] },
   {
     route: 'share/[token]/route.ts',
-    eventTypes: ['organization_share_granted', 'organization_share_revoked'],
+    eventTypes: ['organization_share_granted', 'organization_share_revoked', 'share_link_revoked'],
   },
   {
     route: 'code/sessions/[sessionId]/agent/cancel/route.ts',
