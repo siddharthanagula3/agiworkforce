@@ -1438,7 +1438,7 @@ export default function ChatScreen() {
                   .catch((error: unknown) => {
                     Alert.alert(
                       'This chat could not be saved',
-                      error instanceof Error ? error.message : 'Try again in a moment.',
+                      toUserMessage(error, 'Try again in a moment.'),
                     );
                   });
               },
