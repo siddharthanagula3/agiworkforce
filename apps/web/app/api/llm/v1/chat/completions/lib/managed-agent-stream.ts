@@ -167,22 +167,26 @@ export function buildManagedAgentStream(
     if (state !== undefined) lastTaskState = state;
   };
 
+  const continuation = input.persistsRunContinuation ? input.runJournal : undefined;
+  const priorRunText: Promise<string | null> | null = continuation
+    ? readCloudAgentRunAssistantText(continuation.db, {
+        userId: continuation.userId,
+        runId: continuation.runId,
+      }).then(
+        (prior) => prior.text,
+        (error: unknown) => {
+          logger.warn(
+            { error, runId: continuation.runId },
+            'Run journal unreadable; the resumed turn keeps only this leg',
+          );
+          return null;
+        },
+      )
+    : null;
+
   const continuedRunContent = async (legContent: string): Promise<string> => {
-    const runJournal = input.runJournal;
-    if (!input.persistsRunContinuation || !runJournal) return legContent;
-    try {
-      const whole = await readCloudAgentRunAssistantText(runJournal.db, {
-        userId: runJournal.userId,
-        runId: runJournal.runId,
-      });
-      return whole.text.length >= legContent.length ? whole.text : legContent;
-    } catch (error) {
-      logger.warn(
-        { error, runId: runJournal.runId },
-        'Run journal unreadable; the resumed turn keeps only this leg',
-      );
-      return legContent;
-    }
+    const prior = priorRunText ? await priorRunText : null;
+    return prior === null ? legContent : prior + legContent;
   };
 
   const persistTurn = async (failed: boolean): Promise<void> => {
@@ -264,7 +268,8 @@ export function buildManagedAgentStream(
     // Buffered deltas must land before the run row moves, so a replaying client
     // never sees a terminal run whose last events are still in memory. A failed
     // flush is logged rather than rethrown: losing the tail of the text deltas
-    // is recoverable, the assistant turn is persisted from its own buffer.
+    // is recoverable, because the assistant turn is persisted from this leg's
+    // own buffer after the earlier legs' text, read before this leg began,
     // whereas failing to record the terminal state strands the run.
     await flushJournal().catch((error: unknown) => {
       logger.warn(
@@ -397,6 +402,7 @@ export function buildManagedAgentStream(
 
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
+      if (priorRunText) await priorRunText;
       try {
         while (true) {
           const next = await input.generator.next();

@@ -94,6 +94,10 @@ pub(super) async fn handle_slash_command(
                 provider,
             };
         }
+        crate::claude_parity::ParityCommandResult::Feedback { kind, message } => {
+            eprintln!("{}", crate::cloud::send_feedback(kind, &message).await);
+            return SlashResult::Handled;
+        }
         crate::claude_parity::ParityCommandResult::NotHandled => {}
     }
 

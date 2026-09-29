@@ -129,6 +129,7 @@ export const FileTextPreviewSchema = z.object({
   kind: z.enum(FILE_TEXT_PREVIEW_KINDS),
   text: z.string(),
   truncated: z.boolean(),
+  fileName: z.string().optional(),
 });
 export type FileTextPreview = z.infer<typeof FileTextPreviewSchema>;
 
