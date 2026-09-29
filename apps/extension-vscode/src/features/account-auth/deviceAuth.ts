@@ -6,6 +6,7 @@ import {
   pollDeviceAuthorization as pollSharedDeviceAuthorization,
   refreshDeviceSession as refreshSharedDeviceSession,
   requestDeviceAuthorization as requestSharedDeviceAuthorization,
+  slowedDevicePollIntervalMs,
   type DeviceAuthorizationPollResult,
   type DeviceAuthorizationPost,
   type DeviceAuthorizationRequest,
@@ -210,17 +211,19 @@ export async function signInToAgiCloud(
       progress.report({
         message: `Approve code ${authorization.userCode}. ${whereTheBrowserOpens}`,
       });
-      const maxPolls = Math.max(
-        1,
-        Math.ceil(authorization.expiresInMs / authorization.pollIntervalMs),
-      );
+      const deadline = Date.now() + authorization.expiresInMs;
+      let pollIntervalMs = authorization.pollIntervalMs;
 
-      for (let attempt = 0; attempt < maxPolls; attempt++) {
+      while (Date.now() + pollIntervalMs <= deadline) {
         if (cancelToken.isCancellationRequested) return false;
-        await new Promise((resolve) => setTimeout(resolve, authorization.pollIntervalMs));
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         if (cancelToken.isCancellationRequested) return false;
 
         const result = await pollDeviceAuthorization(origin, authorization.deviceCode, post);
+        if (result.kind === 'slow_down') {
+          pollIntervalMs = slowedDevicePollIntervalMs(pollIntervalMs, result);
+          continue;
+        }
         if (result.kind === 'approved') {
           await setAccountToken(secrets, result.token, result.expiresAt, result.refreshToken);
           vscode.window.showInformationMessage('Signed in to AGI Cloud.');

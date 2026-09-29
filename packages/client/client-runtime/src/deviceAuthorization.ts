@@ -3,6 +3,8 @@ import type { DeviceAuthorizationStartResponse, TokenResponse } from '@agiworkfo
 const MIN_POLL_INTERVAL_MS = 3_000;
 const MAX_POLL_INTERVAL_MS = 10_000;
 const MAX_AUTH_WINDOW_MS = 15 * 60 * 1000;
+const SLOW_DOWN_STEP_MS = 5_000;
+const MAX_SLOWED_POLL_INTERVAL_MS = 60_000;
 
 export type DeviceAuthorizationPost = (
   url: string,
@@ -23,6 +25,7 @@ export interface DeviceAuthorizationRequest {
 export type DeviceAuthorizationPollResult =
   | { kind: 'approved'; token: string; refreshToken?: string; expiresAt: number }
   | { kind: 'pending' }
+  | { kind: 'slow_down'; intervalMs: number | null }
   | { kind: 'denied' }
   | { kind: 'expired' }
   | { kind: 'rejected'; message: string };
@@ -115,11 +118,18 @@ export async function pollDeviceAuthorization(
 
   const body = parseRecord(response.body);
   const error = typeof body['error'] === 'string' ? body['error'] : undefined;
-  if (
-    (response.status === 403 && error === 'authorization_pending') ||
-    (response.status === 429 && error === 'slow_down')
-  ) {
+  if (response.status === 403 && error === 'authorization_pending') {
     return { kind: 'pending' };
+  }
+  if (error === 'slow_down') {
+    const interval = body['interval'];
+    return {
+      kind: 'slow_down',
+      intervalMs:
+        typeof interval === 'number' && Number.isFinite(interval) && interval > 0
+          ? interval * 1000
+          : null,
+    };
   }
   if (response.status === 403 && error === 'terms_acceptance_required') {
     const acceptanceUrl =
@@ -179,6 +189,20 @@ export async function pollDeviceAuthorization(
     ...(tokenResponse.refresh_token ? { refreshToken: tokenResponse.refresh_token } : {}),
     expiresAt: Date.now() + tokenResponse.expires_in * 1000,
   };
+}
+
+/**
+ * RFC 8628 3.5: every slow_down adds five seconds to the polling interval for
+ * the rest of the grant, or takes the server's interval when that is longer.
+ */
+export function slowedDevicePollIntervalMs(
+  currentMs: number,
+  result: Extract<DeviceAuthorizationPollResult, { kind: 'slow_down' }>,
+): number {
+  return Math.min(
+    MAX_SLOWED_POLL_INTERVAL_MS,
+    Math.max(currentMs + SLOW_DOWN_STEP_MS, result.intervalMs ?? 0),
+  );
 }
 
 /**
