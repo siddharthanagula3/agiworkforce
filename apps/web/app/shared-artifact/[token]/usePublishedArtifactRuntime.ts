@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ArtifactRuntimeConnector } from '@agiworkforce/cloud-contracts';
 import type { ArtifactRuntimeHost } from '@/lib/artifact-sandbox';
 import { useSession } from '@/lib/identity/client';
@@ -17,35 +17,35 @@ const CONNECTORS_UNREAD = 'Your connected apps could not be listed for this app.
 
 interface StoredConsent {
   allowed: true;
-  disabledTools: string[];
+  allowedTools: string[];
 }
 
 export interface ArtifactConsentRequest {
   connectorIds: string[];
-  initialDisabledTools: string[];
+  initialAllowedTools: string[] | null;
   connectors: ArtifactRuntimeConnector[] | null;
   error: string | null;
 }
 
 export interface ArtifactConsentAnswer {
   allowed: boolean;
-  disabledTools: string[];
+  allowedTools: string[];
 }
 
 function consentKey(connectors: readonly string[]): string {
   return connectors.length === 0 ? 'ai' : `ai+${[...connectors].sort().join(',')}`;
 }
 
-function readConsent(token: string, key: string): StoredConsent | null {
+function readConsent(scope: string, key: string): StoredConsent | null {
   try {
-    const raw = window.localStorage.getItem(`agiworkforce-artifact-ai:${token}:${key}`);
+    const raw = window.localStorage.getItem(`agiworkforce-artifact-ai:${scope}:${key}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredConsent>;
     if (parsed.allowed !== true) return null;
     return {
       allowed: true,
-      disabledTools: Array.isArray(parsed.disabledTools)
-        ? parsed.disabledTools.filter((name): name is string => typeof name === 'string')
+      allowedTools: Array.isArray(parsed.allowedTools)
+        ? parsed.allowedTools.filter((name): name is string => typeof name === 'string')
         : [],
     };
   } catch {
@@ -53,10 +53,10 @@ function readConsent(token: string, key: string): StoredConsent | null {
   }
 }
 
-function storeConsent(token: string, key: string, consent: StoredConsent): void {
+function storeConsent(scope: string, key: string, consent: StoredConsent): void {
   try {
     window.localStorage.setItem(
-      `agiworkforce-artifact-ai:${token}:${key}`,
+      `agiworkforce-artifact-ai:${scope}:${key}`,
       JSON.stringify(consent),
     );
   } catch {
@@ -64,9 +64,9 @@ function storeConsent(token: string, key: string, consent: StoredConsent): void 
   }
 }
 
-function forgetConsent(token: string, key: string): void {
+function forgetConsent(scope: string, key: string): void {
   try {
-    window.localStorage.removeItem(`agiworkforce-artifact-ai:${token}:${key}`);
+    window.localStorage.removeItem(`agiworkforce-artifact-ai:${scope}:${key}`);
   } catch {
     return;
   }
@@ -88,7 +88,8 @@ interface Waiter {
 }
 
 export function usePublishedArtifactRuntime(token: string | undefined): PublishedArtifactRuntime {
-  const { isLoaded, isSignedIn } = useSession();
+  const { isLoaded, isSignedIn, userId } = useSession();
+  const consentScope = token && userId ? `${userId}:${token}` : null;
   const [signInNeeded, setSignInNeeded] = useState(false);
   const [askingForAi, setAskingForAi] = useState<ArtifactConsentRequest | null>(null);
   const [grantedConnectorSets, setGrantedConnectorSets] = useState<string[][]>([]);
@@ -97,12 +98,17 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
   const askingKeyRef = useRef<string | null>(null);
   const signedOut = isLoaded && !isSignedIn;
 
+  useEffect(() => {
+    answersRef.current.clear();
+    setGrantedConnectorSets([]);
+  }, [consentScope]);
+
   const ask = useCallback(
     (connectorIds: string[]) => {
-      const stored = token ? readConsent(token, consentKey(connectorIds)) : null;
+      const stored = consentScope ? readConsent(consentScope, consentKey(connectorIds)) : null;
       setAskingForAi({
         connectorIds,
-        initialDisabledTools: stored?.disabledTools ?? [],
+        initialAllowedTools: stored?.allowedTools ?? null,
         connectors: null,
         error: null,
       });
@@ -122,7 +128,7 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
           ),
       );
     },
-    [token],
+    [token, consentScope],
   );
 
   const rememberGranted = useCallback((connectorIds: readonly string[]) => {
@@ -139,13 +145,13 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
       const key = askingKeyRef.current;
       if (key === null) return;
       const consent: StoredConsent | null = answer.allowed
-        ? { allowed: true, disabledTools: [...answer.disabledTools] }
+        ? { allowed: true, allowedTools: [...answer.allowedTools] }
         : null;
       answersRef.current.set(key, consent);
       const settled = waitingRef.current.filter((waiter) => waiter.key === key);
-      if (token) {
-        if (consent) storeConsent(token, key, consent);
-        else forgetConsent(token, key);
+      if (consentScope) {
+        if (consent) storeConsent(consentScope, key, consent);
+        else forgetConsent(consentScope, key);
       }
       if (consent) rememberGranted(settled[0]?.connectorIds ?? []);
       waitingRef.current = waitingRef.current.filter((waiter) => waiter.key !== key);
@@ -155,7 +161,7 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
       else setAskingForAi(null);
       for (const waiter of settled) waiter.resolve(consent);
     },
-    [ask, rememberGranted, token],
+    [ask, rememberGranted, consentScope],
   );
 
   const consentFor = useCallback(
@@ -164,7 +170,7 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
       if (!review) {
         const answered = answersRef.current.get(key);
         if (answered !== undefined) return Promise.resolve(answered);
-        const stored = token ? readConsent(token, key) : null;
+        const stored = consentScope ? readConsent(consentScope, key) : null;
         if (stored) {
           answersRef.current.set(key, stored);
           rememberGranted(connectorIds);
@@ -179,7 +185,7 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
         waitingRef.current.push({ key, connectorIds: [...connectorIds], resolve });
       });
     },
-    [ask, rememberGranted, token],
+    [ask, rememberGranted, consentScope],
   );
 
   const reviewConnectors = useCallback(
@@ -197,16 +203,16 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
           setSignInNeeded(true);
           throw new ArtifactRuntimeSignInRequiredError();
         }
-        let disabledTools: string[] = [];
+        let allowedTools: string[] = [];
         if (request.op === 'complete') {
           const consent = await consentFor(request.connectors, false);
           if (!consent) {
             throw new Error(request.connectors.length > 0 ? CONNECTORS_DECLINED : CONSENT_DECLINED);
           }
-          disabledTools = consent.disabledTools;
+          allowedTools = consent.allowedTools;
         }
         try {
-          return await callArtifactRuntime(token, request, { disabledTools });
+          return await callArtifactRuntime(token, request, { allowedTools });
         } catch (error) {
           if (error instanceof ArtifactRuntimeSignInRequiredError) setSignInNeeded(true);
           throw error;

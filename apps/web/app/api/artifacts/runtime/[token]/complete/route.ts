@@ -199,7 +199,8 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
           planTier: entitlement.plan,
           modelKey: route.modelKey,
           connectors,
-          disabledTools: parsed.data.disabledTools,
+          allowedTools: parsed.data.allowedTools,
+          request,
         })
       : null;
   if (connectors.length > 0 && !plan) {

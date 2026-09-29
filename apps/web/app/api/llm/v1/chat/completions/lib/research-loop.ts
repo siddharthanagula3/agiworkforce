@@ -405,6 +405,18 @@ export function usageOfFailedResearchTurn(error: unknown): ObservedProviderUsage
   return typeof error === 'object' && error !== null ? (failedTurnUsage.get(error) ?? null) : null;
 }
 
+function threadShape(messages: ProcessedRequest['llmRequest']['messages']): unknown[] {
+  return messages.map((message) => ({
+    role: message.role,
+    toolCalls: Array.isArray(message.tool_calls)
+      ? message.tool_calls.map((call) =>
+          typeof call === 'object' && call !== null && 'id' in call ? call.id : null,
+        )
+      : [],
+    toolCallId: message.tool_call_id ?? null,
+  }));
+}
+
 function contextDigest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
@@ -2099,7 +2111,7 @@ export async function* runResearchLoop(
           payload: {
             kind,
             withoutTools: turnOptions.withoutTools === true,
-            context: contextDigest(stepRequest.messages),
+            context: contextDigest(threadShape(stepRequest.messages)),
           },
           execute: async () => {
             executed = true;

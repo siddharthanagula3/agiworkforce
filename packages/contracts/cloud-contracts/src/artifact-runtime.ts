@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const ARTIFACT_RUNTIME_MAX_PROMPT_CHARS = 100_000;
 export const ARTIFACT_RUNTIME_MAX_CONNECTORS = 10;
 export const ARTIFACT_RUNTIME_CONNECTOR_ID_PATTERN = /^[a-z0-9][a-z0-9_.-]{0,63}$/;
-export const ARTIFACT_RUNTIME_MAX_DISABLED_TOOLS = 200;
+export const ARTIFACT_RUNTIME_MAX_ALLOWED_TOOLS = 200;
 export const ARTIFACT_RUNTIME_TOOL_NAME_MAX_CHARS = 200;
 export const ARTIFACT_STORAGE_KEY_PATTERN = /^[^\s/\\'"]{1,200}$/u;
 export const ARTIFACT_STORAGE_PREFIX_MAX_CHARS = 200;
@@ -27,9 +27,9 @@ const ArtifactRuntimeConnectorIdsSchema = z
 export const ArtifactRuntimeCompleteRequestSchema = z.object({
   prompt: z.string().min(1).max(ARTIFACT_RUNTIME_MAX_PROMPT_CHARS),
   connectors: ArtifactRuntimeConnectorIdsSchema.default([]),
-  disabledTools: z
+  allowedTools: z
     .array(z.string().min(1).max(ARTIFACT_RUNTIME_TOOL_NAME_MAX_CHARS))
-    .max(ARTIFACT_RUNTIME_MAX_DISABLED_TOOLS)
+    .max(ARTIFACT_RUNTIME_MAX_ALLOWED_TOOLS)
     .default([]),
 });
 export type ArtifactRuntimeCompleteRequest = z.input<typeof ArtifactRuntimeCompleteRequestSchema>;
