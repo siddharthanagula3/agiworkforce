@@ -7,8 +7,8 @@ import type {
 } from './types';
 import { detectCapabilities } from './capabilities';
 import { tier1Generate } from './tier1';
-import { tier2Generate } from './tier2';
-import { tier3Generate } from './tier3';
+import { tier2Generate, tier2LoadModel, tier2LoadedPresetName, tier2Release } from './tier2';
+import { tier3Generate, tier3LoadModel, tier3LoadedModelPath, tier3Release } from './tier3';
 import { getDefaultModel, getModelById, getSystemModelForTier1Runtime } from './catalog';
 import type { ExecutorchPreset } from '@agiworkforce/types';
 
@@ -152,3 +152,36 @@ export type {
   LocalRuntimeName,
   LocalRuntimeTier,
 };
+
+export type LoadedLocalModel =
+  { runtime: 'executorch'; preset: string } | { runtime: 'llama_rn'; modelPath: string };
+
+export function loadedLocalModel(): LoadedLocalModel | null {
+  const preset = tier2LoadedPresetName();
+  if (preset) return { runtime: 'executorch', preset };
+  const modelPath = tier3LoadedModelPath();
+  return modelPath ? { runtime: 'llama_rn', modelPath } : null;
+}
+
+export async function loadLocalModel(
+  modelPathOrId: string | undefined,
+  modelId?: string,
+): Promise<LocalRuntimeName> {
+  const { tier, runtime } = await selectTier({
+    ...(modelPathOrId ? { modelPath: modelPathOrId } : {}),
+    ...(modelId ? { modelId } : {}),
+  });
+  const ref = normalizeModelRef(modelPathOrId, modelId);
+  if (tier === 2) {
+    const preset = resolvePreset(ref.modelId);
+    if (preset) await tier2LoadModel(preset);
+  } else if (tier === 3 && ref.modelPath) {
+    await tier3LoadModel(ref.modelPath, ref.modelId);
+  }
+  return runtime;
+}
+
+export async function unloadLocalModels(): Promise<void> {
+  tier2Release();
+  await tier3Release();
+}
