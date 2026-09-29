@@ -5,6 +5,7 @@ import {
   type RemoteCodeRequestAction,
 } from '@agiworkforce/types';
 import { useConnectionStore } from '@/stores/connectionStore';
+import { beginCodeSessionStart, forgetCodeSessionStart } from './store';
 
 function requestId(): string | null {
   const globalCrypto = globalThis.crypto as { randomUUID?: () => string } | undefined;
@@ -14,9 +15,9 @@ function requestId(): string | null {
 async function sendCodeRequest(
   action: RemoteCodeRequestAction,
   fields: Record<string, unknown> = {},
+  id: string | null = requestId(),
 ): Promise<boolean> {
   const { sendControl, status } = useConnectionStore.getState();
-  const id = requestId();
   if (status !== 'connected' || !id) return false;
   return sendControl(action, {
     ...fields,
@@ -55,6 +56,27 @@ export function interruptCodeTurn(
   turnId: string,
 ): Promise<boolean> {
   return sendCodeRequest('code.turn.interrupt', { rootId, threadId, turnId });
+}
+
+export async function startCodeSession(rootId: string, task: string): Promise<string | null> {
+  const text = task.trim();
+  const id = requestId();
+  if (!id || !text || text.length > REMOTE_CODE_LIMITS.taskLength) return null;
+  beginCodeSessionStart(id, rootId);
+  const sent = await sendCodeRequest('code.session.start', { rootId, text }, id);
+  if (!sent) {
+    forgetCodeSessionStart(id);
+    return null;
+  }
+  return id;
+}
+
+export function requestCodeTranscript(
+  rootId: string,
+  threadId: string,
+  before: number | null,
+): Promise<boolean> {
+  return sendCodeRequest('code.session.history', { rootId, threadId, before });
 }
 
 export function answerCodeApproval(

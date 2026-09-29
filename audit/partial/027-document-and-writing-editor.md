@@ -139,15 +139,12 @@ nothing is left.
 
 - Done when: The user can browse a document's past revisions with their times and open or restore one.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s26-mobile-artifact-versions-edit-publish-state.patch (apply order: p-slack-s26.29, no-yearly-s32-34, w-work-s28, w-work-s26-publish-conversation, then this): same Versions sheet. Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:519-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:147-152`
 
 ## S27.35: Export to document formats.
 
@@ -157,7 +154,7 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:519-556`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A whole reply can be exported as PDF or text from the message export sheet; there is no Word/DOCX export and the artifact viewer exports only Markdown/text. | ui |
+| mobile | partial | Add Word (.docx) to the artifact Download as sheet on mobile so document artifacts download as .docx alongside Markdown, PDF and text. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -167,27 +164,12 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1228-1235`, `a
 
 - Done when: A document can be exported as a PDF.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/p-slack-s26.29-mobile-artifact-download-formats.patch: the artifact viewer exports a document artifact as PDF from its Download as sheet. The export options, the raw source export and the sheet are new free files in the patch; the viewer that opens them, ArtifactFullScreen.tsx, is held by Codex. The viewer hunk passes git apply --check on the Codex working copy, the free files on integration, and it composes in either order with no-yearly-s32-34-mobile-show-changes.patch; the edit was typechecked against this branch. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1228-1235`, `apps/mobile/src/features/chat/components/FileExportButton.tsx:97-101`
-
-## S27.37: Export to Markdown.
-
-- Done when: A document can be exported as a Markdown file.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/p-slack-s26.29-mobile-artifact-download-formats.patch: a Markdown code block exports as a .md file, since the export options read the language as well as the type. The export options, the raw source export and the sheet are new free files in the patch; the viewer that opens them, ArtifactFullScreen.tsx, is held by Codex. The viewer hunk passes git apply --check on the Codex working copy, the free files on integration, and it composes in either order with no-yearly-s32-34-mobile-show-changes.patch; the edit was typechecked against this branch. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:237-241`
 
 ## S27.39: Email draft presentation.
 

@@ -181,8 +181,33 @@ export async function claimManualPairingToken(rawCode: string): Promise<ManualPa
       throw new ManualPairingClaimError('That pairing code is already connected to a phone.');
     }
     if (response.status === 403) {
+      // A 403 is also a workspace that turned Remote Control off, or a sign-in
+      // the gateway refused; only the relay's own answer means another account.
+      const refusal = (await response.json().catch(() => null)) as {
+        error?: unknown;
+        message?: unknown;
+      } | null;
+      const error = refusal?.error;
+      if (error === 'pairing_belongs_to_another_account') {
+        throw new ManualPairingClaimError(
+          'That pairing code belongs to a different account. Sign in as that account on Desktop.',
+        );
+      }
+      // The workspace gate answers {error: "sentence"}, others {error: {message}}.
+      // A bare code is not a sentence to show, so only one with words is used.
+      const message =
+        typeof error === 'string' && /\s/.test(error.trim())
+          ? error.trim()
+          : error &&
+              typeof error === 'object' &&
+              typeof (error as { message?: unknown }).message === 'string'
+            ? (error as { message: string }).message
+            : typeof refusal?.message === 'string'
+              ? refusal.message
+              : null;
       throw new ManualPairingClaimError(
-        'That pairing code belongs to a different account. Sign in as that account on Desktop, or generate a code here.',
+        message ??
+          'AGI Cloud did not allow this phone to pair. Check with your workspace administrator.',
       );
     }
     if (response.status === 401) {

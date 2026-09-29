@@ -28,18 +28,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S4.07: Project overview.
-
-- Done when: Opening a project shows its home: name, description/instructions summary, and entry points to its chats and files.
-- Wave: 2
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The cloud project screen shows only the name plus Chats and Sources tabs; the summary header (description, instructions, members, last used) renders only after fetchProject, which is blocked while FEATURES.crossDeviceSync is off. | flag-off |
-
-Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/projects/[id].tsx:170-175`
-
 ## S4.08: Project conversations.
 
 - Done when: Within a project, a list of the project's conversations that open when selected.
@@ -130,14 +118,11 @@ Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/
 
 - Done when: A coding home lists the user's coding sessions and starts a new one on a repository or runtime.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Remote screen lists and opens AGI Code sessions running on a paired desktop, but mobile cannot start a new coding session (no cloud code, no remote thread start). | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:39-85`, `apps/mobile/src/features/companion/remote-code/service.ts:29-35`
 
 ## S4.20: Coding-session workspace.
 
@@ -209,7 +194,7 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:39-85`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile studio screen waits for the Codex mobile release (rule 12); the web studio's building blocks (image options, Library kind=image history) are ready to reuse. | ui |
+| mobile | partial | On mobile, opening a generated or library image offers Edit with a brush selection (size slider, undo/redo) plus copy, save, share and delete (deletes the source conversation); no separate image studio screen required. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -231,16 +216,13 @@ Code: `apps/web/features/images/components/ImageStudio.tsx:73-73`
 
 - Done when: A media job history lists image/video generation jobs with their status (queued, running, failed, done) and links to results.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | GET /api/media/jobs serves mobile too, but the mobile Library has no Generations section yet; the mobile app is in the Codex release. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/jobs/route.ts:20-20`
 
 ## S4.31: Notebook workspace.
 
@@ -302,7 +284,7 @@ Code: `apps/web/app/api/media/jobs/route.ts:20-20`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile Skills screen only browses the cloud catalog and inserts a skill into chat; installing, removing, toggling or authoring skills is web-only. | handler |
+| mobile | partial | Proposed decline at parity: Claude documents skill create/upload/delete only under Customize > Skills on web (support.claude.com/en/articles/12512180, 12512198, read 2026-09-29); ChatGPT GPT page refused (403). Authoring also waits on AGI_USER_SKILL_AUTHORING. Needs lead ruling. | handler |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `apps/mobile/src/features/skills/service.ts:20-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:290-298`
@@ -337,7 +319,7 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 | --- | --- | --- | --- |
 | web | partial | live-check: with a beta_redemptions-granted test account run Stripe test checkout, then /settings/billing on web and in Electron: plan, invoices, portal (opens externally in Electron) and the overage toggle work; migration 0281 is applied | flag-off |
 | desktop | partial | live-check: with a beta_redemptions-granted test account run Stripe test checkout, then /settings/billing on web and in Electron: plan, invoices, portal (opens externally in Electron) and the overage toggle work; migration 0281 is applied | flag-off |
-| mobile | partial | Subscription screen shows the plan, but FEATURES.billing is false in v1, so the portal, plan changes and Stripe management are off; native IAP depends on an unset store catalog. | flag-off |
+| mobile | partial | D-2026-09-28-27: web-billed plans are managed on the web; invoices, card and plan change link out. FEATURES.billing and the waitlist are owner-held. | flag-off |
 
 Code: `apps/web/features/settings/sections/BillingSection.tsx:304-304`, `apps/mobile/src/features/settings/index.tsx:434-442`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:128-132`, `apps/mobile/lib/v1FeatureFlags.ts:1-10`
 
@@ -349,7 +331,7 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:304-304`, `apps/mo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile manages members, roles and the active workspace only; policies, identity/SSO, audit, sharing and model controls are web-only. | ui |
+| mobile | partial | Proposed decline: admin policies, SSO, audit and sharing controls stay web-only; no official leader page found (help.openai.com 403). Needs lead or founder ruling. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 

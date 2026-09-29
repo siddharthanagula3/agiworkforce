@@ -28,7 +28,6 @@ import {
   fetchWorkspaceMembers,
   fetchWorkspaceOverview,
   removeWorkspaceMember,
-  setActiveWorkspace,
   transferWorkspaceOwnership,
   updateWorkspaceMemberRole,
   type WorkspaceMember,
@@ -37,7 +36,7 @@ import {
 } from '@/src/features/team';
 import { RolePickerModal } from '@/src/features/team/RolePickerModal';
 import { WorkspaceAdministration } from '@/src/features/team/WorkspaceAdministration';
-import { useChatStore } from '@/stores/chatStore';
+import { switchWorkspace } from '@/src/features/team/switchWorkspace';
 import { translatePlural } from '@/src/i18n/plural';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
@@ -116,18 +115,7 @@ export default function WorkspaceScreen() {
       setSwitchingWorkspace(true);
       void (async () => {
         try {
-          try {
-            await setActiveWorkspace(organizationId);
-          } catch {
-            Alert.alert('Could not switch workspace', 'Your workspace was not changed. Try again.');
-            return;
-          }
-          try {
-            await useChatStore.getState().loadConversations();
-          } catch {
-            Alert.alert('Workspace changed', 'Refresh your chats to see this workspace’s history.');
-          }
-          await load();
+          if (await switchWorkspace(organizationId)) await load();
         } finally {
           setSwitchingWorkspace(false);
         }

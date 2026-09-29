@@ -30,14 +30,11 @@ nothing is left.
 
 - Done when: User chooses the clip duration before generating.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same patch: a Length picker from the model's durations (as on web), sent as duration_secs; without it mobile sent none and the server defaulted to 4 s even for models that do not offer 4 s. Held: chatViewStore.ts, chat/[id].tsx, runVideoGenerationTurn.ts. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`
 
 ## S46.07: Aspect-ratio selector.
 
@@ -93,14 +90,11 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `ap
 
 - Done when: User retries a failed video job with the same settings.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s46.29-mobile-retry-video-as-video.patch: Retry on a failed, timed-out or cancelled video resends it as /video <prompt>, a new video job. Held: app/(app)/chat/[id].tsx. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:911-915`, `apps/mobile/app/(app)/chat/[id].tsx:1090-1102`, `apps/mobile/stores/chat/chatExecutionStore.ts:3028-3030`
 
 ## S46.30: Completed clip gallery.
 
@@ -116,27 +110,21 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:911-915`, `app
 
 - Done when: User plays, pauses and scrubs a finished clip in the product.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/slack c7c9fefbe1: Play downloads the clip with the account's credentials and plays it full screen in a web view with the native video controls (file access limited to the app's exports folder, no scripts, no navigation). Left: a playback check on an iPhone and an Android phone, which this lane cannot run; the Library's video player is in held library/index.tsx. ChatGPT parity waits on founder research entry 2 in founder-research-needed-to-proceed.md (help.openai.com returned 403). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:30-30`, `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:183-183`, `apps/mobile/services/fileCreation.ts:373-373`
 
 ## S46.32: Download.
 
 - Done when: User downloads a finished clip as a file.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Share sheet matches web download, accepted by lead. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:56-56`, `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:138-138`
 
 ## S46.33: Share.
 

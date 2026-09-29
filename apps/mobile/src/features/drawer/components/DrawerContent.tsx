@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
@@ -8,8 +9,11 @@ import {
   BookOpen,
   Bot,
   Bell,
+  Building2,
   CalendarClock,
+  ChevronDown,
   ChevronRight,
+  Code2,
   FolderOpen,
   HelpCircle,
   BarChart3,
@@ -28,6 +32,7 @@ import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useNotificationCenter } from '@/services/notifications';
 import { useProjectStore } from '@/src/features/projects/store';
+import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -41,10 +46,13 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import {
+  ActionMenuSheet,
   InlineRenameField,
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
+import { useWorkspaceSwitcher } from '@/src/features/team/useWorkspaceSwitcher';
+import type { ConversationSummary } from '@/types/chat';
 import {
   isDrawerOpen,
   ShellCapabilityShortcuts,
@@ -65,6 +73,7 @@ type RoutePath =
   | '/(app)/reports'
   | '/(app)/schedules'
   | '/(app)/companion'
+  | '/(app)/cloud-code'
   | '/(app)/tasks'
   | '/(app)/notifications'
   | '/(app)/(tabs)/settings'
@@ -76,7 +85,16 @@ type RoutePath =
   | ShellShortcutRoute;
 
 interface PrimaryItem {
-  key: 'chats' | 'projects' | 'library' | 'reports' | 'skills' | 'schedules' | 'remote' | 'tasks';
+  key:
+    | 'chats'
+    | 'projects'
+    | 'library'
+    | 'reports'
+    | 'skills'
+    | 'schedules'
+    | 'code'
+    | 'remote'
+    | 'tasks';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -134,6 +152,13 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     cloud: true,
   },
   {
+    key: 'code',
+    label: CLOUD_CODE_SCREEN_TITLE,
+    icon: Code2,
+    route: '/(app)/cloud-code',
+    cloud: true,
+  },
+  {
     key: 'remote',
     // Desktop's pairing card tells people to open this screen by name, so the
     // label is shared rather than typed twice.
@@ -158,6 +183,7 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
 ];
 
 const DRAWER_RECENT_LIMIT = 8;
+const DRAWER_PROJECT_CHAT_LIMIT = 5;
 
 function Tag({ label }: { label: string }) {
   const colors = useThemeColors();
@@ -289,6 +315,22 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
   const { usesPersistentDrawer } = useTabletLayout();
   const drawerOpen = isDrawerOpen(props.state);
+  const { t } = useTranslation();
+  const workspace = useWorkspaceSwitcher(
+    (drawerOpen || usesPersistentDrawer) && appMode === 'cloud' && isClerkSignedIn,
+    t('navPersonalWorkspace'),
+  );
+  const [expandedProjectIds, setExpandedProjectIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleProject = useCallback((projectId: string) => {
+    setExpandedProjectIds((current) => {
+      const next = new Set(current);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (
@@ -337,23 +379,16 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     navigate('/(app)/search');
   }, [navigate]);
 
-  const displayedConversations = useMemo(() => {
+  const historyConversations = useMemo(() => {
     // Each mode's history comes from the store that owns it. Cloud rows live in
     // useChatCloudMessageStore (where loadConversations writes the server list);
     // filtering the local store for `executionMode: 'cloud'` returned a stale
     // MMKV mirror that server responses never touched.
     const source = appMode === 'cloud' ? cloudConversations : conversations;
-    return (
-      source
-        .filter(
-          (conversation) =>
-            executionModeForConversation(conversation) === appMode &&
-            isHistoryVisibleConversation(conversation),
-        )
-        // Pinned chats first; preserve the existing recency order within each group.
-        .slice()
-        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
-        .slice(0, DRAWER_RECENT_LIMIT)
+    return source.filter(
+      (conversation) =>
+        executionModeForConversation(conversation) === appMode &&
+        isHistoryVisibleConversation(conversation),
     );
   }, [appMode, cloudConversations, conversations]);
 
@@ -370,6 +405,90 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     }
     return localProjects.slice(0, 6);
   }, [appMode, cloudProjects, localProjects]);
+
+  const displayedProjectIds = useMemo(
+    () => new Set(displayedProjects.map((project) => project.id)),
+    [displayedProjects],
+  );
+
+  const displayedConversations = useMemo(
+    () =>
+      historyConversations
+        .filter(
+          (conversation) =>
+            !conversation.projectId || !displayedProjectIds.has(conversation.projectId),
+        )
+        .slice()
+        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+        .slice(0, DRAWER_RECENT_LIMIT),
+    [displayedProjectIds, historyConversations],
+  );
+
+  const projectConversations = useCallback(
+    (projectId: string) =>
+      historyConversations.filter((conversation) => conversation.projectId === projectId),
+    [historyConversations],
+  );
+
+  const renderConversationRow = (conversation: ConversationSummary, inset = 0) => {
+    const active = pathname.includes(conversation.id);
+    return (
+      <Pressable
+        key={conversation.id}
+        onPress={() => navigate('/(app)/chat/[id]', { id: conversation.id })}
+        onLongPress={() =>
+          openActions(
+            conversation.id,
+            conversation.title || 'Untitled chat',
+            Boolean(conversation.pinned),
+          )
+        }
+        accessibilityRole="button"
+        accessibilityLabel={`Open conversation: ${conversation.title}${conversation.unread ? ', unread' : ''}`}
+        accessibilityHint="Long press for more actions"
+        accessibilityState={{ selected: active }}
+        style={{
+          minHeight: 44,
+          borderRadius: 8,
+          paddingLeft: 10 + inset,
+          paddingRight: 10,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          backgroundColor: active ? colors.surfaceHover : colors.transparent,
+        }}
+      >
+        {conversation.pinned ? (
+          <Pin size={12} color={colors.textMuted} fill={colors.textMuted} />
+        ) : null}
+        {rename.conversationId === conversation.id ? (
+          <InlineRenameField rename={rename} />
+        ) : (
+          <Text
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              color: active ? colors.textPrimary : colors.textSecondary,
+              fontSize: 14,
+              fontWeight: active ? '600' : '400',
+            }}
+          >
+            {conversation.title || 'Untitled chat'}
+          </Text>
+        )}
+        {conversation.unread ? (
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: colors.textPrimary,
+            }}
+          />
+        ) : null}
+      </Pressable>
+    );
+  };
 
   const visiblePrimaryItems = useMemo(
     () =>
@@ -396,6 +515,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'skills') return p.includes('/skills');
       if (key === 'reports') return p.includes('/reports');
       if (key === 'schedules') return p.includes('/schedules');
+      if (key === 'code') return p.includes('/cloud-code');
       if (key === 'remote') return p.includes('/companion');
       if (key === 'tasks') return p.includes('/tasks');
       return false;
@@ -485,24 +605,77 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 Projects
               </Text>
               <View style={{ gap: 1 }}>
-                {displayedProjects.map((project) => (
-                  <Pressable
-                    key={project.id}
-                    onPress={() => navigate('/(app)/projects/[id]', { id: project.id })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open project: ${project.name}`}
-                    style={{
-                      minHeight: 44,
-                      borderRadius: 8,
-                      paddingHorizontal: 10,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 14 }}>
-                      {project.name}
-                    </Text>
-                  </Pressable>
-                ))}
+                {displayedProjects.map((project) => {
+                  const chats = projectConversations(project.id);
+                  const expanded = expandedProjectIds.has(project.id);
+                  return (
+                    <View key={project.id}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Pressable
+                          onPress={() => navigate('/(app)/projects/[id]', { id: project.id })}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open project: ${project.name}`}
+                          style={{
+                            flex: 1,
+                            minHeight: 44,
+                            borderRadius: 8,
+                            paddingHorizontal: 10,
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={{ color: colors.textSecondary, fontSize: 14 }}
+                          >
+                            {project.name}
+                          </Text>
+                        </Pressable>
+                        {chats.length > 0 ? (
+                          <Pressable
+                            onPress={() => toggleProject(project.id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${expanded ? 'Hide' : 'Show'} chats in ${project.name}`}
+                            accessibilityState={{ expanded }}
+                            style={{
+                              width: 44,
+                              height: 44,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {expanded ? (
+                              <ChevronDown size={16} color={colors.textMuted} />
+                            ) : (
+                              <ChevronRight size={16} color={colors.textMuted} />
+                            )}
+                          </Pressable>
+                        ) : null}
+                      </View>
+                      {expanded ? (
+                        <View style={{ gap: 1 }}>
+                          {chats
+                            .slice(0, DRAWER_PROJECT_CHAT_LIMIT)
+                            .map((conversation) => renderConversationRow(conversation, 14))}
+                          {chats.length > DRAWER_PROJECT_CHAT_LIMIT ? (
+                            <Pressable
+                              onPress={() => navigate('/(app)/projects/[id]', { id: project.id })}
+                              accessibilityRole="button"
+                              accessibilityLabel={`See all chats in ${project.name}`}
+                              style={{
+                                minHeight: 44,
+                                paddingLeft: 24,
+                                paddingRight: 10,
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Text style={{ color: colors.textMuted, fontSize: 14 }}>See all</Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
               </View>
             </View>
           ) : null}
@@ -522,64 +695,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
             {displayedConversations.length > 0 ? (
               <View style={{ gap: 1 }}>
-                {displayedConversations.map((conversation) => {
-                  const active = pathname.includes(conversation.id);
-                  return (
-                    <Pressable
-                      key={conversation.id}
-                      onPress={() => navigate('/(app)/chat/[id]', { id: conversation.id })}
-                      onLongPress={() =>
-                        openActions(
-                          conversation.id,
-                          conversation.title || 'Untitled chat',
-                          Boolean(conversation.pinned),
-                        )
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open conversation: ${conversation.title}${conversation.unread ? ', unread' : ''}`}
-                      accessibilityHint="Long press to pin or delete"
-                      accessibilityState={{ selected: active }}
-                      style={{
-                        minHeight: 44,
-                        borderRadius: 8,
-                        paddingHorizontal: 10,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 6,
-                        backgroundColor: active ? colors.surfaceHover : colors.transparent,
-                      }}
-                    >
-                      {conversation.pinned ? (
-                        <Pin size={12} color={colors.textMuted} fill={colors.textMuted} />
-                      ) : null}
-                      {rename.conversationId === conversation.id ? (
-                        <InlineRenameField rename={rename} />
-                      ) : (
-                        <Text
-                          numberOfLines={1}
-                          style={{
-                            flex: 1,
-                            color: active ? colors.textPrimary : colors.textSecondary,
-                            fontSize: 14,
-                            fontWeight: active ? '600' : '400',
-                          }}
-                        >
-                          {conversation.title || 'Untitled chat'}
-                        </Text>
-                      )}
-                      {conversation.unread ? (
-                        <View
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
-                            backgroundColor: colors.textPrimary,
-                          }}
-                        />
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
+                {displayedConversations.map((conversation) => renderConversationRow(conversation))}
               </View>
             ) : (
               <Text style={{ color: colors.textMuted, fontSize: 14, paddingHorizontal: 10 }}>
@@ -616,6 +732,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           gap: 2,
         }}
       >
+        {workspace.activeName ? (
+          <NavRow
+            label={`Workspace: ${workspace.activeName}`}
+            icon={Building2}
+            onPress={workspace.open}
+          />
+        ) : null}
         {appMode === 'cloud' && isClerkSignedIn && clerkUserId ? (
           <NavRow
             label={`Usage remaining${remainingUsage ? ` · ${remainingUsage}` : usageLoading ? ' · Checking…' : usageError ? ' · Unavailable' : ''}`}
@@ -641,6 +764,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
       </View>
       <RenameConversationModal rename={rename} inline />
+      <ActionMenuSheet menu={workspace.menu} />
     </SafeAreaView>
   );
 }

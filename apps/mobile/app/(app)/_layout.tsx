@@ -50,6 +50,7 @@ export default function AppLayout() {
         <Drawer.Screen name="library/index" options={HIDDEN} />
         <Drawer.Screen name="connectors/index" options={HIDDEN} />
         <Drawer.Screen name="connectors/[id]" options={HIDDEN} />
+        <Drawer.Screen name="connectors/oauth" options={HIDDEN} />
         <Drawer.Screen name="continuity/index" options={HIDDEN} />
         <Drawer.Screen name="skills/index" options={HIDDEN} />
         <Drawer.Screen name="reports/index" options={HIDDEN} />
@@ -67,6 +68,8 @@ export default function AppLayout() {
         <Drawer.Screen name="companion/index" options={HIDDEN} />
         <Drawer.Screen name="companion/agent/[id]" options={HIDDEN} />
         <Drawer.Screen name="companion/code/[threadId]" options={HIDDEN} />
+        <Drawer.Screen name="cloud-code/index" options={HIDDEN} />
+        <Drawer.Screen name="cloud-code/[sessionId]" options={HIDDEN} />
 
         {/* Profile */}
         <Drawer.Screen name="profile/index" options={HIDDEN} />
@@ -100,6 +103,7 @@ export default function AppLayout() {
         <Drawer.Screen name="translate" options={HIDDEN} />
         <Drawer.Screen name="voice" options={HIDDEN} />
         <Drawer.Screen name="widget-setup" options={HIDDEN} />
+        <Drawer.Screen name="open/[target]/[id]" options={HIDDEN} />
       </Drawer>
       <ContinuityOnboardingGate />
       <WorkspaceMfaBanner />

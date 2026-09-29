@@ -42,15 +42,12 @@ nothing is left.
 
 - Done when: User attaches one or more reference images in dedicated slots that guide the generation.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s44-s46-mobile-media-options.patch: up to 4 attached images for an edit-capable model, the first edited and the rest sent as reference_images, with web's 4-image cap and wording. Waits on the Codex hold. | handler |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:163-169`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`
 
 ## S44.06: Prompt enhancement with user control.
 
@@ -78,27 +75,21 @@ Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest
 
 - Done when: User asks for a transparent background on the generated image.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s44-s46-mobile-media-options.patch: Transparent background toggle in the image options for edit-capable models (as on web), sent as transparent_background. Held: chatViewStore.ts, chat/[id].tsx, runImageGenerationTurn.ts. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`
 
 ## S44.18: Cancel generation.
 
 - Done when: User stops an image generation in progress and the job is cancelled (not billed further).
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s44-s46-mobile-media-options.patch: Stop calls /api/media/image/cancel with the job's idempotency key (keyed by the assistant message id) and says so when the cancel cannot reach AGI Cloud. Held: chatMessageStore.ts, runImageGenerationTurn.ts; free: imagegen.ts. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/image/cancel/route.ts:1-1`
 
 ## S44.19: Retry generation.
 
@@ -146,14 +137,11 @@ Code: `apps/web/app/api/media/image/cancel/route.ts:1-1`
 
 - Done when: User can see the prompt and generation settings (model, ratio, size, quality) used for an image.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s44.23-mobile-image-settings-caption.patch: image messages keep the requested aspect ratio and the full-screen viewer shows "Generated with {model name} · {ratio}" under the prompt, ratio omitted for auto, as web ImageGenerationCard. Waits on the Codex hold. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`
 
 ## S44.24: Reuse prompt.
 
@@ -170,14 +158,11 @@ Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`
 
 - Done when: User regenerates with the same settings (model, ratio) as an earlier image.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s24-s25.07-mobile-library.patch: Remix on a Library image opens a new chat in image mode with that image's model (when still available), the image attached and its prompt as the draft, as web's Library Remix. Waits on the Codex hold. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`
 
 ## S44.27: Save to Library.
 
@@ -205,28 +190,22 @@ Code: `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`
 
 - Done when: User downloads the generated image at full quality.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Share sheet matches web download, accepted by lead. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`, `apps/mobile/services/fileCreation.ts:395-408`
 
 ## S44.30: Copy image.
 
 - Done when: User copies the image itself to the clipboard.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s44.30-mobile-copy-image.patch: Copy image in the full-screen viewer puts the saved image on the clipboard (expo-clipboard, already a dependency). Held: ImageFullScreen.tsx; free: services/fileCreation.ts. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/services/fileCreation.ts:395-408`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`
 
 ## S44.33: Edit image.
 

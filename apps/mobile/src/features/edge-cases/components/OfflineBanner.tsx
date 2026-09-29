@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { View, Animated } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { spacing, useThemeColors, zIndex } from '@/src/ui/theme';
+import { spacing, useThemeColors, zIndex, motion } from '@/src/ui/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -28,12 +28,12 @@ export function OfflineBanner() {
         Animated.parallel([
           Animated.timing(translateY, {
             toValue: 0,
-            duration: 220,
+            duration: motion.quick,
             useNativeDriver: true,
           }),
           Animated.timing(opacity, {
             toValue: 1,
-            duration: 200,
+            duration: motion.quick,
             useNativeDriver: true,
           }),
         ]).start();
@@ -46,12 +46,12 @@ export function OfflineBanner() {
         Animated.parallel([
           Animated.timing(translateY, {
             toValue: hiddenOffset,
-            duration: 180,
+            duration: motion.quick,
             useNativeDriver: true,
           }),
           Animated.timing(opacity, {
             toValue: 0,
-            duration: 160,
+            duration: motion.quick,
             useNativeDriver: true,
           }),
         ]).start();

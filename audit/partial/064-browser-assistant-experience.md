@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sharing a page from the phone browser sends only its address or shared text; the app never reads the page itself. | surface-only |
+| mobile | partial | Recommend decline at leader parity: Claude documents only shared selected text (support.claude.com/en/articles/10263469); ChatGPT page 403, logged in founder-research-needed-to-proceed.md. | surface-only |
 
 Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
 
@@ -26,7 +26,7 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Works only through the phone's share sheet; there is no selection action inside a browser and the source page is not attached. | surface-only |
+| mobile | partial | Recommend done at parity: selected text arrives through the share sheet as in Claude; waits on the ChatGPT founder check. | surface-only |
 
 Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
 
@@ -38,7 +38,7 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only shared text or an address arrives through the share sheet; there is no summarize-this-page action. | surface-only |
+| mobile | partial | Same as S64.01. | surface-only |
 | cli | partial | No summarize command: the user has to ask in chat and the agent calls browser_read_page. | ui |
 
 Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`, `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`
@@ -51,7 +51,7 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only shared text or an address reaches the chat; the app cannot read the page to answer about it. | surface-only |
+| mobile | partial | Same as S64.01. | surface-only |
 
 Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
 

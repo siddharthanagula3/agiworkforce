@@ -9,7 +9,7 @@ import Animated, {
 import { Paperclip, Globe, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react-native';
 import type { AgentEventSource } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, motion } from '@/src/ui/theme';
 import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { translatePlural } from '@/src/i18n/plural';
@@ -42,7 +42,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
     animatedHeight.value = withTiming(nextExpanded ? 1 : 0, {
-      duration: 250,
+      duration: motion.moved,
       easing: Easing.bezier(0.4, 0, 0.2, 1),
     });
   }, [expanded, animatedHeight]);

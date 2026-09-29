@@ -196,6 +196,10 @@
     "windowMinutes_one": "分",
     "windowMinutes_other": "{{count}} 分",
     "windowSeconds_one": "秒",
-    "windowSeconds_other": "{{count}} 秒"
+    "windowSeconds_other": "{{count}} 秒",
+    "memoriesAdded_one": "{{count}} 件のメモリを追加しました",
+    "memoriesAdded_other": "{{count}} 件のメモリを追加しました",
+    "factsFound_one": "{{source}} から {{count}} 件の事実が見つかりました。",
+    "factsFound_other": "{{source}} から {{count}} 件の事実が見つかりました。"
   }
 }

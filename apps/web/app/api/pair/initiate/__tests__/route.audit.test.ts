@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/device-steps/requesting-device', () => ({
+  readRequestingDevice: vi.fn(),
   readRequestingDeviceId: mocks.requestingDevice,
 }));
 

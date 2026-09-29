@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => {
     }
   }
   return {
-    markAppReturn: vi.fn(async () => true),
+    markAppReturn: vi.fn(async (..._args: unknown[]) => true),
     authUser: vi.fn(),
     createPending: vi.fn(),
     listAccounts: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),

@@ -174,7 +174,9 @@
     "packages_other": "패키지 {{count}}개",
     "unreadNotifications_other": "읽지 않은 알림 {{count}}개",
     "packages_one": "패키지 {{count}}개",
-    "unreadNotifications_one": "읽지 않은 알림 {{count}}개"
+    "unreadNotifications_one": "읽지 않은 알림 {{count}}개",
+    "textBlocks_one": "텍스트 블록 {{count}}개",
+    "textBlocks_other": "텍스트 블록 {{count}}개"
   },
   "relative": {
     "minutesAgo_one": "{{count}}분 전",
