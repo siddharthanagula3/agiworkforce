@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/auth 68949fe36: the Full Name field now saves to the account display name through PATCH /api/me; there is still no profile photo upload on mobile | ui |
+| mobile | partial | lands with the Codex mobile commit | ui |
 | cli | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`
