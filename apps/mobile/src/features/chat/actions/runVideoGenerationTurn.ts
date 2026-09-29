@@ -2,6 +2,8 @@ import { ApiPaywallError } from '@/services/api';
 import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
 import {
   MediaGenerationAdmissionError,
+  MEDIA_USAGE_LIMIT_MESSAGE,
+  isUsageLimitRefusal,
   mediaGenerationFailureMessage,
 } from './mediaGenerationError';
 import {
@@ -14,6 +16,8 @@ import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
+
+const CLOUD_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface VideoTurnCompletion {
   videoUrl: string;
@@ -113,6 +117,9 @@ export async function runVideoGenerationTurn(
       {
         prompt: input.prompt,
         model: input.model,
+        ...(CLOUD_CONVERSATION_ID.test(input.conversationId)
+          ? { conversation_id: input.conversationId }
+          : {}),
         ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
         ...(input.resolution ? { resolution: input.resolution } : {}),
         ...(input.durationSecs ? { duration_secs: input.durationSecs } : {}),
@@ -144,6 +151,11 @@ export async function runVideoGenerationTurn(
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);
       return { status: 'paywall', assistantMessageId };
+    }
+
+    if (isUsageLimitRefusal(error)) {
+      input.fail(input.conversationId, assistantMessageId, MEDIA_USAGE_LIMIT_MESSAGE);
+      return { status: 'failed', assistantMessageId };
     }
 
     input.onUnexpectedError?.(error);

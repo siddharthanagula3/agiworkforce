@@ -1149,7 +1149,7 @@ describe('chatStore, streaming state', () => {
       mockRetrievePastChatContext.mockResolvedValue(null);
     });
 
-    it('injects saved memory and past-chat excerpts while memory is on', async () => {
+    it('leaves memory and past chats to the server on a Cloud turn', async () => {
       useCloudSettingsStore.setState({ memoryEnabled: true, referencePastChats: true });
       seedCloudConversation();
       const turn = captureCloudTurn();
@@ -1158,29 +1158,11 @@ describe('chatStore, streaming state', () => {
         await getState().sendMessage(CONV_ID, 'which language should I use', CLOUD_MODEL);
       });
 
-      expect(mockRetrieveMemoryContext).toHaveBeenCalled();
-      expect(mockRetrievePastChatContext).toHaveBeenCalled();
-      const systemContents = systemContentsOf(turn.read());
-      expect(systemContents.some((content) => content.includes(STORED_FACT))).toBe(true);
-      expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(true);
-    });
-
-    it('stops memory injection but keeps past-chat search when only Memory is off', async () => {
-      useCloudSettingsStore.setState({ memoryEnabled: false, referencePastChats: true });
-      seedCloudConversation();
-      const turn = captureCloudTurn();
-
-      await act(async () => {
-        await getState().sendMessage(CONV_ID, 'which language should I use', CLOUD_MODEL);
-      });
-
       expect(mockRetrieveMemoryContext).not.toHaveBeenCalled();
-      expect(mockRetrievePastChatContext).toHaveBeenCalledWith(
-        expect.objectContaining({ enabled: true }),
-      );
+      expect(mockRetrievePastChatContext).not.toHaveBeenCalled();
       const systemContents = systemContentsOf(turn.read());
       expect(systemContents.some((content) => content.includes(STORED_FACT))).toBe(false);
-      expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(true);
+      expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(false);
     });
 
     it('stops writing new Local memories when the master switch is off', async () => {
@@ -1375,6 +1357,11 @@ describe('chatStore, streaming state', () => {
 
     it('does not capture durable facts when the local turn is temporary', async () => {
       useSettingsStore.setState({ isTemporaryChat: true });
+      useChatStore.setState({
+        conversations: getState().conversations.map((conversation) =>
+          conversation.id === CONV_ID ? { ...conversation, temporary: true } : conversation,
+        ),
+      });
       mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
       mockListInstalledModels.mockResolvedValue([
         {

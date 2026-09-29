@@ -53,9 +53,18 @@ function describeMemoryTime(memory: MemoryEntry): string {
 
 function describeMemoryOrigin(memory: MemoryEntry, conversationTitle: string | null): string {
   const origin = memoryFactOrigin(memory);
-  if (origin === 'imported') return 'Imported';
-  if (origin === 'typed') return 'Added by you';
-  return conversationTitle ? `Learned from “${conversationTitle}”` : 'Learned from a chat';
+  const base =
+    origin === 'imported'
+      ? 'Imported'
+      : origin === 'typed'
+        ? 'Added by you'
+        : conversationTitle
+          ? `Learned from “${conversationTitle}”`
+          : 'Learned from a chat';
+  if (memory.project_id) {
+    return `${base}, only in project “${memory.project_name ?? 'a project'}”`;
+  }
+  return base;
 }
 
 interface MemoryItemProps {

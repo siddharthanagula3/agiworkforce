@@ -6,6 +6,8 @@ import { readReferenceImageBase64 } from '@/src/features/image/services/imageRef
 import type { MobileImageReferenceAttachment } from './resolveMobileImageGenerationRequest';
 import {
   MediaGenerationAdmissionError,
+  MEDIA_USAGE_LIMIT_MESSAGE,
+  isUsageLimitRefusal,
   mediaGenerationFailureMessage,
 } from './mediaGenerationError';
 import {
@@ -16,10 +18,13 @@ import {
   type ImageGenRequest,
   type ImageGenResponse,
 } from '@/src/features/image/services/imagegen';
+
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
+
+const CLOUD_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface ImageTurnCompletion {
   imageUrl: string;
@@ -177,6 +182,9 @@ export async function runImageGenerationTurn(
         {
           prompt: input.prompt,
           model: input.model,
+          ...(CLOUD_CONVERSATION_ID.test(input.conversationId)
+            ? { conversation_id: input.conversationId }
+            : {}),
           ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
           ...(input.transparentBackground ? { transparent_background: true } : {}),
           ...(referenceOperation && referenceBase64
@@ -224,6 +232,11 @@ export async function runImageGenerationTurn(
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);
       return { status: 'paywall', assistantMessageId };
+    }
+
+    if (isUsageLimitRefusal(error)) {
+      input.fail(input.conversationId, assistantMessageId, MEDIA_USAGE_LIMIT_MESSAGE);
+      return { status: 'failed', assistantMessageId };
     }
 
     if (error instanceof ImageGenerationTimeout) {

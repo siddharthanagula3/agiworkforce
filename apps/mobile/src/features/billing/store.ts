@@ -72,7 +72,7 @@ export const useTierStore = create<TierState>()(
           const data = parseMeResponse(response);
           const billingTier = normalizeBillingPlanTier(data.plan.tier ?? null);
           const tier = normalizeBillingPlanTier(
-            effectivePlanTier(data.plan.tier ?? null, data.plan.status),
+            data.plan.effective_tier ?? effectivePlanTier(data.plan.tier ?? null, data.plan.status),
           );
           const grantedCapabilities = data.capability_handshake?.granted ?? [];
           set({

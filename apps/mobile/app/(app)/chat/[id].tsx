@@ -1420,8 +1420,29 @@ export default function ChatScreen() {
       if (!id || !isConversationActionCurrent(actionScope)) return;
       if (conversation?.temporary) {
         Alert.alert(
-          'Temporary chats cannot be shared',
-          'Turn off temporary chat to keep this chat, then share it.',
+          'Save this chat to share it?',
+          'Temporary chats cannot be shared. Saving keeps its messages in your history, and from then on it follows your memory and data settings like any other chat.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Save chat',
+              onPress: () => {
+                if (!isConversationActionCurrent(actionScope)) return;
+                useChatStore
+                  .getState()
+                  .keepTemporaryConversation(id)
+                  .then(() =>
+                    Alert.alert('Chat saved', 'It is in your history. You can share it now.'),
+                  )
+                  .catch((error: unknown) => {
+                    Alert.alert(
+                      'This chat could not be saved',
+                      error instanceof Error ? error.message : 'Try again in a moment.',
+                    );
+                  });
+              },
+            },
+          ],
         );
         return;
       }

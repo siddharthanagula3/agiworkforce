@@ -73,6 +73,7 @@ export interface CombinedChatState {
   setConversationModel: (id: string, model: string) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
+  keepTemporaryConversation: (id: string) => Promise<void>;
   markConversationRead: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   setMessageReaction: (
@@ -201,6 +202,7 @@ function buildCombinedState(
     setConversationModel: msg.setConversationModel,
     pinConversation: msg.pinConversation,
     makeConversationPermanent: msg.makeConversationPermanent,
+    keepTemporaryConversation: msg.keepTemporaryConversation,
     markConversationRead: msg.markConversationRead,
     deleteMessage: msg.deleteMessage,
     setMessageReaction: msg.setMessageReaction,

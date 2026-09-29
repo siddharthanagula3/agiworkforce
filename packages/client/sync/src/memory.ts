@@ -21,6 +21,8 @@ export interface SyncMemoryRecord {
   origin?: string | null;
   sourceConversationId?: string | null;
   sourceConversationTitle?: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
 }
 
 const KNOWN_NON_WEB_SOURCES: ReadonlySet<string> = new Set(['mobile', 'desktop', 'auto']);
@@ -43,6 +45,8 @@ export function mapMemoryWireDelta(delta: MemoryWireDelta): SyncMemoryRecord {
     origin: delta.source,
     sourceConversationId: delta.source_conversation_id ?? null,
     sourceConversationTitle: delta.source_conversation_title ?? null,
+    projectId: delta.project_id ?? null,
+    projectName: delta.project_name ?? null,
   };
 }
 

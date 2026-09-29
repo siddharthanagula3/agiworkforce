@@ -15,6 +15,7 @@ interface TermsAcceptanceState {
   currentVersion: string | null;
   error: string | null;
   verify: (userId: string) => Promise<void>;
+  recheck: (userId: string) => Promise<void>;
   accept: (userId: string) => Promise<void>;
   reset: () => void;
 }
@@ -52,6 +53,23 @@ export const useTermsAcceptanceStore = create<TermsAcceptanceState>()((set, get)
     }
   },
 
+  recheck: async (userId) => {
+    const state = get();
+    if (state.userId !== userId || state.status !== 'accepted') return get().verify(userId);
+    const generation = ++requestGeneration;
+    try {
+      const result = TermsStatusSchema.parse(await api.get<unknown>(TERMS_ACCEPTANCE_PATH));
+      if (get().userId !== userId || requestGeneration !== generation) return;
+      set(
+        result.accepted
+          ? { currentVersion: result.currentVersion }
+          : { status: 'required', currentVersion: result.currentVersion },
+      );
+    } catch (error) {
+      console.warn('[terms] recheck failed, keeping the current standing', error);
+    }
+  },
+
   accept: async (userId) => {
     const state = get();
     if (state.userId !== userId || state.status !== 'required' || !state.currentVersion) return;
@@ -69,14 +87,25 @@ export const useTermsAcceptanceStore = create<TermsAcceptanceState>()((set, get)
         throw new Error('The Terms changed. Review the current version before continuing.');
       }
       set({ status: 'accepted', error: null });
-    } catch {
-      if (get().userId === userId && requestGeneration === generation) {
+    } catch (error) {
+      if (get().userId !== userId || requestGeneration !== generation) return;
+      const latestVersion =
+        error instanceof ApiHttpError && error.status === 409
+          ? error.body?.['currentVersion']
+          : undefined;
+      if (typeof latestVersion === 'string' && latestVersion) {
         set({
-          status: 'error',
-          currentVersion: null,
-          error: 'Could not record your agreement. Retry and review the current Terms.',
+          status: 'required',
+          currentVersion: latestVersion,
+          error: 'The Terms changed. Review the current version before continuing.',
         });
+        return;
       }
+      set({
+        status: 'error',
+        currentVersion: null,
+        error: 'Could not record your agreement. Retry and review the current Terms.',
+      });
     }
   },
 

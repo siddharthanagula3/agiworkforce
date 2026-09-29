@@ -69,7 +69,7 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
       notificationsEnabled: true,
       speechLanguage: SPEECH_LANGUAGE_AUTO,
       autoListenEnabled: true,
-      memoryEnabled: true,
+      memoryEnabled: false,
       referencePastChats: false,
       generateMemoryFromHistory: true,
       memoryPolicyInitialized: false,
