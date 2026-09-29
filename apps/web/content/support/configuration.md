@@ -3,9 +3,9 @@ id: configuration
 title: Configure the CLI
 path: /cli
 category: surfaces
-tags: configuration, config, config.toml, settings, default model, permission mode, agi init, agiworkforce_home, project config, mcp.json, hooks.json
+tags: configuration, config, config.toml, settings, default model, permission mode, agi init, agiworkforce_home, update check, project config, mcp.json, hooks.json
 platforms: cli, vscode, macos, windows, linux
-updated: 2026-09-28
+updated: 2026-09-29
 scope: public
 ---
 
@@ -50,6 +50,12 @@ folder you start `agi` in and only applies once you trust that workspace.
   Managed mode and only when your account's product analytics choice, in
   Settings, Privacy on the web, allows them. Like `crash_reports`, this is read
   from your own `config.toml` only.
+- `[updates] check_on_startup = false` stops the full-screen terminal from
+  asking agiworkforce.com for the newest release each time it starts. Setting
+  `AGIWORKFORCE_NO_UPDATE_CHECK` to any value other than `0`, `false`, `off` or
+  `no` does the same for one shell, and Local mode never makes the check.
+  `agi update` still checks when you run it. This is read from your own
+  `config.toml` only.
 
 ## Which setting wins
 

@@ -4202,6 +4202,101 @@
       ]
     },
     {
+      "id": "config-product-analytics-key",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "`[telemetry] product_analytics = false` stops the CLI from sending product usage events, such as a stopped response, even when your account allows product analytics.",
+      "implementation": ["apps/cli/src/cloud/product_analytics.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/cloud/product_analytics.rs",
+          "name": "fn the_config_key_blocks_sending"
+        }
+      ]
+    },
+    {
+      "id": "config-product-analytics-managed-and-consent",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "Events are sent only in Managed mode and only when your account's product analytics choice, in Settings, Privacy on the web, allows them.",
+      "implementation": ["apps/cli/src/cloud/product_analytics.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/cloud/product_analytics.rs",
+          "name": "fn local_and_byok_sessions_never_send"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/cloud/product_analytics.rs",
+          "name": "fn only_consent_under_the_analytics_notice_counts"
+        }
+      ]
+    },
+    {
+      "id": "config-telemetry-user-file-only",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "Like `crash_reports`, this is read from your own `config.toml` only.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "so a repository's project config cannot opt its users into reporting."
+        }
+      ]
+    },
+    {
+      "id": "config-update-check-key",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "`[updates] check_on_startup = false` stops the full-screen terminal from asking agiworkforce.com for the newest release each time it starts.",
+      "implementation": ["apps/cli/src/update_check.rs", "apps/cli/src/tui/tui_app.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/update_check.rs",
+          "name": "fn the_startup_check_stays_off_the_network_when_the_user_or_local_mode_says_so"
+        }
+      ]
+    },
+    {
+      "id": "config-update-check-env-and-local",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "Setting `AGIWORKFORCE_NO_UPDATE_CHECK` to any value other than `0`, `false`, `off` or `no` does the same for one shell, and Local mode never makes the check.",
+      "implementation": ["apps/cli/src/update_check.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/update_check.rs",
+          "name": "fn the_startup_check_stays_off_the_network_when_the_user_or_local_mode_says_so"
+        }
+      ]
+    },
+    {
+      "id": "config-update-check-user-file-only",
+      "doc": "configuration",
+      "section": "Useful settings",
+      "kind": "prose",
+      "sentence": "This is read from your own `config.toml` only.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/update_check.rs",
+          "name": "fn a_repository_cannot_switch_the_startup_check_for_its_users"
+        }
+      ]
+    },
+    {
       "id": "config-layer-order",
       "doc": "configuration",
       "section": "Which setting wins",
