@@ -742,7 +742,7 @@ pub struct McpLogout {
 
 pub async fn logout_from_remote_server(
     server_url: &str,
-    config: &McpServerConfig,
+    config: Option<&McpServerConfig>,
 ) -> Result<McpLogout> {
     let token = KeyringTokenStore.get(server_url);
     let revocation = match &token {
@@ -759,17 +759,21 @@ pub async fn logout_from_remote_server(
     })
 }
 
+fn revocation_oauth_config(config: Option<&McpServerConfig>) -> OAuthConfig {
+    match config.map(to_transport_config) {
+        Some(TransportConfig::Http {
+            oauth: Some(oauth), ..
+        }) => oauth,
+        _ => OAuthConfig::default(),
+    }
+}
+
 async fn revoke_at_provider(
     server_url: &str,
-    config: &McpServerConfig,
+    config: Option<&McpServerConfig>,
     token: &OAuthToken,
 ) -> McpRevocation {
-    let oauth = match to_transport_config(config) {
-        TransportConfig::Http {
-            oauth: Some(oauth), ..
-        } => oauth,
-        _ => OAuthConfig::default(),
-    };
+    let oauth = revocation_oauth_config(config);
     let attempt = agiworkforce_mcp::oauth::revoke_token(token, &oauth, server_url);
     match tokio::time::timeout(std::time::Duration::from_secs(30), attempt).await {
         Ok(Ok(true)) => McpRevocation::Revoked,
@@ -1991,6 +1995,24 @@ fn normalize_mcp_prompt_part(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn logout_revocation_needs_no_parsable_registry_entry() {
+        let fallback = super::revocation_oauth_config(None);
+        assert!(fallback.client_id.is_none() && fallback.token_url.is_none());
+        let config: super::McpServerConfig = serde_json::from_value(serde_json::json!({
+            "transport": "http",
+            "url": "https://mcp.example.com/mcp",
+            "auth": { "client_id": "cli-client" }
+        }))
+        .expect("http config");
+        assert_eq!(
+            super::revocation_oauth_config(Some(&config))
+                .client_id
+                .as_deref(),
+            Some("cli-client")
+        );
+    }
+
     use super::*;
 
     #[test]
