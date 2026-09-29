@@ -1,7 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { GitHubInstallAppStartResponse } from '@agiworkforce/cloud-contracts';
+import {
+  GITHUB_INSTALL_CONNECT_PAGE_PATH,
+  type GitHubInstallAppStartResponse,
+} from '@agiworkforce/cloud-contracts';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
@@ -35,7 +38,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   }
 
   const state = await startAppInstall(userId);
-  const target = new URL(installUrl);
+  const target = new URL(GITHUB_INSTALL_CONNECT_PAGE_PATH, request.url);
   target.searchParams.set('state', state);
 
   return NextResponse.json({ url: target.toString() } satisfies GitHubInstallAppStartResponse, {

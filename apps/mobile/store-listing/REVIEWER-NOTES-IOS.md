@@ -214,9 +214,14 @@ non-`http(s)` scheme requires a confirmation alert first.
 App install flow at `${API_URL}/api/github/install/start`
 (`src/features/settings/cloud-connectors/index.tsx:690`, URL from
 `services/connectors.ts:7-9`), an OAuth start on our own host. The Connect GitHub
-button in the new cloud code session sheet runs the same install in an in-app
-authentication session that returns to `agiworkforce://github/installed`
-(`src/features/cloud-code/githubInstall.ts`), not the external browser. The legal screen
+button in the new cloud code session sheet runs the same install from the app
+(`src/features/cloud-code/githubInstall.ts`). It first opens
+`agiworkforce.com/github/connect`, which names the requesting AGI account before
+GitHub, and always returns through the verified link
+`https://agiworkforce.com/github/installed`: inside an authentication session on
+iOS 17.4 and later, as a universal link in Safari on older iOS, and as a verified
+App Link from a browser tab on Android. The app then names the GitHub account and
+asks before linking it (`app/(app)/github/installed.tsx`). The legal screen
 `app/legal/article-50.tsx:34` opens the EU AI Act text at
 `artificialintelligenceact.eu`. A map result card opens Maps
 (`src/features/chat/components/InteractiveCardBlock.tsx:292`). `mailto:` to

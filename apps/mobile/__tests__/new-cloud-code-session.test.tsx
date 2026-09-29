@@ -15,12 +15,15 @@ jest.mock('@/src/features/cloud-code/service', () => ({
   describeCloudCodeError: (_error: unknown, fallback: string) => fallback,
 }));
 
-const mockConnectGitHubInApp = jest.fn();
+const mockStartGitHubInstall = jest.fn();
+const mockRouterPush = jest.fn();
 
 jest.mock('@/src/features/cloud-code/githubInstall', () => ({
-  connectGitHubInApp: () => mockConnectGitHubInApp(),
-  describeGitHubInstallOutcome: (outcome: string) =>
-    outcome === 'connected' || outcome === 'dismissed' ? null : `outcome:${outcome}`,
+  startGitHubInstallInApp: () => mockStartGitHubInstall(),
+}));
+jest.mock('expo-router', () => ({
+  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
+  useRouter: () => ({ push: mockRouterPush, replace: jest.fn(), back: jest.fn() }),
 }));
 
 import {
@@ -98,42 +101,45 @@ describe('new cloud code session', () => {
     expect(mockCloudCodeApi.create).not.toHaveBeenCalled();
   });
 
-  it('connects GitHub in the app and reloads the repositories when it links', async () => {
-    mockCloudCodeApi.listRepositories.mockResolvedValueOnce({
-      repositories: [],
-      installationCount: 0,
-      truncated: false,
-      unreachable: [],
-    });
-    mockConnectGitHubInApp.mockResolvedValue('connected');
-    const { getByText, getByTestId } = render(
-      <NewCloudCodeSessionSheet visible onClose={jest.fn()} onCreated={jest.fn()} />,
-    );
-
-    await act(async () => {
-      jest.advanceTimersByTime(400);
-    });
-    await waitFor(() => getByText('Connect GitHub'));
-
-    await act(async () => {
-      fireEvent.press(getByText('Connect GitHub'));
-    });
-    await act(async () => {
-      jest.advanceTimersByTime(400);
-    });
-
-    expect(mockConnectGitHubInApp).toHaveBeenCalledTimes(1);
-    await waitFor(() => getByTestId('new-cloud-code-repo-acme/app'));
-  });
-
-  it('says why GitHub did not link and keeps the connect action', async () => {
+  it('sends an iOS GitHub return to the confirm screen instead of linking it', async () => {
     mockCloudCodeApi.listRepositories.mockResolvedValue({
       repositories: [],
       installationCount: 0,
       truncated: false,
       unreachable: [],
     });
-    mockConnectGitHubInApp.mockResolvedValue('ownership_failed');
+    mockStartGitHubInstall.mockResolvedValue({
+      kind: 'returned',
+      result: { state: 'b'.repeat(64), code: 'one-time-code' },
+    });
+    const onClose = jest.fn();
+    const { getByText } = render(
+      <NewCloudCodeSessionSheet visible onClose={onClose} onCreated={jest.fn()} />,
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    await waitFor(() => getByText('Connect GitHub'));
+    await act(async () => {
+      fireEvent.press(getByText('Connect GitHub'));
+    });
+
+    expect(onClose).toHaveBeenCalled();
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/(app)/github/installed',
+      params: { state: 'b'.repeat(64), code: 'one-time-code' },
+    });
+  });
+
+  it('says so when GitHub could not be started and keeps the connect action', async () => {
+    mockCloudCodeApi.listRepositories.mockResolvedValue({
+      repositories: [],
+      installationCount: 0,
+      truncated: false,
+      unreachable: [],
+    });
+    mockStartGitHubInstall.mockResolvedValue({ kind: 'failed' });
     const { getByText } = render(
       <NewCloudCodeSessionSheet visible onClose={jest.fn()} onCreated={jest.fn()} />,
     );
@@ -146,7 +152,8 @@ describe('new cloud code session', () => {
       fireEvent.press(getByText('Connect GitHub'));
     });
 
-    expect(getByText('outcome:ownership_failed')).toBeTruthy();
+    expect(getByText('GitHub could not be connected')).toBeTruthy();
     expect(getByText('Connect GitHub')).toBeTruthy();
+    expect(mockRouterPush).not.toHaveBeenCalled();
   });
 });

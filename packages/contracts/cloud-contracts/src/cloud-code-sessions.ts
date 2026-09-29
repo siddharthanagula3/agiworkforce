@@ -16,7 +16,26 @@ export const CLOUD_CODE_BRANCHES_PATH = '/api/code/repositories/branches';
 
 export const GITHUB_INSTALL_APP_START_PATH = '/api/github/install/app-start';
 export const GITHUB_INSTALL_COMPLETE_PATH = '/api/github/install/complete';
-export const GITHUB_INSTALL_APP_RETURN_URL = 'agiworkforce://github/installed';
+export const GITHUB_INSTALL_APP_LINK_RETURN_URL = 'https://agiworkforce.com/github/installed';
+export const GITHUB_INSTALL_PENDING_PATH = '/api/github/install/pending';
+
+export const GITHUB_INSTALL_CONNECT_PAGE_PATH = '/github/connect';
+
+export const GitHubInstallPendingRequestSchema = z.object({
+  state: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type GitHubInstallPendingRequest = z.infer<typeof GitHubInstallPendingRequestSchema>;
+
+export const GitHubInstallPendingResponseSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('ready'),
+    accountLogin: z.string().min(1).max(256),
+    accountType: z.enum(['User', 'Organization']),
+  }),
+  z.object({ status: z.literal('invalid_state') }),
+  z.object({ status: z.literal('unavailable') }),
+]);
+export type GitHubInstallPendingResponse = z.infer<typeof GitHubInstallPendingResponseSchema>;
 
 export const GitHubInstallAppStartResponseSchema = z.object({
   url: z.string().url(),
