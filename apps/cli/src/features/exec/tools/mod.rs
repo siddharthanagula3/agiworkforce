@@ -769,12 +769,18 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             )
             .await
         }
-        "lsp_definition" => execute_lsp_definition(&call.args).await,
-        "lsp_hover" => execute_lsp_hover(&call.args).await,
+        "lsp_definition" => {
+            execute_lsp_definition(&call.args, opts.workspace_root.as_deref()).await
+        }
+        "lsp_hover" => execute_lsp_hover(&call.args, opts.workspace_root.as_deref()).await,
         "lsp_diagnostics" => execute_lsp_diagnostics(&call.args).await,
-        "lsp_completion" => execute_lsp_completion(&call.args).await,
-        "lsp_document_symbols" => execute_lsp_document_symbols(&call.args).await,
-        "lsp_format" => execute_lsp_format(&call.args).await,
+        "lsp_completion" => {
+            execute_lsp_completion(&call.args, opts.workspace_root.as_deref()).await
+        }
+        "lsp_document_symbols" => {
+            execute_lsp_document_symbols(&call.args, opts.workspace_root.as_deref()).await
+        }
+        "lsp_format" => execute_lsp_format(&call.args, opts.workspace_root.as_deref()).await,
         // The typed Git API: one tool per operation, dispatched from the same
         // spec table the catalog is built from, so a tool cannot be advertised
         // without reaching an operation.
@@ -1231,6 +1237,12 @@ fn policy_primary_argument(tool_name: &str, args: &HashMap<String, String>) -> S
         "write_file" | "edit_file" | "notebook_edit" | "read_file" | "resolve_conflict" => {
             &["path", "file_path"]
         }
+        "lsp_definition"
+        | "lsp_hover"
+        | "lsp_diagnostics"
+        | "lsp_completion"
+        | "lsp_document_symbols"
+        | "lsp_format" => &["file"],
         "web_fetch" => &["url"],
         "web_search" | "search_files" | "grep_files" => &["query", "pattern"],
         "advisor" | "ask_user" => &["question"],
