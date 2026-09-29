@@ -122,16 +122,12 @@ Code: `apps/mobile/app/(auth)/login.tsx:207-209`, `apps/mobile/src/features/sett
 
 - Done when: Before first use the user reviews and accepts the current Terms (versioned), acceptance is recorded, and a terms change re-prompts.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
-| desktop | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
 | chrome | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
 | api | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
-
-Code: `apps/web/app/login/complete/page.tsx:54-71`, `apps/web/app/signup/complete/RecordTermsAcceptance.tsx:37-56`, `apps/web/lib/server/require-current-terms.ts:7-12`
 
 ## S3.20: Age or eligibility verification where applicable.
 
