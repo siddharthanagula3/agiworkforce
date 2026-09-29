@@ -5754,6 +5754,92 @@ export function getWebviewContent(
       return card;
     }
 
+    function renderQuestionCard(payload) {
+      hideEmptyState();
+      var card = document.createElement('section');
+      card.className = 'approval-card';
+      card.dataset.requestId = payload.requestId;
+      card.setAttribute('role', 'group');
+      card.setAttribute('aria-label', 'AGI asks, ' + payload.question.text);
+
+      var head = document.createElement('div');
+      head.className = 'approval-card__head';
+      var icon = document.createElement('span');
+      icon.className = 'codicon codicon-question';
+      icon.setAttribute('aria-hidden', 'true');
+      var headText = document.createElement('h3');
+      headText.className = 'approval-card__title';
+      headText.textContent = 'AGI asks';
+      head.appendChild(icon);
+      head.appendChild(headText);
+      card.appendChild(head);
+
+      var summary = document.createElement('div');
+      summary.className = 'approval-card__summary';
+      summary.textContent = payload.question.text;
+      card.appendChild(summary);
+
+      function answer(text) {
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'once', answer: text },
+        });
+      }
+
+      var actions = document.createElement('div');
+      actions.className = 'approval-card__actions';
+      for (var i = 0; i < payload.question.options.length; i++) {
+        (function (option) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'approval-card__action';
+          button.textContent = option;
+          button.addEventListener('click', function () {
+            answer(option);
+          });
+          actions.appendChild(button);
+        })(payload.question.options[i]);
+      }
+      var skip = document.createElement('button');
+      skip.type = 'button';
+      skip.className = 'approval-card__action';
+      skip.textContent = 'Skip';
+      skip.title = 'Close the question without answering; AGI carries on with its best judgment.';
+      skip.addEventListener('click', function () {
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny' },
+        });
+      });
+      actions.appendChild(skip);
+      var typed = document.createElement('input');
+      typed.type = 'text';
+      typed.className = 'approval-card__guidance';
+      typed.maxLength = ${REMOTE_CODE_LIMITS.guidanceLength};
+      typed.placeholder =
+        payload.question.options.length > 0
+          ? 'Or type your own answer, then press Enter'
+          : 'Type your answer, then press Enter';
+      typed.setAttribute('aria-label', 'Your answer');
+      typed.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !typed.value.trim()) return;
+        event.preventDefault();
+        answer(typed.value.trim());
+      });
+      actions.appendChild(typed);
+      card.appendChild(actions);
+
+      approvalCards[payload.requestId] = { el: card, actions: actions, question: true };
+      messagesEl.appendChild(card);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (payload.question.options.length > 0) {
+        actions.querySelector('.approval-card__action').focus();
+      } else {
+        typed.focus();
+      }
+      return card;
+    }
+
     function restartPendingToolClocks() {
       var now = Date.now();
       var ids = Object.keys(toolCallMap);
@@ -5773,7 +5859,13 @@ export function getWebviewContent(
       entry.actions.remove();
       var outcomeEl = document.createElement('div');
       outcomeEl.className = 'approval-card__outcome';
-      outcomeEl.textContent = APPROVAL_OUTCOMES[outcome] || APPROVAL_OUTCOMES.expired;
+      outcomeEl.textContent = entry.question
+        ? outcome === 'once'
+          ? 'Answered.'
+          : outcome === 'deny'
+            ? 'Skipped.'
+            : APPROVAL_OUTCOMES.expired
+        : APPROVAL_OUTCOMES[outcome] || APPROVAL_OUTCOMES.expired;
       entry.el.appendChild(outcomeEl);
     }
 
@@ -6557,7 +6649,8 @@ export function getWebviewContent(
 
       else if (msg.type === 'approvalRequested') {
         removeTyping();
-        renderApprovalCard(msg.payload);
+        if (msg.payload.question) renderQuestionCard(msg.payload);
+        else renderApprovalCard(msg.payload);
         // Anything the model says after this belongs below the card, not back
         // in the bubble it was writing before it asked.
         currentAssistantEl = null;

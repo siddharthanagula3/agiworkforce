@@ -52,15 +52,12 @@ nothing is left.
 
 - Done when: The user can choose which tools the task may use before it runs.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | VS Code offers only permission modes (ask/auto/plan/bypass); it cannot enable or disable individual tools. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550-3554`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1037-1047`
 
 ## S60.07: Execution-location selection.
 

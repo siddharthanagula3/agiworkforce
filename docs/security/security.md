@@ -86,6 +86,8 @@ Every declared platform tool, and what each policy does with it. The rows are
 | ------------------------------ | ---------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
 | `web_search`                   | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
 | `search_maps`                  | asks                   | runs                           | read, reversible                                                                 |
+| `search_places`                | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
+| `ask_clarifying_questions`     | asks                   | runs                           | read, reversible                                                                 |
 | `plan_itinerary`               | asks                   | runs                           | read, reversible                                                                 |
 | `compare_products`             | asks                   | runs                           | read, reversible                                                                 |
 | `url_fetch`                    | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
@@ -135,6 +137,14 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `device_browser_click`         | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `device_browser_type`          | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `device_browser_download`      | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_read_page`            | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `browser_screenshot`           | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `browser_console`              | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `browser_network`              | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
+| `browser_navigate`             | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_click`                | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_type`                 | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_download`             | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `browser_find`                 | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `browser_fill_form`            | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `browser_history`              | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |

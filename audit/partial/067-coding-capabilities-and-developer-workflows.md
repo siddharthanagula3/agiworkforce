@@ -195,7 +195,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | cli | partial | The CLI's browser_* tools do not drive a browser themselves: execute_browser_command (tools/mod.rs:1236-1249) forwards every call to crate::browser_bridge::run_command, which talks to AGI Desktop's loopback bridge (desktop-bridge.json, 127.0.0.1) and 'the shell owns the pairing; the CLI never speaks to the extension' (browser_bridge.rs:1-2). Without the Electron app running with a Chrome extension paired there, every browser tool returns 'No browser is paired with AGI Desktop' (l.149). The CLI has no pairing of its own (no /browser command, 0 hits). Partial, miss ['surface-only'], remaining: 'browser_* tools only work while AGI Desktop is running with the Chrome extension paired; add a CLI-side pairing or note the dependency.' |  |
-| vscode | partial | Same runtime as the CLI: the app-server's browser_* tools reach a browser only through AGI Desktop's loopback bridge (browser_bridge.rs:1-2, tools/mod.rs:1247); the extension has no browser pairing of its own, so with VS Code and the CLI alone the tools fail 'No browser is paired with AGI Desktop'. Partial, miss ['surface-only'], remaining: 'browser inspection needs AGI Desktop running with the Chrome extension paired; VS Code cannot pair a browser itself.' |  |
+| vscode | partial | Needs a CLI-side browser pairing without AGI Desktop (c-cli lane); VS Code has nothing of its own to add. |  |
 
 Code: `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:686-689`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:775-777`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:950-950`
 
