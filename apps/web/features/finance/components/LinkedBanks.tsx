@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import type { ZodType } from 'zod';
 import {
   BANK_ACCOUNTS_ITEMS_PATH,
+  BankAccountsItemRemoveResponseSchema,
+  BankAccountsItemUpdateResponseSchema,
   BankAccountsItemsResponseSchema,
   bankAccountsItemPath,
   type BankAccountsItem,
@@ -14,17 +17,20 @@ import { toUserMessage } from '@/lib/user-error-message';
 const LOAD_FAILED = 'Your linked banks could not be loaded.';
 const SAVE_FAILED = 'That change was not saved. Try again.';
 
-async function sendItemChange(itemId: string, init: RequestInit): Promise<void> {
+async function sendItemChange(
+  itemId: string,
+  init: RequestInit,
+  responseSchema: ZodType,
+): Promise<void> {
   const response = await fetch(bankAccountsItemPath(itemId), {
     ...init,
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', 'x-csrf-token': await getCsrfToken() },
   });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as {
-      error?: { message?: string };
-    } | null;
-    throw new Error(body?.error?.message ?? SAVE_FAILED);
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok || !responseSchema.safeParse(body).success) {
+    const message = (body as { error?: { message?: string } } | null)?.error?.message;
+    throw new Error(message ?? SAVE_FAILED);
   }
 }
 
@@ -58,10 +64,14 @@ export function LinkedBanks({ onChanged }: { onChanged: () => void }) {
       .map((account) => account.accountId);
     setBusyItem(item.id);
     try {
-      await sendItemChange(item.id, {
-        method: 'PATCH',
-        body: JSON.stringify({ excludedAccountIds: excluded }),
-      });
+      await sendItemChange(
+        item.id,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ excludedAccountIds: excluded }),
+        },
+        BankAccountsItemUpdateResponseSchema,
+      );
       await load();
       onChanged();
     } catch (saveError) {
@@ -80,7 +90,7 @@ export function LinkedBanks({ onChanged }: { onChanged: () => void }) {
       confirmLabel: 'Remove bank',
       destructive: true,
       onConfirm: async () => {
-        await sendItemChange(item.id, { method: 'DELETE' });
+        await sendItemChange(item.id, { method: 'DELETE' }, BankAccountsItemRemoveResponseSchema);
         await load();
         onChanged();
       },

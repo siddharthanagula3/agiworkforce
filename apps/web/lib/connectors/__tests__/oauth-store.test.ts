@@ -95,20 +95,21 @@ describe('pending authorizations', () => {
       },
     ]);
 
-    const pending = await consumePendingAuthorization(STATE);
+    const pending = await consumePendingAuthorization(STATE, 'user-1');
 
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toMatch(/update public\.connector_oauth_authorizations/);
     expect(sql).toMatch(/set consumed_at = now\(\)/);
     expect(sql).toMatch(/consumed_at is null/);
     expect(sql).toMatch(/expires_at > now\(\)/);
-    expect(params).toEqual([STATE_HASH, null]);
+    expect(sql).toMatch(/and user_id = \$2/);
+    expect(params).toEqual([STATE_HASH, 'user-1']);
     expect(pending?.codeVerifier).toBe('verifier-value');
   });
 
   it('returns null for an unknown, expired, or already-claimed state', async () => {
     mockQuery.mockResolvedValue([]);
-    await expect(consumePendingAuthorization(STATE)).resolves.toBeNull();
+    await expect(consumePendingAuthorization(STATE, 'user-1')).resolves.toBeNull();
   });
 
   it('refuses the exchange when the stored verifier cannot be decrypted', async () => {
@@ -123,7 +124,7 @@ describe('pending authorizations', () => {
       },
     ]);
 
-    await expect(consumePendingAuthorization(STATE)).resolves.toBeNull();
+    await expect(consumePendingAuthorization(STATE, 'user-1')).resolves.toBeNull();
   });
 
   it('reports the broker as unavailable when the tables are not migrated', async () => {

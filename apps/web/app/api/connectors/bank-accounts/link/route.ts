@@ -3,7 +3,10 @@ import 'server-only';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { BankAccountsLinkRequestSchema } from '@agiworkforce/cloud-contracts';
+import {
+  BankAccountsLinkRequestSchema,
+  type BankAccountsLinkResponse,
+} from '@agiworkforce/cloud-contracts';
 import {
   bankAccountsUnavailableReason,
   createBankAccountsHostedLink,
@@ -49,7 +52,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const body = await request.json().catch(() => ({}));
   const parsed = BankAccountsLinkRequestSchema.safeParse(body ?? {});
   if (!parsed.success) throw createError.validation('Unknown bank link option');
-  const link = parsed.data.hostedLink
+  const link: BankAccountsLinkResponse = parsed.data.hostedLink
     ? await createBankAccountsHostedLink(userId)
     : await createBankAccountsLinkToken(userId);
   await recordAuditEvent({

@@ -2,7 +2,11 @@ import 'server-only';
 
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
-import { BankAccountsExchangeRequestSchema } from '@agiworkforce/cloud-contracts';
+import type { z } from 'zod';
+import {
+  BankAccountsExchangeRequestSchema,
+  type BankAccountsExchangeResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 
 import {
   bankAccountsUnavailableReason,
@@ -71,12 +75,13 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     detail: { resourceType: 'connector', connectorId: BANK_ACCOUNTS_CONNECTOR_ID, source: 'plaid' },
   });
 
-  return NextResponse.json(
-    {
-      connector: { connectorId: BANK_ACCOUNTS_CONNECTOR_ID, connectedAt: new Date().toISOString() },
-    },
-    { status: 201, headers: { 'Cache-Control': 'private, no-store' } },
-  );
+  const body: z.infer<typeof BankAccountsExchangeResponseSchema> = {
+    connector: { connectorId: BANK_ACCOUNTS_CONNECTOR_ID, connectedAt: new Date().toISOString() },
+  };
+  return NextResponse.json(body, {
+    status: 201,
+    headers: { 'Cache-Control': 'private, no-store' },
+  });
 }
 
 export const POST = withCorsRoute(withErrorHandler(handlePost));

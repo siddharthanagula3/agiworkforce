@@ -9,7 +9,8 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(nu
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({ db: {}, userId: 'user-1', organizationId: null })),
 }));
-vi.mock('@/lib/connectors/bank-accounts', () => ({
+vi.mock('@/lib/connectors/bank-accounts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/bank-accounts')>()),
   listBankItems: (...args: unknown[]) => mockList(...args),
   bankAccountsUnavailableReason: () => mockUnavailable(),
 }));
