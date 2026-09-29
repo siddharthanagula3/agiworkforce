@@ -110,10 +110,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The agent can run Python only through its general shell tool (text output in the transcript) and can edit .ipynb cells without running them; no analysis panel, no chart display. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/exec/tools/mod.rs:548-554`, `apps/cli/src/features/exec/tools/mod.rs:616-622`
 
 ## S29.28: Query-result table.
 

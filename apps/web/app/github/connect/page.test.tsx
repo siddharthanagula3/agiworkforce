@@ -7,13 +7,21 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@shared/components/layout/Header', () => ({ Header: () => null }));
-vi.mock('@/features/marketing/components/MarketingFooter', () => ({ MarketingFooter: () => null }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@shared/components/layout/Header', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/components/layout/Header')>()),
+  Header: () => null,
+}));
+vi.mock('@/features/marketing/components/MarketingFooter', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/marketing/components/MarketingFooter')>()),
+  MarketingFooter: () => null,
+}));
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-app')>()),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
   getGitHubAppInstallUrl: () => 'https://github.com/apps/agi-workforce/installations/new',
 }));
-vi.mock('@/lib/github-install-app-return', () => ({
+vi.mock('@/lib/github-install-app-return', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-install-app-return')>()),
   appInstallRequester: (...args: unknown[]) => mocks.requester(...args),
 }));
 

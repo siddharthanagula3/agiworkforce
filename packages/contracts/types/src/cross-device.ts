@@ -149,9 +149,22 @@ export interface DispatchTaskPendingField {
   options?: Array<{ value: string; label: string }>;
 }
 
+export const DISPATCH_TASK_REPLY_ERROR_CODES = [
+  'required',
+  'not_an_option',
+  'too_short',
+  'too_long',
+  'bad_format',
+  'expired',
+] as const;
+
+export type DispatchTaskReplyErrorCode = (typeof DISPATCH_TASK_REPLY_ERROR_CODES)[number];
+
 export interface DispatchTaskReplyError {
   toolCallId: string;
   message: string;
+  fieldId?: string;
+  code?: DispatchTaskReplyErrorCode;
 }
 
 export type DispatchTaskPendingStep =
@@ -273,7 +286,18 @@ export function parseDispatchTaskReplyError(value: unknown): DispatchTaskReplyEr
   const record = replyRecord(value);
   const toolCallId = record && replyText(record['toolCallId'], DISPATCH_TASK_REPLY_LIMITS.idLength);
   const message = record && replyText(record['message'], DISPATCH_TASK_REPLY_LIMITS.summaryLength);
-  return toolCallId && message ? { toolCallId, message } : null;
+  if (!record || !toolCallId || !message) return null;
+  const fieldId = replyText(record['fieldId'], DISPATCH_TASK_REPLY_LIMITS.idLength);
+  const code = record['code'];
+  return {
+    toolCallId,
+    message,
+    ...(fieldId ? { fieldId } : {}),
+    ...(typeof code === 'string' &&
+    (DISPATCH_TASK_REPLY_ERROR_CODES as readonly string[]).includes(code)
+      ? { code: code as DispatchTaskReplyErrorCode }
+      : {}),
+  };
 }
 
 export function parseDispatchTaskReplies(value: unknown): DispatchTaskStepReply[] | null {

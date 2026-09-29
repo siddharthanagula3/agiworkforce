@@ -6,13 +6,15 @@ import {
   TERMINAL_LIFECYCLE_STATUSES,
   type DispatchTaskPendingField,
   type DispatchTaskPendingStep,
+  type DispatchTaskReplyErrorCode,
   type DispatchTaskStepReply,
 } from '@agiworkforce/types';
 import {
   acceptConnectorInput,
-  connectorInputFieldError,
+  connectorInputFieldIssue,
   readConnectorInputPrompts,
   type ConnectorInputField,
+  type ConnectorInputFieldIssue,
   type ConnectorInputPrompt,
 } from '@agiworkforce/client-runtime';
 import {
@@ -66,7 +68,6 @@ const WAITING_ON_PERMISSION = 'Waiting for a permission prompt in AGI Cloud on t
 const CANCELLED = 'The task was stopped.';
 const RUNNER_NOT_READY = 'AGI Cloud on the computer was not ready to run this task.';
 const REPLY_NOT_ACCEPTED = 'The computer could not use this answer. Check it and send it again.';
-const CHOICE_NOT_OFFERED = 'Choose one of the options offered.';
 
 const TERMINAL: ReadonlySet<string> = new Set(TERMINAL_LIFECYCLE_STATUSES);
 
@@ -315,11 +316,22 @@ function cancelRun(requestId: string): void {
   send(run, { status: 'cancelled', message: CANCELLED });
 }
 
-export function replyFieldError(
+export interface ReplyIssue {
+  fieldId?: string;
+  code?: DispatchTaskReplyErrorCode;
+}
+
+function dispatchCode(issue: ConnectorInputFieldIssue): DispatchTaskReplyErrorCode {
+  return issue === 'required' || issue === 'too_short' || issue === 'too_long'
+    ? issue
+    : 'bad_format';
+}
+
+export function replyFieldIssue(
   prompt: ConnectorInputPrompt,
   values: Readonly<Record<string, string>>,
-): string | null {
-  if (prompt.mode !== 'form') return REPLY_NOT_ACCEPTED;
+): ReplyIssue | null {
+  if (prompt.mode !== 'form') return {};
   for (const field of prompt.fields) {
     const value = values[field.key];
     if (
@@ -328,16 +340,19 @@ export function replyFieldError(
       value !== '' &&
       !field.options.some((option) => option.value === value)
     ) {
-      return `${field.title}: ${CHOICE_NOT_OFFERED}`;
+      return { fieldId: field.key, code: 'not_an_option' };
     }
-    const error = connectorInputFieldError(field, value);
-    if (error) return `${field.title}: ${error}`;
+    const issue = connectorInputFieldIssue(field, value);
+    if (issue) return { fieldId: field.key, code: dispatchCode(issue) };
   }
   return null;
 }
 
-function rejectReply(run: DispatchRun, toolCallId: string, message: string): void {
-  send(run, { ...updateFor(run), replyError: { toolCallId, message } });
+function rejectReply(run: DispatchRun, toolCallId: string, issue: ReplyIssue = {}): void {
+  send(run, {
+    ...updateFor(run),
+    replyError: { toolCallId, message: REPLY_NOT_ACCEPTED, ...issue },
+  });
 }
 
 async function answerStep(
@@ -360,9 +375,9 @@ async function answerStep(
     (candidate) => candidate.key === step.inputKey,
   );
   if (!prompt) return;
-  const error = replyFieldError(prompt, reply.values);
-  if (error) {
-    rejectReply(run, reply.toolCallId, error);
+  const issue = replyFieldIssue(prompt, reply.values);
+  if (issue) {
+    rejectReply(run, reply.toolCallId, issue);
     return;
   }
   await run.runtime.resolveToolInput(
@@ -388,11 +403,15 @@ export async function answerReplies(
   const pending = new Map(pendingSteps(answer).map((step) => [step.toolCallId, step]));
   for (const reply of replies) {
     const step = pending.get(reply.toolCallId);
-    if (!step || step.kind !== reply.kind) continue;
+    if (!step) {
+      rejectReply(run, reply.toolCallId, { code: 'expired' });
+      continue;
+    }
+    if (step.kind !== reply.kind) continue;
     try {
       await answerStep(run, answer, step, reply);
     } catch {
-      rejectReply(run, reply.toolCallId, REPLY_NOT_ACCEPTED);
+      rejectReply(run, reply.toolCallId);
     }
   }
 }

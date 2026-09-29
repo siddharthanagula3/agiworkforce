@@ -22,15 +22,14 @@ nothing is left.
 
 - Done when: Every client runs the session with the same model and the same instruction files.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| cli | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/agent/prompt.rs:396-398`, `apps/cli/src/lib.rs:829-835`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S68.07: Same task plan and checkpoints.
 
@@ -48,27 +47,25 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/agent/prompt.rs:396-398`, 
 
 - Done when: An approval pending in the session shows on every attached client and can be answered from any of them.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| cli | partial | The TUI runs turns in its own process with a per-turn approval broker; another client on the same thread cannot see or answer them until a cross-process transport exists (TUI turns through the app-server, or Remote Control for local threads). | handler |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/tui/tui_app.rs:5940-5940`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S68.09: Same tool activity.
 
 - Done when: Tool activity of a running turn streams to every attached client.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
-| cli | partial | Tool events of a TUI-run turn reach only that terminal (and the JSON stream); streaming them to other attached clients needs the same cross-process transport as S68.08. | handler |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/agent/chat.rs:2835-2835`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S68.12: Execution-owner indicator.
 
