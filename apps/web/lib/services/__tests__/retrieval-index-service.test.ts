@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { RETRIEVAL_EMBEDDING_DIMENSIONS } from '@agiworkforce/data-layer/search';
@@ -121,6 +122,22 @@ describe('prepareChunks', () => {
       metadata: { projectId: 'project-1', anchor: { page: 3 } },
     });
     expect(chunks.map((chunk) => chunk.index)).toEqual(chunks.map((_, index) => index));
+  });
+});
+
+describe('contentDigest', () => {
+  it('hashes the title followed by each chunk behind a NUL separator, so stored digests stay valid', () => {
+    const chunks = ['alpha', 'beta'].map((text, index) => ({
+      index,
+      start: 0,
+      end: text.length,
+      text,
+      metadata: {},
+    }));
+
+    expect(contentDigest('policy.md', chunks)).toBe(
+      createHash('sha256').update('policy.md\u0000alpha\u0000beta').digest('hex'),
+    );
   });
 });
 
