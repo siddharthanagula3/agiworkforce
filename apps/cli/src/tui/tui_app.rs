@@ -5915,6 +5915,14 @@ async fn run_event_loop(
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {
                                 let prompt = resolve_composer_mentions(app, &text);
+                                let (prompt, notices) =
+                                    app.session.expand_mcp_resource_mentions(&prompt).await;
+                                for notice in notices {
+                                    app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: notice,
+                                    });
+                                }
                                 send_message_with_prompt(terminal, app, &text, &prompt).await?;
                             }
                             SlashResult::SendPrompt(prompt) => {

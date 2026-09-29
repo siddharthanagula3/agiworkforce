@@ -1565,6 +1565,10 @@ impl McpManager {
 
     /// Every resource the connected servers allowed in `privacy_mode` list,
     /// paired with the server that owns it.
+    pub fn has_server(&self, server_name: &str) -> bool {
+        self.connections.contains_key(server_name)
+    }
+
     pub async fn list_resources(
         &mut self,
         privacy_mode: crate::agent::PrivacyMode,
