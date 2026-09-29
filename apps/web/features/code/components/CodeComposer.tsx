@@ -53,6 +53,7 @@ import {
 } from '@agiworkforce/types';
 import Link from 'next/link';
 import { SlashCommandMenu, type CommandSuggestion } from '@agiworkforce/unified-chat';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { ComposerFooter } from '@features/chat/components/Composer/ComposerFooter';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
@@ -830,6 +831,7 @@ function BranchChip({
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   onKeyDown={(event) => {
+                    if (isImeComposingKey(event.nativeEvent)) return;
                     if (event.key !== ENTER_KEY || !needle) return;
                     event.preventDefault();
                     choose(needle);
@@ -852,6 +854,7 @@ function BranchChip({
                   value={branch}
                   onChange={(event) => setBranch(event.target.value)}
                   onKeyDown={(event) => {
+                    if (isImeComposingKey(event.nativeEvent)) return;
                     if (event.key !== ENTER_KEY) return;
                     event.preventDefault();
                     apply();
@@ -1451,6 +1454,7 @@ export function CodeComposer({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isImeComposingKey(event.nativeEvent)) return;
     if (handleCommandKey(event)) return;
     if (event.key !== ENTER_KEY || event.shiftKey) return;
     event.preventDefault();
