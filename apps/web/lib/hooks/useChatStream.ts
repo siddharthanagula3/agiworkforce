@@ -76,6 +76,7 @@ import {
   AGENT_EVENT_SCHEMA_VERSION,
   createManagedCloudChatClient,
   createManagedCloudAgentRunClient,
+  ManagedCloudAgentRunHttpError,
   ManagedCloudChatHttpError,
   parseAgentEventDelta,
   parseGeneratedFilesDelta,
@@ -1128,6 +1129,9 @@ function autoResolvePendingApprovals(
 }
 
 const REMOTE_APPROVAL_POLL_INTERVAL_MS = 5_000;
+const REMOTE_APPROVAL_MAX_BACKOFF_MS = 60_000;
+const REMOTE_APPROVAL_FATAL_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
+let remoteApprovalFollowers = 0;
 const WAITING_RUN_STATES: ReadonlySet<string> = new Set(['awaiting_input', 'paused']);
 const remoteApprovalWatches = new Set<string>();
 
@@ -1219,10 +1223,16 @@ async function watchRemoteApproval(
   getAuthToken: AuthTokenProvider,
 ): Promise<void> {
   const client = createManagedCloudAgentRunClient({ getAuthToken });
+  let failures = 0;
   for (;;) {
-    await new Promise((resolve) => setTimeout(resolve, REMOTE_APPROVAL_POLL_INTERVAL_MS));
+    const delay = Math.min(
+      REMOTE_APPROVAL_POLL_INTERVAL_MS * 2 ** failures,
+      REMOTE_APPROVAL_MAX_BACKOFF_MS,
+    );
+    await new Promise((resolve) => setTimeout(resolve, delay));
     const turn = pendingTurns.get(assistantMessageId);
-    if (!turn || turn.resolving) return;
+    if (!turn || turn.resolving || remoteApprovalFollowers === 0) return;
+    if (useChatStore.getState().activeConversationId !== turn.conversationId) return;
     const lastSequence =
       findConversationMessage(turn.conversationId, assistantMessageId)?.metadata?.agentActivity
         ?.lastSequence ?? -1;
@@ -1232,11 +1242,19 @@ async function watchRemoteApproval(
         afterSequence: lastSequence,
         limit: 1,
       });
+      failures = 0;
       progressed =
         !WAITING_RUN_STATES.has(snapshot.run.state) ||
         (lastSequence >= 0 && snapshot.events.length > 0);
     } catch (error) {
       logger.warn('[useChatStream] Could not check a waiting run for a remote answer', error);
+      if (
+        error instanceof ManagedCloudAgentRunHttpError &&
+        REMOTE_APPROVAL_FATAL_STATUSES.has(error.status)
+      ) {
+        return;
+      }
+      failures += 1;
       continue;
     }
     if (pendingTurns.get(assistantMessageId) !== turn || turn.resolving) return;
@@ -3484,6 +3502,7 @@ export function useChatStream(
       if (!token) throw new Error('Not authenticated');
       return token;
     };
+    remoteApprovalFollowers += 1;
     const checked = new Set<string>();
     const followRestored = (messages: readonly Message[]): void => {
       for (const message of messages) {
@@ -3493,9 +3512,19 @@ export function useChatStream(
       }
     };
     followRestored(useChatStore.getState().messages);
-    return useChatStore.subscribe((state, previous) => {
-      if (state.messages !== previous.messages) followRestored(state.messages);
+    const unsubscribe = useChatStore.subscribe((state, previous) => {
+      if (state.activeConversationId !== previous.activeConversationId) checked.clear();
+      if (
+        state.messages !== previous.messages ||
+        state.activeConversationId !== previous.activeConversationId
+      ) {
+        followRestored(state.messages);
+      }
     });
+    return () => {
+      unsubscribe();
+      remoteApprovalFollowers -= 1;
+    };
   }, [followActiveConversation, getToken]);
 
   const activeConversationId = useChatStore((state) => state.activeConversationId);

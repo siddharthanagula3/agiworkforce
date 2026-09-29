@@ -453,7 +453,6 @@ Code: `apps/web/lib/services/cloud-code-github-task.ts:216-216`, `apps/web/lib/s
 | --- | --- | --- | --- |
 | web | partial | Code done; switch-on AGI_E2B_EXECUTION=1 (with E2B_API_KEY and priced sandbox compute) at deploy creates cloud sessions. Ledger text was stale: the cloud composer offers the same 12/24/48 step bounds as the desktop cell that is done. | switch-on |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-| vscode | partial | The runtime loop uses its default cap; the extension exposes only effort presets, not a goal bound. | ui |
 
 Code: `apps/web/features/code/components/CodeComposer.tsx:1177-1177`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:151-151`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 

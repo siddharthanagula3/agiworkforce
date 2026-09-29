@@ -60,6 +60,7 @@ import {
   writerConflictHolder,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
+  type ThreadActiveTurn,
   type ThreadCheckpointList,
   type ThreadRewindOutcome,
 } from '../../integrations/localRuntimeClient';
@@ -423,6 +424,7 @@ export type ExtToWebviewMessage =
         notice: string;
       };
     }
+  | { type: 'turnResumed' }
   | {
       type: 'turnStarted';
       payload: {
@@ -2240,6 +2242,7 @@ export class ChatStateManager {
       await this.pushUsageMeter(isCommittedAttempt);
       if (!isCommittedAttempt()) return false;
       this._postSessionBoundary(resumed.trustMode, resumed.provider);
+      void this._reattachRunningTurn(resolved.runtime, resumed.id, committedEpoch);
       return true;
     } catch (error) {
       if (!isCurrentAttempt()) return false;
@@ -2247,6 +2250,110 @@ export class ChatStateManager {
         error instanceof Error ? error.message : t('chatNotice.resumeFailed'),
         RUNTIME_REFUSAL,
       );
+    }
+  }
+
+  private async _reattachRunningTurn(
+    runtime: LocalRuntimeClient,
+    threadId: string,
+    epoch: number,
+  ): Promise<void> {
+    if (!(await runtime.offers('reconnect'))) return;
+    const buffered: LocalRuntimeEvent[] = [];
+    let snapshot: ThreadActiveTurn | null | undefined;
+    let attached = false;
+    let terminal = false;
+    let uiSettled = false;
+    let resolveCompletion!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    const complete = (): void => {
+      uiSettled = true;
+      if (!terminal) {
+        terminal = true;
+        resolveCompletion();
+      }
+    };
+    const deliver = (event: LocalRuntimeEvent): void => {
+      if (
+        event.type === 'output_delta' &&
+        event.index !== undefined &&
+        snapshot?.nextDeltaIndex !== undefined &&
+        event.index < snapshot.nextDeltaIndex
+      ) {
+        return;
+      }
+      void this._handleRuntimeEvent(runtime, event, complete);
+    };
+    const subscription = runtime.onEvent((event) => {
+      if (event.type === 'runtime_disconnected') {
+        if (attached) void this._handleRuntimeEvent(runtime, event, complete);
+        return;
+      }
+      if (event.type === 'mcp_status' || event.threadId !== threadId) return;
+      if (snapshot === undefined) {
+        buffered.push(event);
+        return;
+      }
+      if (attached && event.turnId === snapshot?.turnId) deliver(event);
+    });
+    try {
+      snapshot = await runtime.reconnectThread(threadId).catch(() => null);
+      if (
+        snapshot === null ||
+        epoch !== this._conversationEpoch ||
+        this._thread?.id !== threadId ||
+        this._thread.runtime !== runtime ||
+        this._turnLifecycleActive ||
+        this._activeTurn !== undefined
+      ) {
+        return;
+      }
+      const active = snapshot;
+      attached = true;
+      this._turnLifecycleActive = true;
+      this._turnLifecycleEpoch = epoch;
+      this._activeTurn = {
+        threadId,
+        turnId: active.turnId,
+        runtime,
+        complete,
+        isUiSettled: () => uiSettled,
+      };
+      this._post({ type: 'turnResumed' });
+      if (active.partialResponse !== '') {
+        this._post({ type: 'token', payload: { text: active.partialResponse } });
+      }
+      for (const approval of active.pendingApprovals) {
+        void this._handleRuntimeEvent(
+          runtime,
+          { type: 'approval_requested', threadId, turnId: active.turnId, ...approval },
+          complete,
+        );
+      }
+      for (const event of buffered.splice(0)) {
+        if (
+          event.type !== 'runtime_disconnected' &&
+          event.type !== 'mcp_status' &&
+          event.turnId === active.turnId
+        ) {
+          deliver(event);
+        }
+      }
+      await completion;
+      if (this._thread?.id === threadId && this._thread.runtime === runtime) {
+        await this._refreshLoadedConversation(runtime, threadId, true);
+      }
+    } finally {
+      subscription.dispose();
+      if (attached) {
+        if (this._activeTurn?.turnId === snapshot?.turnId) delete this._activeTurn;
+        this._turnLifecycleActive = false;
+        this._turnLifecycleEpoch = undefined;
+        const next = this._queuedSends.shift();
+        if (next !== undefined) void this._drainSendLifecycle(next, true);
+      }
     }
   }
 

@@ -406,28 +406,6 @@ const mcpServerInspectionSchema = z.object({
 
 export type McpServerInspection = z.infer<typeof mcpServerInspectionSchema>;
 
-const threadReconnectResponseSchema = z.object({
-  activeTurn: z
-    .object({
-      turnId: z.string().min(1),
-      partialResponse: z.string(),
-      pendingApprovals: z
-        .array(
-          z.object({
-            requestId: z.string().min(1),
-            summary: z.string(),
-            detail: z.string(),
-          }),
-        )
-        .default([]),
-    })
-    .optional(),
-});
-
-export type ThreadActiveTurn = NonNullable<
-  z.infer<typeof threadReconnectResponseSchema>['activeTurn']
->;
-
 const threadRewindResponseSchema = z.object({
   thread: threadSummarySchema,
   prompt: z.string().max(1_000_000),
@@ -708,6 +686,7 @@ const outputDeltaEventSchema = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),
   delta: z.string(),
+  index: z.number().int().nonnegative().optional(),
 });
 // Keyed by the protocol's own unions, so a code the CLI learns to send fails
 // the typecheck here instead of making the whole terminal event unparsable,
@@ -798,6 +777,34 @@ const approvalRequestedEventSchema = z.object({
   editable: z.boolean().optional().catch(undefined),
   alwaysAllowSaved: z.boolean().optional().catch(undefined),
 });
+const threadReconnectResponseSchema = z.object({
+  activeTurn: z
+    .object({
+      turnId: z.string().min(1),
+      partialResponse: z.string(),
+      nextDeltaIndex: z.number().int().nonnegative().optional(),
+      pendingApprovals: z
+        .array(
+          z.object({
+            requestId: z.string().min(1),
+            kind: z.string().default(''),
+            summary: z.string(),
+            detail: z.string(),
+            riskLevel: z.enum(APPROVAL_RISK_LEVELS).optional().catch(undefined),
+            reversible: z.boolean().optional().catch(undefined),
+            proposedContent: z.string().max(1_000_000).optional().catch(undefined),
+            alwaysAllowSaved: z.boolean().optional().catch(undefined),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
+});
+
+export type ThreadActiveTurn = NonNullable<
+  z.infer<typeof threadReconnectResponseSchema>['activeTurn']
+>;
+
 const turnInterruptedEventSchema = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),

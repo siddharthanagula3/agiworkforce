@@ -27,9 +27,9 @@ pub enum ParityCommandResult {
         destination: PrivacyMode,
         provider: String,
     },
-    SendFeedback {
-        kind: crate::feedback::FeedbackKind,
-        text: String,
+    Feedback {
+        kind: crate::cloud::feedback::FeedbackKind,
+        message: String,
     },
 }
 
@@ -146,10 +146,25 @@ pub fn handle_shared_command(
         "/route" => ParityCommandResult::SystemMessage(session.routing_profile(arg)),
         "/replay" => ParityCommandResult::SystemMessage(render_replay()),
         "/insights" => ParityCommandResult::SystemMessage(render_insights(session)),
-        "/feedback" | "/bug" => match crate::feedback::parse_feedback_command(&command, arg) {
-            Ok((kind, text)) => ParityCommandResult::SendFeedback { kind, text },
-            Err(usage) => ParityCommandResult::SystemMessage(usage),
-        },
+        "/feedback" | "/bug" if arg.trim().is_empty() => {
+            ParityCommandResult::SystemMessage(crate::cloud::feedback::USAGE.to_string())
+        }
+        "/feedback" | "/bug" => {
+            let request = arg.trim();
+            let feature = (command == "/feedback")
+                .then(|| request.strip_prefix("feature "))
+                .flatten();
+            ParityCommandResult::Feedback {
+                kind: if command == "/bug" {
+                    crate::cloud::feedback::FeedbackKind::Bug
+                } else if feature.is_some() {
+                    crate::cloud::feedback::FeedbackKind::Feature
+                } else {
+                    crate::cloud::feedback::FeedbackKind::Feedback
+                },
+                message: feature.unwrap_or(request).trim().to_string(),
+            }
+        }
         "/focus" => ParityCommandResult::SystemMessage(
             "Focus mode is not implemented. Use /statusline to choose which status fields render."
                 .to_string(),

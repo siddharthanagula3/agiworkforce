@@ -339,9 +339,6 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Credential files and untrusted workspaces are blocked from leaving outright; there is no approve-this-transfer prompt for other sensitive content. | ui |
-
-Code: `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`, `apps/extension-vscode/src/core/runInlineCommand.ts:42-42`
 
 ## S10.40: Remote-device pairing.
 

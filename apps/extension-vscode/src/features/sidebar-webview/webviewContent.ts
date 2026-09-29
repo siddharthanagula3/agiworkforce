@@ -6117,6 +6117,15 @@ export function getWebviewContent(
         );
       }
 
+      else if (msg.type === 'turnResumed') {
+        removeTyping();
+        showTyping();
+        setStreaming(true);
+        currentAssistantEl = null;
+        accumulatedContent = '';
+        activePlanCard = null;
+      }
+
       else if (msg.type === 'token') {
         removeTyping();
         settleSending('');

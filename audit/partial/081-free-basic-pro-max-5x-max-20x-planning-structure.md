@@ -111,9 +111,8 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Migration 0281 is now applied in production (2026-09-27). Still open: CLI shows overage on/off but cannot change it (web billing), and overage accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
-| vscode | partial | Migration 0281 is now applied in production (2026-09-27). Still open: VS Code shows whether credits are spent past a limit and points to billing to enable it; toggle lives on web; accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
 
-Code: `apps/cli/src/usage_summary.rs:317-328`, `apps/extension-vscode/src/data/usageMeter.ts:220-223`
+Code: `apps/cli/src/usage_summary.rs:317-328`
 
 ## S81.23: Upgrade effective time.
 
