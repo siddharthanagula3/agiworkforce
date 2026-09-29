@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PRODUCT_ANALYTICS_NOTICE_VERSION } from '@agiworkforce/types';
 
 vi.mock('next/script', () => ({
   default: ({ src, id, children }: { src?: string; id?: string; children?: string }) =>
@@ -51,10 +52,25 @@ function analyticsDisabledFlag(): unknown {
 interface StoredConsent {
   purpose: string;
   granted: boolean;
+  noticeVersion?: string;
+}
+
+function recordedNotice(purpose: string): string {
+  return purpose === ANALYTICS_PURPOSE
+    ? PRODUCT_ANALYTICS_NOTICE_VERSION
+    : POLICY_LAST_UPDATED.privacy;
 }
 
 function stubConsentApi(initial: StoredConsent[]) {
-  const consents = new Map(initial.map((entry) => [entry.purpose, entry.granted]));
+  const consents = new Map(
+    initial.map((entry) => [
+      entry.purpose,
+      {
+        granted: entry.granted,
+        noticeVersion: entry.noticeVersion ?? recordedNotice(entry.purpose),
+      },
+    ]),
+  );
   const posted: Array<{ purpose: string; granted: boolean }> = [];
 
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -64,7 +80,10 @@ function stubConsentApi(initial: StoredConsent[]) {
         decisions: Array<{ purpose: string; granted: boolean }>;
       };
       for (const decision of body.decisions) {
-        consents.set(decision.purpose, decision.granted);
+        consents.set(decision.purpose, {
+          granted: decision.granted,
+          noticeVersion: recordedNotice(decision.purpose),
+        });
         posted.push(decision);
       }
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
@@ -74,10 +93,10 @@ function stubConsentApi(initial: StoredConsent[]) {
         JSON.stringify({
           noticeVersion: POLICY_LAST_UPDATED.privacy,
           purposes: CONSENT_PURPOSES,
-          consents: [...consents.entries()].map(([purpose, granted]) => ({
+          consents: [...consents.entries()].map(([purpose, { granted, noticeVersion }]) => ({
             purpose,
             granted,
-            noticeVersion: POLICY_LAST_UPDATED.privacy,
+            noticeVersion,
             surface: 'web-consent-centre',
             recordedAt: '2026-09-01T00:00:00.000Z',
           })),
@@ -133,6 +152,25 @@ describe('consent centre analytics withdrawal reaches the analytics gate', () =>
     expect(posted).toContainEqual({ purpose: ANALYTICS_PURPOSE, granted: false });
     expect(readCookiePreferences()).toEqual({ necessary: true, analytics: false });
     expect(analyticsDisabledFlag()).toBe(true);
+  });
+
+  it('shows a grant from before the analytics notice as not given and asks again', async () => {
+    const { posted } = stubConsentApi([
+      { purpose: ANALYTICS_PURPOSE, granted: true, noticeVersion: '2026-09-29' },
+    ]);
+
+    render(<ConsentCentre optedOutBySignal={false} />);
+
+    await waitFor(() => expect(screen.getByText(/Not given; confirm to turn on/u)).toBeTruthy());
+    expect(screen.queryByText(/Consent given/u)).toBeNull();
+    expect(analyticsButton().textContent).toBe('Give consent');
+
+    await act(async () => {
+      fireEvent.click(analyticsButton());
+    });
+
+    expect(posted).toContainEqual({ purpose: ANALYTICS_PURPOSE, granted: true });
+    await waitFor(() => expect(analyticsButton().textContent).toBe('Withdraw consent'));
   });
 
   it('turns analytics back on in the same tab when consent is given again', async () => {

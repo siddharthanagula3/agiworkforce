@@ -623,10 +623,10 @@ const BASIS_LEDGER: readonly LedgerRow[] = [
         <br />
         <strong>Basis:</strong> <strong>your consent.</strong> Nothing loads or is recorded until
         you give it, and the gate fails closed: if your choice cannot be read, analytics stays off.
-        A consent given under a version of this notice older than 2026-09-29 covered page views
-        only, so the app events need you to allow analytics again. Change it any time from Settings
-        in any AGI app or on the data rights page; a workspace administrator can also turn it off
-        for every member.
+        Analytics consent given before this disclosure (notice revision product-analytics-v1)
+        covered page views only, so the app events need you to allow analytics again. Change it any
+        time from Settings in any AGI app or on the data rights page; a workspace administrator can
+        also turn it off for every member.
       </>
     ),
   },
