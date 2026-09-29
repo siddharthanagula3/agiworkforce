@@ -15,9 +15,6 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | agi artifacts show --out writes the document to a file for an outside editor; nothing reads the edited file back as a version. | ui |
-
-Code: `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 
 ## S110.02: Document → presentation.
 
@@ -94,11 +91,10 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/component
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Managed-cloud turns get the account's Gmail connector when configured, but Always-allow tools run silently and there is no email intake command. | flag-off, ui, states |
 | vscode | partial | Inherits CLI limits (operator-gated Gmail, no email intake command); fix belongs to c-cli. | flag-off, ui, states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/models/streaming.rs:361-361`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1157-1157`
+Code: `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1157-1157`
 
 ## S110.11: Team mention → coding session.
 
@@ -123,9 +119,8 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | ui, flag-off |
-| cli | partial | agi artifacts show --out writes the design into the repo for the agent to implement; no spec handoff or Figma import. | ui |
 
-Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/cli/src/lib.rs:2391-2391`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S110.14: Completed task → reusable Skill.
 
@@ -171,16 +166,16 @@ Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:42-42`, `apps/web/app/api/
 
 - Done when: The user explicitly hands a local coding session (history, repo state, pending work) to cloud execution and it continues in a cloud session.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /continue-with-cloud only switches to the managed cloud model; the app-server's hand_off_thread can target Cloud but no client calls it, and there is no cloud importer. | handler |
 | vscode | partial | Met at parity with claude --cloud (new session from the pushed branch, D-2026-09-28-25); needs AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/cli/src/claude_parity.rs:178-180`, `apps/cli/src/app_server/developer_host.rs:1678-1678`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:79-80`, `docs/decisions/2026-09-27-founder-decisions.md:391-391`
+Code: `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:79-80`, `docs/decisions/2026-09-27-founder-decisions.md:391-391`
 
 ## S110.23: Cloud result → local repository application.
 
@@ -195,18 +190,6 @@ Code: `apps/cli/src/claude_parity.rs:178-180`, `apps/cli/src/app_server/develope
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/extension-vscode/src/features/cloud-tasks/cloudCodeSessions.ts:266-266`
 
-## S110.24: Existing notebook → main assistant context.
-
-- Done when: From the main chat, the user brings an existing notebook (project) into the conversation so its instructions and sources ground the answers.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | agi projects link binds the folder to a project and its instructions reach every managed-cloud turn, but no knowledge-file content grounds a turn (the ledger's 'missing' is stale). |  |
-
-Code: `apps/cli/src/lib.rs:1057-1057`, `apps/cli/src/agent/mod.rs:2031-2031`, `apps/cli/src/cloud/mod.rs:590-591`
-
 ## S110.25: Main conversation → persistent notebook sources.
 
 - Done when: From the main conversation, the user saves answers or the chat into a notebook (project) as persistent sources that later project chats can cite.
@@ -219,18 +202,6 @@ Code: `apps/cli/src/lib.rs:1057-1057`, `apps/cli/src/agent/mod.rs:2031-2031`, `a
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S110.27: Disconnected integration → reconnect and resume.
-
-- Done when: When a connected integration expires mid-task, the user is prompted to reconnect and the interrupted turn or run continues from where it stopped once reauthorized.
-- Wave: 3
-- Already works on: vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | An expired account connector now prints its reconnect link (dc4299a638) and the next message continues the task; resuming the interrupted turn itself needs a server resume path after reconnect, the same gap as web | handler |
-
-Code: `apps/cli/src/cloud/connectors.rs:53-53`, `apps/cli/src/models/streaming.rs:619-619`, `crates/agiworkforce-llm/src/stream.rs:845-845`, `apps/cli/src/app_server/developer_host.rs:2589-2589`
 
 ## S110.28: Published output → versioned update.
 

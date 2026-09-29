@@ -132,9 +132,6 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Only the agent can look symbols up (lsp_document_symbols tool); the user has no symbol search in the TUI. | ui |
-
-Code: `apps/cli/src/features/exec/tools/mod.rs:644-644`
 
 ## S66.11: Code editor.
 
@@ -183,9 +180,6 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:644-644`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can read diagnostics (lsp_diagnostics tool), but the TUI has no diagnostics view for the user. | ui |
-
-Code: `apps/cli/src/agent/mod.rs:430-430`
 
 ## S66.15: Integrated terminal.
 
@@ -407,10 +401,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /export writes the transcript (markdown/json) for the user to pass on; there is no share link another person can open. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/repl/registry.rs:368-378`
 
 ## S66.41: Continue in another client.
 
