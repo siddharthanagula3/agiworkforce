@@ -148,10 +148,10 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Connector detail in a warning state now shows Connect beside Disconnect and runs the connector's authorization again; not yet verified in a browser against a real expired grant, and the list row still shows only the warning label. | states |
-| desktop | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
+| web | partial | live check only: the list row now shows Reconnect beside the warning (5cbd0fea9f), the detail shows Reconnect, and an expired grant offers agi_reconnect in turns so the chat card appears; verify in a browser against a real expired grant | states |
+| desktop | partial | live check only: the list row now shows Reconnect beside the warning (5cbd0fea9f), the detail shows Reconnect, and an expired grant offers agi_reconnect in turns so the chat card appears; verify in a browser against a real expired grant | states |
 
-Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`
+Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:160-160`, `apps/web/lib/user-connector-tools.ts:2452-2452`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:473-473`
 
 ## S55.21: Test connection.
 

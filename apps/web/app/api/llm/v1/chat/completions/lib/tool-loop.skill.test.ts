@@ -17,6 +17,13 @@ vi.mock('./tool-loop-anthropic', () => ({
   buildServingRouteId: (...args: unknown[]) => args.join(':'),
 }));
 
+vi.mock('@/lib/services/workspace-plugin-access', async () => {
+  const { listEnabledPluginIds } = await import('@/lib/services/plugin-installation-service');
+  return {
+    workspaceAllowsPlugins: vi.fn(async () => true),
+    listPermittedPluginIds: listEnabledPluginIds,
+  };
+});
 vi.mock('@/lib/e2b/runtime', () => ({
   getE2BExecutor: vi.fn().mockResolvedValue(null),
   pauseE2BSession: vi.fn().mockResolvedValue(undefined),

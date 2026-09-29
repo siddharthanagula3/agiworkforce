@@ -303,7 +303,7 @@ import {
   useDetachablePanels,
   useLocalModelSelection,
 } from '@/features/desktop-host';
-import type { AgiWorkGoalInput } from '../utils/agiwork-plan';
+import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '../utils/agiwork-plan';
 import {
   planEditRollback,
   planRegenerateRollback,
@@ -5663,6 +5663,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [handleSend],
   );
 
+  const handleVoiceStartWorkTask = useCallback(
+    (goal: string) => {
+      const outcome = handleSend(goal, undefined, undefined, {
+        workMode: AGI_WORK_MODE,
+        agiWorkGoal: buildAgiWorkGoalInput(goal),
+      });
+      return outcome !== false && outcome !== SEND_GUARD_BLOCKED;
+    },
+    [handleSend],
+  );
+
   const handleVoiceOpenLibrary = useCallback(() => {
     const href = APP_NAV_DESTINATIONS.find(
       (destination) => destination.id === VOICE_LIBRARY_NAV_ID,
@@ -5686,6 +5697,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     turnActive: isLoading || isStreaming,
     conversationId: displayedConversationId ?? null,
     onSend: handleVoiceSend,
+    onStartWorkTask: handleVoiceStartWorkTask,
     onEnsureConversation: handleVoiceEnsureConversation,
     onTranscript: handleVoiceTranscript,
     onNewChat: handleNewChat,

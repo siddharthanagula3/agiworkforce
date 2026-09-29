@@ -152,9 +152,29 @@ function ConnectorStatusCell({
   if (connection) {
     if (connection.status === 'warning') {
       return (
-        <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-          <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-          {connection.warningLabel ?? 'Connection issue'}
+        <span className="flex items-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+            <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            {connection.warningLabel ?? 'Connection issue'}
+          </span>
+          {connection.needsReauthorization && canConnect ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onConnect();
+              }}
+              disabled={mutating}
+              aria-busy={mutating || undefined}
+              aria-label={`Reconnect ${connector.name}`}
+              className={cn(
+                'rounded-lg border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50',
+                FOCUS_RING,
+              )}
+            >
+              {mutating ? 'Connecting…' : 'Reconnect'}
+            </button>
+          ) : null}
         </span>
       );
     }

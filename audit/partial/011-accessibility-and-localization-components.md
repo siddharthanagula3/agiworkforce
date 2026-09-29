@@ -168,14 +168,13 @@ Code: `apps/mobile/src/features/billing/storePricing.ts:66-66`, `apps/mobile/lib
 
 - Done when: Counted phrases follow each language's plural rules rather than an English "s" suffix.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Counts use English-only "=== 1 ? '' : 's'" suffixes; use the i18n plural rules (one/few/many) so translated counts read correctly. | ui |
-| chrome | partial | 56cd1c51f: tPlural over Intl.PluralRules in place; adding locales is outside this item | only an English locale ships |
 
-Code: `apps/mobile/app/(app)/notifications/index.tsx:307-307`, `apps/extension/src/i18n.ts:13-13`, `apps/extension/src/features/side-panel/projectsDrawer.ts:12-12`
+Code: `apps/mobile/app/(app)/notifications/index.tsx:307-307`
 
 ## S11.25: Translated error messages.
 

@@ -42,6 +42,8 @@ export const DEVICE_STEP_TOOLS = [
   'device_browser_type',
   'device_browser_screenshot',
   'device_browser_download',
+  'device_browser_console',
+  'device_browser_network',
 ] as const;
 
 export type DeviceStepTool = (typeof DEVICE_STEP_TOOLS)[number];
@@ -80,10 +82,14 @@ export interface DeviceStepDefinition {
 
 export const BROWSER_STEP_COMMAND = 'browser_step';
 
-function browserStep(browserCommand: BrowserCommand, description: string): DeviceStepDefinition {
+function browserStep(
+  browserCommand: BrowserCommand,
+  description: string,
+  capability: DesktopCapability = 'browser.site',
+): DeviceStepDefinition {
   return {
     command: BROWSER_STEP_COMMAND,
-    capability: 'browser.site',
+    capability,
     scope: 'browser',
     description,
     browserCommand,
@@ -99,7 +105,7 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
     capability: 'filesystem.read',
     scope: 'workspace',
     description:
-      "Read a text file from a folder the user granted on their desktop. Call list_device_folders first, or use a rootId the user's message already named. Returns the file text, truncated when large.",
+      "Read a text file from a folder the user granted on their desktop. Find the file first with device_list_folder or device_find_files unless the user's message already named its path. Returns the file text, truncated when large.",
   },
   device_list_folder: {
     command: 'file_list',
@@ -246,6 +252,16 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
     'browser_download',
     "Download a file through the user's paired Chrome browser into their downloads folder. The user is asked before it starts.",
   ),
+  device_browser_console: browserStep(
+    'browser_console',
+    "Read the console messages the active tab of the user's paired Chrome browser has logged, to find errors in a page or app under test. Set level to error to see only errors. The user is asked before it runs.",
+    'browser.cdp',
+  ),
+  device_browser_network: browserStep(
+    'browser_network',
+    "Read the requests the active tab of the user's paired Chrome browser has made, with their addresses and status, to find failed calls in a page or app under test. Set failedOnly to see only failures. The user is asked before it runs.",
+    'browser.cdp',
+  ),
 };
 
 export function deviceStepCapability(tool: DeviceStepTool): DesktopCapability {
@@ -268,6 +284,9 @@ export const DEVICE_MOUSE_BUTTONS = ['left', 'right'] as const;
 export type DeviceMouseButton = (typeof DEVICE_MOUSE_BUTTONS)[number];
 
 export const DEVICE_KEY_MODIFIERS = ['command', 'control', 'option', 'shift'] as const;
+
+export const DEVICE_BROWSER_CONSOLE_LEVELS = ['error', 'warning', 'info', 'log', 'debug'] as const;
+export type DeviceBrowserConsoleLevel = (typeof DEVICE_BROWSER_CONSOLE_LEVELS)[number];
 export type DeviceKeyModifier = (typeof DEVICE_KEY_MODIFIERS)[number];
 
 /**
@@ -504,6 +523,8 @@ export interface DeviceStepRequest {
   url?: string;
   selector?: string;
   clear?: boolean;
+  level?: DeviceBrowserConsoleLevel;
+  failedOnly?: boolean;
   pattern?: string;
   query?: string;
   ignoreCase?: boolean;
@@ -733,6 +754,28 @@ function planBrowserStep(tool: DeviceStepTool, args: Record<string, unknown>): D
       return { tool, url: readHttpUrl(args['url']) };
     case 'device_browser_click':
       return withReview({ tool, selector: readSelector(args['selector']) }, args);
+    case 'device_browser_console':
+    case 'device_browser_network': {
+      const pattern = readBoundedString(args['pattern'], MAX_BROWSER_SELECTOR_LENGTH);
+      const level = args['level'];
+      if (
+        tool === 'device_browser_console' &&
+        level !== undefined &&
+        !(DEVICE_BROWSER_CONSOLE_LEVELS as readonly unknown[]).includes(level)
+      ) {
+        refuse(`"level" must be one of ${DEVICE_BROWSER_CONSOLE_LEVELS.join(', ')}.`);
+      }
+      return {
+        tool,
+        ...(pattern ? { pattern } : {}),
+        ...(tool === 'device_browser_console' && level !== undefined
+          ? { level: level as DeviceBrowserConsoleLevel }
+          : {}),
+        ...(tool === 'device_browser_network' && args['failedOnly'] === true
+          ? { failedOnly: true }
+          : {}),
+      };
+    }
     case 'device_browser_type': {
       const text = args['text'];
       if (typeof text !== 'string' || text.length === 0) {
@@ -936,5 +979,13 @@ export function describeDeviceStep(
       return 'Take a screenshot of the Chrome tab';
     case 'device_browser_download':
       return `Download ${request.url} through Chrome`;
+    case 'device_browser_console':
+      return request.level === 'error'
+        ? "Read the errors in the Chrome tab's console"
+        : "Read the Chrome tab's console";
+    case 'device_browser_network':
+      return request.failedOnly
+        ? 'Read the failed requests of the Chrome tab'
+        : 'Read the network requests of the Chrome tab';
   }
 }

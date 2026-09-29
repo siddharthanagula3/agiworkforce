@@ -17,17 +17,6 @@ nothing is left.
 
 Code: `apps/web/lib/connectors/microsoft-graph.ts:297-297`, `apps/web/lib/connectors/microsoft-graph.ts:406-406`, `apps/web/lib/connectors/microsoft-graph.ts:444-444`, `apps/web/lib/connectors/microsoft-graph.ts:505-505`
 
-## S98.19: Plugin dependency resolver.
-
-- Done when: Installing a plugin resolves and installs the plugins it depends on.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The CLI resolver call is done (ec7e0839d5: declared dependencies, as names or objects with semver ranges, install and enable breadth first and bounded, same marketplace unless allowCrossMarketplaceDependenciesOn names another). Dependency resolution for uploaded and authored plugins is still owed by p-routines-voice | handler |
-
-Code: `apps/cli/src/installs.rs:140-140`, `apps/cli/src/installs.rs:257-257`, `apps/cli/src/installs.rs:278-278`, `apps/cli/src/features/plugins/plugins.rs:141-141`
-
 ## S98.26: Publisher identity service.
 
 - Done when: Publishers have verified identities and installs check a package came from its publisher.

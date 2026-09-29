@@ -10,20 +10,20 @@ nothing is left.
 
 - Done when: A document the assistant writes in chat opens as an artifact the user can edit as a document and save back as a new version.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Edit is still a raw source textarea over the artifact text; Save writes a new version, but there is no document editor, and DOCX/PDF outputs cannot be edited. | ui |
-| desktop | partial | Edit is still a raw source textarea over the artifact text; Save writes a new version, but there is no document editor, and DOCX/PDF outputs cannot be edited. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | agi artifacts show --out writes the document to a file for an outside editor; nothing reads the edited file back as a version. | ui |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:2232-2232`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:735-735`, `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
+Code: `apps/cli/src/lib.rs:1101-1101`, `apps/cli/src/lib.rs:2391-2391`
 
 ## S110.02: Document → presentation.
 
 - Done when: A document (chat artifact or uploaded file) is turned into a presentation the user can open and keep working on.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -32,9 +32,8 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:2232-2232
 | mobile | partial | The office-file tool can build a .pptx from the chat's text; no deck action or editor. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The office tool is offered only when the prompt names an Office file; the source can only be the page or pasted text; no deck view. | ui |
 
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1001-1001`, `apps/web/lib/services/managed-office-file-service.ts:513-513`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:686-687`
+Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:1001-1001`, `apps/web/lib/services/managed-office-file-service.ts:513-513`, `apps/mobile/stores/chat/chatExecutionStore.ts:1811-1811`
 
 ## S110.03: Spreadsheet → chart → report.
 
@@ -69,17 +68,16 @@ Code: `apps/web/lib/services/managed-office-file-service.ts:156-156`, `apps/web/
 
 - Done when: A request made in voice mode becomes a durable AGI Work task (runs in background, tracked in Tasks) without the user retyping it.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The live-voice tool registry keeps agi_work unreachable, so a voice turn cannot start or hand off an AGI Work task; the user leaves voice and retypes in Work mode. | handler |
-| desktop | partial | The live-voice tool registry keeps agi_work unreachable, so a voice turn cannot start or hand off an AGI Work task; the user leaves voice and retypes in Work mode. | handler |
 | mobile | partial | agi_work is unreachable from live voice; the user must switch to text and start a task from the Tasks screen, carrying no voice context. | handler |
 | cli | partial | A /voice turn is an ordinary agent turn, but voice ships only in builds with the off-by-default voice feature and needs the user's own OPENAI_API_KEY or local whisper. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/voice/live-voice-tools.ts:215-215`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4985-4985`, `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:331-331`, `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:96-96`
+Code: `apps/mobile/src/features/voice/components/LiveVoiceBar.tsx:331-331`, `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:96-96`, `apps/cli/Cargo.toml:111-111`, `apps/cli/src/tui/tui_app.rs:4451-4451`
 
 ## S110.08: Voice → generated document.
 
@@ -243,17 +241,13 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1382-1382`, `apps/mobile/se
 
 - Done when: When the user runs out of usage, the product offers an eligible alternative (named eligible model, reset wait, or purchase) that the user can take in one step and continue.
 - Wave: 2
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A one-click 'Switch to <model>' appears only for the flagship weekly limit and the free-trial model block; the credit, monthly and rolling limits show a reset time and Upgrade only, and checkout stays behind the beta_redemptions waitlist for accounts without a paid plan. | ui, flag-off |
-| desktop | partial | A one-click 'Switch to <model>' appears only for the flagship weekly limit and the free-trial model block; the credit, monthly and rolling limits show a reset time and Upgrade only, and checkout stays behind the beta_redemptions waitlist for accounts without a paid plan. | ui, flag-off |
 | mobile | partial | The paywall sheet names no model and no reset time, and in-app purchase is off (MOBILE_IAP_ENABLED unset); post-codex/no-yearly-s82-mobile-chat-usage.patch adds the model choice and reset line. | ui, flag-off |
-| chrome | partial | A disallowed selection falls back to Auto without naming a model, the reset time is only in Usage settings, and the copy states upgrades need the waitlist. | ui |
-| api | partial | Error bodies carry alternative_model only for the flagship and free-trial cases; most exhaustion errors carry no alternative, and checkout recovery links hit the waitlist. | ui |
 
-Code: `packages/contracts/types/src/billing-catalog.ts:587-587`, `apps/web/features/chat/components/InlinePaywallCard.tsx:442-442`, `apps/web/app/api/checkout/route.ts:201-201`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:41-41`
+Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:41-41`, `apps/web/lib/server/mobile-iap-catalog.ts:25-25`
 
 ## S110.27: Disconnected integration → reconnect and resume.
 

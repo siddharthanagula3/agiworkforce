@@ -321,3 +321,20 @@ export records that the customer holds with its own tools. So the public API
 keeps GET /api/me and read access to held records and preservation status,
 while profile edits stay a signed-in client action and holds stay an admin
 console action (S85.01 api, S87.37 api). Checked 2026-09-28.
+
+## D-2026-09-28-20 No device-only conversations on the web
+
+ChatGPT and Claude on the web keep every saved conversation in the account and
+answer privacy with temporary chat and incognito, which are never saved. Neither
+offers a durable conversation kept only in the browser, so the web and desktop
+apps keep local-model chats temporary rather than storing them on the device
+(S41.14 web and desktop). The mobile, CLI, VS Code and Chrome apps already keep
+local conversations on the device.
+
+## D-2026-09-28-21 Only cloud coding sessions are shared
+
+Claude shares Claude Code sessions that run in the cloud, from the session list
+at claude.ai/code, and offers no share link for a session running on the
+person's own machine (code.claude.com/docs/en/claude-code-on-the-web, section
+Share sessions). The desktop app shares cloud sessions through the hosted Code
+page, and local sessions stay unshareable (S66.40 desktop). Checked 2026-09-28.

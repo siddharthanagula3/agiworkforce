@@ -1,8 +1,10 @@
 import {
   LiveVoiceToolBridge,
   LiveVoiceToolCallResponseSchema,
+  LIVE_VOICE_WORK_TASK_TOOL,
   liveVoiceFunctionCallOf,
   liveVoiceToolCallPath,
+  liveVoiceWorkTaskGoal,
   type LiveVoicePendingApproval,
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
@@ -19,6 +21,7 @@ export interface LiveVoiceToolOutcome {
 }
 import { formatUsageResetIn } from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
 
 export const LIVE_SESSION_ENDPOINT = '/api/voice/live/sessions';
@@ -108,6 +111,9 @@ export function checkSpokenSuccessClaim(
   return { claimsSuccess, verified: !claimsSuccess || completedTools.length > 0 };
 }
 
+const WORK_TASK_NOT_STARTED =
+  'The task did not start because the chat could not send it right now. Tell the user to type the request in the chat with Work mode on.';
+
 export interface LiveVoiceSessionCallbacks {
   onStarted: () => void;
   onSpeaking: (active: boolean) => void;
@@ -119,6 +125,8 @@ export interface LiveVoiceSessionCallbacks {
   onToolApprovals?: (approvals: readonly LiveVoicePendingApproval[]) => void;
   /** A function tool's result, so the surface can show what the voice turn got back. */
   onToolResult?: (outcome: LiveVoiceToolOutcome) => void;
+  /** Sends a spoken goal to the chat as an AGI Work turn; false when it could not start. */
+  onStartWorkTask?: (goal: string) => boolean;
   onTranscript: (turn: LiveTranscriptTurn) => void;
   onUsage: (seconds: number) => void;
   onClosed: (closed: LiveSessionClosed) => void;
@@ -377,7 +385,10 @@ export class LiveVoiceSession {
           conversationId: options.conversationId,
           language: options.language ?? null,
           ...(options.pace === undefined ? {} : { pace: options.pace }),
-          surface: 'web',
+          surface: isDesktopHost() ? 'desktop' : 'web',
+          ...(options.callbacks.onStartWorkTask
+            ? { clientHandoffs: [LIVE_VOICE_WORK_TASK_TOOL] }
+            : {}),
         }),
       });
       if (!response.ok) throw await readLiveSessionError(response);
@@ -447,7 +458,17 @@ export class LiveVoiceSession {
       body: JSON.stringify(request),
     });
     if (!response.ok) throw await readLiveSessionError(response);
-    return LiveVoiceToolCallResponseSchema.parse(await response.json());
+    const parsed = LiveVoiceToolCallResponseSchema.parse(await response.json());
+    if (
+      request.name !== LIVE_VOICE_WORK_TASK_TOOL ||
+      parsed.status !== 'completed' ||
+      parsed.isError
+    ) {
+      return parsed;
+    }
+    const goal = liveVoiceWorkTaskGoal(request.arguments);
+    if (goal && this.callbacks.onStartWorkTask?.(goal)) return parsed;
+    return { status: 'completed', isError: true, output: WORK_TASK_NOT_STARTED };
   }
 
   setMuted(muted: boolean): void {

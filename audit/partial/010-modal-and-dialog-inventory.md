@@ -165,18 +165,6 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:163-177`, `apps/mobile/src/f
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S10.17: Upload from device.
-
-- Done when: Choosing upload opens the device file chooser and the picked files attach to the message.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | needs the R2 upload host in manifest connect-src and host_permissions (permission prompt on update, owner call) or a server upload proxy accepting the extension token | document upload |
-
-Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_panel.ts:5258-5298`
-
 ## S10.19: Reauthorize connection.
 
 - Done when: An expired connection offers a reconnect dialog that re-runs authorization and keeps its settings.
