@@ -353,6 +353,7 @@ fn capabilities() -> AppServerCapabilities {
         trust: false,
         turn_tool_filters: false,
         plan_decision: false,
+        provider_keys: false,
     }
 }
 

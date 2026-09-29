@@ -12,16 +12,17 @@ use agiworkforce_protocol::developer_session::{
     PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
     PermissionsRemoveParams, PlanDecisionParams, PluginInstallParams, PluginListResponse,
     PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
-    ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
-    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
-    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TrustListResponse,
-    TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams,
-    TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
+    ProtocolVersionUnsupportedData, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
+    ThreadSearchResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
+    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnInterruptParams,
+    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary, WorktreeCreateParams,
+    WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
     LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
     PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
     THREAD_WRITER_CONFLICT_ERROR_CODE,
@@ -445,6 +446,24 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: PlanDecisionParams,
     ) -> Result<(), DeveloperSessionHostError> {
         Err(unsupported(method::THREAD_PLAN_DECISION))
+    }
+
+    async fn list_provider_keys(&self) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PROVIDERS_LIST))
+    }
+
+    async fn set_provider_key(
+        &self,
+        _params: ProviderSetKeyParams,
+    ) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PROVIDERS_SET_KEY))
+    }
+
+    async fn remove_provider_key(
+        &self,
+        _params: ProviderParams,
+    ) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PROVIDERS_REMOVE_KEY))
     }
 
     async fn list_trusted_folders(&self) -> Result<TrustListResponse, DeveloperSessionHostError> {
@@ -1193,6 +1212,35 @@ impl DeveloperSessionProcessor {
                     .decide_plan(params)
                     .await
                     .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
+            method::PROVIDERS_LIST => {
+                if let Err(response) = parse_optional_params::<NoParams>(&request) {
+                    return *response;
+                }
+                self.host
+                    .list_provider_keys()
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PROVIDERS_SET_KEY => {
+                let params = match parse_params::<ProviderSetKeyParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .set_provider_key(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PROVIDERS_REMOVE_KEY => {
+                let params = match parse_params::<ProviderParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .remove_provider_key(params)
+                    .await
+                    .map(serde_json::to_value)
             }
             method::TRUST_LIST => {
                 if let Err(response) = parse_optional_params::<NoParams>(&request) {

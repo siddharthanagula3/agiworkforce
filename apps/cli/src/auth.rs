@@ -1028,6 +1028,64 @@ fn api_key_provider(provider: &str) -> Option<ApiKeyProvider> {
         .find(|candidate| candidate.id == normalized)
 }
 
+pub struct ApiKeyProviderSummary {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub env_var: &'static str,
+    pub configured: bool,
+}
+
+pub fn api_key_providers() -> Result<Vec<ApiKeyProviderSummary>> {
+    let store = AuthStore::load()?;
+    Ok(API_KEY_PROVIDERS
+        .iter()
+        .map(|provider| ApiKeyProviderSummary {
+            id: provider.id,
+            label: provider.label,
+            env_var: provider.env_var,
+            configured: matches!(
+                store.entries.get(provider.id),
+                Some(AuthEntry::ApiKey { .. })
+            ),
+        })
+        .collect())
+}
+
+pub fn save_api_key(provider: &str, key: &str) -> Result<()> {
+    let provider = api_key_provider(provider)
+        .ok_or_else(|| anyhow::anyhow!("Unknown API-key provider '{}'", provider))?;
+    let key = key.trim();
+    if key.is_empty()
+        || key
+            .chars()
+            .any(|character| character.is_whitespace() || character.is_control())
+    {
+        bail!("That is not an API key.");
+    }
+    save_auth_entry(
+        provider.id,
+        AuthEntry::ApiKey {
+            key: key.to_string(),
+        },
+    )
+}
+
+pub fn remove_api_key(provider: &str) -> Result<bool> {
+    let provider = api_key_provider(provider)
+        .ok_or_else(|| anyhow::anyhow!("Unknown API-key provider '{}'", provider))?;
+    let mut store = AuthStore::load()?;
+    if !matches!(
+        store.entries.get(provider.id),
+        Some(AuthEntry::ApiKey { .. })
+    ) {
+        return Ok(false);
+    }
+    store.entries.remove(provider.id);
+    store.save()?;
+    record_credential_use(provider.id, "removed a saved API key");
+    Ok(true)
+}
+
 pub(crate) fn is_api_key_provider(provider: &str) -> bool {
     api_key_provider(provider).is_some()
 }

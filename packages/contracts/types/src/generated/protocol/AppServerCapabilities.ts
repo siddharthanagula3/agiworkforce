@@ -53,4 +53,5 @@ export type AppServerCapabilities = {
   trust?: boolean;
   turnToolFilters?: boolean;
   planDecision?: boolean;
+  providerKeys?: boolean;
 };

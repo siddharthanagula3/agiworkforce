@@ -16,11 +16,12 @@ use agiworkforce_protocol::developer_session::{
     McpServerToolsResponse, McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope,
     PermissionRule, PermissionRuleDecision, PermissionRuleKind, PermissionRulesResponse,
     PermissionsAddParams, PermissionsListResponse, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginScope, PluginSummary, PluginUpdateResponse, SavedPermission,
-    SavedPermissionDecision, SavedPermissionKind, SettingsReadResponse, SettingsWriteParams,
-    SkillCatalogScope, SkillConsentResponse, SkillInstallParams, SkillListResponse,
-    SkillRemoveParams, SkillSummary, SlashCommandListResponse, SlashCommandResultKind,
-    SlashCommandRunResponse, SlashCommandSummary, TrustListResponse, TrustedFolder,
+    PluginRemoveParams, PluginScope, PluginSummary, PluginUpdateResponse, ProviderKeySummary,
+    ProvidersListResponse, SavedPermission, SavedPermissionDecision, SavedPermissionKind,
+    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
+    SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
+    TrustListResponse, TrustedFolder,
 };
 use std::path::{Path, PathBuf};
 
@@ -1279,6 +1280,23 @@ pub fn add_permission(
         }
     }
     list_permission_rules()
+}
+
+pub fn list_provider_keys() -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+    let providers = crate::auth::api_key_providers()
+        .map_err(internal)?
+        .into_iter()
+        .map(|provider| ProviderKeySummary {
+            provider: provider.id.to_string(),
+            label: provider.label.to_string(),
+            env_var: provider.env_var.to_string(),
+            configured: provider.configured,
+        })
+        .collect();
+    Ok(ProvidersListResponse {
+        providers,
+        storage: crate::auth::credential_storage_label().to_string(),
+    })
 }
 
 pub fn list_trusted_folders() -> Result<TrustListResponse, DeveloperSessionHostError> {
