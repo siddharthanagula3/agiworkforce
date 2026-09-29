@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 const VOCABULARY = 'packages/contracts/types/src/conversation.ts';
 const AGENT_EVENT_UNION = 'packages/contracts/types/src/generated/protocol/AgentEvent.ts';
 const KIND_MAPPING = 'packages/contracts/types/src/message-block-kinds.ts';
-const KIND_MAPPING_READ = /\b(?:messageKindForAgentEvent|AGENT_EVENT_MESSAGE_KINDS)\b/;
+const KIND_MAPPING_READ =
+  /\b(?:messageKindForAgentEvent|AGENT_EVENT_MESSAGE_KINDS|messageKindForDeveloperSessionEvent)\b/;
 const CLIENT_ROOTS = Object.freeze([
   'apps/web/app',
   'apps/web/features',
@@ -63,8 +64,6 @@ const WEB_FIX =
   'classify each event with messageKindForAgentEvent and keep per-type branches only for payload details';
 
 export const BLOCK_KIND_READERS_PENDING = Object.freeze({
-  'apps/web/features/code/hooks/use-local-session.ts': `p-sessions: ${WEB_FIX}`,
-  'apps/web/lib/hooks/useChatStream.ts': `p-mcp-web: ${WEB_FIX}`,
   'apps/mobile/services/streaming.ts': `mobile, post-codex patch: ${WEB_FIX}`,
   'apps/mobile/src/features/tasks/runPresentation.ts': `mobile, post-codex patch: ${WEB_FIX}`,
   'apps/extension/src/features/side-panel/chat-state.ts': `p-chrome: ${WEB_FIX}`,
