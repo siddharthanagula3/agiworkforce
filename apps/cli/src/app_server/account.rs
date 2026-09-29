@@ -11,6 +11,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::auth::{AuthEntry, AuthStore};
 use crate::tier_cache;
+use agiworkforce_protocol::developer_session::{
+    ProviderKeySource, ProviderKeySummary, ProviderKeysListResponse,
+};
 
 const ACCOUNT_CACHE_FILE: &str = "cache/account.toml";
 const ACCOUNT_CACHE_TTL: Duration = Duration::from_secs(300);
@@ -333,6 +336,45 @@ pub fn logout() -> Result<()> {
     tier_cache::invalidate_tier_cache();
     clear_account_cache();
     Ok(())
+}
+
+const MAX_PROVIDER_KEY_CHARS: usize = 4_096;
+
+pub fn provider_keys() -> Result<ProviderKeysListResponse> {
+    let store = AuthStore::load().context("Failed to read the credential store")?;
+    let providers = crate::auth::api_key_providers()
+        .iter()
+        .map(|provider| ProviderKeySummary {
+            id: provider.id.to_string(),
+            label: provider.label.to_string(),
+            env_var: provider.env_var.to_string(),
+            source: if matches!(
+                store.entries.get(provider.id),
+                Some(AuthEntry::ApiKey { .. })
+            ) {
+                Some(ProviderKeySource::Stored)
+            } else if std::env::var(provider.env_var).is_ok_and(|value| !value.trim().is_empty()) {
+                Some(ProviderKeySource::Environment)
+            } else {
+                None
+            },
+        })
+        .collect();
+    Ok(ProviderKeysListResponse { providers })
+}
+
+pub fn validate_provider_key(key: &str) -> std::result::Result<&str, &'static str> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err("Paste the API key");
+    }
+    if key.chars().count() > MAX_PROVIDER_KEY_CHARS {
+        return Err("That is longer than any provider's API key");
+    }
+    if key.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("An API key has no spaces or line breaks");
+    }
+    Ok(key)
 }
 
 #[cfg(test)]

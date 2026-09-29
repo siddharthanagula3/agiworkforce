@@ -116,6 +116,9 @@ pub mod method {
     pub const PERMISSIONS_REMOVE: &str = "permissions/remove";
     pub const PLAN_DECIDE: &str = "plan/decide";
     pub const PERMISSIONS_ADD: &str = "permissions/add";
+    pub const PROVIDER_KEYS_LIST: &str = "providerKeys/list";
+    pub const PROVIDER_KEYS_SET: &str = "providerKeys/set";
+    pub const PROVIDER_KEYS_REMOVE: &str = "providerKeys/remove";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -390,6 +393,8 @@ pub struct AppServerCapabilities {
     pub plan_decisions: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub permission_rules: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub provider_keys: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2481,6 +2486,58 @@ pub struct SavedPermission {
 #[ts(rename_all = "camelCase")]
 pub struct PermissionsListResponse {
     pub permissions: Vec<SavedPermission>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum ProviderKeySource {
+    Stored,
+    Environment,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProviderKeySummary {
+    pub id: String,
+    pub label: String,
+    pub env_var: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source: Option<ProviderKeySource>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProviderKeysListResponse {
+    pub providers: Vec<ProviderKeySummary>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProviderKeySetParams {
+    pub provider: String,
+    pub key: String,
+}
+
+impl std::fmt::Debug for ProviderKeySetParams {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ProviderKeySetParams")
+            .field("provider", &self.provider)
+            .field("key", &"[redacted]")
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProviderKeyRemoveParams {
+    pub provider: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

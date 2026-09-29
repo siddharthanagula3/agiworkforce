@@ -628,6 +628,21 @@ const fr = {
   'savedApprovals.allowCommandDetail':
     'AGI exécute toute commande qui commence ainsi, dans chaque session, sans demander.',
   'savedApprovals.allowConfirm': 'Toujours autoriser',
+  'providerKeys.title': 'Clés d’API des fournisseurs',
+  'providerKeys.placeholder':
+    'Clés que l’AGI CLI utilise pour appeler un fournisseur avec votre propre compte',
+  'providerKeys.empty': 'Cette AGI CLI ne liste aucun fournisseur acceptant une clé d’API',
+  'providerKeys.stored': 'Clé enregistrée',
+  'providerKeys.fromEnvironment': 'Depuis {envVar}',
+  'providerKeys.notSet': 'Non défini',
+  'providerKeys.setDetail':
+    'Choisissez pour saisir une clé ; elle est conservée dans le trousseau du système',
+  'providerKeys.prompt': 'Clé d’API {provider}',
+  'providerKeys.removeTitle': 'Supprimer la clé {provider} enregistrée ?',
+  'providerKeys.removeDetail':
+    'Les modèles de {provider} cessent de fonctionner via votre propre compte jusqu’à l’ajout d’une nouvelle clé.',
+  'providerKeys.saved': 'AGI Workforce : clé {provider} enregistrée.',
+  'providerKeys.noun': 'clés d’API des fournisseurs',
   'savedApprovals.noun': 'approbations enregistrées',
   'webview.alwaysAllow': 'Toujours autoriser',
   'webview.alwaysAllowHint':

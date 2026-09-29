@@ -915,10 +915,10 @@ pub async fn login_agiworkforce() -> Result<()> {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct ApiKeyProvider {
-    id: &'static str,
-    label: &'static str,
-    env_var: &'static str,
+pub(crate) struct ApiKeyProvider {
+    pub(crate) id: &'static str,
+    pub(crate) label: &'static str,
+    pub(crate) env_var: &'static str,
 }
 
 const API_KEY_PROVIDERS: &[ApiKeyProvider] = &[
@@ -1030,6 +1030,41 @@ fn api_key_provider(provider: &str) -> Option<ApiKeyProvider> {
 
 pub(crate) fn is_api_key_provider(provider: &str) -> bool {
     api_key_provider(provider).is_some()
+}
+
+pub(crate) fn api_key_providers() -> &'static [ApiKeyProvider] {
+    API_KEY_PROVIDERS
+}
+
+pub(crate) fn save_api_key(provider: &str, key: &str) -> Result<&'static str> {
+    let provider = api_key_provider(provider)
+        .ok_or_else(|| anyhow::anyhow!("Unknown API-key provider '{}'", provider))?;
+    let key = key.trim();
+    if key.is_empty() {
+        bail!("Empty API key.");
+    }
+    save_auth_entry(
+        provider.id,
+        AuthEntry::ApiKey {
+            key: key.to_string(),
+        },
+    )?;
+    Ok(provider.id)
+}
+
+pub(crate) fn remove_api_key(provider: &str) -> Result<bool> {
+    let provider = api_key_provider(provider)
+        .ok_or_else(|| anyhow::anyhow!("Unknown API-key provider '{}'", provider))?;
+    let mut store = AuthStore::load()?;
+    if !matches!(
+        store.entries.get(provider.id),
+        Some(AuthEntry::ApiKey { .. })
+    ) {
+        return Ok(false);
+    }
+    store.entries.remove(provider.id);
+    store.save()?;
+    Ok(true)
 }
 
 pub async fn interactive_api_key_login_for_provider(provider: &str) -> Result<()> {

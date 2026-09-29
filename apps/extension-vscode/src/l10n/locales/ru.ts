@@ -672,6 +672,20 @@ const ru = {
   'savedApprovals.allowCommandDetail':
     'AGI будет выполнять любую команду, начинающуюся так, в каждом сеансе без запроса.',
   'savedApprovals.allowConfirm': 'Всегда разрешать',
+  'providerKeys.title': 'API-ключи провайдеров',
+  'providerKeys.placeholder':
+    'Ключи, с которыми AGI CLI обращается к провайдеру от вашей учётной записи',
+  'providerKeys.empty': 'В этой AGI CLI нет провайдеров, принимающих API-ключ',
+  'providerKeys.stored': 'Ключ сохранён',
+  'providerKeys.fromEnvironment': 'Из {envVar}',
+  'providerKeys.notSet': 'Не задан',
+  'providerKeys.setDetail': 'Выберите, чтобы ввести ключ; он хранится в системной связке ключей',
+  'providerKeys.prompt': 'API-ключ {provider}',
+  'providerKeys.removeTitle': 'Удалить сохранённый ключ {provider}?',
+  'providerKeys.removeDetail':
+    'Модели {provider} перестанут работать через вашу учётную запись, пока ключ не будет добавлен снова.',
+  'providerKeys.saved': 'AGI Workforce: ключ {provider} сохранён.',
+  'providerKeys.noun': 'API-ключи провайдеров',
   'savedApprovals.noun': 'сохранённые подтверждения',
   'webview.alwaysAllow': 'Всегда разрешать',
   'webview.alwaysAllowHint':

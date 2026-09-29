@@ -35,6 +35,9 @@ export const CLI_CAPABILITY_METHODS = {
   savedPermissions: 'listSavedPermissions',
   savedPermissionsRemove: 'removeSavedPermission',
   savedPermissionsAdd: 'addSavedPermission',
+  providerKeys: 'listProviderKeys',
+  providerKeysSet: 'setProviderKey',
+  providerKeysRemove: 'removeProviderKey',
   mcpInspect: 'inspectMcpServer',
   pluginsUpdate: 'updatePlugin',
   memoryAdd: 'addMemory',
@@ -63,6 +66,7 @@ export type CliFamily = keyof Pick<
   | 'memory'
   | 'worktrees'
   | 'permissionRules'
+  | 'providerKeys'
 >;
 
 const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
@@ -96,6 +100,9 @@ const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
   savedPermissions: 'savedPermissions',
   savedPermissionsRemove: 'savedPermissions',
   savedPermissionsAdd: 'permissionRules',
+  providerKeys: 'providerKeys',
+  providerKeysSet: 'providerKeys',
+  providerKeysRemove: 'providerKeys',
   mcpInspect: 'mcpInspect',
   pluginsUpdate: 'pluginUpdates',
   memoryAdd: 'memory',
@@ -121,6 +128,7 @@ const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
   memory: 'repository memory',
   worktrees: 'session worktrees',
   permissionRules: 'adding approval rules',
+  providerKeys: 'provider API keys',
 };
 
 export function cliCapabilityNotOffered(capability: CliCapability): string {

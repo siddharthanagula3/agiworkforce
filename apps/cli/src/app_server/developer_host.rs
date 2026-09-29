@@ -24,18 +24,18 @@ use agiworkforce_protocol::developer_session::{
     ModelListParams, PendingApprovalSnapshot, PermissionsAddParams, PermissionsListResponse,
     PermissionsRemoveParams, PlanDecideParams, PlanDecision, PluginInstallParams,
     PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
-    RewindSkippedFile, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
-    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
-    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
-    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
-    WorktreeSummary,
+    ProviderKeyRemoveParams, ProviderKeySetParams, ProviderKeysListResponse, RewindSkippedFile,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
+    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
+    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
+    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
+    ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
+    TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
+    TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -444,6 +444,7 @@ impl CliDeveloperSessionHost {
             plugin_updates: true,
             plan_decisions: true,
             permission_rules: true,
+            provider_keys: true,
         }
     }
 
@@ -3543,6 +3544,64 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         tokio::task::spawn_blocking(move || surfaces::remove_saved_permission(&params.id))
             .await
             .map_err(internal_error)?
+    }
+
+    async fn list_provider_keys(
+        &self,
+    ) -> Result<ProviderKeysListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(account::provider_keys)
+            .await
+            .map_err(internal_error)?
+            .map_err(internal_error)
+    }
+
+    async fn set_provider_key(
+        &self,
+        params: ProviderKeySetParams,
+    ) -> Result<ProviderKeysListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        if !crate::auth::is_api_key_provider(&params.provider) {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "That provider does not take an API key",
+            ));
+        }
+        let key = account::validate_provider_key(&params.key)
+            .map_err(DeveloperSessionHostError::invalid_request)?
+            .to_string();
+        tokio::task::spawn_blocking(move || {
+            crate::auth::save_api_key(&params.provider, &key)?;
+            account::provider_keys()
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)
+    }
+
+    async fn remove_provider_key(
+        &self,
+        params: ProviderKeyRemoveParams,
+    ) -> Result<ProviderKeysListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        if !crate::auth::is_api_key_provider(&params.provider) {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "That provider does not take an API key",
+            ));
+        }
+        let removed =
+            tokio::task::spawn_blocking(move || crate::auth::remove_api_key(&params.provider))
+                .await
+                .map_err(internal_error)?
+                .map_err(internal_error)?;
+        if !removed {
+            return Err(DeveloperSessionHostError::not_found(
+                "No saved key for that provider; a key set in the environment is removed there",
+            ));
+        }
+        tokio::task::spawn_blocking(account::provider_keys)
+            .await
+            .map_err(internal_error)?
+            .map_err(internal_error)
     }
 
     async fn add_permission(
