@@ -2,10 +2,12 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import { CUSTOM_SERVER_PREFIX, ORG_SHARED_SERVER_PREFIX } from '@/lib/connectors/custom-server-ids';
 import {
   GOOGLE_USER_DATA_TRIGGER_SOURCES,
   isGoogleUserDataConnector,
 } from '@/lib/connectors/google-user-data';
+import { DIRECTORY_SERVER_ID_PREFIX } from '@/lib/connectors/mcp-directory-targets';
 import { logger } from '@/lib/logger';
 import { GOOGLE_USER_DATA_WITHHELD } from '@/lib/server/support-access-service';
 
@@ -40,10 +42,19 @@ function eventSource(job: BackgroundJob): string | null {
 }
 
 // A routine with no connector list runs with every connector its owner has
-// connected, so only an explicit list without a Google connector clears it.
+// connected, so only an explicit list without a Google connector clears it. A
+// custom, workspace or directory server is identified by an id that does not
+// name its host, so it counts as one that may be served from Google.
 function routineMayReachGoogle(connectors: unknown): boolean {
   if (!Array.isArray(connectors)) return true;
-  return connectors.some((id) => typeof id !== 'string' || isGoogleUserDataConnector(id));
+  return connectors.some(
+    (id) =>
+      typeof id !== 'string' ||
+      isGoogleUserDataConnector(id) ||
+      [CUSTOM_SERVER_PREFIX, ORG_SHARED_SERVER_PREFIX, DIRECTORY_SERVER_ID_PREFIX].some((prefix) =>
+        id.startsWith(prefix),
+      ),
+  );
 }
 
 interface RoutineConnectorRow extends Record<string, unknown> {

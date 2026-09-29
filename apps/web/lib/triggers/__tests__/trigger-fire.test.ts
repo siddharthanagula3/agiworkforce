@@ -14,21 +14,26 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.createClaimedUserScopedDb,
 }));
-vi.mock('@/lib/services/scheduled-agent-executor', () => ({
+vi.mock('@/lib/services/scheduled-agent-executor', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   executeScheduledAgent: vi.fn(),
   scheduledAgentExecutor: mocks.scheduledAgentExecutor,
 }));
-vi.mock('@/lib/services/schedule-service', async () => {
+vi.mock('@/lib/services/schedule-service', async (importOriginal) => {
   class ScheduleConflictError extends Error {}
   class ScheduleNotFoundError extends Error {}
   return {
+    ...(await importOriginal<Record<string, unknown>>()),
     ScheduleConflictError,
     ScheduleNotFoundError,
     createEventTriggeredScheduleRun: mocks.createEventTriggeredScheduleRun,
     processClaimedScheduleRun: mocks.processClaimedScheduleRun,
   };
 });
-vi.mock('../trigger-ingest', () => ({ settleTriggerDelivery: mocks.settleTriggerDelivery }));
+vi.mock('../trigger-ingest', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  settleTriggerDelivery: mocks.settleTriggerDelivery,
+}));
 
 import { ScheduleConflictError } from '@/lib/services/schedule-service';
 import { PermanentJobError } from '@/lib/jobs/job-service';
@@ -182,7 +187,7 @@ describe('fireEventTriggerJob', () => {
     expect(mocks.processClaimedScheduleRun.mock.calls[0]?.[2]).toBe(mocks.executor);
   });
 
-  it.each(['gmail', 'google_calendar'])(
+  it.each(['gmail', 'google_calendar', 'connector'])(
     'keeps a run started by a %s event on models that do not train on it',
     async (source) => {
       const googleEvent = context();

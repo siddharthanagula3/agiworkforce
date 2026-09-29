@@ -336,9 +336,9 @@ import {
   GOOGLE_USER_DATA_CONNECTED_MODEL_MAY_TRAIN_MESSAGE,
   GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE,
   GOOGLE_USER_DATA_NO_MODEL_MESSAGE,
-  isGoogleUserDataConnector,
   markConversationGoogleUserData,
   mcpContextConnectorIds,
+  connectorIdsReadGoogleUserData,
   resolveGoogleUserDataTurn,
   type GoogleUserDataTurnReason,
 } from '@/lib/connectors/google-user-data';
@@ -2858,6 +2858,7 @@ export async function processRequest(
     .then((scoped) =>
       resolveGoogleUserDataTurn(scoped.db, userId, {
         conversationId: chatRequest.conversation_id,
+        organizationId: scoped.organizationId,
         messages: chatRequest.messages,
         connectorToolsEnabled:
           chatRequest.connector_tools_enabled !== false &&
@@ -3394,15 +3395,18 @@ export async function processRequest(
 
   if (chatRequest.mcp_context) {
     try {
-      if (
-        chatRequest.conversation_id &&
-        mcpContextConnectorIds(chatRequest.mcp_context).some(isGoogleUserDataConnector)
-      ) {
-        await markConversationGoogleUserData(
-          (await scopedDbPromise).db,
-          userId,
-          chatRequest.conversation_id,
-        );
+      if (chatRequest.conversation_id) {
+        const scoped = await scopedDbPromise;
+        if (
+          await connectorIdsReadGoogleUserData(
+            scoped.db,
+            userId,
+            scoped.organizationId,
+            mcpContextConnectorIds(chatRequest.mcp_context),
+          )
+        ) {
+          await markConversationGoogleUserData(scoped.db, userId, chatRequest.conversation_id);
+        }
       }
       const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context);
       if (context) {

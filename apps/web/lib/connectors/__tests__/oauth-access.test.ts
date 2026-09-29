@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -51,7 +52,8 @@ const mocks = vi.hoisted(() => {
 const MockTokenError = mocks.ConnectorOAuthTokenError;
 const MockDecryptionError = mocks.ConnectorGrantDecryptionError;
 
-vi.mock('@/lib/connectors/oauth-store', () => ({
+vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ConnectorGrantDecryptionError: mocks.ConnectorGrantDecryptionError,
   ConnectorGrantLockTimeoutError: mocks.ConnectorGrantLockTimeoutError,
   withLockedConnectorOAuthGrant: async (
@@ -73,25 +75,30 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   upsertConnectorOAuthGrant: vi.fn(),
 }));
 
-vi.mock('@/lib/connectors/oauth-client', () => ({
+vi.mock('@/lib/connectors/oauth-client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ConnectorOAuthTokenError: mocks.ConnectorOAuthTokenError,
   refreshAccessToken: (...a: unknown[]) => mocks.refresh(...a),
   revokeTokenAtProvider: (...a: unknown[]) => mocks.revokeAtProvider(...a),
   TOKEN_REQUEST_TIMEOUT_MS: 10_000,
 }));
 
-vi.mock('@/lib/connectors/oauth-registry', () => ({
+vi.mock('@/lib/connectors/oauth-registry', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getConnectorOAuthProvider: (...a: unknown[]) => mocks.getProvider(...a),
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getNeonDb: () => ({ privileged: true, query: (...a: unknown[]) => mocks.dbQuery(...a) }),
 }));
-vi.mock('@/lib/services/notification-service', () => ({
+vi.mock('@/lib/services/notification-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   recordNotification: (...a: unknown[]) => mocks.record(...a),
 }));
 
-vi.mock('@/lib/connectors/mcp-discovery', () => ({
+vi.mock('@/lib/connectors/mcp-discovery', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   refreshDiscoveredGrant: mocks.refreshDiscovered,
 }));
 

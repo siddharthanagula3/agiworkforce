@@ -829,6 +829,7 @@ async function dispatchChatCompletions(
               organizationId: processed.organizationId,
               isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
               ...(processed.healthSpaceProjectId ? { healthSpace: true } : {}),
+              googleUserDataRouted: processed.googleUserData === true,
             }),
           )
         : { tools: [], dropped: [], limit: null };

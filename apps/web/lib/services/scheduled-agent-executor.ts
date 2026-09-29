@@ -16,6 +16,7 @@ import {
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import {
   connectedGoogleUserDataConnectorIds,
+  googleHostedCustomServerIds,
   projectHoldsGoogleUserData,
   readsGoogleUserData,
 } from '@/lib/connectors/google-user-data';
@@ -338,6 +339,7 @@ export async function buildScheduledToolPlan(input: {
       planTier: input.planTier,
       organizationId: input.organizationId,
       isToolDenied: connectorPermissions.isConnectorToolDenied,
+      googleUserDataRouted: modelKeepsInputsOutOfTraining(input.model),
     }),
   ]);
   const mcpTools = [...operatorTools, ...connectorCatalog.tools].filter(
@@ -516,6 +518,7 @@ function buildScheduledProcessedRequest(input: {
   organizationId?: string | null;
   reservation: ManagedUsageRequestReservation;
   sensitiveContextPresent: boolean;
+  googleUserData: boolean;
 }): ProcessedRequest {
   const chatRequest: ChatCompletionRequest = {
     model: input.route.modelKey,
@@ -530,6 +533,7 @@ function buildScheduledProcessedRequest(input: {
     requestId: `schedule-run-${input.runId}`,
     chatSurface: 'web',
     sensitiveContextPresent: input.sensitiveContextPresent,
+    googleUserData: input.googleUserData,
     organizationId: input.organizationId,
     managedUsage: input.reservation,
     chatRequest,
@@ -691,10 +695,16 @@ const GOOGLE_USER_DATA_ROUTE_MESSAGE =
 async function scheduledRunReachesGoogleUserData(
   db: Parameters<typeof connectedGoogleUserDataConnectorIds>[0],
   userId: string,
+  organizationId: string | null,
   task: ScheduleTask,
   sources: { project: boolean },
 ): Promise<boolean> {
-  const connected = await connectedGoogleUserDataConnectorIds(db, userId);
+  const [google, hosted] = await Promise.all([
+    connectedGoogleUserDataConnectorIds(db, userId),
+    googleHostedCustomServerIds(db, userId, organizationId),
+  ]);
+  if (hosted === null) return true;
+  const connected = [...google, ...hosted];
   const connectors = task.connectors ?? null;
   if (connected.some((connectorId) => connectors === null || connectors.includes(connectorId))) {
     return true;
@@ -832,7 +842,13 @@ async function runScheduledAgent(
   const sources = task.sources ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES;
   const googleUserData =
     options.googleUserDataEvent === true ||
-    (await scheduledRunReachesGoogleUserData(scope.db, scope.userId, task, sources));
+    (await scheduledRunReachesGoogleUserData(
+      scope.db,
+      scope.userId,
+      scope.organizationId,
+      task,
+      sources,
+    ));
   const route = resume
     ? resumedRoute(resume.checkpoint.route)
     : await selectScheduledRoute(scope, task, taskType, subscriptionTier, googleUserData);
@@ -857,7 +873,9 @@ async function runScheduledAgent(
   });
   if (
     !modelKeepsInputsOutOfTraining(route.modelKey) &&
-    plan.mcpTools.some((tool) => readsGoogleUserData(tool.serverId, tool.toolName))
+    plan.mcpTools.some(
+      (tool) => tool.googleUserData === true || readsGoogleUserData(tool.serverId, tool.toolName),
+    )
   ) {
     throw new Error(GOOGLE_USER_DATA_ROUTE_MESSAGE);
   }
@@ -967,6 +985,7 @@ async function runScheduledAgent(
             organizationId: scope.organizationId,
             reservation,
             sensitiveContextPresent,
+            googleUserData: googleUserData || modelKeepsInputsOutOfTraining(route.modelKey),
           }),
           plan,
           approvalMode: loopInputs.approvalMode,

@@ -12,6 +12,7 @@ import {
   GOOGLE_USER_DATA_CONNECTOR_IDS,
   GOOGLE_USER_DATA_TRIGGER_SOURCES,
   isGoogleApiUrl,
+  storedMessageToolServerIds,
   isGoogleUserDataConnector,
   isGoogleUserDataToolName,
   messagesCarryGoogleToolUse,
@@ -231,5 +232,74 @@ describe('turnHoldsGoogleUserData', () => {
         googleToolRan: false,
       }),
     ).resolves.toBe(true);
+  });
+});
+
+describe('Google API hosts', () => {
+  it('matches the host by domain suffix after parsing, never by substring', () => {
+    expect(isGoogleApiUrl('https://sheets.googleapis.com/mcp')).toBe(true);
+    expect(isGoogleApiUrl('https://googleapis.com/mcp')).toBe(true);
+    expect(isGoogleApiUrl('https://mcp.google.com./v1')).toBe(true);
+    expect(isGoogleApiUrl('https://evilgoogleapis.com/mcp')).toBe(false);
+    expect(isGoogleApiUrl('https://googleapis.com.attacker.example/mcp')).toBe(false);
+    expect(isGoogleApiUrl('https://attacker.example/?u=https://x.googleapis.com')).toBe(false);
+    expect(isGoogleApiUrl('not a url')).toBe(false);
+  });
+});
+
+describe('custom connectors served from Google', () => {
+  function customDb(url: string) {
+    return database((sql) =>
+      sql.includes('from public.user_custom_connectors') ? [{ short_id: 'abc123', url }] : [],
+    );
+  }
+
+  it('forces a turn where a Google-hosted custom connector is available', async () => {
+    const { db } = customDb('https://bigquery.googleapis.com/mcp');
+    await expect(resolveGoogleUserDataTurn(db, 'user-1', plainTurn)).resolves.toBe('connectors');
+  });
+
+  it('leaves a turn alone when that connector is off for the chat or is not Google-hosted', async () => {
+    const google = customDb('https://bigquery.googleapis.com/mcp');
+    await expect(
+      resolveGoogleUserDataTurn(google.db, 'user-1', {
+        ...plainTurn,
+        disabledConnectorIds: ['custom-abc123'],
+      }),
+    ).resolves.toBeNull();
+    const other = customDb('https://mcp.example.com/mcp');
+    await expect(resolveGoogleUserDataTurn(other.db, 'user-1', plainTurn)).resolves.toBeNull();
+  });
+
+  it('forces research that names a Google-hosted custom connector', async () => {
+    const { db } = customDb('https://bigquery.googleapis.com/mcp');
+    await expect(
+      resolveGoogleUserDataTurn(db, 'user-1', {
+        ...plainTurn,
+        connectorToolsEnabled: false,
+        researchConnectorIds: ['custom-abc123'],
+      }),
+    ).resolves.toBe('connectors');
+  });
+});
+
+describe('stored message evidence', () => {
+  it('reads tool entries, observed offers and tool calls the way the backfill does', () => {
+    expect(
+      storedMessageToolServerIds({
+        tools: [{ connectorId: 'gmail' }, { name: 'mcp__google-drive__search' }],
+        toolInvocations: { observed: true, offered: ['mcp__youtube__search'] },
+        tool_calls: [{ function: { name: 'mcp__custom-abc123__read' } }],
+      }),
+    ).toEqual(['gmail', 'google-drive', 'youtube', 'custom-abc123']);
+    expect(
+      storedMessageToolServerIds({
+        toolInvocations: { observed: false, offered: ['mcp__gmail__search'] },
+      }),
+    ).toEqual([]);
+  });
+
+  it('treats a generic connector trigger as possibly Google', () => {
+    expect(GOOGLE_USER_DATA_TRIGGER_SOURCES.has('connector')).toBe(true);
   });
 });

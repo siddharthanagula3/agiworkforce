@@ -19,7 +19,8 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn() },
 }));
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
     source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
 
@@ -52,7 +53,8 @@ vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
     calculateCostMicrousd: vi.fn(() => 30_000),
   },
 }));
-vi.mock('@/lib/services/provider-adapter-service', () => ({
+vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   buildServerProviderAdapter: vi.fn(),
   toGenericUpstreamError: vi.fn(),
   buildProtocolRouteAdapter: vi.fn(),

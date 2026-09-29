@@ -15,22 +15,30 @@ const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn<() => Promise<Response | null>>(async () => null),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   requireCsrfToken: (...args: unknown[]) => mocks.requireCsrfToken(...(args as [])),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(async () => undefined),
   recordAuditEvent: (...args: unknown[]) => mocks.recordAuditEvent(...(args as [])),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getNeonDb: () => ({ query: vi.fn(), execute: vi.fn() }),
 }));
-vi.mock('@/lib/auth-guards', () => ({
+vi.mock('@/lib/auth-guards', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   requirePlatformAdmin: (...args: unknown[]) => mocks.requirePlatformAdmin(...(args as [])),
 }));
 vi.mock('@/lib/server/support-access-service', async () => {

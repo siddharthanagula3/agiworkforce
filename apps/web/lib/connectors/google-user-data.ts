@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { GMAIL_CONNECTOR_ID } from '@/lib/connectors/gmail-actions';
 import { GOOGLE_DRIVE_CONNECTOR_ID } from '@/lib/connectors/google-drive-files';
+import { customServerId, orgSharedServerId } from '@/lib/connectors/custom-server-ids';
 import { directoryServerId } from '@/lib/connectors/mcp-directory-targets';
 import { logger } from '@/lib/logger';
 import { CONNECTOR_RECONNECT_TOOL_NAME, parseQualifiedToolName } from '@/lib/mcp-tool-executor';
@@ -31,20 +32,24 @@ const GOOGLE_USER_DATA_CONNECTOR_ID_SET: ReadonlySet<string> = new Set([
   ...GOOGLE_USER_DATA_CONNECTOR_IDS.map(directoryServerId),
 ]);
 
-const GOOGLE_API_HOST_SUFFIXES = ['.googleapis.com', '.google.com', '.youtube.com'];
+const GOOGLE_API_DOMAINS = ['googleapis.com', 'google.com', 'youtube.com'];
 
 export function isGoogleApiUrl(url: string): boolean {
+  let host: string;
   try {
-    const host = new URL(url).hostname.toLowerCase();
-    return GOOGLE_API_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+    host = new URL(url).hostname.toLowerCase().replace(/\.$/, '');
   } catch {
     return false;
   }
+  return GOOGLE_API_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
+// A generic `connector` trigger is an external webhook that records no
+// connector id, so what it relays cannot be told apart from Google data.
 export const GOOGLE_USER_DATA_TRIGGER_SOURCES: ReadonlySet<string> = new Set([
   'gmail',
   'google_calendar',
+  'connector',
 ]);
 
 export const GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE =
@@ -58,6 +63,9 @@ export const GOOGLE_USER_DATA_NO_MODEL_MESSAGE =
 
 export const GOOGLE_USER_DATA_MEMORY_REFUSAL =
   'Not saved. This chat includes data from your Google account, and Memory does not keep facts drawn from Google data.';
+
+export const GOOGLE_USER_DATA_UNROUTED_MESSAGE =
+  'This Google connector did not run because this run is not limited to models that keep Google data out of training.';
 
 export const GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE =
   'This Google connector did not run because the chat could not be marked as holding Google data. Try again.';
@@ -194,8 +202,46 @@ export async function conversationHoldsGoogleUserData(
   }
 }
 
+export async function googleHostedCustomServerIds(
+  db: GoogleUserDataDb,
+  userId: string,
+  organizationId: string | null,
+): Promise<string[] | null> {
+  try {
+    const [own, published] = await Promise.all([
+      db.query<{ short_id: string; url: string }>(
+        `select short_id, url from public.user_custom_connectors where user_id = $1`,
+        [userId],
+      ),
+      organizationId
+        ? db.query<{ short_id: string; url: string }>(
+            `select short_id, url
+               from public.organization_mcp_servers
+              where organization_id = $1::uuid
+                and published
+                and retired_at is null`,
+            [organizationId],
+          )
+        : Promise.resolve([]),
+    ]);
+    return [
+      ...own.filter((row) => isGoogleApiUrl(row.url)).map((row) => customServerId(row.short_id)),
+      ...published
+        .filter((row) => isGoogleApiUrl(row.url))
+        .map((row) => orgSharedServerId(row.short_id)),
+    ];
+  } catch (error) {
+    logger.warn(
+      { error, userId },
+      'Custom connector hosts unreadable; treating a Google-hosted one as available',
+    );
+    return null;
+  }
+}
+
 export interface GoogleUserDataTurnInput {
   conversationId: string | null | undefined;
+  organizationId?: string | null;
   messages: readonly unknown[];
   connectorToolsEnabled: boolean;
   disabledConnectorIds: readonly string[] | undefined;
@@ -223,11 +269,14 @@ export async function resolveGoogleUserDataTurn(
   ) {
     return 'conversation';
   }
-  if (input.researchConnectorIds?.some(isGoogleUserDataConnector)) return 'connectors';
-  if (input.contextConnectorIds?.some(isGoogleUserDataConnector)) return 'connectors';
+  const named = [...(input.researchConnectorIds ?? []), ...(input.contextConnectorIds ?? [])];
+  if (named.some(isGoogleUserDataConnector)) return 'connectors';
+  if (!input.connectorToolsEnabled && named.length === 0) return null;
+  const hosted = await googleHostedCustomServerIds(db, userId, input.organizationId ?? null);
+  if (hosted === null || named.some((id) => hosted.includes(id))) return 'connectors';
   if (!input.connectorToolsEnabled) return null;
   const disabled = new Set(input.disabledConnectorIds ?? []);
-  const connected = await connectedGoogleUserDataConnectorIds(db, userId);
+  const connected = [...(await connectedGoogleUserDataConnectorIds(db, userId)), ...hosted];
   return connected.some((connectorId) => !disabled.has(connectorId)) ? 'connectors' : null;
 }
 
@@ -273,4 +322,102 @@ export function mcpContextConnectorIds(selection: {
     ...(selection.prompt ? [selection.prompt.connectorId] : []),
     ...(selection.resources ?? []).map((resource) => resource.connectorId),
   ];
+}
+
+export async function connectorIdsReadGoogleUserData(
+  db: GoogleUserDataDb,
+  userId: string,
+  organizationId: string | null,
+  connectorIds: readonly string[],
+): Promise<boolean> {
+  if (connectorIds.length === 0) return false;
+  if (connectorIds.some(isGoogleUserDataConnector)) return true;
+  const hosted = await googleHostedCustomServerIds(db, userId, organizationId);
+  return hosted === null || connectorIds.some((id) => hosted.includes(id));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function serverIdOfToolName(name: unknown): string[] {
+  if (typeof name !== 'string') return [];
+  const parsed = parseQualifiedToolName(name);
+  return parsed ? [parsed.serverId] : [];
+}
+
+/**
+ * The connector servers a stored message says it called, read with the same
+ * evidence rules as the 0344 backfill: `metadata.tools` entries by connector id
+ * or tool name, `toolInvocations.offered` when a tool was observed to run, and
+ * any `tool_calls` the message carries.
+ */
+export function storedMessageToolServerIds(metadata: unknown): string[] {
+  const record = asRecord(metadata);
+  if (!record) return [];
+  const ids: string[] = [];
+  for (const entry of Array.isArray(record['tools']) ? record['tools'] : []) {
+    const tool = asRecord(entry);
+    if (!tool) continue;
+    if (typeof tool['connectorId'] === 'string') ids.push(tool['connectorId']);
+    ids.push(...serverIdOfToolName(tool['name']));
+  }
+  const invocations = asRecord(record['toolInvocations']);
+  if (invocations?.['observed'] === true && Array.isArray(invocations['offered'])) {
+    for (const name of invocations['offered']) ids.push(...serverIdOfToolName(name));
+  }
+  for (const key of ['tool_calls', 'toolCalls']) {
+    for (const entry of Array.isArray(record[key]) ? record[key] : []) {
+      const call = asRecord(entry);
+      ids.push(...serverIdOfToolName(asRecord(call?.['function'])?.['name'] ?? call?.['name']));
+    }
+  }
+  return ids;
+}
+
+/**
+ * Marks every conversation a synced or imported batch shows a Google connector
+ * ran in. A custom or workspace server counts when its host is Google's, and
+ * when the hosts cannot be read.
+ */
+export async function markSyncedConversationsGoogleUserData(
+  db: GoogleUserDataDb,
+  userId: string,
+  organizationId: string | null,
+  messages: ReadonlyArray<{ conversationId: string; metadata?: unknown }>,
+): Promise<void> {
+  const byConversation = new Map<string, string[]>();
+  for (const message of messages) {
+    const ids = storedMessageToolServerIds(message.metadata);
+    if (ids.length > 0) {
+      byConversation.set(message.conversationId, [
+        ...(byConversation.get(message.conversationId) ?? []),
+        ...ids,
+      ]);
+    }
+  }
+  let hosted: Promise<string[] | null> | null = null;
+  const marked: string[] = [];
+  for (const [conversationId, ids] of byConversation) {
+    if (ids.some(isGoogleUserDataConnector)) {
+      marked.push(conversationId);
+      continue;
+    }
+    hosted ??= googleHostedCustomServerIds(db, userId, organizationId);
+    const hostedIds = await hosted;
+    if (hostedIds === null || ids.some((id) => hostedIds.includes(id))) {
+      marked.push(conversationId);
+    }
+  }
+  if (marked.length === 0) return;
+  await db.query(
+    `update public.web_conversations
+        set google_user_data_at = now()
+      where id = any($1::uuid[])
+        and user_id = $2
+        and google_user_data_at is null`,
+    [marked, userId],
+  );
 }
