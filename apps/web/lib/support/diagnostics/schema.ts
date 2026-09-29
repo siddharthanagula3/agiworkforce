@@ -1,5 +1,5 @@
 import { redactSecrets } from '@/lib/redaction';
-import { redactSecrets as redactLeakPatterns } from '@/lib/support/handoff/transcript';
+import { redactTranscriptText as redactLeakPatterns } from '@/lib/support/handoff/transcript';
 import {
   MAX_DIAGNOSTIC_EVENTS,
   MAX_DIAGNOSTIC_MESSAGE_CHARS,

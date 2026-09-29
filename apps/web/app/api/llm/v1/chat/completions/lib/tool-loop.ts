@@ -92,7 +92,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
-import { redactSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
+import { redactAuditedSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
 import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { getRoutePricing } from '@agiworkforce/model-registry';
@@ -2996,7 +2996,7 @@ export async function applyToolResultSecretPolicy(
   let nextContent = content;
   if (action === 'redacted') {
     const highConfidenceNames = new Set(highConfidence.map((detection) => detection.name));
-    nextContent = redactSecrets(content, highConfidenceNames);
+    nextContent = redactAuditedSecrets(content, highConfidenceNames);
   } else if (action === 'blocked') {
     nextContent = toolResultSecretBlockedMessage(toolName);
   }
@@ -4038,7 +4038,9 @@ export async function* runToolLoop(
     processed.chatSurface === 'web' &&
     searchRequired &&
     getModelMetadataById(processed.requestedModel)?.webSearchToolOfferPolicy === 'required_only';
-  const serverOwnedSearchQuery = redactSecrets(lastUserTurnText(processed.chatRequest?.messages))
+  const serverOwnedSearchQuery = redactAuditedSecrets(
+    lastUserTurnText(processed.chatRequest?.messages),
+  )
     .slice(0, WEB_SEARCH_MAX_QUERY_LENGTH)
     .trim();
   let searchObserved = false;

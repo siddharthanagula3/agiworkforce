@@ -204,6 +204,7 @@
       "./reasoning": "universal",
       "./remote-control": "server",
       "./retry-policy": "universal",
+      "./secret-redaction": "universal",
       "./signaling": "universal",
       "./source-url": "universal",
       "./uuidv7": "universal",
