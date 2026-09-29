@@ -151,6 +151,7 @@
     "capability-handshake",
     "chat-attachment-truncation",
     "chat-attachments",
+    "chat-code-runs",
     "client-handshake",
     "client-request",
     "cloud-agent-runs",
