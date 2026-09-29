@@ -67,6 +67,8 @@ test('reads every kind of Google evidence the product records', () => {
     /'mcpContext' -> 'resources'/,
     /external_resource_references/,
     /research_reports/,
+    /user_custom_connectors cc/,
+    /\(googleapis\|google\|youtube\)/,
   ]) {
     assert.match(APPLY_SQL, evidence);
   }

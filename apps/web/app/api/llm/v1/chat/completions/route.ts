@@ -593,6 +593,8 @@ async function dispatchChatCompletions(
             userId,
             organizationId: processed.organizationId ?? null,
             query: extractUserQuery(processed.llmRequest.messages),
+            conversationId: processed.conversationId ?? null,
+            googleUserDataRouted: processed.googleUserData === true,
           })
         : [];
 

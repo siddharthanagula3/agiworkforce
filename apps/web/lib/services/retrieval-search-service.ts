@@ -26,6 +26,10 @@ import {
 import { DEFAULT_DATA_REGION, normaliseDataRegion } from '@agiworkforce/compliance';
 
 import { retrievalQueryMayCarryGoogleUserData } from '@/lib/connectors/google-user-data-runs';
+import {
+  googleUserDataConnectorRefs,
+  retrievalDocumentGoogleUserDataSql,
+} from '@/lib/connectors/google-user-data';
 import { logger } from '@/lib/logger';
 import { readOrganizationRegion } from '@/lib/server/data-region';
 import {
@@ -54,6 +58,12 @@ export interface RetrievalSearchScope {
   residency?: SearchResidencyState;
   healthSpaceProjectId?: string | null;
   includeHealthSpaces?: boolean;
+  /**
+   * Whether documents holding Google user data are searched. They are left out
+   * unless the caller serves results only to models that keep inputs out of
+   * training, or only to the account itself.
+   */
+  googleUserData?: 'exclude' | 'include';
 }
 
 const PRIVATE_INDEX_MODES = searchModesByCorpus('private_index');
@@ -72,6 +82,7 @@ interface CandidateRow {
   indexed_at: string | null;
   lexical_rank: string | number | null;
   semantic_rank: string | number | null;
+  google_user_data: boolean | null;
 }
 
 export function buildTsQuery(text: string, match: SearchRequest['match']): string | null {
@@ -183,7 +194,16 @@ function candidateSql(options: {
   lexicalParam: number | null;
   semanticParam: number | null;
   healthSpaceParam: number | null;
+  googleRefsParam: number;
+  excludeGoogleUserData: boolean;
 }): string {
+  const googleUserData = retrievalDocumentGoogleUserDataSql({
+    document: 'd',
+    artifact: 'artifact',
+    report: 'report',
+    asset: 'asset',
+    connectorRefsParam: options.googleRefsParam,
+  });
   const scope = `c.user_id = $1
          and c.organization_id is not distinct from $2::uuid
          and c.source_kind = any($3::text[])
@@ -231,7 +251,8 @@ function candidateSql(options: {
            c.title, c.content, c.start_offset, c.end_offset, c.metadata, c.chunk_version,
            d.indexed_at::text as indexed_at,
            ${options.lexicalParam !== null ? 'l.rank' : 'null'} as lexical_rank,
-           ${options.semanticParam !== null ? 's.rank' : 'null'} as semantic_rank
+           ${options.semanticParam !== null ? 's.rank' : 'null'} as semantic_rank,
+           ${googleUserData} as google_user_data
       from retrieval_chunks c
       join retrieval_documents d on d.id = c.document_id
       left join web_artifacts artifact on artifact.id = d.artifact_id
@@ -251,7 +272,9 @@ function candidateSql(options: {
        and origin.deleted_at is null
        and coalesce(origin.is_temporary, false) = false
        and asset.deleted_at is null
-       and coalesce(asset.temporary_chat, false) = false`;
+       and coalesce(asset.temporary_chat, false) = false${
+         options.excludeGoogleUserData ? `\n       and not ${googleUserData}` : ''
+       }`;
 }
 
 function healthSpaceDocuments(param: number): string {
@@ -285,9 +308,11 @@ export interface IndexedSourceText {
   title: string;
   text: string;
   truncated: boolean;
+  googleUserData: boolean;
 }
 
 interface IndexedSourceChunkRow {
+  google_user_data: boolean | null;
   source_kind: string;
   title: string;
   content: string;
@@ -315,6 +340,13 @@ export async function readIndexedSourceText(
       `with ${healthSpaceDocuments(5)},
       ordered as (
         select c.chunk_index, c.source_kind, c.title, c.content, c.start_offset, c.end_offset,
+               ${retrievalDocumentGoogleUserDataSql({
+                 document: 'd',
+                 artifact: 'artifact',
+                 report: 'report',
+                 asset: 'asset',
+                 connectorRefsParam: 7,
+               })} as google_user_data,
                coalesce(sum(char_length(c.content)) over (
                  order by c.chunk_index rows between unbounded preceding and 1 preceding
                ), 0) as chars_before,
@@ -343,7 +375,7 @@ export async function readIndexedSourceText(
                max(coalesce(end_offset, chars_before + chars)) over () as document_end
           from ordered
       )
-      select source_kind, title, content, start_offset, end_offset, document_end
+      select google_user_data, source_kind, title, content, start_offset, end_offset, document_end
         from positioned
        where position <= $6
        order by chunk_index`,
@@ -354,6 +386,7 @@ export async function readIndexedSourceText(
         request.sourceId,
         scope.healthSpaceProjectId ?? null,
         request.maxChars,
+        googleUserDataConnectorRefs(),
       ],
     );
   } catch (error) {
@@ -382,6 +415,7 @@ export async function readIndexedSourceText(
     title: first.title,
     text: truncated ? text.slice(0, request.maxChars) : text,
     truncated,
+    googleUserData: rows.some((row) => row.google_user_data !== false),
   };
 }
 
@@ -430,7 +464,14 @@ export function createPostgresSearchProvider(scope: RetrievalSearchScope): Searc
         const healthSpaceParam = scope.includeHealthSpaces
           ? null
           : params.push(scope.healthSpaceProjectId ?? null);
-        const sql = candidateSql({ lexicalParam, semanticParam, healthSpaceParam });
+        const googleRefsParam = params.push(googleUserDataConnectorRefs());
+        const sql = candidateSql({
+          lexicalParam,
+          semanticParam,
+          healthSpaceParam,
+          googleRefsParam,
+          excludeGoogleUserData: scope.googleUserData !== 'include',
+        });
         rows = await scope.db.query<CandidateRow>(sql, params);
         if (semanticParam !== null) {
           recordVectorQuery({
@@ -455,7 +496,10 @@ export function createPostgresSearchProvider(scope: RetrievalSearchScope): Searc
           text: row.content,
           start: row.start_offset,
           end: row.end_offset,
-          metadata: row.metadata ?? {},
+          metadata:
+            row.google_user_data === true
+              ? { ...(row.metadata ?? {}), googleUserData: true }
+              : (row.metadata ?? {}),
           chunkVersion: row.chunk_version,
           indexedAt: row.indexed_at,
           lexicalRank: toRank(row.lexical_rank),

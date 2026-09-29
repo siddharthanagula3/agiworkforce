@@ -63,6 +63,17 @@ function arrayAt(path) {
 
 const SERVER_OF = (expression) => `substring(${expression} from '^mcp__([^_][^_]*)__')`;
 
+// A user's own MCP server whose URL host is a Google domain, reached as
+// 'custom-<short_id>'.
+const GOOGLE_HOSTED_CUSTOM = (serverId) => `exists (
+  select 1
+    from public.user_custom_connectors cc
+   where cc.user_id = c.user_id
+     and ${serverId} = 'custom-' || cc.short_id
+     and lower(substring(cc.url from '^[a-z]+://(?:[^/@]*@)?([^/:?#]+)'))
+         ~ '(^|\\.)(googleapis|google|youtube)\\.com\\.?$'
+)`;
+
 // $3 is the id array, $4 the mention pattern.
 const EVIDENCE = `(
   exists (
@@ -74,6 +85,7 @@ const EVIDENCE = `(
            select 1 from jsonb_array_elements(${arrayAt("m.metadata -> 'tools'")}) as tool(entry)
             where tool.entry ->> 'connectorId' = any ($3::text[])
                or ${SERVER_OF("tool.entry ->> 'name'")} = any ($3::text[])
+               or ${GOOGLE_HOSTED_CUSTOM(SERVER_OF("tool.entry ->> 'name'"))}
          )
          or (
            (m.metadata -> 'toolInvocations' ->> 'observed') = 'true'
@@ -81,6 +93,7 @@ const EVIDENCE = `(
              select 1
                from jsonb_array_elements_text(${arrayAt("m.metadata -> 'toolInvocations' -> 'offered'")}) as offered(name)
               where ${SERVER_OF('offered.name')} = any ($3::text[])
+                 or ${GOOGLE_HOSTED_CUSTOM(SERVER_OF('offered.name'))}
            )
          )
          or m.metadata -> 'mcpContext' -> 'prompt' ->> 'connectorId' = any ($3::text[])

@@ -1,5 +1,9 @@
 import 'server-only';
 
+import {
+  GOOGLE_USER_DATA_FILE_HELD_MESSAGE,
+  markConversationGoogleUserData,
+} from '@/lib/connectors/google-user-data';
 import { z } from 'zod';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
@@ -89,6 +93,15 @@ export interface FileSearchToolContext {
   organizationId: string | null;
   temporaryChat: boolean;
   healthSpaceProjectId?: string | null;
+  conversationId?: string | null;
+  /** The turn is served only by models that keep inputs out of training. */
+  googleUserDataRouted?: boolean;
+}
+
+async function markChatGoogleUserData(context: FileSearchToolContext): Promise<void> {
+  if (context.conversationId) {
+    await markConversationGoogleUserData(context.db, context.userId, context.conversationId);
+  }
 }
 
 const QueryArgs = z.object({ query: z.string().trim().min(1).max(MAX_QUERY_CHARS) });
@@ -127,6 +140,7 @@ export async function executeFileSearchTool(
     semantic: true,
     residency,
     healthSpaceProjectId: context.healthSpaceProjectId ?? null,
+    googleUserData: context.googleUserDataRouted === true ? 'include' : 'exclude',
   }).search({
     text: parsed.data.query,
     kinds: FILE_SOURCE_KINDS,
@@ -141,6 +155,9 @@ export async function executeFileSearchTool(
       content: `No passage in the user's files matched "${parsed.data.query}".`,
       isError: false,
     };
+  }
+  if (hits.some((hit) => hit.metadata['googleUserData'] === true)) {
+    await markChatGoogleUserData(context);
   }
 
   const excerpts = hits
@@ -202,6 +219,12 @@ export async function executeOpenFileTool(
       content: `No file of the user's with id ${parsed.data.file_id} can be read. Search again for its current id.`,
       isError: true,
     };
+  }
+  if (source.googleUserData) {
+    await markChatGoogleUserData(context);
+    if (context.googleUserDataRouted !== true) {
+      return { content: GOOGLE_USER_DATA_FILE_HELD_MESSAGE, isError: true };
+    }
   }
 
   const header = `${source.title} (${source.sourceKind === 'project_knowledge' ? 'project file' : 'library file'})`;
