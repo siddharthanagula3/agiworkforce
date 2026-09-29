@@ -14,6 +14,7 @@ import { api, ApiPaywallError } from '@/services/api';
 import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
 import { buildAttachedDocumentContext } from '@/services/attachmentContext';
+import { getThermalState, recordPerfEvent } from '@/services/performanceMonitor';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import { imageLimitRefusal } from '@/src/features/chat/utils/attachmentValidation';
 import {
@@ -2010,6 +2011,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           }));
         };
 
+        const localStartedAt = Date.now();
         const result = await localGenerate(localRef.modelPath, {
           modelId: localRef.modelId,
           prompt: messageContent,
@@ -2048,6 +2050,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           decodeMs > 0 && localTokenCount > 1
             ? Math.round((localTokenCount / decodeMs) * 1000 * 10) / 10
             : undefined;
+        if (tokensPerSecond !== undefined) {
+          recordPerfEvent({
+            ts: Date.now(),
+            tokensPerSecond,
+            firstTokenLatencyMs: localFirstTokenAt - localStartedAt,
+            peakMemoryMB: 0,
+            backend: result.runtime,
+            thermalState: getThermalState(),
+          });
+        }
 
         const currentMsgStore = getConversationMessageStore(conversationId);
         const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
