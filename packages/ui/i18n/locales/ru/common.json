@@ -212,7 +212,15 @@
     "unsentMessages_few": "У вас {{count}} неотправленных сообщения.",
     "unsentMessages_many": "У вас {{count}} неотправленных сообщений.",
     "unsentMessages_one": "У вас есть одно неотправленное сообщение.",
-    "unsentMessages_other": "У вас {{count}} неотправленных сообщения."
+    "unsentMessages_other": "У вас {{count}} неотправленных сообщения.",
+    "packages_one": "{{count}} пакет",
+    "packages_few": "{{count}} пакета",
+    "packages_many": "{{count}} пакетов",
+    "packages_other": "{{count}} пакета",
+    "unreadNotifications_one": "{{count}} непрочитанное уведомление",
+    "unreadNotifications_few": "{{count}} непрочитанных уведомления",
+    "unreadNotifications_many": "{{count}} непрочитанных уведомлений",
+    "unreadNotifications_other": "{{count}} непрочитанного уведомления"
   },
   "relative": {
     "minutesAgo_one": "{{count}} минуту назад",

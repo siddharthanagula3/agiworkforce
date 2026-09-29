@@ -9,6 +9,7 @@ import {
   groupOssPackages,
   type OssLicenseGroup,
 } from '@/src/features/legal';
+import { translatePlural } from '@/src/i18n/plural';
 
 const MONOSPACE = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
 
@@ -70,7 +71,10 @@ export default function LicensesScreen() {
               {group.licenses.join(' · ')}
             </Text>
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-              {group.packages.length} package{group.packages.length === 1 ? '' : 's'}
+              {translatePlural('common', 'counts.packages', group.packages.length, {
+                one: '{{count}} package',
+                other: '{{count}} packages',
+              })}
             </Text>
           </View>
 

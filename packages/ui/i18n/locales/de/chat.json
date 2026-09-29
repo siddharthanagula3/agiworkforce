@@ -449,7 +449,13 @@
     "savedMemoriesUsed_one": "{{count}} gespeicherte Erinnerung verwendet",
     "savedMemoriesUsed_other": "{{count}} gespeicherte Erinnerungen verwendet",
     "moreSavedMemories_one": "Und {{count}} weitere",
-    "moreSavedMemories_other": "Und {{count}} weitere"
+    "moreSavedMemories_other": "Und {{count}} weitere",
+    "filesCreated_one": "{{count}} Datei erstellt",
+    "filesCreated_other": "{{count}} Dateien erstellt",
+    "foundSources_one": "{{count}} Quelle gefunden",
+    "foundSources_other": "{{count}} Quellen gefunden",
+    "mapPreviewPlaces_one": "Kartenvorschau mit {{count}} Ort",
+    "mapPreviewPlaces_other": "Kartenvorschau mit {{count}} Orten"
   },
   "markdownTable": {
     "label": "Tabelle",
