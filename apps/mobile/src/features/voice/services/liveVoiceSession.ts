@@ -16,6 +16,7 @@ import {
   type LiveVoiceToolCallResponse,
   type LiveVoiceToolDecision,
 } from '@agiworkforce/cloud-contracts';
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { apiFetch } from '@/services/api';
 import { LIVE_VOICE_MESSAGE, liveVoiceUnavailableReason } from './liveVoiceAvailability';
@@ -60,7 +61,7 @@ export interface LiveVoiceToolDescriptor {
   requiresApproval: boolean;
 }
 
-export type LiveVoiceToolState = 'running' | 'timed_out';
+export type LiveVoiceToolState = Extract<LifecycleStatus, 'running'> | 'timed_out';
 
 export interface LiveVoiceToolActivity {
   delegationId: string;
