@@ -6,30 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S4.03: Conversation search.
-
-- Done when: A search destination where the user types a keyword, gets past conversations matching titles or message text, and opens one.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The Sessions History quick pick filters only session titles, model and folder; message text is not searched, so add content search. | handler |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1278`
-
 ## S4.04: Archived conversations.
 
 - Done when: A destination lists the user's archived conversations and lets them open, restore or delete them.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | partials/chat-gates af8d8f52c1: the sidebar session list now leaves archived chats out, as the tree already did. Still nothing lists or restores archived sessions in VS Code (VS Code phase). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1959-1959`
 
 ## S4.05: Pinned conversations.
 
