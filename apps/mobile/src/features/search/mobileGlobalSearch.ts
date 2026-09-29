@@ -128,6 +128,24 @@ export function buildMobileGlobalSearchGroups(input: {
   };
 }
 
+export function recentMobileFiles(
+  conversations: ReadonlyArray<ConversationSummary>,
+  messagesByConversation: Readonly<Record<string, ReadonlyArray<ChatMessage>>>,
+): SearchableMobileFile[] {
+  const addedAt = new Map<string, number>();
+  for (const conversation of conversations) {
+    for (const message of messagesByConversation[conversation.id] ?? []) {
+      const time = Date.parse(message.createdAt);
+      for (const index of (message.attachments ?? []).keys()) {
+        addedAt.set(`${message.id}:${index}`, Number.isNaN(time) ? 0 : time);
+      }
+    }
+  }
+  return collectSearchableMobileFiles(conversations, messagesByConversation).sort(
+    (a, b) => (addedAt.get(b.id) ?? 0) - (addedAt.get(a.id) ?? 0),
+  );
+}
+
 export function collectSearchableMobileFiles(
   conversations: ReadonlyArray<ConversationSummary>,
   messagesByConversation: Readonly<Record<string, ReadonlyArray<ChatMessage>>>,
