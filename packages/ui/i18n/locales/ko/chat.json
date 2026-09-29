@@ -75,6 +75,11 @@
     "runtimeConsentConnectors": "이 앱이 내 계정으로 AI를 사용하고 {{apps}}의 데이터를 읽거나 변경하려고 합니다. 앱은 해당 앱이 반환하는 내용을 볼 수 있으며, 각 요청은 요금제 사용량에 포함됩니다.",
     "runtimeAllow": "허용",
     "runtimeDecline": "허용 안 함",
+    "runtimeConnectorsLoading": "연결된 앱을 확인하는 중",
+    "runtimeConnectorNotConnected": "연결되지 않았습니다. 이 앱의 이 부분을 사용하려면 설정의 커넥터에서 연결하세요.",
+    "runtimeToolNeedsApproval": "사용할 때마다 확인을 요청하므로 이 앱에서는 사용할 수 없습니다.",
+    "runtimeToolBlocked": "설정에서 차단되었습니다.",
+    "runtimeManageConnectors": "연결된 앱",
     "saveCopy": "내 채팅에 사본 저장",
     "saveCopyBusy": "복사 중…",
     "saveCopyFailed": "이 아티팩트를 복사할 수 없습니다."
