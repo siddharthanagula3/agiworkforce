@@ -109,6 +109,8 @@ export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalC
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [revision, setRevision] = useState(0);
   const { confirm, dialog } = useConfirmAction();
 
   const load = useCallback(async () => {
@@ -122,6 +124,7 @@ export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalC
       setError(toUserMessage(cause, LOCAL_CODE_COPY.changesFailed));
     } finally {
       setLoading(false);
+      setRevision((count) => count + 1);
     }
   }, [rootId]);
 
@@ -147,6 +150,23 @@ export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalC
         }
       },
     });
+  };
+
+  const leaveEditor = (proceed: () => void) => {
+    if (editing === null || !editorDirty) {
+      proceed();
+      return;
+    }
+    confirm({
+      title: LOCAL_CODE_COPY.discardEditsTitle,
+      description: LOCAL_CODE_COPY.discardEditsDescription(editing),
+      confirmLabel: LOCAL_CODE_COPY.discardFileEdits,
+      onConfirm: proceed,
+    });
+  };
+
+  const openEditor = (path: string) => {
+    if (path !== editing) leaveEditor(() => setEditing(path));
   };
 
   const diffs = diffByPath(changes?.diff ?? '');
@@ -175,7 +195,7 @@ export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalC
             type="button"
             className={styles['headerButton']}
             aria-label={CODE_COPY.closeChanges}
-            onClick={onClose}
+            onClick={() => leaveEditor(onClose)}
           >
             <X size={GLYPH_SIZE} aria-hidden="true" />
           </button>
@@ -205,20 +225,19 @@ export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalC
 
         {changes !== null && changes.files.length > 0 && (
           <div className={styles['fileList']}>
-            {changes.files.map((change) => (
-              <LocalChangedFile
-                key={change.path}
-                change={change}
-                body={diffs.get(change.path)}
-                busy={busy}
-                onEdit={
-                  change.state !== 'deleted' && folderPath(change.path) !== null
-                    ? () => setEditing(folderPath(change.path))
-                    : null
-                }
-                onDiscard={() => discard(change.path)}
-              />
-            ))}
+            {changes.files.map((change) => {
+              const editable = change.state === 'deleted' ? null : folderPath(change.path);
+              return (
+                <LocalChangedFile
+                  key={change.path}
+                  change={change}
+                  body={diffs.get(change.path)}
+                  busy={busy}
+                  onEdit={editable === null ? null : () => openEditor(editable)}
+                  onDiscard={() => discard(change.path)}
+                />
+              );
+            })}
           </div>
         )}
 
@@ -226,6 +245,8 @@ export function LocalChangesPanel({ rootId, title, refreshKey, onClose }: LocalC
           <LocalFileEditor
             rootId={rootId}
             path={editing}
+            refreshKey={revision}
+            onDirtyChange={setEditorDirty}
             onSaved={() => void load()}
             onClose={() => setEditing(null)}
           />
