@@ -7,6 +7,7 @@ import {
   Alert,
   Platform,
   TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -1009,65 +1010,70 @@ export function ArtifactFullScreen({
         animationType="slide"
         onRequestClose={() => setEditDraft(null)}
       >
-        <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top + 8 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 12,
-              paddingBottom: 8,
-              gap: 8,
-            }}
-          >
-            <Pressable
-              onPress={() => setEditDraft(null)}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel editing"
-              style={{ padding: 8 }}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top + 8 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 12,
+                paddingBottom: 8,
+                gap: 8,
+              }}
             >
-              <Text style={{ fontSize: 15, color: colors.textSecondary }}>Cancel</Text>
-            </Pressable>
-            <Text
-              style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
-              numberOfLines={1}
-            >
-              {artifact.title}
-            </Text>
-            <Pressable
-              onPress={handleSaveEdit}
-              accessibilityRole="button"
-              accessibilityLabel="Save as a new version"
-              style={{ padding: 8 }}
-            >
-              <Text style={{ fontSize: 15, fontWeight: '600', color: colors.teal }}>Save</Text>
-            </Pressable>
+              <Pressable
+                onPress={() => setEditDraft(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel editing"
+                style={{ padding: 8 }}
+              >
+                <Text style={{ fontSize: 15, color: colors.textSecondary }}>Cancel</Text>
+              </Pressable>
+              <Text
+                style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
+                numberOfLines={1}
+              >
+                {artifact.title}
+              </Text>
+              <Pressable
+                onPress={handleSaveEdit}
+                accessibilityRole="button"
+                accessibilityLabel="Save as a new version"
+                style={{ padding: 8 }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.teal }}>Save</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              value={editDraft ?? ''}
+              onChangeText={setEditDraft}
+              multiline
+              autoCapitalize="none"
+              autoCorrect={false}
+              textAlignVertical="top"
+              accessibilityLabel="Artifact source"
+              style={{
+                flex: 1,
+                margin: 12,
+                padding: 12,
+                fontSize: 13,
+                lineHeight: 20,
+                color: colors.textPrimary,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 8,
+                fontFamily: Platform.select({
+                  ios: 'Menlo',
+                  android: 'monospace',
+                  default: 'monospace',
+                }),
+              }}
+            />
           </View>
-          <TextInput
-            value={editDraft ?? ''}
-            onChangeText={setEditDraft}
-            multiline
-            autoCapitalize="none"
-            autoCorrect={false}
-            textAlignVertical="top"
-            accessibilityLabel="Artifact source"
-            style={{
-              flex: 1,
-              margin: 12,
-              padding: 12,
-              fontSize: 13,
-              lineHeight: 20,
-              color: colors.textPrimary,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 8,
-              fontFamily: Platform.select({
-                ios: 'Menlo',
-                android: 'monospace',
-                default: 'monospace',
-              }),
-            }}
-          />
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
       <ArtifactExportSheet
         artifact={artifact}
