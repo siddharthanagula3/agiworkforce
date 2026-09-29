@@ -331,7 +331,9 @@ describe('managed usage accounting', () => {
       usage: twoSubthresholdCalls,
       reason: 'fixture_two_calls',
     });
-    expect(vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostMicrousd).toBe(7_500);
+    expect(vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostMicrousd).toBe(
+      7_500,
+    );
 
     const oneLongCall = createObservedProviderUsage();
     accumulateObservedProviderUsage(oneLongCall, { inputTokens: 150, outputTokens: 0 }, pricing);
@@ -341,7 +343,9 @@ describe('managed usage accounting', () => {
       usage: oneLongCall,
       reason: 'fixture_one_call',
     });
-    expect(vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostMicrousd).toBe(15_000);
+    expect(vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostMicrousd).toBe(
+      15_000,
+    );
     expect(
       vi
         .mocked(LLMCostCalculator.calculateCostDollars)
@@ -552,5 +556,27 @@ describe('managed usage accounting', () => {
         verifierResult: 'skipped',
       },
     });
+  });
+});
+
+describe('served speed on provider observations', () => {
+  it('prices each call with the speed the provider reported and flags the aggregate', () => {
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(
+      usage,
+      { inputTokens: 100, outputTokens: 20, speed: 'fast' },
+      { provider: 'anthropic', model: ANTHROPIC_MODEL },
+    );
+    accumulateObservedProviderUsage(
+      usage,
+      { inputTokens: 50, outputTokens: 5 },
+      { provider: 'anthropic', model: ANTHROPIC_MODEL },
+    );
+
+    const calls = vi.mocked(LLMCostCalculator.calculateCostDollars).mock.calls;
+    expect(calls.at(-2)?.[2]).toMatchObject({ speed: 'fast' });
+    expect(calls.at(-1)?.[2]).not.toHaveProperty('speed');
+    expect(usage.speed).toBe('fast');
+    expect(usage.providerCallObservations?.[0]?.speed).toBe('fast');
   });
 });

@@ -100,6 +100,7 @@ const ProviderCallObservationSchema = z
     routeId: z.string().min(1).nullable().optional(),
     upstreamProvider: z.string().min(1).optional(),
     providerReportedCostUsd: z.number().finite().nonnegative().optional(),
+    speed: z.enum(['standard', 'fast']).optional(),
   })
   .strict();
 const providerCallObservationSchemaCoversObservation: SameKeys<
@@ -131,6 +132,7 @@ const UsageSchema = z
     toolSpendMicrousd: z.number().nonnegative().optional(),
     providerCostDollars: z.number().finite().nonnegative().optional(),
     providerCallObservations: z.array(ProviderCallObservationSchema).optional(),
+    speed: z.literal('fast').optional(),
   })
   .strict();
 const usageSchemaCoversObservedProviderUsage: SameKeys<

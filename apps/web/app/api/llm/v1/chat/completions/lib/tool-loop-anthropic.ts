@@ -141,6 +141,7 @@ export function chunksToOpenAiSse(
   let usageCommitted = false;
   let upstreamProvider: string | undefined;
   let providerReportedCostUsd: number | undefined;
+  let servedSpeed: 'standard' | 'fast' | undefined;
   const providerTrace: ProviderStreamShape = {
     chunks: 0,
     textChunks: 0,
@@ -174,6 +175,7 @@ export function chunksToOpenAiSse(
         ...streamUsage,
         ...(upstreamProvider ? { upstreamProvider } : {}),
         ...(providerReportedCostUsd !== undefined ? { providerReportedCostUsd } : {}),
+        ...(servedSpeed ? { speed: servedSpeed } : {}),
         codeExecutionContainerIds: [...codeExecutionContainerIds],
         elapsedMs: Date.now() - startedAt,
         dynamicFilteringWebTool: pricing?.dynamicFilteringWebTool === true,
@@ -250,6 +252,7 @@ export function chunksToOpenAiSse(
             if (reportedCost !== undefined) {
               providerReportedCostUsd = reportedCost;
             }
+            if (chunk.speed !== undefined) servedSpeed = chunk.speed;
           }
           const wireEvents = assembler.sseChunks(chunk);
           providerTrace.wireEvents += wireEvents.length;

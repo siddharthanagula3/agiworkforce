@@ -43,6 +43,8 @@ export interface ObservedProviderUsage {
   toolSpendMicrousd?: number;
   providerCostDollars?: number;
   providerCallObservations?: ProviderUsageObservation[];
+  /** Set once any call was served fast, for the aggregate pricing fallback. */
+  speed?: 'fast';
 }
 
 export function createObservedProviderUsage(): ObservedProviderUsage {
@@ -73,6 +75,7 @@ export interface ProviderUsageObservation {
   routeId?: string | null;
   upstreamProvider?: string;
   providerReportedCostUsd?: number;
+  speed?: 'standard' | 'fast';
 }
 
 export interface ServerToolUsageInput {
@@ -186,6 +189,7 @@ function toTokenUsage(observation: ProviderUsageObservation): TokenUsage {
     cacheReadInputTokens: observation.cacheReadTokens,
     cacheCreationInputTokens: observation.cacheWriteTokens,
     cacheCreation1hInputTokens: observation.cacheWrite1hTokens,
+    ...(observation.speed ? { speed: observation.speed } : {}),
   };
 }
 
@@ -217,6 +221,7 @@ function normalizeObservation(
     reasoningTokens: nonNegative(observation.reasoningTokens),
     ...(observation.upstreamProvider ? { upstreamProvider: observation.upstreamProvider } : {}),
     ...(providerReportedCostUsd !== undefined ? { providerReportedCostUsd } : {}),
+    ...(observation.speed ? { speed: observation.speed } : {}),
   };
 }
 
@@ -233,6 +238,7 @@ export function accumulateObservedProviderUsage(
   target.cacheWriteTokens += normalized.cacheWriteTokens;
   target.cacheWrite1hTokens += normalized.cacheWrite1hTokens;
   target.reasoningTokens += normalized.reasoningTokens;
+  if (normalized.speed === 'fast') target.speed = 'fast';
 
   let priced: ProviderUsageObservation = normalized;
   if (pricing) {
@@ -289,6 +295,7 @@ export function mergeObservedProviderUsage(
   target.cacheWriteTokens += source.cacheWriteTokens;
   target.cacheWrite1hTokens += source.cacheWrite1hTokens;
   target.reasoningTokens += source.reasoningTokens;
+  if (source.speed === 'fast') target.speed = 'fast';
   if (source.providerCallObservations?.length) {
     (target.providerCallObservations ??= []).push(
       ...source.providerCallObservations.map((observation) => ({ ...observation })),
@@ -347,6 +354,7 @@ export function calculateObservedProviderUsageCostDollars(
       cacheReadInputTokens: usage.cacheReadTokens,
       cacheCreationInputTokens: usage.cacheWriteTokens,
       cacheCreation1hInputTokens: usage.cacheWrite1hTokens,
+      ...(usage.speed ? { speed: usage.speed } : {}),
     },
     undefined,
     fallbackPricing.routeId,
@@ -400,6 +408,7 @@ export function calculateObservedListCostDollars(
     cacheReadInputTokens: usage.cacheReadTokens,
     cacheCreationInputTokens: usage.cacheWriteTokens,
     cacheCreation1hInputTokens: usage.cacheWrite1hTokens,
+    ...(usage.speed ? { speed: usage.speed } : {}),
   };
   const listCost = LLMCostCalculator.calculateListCost(fallbackPricing.model, aggregateUsage);
   if (listCost !== null) return listCost;

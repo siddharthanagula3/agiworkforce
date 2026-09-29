@@ -1375,6 +1375,7 @@
         "cached_write": 6.25,
         "cached_write_1h": 10
       },
+      "fastTier": { "priceMultiplier": 2 },
       "contextOverride": 1000000,
       "capabilitiesOverride": {
         "streaming": true,
