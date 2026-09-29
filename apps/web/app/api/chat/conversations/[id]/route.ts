@@ -54,6 +54,22 @@ const DELETE_CONVERSATION_SQL = `
   returning id
 `;
 
+const MARK_TEMPORARY_IMAGE_JOBS_SQL = `
+  update public.image_generation_jobs
+     set temporary_chat = true
+   where conversation_id = $1
+     and user_id = $2
+     and not temporary_chat
+`;
+
+const MARK_TEMPORARY_VIDEO_JOBS_SQL = `
+  update public.video_generation_jobs
+     set temporary_chat = true
+   where conversation_id = $1
+     and user_id = $2
+     and not temporary_chat
+`;
+
 const PENDING_REVOCATION_SQL = `
   select c.id
     from web_conversations c
@@ -447,6 +463,15 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       }
     }
     throw createError.notFound('Conversation not found');
+  }
+
+  if (updates['isTemporary'] === true) {
+    try {
+      await db.query(MARK_TEMPORARY_IMAGE_JOBS_SQL, [id, userId]);
+      await db.query(MARK_TEMPORARY_VIDEO_JOBS_SQL, [id, userId]);
+    } catch (error) {
+      logger.error({ error, conversationId: id }, 'Media jobs were not marked temporary');
+    }
   }
 
   const { conversation, version } = withoutVersion(updated);

@@ -25,11 +25,9 @@ const PURGE_BATCH = 500;
 const MAX_BATCHES = 200;
 const PURGE_BUDGET_MS = 240_000;
 const RETENTION_DAYS = 30;
-const SETTLED_IMAGE_JOB = `job.temporary_chat
-  and job.status = any (array['completed', 'failed', 'canceled'])
+const SETTLED_IMAGE_JOB = `job.status = any (array['completed', 'failed', 'canceled'])
   and coalesce(job.billing_settlement_status, 'succeeded') <> 'pending'`;
-const SETTLED_VIDEO_JOB = `job.temporary_chat
-  and job.status = any (array['completed', 'failed'])
+const SETTLED_VIDEO_JOB = `job.status = any (array['completed', 'failed', 'outcome_unknown'])
   and coalesce(job.billing_settlement_status, 'succeeded') <> 'pending'`;
 
 export async function GET(request: NextRequest) {
@@ -112,12 +110,14 @@ export async function GET(request: NextRequest) {
       `with image_jobs as (
          delete from public.image_generation_jobs job
           where job.conversation_id is null
+            and job.temporary_chat
             and job.created_at < now() - make_interval(days => $1)
             and ${SETTLED_IMAGE_JOB}
           returning 1
        ), video_jobs as (
          delete from public.video_generation_jobs job
           where job.conversation_id is null
+            and job.temporary_chat
             and job.created_at < now() - make_interval(days => $1)
             and ${SETTLED_VIDEO_JOB}
           returning 1
