@@ -11,6 +11,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import type { RiskLevel } from '@/types/chat';
+import { translatePlural } from '@/src/i18n/plural';
 
 export type CloudToolApprovalDecision = 'approved' | 'rejected';
 
@@ -104,7 +105,13 @@ function DiffPreview({ diff }: { diff: FileDiff }) {
       ))}
       {hidden > 0 ? (
         <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-          {`${hidden} more line${hidden === 1 ? '' : 's'}`}
+          {translatePlural(
+            'chat',
+            'counts.hiddenLines',
+            hidden,
+            { one: '{{lines}} more line not shown', other: '{{lines}} more lines not shown' },
+            { lines: hidden },
+          )}
         </Text>
       ) : null}
     </View>

@@ -12,6 +12,7 @@ import type {
   MobileArtifactProvenance,
   ScopedMobileArtifact,
 } from './types';
+import { translatePlural } from '@/src/i18n/plural';
 
 const MAX_ARTIFACTS = 200;
 const MAX_VERSIONS_PER_ARTIFACT = 20;
@@ -324,7 +325,12 @@ export function formatAgeLabel(iso: string): string {
   const diffHours = Math.floor(diffMin / 60);
   if (diffHours < 24) return `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+  if (diffDays < 7) {
+    return translatePlural('common', 'relative.daysAgo', diffDays, {
+      one: '{{count}} day ago',
+      other: '{{count}} days ago',
+    });
+  }
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
