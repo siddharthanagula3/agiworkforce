@@ -12,6 +12,7 @@ import { openExternalUrl } from '@/lib/safeOpenURL';
 import { ExternalLink, FileText, EyeOff } from 'lucide-react-native';
 import { View } from 'react-native';
 import { ChineseHqProviderConsentGroup } from './ChineseHqProviderConsentGroup';
+import { ProductAnalyticsConsentGroup } from './ProductAnalyticsConsentGroup';
 import { ProviderTrainingOptOutGroup } from './ProviderTrainingOptOutGroup';
 import { UsOnlyRoutingGroup } from './UsOnlyRoutingGroup';
 
@@ -24,7 +25,7 @@ const PRIVACY_ITEMS = [
   {
     key: 'telemetry',
     label: 'Telemetry off by default',
-    body: 'Product analytics stay off until you allow them in your account privacy choices, and even then carry only event names such as a stopped response, never your messages. No third-party analytics or crash-reporting SDK (such as Sentry or PostHog) is bundled in the app; diagnostics leave the device only when you share them.',
+    body: 'Product analytics stay off until you allow them below, and even then carry only event names such as a stopped response, never your messages. No third-party analytics or crash-reporting SDK (such as Sentry or PostHog) is bundled in the app; diagnostics leave the device only when you share them.',
   },
   {
     key: 'retention',
@@ -186,6 +187,8 @@ export default function CloudPrivacyScreen() {
       <UsOnlyRoutingGroup />
 
       <ChineseHqProviderConsentGroup />
+
+      <ProductAnalyticsConsentGroup />
 
       {/* External links */}
       <SettingsGroup>

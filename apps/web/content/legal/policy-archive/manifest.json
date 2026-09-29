@@ -30,7 +30,7 @@
       "versions": [
         {
           "date": "2026-09-29",
-          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements.",
+          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements. Product analytics now also covers usage events from the AGI apps recorded against your account, so a consent given under an earlier version covers page views only.",
           "status": "current"
         },
         {

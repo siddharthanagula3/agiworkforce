@@ -252,6 +252,14 @@ export function createProductAnalyticsEmitter(
 
 export const PRODUCT_ANALYTICS_CONSENT_PATH = '/api/consent';
 
+export const PRODUCT_ANALYTICS_NOTICE_VERSION = '2026-09-29';
+
+export const PRODUCT_ANALYTICS_CHOICES_PATH = '/settings/privacy';
+
+export function coversProductAnalytics(noticeVersion: unknown): boolean {
+  return typeof noticeVersion === 'string' && noticeVersion >= PRODUCT_ANALYTICS_NOTICE_VERSION;
+}
+
 const ACCOUNT_CONSENT_TTL_MS = 10 * 60_000;
 const ACCOUNT_FLUSH_DELAY_MS = 5_000;
 
@@ -264,7 +272,8 @@ export function readProductAnalyticsConsent(body: unknown): boolean {
       typeof record === 'object' &&
       record !== null &&
       (record as { purpose?: unknown }).purpose === PRODUCT_ANALYTICS_CONSENT_PURPOSE &&
-      (record as { granted?: unknown }).granted === true,
+      (record as { granted?: unknown }).granted === true &&
+      coversProductAnalytics((record as { noticeVersion?: unknown }).noticeVersion),
   );
 }
 

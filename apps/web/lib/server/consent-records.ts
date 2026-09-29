@@ -154,3 +154,19 @@ export async function hasConsent(userId: string, purpose: string): Promise<boole
   );
   return rows[0]?.granted === true;
 }
+
+export async function readLatestConsent(
+  userId: string,
+  purpose: string,
+): Promise<ConsentRecord | null> {
+  if (!isConsentPurpose(purpose)) return null;
+  const rows = await getNeonDb().query<ConsentRow>(
+    `select purpose, granted, notice_version, surface, recorded_at
+       from public.consent_records
+      where user_id = $1 and purpose = $2
+      order by recorded_at desc
+      limit 1`,
+    [userId, purpose],
+  );
+  return rows[0] ? toRecord(rows[0]) : null;
+}
