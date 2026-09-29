@@ -551,6 +551,15 @@ const pt = {
   'webview.resendMessage': 'Reenviar',
   'webview.resendMessageLabel': 'Reenviar esta mensagem',
   'webview.branchFromMessage': 'Ramificar',
+  'plan.needsUpdate':
+    'AGI Workforce: atualize a AGI CLI para aprovar ou revisar um plano no VS Code.',
+  'plan.approvedMessage': 'Pode seguir com o plano.',
+  'plan.revisedMessage': 'Revise o plano: {feedback}',
+  'webview.approvePlan': 'Aprovar plano',
+  'webview.revisePlan': 'Revisar',
+  'webview.revisePlanPlaceholder': 'O que deve mudar no plano?',
+  'webview.sendRevision': 'Enviar',
+  'webview.cancelRevision': 'Cancelar',
   'webview.branchFromAnswer': 'Ramificar daqui',
   'webview.branchFromAnswerLabel':
     'Iniciar uma nova sessão que mantém a conversa até esta resposta',
