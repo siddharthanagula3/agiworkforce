@@ -21,6 +21,17 @@ struct EffectiveWorkspacePolicy {
     governed: bool,
     #[serde(default)]
     controls: Option<WorkspaceControls>,
+    #[serde(default)]
+    code: Option<WorkspaceCodeControls>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceCodeControls {
+    #[serde(default)]
+    allow_mcp_servers: Option<bool>,
+    #[serde(default)]
+    allowed_mcp_servers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -87,6 +98,30 @@ pub fn feature_enabled(feature: &str) -> bool {
 
 pub fn governed() -> bool {
     with_current(|policy| policy.governed)
+}
+
+pub fn mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String> {
+    with_current(|policy| {
+        let code = policy.code.as_ref()?;
+        if code.allow_mcp_servers == Some(false) {
+            return Some(format!(
+                "MCP server '{name}' was not started: your workspace administrator has turned MCP servers off"
+            ));
+        }
+        if code.allowed_mcp_servers.is_empty() {
+            return None;
+        }
+        let host = url
+            .and_then(|url| reqwest::Url::parse(url).ok())
+            .and_then(|url| url.host_str().map(str::to_ascii_lowercase));
+        match host {
+            Some(host) if code.allowed_mcp_servers.iter().any(|allowed| *allowed == host) => None,
+            Some(host) => Some(format!(
+                "MCP server '{name}' was not started: your workspace allows only listed MCP hosts, and {host} is not one of them"
+            )),
+            None => None,
+        }
+    })
 }
 
 pub fn hooks_allowed() -> bool {
