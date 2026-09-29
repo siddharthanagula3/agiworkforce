@@ -6,68 +6,17 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S68.01: Shared session identifier across supported clients.
-
-- Done when: One session identifier names the same coding session on every supported client.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
-
-## S68.02: Same conversation history.
-
-- Done when: Opening the session on any client shows the same conversation history.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
-
-## S68.03: Same active branch.
-
-- Done when: Every client shows and works on the same active git branch for the session.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
-
-## S68.04: Same repository association.
-
-- Done when: Every client associates the session with the same repository.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
-
 ## S68.05: Same worktree association.
 
 - Done when: Every client associates the session with the same git worktree.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | The thread schema carries worktreeRoot, but the runtime reports worktrees:false and the extension never uses it. | handler |
-
-Code: `apps/extension-vscode/src/integrations/localRuntimeClient.ts:202-202`
 
 ## S68.06: Same model and instruction configuration.
 
@@ -228,6 +177,7 @@ Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`,
 
 - Done when: The user pairs a phone or another client with a machine so it can reach that machine's sessions.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -235,7 +185,6 @@ Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`,
 | desktop | partial | Parity: Claude Remote Control serves one remote connection per process and a browser on another computer connects (code.claude.com/docs/en/remote-control, 2026-09-28); ours pairs one phone or one browser (/code/computer). Live check after the website deploy, as the web cell. | live-check |
 | mobile | partial | Scans the desktop's code to pair; only phone-to-desktop. | surface-only |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Remote Control in VS Code pairs a phone through /api/pair/initiate with the account token, by QR code or pairing link, but only one phone at a time and with no computer-to-computer pairing. That is the same limit the desktop cell records. | surface-only |
 
 Code: `apps/web/app/api/pair/claim/route.ts:72-72`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:81-81`, `apps/web/features/remote-dispatch/components/RemoteComputerPage.tsx:75-75`, `apps/mobile/app/(app)/companion/index.tsx:248-248`
 

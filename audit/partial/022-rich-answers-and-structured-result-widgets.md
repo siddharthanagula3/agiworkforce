@@ -49,14 +49,14 @@ Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:192-192`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | an image results carousel in an answer needs image results from server-side search first. | handler |
-| desktop | partial | an image results carousel in an answer needs image results from server-side search first. | handler |
+| web | partial | Owner decision. The only configured search backend, the Perplexity Search API, returns no images (docs.perplexity.ai/api-reference/search-post, read 2026-09-28: results carry title, url, snippet and dates only). An answer image carousel needs an image-search provider and its key chosen, for example Sonar return_images or a dedicated image-search API. The web UI already has the lightbox (MessageBubble lightboxImages). | handler |
+| desktop | partial | Owner decision. The only configured search backend, the Perplexity Search API, returns no images (docs.perplexity.ai/api-reference/search-post, read 2026-09-28: results carry title, url, snippet and dates only). An answer image carousel needs an image-search provider and its key chosen, for example Sonar return_images or a dedicated image-search API. The web UI already has the lightbox (MessageBubble lightboxImages). | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1513-1513`
+Code: `apps/web/lib/web-search/web-search-providers.json:4-4`
 
 ## S22.08: Interactive charts.
 

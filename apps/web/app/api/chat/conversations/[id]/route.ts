@@ -25,7 +25,7 @@ import {
   versionEtag,
 } from '@/lib/http-preconditions';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -52,6 +52,22 @@ const DELETE_CONVERSATION_SQL = `
      and organization_id is not distinct from $3
      and deleted_at is null
   returning id
+`;
+
+const MARK_TEMPORARY_IMAGE_JOBS_SQL = `
+  update public.image_generation_jobs
+     set temporary_chat = true
+   where conversation_id = $1
+     and user_id = $2
+     and not temporary_chat
+`;
+
+const MARK_TEMPORARY_VIDEO_JOBS_SQL = `
+  update public.video_generation_jobs
+     set temporary_chat = true
+   where conversation_id = $1
+     and user_id = $2
+     and not temporary_chat
 `;
 
 const PENDING_REVOCATION_SQL = `
@@ -179,6 +195,9 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await context.params;
+  if (!UUID_RE.test(id)) {
+    throw createError.notFound('Conversation not found');
+  }
 
   const precondition = readIfMatchVersion(request);
   if (precondition.kind === 'malformed') {
@@ -374,7 +393,11 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         model = coalesce($4, model),
         ${routePinColumnReady ? 'selected_route_id = $20::text,' : ''}
         project_id = case when $5::boolean then $6::text else project_id end,
-        pinned = case when $7::boolean then $8::boolean else pinned end,
+        pinned = case
+          when $11::boolean and $12::boolean then false
+          when $7::boolean then $8::boolean
+          else pinned
+        end,
         starred = case when $9::boolean then $10::boolean else starred end,
         archived = case when $11::boolean then $12::boolean else archived end,
         is_temporary = case when $13::boolean then $14::boolean else is_temporary end,
@@ -442,6 +465,15 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     throw createError.notFound('Conversation not found');
   }
 
+  if (updates['isTemporary'] === true) {
+    try {
+      await db.query(MARK_TEMPORARY_IMAGE_JOBS_SQL, [id, userId]);
+      await db.query(MARK_TEMPORARY_VIDEO_JOBS_SQL, [id, userId]);
+    } catch (error) {
+      logger.error({ error, conversationId: id }, 'Media jobs were not marked temporary');
+    }
+  }
+
   const { conversation, version } = withoutVersion(updated);
   const response = NextResponse.json({ conversation });
   if (version) response.headers.set('etag', versionEtag(version));
@@ -458,6 +490,9 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await context.params;
+  if (!UUID_RE.test(id)) {
+    throw createError.notFound('Conversation not found');
+  }
 
   let deletedConversation: { id: string } | undefined;
   let revokedCount = 0;

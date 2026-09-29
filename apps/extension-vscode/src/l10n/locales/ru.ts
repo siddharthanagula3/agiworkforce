@@ -611,6 +611,8 @@ const ru = {
   'webview.resendMessage': 'Отправить повторно',
   'webview.resendMessageLabel': 'Отправить это сообщение повторно',
   'webview.branchFromMessage': 'Ответвить',
+  'webview.branchFromAnswer': 'Ответвить отсюда',
+  'webview.branchFromAnswerLabel': 'Начать новый сеанс, сохранив разговор до этого ответа',
   'webview.branchFromMessageLabel':
     'Начать новую сессию с этого места, подставив это сообщение для правки',
   'localServers.running_one': '{provider} запущен · {count} модель',

@@ -192,16 +192,15 @@ Code: `apps/web/lib/services/cloud-code-agent-tools.ts:357-357`, `apps/mobile/sr
 
 - Done when: The agent starts a development server and keeps it running while it continues working.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | run_command blocks until the command exits or times out; there is no background shell, so a dev server cannot keep running while the agent continues. | handler |
-| vscode | partial | Same local runtime limit (no background shell); the user can start a server in a VS Code terminal themselves. | handler |
 
-Code: `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:552-552`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:775-777`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:950-950`
+Code: `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:552-552`
 
 ## S67.16: Inspect browser behavior.
 
@@ -462,15 +461,14 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:1177-1177`, `apps/web/
 
 - Done when: The agent saves useful repository-specific facts to memory and reuses them in later sessions on that repository.
 - Wave: 3
-- Already works on: desktop, cli
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-| vscode | partial | VS Code memory commands edit account-wide facts (/api/memory/sync); repository memory is only what the local runtime already loads from project files. | ui |
 
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/extension-vscode/src/core/commandSetup.ts:1863-1868`, `apps/extension-vscode/src/memory/accountMemoryClient.ts:10-10`
+Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.38: Load repository instruction files.
 

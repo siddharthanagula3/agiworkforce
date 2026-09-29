@@ -203,14 +203,11 @@ Code: `apps/mobile/src/features/chat/components/MessageList.tsx:91-91`, `apps/mo
 
 - Done when: From any answer, the user can branch a new conversation that keeps history up to that point and leaves the original unchanged.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | 'Fork Conversation' copies a whole session from the command palette/tree; add branching from a chosen answer. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1210-1229`
 
 ## S17.28: Navigate answer variants.
 
