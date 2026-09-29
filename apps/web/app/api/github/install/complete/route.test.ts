@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { createHash } from 'node:crypto';
 
 const mocks = vi.hoisted(() => ({
   userId: 'user-1',
-  consume: vi.fn(async (..._args: unknown[]): Promise<number | null> => 987654),
+  consume: vi.fn(
+    async (..._args: unknown[]): Promise<{ installationId: number; codeVerifier: string } | null> =>
+      null,
+  ),
   link: vi.fn(async (..._args: unknown[]) => true),
   exchangeCode: vi.fn(async (..._args: unknown[]) => 'ghu_ephemeral'),
   findInstallation: vi.fn(async (..._args: unknown[]): Promise<unknown> => ({
@@ -51,7 +55,8 @@ async function statusOf(response: Response): Promise<string> {
 describe('POST /api/github/install/complete', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.consume.mockResolvedValue(987654);
+    mocks.consume.mockResolvedValue({ installationId: 987654, codeVerifier: 'verifier-a' });
+    mocks.exchangeCode.mockResolvedValue('ghu_ephemeral');
     mocks.link.mockResolvedValue(true);
     mocks.findInstallation.mockResolvedValue({
       installationId: 987654,
@@ -69,6 +74,7 @@ describe('POST /api/github/install/complete', () => {
     expect(mocks.exchangeCode).toHaveBeenCalledWith(
       'one-time-code',
       'http://localhost:3000/api/github/oauth/callback',
+      'verifier-a',
     );
     expect(mocks.findInstallation).toHaveBeenCalledWith('ghu_ephemeral', 987654);
     expect(mocks.link).toHaveBeenCalledWith(
@@ -116,5 +122,25 @@ describe('POST /api/github/install/complete', () => {
 
     expect(response.status).toBe(400);
     expect(mocks.consume).not.toHaveBeenCalled();
+  });
+
+  it('cannot complete a code minted for another install, because its verifier does not match', async () => {
+    const challengeOf = (verifier: string) =>
+      createHash('sha256').update(verifier).digest('base64url');
+    const codeChallenges = new Map([['victim-code', challengeOf('verifier-victim')]]);
+    mocks.exchangeCode.mockImplementation(async (...args: unknown[]) => {
+      const [code, , verifier] = args as [string, string, string | undefined];
+      if (!verifier || codeChallenges.get(code) !== challengeOf(verifier)) {
+        throw new Error('GitHub OAuth code exchange failed: 400');
+      }
+      return 'ghu_victim';
+    });
+    mocks.consume.mockResolvedValue({ installationId: 987654, codeVerifier: 'verifier-attacker' });
+
+    const response = await POST(completeRequest({ state: STATE, code: 'victim-code' }));
+
+    expect(await statusOf(response)).toBe('failed');
+    expect(mocks.findInstallation).not.toHaveBeenCalled();
+    expect(mocks.link).not.toHaveBeenCalled();
   });
 });

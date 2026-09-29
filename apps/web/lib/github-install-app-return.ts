@@ -1,15 +1,35 @@
 import 'server-only';
 
 import { GITHUB_INSTALL_APP_RETURN_URL } from '@agiworkforce/cloud-contracts';
-import { hashOAuthState } from '@/lib/connectors/pkce';
+import { generatePkcePair, hashOAuthState } from '@/lib/connectors/pkce';
+import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-connector-crypto';
 import { generateGitHubInstallState, type VerifiedGitHubInstallation } from '@/lib/github-app';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 const APP_INSTALL_TTL_MINUTES = 10;
 
+const VERIFIER_PURPOSE = 'oauth-code-verifier';
+
+export interface AppInstallAuthorization {
+  oauthState: string;
+  codeChallenge: string;
+}
+
+export interface ConsumedAppInstall {
+  installationId: number;
+  codeVerifier: string;
+}
+
 export async function startAppInstall(userId: string): Promise<string> {
   const state = generateGitHubInstallState();
-  await getNeonDb().query(
+  const db = getNeonDb();
+  await db.query(
+    `delete from public.github_install_authorizations
+      where user_id = $1
+        and (expires_at < now() or consumed_at is not null)`,
+    [userId],
+  );
+  await db.query(
     `insert into public.github_install_authorizations (user_id, install_state_hash, expires_at)
      values ($1, $2, now() + make_interval(mins => $3))`,
     [userId, hashOAuthState(state), APP_INSTALL_TTL_MINUTES],
@@ -20,20 +40,27 @@ export async function startAppInstall(userId: string): Promise<string> {
 export async function recordAppInstallation(
   installState: string,
   installationId: number,
-): Promise<string | null> {
+): Promise<AppInstallAuthorization | null> {
   const oauthState = generateGitHubInstallState();
+  const pkce = generatePkcePair();
   const rows = await getNeonDb().query<{ user_id: string }>(
     `update public.github_install_authorizations
         set installation_id = $2,
-            oauth_state_hash = $3
+            oauth_state_hash = $3,
+            code_verifier_enc = $4
       where install_state_hash = $1
         and installation_id is null
         and consumed_at is null
         and expires_at > now()
       returning user_id`,
-    [hashOAuthState(installState), installationId, hashOAuthState(oauthState)],
+    [
+      hashOAuthState(installState),
+      installationId,
+      hashOAuthState(oauthState),
+      encryptConnectorToken(pkce.verifier, VERIFIER_PURPOSE),
+    ],
   );
-  return rows.length > 0 ? oauthState : null;
+  return rows.length > 0 ? { oauthState, codeChallenge: pkce.challenge } : null;
 }
 
 export async function appInstallOwner(oauthState: string): Promise<string | null> {
@@ -52,20 +79,35 @@ export async function appInstallOwner(oauthState: string): Promise<string | null
 export async function consumeAppInstall(
   userId: string,
   oauthState: string,
-): Promise<number | null> {
-  const rows = await getNeonDb().query<{ installation_id: string | number }>(
+): Promise<ConsumedAppInstall | null> {
+  const rows = await getNeonDb().query<{
+    installation_id: string | number;
+    code_verifier_enc: string | null;
+  }>(
     `update public.github_install_authorizations
         set consumed_at = now()
       where oauth_state_hash = $1
         and user_id = $2
         and installation_id is not null
+        and code_verifier_enc is not null
         and consumed_at is null
         and expires_at > now()
-      returning installation_id`,
+      returning installation_id, code_verifier_enc`,
     [hashOAuthState(oauthState), userId],
   );
-  const installationId = Number(rows[0]?.installation_id);
-  return Number.isSafeInteger(installationId) && installationId > 0 ? installationId : null;
+  const row = rows[0];
+  const installationId = Number(row?.installation_id);
+  if (!row?.code_verifier_enc || !Number.isSafeInteger(installationId) || installationId <= 0) {
+    return null;
+  }
+  try {
+    return {
+      installationId,
+      codeVerifier: decryptConnectorToken(row.code_verifier_enc, VERIFIER_PURPOSE),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function appInstallReturnUrl(params: Readonly<Record<string, string | null>>): URL {

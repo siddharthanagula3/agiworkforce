@@ -7,11 +7,14 @@ const mocks = vi.hoisted(() => ({
   cookieSet: vi.fn((_options: unknown) => undefined),
   generateState: vi.fn(() => 'a'.repeat(64)),
   getAuthorizationUrl: vi.fn(
-    (_state: string, _redirectUri: string) =>
+    (_state: string, _redirectUri: string, _challenge?: string) =>
       `https://github.com/login/oauth/authorize?client_id=Iv1.client-id&state=${'a'.repeat(64)}`,
   ),
   linkingAvailable: vi.fn(() => false),
-  recordAppInstallation: vi.fn(async (..._args: unknown[]): Promise<string | null> => null),
+  recordAppInstallation: vi.fn(
+    async (..._args: unknown[]): Promise<{ oauthState: string; codeChallenge: string } | null> =>
+      null,
+  ),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -43,8 +46,10 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/github-app', () => ({
   generateGitHubInstallState: () => mocks.generateState(),
-  getGitHubUserAuthorizationUrl: (state: string, redirectUri: string) =>
-    mocks.getAuthorizationUrl(state, redirectUri),
+  getGitHubUserAuthorizationUrl: (state: string, redirectUri: string, challenge?: string) =>
+    challenge === undefined
+      ? mocks.getAuthorizationUrl(state, redirectUri)
+      : mocks.getAuthorizationUrl(state, redirectUri, challenge),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
 }));
 
@@ -142,7 +147,10 @@ describe('GitHub installation callback ownership proof', () => {
   it('records an app install against its pending row without a cookie or web session', async () => {
     mocks.linkingAvailable.mockReturnValue(true);
     mocks.cookieGet.mockReturnValue(undefined as never);
-    mocks.recordAppInstallation.mockResolvedValue('d'.repeat(64));
+    mocks.recordAppInstallation.mockResolvedValue({
+      oauthState: 'd'.repeat(64),
+      codeChallenge: 'row-challenge',
+    });
 
     const response = await GET(
       new NextRequest(
@@ -155,6 +163,7 @@ describe('GitHub installation callback ownership proof', () => {
     expect(mocks.getAuthorizationUrl).toHaveBeenCalledWith(
       'd'.repeat(64),
       'http://localhost:3000/api/github/oauth/callback',
+      'row-challenge',
     );
     expect(mocks.cookieSet).not.toHaveBeenCalled();
     expect(mocks.execute).not.toHaveBeenCalled();
