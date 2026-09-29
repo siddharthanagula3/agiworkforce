@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { markSyncedConversationsGoogleUserData } from '@/lib/connectors/google-user-data';
 import {
+  CHAT_SYNC_CONVERSATIONS_SCOPE,
   ChatSyncPullResponseSchema,
   ChatSyncPushRequestSchema,
   ChatSyncPushResponseSchema,
@@ -84,6 +85,7 @@ async function handlePull(request: NextRequest) {
     throw createError.validation('Invalid chat sync cursor', parsedSince.error);
   }
   const since = parsedSince.data;
+  const conversationsOnly = url.searchParams.get('scope') === CHAT_SYNC_CONVERSATIONS_SCOPE;
 
   try {
     const [conversations, messages, artifacts] = await Promise.all([
@@ -99,8 +101,10 @@ async function handlePull(request: NextRequest) {
       `,
         [userId, since],
       ),
-      db.query<MessageDelta>(
-        `
+      conversationsOnly
+        ? Promise.resolve<MessageDelta[]>([])
+        : db.query<MessageDelta>(
+            `
         select m.id, m.conversation_id, m.parent_id::text as parent_id,
                m.role, m.content, m.model, m.provider,
                m.input_tokens, m.output_tokens, m.metadata,
@@ -111,10 +115,12 @@ async function handlePull(request: NextRequest) {
         order by m.server_version asc
         limit ${MAX_MESSAGES_PULL}
       `,
-        [userId, since],
-      ),
-      db.query<ArtifactDelta>(
-        `
+            [userId, since],
+          ),
+      conversationsOnly
+        ? Promise.resolve<ArtifactDelta[]>([])
+        : db.query<ArtifactDelta>(
+            `
         select id, conversation_id, message_id, title, artifact_type, language, content,
                current_version, pinned, tags, created_at, updated_at, deleted_at, server_version
         from web_artifacts
@@ -126,8 +132,8 @@ async function handlePull(request: NextRequest) {
         order by server_version asc
         limit ${MAX_ARTIFACTS_PULL}
       `,
-        [userId, since],
-      ),
+            [userId, since],
+          ),
     ]);
 
     const convSaturated = conversations.length >= MAX_CONVERSATIONS_PULL;

@@ -45,6 +45,7 @@
     "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
+    "@agiworkforce/sync": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
