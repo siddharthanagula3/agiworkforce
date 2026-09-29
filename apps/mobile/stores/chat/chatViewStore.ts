@@ -17,6 +17,10 @@ const RETIRED_CHAT_STYLES: Readonly<Record<string, ChatStyle>> = {
   creative: 'normal',
 };
 
+export const DEFAULT_CHAT_STYLE: ChatStyle = 'normal';
+
+export const NEW_CHAT_STYLE_KEY = 'new-chat';
+
 export interface ChatFeatures {
   webSearch: boolean;
   imageGen: boolean;
@@ -56,6 +60,8 @@ interface ViewState {
   chatMode: ChatMode;
   workMode: CloudWorkMode;
   chatStyle: ChatStyle;
+  styleConversationId: string | null;
+  chatStyleByConversation: Record<string, ChatStyle>;
   features: ChatFeatures;
   /** Output kind the composer is aimed at. See {@link MediaMode}. */
   mediaMode: MediaMode;
@@ -63,17 +69,23 @@ interface ViewState {
   videoAspectRatio: string;
   videoResolution: string;
   imageAspectRatio: string;
+  imageTransparentBackground: boolean;
+  videoDurationSecs: number | null;
 
   searchConversations: (query: string) => void;
   setChatMode: (mode: ChatMode) => void;
   setWorkMode: (mode: CloudWorkMode) => void;
   setChatStyle: (style: ChatStyle) => void;
+  bindStyleConversation: (conversationId: string) => void;
+  adoptStyleSelection: (fromKey: string, toKey: string) => void;
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
   setMediaMode: (mode: MediaMode) => void;
   setMediaModel: (kind: 'image' | 'video', modelId: string) => void;
   setVideoAspectRatio: (aspectRatio: string) => void;
   setVideoResolution: (resolution: string) => void;
   setImageAspectRatio: (aspectRatio: string) => void;
+  setImageTransparentBackground: (enabled: boolean) => void;
+  setVideoDurationSecs: (durationSecs: number) => void;
   clearCloudSearchState: () => void;
 }
 
@@ -251,6 +263,14 @@ async function runSearch(
   if (isCurrent()) set({ searchResults: results, ...EMPTY_REMOTE_MATCHES, isSearching: false });
 }
 
+export function styleForConversation(
+  state: Pick<ViewState, 'chatStyle' | 'styleConversationId' | 'chatStyleByConversation'>,
+  conversationId: string,
+): ChatStyle {
+  if (state.styleConversationId === conversationId) return state.chatStyle;
+  return state.chatStyleByConversation[conversationId] ?? DEFAULT_CHAT_STYLE;
+}
+
 export function migratePersistedChatView(
   persisted: unknown,
   version: number,
@@ -275,7 +295,9 @@ export const useChatViewStore = create<ViewState>()(
       isSearching: false,
       chatMode: 'chat',
       workMode: 'chat',
-      chatStyle: 'normal',
+      chatStyle: DEFAULT_CHAT_STYLE,
+      styleConversationId: null,
+      chatStyleByConversation: {},
       features: {
         webSearch: true,
         imageGen: true,
@@ -288,6 +310,8 @@ export const useChatViewStore = create<ViewState>()(
       videoAspectRatio: '16:9',
       videoResolution: '720p',
       imageAspectRatio: '1:1',
+      imageTransparentBackground: false,
+      videoDurationSecs: null,
 
       searchConversations: (query: string) => {
         searchGeneration += 1;
@@ -326,7 +350,36 @@ export const useChatViewStore = create<ViewState>()(
 
       setChatMode: (mode) => set({ chatMode: mode }),
       setWorkMode: (mode) => set({ workMode: mode }),
-      setChatStyle: (style) => set({ chatStyle: style }),
+      setChatStyle: (style) =>
+        set((state) => {
+          const key = state.styleConversationId;
+          if (!key) return { chatStyle: style };
+          const { [key]: _previous, ...rest } = state.chatStyleByConversation;
+          return {
+            chatStyle: style,
+            chatStyleByConversation:
+              style === DEFAULT_CHAT_STYLE ? rest : { ...rest, [key]: style },
+          };
+        }),
+      bindStyleConversation: (conversationId) =>
+        set((state) =>
+          state.styleConversationId === conversationId
+            ? state
+            : {
+                styleConversationId: conversationId,
+                chatStyle: state.chatStyleByConversation[conversationId] ?? DEFAULT_CHAT_STYLE,
+              },
+        ),
+      adoptStyleSelection: (fromKey, toKey) =>
+        set((state) => {
+          const pending = state.chatStyleByConversation[fromKey];
+          if (!pending || fromKey === toKey) return state;
+          const { [fromKey]: _pending, ...rest } = state.chatStyleByConversation;
+          return {
+            chatStyleByConversation: { ...rest, [toKey]: rest[toKey] ?? pending },
+            ...(state.styleConversationId === fromKey ? { styleConversationId: toKey } : {}),
+          };
+        }),
       setFeature: (feature, enabled) =>
         set((state) => ({ features: { ...state.features, [feature]: enabled } })),
       setMediaMode: (mode) => set({ mediaMode: mode }),
@@ -335,6 +388,8 @@ export const useChatViewStore = create<ViewState>()(
       setVideoAspectRatio: (aspectRatio) => set({ videoAspectRatio: aspectRatio }),
       setVideoResolution: (resolution) => set({ videoResolution: resolution }),
       setImageAspectRatio: (aspectRatio) => set({ imageAspectRatio: aspectRatio }),
+      setImageTransparentBackground: (enabled) => set({ imageTransparentBackground: enabled }),
+      setVideoDurationSecs: (durationSecs) => set({ videoDurationSecs: durationSecs }),
       clearCloudSearchState: () => {
         searchGeneration += 1;
         if (searchDebounceTimer !== undefined) {
@@ -354,11 +409,14 @@ export const useChatViewStore = create<ViewState>()(
         chatMode: state.chatMode,
         workMode: state.workMode,
         chatStyle: state.chatStyle,
+        chatStyleByConversation: state.chatStyleByConversation,
         features: state.features,
         selectedMediaModel: state.selectedMediaModel,
         videoAspectRatio: state.videoAspectRatio,
         videoResolution: state.videoResolution,
         imageAspectRatio: state.imageAspectRatio,
+        imageTransparentBackground: state.imageTransparentBackground,
+        videoDurationSecs: state.videoDurationSecs,
       }),
     },
   ),

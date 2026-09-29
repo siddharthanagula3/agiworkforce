@@ -1,9 +1,11 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { ACCOUNT_AGE_REQUIREMENT_NOTICE } from '@agiworkforce/types';
 import {
   clearAgeGate,
   confirmAgeGate,
+  isAgeGateConfirmed,
   isMinorMode,
   type AgeGateRecord,
 } from '@/src/features/auth/services/ageGate';
@@ -48,6 +50,14 @@ jest.mock('expo-router', () => {
     useLocalSearchParams: () => mockSearchParams,
   };
 });
+
+let mockSignedIn = false;
+const mockSignOut = jest.fn(() => Promise.resolve());
+
+jest.mock('@/src/features/auth/store', () => ({
+  useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ isClerkSignedIn: mockSignedIn, signOut: mockSignOut }),
+}));
 
 beforeAll(() => {
   Object.defineProperty(global, 'Intl', {
@@ -140,6 +150,8 @@ describe('the age screen when the answer does not work', () => {
   beforeEach(() => {
     clearAgeGate();
     mockReplace.mockClear();
+    mockSignOut.mockClear();
+    mockSignedIn = false;
     mockSearchParams = {};
   });
 
@@ -198,15 +210,43 @@ describe('the age screen when the answer does not work', () => {
     expect(screen.queryByTestId('age-gate-error')).toBeNull();
   });
 
-  it('tells a minor what changed before it moves them on', () => {
+  it('refuses anyone under 18 with the Terms wording and moves them nowhere', () => {
     render(<AgeGateScreen />);
 
-    fireEvent.changeText(screen.getByTestId('age-gate-input'), '9');
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '17');
     fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
 
-    expect(screen.getByTestId('age-gate-minor-notice')).toBeTruthy();
+    expect(screen.getByTestId('age-gate-refusal')).toHaveTextContent(
+      ACCOUNT_AGE_REQUIREMENT_NOTICE,
+    );
+    expect(screen.queryByTestId('age-gate-refused-sign-out-btn')).toBeNull();
     expect(mockReplace).not.toHaveBeenCalled();
     expect(isMinorMode()).toBe(true);
+    expect(isAgeGateConfirmed()).toBe(false);
+  });
+
+  it('keeps Cloud sign-in closed to a device that was refused', () => {
+    confirmAgeGate(15);
+    mockSearchParams = { returnTo: '/(auth)/login' };
+    render(<AgeGateScreen />);
+
+    expect(screen.getByTestId('age-gate-refused')).toBeTruthy();
+    expect(screen.queryByTestId('age-gate-input')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/(app)');
+  });
+
+  it('lets a signed-in person refused an account sign out to Local chat', async () => {
+    mockSignedIn = true;
+    confirmAgeGate(16);
+    render(<AgeGateScreen />);
+
+    fireEvent.press(screen.getByTestId('age-gate-refused-sign-out-btn'));
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(app)'));
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
   });
 });
 

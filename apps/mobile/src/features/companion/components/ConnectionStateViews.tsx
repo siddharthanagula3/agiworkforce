@@ -12,14 +12,14 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { PairingRiskDisclosure } from './PairingRiskDisclosure';
 
 export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
   const colors = useThemeColors();
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-1 items-center justify-center px-8"
     >
       <View className="w-20 h-20 rounded-2xl bg-amber-500/10 items-center justify-center mb-6">
@@ -53,7 +53,7 @@ export function DisconnectedView({
 }) {
   const colors = useThemeColors();
   return (
-    <Animated.View entering={FadeIn.duration(300)} className="flex-1">
+    <Animated.View entering={FadeIn.duration(motion.moved)} className="flex-1">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: 32,
@@ -103,7 +103,7 @@ export function DisconnectedView({
           className="mb-8"
           steps={[
             'Open Desktop in Managed Cloud',
-            'Go to Settings and select "Connections"',
+            'Go to Settings, select Capabilities and choose "Pair a phone"',
             'Generate and scan the short-lived code',
           ]}
         />
@@ -164,7 +164,7 @@ export function ConnectingView({ onCancel }: { onCancel: () => void }) {
   const colors = useThemeColors();
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-1 items-center justify-center px-8"
     >
       <View className="w-20 h-20 rounded-2xl bg-amber-500/10 items-center justify-center mb-6">
@@ -190,7 +190,7 @@ export function ErrorView({ error, onRetry }: { error: string | null; onRetry: (
 
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-1 items-center justify-center px-8"
     >
       <View className="w-20 h-20 rounded-2xl bg-red-500/10 items-center justify-center mb-6">
@@ -206,7 +206,7 @@ export function ErrorView({ error, onRetry }: { error: string | null; onRetry: (
 
       <PairingChecklist
         steps={[
-          'Dispatch is turned on in Desktop → Settings → Connections',
+          'Remote Control is on in Desktop → Settings → Capabilities',
           'Desktop is signed in and in Managed Cloud',
           'Use a new pairing code from Desktop; phone and Desktop accounts do not need to match',
           'Desktop is open and up to date',

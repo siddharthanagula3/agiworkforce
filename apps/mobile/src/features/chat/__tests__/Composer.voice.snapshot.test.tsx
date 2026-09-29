@@ -45,8 +45,8 @@ jest.mock('expo-haptics', () => ({
 }));
 
 jest.mock('@/stores/settingsStore', () => ({
-  useSettingsStore: (sel: (s: { hapticsEnabled: boolean; voiceEnabled: boolean }) => unknown) =>
-    sel({ hapticsEnabled: false, voiceEnabled: true }),
+  useSettingsStore: (sel: (s: Record<string, unknown>) => unknown) =>
+    sel({ hapticsEnabled: false, voiceEnabled: true, dictationOnboardingSeen: true }),
 }));
 
 jest.mock('react-native-reanimated', () => {

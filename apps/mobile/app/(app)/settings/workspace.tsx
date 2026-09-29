@@ -17,7 +17,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/src/ui/theme';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { getBillingPlanPricing, isOrganizationAdminRole } from '@agiworkforce/types';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
@@ -38,6 +38,7 @@ import {
 import { RolePickerModal } from '@/src/features/team/RolePickerModal';
 import { WorkspaceAdministration } from '@/src/features/team/WorkspaceAdministration';
 import { useChatStore } from '@/stores/chatStore';
+import { translatePlural } from '@/src/i18n/plural';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 
@@ -263,6 +264,8 @@ export default function WorkspaceScreen() {
   const overview = state.kind === 'ready' ? state.overview : null;
   const workspace = overview?.workspace ?? null;
   const canManage = overview?.access.canManageTeam ?? false;
+  const canManageMembers =
+    canManage && workspace !== null && isOrganizationAdminRole(workspace.currentUserRole);
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
@@ -463,7 +466,10 @@ export default function WorkspaceScreen() {
                 <Text style={{ fontSize: 13, color: c.textSecondary, marginTop: 6 }}>
                   {planLabel(workspace.plan)} ·{' '}
                   {workspace.maxMembers === null
-                    ? `${workspace.memberCount} member${workspace.memberCount === 1 ? '' : 's'}`
+                    ? translatePlural('settings', 'counts.members', workspace.memberCount, {
+                        one: '{{count}} member',
+                        other: '{{count}} members',
+                      })
                     : `${workspace.memberCount} of ${workspace.maxMembers} seats used`}
                 </Text>
                 <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 2 }}>
@@ -503,7 +509,7 @@ export default function WorkspaceScreen() {
 
                   {/* The server refuses self-removal and blocks admins from
                       removing owners, so those controls are not offered. */}
-                  {canManage && !member.isCurrentUser && (
+                  {canManageMembers && !member.isCurrentUser && (
                     <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
                       <Pressable
                         onPress={() => handleChangeRole(member)}

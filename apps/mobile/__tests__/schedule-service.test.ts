@@ -199,6 +199,7 @@ describe('mobile schedule service', () => {
         result: 'Partial result',
         error: 'This run exceeded its time limit. Try again.',
         pendingApproval: null,
+        timingNote: null,
       },
     ]);
     expect(apiMock.get).toHaveBeenCalledWith('/api/schedules/schedule%2F1/runs');

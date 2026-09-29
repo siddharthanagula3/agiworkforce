@@ -21,7 +21,7 @@ export const TASK_CHIP_DRAFT_STARTERS: Record<TaskSuggestionType, string> = {
 
 export const TASK_CHIP_SEND_CONTEXT: Record<
   TaskChipType,
-  { mode: 'create' | 'research'; taskInstruction: string }
+  { mode: 'create' | 'research'; taskInstruction: string; searchRequested?: true }
 > = {
   write: {
     mode: 'create',
@@ -30,6 +30,7 @@ export const TASK_CHIP_SEND_CONTEXT: Record<
   },
   research: {
     mode: 'research',
+    searchRequested: true,
     taskInstruction:
       'Task: Research. Analyze carefully, separate facts from uncertainty, and avoid claiming live web access unless a web-search tool is available.',
   },

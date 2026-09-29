@@ -1,19 +1,24 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { View, Pressable, Modal, Alert, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { X, Share2 } from 'lucide-react-native';
+import { Check, Copy, X, Share2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { copyGeneratedImage } from '@/services/fileCreation';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, zIndex } from '@/src/ui/theme';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { shareGeneratedImage } from '@/services/fileCreation';
+
+import { imageSettingsCaption } from '@/src/features/image/imageSettingsCaption';
 
 interface ImageFullScreenProps {
   imageUrl: string | null;
   prompt?: string;
+  model?: string;
+  aspectRatio?: string;
   visible: boolean;
   onClose: () => void;
   allowEphemeral?: boolean;
@@ -29,10 +34,13 @@ function isDirectlyDisplayableUri(imageUrl: string | null): imageUrl is string {
 export function ImageFullScreen({
   imageUrl,
   prompt,
+  model,
+  aspectRatio,
   visible,
   onClose,
   allowEphemeral = false,
 }: ImageFullScreenProps) {
+  const settingsCaption = imageSettingsCaption(model, aspectRatio);
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { width: screenWidth } = useWindowDimensions();
@@ -124,6 +132,22 @@ export function ImageFullScreen({
     }
   }, [imageUrl]);
 
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(async () => {
+    if (!imageUrl) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await copyGeneratedImage(imageUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      Alert.alert(
+        'Could not copy image',
+        error instanceof Error ? error.message : 'Try again in a moment.',
+      );
+    }
+  }, [imageUrl]);
+
   const handleClose = useCallback(() => {
     scale.value = 1;
     savedScale.value = 1;
@@ -164,7 +188,7 @@ export function ImageFullScreen({
               paddingHorizontal: 16,
               paddingBottom: 12,
               gap: 8,
-              zIndex: 10,
+              zIndex: zIndex.control,
             }}
           >
             {/* Share button */}
@@ -179,6 +203,23 @@ export function ImageFullScreen({
               accessibilityRole="button"
             >
               <Share2 size={18} color={colors.cameraOverlayText} />
+            </Pressable>
+
+            <Pressable
+              onPress={handleCopy}
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                backgroundColor: colors.voiceControlSurface,
+              }}
+              accessibilityLabel={copied ? 'Image copied' : 'Copy image'}
+              accessibilityRole="button"
+            >
+              {copied ? (
+                <Check size={18} color={colors.cameraOverlayText} />
+              ) : (
+                <Copy size={18} color={colors.cameraOverlayText} />
+              )}
             </Pressable>
 
             {/* Close button */}
@@ -241,7 +282,7 @@ export function ImageFullScreen({
           </View>
 
           {/* Prompt footer */}
-          {prompt ? (
+          {prompt || settingsCaption ? (
             <View
               style={{
                 paddingHorizontal: 24,
@@ -249,18 +290,34 @@ export function ImageFullScreen({
                 paddingBottom: insets.bottom + 16,
               }}
             >
-              <Text
-                style={{
-                  fontSize: 13,
-                  lineHeight: 19,
-                  color: colors.cameraOverlayTextMuted,
-                  textAlign: 'center',
-                }}
-                numberOfLines={4}
-                selectable
-              >
-                {prompt}
-              </Text>
+              {prompt ? (
+                <Text
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 19,
+                    color: colors.cameraOverlayTextMuted,
+                    textAlign: 'center',
+                  }}
+                  numberOfLines={4}
+                  selectable
+                >
+                  {prompt}
+                </Text>
+              ) : null}
+              {settingsCaption ? (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 17,
+                    marginTop: prompt ? 6 : 0,
+                    color: colors.cameraOverlayTextMuted,
+                    textAlign: 'center',
+                  }}
+                  selectable
+                >
+                  {settingsCaption}
+                </Text>
+              ) : null}
             </View>
           ) : (
             <View style={{ height: insets.bottom + 16 }} />

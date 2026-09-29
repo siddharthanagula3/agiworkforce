@@ -1,4 +1,13 @@
-import { View, ScrollView, Pressable, Modal, Share, Alert, Platform } from 'react-native';
+import {
+  View,
+  ScrollView,
+  Pressable,
+  Modal,
+  Share,
+  Alert,
+  Platform,
+  TextInput,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
   X,
@@ -13,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   TriangleAlert,
+  Pencil,
 } from 'lucide-react-native';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
@@ -22,25 +32,35 @@ import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useArtifactStore } from '@/src/features/artifacts/store';
-import { publishArtifact, publishFailureMessage } from '../services/artifactPublishing';
 import {
-  shareFile,
-  exportToText,
-  exportToMarkdown,
-  downloadGeneratedFile,
-} from '@/services/fileCreation';
+  fetchArtifactPublication,
+  publishArtifact,
+  publishFailureMessage,
+  type ArtifactPublication,
+} from '../services/artifactPublishing';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { shareFile, downloadGeneratedFile } from '@/services/fileCreation';
+import { artifactExportOptions, exportArtifact } from '@/src/features/chat/utils/artifactExport';
+import { ArtifactExportSheet } from './ArtifactExportSheet';
 import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import type { Artifact } from '@/types/chat';
+import { ArtifactSwitcher } from './ArtifactSwitcher';
 import { renderMarkdownContent } from './MessageContentRenderer';
 import { GeneratedFileCard } from './GeneratedFileCard';
 import { SafeArtifactPreview, type PreviewableKind } from './SafeArtifactPreview';
+import { ArtifactChangesView } from './ArtifactChangesView';
+import { ArtifactVersionHistorySheet } from './ArtifactVersionHistorySheet';
+import { PublishedArtifactControls } from './PublishedArtifactControls';
 
 interface ArtifactFullScreenProps {
   artifact: Artifact | null;
+  switchable?: Artifact[];
+  onSwitch?: (artifact: Artifact) => void;
   visible: boolean;
   onClose: () => void;
   onRegenerate?: () => void;
+  conversationId?: string;
 }
 
 /**
@@ -126,27 +146,66 @@ type ViewMode = 'source' | 'preview';
 
 export function ArtifactFullScreen({
   artifact,
+  switchable,
+  onSwitch,
   visible,
   onClose,
   onRegenerate,
+  conversationId,
 }: ArtifactFullScreenProps) {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { status: copyStatus, copy } = useCopyAction();
   const [viewMode, setViewMode] = useState<ViewMode>('source');
   const [downloading, setDownloading] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [published, setPublished] = useState<{ artifactId: string; url: string } | null>(null);
+  const [published, setPublished] = useState<{
+    artifactId: string;
+    publication: ArtifactPublication;
+  } | null>(null);
+  const [workspaceMemberCount, setWorkspaceMemberCount] = useState<number | null>(null);
+  const appMode = useChatAppModeStore((s) => s.appMode);
   const { status: linkCopyStatus, copy: copyLink } = useCopyAction();
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
+  const [changesShownFor, setChangesShownFor] = useState<string | null>(null);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
 
-  const publishedUrl = published && published.artifactId === artifact?.id ? published.url : null;
+  const currentPublication =
+    published && published.artifactId === artifact?.id ? published.publication : null;
+  const publishedUrl = currentPublication?.shareUrl ?? null;
 
   const artifactId = artifact?.id;
+
+  const loadPublication = useCallback(async (id: string) => {
+    try {
+      const state = await fetchArtifactPublication(id);
+      setWorkspaceMemberCount(state.workspaceMemberCount);
+      setPublished((current) =>
+        state.publication
+          ? { artifactId: id, publication: state.publication }
+          : current?.artifactId === id
+            ? null
+            : current,
+      );
+    } catch (error) {
+      console.warn('[ArtifactFullScreen] publication lookup failed', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!visible || !artifactId || appMode !== 'cloud') return;
+    void loadPublication(artifactId);
+  }, [appMode, artifactId, loadPublication, visible]);
   const versionHistory = useArtifactStore((s) =>
     artifactId ? s.versionsById[artifactId] : undefined,
   );
   const restoreArtifactVersion = useArtifactStore((s) => s.restoreArtifactVersion);
+  const storedArtifact = useArtifactStore((s) =>
+    artifactId ? s.artifacts.find((candidate) => candidate.id === artifactId) : undefined,
+  );
+  const addArtifacts = useArtifactStore((s) => s.addArtifacts);
+  const [editDraft, setEditDraft] = useState<string | null>(null);
   const versionCount = versionHistory?.length ?? 0;
   const shownVersionIndex = viewedVersionIndex ?? (versionCount > 0 ? versionCount - 1 : 0);
   const activeContent = versionHistory?.[shownVersionIndex]?.content ?? artifact?.content ?? '';
@@ -174,6 +233,14 @@ export function ArtifactFullScreen({
   const hasGeneratedFileManifest = Boolean(
     artifact?.computeSession || artifact?.generatedFile || artifact?.artifactManifest,
   );
+  const previousVersionContent =
+    shownVersionIndex > 0 ? versionHistory?.[shownVersionIndex - 1]?.content : undefined;
+  const changesKey = `${artifactId ?? ''}:${shownVersionIndex}:${versionCount}`;
+  const canShowChanges = previousVersionContent !== undefined && !hasGeneratedFileManifest;
+  if (changesShownFor !== null && (changesShownFor !== changesKey || !canShowChanges)) {
+    setChangesShownFor(null);
+  }
+  const showChanges = canShowChanges && changesShownFor === changesKey;
 
   const sourceTokens = useMemo(
     () =>
@@ -234,11 +301,13 @@ export function ArtifactFullScreen({
         const localUri = await downloadGeneratedFile(remoteUri, artifact.generatedFile.fileName);
         await shareFile(localUri);
       } else {
-        const isMarkdownKind = artifact.type === 'document' || artifact.type === 'research';
-        const result = isMarkdownKind
-          ? await exportToMarkdown(activeContent, artifact.title)
-          : await exportToText(activeContent, artifact.title);
-        await shareFile(result.uri);
+        const [option, ...others] = artifactExportOptions(artifact);
+        if (!option) return;
+        if (others.length > 0) {
+          setExportOpen(true);
+          return;
+        }
+        await shareFile(await exportArtifact(activeContent, artifact.title, option));
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
@@ -262,16 +331,25 @@ export function ArtifactFullScreen({
         kind,
         ...(artifact.language ? { language: artifact.language } : {}),
         content: activeContent,
+        ...(conversationId ? { conversationId } : {}),
       });
 
-      setPublished({ artifactId: artifact.id, url: shareUrl });
+      setPublished((current) => ({
+        artifactId: artifact.id,
+        publication: {
+          shareUrl,
+          visibility:
+            current?.artifactId === artifact.id ? current.publication.visibility : 'public',
+        },
+      }));
       await copyLink(shareUrl);
+      void loadPublication(artifact.id);
     } catch (err) {
       Alert.alert('Publish failed', publishFailureMessage(err));
     } finally {
       setPublishing(false);
     }
-  }, [artifact, activeContent, copyLink, publishing]);
+  }, [artifact, activeContent, conversationId, copyLink, loadPublication, publishing]);
 
   const handleRestoreVersion = useCallback(() => {
     if (!artifactId) return;
@@ -280,6 +358,41 @@ export function ArtifactFullScreen({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   }, [artifactId, restoreArtifactVersion, shownVersionIndex]);
+
+  const handleOpenHistoryVersion = useCallback(
+    (index: number) => {
+      setViewedVersionIndex(index === versionCount - 1 ? null : index);
+      setVersionHistoryOpen(false);
+    },
+    [versionCount],
+  );
+
+  const handleRestoreHistoryVersion = useCallback(
+    (index: number) => {
+      if (!artifactId) return;
+      if (restoreArtifactVersion(artifactId, index)) {
+        setViewedVersionIndex(null);
+        setVersionHistoryOpen(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    },
+    [artifactId, restoreArtifactVersion],
+  );
+
+  const canEditSource =
+    storedArtifact !== undefined &&
+    !hasGeneratedFileManifest &&
+    shownVersionIndex === Math.max(0, versionCount - 1) &&
+    activeContent.trim().length > 0;
+
+  const handleSaveEdit = useCallback(() => {
+    if (!storedArtifact || editDraft === null) return;
+    if (editDraft !== activeContent && editDraft.trim().length > 0) {
+      addArtifacts([{ ...storedArtifact, content: editDraft }]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setEditDraft(null);
+  }, [activeContent, addArtifacts, editDraft, storedArtifact]);
 
   const handleCopyLink = useCallback(() => {
     if (!publishedUrl) return;
@@ -420,6 +533,22 @@ export function ArtifactFullScreen({
               </Pressable>
             ) : null}
 
+            {canEditSource ? (
+              <Pressable
+                onPress={() => setEditDraft(activeContent)}
+                style={{
+                  padding: 8,
+                  borderRadius: 8,
+                  backgroundColor: colors.neutralSurface,
+                }}
+                accessibilityLabel="Edit source"
+                accessibilityHint="Saving keeps the current text as an earlier version"
+                accessibilityRole="button"
+              >
+                <Pencil size={17} color={colors.textSecondary} />
+              </Pressable>
+            ) : null}
+
             {/* Download / export */}
             <Pressable
               onPress={handleDownload}
@@ -540,18 +669,28 @@ export function ArtifactFullScreen({
               >
                 <ChevronLeft size={15} color={colors.textSecondary} />
               </Pressable>
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: colors.textSecondary,
-                  minWidth: 42,
-                  textAlign: 'center',
-                }}
-                accessibilityLiveRegion="polite"
-                testID="artifact-version-label"
+              <Pressable
+                onPress={() => setVersionHistoryOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Version ${shownVersionIndex + 1} of ${versionCount}`}
+                accessibilityHint="Opens the version history"
+                testID="artifact-version-history-button"
+                style={{ paddingVertical: 6, paddingHorizontal: 2 }}
               >
-                {`v${shownVersionIndex + 1}/${versionCount}`}
-              </Text>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: colors.textSecondary,
+                    minWidth: 42,
+                    textAlign: 'center',
+                    textDecorationLine: 'underline',
+                  }}
+                  accessibilityLiveRegion="polite"
+                  testID="artifact-version-label"
+                >
+                  {`v${shownVersionIndex + 1}/${versionCount}`}
+                </Text>
+              </Pressable>
               <Pressable
                 onPress={() =>
                   setViewedVersionIndex(Math.min(versionCount - 1, shownVersionIndex + 1))
@@ -567,6 +706,25 @@ export function ArtifactFullScreen({
               >
                 <ChevronRight size={15} color={colors.textSecondary} />
               </Pressable>
+              {canShowChanges ? (
+                <Pressable
+                  onPress={() => setChangesShownFor(showChanges ? null : changesKey)}
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 8,
+                    borderRadius: 6,
+                    backgroundColor: showChanges ? colors.accentSurface : colors.transparent,
+                  }}
+                  accessibilityLabel="Show changes"
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: showChanges }}
+                  testID="artifact-show-changes"
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '500', color: colors.textSecondary }}>
+                    Show changes
+                  </Text>
+                </Pressable>
+              ) : null}
               {shownVersionIndex < versionCount - 1 ? (
                 <Pressable
                   onPress={handleRestoreVersion}
@@ -581,6 +739,9 @@ export function ArtifactFullScreen({
                 </Pressable>
               ) : null}
             </View>
+          ) : null}
+          {artifact && onSwitch && switchable && switchable.length > 1 ? (
+            <ArtifactSwitcher artifacts={switchable} activeId={artifact.id} onSelect={onSwitch} />
           ) : null}
 
           {/* Row 3: the hosted link, once published */}
@@ -629,11 +790,33 @@ export function ArtifactFullScreen({
               </Pressable>
             </View>
           ) : null}
+          {currentPublication && artifact ? (
+            <PublishedArtifactControls
+              title={artifact.title}
+              publication={currentPublication}
+              workspaceMemberCount={workspaceMemberCount}
+              onChanged={(publication) => setPublished({ artifactId: artifact.id, publication })}
+              onUnpublished={() => setPublished(null)}
+            />
+          ) : null}
         </View>
 
         {/* ── Content ── */}
-        {canPreview && viewMode === 'preview' && previewKind ? (
-          <SafeArtifactPreview content={activeContent} kind={previewKind} style={{ flex: 1 }} />
+        {showChanges && previousVersionContent !== undefined ? (
+          <ArtifactChangesView
+            previous={previousVersionContent}
+            next={activeContent}
+            unit={isMonospace ? 'line' : 'word'}
+            fromVersion={shownVersionIndex}
+            bottomInset={insets.bottom}
+          />
+        ) : canPreview && viewMode === 'preview' && previewKind ? (
+          <SafeArtifactPreview
+            content={activeContent}
+            kind={previewKind}
+            style={{ flex: 1 }}
+            onViewSource={() => setViewMode('source')}
+          />
         ) : canPreview && viewMode === 'preview' ? (
           <View
             style={{
@@ -813,6 +996,85 @@ export function ArtifactFullScreen({
           </ScrollView>
         )}
       </View>
+      <ArtifactVersionHistorySheet
+        visible={versionHistoryOpen && versionCount > 1}
+        versions={versionHistory ?? []}
+        shownIndex={shownVersionIndex}
+        onOpen={handleOpenHistoryVersion}
+        onRestore={handleRestoreHistoryVersion}
+        onClose={() => setVersionHistoryOpen(false)}
+      />
+      <Modal
+        visible={editDraft !== null}
+        animationType="slide"
+        onRequestClose={() => setEditDraft(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top + 8 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 12,
+              paddingBottom: 8,
+              gap: 8,
+            }}
+          >
+            <Pressable
+              onPress={() => setEditDraft(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel editing"
+              style={{ padding: 8 }}
+            >
+              <Text style={{ fontSize: 15, color: colors.textSecondary }}>Cancel</Text>
+            </Pressable>
+            <Text
+              style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary }}
+              numberOfLines={1}
+            >
+              {artifact.title}
+            </Text>
+            <Pressable
+              onPress={handleSaveEdit}
+              accessibilityRole="button"
+              accessibilityLabel="Save as a new version"
+              style={{ padding: 8 }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '600', color: colors.teal }}>Save</Text>
+            </Pressable>
+          </View>
+          <TextInput
+            value={editDraft ?? ''}
+            onChangeText={setEditDraft}
+            multiline
+            autoCapitalize="none"
+            autoCorrect={false}
+            textAlignVertical="top"
+            accessibilityLabel="Artifact source"
+            style={{
+              flex: 1,
+              margin: 12,
+              padding: 12,
+              fontSize: 13,
+              lineHeight: 20,
+              color: colors.textPrimary,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 8,
+              fontFamily: Platform.select({
+                ios: 'Menlo',
+                android: 'monospace',
+                default: 'monospace',
+              }),
+            }}
+          />
+        </View>
+      </Modal>
+      <ArtifactExportSheet
+        artifact={artifact}
+        content={activeContent}
+        visible={exportOpen}
+        onClose={() => setExportOpen(false)}
+      />
     </Modal>
   );
 }

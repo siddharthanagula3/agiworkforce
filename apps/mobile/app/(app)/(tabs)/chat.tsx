@@ -12,6 +12,10 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { Building2, UserRound } from 'lucide-react-native';
+import { AgiWorkExamples } from '@/src/features/chat/components/AgiWorkExamples';
+import { useNewChatWorkspace } from '@/src/features/team/useNewChatWorkspace';
 import { Download } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -53,6 +57,7 @@ import {
 } from '@/src/features/voice/hooks/useVoiceConversation';
 import * as TTS from '@/src/features/voice/services/tts';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
 import { findNewAssistantResponse } from '@/src/features/voice/utils/assistantResponse';
 import { Text } from '@/components/ui/text';
 import { paywallErrorStateFromApiError, useChatStore } from '@/stores/chatStore';
@@ -91,9 +96,9 @@ import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
-import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
+import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
 import { WorkModeSourceNotice } from '@/src/features/chat/components/WorkModeSourceNotice';
 import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
@@ -157,6 +162,7 @@ export default function ChatTabScreen() {
   useFocusEffect(
     useCallback(() => {
       clearError();
+      useChatViewStore.getState().bindStyleConversation(NEW_CHAT_STYLE_KEY);
     }, [clearError]),
   );
   useComposerAttachmentHandoff('new-chat', chatInputAttachRef);
@@ -201,6 +207,11 @@ export default function ChatTabScreen() {
         Boolean(getSelectableModelById(modelId)),
       ),
     [installedModelIds, readySystemModelIds],
+  );
+  const { t } = useTranslation();
+  const newChatWorkspace = useNewChatWorkspace(
+    activeMode === 'cloud' && isClerkSignedIn,
+    t('navPersonalWorkspace'),
   );
   const cloudChatAvailable = FEATURES.cloudChat && Boolean(DEFAULT_CLOUD_MODEL_ID);
   const modeDescription =
@@ -386,7 +397,7 @@ export default function ChatTabScreen() {
             });
 
         if (imageRequest.status === 'blocked') {
-          Alert.alert(imageRequest.alert.title, imageRequest.alert.message);
+          alertBlockedImageRequest(imageRequest);
           return false;
         }
         if (imageRequest.status === 'ready') {
@@ -683,6 +694,7 @@ export default function ChatTabScreen() {
       const result = await DocumentPicker.getDocumentAsync({
         type: [...PICKABLE_DOCUMENT_MIME_TYPES],
         copyToCacheDirectory: true,
+        multiple: true,
       });
       if (!result.canceled && result.assets.length > 0) {
         const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
@@ -699,6 +711,10 @@ export default function ChatTabScreen() {
       Alert.alert('Error', 'Failed to pick document. Please try again.');
     }
   }, []);
+
+  const handleOpenSkills = useCallback(() => {
+    router.push('/(app)/skills?returnTo=composer' as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const handleAttachFromLibrary = useCallback(
     (attachment: import('@/src/features/chat/components/AttachmentPreview').Attachment) => {
@@ -955,8 +971,33 @@ export default function ChatTabScreen() {
               >
                 {modeDescription}
               </Text>
+              {newChatWorkspace ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 8,
+                    maxWidth: 300,
+                  }}
+                >
+                  {newChatWorkspace.organization ? (
+                    <Building2 size={14} color={c.textMuted} />
+                  ) : (
+                    <UserRound size={14} color={c.textMuted} />
+                  )}
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: c.textMuted }}>
+                    {t('newChat.workspace', { name: newChatWorkspace.name })}
+                  </Text>
+                </View>
+              ) : null}
               {workMode === 'agiwork' ? (
-                <WorkModeSourceNotice onOpenConnectors={handleOpenConnectors} />
+                <>
+                  <WorkModeSourceNotice onOpenConnectors={handleOpenConnectors} />
+                  <AgiWorkExamples
+                    onChoose={(prompt) => chatInputAttachRef.current?.prefillText?.(prompt)}
+                  />
+                </>
               ) : null}
             </>
           ) : (
@@ -1018,6 +1059,8 @@ export default function ChatTabScreen() {
         onOpenModelPicker={handleSheetModelPicker}
         onOpenProjectPicker={handleSheetProjectPicker}
         onAttachFromLibrary={handleAttachFromLibrary}
+        onOpenSkills={handleOpenSkills}
+        offersOutputFormat
       />
 
       <StyleSelector openSignal={styleSelectorOpenSignal} />
@@ -1029,6 +1072,7 @@ export default function ChatTabScreen() {
         modelScope={modelPickerScope}
         onSelect={setModel}
         onOpenCloudAccess={handleOpenCloudAccess}
+        offerRoutingProfiles
       />
 
       {/* First-run voice intro + recording disclosure, gating the overlay below */}

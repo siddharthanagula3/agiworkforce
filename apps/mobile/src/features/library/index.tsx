@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, RefreshControl, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
+import { stageComposerAttachments } from '@/src/features/chat/composerHandoff';
+import { setDraft } from '@/src/features/chat/draftStore';
+import { enterMediaMode, listMediaModels } from '@/src/features/chat/actions/mediaMode';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import {
@@ -18,6 +22,7 @@ import {
   LIBRARY_SORTS,
   type LibrarySort,
 } from '@agiworkforce/cloud-contracts';
+import { formatBytes } from '@agiworkforce/utils/format';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
@@ -39,13 +44,19 @@ import {
   isAccountScopedUiStateOwned,
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
-import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
+import {
+  downloadGeneratedFile,
+  prepareLocalVideoPlayer,
+  shareFile,
+  type LocalVideoPlayer,
+} from '@/services/fileCreation';
+import { VideoPlayerModal } from '@/src/features/chat/components/VideoPlayerModal';
 import { API_URL } from '@/lib/constants';
 import {
   MAX_GRID_CONTENT_WIDTH,
   useResponsiveLayout,
 } from '@/src/shared/hooks/useResponsiveLayout';
-import type { LibraryAsset } from './libraryClient';
+import type { LibraryAsset, LibraryScope } from './libraryClient';
 import { useLibraryAssets } from './useLibraryAssets';
 
 const CARD_GAP = 14;
@@ -59,7 +70,15 @@ const SORT_LABELS: Record<LibrarySort, string> = {
   size: 'Size',
 };
 
-type LibraryFilter = 'all' | 'images' | 'videos' | 'documents' | 'artifacts';
+type LibraryFilter =
+  'all' | 'images' | 'videos' | 'documents' | 'uploads' | 'generated' | 'artifacts';
+
+function scopeForFilter(filter: LibraryFilter, showDeleted: boolean): LibraryScope {
+  if (showDeleted) return { deleted: true };
+  if (filter === 'uploads') return { origin: 'uploaded' };
+  if (filter === 'generated') return { origin: 'generated', kind: 'file' };
+  return {};
+}
 
 type LibraryRow =
   | { row: 'asset'; id: string; asset: LibraryAsset }
@@ -80,9 +99,15 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const [search, setSearch] = useState('');
   const [previewImage, setPreviewImage] = useState<LibraryAsset | null>(null);
   const previewImageScopeRef = useRef<AccountScopedUiState | null>(null);
+  const [videoPlayer, setVideoPlayer] = useState<{
+    player: LocalVideoPlayer;
+    label: string;
+  } | null>(null);
+  const videoLoadingRef = useRef(false);
   const selectionScopeRef = useRef<AccountScopedUiState | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
   const [deletingSelected, setDeletingSelected] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const openedInitialImageRef = useRef<string | null>(null);
 
   const appMode = useChatAppModeStore((s) => s.appMode);
@@ -96,7 +121,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const library = useLibraryAssets(search, sort);
+  const library = useLibraryAssets(search, sort, scopeForFilter(filter, showDeleted));
 
   const selectionActive =
     selectedIds !== null && isAccountScopedUiStateOwned(selectionScopeRef.current);
@@ -130,11 +155,26 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
 
   const openLibraryOptions = useCallback(() => {
     Alert.alert('Library', undefined, [
-      ...(library.signedOut ? [] : [{ text: 'Select saved files', onPress: beginSelection }]),
+      ...(library.signedOut || showDeleted
+        ? []
+        : [{ text: 'Select saved files', onPress: beginSelection }]),
       { text: 'Sort saved files', onPress: openSortOptions },
+      ...(library.signedOut
+        ? []
+        : [
+            showDeleted
+              ? { text: 'Back to Library', onPress: () => setShowDeleted(false) }
+              : {
+                  text: 'Recently deleted',
+                  onPress: () => {
+                    setFilter('all');
+                    setShowDeleted(true);
+                  },
+                },
+          ]),
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [beginSelection, library.signedOut, openSortOptions]);
+  }, [beginSelection, library.signedOut, openSortOptions, showDeleted]);
 
   useLayoutEffect(() => {
     if (!previewImage) return;
@@ -160,7 +200,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const rows = useMemo<LibraryRow[]>(() => {
     const normalizedQuery = search.trim().toLocaleLowerCase();
     const assetRows: LibraryRow[] =
-      filter === 'artifacts'
+      filter === 'artifacts' && !showDeleted
         ? []
         : library.assets
             .filter((asset) => {
@@ -171,7 +211,13 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             })
             .map((asset) => ({ row: 'asset' as const, id: asset.id, asset }));
     const artifactRows: LibraryRow[] =
-      selectionActive || filter === 'images' || filter === 'videos' || filter === 'documents'
+      selectionActive ||
+      showDeleted ||
+      filter === 'images' ||
+      filter === 'videos' ||
+      filter === 'documents' ||
+      filter === 'uploads' ||
+      filter === 'generated'
         ? []
         : artifacts
             .filter(
@@ -183,7 +229,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             )
             .map((artifact) => ({ row: 'artifact' as const, id: artifact.id, artifact }));
     return [...assetRows, ...artifactRows];
-  }, [artifacts, filter, library.assets, search, selectionActive]);
+  }, [artifacts, filter, library.assets, search, selectionActive, showDeleted]);
 
   const openDrawer = useCallback(() => {
     openNearestDrawer(navigation);
@@ -218,6 +264,62 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     }
   }, []);
 
+  const handlePlayVideo = useCallback(
+    async (asset: LibraryAsset) => {
+      if (videoLoadingRef.current) return;
+      videoLoadingRef.current = true;
+      try {
+        const player = await prepareLocalVideoPlayer(absoluteAssetUrl(asset.uri), c.black);
+        setVideoPlayer({ player, label: asset.prompt ? `Video: ${asset.prompt}` : asset.fileName });
+      } catch (error) {
+        Alert.alert(
+          'Could not play the video',
+          error instanceof Error ? error.message : 'Check your connection and try again.',
+        );
+      } finally {
+        videoLoadingRef.current = false;
+      }
+    },
+    [c.black],
+  );
+
+  const handleCloseVideo = useCallback(() => setVideoPlayer(null), []);
+
+  const router = useRouter();
+  const handleAddToChat = useCallback(
+    (asset: LibraryAsset) => {
+      stageComposerAttachments('new-chat', [
+        {
+          id: `library-${asset.id}`,
+          uri: asset.uri,
+          mimeType: asset.mimeType,
+          fileName: asset.fileName,
+          ...(asset.byteCount != null ? { fileSize: asset.byteCount } : {}),
+          assetId: asset.id,
+        },
+      ]);
+      router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+    },
+    [router],
+  );
+
+  const handleRemix = useCallback(
+    (asset: LibraryAsset) => {
+      if (asset.model && listMediaModels('image').includes(asset.model)) {
+        useChatViewStore.getState().setMediaModel('image', asset.model);
+      }
+      if (!enterMediaMode('image')) {
+        Alert.alert('Image generation is unavailable', 'No image model is available right now.');
+        return;
+      }
+      if (asset.prompt?.trim() && clerkUserId) {
+        setDraft('new-chat', asset.prompt, { scope: 'cloud', ownerId: clerkUserId });
+      }
+      handleAddToChat(asset);
+    },
+    [clerkUserId, handleAddToChat],
+  );
+
   const handleDeleteAsset = useCallback(
     (asset: LibraryAsset) => {
       Alert.alert('Delete from Library?', `“${asset.fileName}” moves to deleted items.`, [
@@ -236,15 +338,73 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     [library],
   );
 
+  const handleRestoreAsset = useCallback(
+    (asset: LibraryAsset) => {
+      void library.restoreAsset(asset.id).catch(() => {
+        Alert.alert('Restore failed', 'The file could not be restored. Try again.');
+      });
+    },
+    [library],
+  );
+
+  const handlePermanentDelete = useCallback(
+    (asset: LibraryAsset) => {
+      Alert.alert(
+        'Delete permanently?',
+        `“${asset.fileName}” is erased now instead of after 30 days. This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete permanently',
+            style: 'destructive',
+            onPress: () => {
+              void library.permanentlyDeleteAsset(asset.id).catch(() => {
+                Alert.alert('Delete failed', 'The file could not be deleted. Try again.');
+              });
+            },
+          },
+        ],
+      );
+    },
+    [library],
+  );
+
   const handleAssetActions = useCallback(
     (asset: LibraryAsset) => {
+      if (showDeleted) {
+        Alert.alert(asset.fileName, undefined, [
+          { text: 'Restore', onPress: () => handleRestoreAsset(asset) },
+          {
+            text: 'Delete permanently',
+            style: 'destructive',
+            onPress: () => handlePermanentDelete(asset),
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+        return;
+      }
       Alert.alert(asset.fileName, undefined, [
+        ...(appMode === 'cloud' && asset.kind !== 'video'
+          ? [{ text: 'Add to chat', onPress: () => handleAddToChat(asset) }]
+          : []),
+        ...(appMode === 'cloud' && asset.kind === 'image'
+          ? [{ text: 'Remix', onPress: () => handleRemix(asset) }]
+          : []),
         { text: 'Share', onPress: () => void handleShareAsset(asset) },
         { text: 'Delete', style: 'destructive', onPress: () => handleDeleteAsset(asset) },
         { text: 'Cancel', style: 'cancel' },
       ]);
     },
-    [handleDeleteAsset, handleShareAsset],
+    [
+      appMode,
+      handleAddToChat,
+      handleDeleteAsset,
+      handleRemix,
+      handlePermanentDelete,
+      handleRestoreAsset,
+      handleShareAsset,
+      showDeleted,
+    ],
   );
 
   const toggleSelected = useCallback((id: string) => {
@@ -331,6 +491,19 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       const onLongPress = () =>
         selectionActive ? toggleSelected(asset.id) : handleAssetActions(asset);
       const onPress = () => toggleSelected(asset.id);
+      if (showDeleted) {
+        return (
+          <LibraryFileCard
+            asset={asset}
+            width={cardWidth}
+            style={style}
+            selectionMode={false}
+            selected={false}
+            onPress={() => handleAssetActions(asset)}
+            onLongPress={() => handleAssetActions(asset)}
+          />
+        );
+      }
       if (asset.kind === 'image') {
         return (
           <LibraryImageCard
@@ -351,7 +524,13 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           style={style}
           selectionMode={selectionActive}
           selected={selectedIds?.has(asset.id) ?? false}
-          onPress={selectionActive ? onPress : () => void handleShareAsset(asset)}
+          onPress={
+            selectionActive
+              ? onPress
+              : asset.kind === 'video'
+                ? () => void handlePlayVideo(asset)
+                : () => void handleShareAsset(asset)
+          }
           onLongPress={onLongPress}
         />
       );
@@ -361,9 +540,11 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       gridColumns,
       handleAssetActions,
       handleOpenImage,
+      handlePlayVideo,
       handleShareAsset,
       selectedIds,
       selectionActive,
+      showDeleted,
       toggleSelected,
     ],
   );
@@ -393,7 +574,16 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       {/* Horizontally scrollable, not a fixed row. The labels already overflow
           a 375pt screen at the default text size, and at any accessibility
           size the last filter was pushed off-screen with no way to reach it. */}
-      {!selectionActive ? (
+      {showDeleted ? (
+        <Text
+          testID="library-deleted-heading"
+          style={{ color: c.textMuted, fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 }}
+        >
+          Recently deleted. Files are erased 30 days after you delete them. Long press to restore.
+        </Text>
+      ) : null}
+
+      {!selectionActive && !showDeleted ? (
         <ScrollView
           testID="library-filter-row"
           horizontal
@@ -416,6 +606,16 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             label="Documents"
             active={filter === 'documents'}
             onPress={() => setFilter('documents')}
+          />
+          <FilterChip
+            label="Uploads"
+            active={filter === 'uploads'}
+            onPress={() => setFilter('uploads')}
+          />
+          <FilterChip
+            label="Generated files"
+            active={filter === 'generated'}
+            onPress={() => setFilter('generated')}
           />
           <FilterChip
             label="Artifacts"
@@ -450,16 +650,28 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         onEndReachedThreshold={0.4}
         onEndReached={library.loadMore}
         ListHeaderComponent={
-          library.error ? (
-            <LibraryNotice
-              testID="library-error"
-              text={
-                library.showingCachedPage
-                  ? `Showing the last synced page · ${library.error}`
-                  : library.error
-              }
-            />
-          ) : null
+          <>
+            {library.error ? (
+              <LibraryNotice
+                testID="library-error"
+                text={
+                  library.showingCachedPage
+                    ? `Showing the last synced page · ${library.error}`
+                    : library.error
+                }
+              />
+            ) : null}
+            {!showDeleted && library.storageUsedBytes !== null ? (
+              <Text
+                testID="library-storage-used"
+                style={{ color: c.textMuted, fontSize: 12, marginBottom: 12 }}
+              >
+                {library.storageLimitBytes !== null
+                  ? `${formatBytes(library.storageUsedBytes, 1)} of ${formatBytes(library.storageLimitBytes, 0)} file storage used`
+                  : `${formatBytes(library.storageUsedBytes, 1)} of file storage used`}
+              </Text>
+            ) : null}
+          </>
         }
         ListFooterComponent={
           library.loadingMore ? (
@@ -474,7 +686,12 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
               <ActivityIndicator color={c.textMuted} />
             </View>
           ) : (
-            <LibraryEmptyState filter={filter} query={search} signedOut={library.signedOut} />
+            <LibraryEmptyState
+              filter={filter}
+              query={search}
+              signedOut={library.signedOut}
+              showDeleted={showDeleted}
+            />
           )
         }
         keyboardShouldPersistTaps="handled"
@@ -556,6 +773,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         visible={previewImage !== null}
         onClose={handleCloseImage}
       />
+
+      <VideoPlayerModal
+        player={videoPlayer?.player ?? null}
+        visible={videoPlayer !== null}
+        onClose={handleCloseVideo}
+        label={videoPlayer?.label ?? 'Video'}
+        failureHint="Long-press the video and choose Share to open it in another app."
+      />
     </SafeAreaView>
   );
 }
@@ -612,25 +837,33 @@ function LibraryEmptyState({
   filter,
   query,
   signedOut,
+  showDeleted,
 }: {
   filter: LibraryFilter;
   query: string;
   signedOut: boolean;
+  showDeleted: boolean;
 }) {
   const c = useThemeColors();
   const copy = signedOut
     ? 'Sign in to see the images, videos, and files saved to your account.'
-    : query.trim()
-      ? `Nothing in ${filter === 'all' ? 'your Library' : filter} matches “${query.trim()}”`
-      : filter === 'images'
-        ? 'Images you generate or upload will appear here'
-        : filter === 'videos'
-          ? 'Videos you generate will appear here'
-          : filter === 'documents'
-            ? 'Files you attach or generate will appear here for reuse'
-            : filter === 'artifacts'
-              ? 'Artifacts you create in conversations will appear here'
-              : 'Images, videos, files, and artifacts from your account will appear here';
+    : showDeleted
+      ? 'Nothing deleted in the last 30 days'
+      : filter === 'uploads' && !query.trim()
+        ? 'Files you upload will appear here'
+        : filter === 'generated' && !query.trim()
+          ? 'Files AGI creates for you will appear here'
+          : query.trim()
+            ? `Nothing in ${filter === 'all' ? 'your Library' : filter} matches “${query.trim()}”`
+            : filter === 'images'
+              ? 'Images you generate or upload will appear here'
+              : filter === 'videos'
+                ? 'Videos you generate will appear here'
+                : filter === 'documents'
+                  ? 'Files you attach or generate will appear here for reuse'
+                  : filter === 'artifacts'
+                    ? 'Artifacts you create in conversations will appear here'
+                    : 'Images, videos, files, and artifacts from your account will appear here';
   return (
     <View testID="library-empty-state" className="flex-1 items-center justify-center py-20 px-8">
       <View

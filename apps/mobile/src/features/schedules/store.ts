@@ -56,6 +56,7 @@ export interface ScheduleRun {
   result: string | null;
   error: string | null;
   pendingApproval?: ManagedCloudScheduleRunPendingApproval | null;
+  timingNote: string | null;
 }
 
 export type CreateScheduleInput = Omit<

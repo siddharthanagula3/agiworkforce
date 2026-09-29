@@ -32,7 +32,7 @@ import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { VoiceCaptureError, transcribeAudioFile } from '@/src/features/voice/services/voiceInput';
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { activeSpeechLanguage, speechSettings } from '@/src/features/voice/services/speechSettings';
-import { colors } from '@/src/ui/theme';
+import { colors, motion, zIndex } from '@/src/ui/theme';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import {
@@ -377,7 +377,7 @@ export default function VoiceScreen() {
           ) : null}
 
           {/* Model badge */}
-          <Animated.View entering={FadeIn.duration(400)} style={styles.modelBadge}>
+          <Animated.View entering={FadeIn.duration(motion.moved)} style={styles.modelBadge}>
             <Text style={styles.modelLabel}>{modelLabel.toUpperCase()}</Text>
             <Text testID="voice-processing-badge" style={styles.onDeviceBadge}>
               {isCloudModel ? 'REPLIES FROM AGI CLOUD' : 'ON-DEVICE'}
@@ -386,7 +386,7 @@ export default function VoiceScreen() {
 
           {/* Transcription latency, only for a capture the user chose to stop */}
           {lastResponseMs !== undefined && (
-            <Animated.View entering={FadeIn.duration(300)}>
+            <Animated.View entering={FadeIn.duration(motion.moved)}>
               <Text testID="voice-stt-latency" style={styles.latencyLabel}>
                 {`Transcribed in ${lastResponseMs} ms`}
               </Text>
@@ -394,7 +394,7 @@ export default function VoiceScreen() {
           )}
 
           {visibleSessionMessages?.length || showCurrentPreview ? (
-            <Animated.View entering={FadeIn.duration(200)} style={styles.transcriptBox}>
+            <Animated.View entering={FadeIn.duration(motion.quick)} style={styles.transcriptBox}>
               <ScrollView
                 testID="voice-session-transcript"
                 style={styles.transcriptScroll}
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
   closeBtn: {
     position: 'absolute',
     right: 16,
-    zIndex: 10,
+    zIndex: zIndex.control,
     width: 44,
     height: 44,
     borderRadius: 22,

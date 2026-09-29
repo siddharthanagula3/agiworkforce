@@ -23,7 +23,7 @@ import {
   UserCircle,
   type LucideIcon,
 } from 'lucide-react-native';
-import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
+import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useNotificationCenter } from '@/services/notifications';
@@ -41,6 +41,7 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import {
+  InlineRenameField,
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
@@ -274,7 +275,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const tier = useTierStore((s) => s.tier);
+  const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const clerkUserId = useAuthStore((s) => s.clerkUserId);
   const usageOwnerId = useCloudUsageStore((s) => s.ownerId);
@@ -282,9 +283,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const usageLoading = useCloudUsageStore((s) => s.loading);
   const usageError = useCloudUsageStore((s) => s.error);
   const refreshUsage = useCloudUsageStore((s) => s.refresh);
-  // Same gate the [+] sheet applied before this moved: Cloud-only, and only for
-  // a plan that includes AGI Work. The server is still authoritative.
-  const showAgiWork = appMode === 'cloud' && canUseBillingPlanCapability(tier, 'agi_work');
+  // Same gate the [+] sheet applied before this moved: Cloud-only, and only
+  // where the capability document grants AGI Work. The server is still authoritative.
+  const showAgiWork = appMode === 'cloud' && grantedCapabilities.includes('canUseAgiWork');
 
   const { usesPersistentDrawer } = useTabletLayout();
   const drawerOpen = isDrawerOpen(props.state);
@@ -362,7 +363,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     // Only show non-tombstoned projects. Local mode: read from local store as before.
     if (appMode === 'cloud') {
       const source = cloudProjects.filter((p) => p.deletedAt === null && !p.isArchived);
-      return source.slice(0, 6);
+      return source
+        .slice()
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+        .slice(0, 6);
     }
     return localProjects.slice(0, 6);
   }, [appMode, cloudProjects, localProjects]);
@@ -532,7 +536,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                         )
                       }
                       accessibilityRole="button"
-                      accessibilityLabel={`Open conversation: ${conversation.title}`}
+                      accessibilityLabel={`Open conversation: ${conversation.title}${conversation.unread ? ', unread' : ''}`}
                       accessibilityHint="Long press to pin or delete"
                       accessibilityState={{ selected: active }}
                       style={{
@@ -548,17 +552,31 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                       {conversation.pinned ? (
                         <Pin size={12} color={colors.textMuted} fill={colors.textMuted} />
                       ) : null}
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          flex: 1,
-                          color: active ? colors.textPrimary : colors.textSecondary,
-                          fontSize: 14,
-                          fontWeight: active ? '600' : '400',
-                        }}
-                      >
-                        {conversation.title || 'Untitled chat'}
-                      </Text>
+                      {rename.conversationId === conversation.id ? (
+                        <InlineRenameField rename={rename} />
+                      ) : (
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            flex: 1,
+                            color: active ? colors.textPrimary : colors.textSecondary,
+                            fontSize: 14,
+                            fontWeight: active ? '600' : '400',
+                          }}
+                        >
+                          {conversation.title || 'Untitled chat'}
+                        </Text>
+                      )}
+                      {conversation.unread ? (
+                        <View
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            backgroundColor: colors.textPrimary,
+                          }}
+                        />
+                      ) : null}
                     </Pressable>
                   );
                 })}
@@ -622,7 +640,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         />
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
       </View>
-      <RenameConversationModal rename={rename} />
+      <RenameConversationModal rename={rename} inline />
     </SafeAreaView>
   );
 }

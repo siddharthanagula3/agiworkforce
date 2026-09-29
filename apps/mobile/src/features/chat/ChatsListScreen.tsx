@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Pin,
   ChevronRight,
+  MoreHorizontal,
   Search,
   SlidersHorizontal,
   SquarePen,
@@ -36,6 +37,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import {
+  InlineRenameField,
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
@@ -58,17 +60,19 @@ import { contentColumn } from '@/src/shared/layout/contentColumn';
 import {
   buildMobileGlobalSearchGroups,
   collectSearchableMobileFiles,
+  searchMobileDestinations,
   type MobileGlobalSearchResult,
 } from '@/src/features/search';
 import type { ConversationGroup, ConversationSummary } from '@/types/chat';
 import { TIME_GROUPS } from '@/lib/constants';
 
 type ChatListFilter = 'all' | 'pinned' | 'unread';
-type SearchKind = 'chat' | 'project' | 'file' | 'library' | 'artifact';
+type SearchKind = 'chat' | 'destination' | 'project' | 'file' | 'library' | 'artifact';
 
 interface ChatsListItem extends MobileGlobalSearchResult {
   kind: SearchKind;
   pinned?: boolean;
+  unread?: boolean;
 }
 
 type ChatsListSection = SectionListData<ChatsListItem, { title: string }>;
@@ -101,6 +105,7 @@ function groupHistory(conversations: ReadonlyArray<ConversationSummary>): ChatsL
       title: conversation.title || 'Untitled chat',
       subtitle: formatAgeLabel(conversation.updatedAt),
       pinned: conversation.pinned,
+      unread: conversation.unread,
     };
     if (conversation.pinned) {
       groups.Pinned.push(item);
@@ -287,12 +292,13 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
     if (!isSearching) return searchOnly ? [] : groupHistory(filteredHistory);
     return [
       searchSection('Chats', 'chat', globalResults.chats),
+      searchSection('Go to', 'destination', searchMobileDestinations(query)),
       searchSection('Projects', 'project', globalResults.projects),
       searchSection('Files', 'file', globalResults.files),
       searchSection('Library', 'library', globalResults.library),
       searchSection('Artifacts', 'artifact', globalResults.artifacts),
     ].filter((section): section is ChatsListSection => section !== null);
-  }, [filteredHistory, globalResults, isSearching, searchOnly]);
+  }, [filteredHistory, globalResults, isSearching, query, searchOnly]);
 
   const openFilter = useCallback(() => {
     const option = (value: ChatListFilter) => ({
@@ -314,6 +320,10 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           pathname: '/(app)/chat/[id]',
           params: { id: item.id },
         });
+        return;
+      }
+      if (item.kind === 'destination') {
+        router.push((item.targetId ?? item.id) as Parameters<typeof router.push>[0]);
         return;
       }
       if (item.kind === 'project') {
@@ -355,7 +365,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
             : undefined
         }
         accessibilityRole="button"
-        accessibilityLabel={`Open ${item.kind}: ${item.title}`}
+        accessibilityLabel={`Open ${item.kind}: ${item.title}${item.unread ? ', unread' : ''}`}
         accessibilityHint={item.kind === 'chat' ? 'Long press to rename, pin or delete' : undefined}
         style={({ pressed }) => ({
           minHeight: 66,
@@ -372,18 +382,27 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           gap: 10,
         })}
       >
+        {item.unread ? (
+          <View
+            style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textPrimary }}
+          />
+        ) : null}
         {item.pinned ? <Pin size={15} color={colors.textMuted} fill={colors.textMuted} /> : null}
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text
-            numberOfLines={1}
-            style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
-          >
-            {item.title}
-          </Text>
-          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
-            {item.subtitle}
-          </Text>
-        </View>
+        {item.kind === 'chat' && rename.conversationId === item.id ? (
+          <InlineRenameField rename={rename} />
+        ) : (
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text
+              numberOfLines={1}
+              style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+            >
+              {item.title}
+            </Text>
+            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
+              {item.subtitle}
+            </Text>
+          </View>
+        )}
         {isSearching ? (
           <View
             style={{
@@ -398,12 +417,30 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               {item.kind}
             </Text>
           </View>
+        ) : item.kind === 'chat' ? (
+          <PressableBox
+            onPress={() => openActions(item.id, item.title, item.pinned === true)}
+            accessibilityRole="button"
+            accessibilityLabel={`More actions for ${item.title}`}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
+              marginEnd: -10,
+              borderRadius: 22,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+            })}
+          >
+            <MoreHorizontal size={18} color={colors.textMuted} />
+          </PressableBox>
         ) : (
           <ChevronRight size={16} color={colors.textMuted} />
         )}
       </PressableBox>
     ),
-    [colors, isSearching, openActions, openItem],
+    [colors, isSearching, openActions, openItem, rename],
   );
 
   const hasResults = sections.some((section) => section.data.length > 0);
@@ -436,12 +473,12 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         )}
         <View style={{ flex: 1 }}>
           <Text
-            maxFontSizeMultiplier={1.4}
+            maxFontSizeMultiplier={2}
             style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}
           >
             {searchOnly ? 'Search' : 'Chats'}
           </Text>
-          <Text maxFontSizeMultiplier={1.4} style={{ color: colors.textMuted, fontSize: 11 }}>
+          <Text maxFontSizeMultiplier={2} style={{ color: colors.textMuted, fontSize: 11 }}>
             {appMode === 'cloud' ? 'Managed Cloud' : 'Local on this device'}
           </Text>
         </View>
@@ -629,7 +666,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         inputRef={searchInputRef}
         autoFocus={autoFocusSearch}
       />
-      <RenameConversationModal rename={rename} />
+      <RenameConversationModal rename={rename} inline />
     </SafeAreaView>
   );
 }

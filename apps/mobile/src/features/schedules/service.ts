@@ -11,6 +11,7 @@ import {
   managedCloudSchedulePath,
   managedCloudScheduleRunApprovalPath,
   managedCloudScheduleRunsPath,
+  describeScheduleRunTiming,
   type ManagedCloudScheduleRun,
   type ManagedCloudScheduleRunApproval,
   type ManagedCloudScheduleTask,
@@ -95,6 +96,17 @@ function resultText(run: ManagedCloudScheduleRun): string | null {
   return run.result === null ? null : JSON.stringify(run.result);
 }
 
+function formatRunWhen(iso: string): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return iso;
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 function mapRun(run: ManagedCloudScheduleRun): ScheduleRun {
   const error = run.error
     ? run.status === 'timeout'
@@ -112,6 +124,7 @@ function mapRun(run: ManagedCloudScheduleRun): ScheduleRun {
     result: resultText(run),
     error,
     pendingApproval: run.pendingApproval ?? null,
+    timingNote: describeScheduleRunTiming(run, formatRunWhen)?.note ?? null,
   };
 }
 

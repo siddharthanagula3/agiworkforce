@@ -1,5 +1,5 @@
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
-import { hasAcceptedCurrentTerms, mustAcceptTerms } from '@/lib/server/terms';
+import { hasAcceptedAnyTerms, hasAcceptedCurrentTerms, mustAcceptTerms } from '@/lib/server/terms';
 import { TermsGate } from '../../signup/TermsGate';
 import { StaleSessionRecovery } from './StaleSessionRecovery';
 import {
@@ -66,6 +66,7 @@ export default async function LoginCompletePage({
   if (!mustAccept) {
     return <ContinueWithCurrentTerms redirectTo={redirectTo} />;
   }
+  const firstAcceptance = !(await hasAcceptedAnyTerms(userId));
 
   return (
     <AuthLayout>
@@ -77,7 +78,11 @@ export default async function LoginCompletePage({
         footer={<TermsReviewSignOut />}
       >
         <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue">
-          <RecordTermsAcceptance redirectTo={redirectTo} surface="web-login" />
+          <RecordTermsAcceptance
+            redirectTo={redirectTo}
+            surface="web-login"
+            confirmAge={firstAcceptance}
+          />
         </TermsGate>
       </AuthStepFrame>
     </AuthLayout>

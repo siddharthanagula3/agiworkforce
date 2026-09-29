@@ -1,4 +1,11 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import {
   View,
   ScrollView,
@@ -18,7 +25,7 @@ import type { Attachment } from '@/src/features/chat/components/AttachmentPrevie
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getCloudModelsForTier, getModelById, getProviderById, getDisplayName } from '@/lib/models';
-import { requireProviderDefaultModel } from '@agiworkforce/types';
+import { getPlanMaxConcurrentTurns, requireProviderDefaultModel } from '@agiworkforce/types';
 import { useThemeColors } from '@/src/ui/theme';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -35,6 +42,7 @@ import { EgressBlockedError } from '@/lib/egressGuard';
 
 interface CompareStreamState {
   content: string;
+  isQueued: boolean;
   isStreaming: boolean;
   isDone: boolean;
   errorMessage: string | null;
@@ -45,6 +53,7 @@ interface CompareStreamState {
 
 const initialStreamState = (): CompareStreamState => ({
   content: '',
+  isQueued: false,
   isStreaming: false,
   isDone: false,
   errorMessage: null,
@@ -59,6 +68,14 @@ const COMPARE_ATTACHMENTS_UNSUPPORTED =
 const LOCAL_MODE_COMPARE_NOTICE =
   'Model comparison runs on AGI Cloud, so it is unavailable while chat is in Local Mode. ' +
   'Nothing was sent from this device. Switch to AGI Cloud to compare two models.';
+
+const ONE_ANSWER_AT_A_TIME_NOTE =
+  'Your plan runs one answer at a time, so the second answer starts when the first finishes.';
+
+function runsOneAnswerAtATime(tier: string): boolean {
+  const limit = getPlanMaxConcurrentTurns(tier);
+  return limit !== null && limit <= 1;
+}
 
 function compareErrorMessage(err: unknown): string {
   if (err instanceof EgressBlockedError) return LOCAL_MODE_COMPARE_NOTICE;
@@ -91,6 +108,7 @@ export default function CompareScreen() {
   const tier = useTierStore((state) => state.tier);
   const isCloudMode = appMode === 'cloud';
   const availableModels = comparisonModelsForTier(tier);
+  const oneAnswerAtATime = runsOneAnswerAtATime(tier);
 
   const [modelA, setModelA] = useState(() => availableModels?.[0] ?? DEFAULT_MODEL_A);
   const [modelB, setModelB] = useState(() => availableModels?.[1] ?? DEFAULT_MODEL_B);
@@ -134,8 +152,8 @@ export default function CompareScreen() {
     compareGenerationRef.current += 1;
     controllerARef.current?.abort();
     controllerBRef.current?.abort();
-    setStateA((prev) => ({ ...prev, isStreaming: false, isDone: true }));
-    setStateB((prev) => ({ ...prev, isStreaming: false, isDone: true }));
+    setStateA((prev) => ({ ...prev, isQueued: false, isStreaming: false, isDone: true }));
+    setStateB((prev) => ({ ...prev, isQueued: false, isStreaming: false, isDone: true }));
   }, []);
 
   useLayoutEffect(() => {
@@ -214,129 +232,91 @@ export default function CompareScreen() {
       controllerARef.current?.abort();
       controllerBRef.current?.abort();
 
-      setLastPrompt(text.trim());
+      const prompt = text.trim();
+      const queueB = runsOneAnswerAtATime(useTierStore.getState().tier);
+      setLastPrompt(prompt);
       setStateA(initialStreamState());
-      setStateB(initialStreamState());
+      setStateB({ ...initialStreamState(), isQueued: queueB });
 
-      const messages = [{ role: 'user', content: text.trim() }];
+      const runAnswer = (
+        model: string,
+        setState: Dispatch<SetStateAction<CompareStreamState>>,
+        controller: AbortController,
+        onSettled?: () => void,
+      ) => {
+        const isActive = () =>
+          compareGenerationRef.current === generation &&
+          !controller.signal.aborted &&
+          isCloudAccountEpochCurrent(accountEpoch);
+        const startedAt = Date.now();
+        setState((prev) => ({ ...prev, isQueued: false, isStreaming: true }));
+
+        streamChat(
+          {
+            model,
+            messages: [{ role: 'user', content: prompt }],
+            stream: true as const,
+            operationId: uuidv7(),
+            thinking: false,
+            tool_choice: 'none',
+            memory_enabled: false,
+            connector_tools_enabled: false,
+          },
+          {
+            onDelta: (delta: StreamDelta) => {
+              if (!isActive()) return;
+              if (delta.content) {
+                setState((prev) => {
+                  const newContent = prev.content + delta.content;
+                  const ttft = prev.ttftMs === null ? Date.now() - startedAt : prev.ttftMs;
+                  return {
+                    ...prev,
+                    content: newContent,
+                    ttftMs: ttft,
+                    tokenCount: Math.round(newContent.length / 4),
+                  };
+                });
+              }
+            },
+            onDone: () => {
+              if (!isActive()) return;
+              setState((prev) => ({
+                ...prev,
+                isStreaming: false,
+                isDone: true,
+                durationMs: Date.now() - startedAt,
+              }));
+              onSettled?.();
+            },
+            onError: (err: Error) => {
+              if (!isActive()) return;
+              setState((prev) => ({
+                ...prev,
+                isStreaming: false,
+                isDone: true,
+                errorMessage: compareErrorMessage(err),
+              }));
+              onSettled?.();
+            },
+          },
+          controller.signal,
+        );
+      };
 
       const ctrlA = new AbortController();
-      controllerARef.current = ctrlA;
-      const isAActive = () =>
-        compareGenerationRef.current === generation &&
-        !ctrlA.signal.aborted &&
-        isCloudAccountEpochCurrent(accountEpoch);
-
-      const startA = Date.now();
-      setStateA((prev) => ({ ...prev, isStreaming: true }));
-
-      streamChat(
-        {
-          model: modelA,
-          messages,
-          stream: true as const,
-          operationId: uuidv7(),
-          thinking: false,
-        },
-        {
-          onDelta: (delta: StreamDelta) => {
-            if (!isAActive()) return;
-            if (delta.content) {
-              setStateA((prev) => {
-                const newContent = prev.content + delta.content;
-                const ttft = prev.ttftMs === null ? Date.now() - startA : prev.ttftMs;
-                return {
-                  ...prev,
-                  content: newContent,
-                  ttftMs: ttft,
-                  tokenCount: Math.round(newContent.length / 4),
-                };
-              });
-            }
-          },
-          onDone: () => {
-            if (!isAActive()) return;
-            setStateA((prev) => ({
-              ...prev,
-              isStreaming: false,
-              isDone: true,
-              durationMs: Date.now() - startA,
-            }));
-          },
-          onError: (err: Error) => {
-            if (!isAActive()) return;
-            setStateA((prev) => ({
-              ...prev,
-              isStreaming: false,
-              isDone: true,
-              errorMessage: compareErrorMessage(err),
-            }));
-          },
-        },
-        ctrlA.signal,
-      );
-
       const ctrlB = new AbortController();
+      controllerARef.current = ctrlA;
       controllerBRef.current = ctrlB;
-      const isBActive = () =>
-        compareGenerationRef.current === generation &&
-        !ctrlB.signal.aborted &&
-        isCloudAccountEpochCurrent(accountEpoch);
-
-      const startB = Date.now();
-      setStateB((prev) => ({ ...prev, isStreaming: true }));
-
-      streamChat(
-        {
-          model: modelB,
-          messages,
-          stream: true as const,
-          operationId: uuidv7(),
-          thinking: false,
-        },
-        {
-          onDelta: (delta: StreamDelta) => {
-            if (!isBActive()) return;
-            if (delta.content) {
-              setStateB((prev) => {
-                const newContent = prev.content + delta.content;
-                const ttft = prev.ttftMs === null ? Date.now() - startB : prev.ttftMs;
-                return {
-                  ...prev,
-                  content: newContent,
-                  ttftMs: ttft,
-                  tokenCount: Math.round(newContent.length / 4),
-                };
-              });
-            }
-          },
-          onDone: () => {
-            if (!isBActive()) return;
-            setStateB((prev) => ({
-              ...prev,
-              isStreaming: false,
-              isDone: true,
-              durationMs: Date.now() - startB,
-            }));
-          },
-          onError: (err: Error) => {
-            if (!isBActive()) return;
-            setStateB((prev) => ({
-              ...prev,
-              isStreaming: false,
-              isDone: true,
-              errorMessage: compareErrorMessage(err),
-            }));
-          },
-        },
-        ctrlB.signal,
-      );
+      const startB = () => runAnswer(modelB, setStateB, ctrlB);
+      runAnswer(modelA, setStateA, ctrlA, queueB ? startB : undefined);
+      if (!queueB) startB();
       return true;
     },
     [modelA, modelB],
   );
 
-  const isAnyStreaming = stateA.isStreaming || stateB.isStreaming;
+  const isAnyStreaming =
+    stateA.isStreaming || stateB.isStreaming || stateA.isQueued || stateB.isQueued;
   const bothDone = stateA.isDone && stateB.isDone;
 
   const winner = bothDone ? determineWinner(stateA, stateB) : null;
@@ -639,6 +619,8 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
         </View>
       ) : state.content ? (
         <Text className="text-[13px] text-white leading-5">{state.content}</Text>
+      ) : state.isQueued ? (
+        <Text className="text-[12px] text-fg-muted">{ONE_ANSWER_AT_A_TIME_NOTE}</Text>
       ) : !state.isStreaming ? (
         <Text className="text-[12px] text-fg-muted italic">No response yet.</Text>
       ) : null}

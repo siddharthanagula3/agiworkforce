@@ -28,6 +28,7 @@ export interface RunVideoGenerationTurnInput {
   model: string;
   aspectRatio?: VideoGenRequest['aspect_ratio'];
   resolution?: VideoGenRequest['resolution'];
+  durationSecs?: number;
   ownerId: string;
   onStarted?: () => void;
   begin: (conversationId: string, displayText: string, prompt: string, model: string) => string;
@@ -114,6 +115,7 @@ export async function runVideoGenerationTurn(
         model: input.model,
         ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
         ...(input.resolution ? { resolution: input.resolution } : {}),
+        ...(input.durationSecs ? { duration_secs: input.durationSecs } : {}),
       },
       {
         onTaskCreated: (taskId) => {

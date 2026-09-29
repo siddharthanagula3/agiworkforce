@@ -268,9 +268,8 @@ const config = {
       'expo-calendar',
       {
         calendarPermission:
-          'Allow $(PRODUCT_NAME) to read calendar events only after you enable device calendar context.',
-        remindersPermission:
-          'Allow $(PRODUCT_NAME) to access reminders only when you explicitly enable reminder access.',
+          'Allow $(PRODUCT_NAME) to read your calendars when you ask about your schedule, and to add the events you confirm in a chat.',
+        remindersPermission: 'Allow $(PRODUCT_NAME) to add the reminders you confirm in a chat.',
       },
     ],
     [

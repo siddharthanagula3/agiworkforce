@@ -387,7 +387,7 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
     expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/settings/billing');
   });
 
-  it('shows exact Web proration and founder-set top-up terms for an active Stripe plan', () => {
+  it('shows exact Web proration and sends top-ups to the web for an active Stripe plan', () => {
     Object.assign(mockTierState, {
       tier: 'pro',
       billingTier: 'pro',
@@ -403,15 +403,8 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
       getByText(/exact prorated charge for the rest of your current billing period/i),
     ).toBeTruthy();
     expect(getByText('Usage top-ups')).toBeTruthy();
-    // "units" became "credits" when the founder settled the pricing model on
-    // AGI Credits at 50 per dollar. The screen was updated and this assertion
-    // was not, so it has been failing on main since.
-    expect(getByText(/50 credits for every \$1/i)).toBeTruthy();
-    expect(getByText(/minimum top-up is \$10 \(500 credits\)/i)).toBeTruthy();
-    expect(getByText(/ordinary self-serve maximum is \$100/i)).toBeTruthy();
-    expect(
-      getByText(/native store shows the actual localized price and applicable tax/i),
-    ).toBeTruthy();
+    expect(getByText(/credits are bought on the web, in settings, billing/i)).toBeTruthy();
+    expect(queryByText(/minimum top-up/i)).toBeNull();
     expect(queryByText(/buy 500 units/i)).toBeNull();
   });
 

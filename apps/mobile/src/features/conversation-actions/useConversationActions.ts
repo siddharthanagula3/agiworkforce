@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
-import { archiveConversation } from '@/src/features/archived-chats';
+import { archiveConversation, restoreArchivedConversation } from '@/src/features/archived-chats';
+import { showToast } from '@/src/shared/components/Toast';
 import {
   captureAccountScopedUiState,
   isAccountScopedUiStateOwned,
@@ -27,6 +28,7 @@ export interface ConversationMenuState {
 
 export interface ConversationRenameState {
   visible: boolean;
+  conversationId: string | null;
   title: string;
   text: string;
   setText: (text: string) => void;
@@ -102,7 +104,28 @@ export function useConversationActions(): ConversationActions {
             // swallowed failure would leave the chat visibly gone here and
             // still present on web and desktop.
             if (!isAccountScopedUiStateOwned(ownership)) return;
-            useChatCloudMessageStore.getState().removeCloudConversation(conversationId);
+            const cloudStore = useChatCloudMessageStore.getState();
+            const index = cloudStore.conversations.findIndex((c) => c.id === conversationId);
+            cloudStore.removeCloudConversation(conversationId);
+            showToast('Chat archived. Find it in Settings, Archived chats.', {
+              label: 'Undo',
+              onPress: () => {
+                void (async () => {
+                  try {
+                    await restoreArchivedConversation(conversationId);
+                    if (!isAccountScopedUiStateOwned(ownership)) return;
+                    useChatCloudMessageStore
+                      .getState()
+                      .restoreCloudConversation(conversation, Math.max(0, index));
+                  } catch {
+                    Alert.alert(
+                      'Could not unarchive',
+                      'Find the chat in Settings, Archived chats.',
+                    );
+                  }
+                })();
+              },
+            });
           } catch {
             Alert.alert('Could not archive', 'Check your connection and try again.');
           }
@@ -131,7 +154,7 @@ export function useConversationActions(): ConversationActions {
           run: guard(() =>
             Alert.alert(
               'Delete chat?',
-              'This chat and its messages are removed from every device on this account. It cannot be recovered.',
+              'This chat and its messages are removed from every device on this account. You can restore it from Recently deleted in Settings on the web.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -181,6 +204,7 @@ export function useConversationActions(): ConversationActions {
     openActions,
     rename: {
       visible: pendingRename !== null,
+      conversationId: pendingRename?.conversationId ?? null,
       title: pendingRename?.title ?? '',
       text: renameText,
       setText: setRenameText,

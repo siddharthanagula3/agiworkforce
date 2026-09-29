@@ -10,6 +10,7 @@ import {
   ShoppingBag,
   CircleHelp,
   Check,
+  ListChecks,
 } from 'lucide-react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -24,15 +25,11 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import {
-  MAX_TOP_UP_AMOUNT_USD,
-  MIN_TOP_UP_AMOUNT_USD,
-  TOP_UP_UNITS_PER_USD,
   canUseBillingPlanCapability,
   formatCredits,
   getBillingPlanPricing,
   getNextUpgradeTier,
   isEntitledSubscriptionStatus,
-  topUpUnitsForUsd,
 } from '@agiworkforce/types';
 import { useTierStore } from '@/src/features/billing/store';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
@@ -54,16 +51,6 @@ import {
 } from '@/src/features/billing/mobileIapService';
 
 const PURCHASE_HELP_URL = 'https://agiworkforce.com/help?q=purchase+billing+credits+refund';
-
-function requireTopUpUnits(amountUsd: number): number {
-  const units = topUpUnitsForUsd(amountUsd);
-  if (units === null) {
-    throw new Error('The canonical minimum top-up amount must resolve to a valid unit grant.');
-  }
-  return units;
-}
-
-const MINIMUM_TOP_UP_UNITS = requireTopUpUnits(MIN_TOP_UP_AMOUNT_USD);
 
 function PlanBadge() {
   const colors = useThemeColors();
@@ -116,6 +103,7 @@ export default function CloudBillingScreen() {
   const tierLabel = getBillingPlanPricing(billingTier).label;
   const isFreeTier = billingTier === 'free';
   const isEntitled = isEntitledSubscriptionStatus(billingStatus);
+  const isTrialing = billingStatus === 'trialing';
   const statusLabel = billingStatus.replaceAll('_', ' ');
   const periodEndLabel =
     billingPeriodEnd === null
@@ -148,8 +136,6 @@ export default function CloudBillingScreen() {
     nativeIap.catalog?.enabled === true &&
     !isWorkspacePlan &&
     (!subscriptionGuard.blocked || billingSource === nativeSubscriptionSource);
-  const canBuyNativeTopUp =
-    nativeIap.catalog?.enabled === true && !isFreeTier && isEntitled && !isWorkspacePlan;
   const paywallRecoveryAction = isFreeTier
     ? 'subscribe'
     : isEntitled
@@ -357,7 +343,11 @@ export default function CloudBillingScreen() {
             )}
             {!isFreeTier && isEntitled && periodEndLabel ? (
               <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 2 }}>
-                {billingCancelsAtPeriodEnd ? 'Cancels' : 'Renews'} {periodEndLabel}
+                {billingCancelsAtPeriodEnd
+                  ? `Access ends ${periodEndLabel}. You keep ${tierLabel} until then.`
+                  : isTrialing
+                    ? `Free trial ends ${periodEndLabel}, then renews unless you cancel.`
+                    : `Renews ${periodEndLabel}`}
               </Text>
             ) : null}
           </View>
@@ -401,7 +391,16 @@ export default function CloudBillingScreen() {
                     ? handleUpgrade
                     : undefined
               }
-              isLast={isFreeTier}
+            />
+          ) : null}
+          {!isWorkspacePlan ? (
+            <SettingsRow
+              label="Compare plans"
+              icon={ListChecks}
+              onPress={() =>
+                router.push('/(app)/settings/plans' as Parameters<typeof router.push>[0])
+              }
+              isLast={isFreeTier || !managementTarget}
             />
           ) : null}
           {isWorkspacePlan ? (
@@ -438,7 +437,7 @@ export default function CloudBillingScreen() {
           />
           <SettingsInfo
             title="Usage top-ups"
-            body={`${TOP_UP_UNITS_PER_USD} credits for every $1 of configured product value. The minimum top-up is $${MIN_TOP_UP_AMOUNT_USD} (${MINIMUM_TOP_UP_UNITS.toLocaleString('en-US')} credits), and the ordinary self-serve maximum is $${MAX_TOP_UP_AMOUNT_USD}. The native store shows the actual localized price and applicable tax before approval. Top-ups do not change your plan or renewal date, and unused purchased balance carries across renewals for up to 12 months.`}
+            body="Credits are bought on the web, in Settings, Billing. Top-ups do not change your plan or renewal date, and purchased credits don't expire unless the law where you bought them sets a limit."
             icon={CreditCard}
           />
         </>
@@ -489,45 +488,9 @@ export default function CloudBillingScreen() {
           ) : subscriptionGuard.blocked && billingSource !== nativeSubscriptionSource ? (
             <SettingsInfo
               title="Subscription managed elsewhere"
-              body={`Your plan is managed through ${subscriptionGuard.sourceLabel}. Native subscription choices stay disabled to prevent a second recurring charge. Top-ups remain available below when eligible.`}
+              body={`Your plan is managed through ${subscriptionGuard.sourceLabel}. Native subscription choices stay disabled to prevent a second recurring charge.`}
               icon={CreditCard}
             />
-          ) : null}
-
-          {canBuyNativeTopUp ? (
-            <>
-              <SettingsInfo
-                title="Native usage top-ups"
-                body={`${TOP_UP_UNITS_PER_USD} credits per $1 of configured product value, with a $${MIN_TOP_UP_AMOUNT_USD} minimum. The store shows the actual localized price before purchase. Top-ups are consumable, do not change your renewal date, and are granted only once after server verification.`}
-                icon={ShoppingBag}
-              />
-              <SettingsGroup>
-                {nativeIap.catalog.products
-                  .filter((product) => product.kind === 'top_up')
-                  .map((product, index, products) => {
-                    const storeProduct = nativeIap.storeProducts.get(product.productId);
-                    const busy = nativeIap.purchasingKey === product.key;
-                    return (
-                      <SettingsRow
-                        key={product.key}
-                        label={formatCredits(product.units)}
-                        value={
-                          busy
-                            ? 'Opening store…'
-                            : (nativeIap.priceFor(product.key).label ?? 'Unavailable')
-                        }
-                        icon={ShoppingBag}
-                        onPress={
-                          storeProduct && !nativeIap.purchasingKey && !nativeIap.restoring
-                            ? () => void nativeIap.purchase(product.key)
-                            : undefined
-                        }
-                        isLast={index === products.length - 1}
-                      />
-                    );
-                  })}
-              </SettingsGroup>
-            </>
           ) : null}
         </>
       ) : (

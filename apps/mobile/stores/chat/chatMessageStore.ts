@@ -36,7 +36,10 @@ import {
 import { managedCloudChat } from '@/services/managedCloudChat';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import { setCloudMessageReactionRemote } from '@/src/features/chat/services/cloudMessageMutations';
-import { getDurableGeneratedImagePath } from '@/src/features/image/services/imagegen';
+import {
+  cancelImageGeneration,
+  getDurableGeneratedImagePath,
+} from '@/src/features/image/services/imagegen';
 import {
   deriveAndMapToMobileArtifacts,
   generatedImageToMobileArtifact,
@@ -47,6 +50,7 @@ import { resolveInterruptedGeneration } from '@/stores/chat/chatCloudMessageStor
 import { getConversationMessageStore } from './conversationRepository';
 import { cancelVideoGeneration } from '@/src/features/video/services/videogen';
 import { useCloudSyncStateStore } from './cloudSyncStateStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from './chatViewStore';
 
 const CLOUD_CONVERSATION_PAGE_SIZE = MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE;
 const CLOUD_MESSAGE_PAGE_SIZE = 500;
@@ -133,6 +137,7 @@ interface MessageState {
       persistenceWarning?: string;
       revisedPrompt?: string;
       model?: string;
+      aspectRatio?: string;
     },
   ) => void;
   failImageGeneration: (
@@ -349,13 +354,15 @@ export const useChatMessageStore = create<MessageState>()(
         const selectedModelMode = executionModeForSelection(selectedModel, requestedMode);
         const conversationModel = selectedModelMode === requestedMode ? selectedModel : undefined;
 
-        return createConversationForMode(
+        const conversationId = await createConversationForMode(
           set,
           title,
           effectiveProjectId,
           conversationModel,
           requestedMode,
         );
+        useChatViewStore.getState().adoptStyleSelection(NEW_CHAT_STYLE_KEY, conversationId);
+        return conversationId;
       },
 
       forkConversation: async (sourceConversationId, options) => {
@@ -965,6 +972,7 @@ export const useChatMessageStore = create<MessageState>()(
                       imageUrl: result.imageUrl,
                       imageGenPersisted: result.persisted !== false,
                       revisedPrompt: result.revisedPrompt,
+                      imageAspectRatio: result.aspectRatio,
                       content: finalContent,
                       isGeneratingImage: false,
                       imageGenStatus: 'completed',
@@ -1072,6 +1080,12 @@ export const useChatMessageStore = create<MessageState>()(
 
       stopImageGeneration: (conversationId, assistantMessageId) => {
         if (!isImageGenerationLive(conversationId, assistantMessageId)) return;
+        void cancelImageGeneration(assistantMessageId).catch(() =>
+          patchGenerationMessage(conversationId, assistantMessageId, {
+            imageGenError:
+              'Stopped on this phone, but AGI Cloud could not be reached to stop the job, so it may still finish.',
+          }),
+        );
         patchGenerationMessage(conversationId, assistantMessageId, {
           content: 'Image generation stopped.',
           isGeneratingImage: false,

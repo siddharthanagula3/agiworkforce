@@ -9,7 +9,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { PairingChecklist } from './ConnectionStateViews';
 import { PairingRiskDisclosure } from './PairingRiskDisclosure';
 
@@ -88,7 +88,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
   }, [accountEmail]);
 
   return (
-    <Animated.View entering={FadeIn.duration(300)} className="flex-1">
+    <Animated.View entering={FadeIn.duration(motion.moved)} className="flex-1">
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 32, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}

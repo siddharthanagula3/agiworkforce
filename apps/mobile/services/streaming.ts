@@ -2,12 +2,18 @@ import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { AbortError } from '@agiworkforce/utils/async';
 import {
+  SSE_DONE_DATA,
+  readServerSentEvents,
+  splitJoinedServerSentEventData,
+} from '@agiworkforce/client-runtime';
+import {
   getModelMetadataById,
   getProviderOffering,
   type CloudWorkMode,
   type Effort,
   type Provider,
   type ResearchStep,
+  type RoutingProfileChoice,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
@@ -17,6 +23,7 @@ import { httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
 import { ensureLlmGateOpen } from './llmGate';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
 import { createChatStreamDedupe } from '@/src/lib/chat-stream-dedupe';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
@@ -26,13 +33,18 @@ import {
   parseToolApprovalRequestDelta,
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
+  readAttachmentTruncationHeader,
+  ATTACHMENTS_TRUNCATED_HEADER,
   TOOL_APPROVAL_RESUME_PATH,
+  DEVICE_STEP_RESUME_PATH,
   FREE_QUOTA_COMPLETIONS_PATH,
+  type DeviceStepResultWire,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunReference,
   type FreeQuotaMessageContent,
 } from '@agiworkforce/cloud-contracts';
 import { platformRequestHeaders } from '../lib/platformHeaders';
+import { phoneDeviceHostHeaders } from '@/src/features/integrations/services/phoneDeviceHost';
 
 export interface ChatWireMessage {
   role: string;
@@ -100,6 +112,7 @@ export interface StreamDelta {
   x_research_plan?: unknown;
   x_generated_files?: { files?: StreamGeneratedFile[] };
   x_interactive_card?: unknown;
+  x_agiwork_plan?: unknown;
   x_stream_error?: {
     message: string;
     code?: string;
@@ -117,6 +130,7 @@ export interface StreamCallbacks {
   onReconnecting?: (attempt: number) => void;
   onActivity?: () => void;
   onRunReference?: (reference: ManagedCloudAgentRunReference) => void;
+  onAttachmentsTruncated?: (fileNames: string[]) => void;
 }
 
 const MAX_RECONNECT_ATTEMPTS = 3;
@@ -144,26 +158,26 @@ function sanitizeToolEventFields(delta: StreamDelta): void {
   }
 }
 
-function processSseLine(line: string, callbacks: StreamCallbacks): boolean {
-  const trimmed = line.trim();
-  if (!trimmed || !trimmed.startsWith('data: ')) return false;
+function processSseData(data: string, callbacks: StreamCallbacks): boolean {
+  for (const payload of splitJoinedServerSentEventData(data)) {
+    const trimmed = payload.trim();
+    if (!trimmed) continue;
+    if (trimmed === SSE_DONE_DATA) return true;
 
-  const payload = trimmed.slice(6);
-  if (payload === '[DONE]') return true;
-
-  let parsed;
-  try {
-    parsed = JSON.parse(payload);
-  } catch {
-    return false;
-  }
-  const choice = parsed?.choices?.[0];
-  if (choice?.delta) {
-    sanitizeToolEventFields(choice.delta);
-    callbacks.onDelta(choice.delta);
-  }
-  if (choice?.finish_reason) {
-    callbacks.onDelta({ finish_reason: choice.finish_reason });
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    const choice = parsed?.choices?.[0];
+    if (choice?.delta) {
+      sanitizeToolEventFields(choice.delta);
+      callbacks.onDelta(choice.delta);
+    }
+    if (choice?.finish_reason) {
+      callbacks.onDelta({ finish_reason: choice.finish_reason });
+    }
   }
   return false;
 }
@@ -183,6 +197,11 @@ export function createMobileCloudAgentRunClient(): ManagedCloudAgentRunClient {
   });
 }
 
+function isTermsRefusal(text: string): boolean {
+  const body = parseJsonBody(text) as { error?: { code?: unknown } } | null;
+  return String(body?.error?.code ?? '').toLowerCase() === 'terms_acceptance_required';
+}
+
 export async function cancelMobileCloudAgentRun(runId: string) {
   return createMobileCloudAgentRunClient().cancelRun(runId);
 }
@@ -192,6 +211,7 @@ interface InitialStreamRequest {
   messages: ChatWireMessage[];
   stream: true;
   operationId: string;
+  conversation_id?: string;
   thinking?: boolean;
   effort?: Effort | 'none' | 'minimal';
   web_search?: boolean;
@@ -205,7 +225,14 @@ interface InitialStreamRequest {
   office_creation?: boolean;
   work_mode?: CloudWorkMode;
   agi_work_goal?: { goal: string; constraints?: string; deliverable?: string };
+  agi_work_plan?: { steps: string[] };
+  agi_work_plan_approval?: boolean;
   skill_name?: string;
+  personalization?: false;
+  routing_profile?: RoutingProfileChoice;
+  tool_choice?: 'auto' | 'none' | 'required';
+  memory_enabled?: boolean;
+  connector_tools_enabled?: boolean;
   x_interactive_cards?: { supported: string[]; canRespond: boolean };
 }
 
@@ -213,6 +240,14 @@ interface ApprovalResumeRequest {
   run_id: string;
   operationId: string;
   tool_approvals: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>;
+  guidance?: string;
+}
+
+interface DeviceStepResumeRequest {
+  run_id: string;
+  operationId: string;
+  device_id: string;
+  device_results: DeviceStepResultWire[];
 }
 
 export interface FreeQuotaStreamRequest {
@@ -232,7 +267,8 @@ export interface FreeQuotaStreamRequest {
 }
 
 async function attemptStream(
-  body: InitialStreamRequest | ApprovalResumeRequest | FreeQuotaStreamRequest,
+  body:
+    InitialStreamRequest | ApprovalResumeRequest | DeviceStepResumeRequest | FreeQuotaStreamRequest,
   callbacks: StreamCallbacks,
   signal: AbortSignal,
   path: string = COMPLETIONS_PATH,
@@ -252,6 +288,8 @@ async function attemptStream(
           };
         })()
       : requestBody;
+  const deviceHostHeaders =
+    path === FREE_QUOTA_COMPLETIONS_PATH ? {} : await phoneDeviceHostHeaders();
 
   const response = await guardedFetch(
     `${API_URL}${path}`,
@@ -261,9 +299,13 @@ async function attemptStream(
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
         ...platformRequestHeaders(),
+        ...deviceHostHeaders,
         'Idempotency-Key': createManagedChatIdempotencyKey({
           surface: 'mobile',
-          purpose: path === TOOL_APPROVAL_RESUME_PATH ? 'tool-resume' : 'send',
+          purpose:
+            path === TOOL_APPROVAL_RESUME_PATH || path === DEVICE_STEP_RESUME_PATH
+              ? 'tool-resume'
+              : 'send',
           operationId,
         }),
         Authorization: `Bearer ${token}`,
@@ -280,6 +322,14 @@ async function attemptStream(
     if (response.status === 429) {
       const rateLimitError = rateLimitErrorFrom(parseJsonBody(text));
       if (rateLimitError) throw rateLimitError;
+    }
+
+    // The gateway refuses a turn from an account with no terms acceptance on
+    // record, or one past a material revision's deadline. Re-checking the
+    // account's standing sends the app to the in-app terms review.
+    if (response.status === 403 && isTermsRefusal(text)) {
+      const terms = useTermsAcceptanceStore.getState();
+      if (terms.userId && terms.status !== 'checking') void terms.verify(terms.userId);
     }
 
     if (response.status === 403) {
@@ -306,64 +356,22 @@ async function attemptStream(
     if (runHandle) {
       callbacks.onRunReference?.({ ...runHandle, lastSequence: -1 });
     }
+    const truncated = readAttachmentTruncationHeader(
+      response.headers.get(ATTACHMENTS_TRUNCATED_HEADER),
+    );
+    if (truncated.length > 0) callbacks.onAttachmentsTruncated?.(truncated);
   }
 
-  const reader = response.body?.getReader();
-
-  if (!reader) {
-    const full = await response.text();
-    let completed = false;
-    for (const line of full.split('\n')) {
-      if (processSseLine(line, callbacks)) {
-        completed = true;
-        break;
-      }
+  for await (const event of readServerSentEvents(response, {
+    acceptUnterminatedFinalFrame: true,
+    onChunk: () => callbacks.onActivity?.(),
+  })) {
+    if (processSseData(event.data, callbacks)) {
+      callbacks.onDone();
+      return true;
     }
-    if (!completed) throw new Error('The response ended before completion. Please retry.');
-    callbacks.onDone();
-    return true;
   }
-
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let doneCalled = false;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      callbacks.onActivity?.();
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        if (processSseLine(line, callbacks)) {
-          if (!doneCalled) {
-            doneCalled = true;
-            callbacks.onDone();
-          }
-          return true;
-        }
-      }
-    }
-
-    buffer += decoder.decode();
-    for (const line of buffer.split('\n')) {
-      if (processSseLine(line, callbacks)) {
-        if (!doneCalled) {
-          doneCalled = true;
-          callbacks.onDone();
-        }
-        return true;
-      }
-    }
-
-    throw new Error('The response ended before completion. Please retry.');
-  } finally {
-    reader.releaseLock();
-  }
+  throw new Error('The response ended before completion. Please retry.');
 }
 
 export async function streamFreeQuotaChat(
@@ -447,7 +455,7 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  if ('conversation_id' in body) return streamFreeQuotaChat(body, callbacks, signal);
+  if ('assistant_message_id' in body) return streamFreeQuotaChat(body, callbacks, signal);
   if (getProviderOffering(body.model)) {
     callbacks.onError(new Error('Provider-funded Free models require the Free chat route.'));
     return;
@@ -668,9 +676,26 @@ export async function streamChat(
   );
 }
 
-export async function streamToolApprovalResume(
+export function streamToolApprovalResume(
   body: ApprovalResumeRequest,
   callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamCheckpointResume(body, callbacks, TOOL_APPROVAL_RESUME_PATH, signal);
+}
+
+export function streamDeviceStepResume(
+  body: DeviceStepResumeRequest,
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamCheckpointResume(body, callbacks, DEVICE_STEP_RESUME_PATH, signal);
+}
+
+async function streamCheckpointResume(
+  body: ApprovalResumeRequest | DeviceStepResumeRequest,
+  callbacks: StreamCallbacks,
+  path: string,
   signal?: AbortSignal,
 ): Promise<void> {
   try {
@@ -705,7 +730,7 @@ export async function streamToolApprovalResume(
   };
 
   try {
-    await attemptStream(body, timedCallbacks, combinedSignal, TOOL_APPROVAL_RESUME_PATH);
+    await attemptStream(body, timedCallbacks, combinedSignal, path);
     clearTimeout(timeoutId);
   } catch (err) {
     clearTimeout(timeoutId);

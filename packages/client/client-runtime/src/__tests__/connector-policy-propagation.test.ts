@@ -240,6 +240,67 @@ describe('an org block reaches every surface', () => {
     });
   });
 
+  it('hands an API-key connector back as credentials-required instead of starting OAuth', async () => {
+    const requested: string[] = [];
+    const runtime = createConnectorRuntime({
+      surface: 'mobile',
+      endpoints: ENDPOINTS,
+      http: {
+        async get(path: string) {
+          requested.push(path);
+          return {};
+        },
+        async post() {
+          throw Object.assign(new ConnectorHttpError(409, 'key required'), {
+            body: { credentialsPath: `/api/connectors/${PERMITTED}/credentials` },
+          });
+        },
+        async put() {
+          return {};
+        },
+        async delete() {
+          return {};
+        },
+      },
+    });
+    await expect(runtime.connect(PERMITTED)).resolves.toEqual({
+      kind: 'credentials-required',
+      connectorId: PERMITTED,
+      credentialsPath: `/api/connectors/${PERMITTED}/credentials`,
+    });
+    expect(requested.some((path) => path.startsWith(OAUTH_START_PATH))).toBe(false);
+  });
+
+  it('starts OAuth when the conflict names an authorization start path', async () => {
+    const authorizeUrl = 'https://provider.example/authorize?state=abc';
+    const startPath = `${OAUTH_START_PATH}?connectorId=${PERMITTED}`;
+    const runtime = createConnectorRuntime({
+      surface: 'mobile',
+      endpoints: ENDPOINTS,
+      http: {
+        async get(path: string) {
+          return path.startsWith(OAUTH_START_PATH) ? { connectorId: PERMITTED, authorizeUrl } : {};
+        },
+        async post() {
+          throw Object.assign(new ConnectorHttpError(409, 'oauth required'), {
+            body: { oauthStartPath: startPath, installStartPath: startPath },
+          });
+        },
+        async put() {
+          return {};
+        },
+        async delete() {
+          return {};
+        },
+      },
+    });
+    await expect(runtime.connect(PERMITTED)).resolves.toEqual({
+      kind: 'oauth-required',
+      connectorId: PERMITTED,
+      authorizeUrl,
+    });
+  });
+
   it('the policy is read once per window, not once per question', async () => {
     const calls: Call[] = [];
     const { runtime } = runtimeFor('web', calls, false);
