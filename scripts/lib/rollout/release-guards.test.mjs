@@ -240,7 +240,7 @@ test('a listing that outran the build fails', () => {
   assert.equal(failures.length, 2);
   assert.ok(
     failures.every((failure) =>
-      /_meta.version is 1\.2\.0 but the app ships 9\.9\.9/u.test(failure),
+      failure.includes(`_meta.version is ${IOS_LISTING._meta.version} but the app ships 9.9.9`),
     ),
   );
 
