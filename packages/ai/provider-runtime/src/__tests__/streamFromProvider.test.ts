@@ -254,6 +254,22 @@ describe('streamFromProvider, paywall detection (opt-in)', () => {
     expect(chunks.some((c) => c.type === 'paywall')).toBe(false);
   });
 
+  it.each([
+    ['a non-JSON rate limit page', '<html>Too Many Requests</html>'],
+    ['a JSON null body', 'null'],
+  ])('ends with an error and a stop chunk for %s', async (_label, body) => {
+    const fetchImpl = fetchMockResolving(errorResponse(429, body));
+
+    const chunks = await collect<Chunk>(
+      streamFromProvider({ ...BASE, fetchImpl, detectPaywall: true }),
+    );
+
+    expect(chunks).toEqual([
+      { type: 'error', message: body },
+      { type: 'stop', reason: 'error' },
+    ]);
+  });
+
   it('does not treat a non-429 status as a paywall even with a paywall-shaped body', async () => {
     const fetchImpl = fetchMockResolving(errorResponse(503, paywallBody));
 
