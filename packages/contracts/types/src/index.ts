@@ -419,3 +419,4 @@ export {
   type TechnicalLevel,
 } from './response-style-preferences';
 export * from './chart-spec';
+export * from './connector-connect-required';
