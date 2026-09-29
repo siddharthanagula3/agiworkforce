@@ -118,7 +118,7 @@ export const CLIENT_ROOTS = Object.freeze([
  * holds it. Naming capabilities is fine; deciding them locally is not.
  */
 const HANDSHAKE_CONSUMER_RE =
-  /(isCapabilityEnabled|getPlatformCapabilities|PLATFORM_CAPABILITIES|capability-handshake|useCapabilit|isCapabilityRequestable|grantedCapabilities|CapabilityDecision|resolveEffectiveCapabilities|resolveCapabilityDocumentDecision|capabilityAllowed\()/;
+  /(isCapabilityEnabled|getPlatformCapabilities|PLATFORM_CAPABILITIES|capability-handshake|useCapabilit|isCapabilityRequestable|grantedCapabilities|CapabilityDecision|resolveEffectiveCapabilities|resolveCapabilityDocumentDecision|from\s+['"][^'"]*cloud-bridge\/capabilityDocument['"])/;
 
 const MIN_DISTINCT_CAPABILITIES = 3;
 
