@@ -286,7 +286,7 @@ export function prepareChunks(source: RetrievalSourceText): PreparedChunk[] {
 
 export function contentDigest(title: string, chunks: readonly PreparedChunk[]): string {
   const hash = createHash('sha256').update(title);
-  for (const chunk of chunks) hash.update(' ').update(chunk.text);
+  for (const chunk of chunks) hash.update('\0').update(chunk.text);
   return hash.digest('hex');
 }
 
