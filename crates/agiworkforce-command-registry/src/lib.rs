@@ -199,7 +199,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         ),
         RegistryCommand::builtin_slash(
             "diff",
-            "Show git diff (incl. untracked)",
+            "Show git diff, or keep changes beside the chat (/diff panel)",
             true,
             false,
             vec![],
