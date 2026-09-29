@@ -6603,7 +6603,7 @@ function renderMessages(): void {
           ...(regenerable
             ? {
                 onRegenerate: (messageId: string, modelSelection?: string) => {
-                  trackProductEvent('response_regenerated');
+                  trackProductEvent('response_regenerated', msg.runtime);
                   regenerateTurn(messageId, modelSelection);
                 },
                 regenerateModels,
@@ -14857,7 +14857,10 @@ function buildUI(): void {
   sendBtn.appendChild(renderIcon(ArrowUp, 16));
   sendBtn.addEventListener('click', () => {
     if (sendBtn.getAttribute('data-mode') === 'stop') {
-      trackProductEvent('generation_stopped');
+      trackProductEvent(
+        'generation_stopped',
+        _ctx.messages.find((message) => message.id === _ctx.currentStreamId)?.runtime,
+      );
       cancelCurrentManagedStream(true);
       return;
     }

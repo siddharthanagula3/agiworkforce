@@ -5,6 +5,7 @@ import {
   type ProductAnalyticsProperties,
 } from '@agiworkforce/types';
 
+import type { ConversationRuntime } from '../background/conversation-history';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from '../cloud-bridge/freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 
@@ -35,8 +36,10 @@ const analytics = createAccountProductAnalytics({
 
 export function trackProductEvent(
   name: ProductAnalyticsEventName,
+  runtime: ConversationRuntime | undefined,
   input?: { outcome?: ProductAnalyticsOutcome; properties?: ProductAnalyticsProperties },
 ): void {
+  if (runtime !== 'managed-cloud') return;
   analytics.track(name, input);
 }
 
