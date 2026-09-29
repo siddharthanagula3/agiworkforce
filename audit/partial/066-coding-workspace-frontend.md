@@ -254,16 +254,13 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/extension-vscode/src/core/commandS
 
 - Done when: The user accepts or rejects individual hunks of an agent change.
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /diff-review decides per file, not per hunk; approve stages the file with git add and reject leaves it as is (nothing is reverted). | handler |
-
-Code: `apps/cli/src/tui/tui_app.rs:748-762`, `apps/cli/src/tui/tui_app.rs:3974-3977`
 
 ## S66.22: Checkpoint list.
 

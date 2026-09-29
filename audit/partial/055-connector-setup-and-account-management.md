@@ -162,18 +162,6 @@ Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:293-293`
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S55.23: Revoke permission.
-
-- Done when: Revoking removes the stored grant and asks the provider to revoke the token.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `agi mcp logout` only deletes the locally stored token; it never calls the provider's revocation endpoint. | handler |
-
-Code: `apps/cli/src/lib.rs:2557-2571`, `apps/cli/src/mcp/mod.rs:658-670`
-
 ## S55.25: Folder or repository selection.
 
 - Done when: The user limits a connector to chosen folders or repositories.

@@ -102,15 +102,12 @@ Code: `apps/mobile/app/(app)/schedules/index.tsx:1-1`
 
 - Done when: A routine can be set to run when an external event happens (GitHub, Slack, Gmail, Calendar, webhook) and it runs when the event arrives.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The local daemon fires cron, webhook and file-watcher triggers, but only from a hand-written ~/.agiworkforce/triggers.json run with `agi --daemon`; no command creates them. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:360-360`, `apps/cli/src/features/hooks/hooks.rs:449-449`, `apps/cli/src/daemon.rs:967-967`
 
 ## S63.16: Event filters.
 

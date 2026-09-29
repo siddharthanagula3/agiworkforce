@@ -13,10 +13,6 @@ vi.mock('@/lib/server/service-notices', () => ({
 
 import { GET } from '../route';
 
-function request(): never {
-  return new Request('http://localhost/api/status/notices') as never;
-}
-
 describe('GET /api/status/notices', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -28,7 +24,7 @@ describe('GET /api/status/notices', () => {
     ];
     mocks.readServiceNotices.mockResolvedValue(notices);
 
-    const response = await GET(request(), undefined as never);
+    const response = await GET();
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ notices });
@@ -41,7 +37,7 @@ describe('GET /api/status/notices', () => {
   it('returns an empty list when nothing is posted', async () => {
     mocks.readServiceNotices.mockResolvedValue([]);
 
-    const response = await GET(request(), undefined as never);
+    const response = await GET();
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ notices: [] });
@@ -50,7 +46,7 @@ describe('GET /api/status/notices', () => {
   it('turns a notice store failure into a server error', async () => {
     mocks.readServiceNotices.mockRejectedValue(new Error('store down'));
 
-    const response = await GET(request(), undefined as never);
+    const response = await GET();
 
     expect(response.status).toBe(500);
   });

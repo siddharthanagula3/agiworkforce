@@ -43,18 +43,6 @@ Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:195-1
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S36.04: Source URL or resource identifier.
-
-- Done when: Each cited source exposes its URL or resource identifier and can be opened.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | URLs appear as text in answers (link text plus URL); web sources exist only when SEARCH_API_KEY is set. | ui |
-
-Code: `apps/cli/src/markdown.rs:434-440`, `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
-
 ## S36.05: Publication date.
 
 - Done when: Cited sources show their publication date when known.

@@ -127,7 +127,7 @@ describe('the sensitive-source leg of the trifecta gate', () => {
           },
           {
             approvalMode: 'auto',
-            toolApprovalPolicy: 'auto',
+            toolApprovalPolicy: 'autonomous',
             unattended: false,
             deviceHostPresent: false,
             untrustedContentInContext: hasUntrustedContext({}, messages),
