@@ -6,7 +6,7 @@ import { TOOL_APPROVAL_ACTION_LABELS, creditsFromCents, formatCredits } from '@a
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
 import {
   cloudRunStateColor,
   cloudRunTimeLabel,
@@ -38,7 +38,7 @@ function SectionTitle({ label }: { label: string }) {
     <Text
       style={{
         color: colors.textMuted,
-        fontSize: 12,
+        fontSize: typeScale.caption,
         fontWeight: '700',
         textTransform: 'uppercase',
         letterSpacing: 0.6,
@@ -54,8 +54,12 @@ function MetadataRow({ label, value }: { label: string; value: string }) {
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      <Text style={{ color: colors.textMuted, fontSize: 13, width: 96 }}>{label}</Text>
-      <Text style={{ color: colors.textSecondary, fontSize: 13, flex: 1 }}>{value}</Text>
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, width: 96 }}>
+        {label}
+      </Text>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, flex: 1 }}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -102,7 +106,12 @@ export function CloudRunDetailSheet({
         >
           <Text
             numberOfLines={1}
-            style={{ flex: 1, color: colors.textPrimary, fontSize: 17, fontWeight: '700' }}
+            style={{
+              flex: 1,
+              color: colors.textPrimary,
+              fontSize: typeScale.headline,
+              fontWeight: '700',
+            }}
           >
             {title}
           </Text>
@@ -139,7 +148,10 @@ export function CloudRunDetailSheet({
                   borderColor: colors.dangerBorder,
                 }}
               >
-                <Text selectable style={{ color: colors.agentError, fontSize: 13, lineHeight: 19 }}>
+                <Text
+                  selectable
+                  style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
+                >
                   {detail.error}
                 </Text>
               </View>
@@ -159,14 +171,16 @@ export function CloudRunDetailSheet({
                   <Text
                     style={{
                       color: cloudRunStateColor(run.state, colors),
-                      fontSize: 13,
+                      fontSize: typeScale.footnote,
                       fontWeight: '700',
                     }}
                   >
                     {CLOUD_RUN_STATE_LABELS[run.state]}
                   </Text>
                   {detail?.status === 'live' ? (
-                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>· Following live</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+                      · Following live
+                    </Text>
                   ) : null}
                 </View>
 
@@ -214,18 +228,31 @@ export function CloudRunDetailSheet({
                   borderColor: colors.warningBorder,
                 }}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '700',
+                  }}
+                >
                   Waiting for your approval
                 </Text>
                 {run.pendingApproval.toolCalls.map((call) => (
                   <View key={call.toolCallId} style={{ gap: 3 }}>
-                    <Text numberOfLines={1} style={{ color: colors.textPrimary, fontSize: 13 }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}
+                    >
                       {call.name}
                     </Text>
                     <Text
                       selectable
                       numberOfLines={4}
-                      style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: typeScale.caption,
+                        lineHeight: 18,
+                      }}
                     >
                       {call.argsPreview}
                     </Text>
@@ -265,7 +292,13 @@ export function CloudRunDetailSheet({
                   borderColor: colors.border,
                 }}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '700',
+                  }}
+                >
                   Waiting for connector input
                 </Text>
                 <CloudRunInputForm
@@ -289,19 +322,27 @@ export function CloudRunDetailSheet({
                   borderColor: colors.border,
                 }}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '700',
+                  }}
+                >
                   {`Waiting for ${run.pendingDeviceStep.deviceName}`}
                 </Text>
                 {run.pendingDeviceStep.steps.map((step) => (
                   <Text
                     key={step.toolCallId}
                     numberOfLines={2}
-                    style={{ color: colors.textSecondary, fontSize: 13 }}
+                    style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
                   >
                     {step.summary}
                   </Text>
                 ))}
-                <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
+                <Text
+                  style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 18 }}
+                >
                   {DEVICE_STEP_NOTE}
                 </Text>
               </View>
@@ -324,7 +365,7 @@ export function CloudRunDetailSheet({
                             : status === 'failed'
                               ? colors.agentError
                               : colors.textSecondary,
-                        fontSize: 13,
+                        fontSize: typeScale.footnote,
                         lineHeight: 19,
                       }}
                     >
@@ -333,7 +374,13 @@ export function CloudRunDetailSheet({
                   );
                 })}
                 {STOPPED_SHORT_STATES.has(run.workState ?? run.state) ? (
-                  <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: typeScale.footnote,
+                      lineHeight: 19,
+                    }}
+                  >
                     {`Done ${detail.plan.filter((step) => step.status === 'completed').length} of ${detail.plan.length} steps before it stopped.`}
                   </Text>
                 ) : null}
@@ -345,7 +392,11 @@ export function CloudRunDetailSheet({
                 <SectionTitle label="Latest output" />
                 <Text
                   selectable
-                  style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 20 }}
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    lineHeight: 20,
+                  }}
                 >
                   {detail.transcript}
                 </Text>
@@ -365,7 +416,7 @@ export function CloudRunDetailSheet({
                     numberOfLines={3}
                     style={{
                       color: activityToneColor(line.tone, colors),
-                      fontSize: 13,
+                      fontSize: typeScale.footnote,
                       lineHeight: 19,
                     }}
                   >

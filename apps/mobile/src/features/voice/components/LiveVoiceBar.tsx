@@ -11,7 +11,7 @@ import type {
   LiveVoiceToolDecision,
 } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { StatusStep } from '@/src/features/chat/components/StatusStep';
 import { VoiceOrb } from './VoiceOrb';
@@ -138,7 +138,12 @@ export function LiveVoiceBar({
 
       <Text
         testID="live-voice-status"
-        style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 8 }}
+        style={{
+          color: colors.textSecondary,
+          fontSize: typeScale.footnote,
+          textAlign: 'center',
+          marginBottom: 8,
+        }}
       >
         {statusLabel(status, muted, assistantSpeaking, interrupted, reconnecting)}
       </Text>
@@ -156,7 +161,7 @@ export function LiveVoiceBar({
             gap: 10,
           }}
         >
-          <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{error}</Text>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>{error}</Text>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <Pressable
               onPress={tap(onRetry)}
@@ -174,7 +179,9 @@ export function LiveVoiceBar({
               }}
             >
               <RotateCcw size={16} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Try again</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+                Try again
+              </Text>
             </Pressable>
             <Pressable
               onPress={tap(onSwitchToText)}
@@ -191,7 +198,9 @@ export function LiveVoiceBar({
               }}
             >
               <Keyboard size={16} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Use the keyboard</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+                Use the keyboard
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -206,10 +215,12 @@ export function LiveVoiceBar({
         >
           {turns.map((turn) => (
             <View key={turn.turnId} style={{ gap: 2 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 11, letterSpacing: 0.6 }}>
+              <Text
+                style={{ color: colors.textMuted, fontSize: typeScale.caption, letterSpacing: 0.6 }}
+              >
                 {turn.role === 'user' ? 'YOU' : 'AGI'}
               </Text>
-              <Text style={{ color: colors.textPrimary, fontSize: 15, lineHeight: 21 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, lineHeight: 21 }}>
                 {turn.text}
               </Text>
             </View>
@@ -219,7 +230,9 @@ export function LiveVoiceBar({
 
       {toolOutcomes.length > 0 ? (
         <View testID="live-voice-tool-results" style={{ marginBottom: 12, gap: 8 }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+          <Text
+            style={{ color: colors.textSecondary, fontSize: typeScale.footnote, fontWeight: '600' }}
+          >
             {TOOL_RESULTS_TITLE}
           </Text>
           {toolOutcomes.map((outcome) => (
@@ -235,11 +248,21 @@ export function LiveVoiceBar({
                 gap: 4,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                }}
+              >
                 {outcome.isError ? `${outcome.label} · ${TOOL_FAILED_LABEL}` : outcome.label}
               </Text>
               <Text
-                style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 18,
+                }}
                 numberOfLines={TOOL_OUTPUT_LINES}
               >
                 {outcome.output}
@@ -266,17 +289,21 @@ export function LiveVoiceBar({
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <ShieldQuestion size={16} color={colors.agentWarning} />
-            <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
+            >
               {APPROVAL_TITLE}
             </Text>
           </View>
-          <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{approval.summary}</Text>
-          <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>
+            {approval.summary}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }} numberOfLines={1}>
             {approval.name}
           </Text>
           {approval.input ? (
             <Text
-              style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17 }}
+              style={{ color: colors.textSecondary, fontSize: typeScale.caption, lineHeight: 17 }}
               numberOfLines={6}
             >
               {approval.input}
@@ -307,7 +334,9 @@ export function LiveVoiceBar({
               ) : (
                 <Check size={16} color={colors.accentText} />
               )}
-              <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{ color: colors.accentText, fontSize: typeScale.subhead, fontWeight: '600' }}
+              >
                 {TOOL_APPROVAL_ACTION_LABELS.approve}
               </Text>
             </Pressable>
@@ -332,7 +361,9 @@ export function LiveVoiceBar({
               }}
             >
               <X size={16} color={colors.agentError} />
-              <Text style={{ color: colors.agentError, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{ color: colors.agentError, fontSize: typeScale.subhead, fontWeight: '600' }}
+              >
                 {TOOL_APPROVAL_ACTION_LABELS.deny}
               </Text>
             </Pressable>
@@ -380,7 +411,13 @@ export function LiveVoiceBar({
               borderColor: colors.border,
             }}
           >
-            <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: typeScale.subhead,
+                fontWeight: '600',
+              }}
+            >
               Stop the task
             </Text>
           </Pressable>
@@ -405,7 +442,7 @@ export function LiveVoiceBar({
           }}
         >
           <Keyboard size={20} color={colors.textSecondary} />
-          <Text style={{ color: colors.textMuted, fontSize: 16 }}>Type instead</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.callout }}>Type instead</Text>
         </Pressable>
 
         <AudioRoutePicker compact />

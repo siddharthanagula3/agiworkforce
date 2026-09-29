@@ -8,7 +8,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, zIndex, motion } from '@/src/ui/theme';
+import { useThemeColors, zIndex, motion, typeScale } from '@/src/ui/theme';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { shareGeneratedImage } from '@/services/fileCreation';
 
@@ -290,7 +290,7 @@ export function ImageFullScreen({
               {prompt ? (
                 <Text
                   style={{
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     lineHeight: 19,
                     color: colors.cameraOverlayTextMuted,
                     textAlign: 'center',
@@ -304,7 +304,7 @@ export function ImageFullScreen({
               {settingsCaption ? (
                 <Text
                   style={{
-                    fontSize: 12,
+                    fontSize: typeScale.caption,
                     lineHeight: 17,
                     marginTop: prompt ? 6 : 0,
                     color: colors.cameraOverlayTextMuted,

@@ -11,7 +11,7 @@ import {
   type ToolApprovalStake,
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import type { RiskLevel } from '@/types/chat';
 import { translatePlural } from '@/src/i18n/plural';
 
@@ -91,18 +91,25 @@ function DiffPreview({ diff }: { diff: FileDiff }) {
       }}
     >
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Text numberOfLines={1} style={{ flex: 1, fontSize: 11, color: colors.textSecondary }}>
+        <Text
+          numberOfLines={1}
+          style={{ flex: 1, fontSize: typeScale.caption, color: colors.textSecondary }}
+        >
           {diff.filePath ?? 'Proposed change'}
         </Text>
-        <Text style={{ fontSize: 11, color: colors.agentSuccess }}>+{diff.additions}</Text>
-        <Text style={{ fontSize: 11, color: colors.agentError }}>-{diff.deletions}</Text>
+        <Text style={{ fontSize: typeScale.caption, color: colors.agentSuccess }}>
+          +{diff.additions}
+        </Text>
+        <Text style={{ fontSize: typeScale.caption, color: colors.agentError }}>
+          -{diff.deletions}
+        </Text>
       </View>
       {visible.map((line, index) => (
         <Text
           key={index}
           style={{
             fontFamily: 'monospace',
-            fontSize: 11,
+            fontSize: typeScale.caption,
             color:
               line.type === 'add'
                 ? colors.agentSuccess
@@ -115,7 +122,7 @@ function DiffPreview({ diff }: { diff: FileDiff }) {
         </Text>
       ))}
       {hidden > 0 ? (
-        <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
           {translatePlural(
             'chat',
             'counts.hiddenLines',
@@ -154,7 +161,14 @@ export function CloudToolApprovalControls({
       {riskLevel === 'high' ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <ShieldAlert size={14} color={colors.agentError} />
-          <Text style={{ flex: 1, fontSize: 12.5, fontWeight: '600', color: colors.agentError }}>
+          <Text
+            style={{
+              flex: 1,
+              fontSize: typeScale.caption,
+              fontWeight: '600',
+              color: colors.agentError,
+            }}
+          >
             {TOOL_APPROVAL_HIGH_RISK_NOTICE}
           </Text>
         </View>
@@ -165,7 +179,7 @@ export function CloudToolApprovalControls({
           {preview.stakes.map((stake) => (
             <Text
               key={`${stake.kind}:${stake.label}`}
-              style={{ fontSize: 12.5, color: colors.textPrimary }}
+              style={{ fontSize: typeScale.caption, color: colors.textPrimary }}
             >
               <Text style={{ color: colors.textSecondary }}>{`${stake.label}: `}</Text>
               <Text style={{ fontWeight: '600' }}>{stake.value}</Text>
@@ -197,7 +211,7 @@ export function CloudToolApprovalControls({
             borderColor: colors.border,
             backgroundColor: colors.inputSurface,
             color: colors.textPrimary,
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             paddingHorizontal: 10,
             paddingVertical: 8,
             textAlignVertical: 'top',
@@ -223,7 +237,9 @@ export function CloudToolApprovalControls({
               opacity: disabled ? 0.5 : 1,
             }}
           >
-            <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.accentText, fontSize: typeScale.caption, fontWeight: '600' }}
+            >
               {decision === 'approved'
                 ? TOOL_APPROVAL_ACTION_LABELS.allowed
                 : TOOL_APPROVAL_ACTION_LABELS.allow}
@@ -246,7 +262,13 @@ export function CloudToolApprovalControls({
                 borderColor: colors.border,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.caption,
+                  fontWeight: '600',
+                }}
+              >
                 {TOOL_APPROVAL_ACTION_LABELS.allowForChat}
               </Text>
             </View>
@@ -270,7 +292,9 @@ export function CloudToolApprovalControls({
               opacity: disabled ? 0.5 : 1,
             }}
           >
-            <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.caption, fontWeight: '600' }}
+            >
               {decision === 'rejected'
                 ? TOOL_APPROVAL_ACTION_LABELS.denied
                 : TOOL_APPROVAL_ACTION_LABELS.deny}
@@ -285,7 +309,13 @@ export function CloudToolApprovalControls({
             hitSlop={HIT_SLOP}
           >
             <View style={{ paddingHorizontal: 6, paddingVertical: 7 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.caption,
+                  fontWeight: '600',
+                }}
+              >
                 Add guidance
               </Text>
             </View>

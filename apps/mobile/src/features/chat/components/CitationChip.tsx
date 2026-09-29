@@ -77,10 +77,10 @@ export function CitationChip({ index, title, url, snippet, publishedDate }: Cita
       accessibilityRole={canOpen ? 'link' : undefined}
       accessibilityHint={canOpen ? 'Shows the source, then opens it in the browser' : undefined}
     >
-      <Text className="text-[11px] font-medium" style={{ color: colors.teal }}>
+      <Text className="text-xs font-medium" style={{ color: colors.teal }}>
         [{index}]
       </Text>
-      <Text className="text-[11px]" style={{ color: colors.textSecondary }} numberOfLines={1}>
+      <Text className="text-xs" style={{ color: colors.textSecondary }} numberOfLines={1}>
         {title}
       </Text>
       {canOpen && <ExternalLink size={10} color={colors.teal} />}

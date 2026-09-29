@@ -13,7 +13,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { ResearchSourcesAppendix } from '@/src/features/chat/components/research/ResearchSourcesAppendix';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
-import { radii, useThemeColors } from '@/src/ui/theme';
+import { radii, useThemeColors, typeScale } from '@/src/ui/theme';
 import type { ToolSearchResult } from '@/types/chat';
 import { extractReportSections } from './reportSections';
 import { fetchResearchReports, researchReportLabel, type MobileResearchReport } from './service';
@@ -52,7 +52,12 @@ function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) 
       </Pressable>
       <Text
         numberOfLines={1}
-        style={{ flex: 1, color: colors.textPrimary, fontSize: 18, fontWeight: '700' }}
+        style={{
+          flex: 1,
+          color: colors.textPrimary,
+          fontSize: typeScale.headline,
+          fontWeight: '700',
+        }}
       >
         {title}
       </Text>
@@ -92,11 +97,14 @@ function ReportRow({ report, onOpen }: { report: MobileResearchReport; onOpen: (
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           numberOfLines={2}
-          style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}
+          style={{ fontSize: typeScale.subhead, fontWeight: '600', color: colors.textPrimary }}
         >
           {researchReportLabel(report)}
         </Text>
-        <Text numberOfLines={1} style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+        <Text
+          numberOfLines={1}
+          style={{ fontSize: typeScale.caption, color: colors.textMuted, marginTop: 2 }}
+        >
           {meta}
         </Text>
       </View>
@@ -113,7 +121,9 @@ function ReportRow({ report, onOpen }: { report: MobileResearchReport; onOpen: (
           }}
         >
           <TriangleAlert size={11} color={colors.textMuted} />
-          <Text style={{ fontSize: 11, color: colors.textMuted }}>{report.status}</Text>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+            {report.status}
+          </Text>
         </View>
       ) : null}
     </Pressable>
@@ -166,7 +176,9 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
         testID="research-report-detail"
       >
         {report.summary ? (
-          <Text style={{ fontSize: 14, lineHeight: 21, color: colors.textSecondary }}>
+          <Text
+            style={{ fontSize: typeScale.subhead, lineHeight: 21, color: colors.textSecondary }}
+          >
             {report.summary}
           </Text>
         ) : null}
@@ -184,7 +196,7 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
             }}
           >
             <AlertCircle size={14} color={colors.agentError} />
-            <Text style={{ flex: 1, fontSize: 12, color: colors.textSecondary }}>
+            <Text style={{ flex: 1, fontSize: typeScale.caption, color: colors.textSecondary }}>
               {report.error}
             </Text>
           </View>
@@ -192,13 +204,15 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
 
         {report.keyFindings.length > 0 ? (
           <View style={{ gap: 4 }}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
+            <Text
+              style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}
+            >
               Key findings
             </Text>
             {report.keyFindings.map((finding, index) => (
               <Text
                 key={`${index}-${finding.slice(0, 16)}`}
-                style={{ fontSize: 13, lineHeight: 20, color: colors.textPrimary }}
+                style={{ fontSize: typeScale.footnote, lineHeight: 20, color: colors.textPrimary }}
               >
                 {`• ${finding}`}
               </Text>
@@ -217,7 +231,9 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
             }}
             testID="research-report-detail-sections"
           >
-            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
+            <Text
+              style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}
+            >
               {`Sections · ${sections.length}`}
             </Text>
             {sections.map((section) => (
@@ -233,7 +249,13 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
                   paddingLeft: Math.max(0, section.level - (sections[0]?.level ?? 1)) * 12,
                 }}
               >
-                <Text style={{ fontSize: 12, lineHeight: 19, color: colors.textSecondary }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.caption,
+                    lineHeight: 19,
+                    color: colors.textSecondary,
+                  }}
+                >
                   {section.text}
                 </Text>
               </Pressable>
@@ -255,7 +277,7 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
         <ResearchSourcesAppendix sources={sources} />
         {retrievedOn ? (
           <Text
-            style={{ fontSize: 11, color: colors.textMuted }}
+            style={{ fontSize: typeScale.caption, color: colors.textMuted }}
             testID="research-report-sources-retrieved"
           >
             {`Sources retrieved ${retrievedOn}`}
@@ -323,10 +345,12 @@ export function ReportsScreen() {
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
         <ScreenHeader title="Reports" onBack={handleBack} />
         <View style={{ paddingHorizontal: 16, gap: 6 }}>
-          <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+          <Text
+            style={{ fontSize: typeScale.subhead, fontWeight: '600', color: colors.textPrimary }}
+          >
             Sign in to read your reports
           </Text>
-          <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+          <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
             Research reports are saved to your Managed Cloud account.
           </Text>
         </View>
@@ -349,7 +373,7 @@ export function ReportsScreen() {
         </View>
       ) : state === 'error' ? (
         <View style={{ paddingHorizontal: 16, gap: 12, alignItems: 'flex-start' }}>
-          <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+          <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
             {error ?? 'Could not load reports.'}
           </Text>
           <Button
@@ -361,10 +385,12 @@ export function ReportsScreen() {
         </View>
       ) : reports.length === 0 ? (
         <View style={{ paddingHorizontal: 16, gap: 6 }}>
-          <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+          <Text
+            style={{ fontSize: typeScale.subhead, fontWeight: '600', color: colors.textPrimary }}
+          >
             No reports yet
           </Text>
-          <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+          <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
             Turn on Research in the composer and ask a question. Finished runs are saved here.
           </Text>
         </View>

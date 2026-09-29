@@ -6,7 +6,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { CONNECTOR_OAUTH_APP_RETURN_URL } from '@agiworkforce/cloud-contracts';
 import { completeConnectorAuthorization } from '@/services/connectors';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 export default function ConnectorOAuthReturnRoute() {
@@ -56,7 +56,7 @@ export default function ConnectorOAuthReturnRoute() {
         accessibilityLabel="Cancel"
         style={{ marginTop: 24, minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }}
       >
-        <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>Cancel</Text>
       </Pressable>
     </SafeAreaView>
   );

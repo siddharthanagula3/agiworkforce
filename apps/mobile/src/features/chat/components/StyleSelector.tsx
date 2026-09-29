@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/text';
 import { useChatStore, type ChatStyle } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, dialogPadding } from '@/src/ui/theme';
+import { useTheme, dialogPadding, typeScale } from '@/src/ui/theme';
 
 const STYLE_OPTIONS: Array<{
   id: ChatStyle;
@@ -120,7 +120,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
             </Pressable>
             <Text
               style={{
-                fontSize: 16,
+                fontSize: typeScale.callout,
                 fontWeight: '600',
                 color: themeColors.textPrimary,
               }}
@@ -184,7 +184,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
                   <View style={{ flex: 1 }}>
                     <Text
                       style={{
-                        fontSize: 15,
+                        fontSize: typeScale.body,
                         fontWeight: '500',
                         color: themeColors.textPrimary,
                       }}
@@ -193,7 +193,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
                     </Text>
                     <Text
                       style={{
-                        fontSize: 13,
+                        fontSize: typeScale.footnote,
                         color: themeColors.textMuted,
                         marginTop: 2,
                       }}

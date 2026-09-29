@@ -32,7 +32,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { CloudCodeApprovalCard } from './components/CloudCodeApprovalCard';
 import { CloudCodeChangesSheet } from './components/CloudCodeChangesSheet';
 import { CloudCodeComposer } from './components/CloudCodeComposer';
@@ -99,12 +99,12 @@ function Header({
         <Text
           numberOfLines={1}
           accessibilityRole="header"
-          style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '600' }}
+          style={{ color: colors.textPrimary, fontSize: typeScale.callout, fontWeight: '600' }}
         >
           {session?.title ?? CLOUD_CODE_SCREEN_TITLE}
         </Text>
         {workspace ? (
-          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
+          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
             {workspace}
           </Text>
         ) : null}
@@ -170,7 +170,7 @@ function Notice({
         style={{
           flex: 1,
           color: error ? colors.agentError : colors.textSecondary,
-          fontSize: 13,
+          fontSize: typeScale.footnote,
           lineHeight: 19,
         }}
       >
@@ -311,7 +311,7 @@ function SessionView({
             selectable
             style={{
               color: colors.textSecondary,
-              fontSize: 15,
+              fontSize: typeScale.body,
               lineHeight: 22,
               textAlign: 'center',
             }}
@@ -400,14 +400,23 @@ function SessionView({
               }}
             >
               <ExternalLink size={14} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                }}
+              >
                 {pullRequestLabel}
               </Text>
             </Pressable>
           ) : null}
 
           {failedMessage ? (
-            <Text selectable style={{ color: colors.agentError, fontSize: 13, lineHeight: 19 }}>
+            <Text
+              selectable
+              style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
+            >
               {failedMessage}
             </Text>
           ) : null}

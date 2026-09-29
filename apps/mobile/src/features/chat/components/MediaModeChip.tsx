@@ -2,7 +2,7 @@ import { View, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Film, Paintbrush, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
 import type { MediaMode } from '@/stores/chat/chatViewStore';
 
 export interface MediaModeChipProps {
@@ -39,9 +39,11 @@ export function MediaModeChip({ mode, modelName, onExit }: MediaModeChipProps) {
         }}
       >
         <Icon size={13} color={colors.teal} />
-        <Text style={{ fontSize: 12, fontWeight: '600', color: colors.teal }}>{label}</Text>
+        <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.teal }}>
+          {label}
+        </Text>
         {modelName ? (
-          <Text style={{ fontSize: 12, color: colors.textMuted }} numberOfLines={1}>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }} numberOfLines={1}>
             {modelName}
           </Text>
         ) : null}

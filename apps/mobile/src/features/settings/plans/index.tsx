@@ -13,7 +13,7 @@ import {
   type BillingPlanTier,
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, cardRadius } from '@/src/ui/theme';
+import { useThemeColors, cardRadius, typeScale } from '@/src/ui/theme';
 import { useTierStore } from '@/src/features/billing/store';
 import { SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 
@@ -94,30 +94,51 @@ export default function PlansScreen() {
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.callout,
+                  fontWeight: '700',
+                }}
+              >
                 {label}
               </Text>
               {isCurrent ? (
-                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
                   Your plan
                 </Text>
               ) : null}
             </View>
-            <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}>
+            <Text
+              style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 20 }}
+            >
               {usageLine(plan)}
             </Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}>
+            <Text
+              style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 20 }}
+            >
               {contextLine(plan)}
             </Text>
             <Text
-              style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600', marginTop: 4 }}
+              style={{
+                color: colors.textPrimary,
+                fontSize: typeScale.subhead,
+                fontWeight: '600',
+                marginTop: 4,
+              }}
             >
               {features.heading}
             </Text>
             {features.items.map((item) => (
               <Text
                 key={item}
-                style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}
+                style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 20 }}
               >
                 {`• ${item}`}
               </Text>

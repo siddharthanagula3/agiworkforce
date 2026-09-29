@@ -29,7 +29,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { API_URL } from '@/lib/constants';
 import { openExternalUrl } from '@/lib/safeOpenURL';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, typeScale } from '@/src/ui/theme';
 import { authErrorMessage, isNativeAppleCancellation } from './authErrorMessage';
 import {
   POST_AUTH_INTENT_PARAM,
@@ -288,7 +288,7 @@ export function MobileSignUp({
             accessibilityRole="header"
             style={{
               color: colors.textPrimary,
-              fontSize: 32,
+              fontSize: typeScale.largeTitle,
               fontWeight: '700',
               textAlign: 'center',
               marginBottom: 32,
@@ -301,7 +301,7 @@ export function MobileSignUp({
               <Text
                 style={{
                   color: colors.textSecondary,
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   textAlign: 'center',
                   marginBottom: 24,
                 }}
@@ -315,7 +315,7 @@ export function MobileSignUp({
                   <Text
                     style={{
                       color: colors.textPrimary,
-                      fontSize: 14,
+                      fontSize: typeScale.subhead,
                       fontWeight: '600',
                       textAlign: 'center',
                       marginBottom: 10,
@@ -339,7 +339,7 @@ export function MobileSignUp({
                       borderColor: colors.border,
                       color: colors.textPrimary,
                       backgroundColor: colors.surfaceElevated,
-                      fontSize: 16,
+                      fontSize: typeScale.callout,
                       textAlign: 'center',
                       paddingHorizontal: 20,
                     }}
@@ -362,7 +362,13 @@ export function MobileSignUp({
                     {busy ? (
                       <ActivityIndicator color={colors.accentText} />
                     ) : (
-                      <Text style={{ color: colors.accentText, fontSize: 16, fontWeight: '600' }}>
+                      <Text
+                        style={{
+                          color: colors.accentText,
+                          fontSize: typeScale.callout,
+                          fontWeight: '600',
+                        }}
+                      >
                         Verify and continue
                       </Text>
                     )}
@@ -438,7 +444,13 @@ export function MobileSignUp({
                         opacity: busy ? 0.5 : 1,
                       }}
                     >
-                      <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '500' }}>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontSize: typeScale.callout,
+                          fontWeight: '500',
+                        }}
+                      >
                         {pendingProvider === provider.id
                           ? 'Opening…'
                           : `Continue with ${provider.label}`}
@@ -457,7 +469,13 @@ export function MobileSignUp({
                   }}
                 >
                   <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
-                  <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: typeScale.footnote,
+                      fontWeight: '600',
+                    }}
+                  >
                     OR
                   </Text>
                   <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
@@ -466,7 +484,7 @@ export function MobileSignUp({
               <Text
                 style={{
                   color: colors.textPrimary,
-                  fontSize: 14,
+                  fontSize: typeScale.subhead,
                   fontWeight: '600',
                   textAlign: 'center',
                   marginBottom: 10,
@@ -497,7 +515,7 @@ export function MobileSignUp({
                   borderColor: colors.border,
                   color: colors.textPrimary,
                   backgroundColor: colors.surfaceElevated,
-                  fontSize: 16,
+                  fontSize: typeScale.callout,
                   textAlign: 'center',
                   paddingHorizontal: 20,
                 }}
@@ -520,7 +538,13 @@ export function MobileSignUp({
                 {busy ? (
                   <ActivityIndicator color={colors.accentText} />
                 ) : (
-                  <Text style={{ color: colors.accentText, fontSize: 16, fontWeight: '600' }}>
+                  <Text
+                    style={{
+                      color: colors.accentText,
+                      fontSize: typeScale.callout,
+                      fontWeight: '600',
+                    }}
+                  >
                     Continue
                   </Text>
                 )}
@@ -530,7 +554,12 @@ export function MobileSignUp({
           {error ? (
             <Text
               accessibilityRole="alert"
-              style={{ color: colors.agentError, textAlign: 'center', fontSize: 14, marginTop: 14 }}
+              style={{
+                color: colors.agentError,
+                textAlign: 'center',
+                fontSize: typeScale.subhead,
+                marginTop: 14,
+              }}
             >
               {error}
             </Text>
@@ -548,7 +577,7 @@ export function MobileSignUp({
                 marginTop: 8,
               }}
             >
-              <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '600' }}>
+              <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}>
                 Log in instead
               </Text>
             </Pressable>
@@ -565,7 +594,7 @@ export function MobileSignUp({
                 marginTop: 8,
               }}
             >
-              <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '600' }}>
+              <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}>
                 Continue with another sign-up method
               </Text>
             </Pressable>
@@ -580,7 +609,7 @@ export function MobileSignUp({
                   marginTop: 28,
                 }}
               >
-                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
                   Already have an account?
                 </Text>
                 <Pressable
@@ -589,7 +618,9 @@ export function MobileSignUp({
                   onPress={onSignIn}
                   style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 }}
                 >
-                  <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '600' }}>
+                  <Text
+                    style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}
+                  >
                     Log in
                   </Text>
                 </Pressable>
@@ -598,7 +629,7 @@ export function MobileSignUp({
                 style={{
                   color: colors.textSecondary,
                   textAlign: 'center',
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   lineHeight: 20,
                   marginTop: 16,
                 }}
@@ -609,7 +640,7 @@ export function MobileSignUp({
                   onPress={() => void openExternalUrl(new URL('/terms', API_URL).toString())}
                   style={{
                     color: colors.textSecondary,
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     lineHeight: 20,
                     textDecorationLine: 'underline',
                   }}
@@ -622,7 +653,7 @@ export function MobileSignUp({
                   onPress={() => void openExternalUrl(new URL('/privacy', API_URL).toString())}
                   style={{
                     color: colors.textSecondary,
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     lineHeight: 20,
                     textDecorationLine: 'underline',
                   }}
@@ -635,13 +666,19 @@ export function MobileSignUp({
                 testID="cloud-sign-up-data-use"
                 style={{ alignItems: 'center', gap: 4, marginTop: 24 }}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
                   {FREE_PLAN_TRAINING_NOTICE_TITLE}
                 </Text>
                 <Text
                   style={{
                     color: colors.textSecondary,
-                    fontSize: 12,
+                    fontSize: typeScale.caption,
                     lineHeight: 18,
                     textAlign: 'center',
                   }}
@@ -655,7 +692,9 @@ export function MobileSignUp({
                   onPress={() => void openExternalUrl(new URL('/data-use', API_URL).toString())}
                   style={{ minHeight: 44, justifyContent: 'center' }}
                 >
-                  <Text style={{ color: colors.teal, fontSize: 12, fontWeight: '600' }}>
+                  <Text
+                    style={{ color: colors.teal, fontSize: typeScale.caption, fontWeight: '600' }}
+                  >
                     How Free model data is used
                   </Text>
                 </Pressable>

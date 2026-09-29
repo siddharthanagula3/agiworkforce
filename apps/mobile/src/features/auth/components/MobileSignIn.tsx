@@ -21,7 +21,7 @@ import {
 import { validateEmail } from '@agiworkforce/utils';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, typeScale } from '@/src/ui/theme';
 import { authErrorMessage, isNativeAppleCancellation } from './authErrorMessage';
 import {
   POST_AUTH_INTENT_PARAM,
@@ -284,7 +284,9 @@ export function MobileSignIn({
       {busy ? (
         <ActivityIndicator color={colors.accentText} />
       ) : (
-        <Text style={{ color: colors.accentText, fontSize: 16, fontWeight: '600' }}>{label}</Text>
+        <Text style={{ color: colors.accentText, fontSize: typeScale.callout, fontWeight: '600' }}>
+          {label}
+        </Text>
       )}
     </Pressable>
   );
@@ -310,7 +312,7 @@ export function MobileSignIn({
             accessibilityRole="header"
             style={{
               color: colors.textPrimary,
-              fontSize: 32,
+              fontSize: typeScale.largeTitle,
               fontWeight: '700',
               textAlign: 'center',
               marginBottom: 32,
@@ -364,7 +366,13 @@ export function MobileSignIn({
                         opacity: busy ? 0.5 : 1,
                       }}
                     >
-                      <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '500' }}>
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontSize: typeScale.callout,
+                          fontWeight: '500',
+                        }}
+                      >
                         {pendingProvider === provider.id
                           ? 'Opening…'
                           : `Continue with ${provider.label}`}
@@ -383,7 +391,13 @@ export function MobileSignIn({
                   }}
                 >
                   <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
-                  <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '600' }}>
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: typeScale.footnote,
+                      fontWeight: '600',
+                    }}
+                  >
                     OR
                   </Text>
                   <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
@@ -392,7 +406,7 @@ export function MobileSignIn({
               <Text
                 style={{
                   color: colors.textPrimary,
-                  fontSize: 14,
+                  fontSize: typeScale.subhead,
                   fontWeight: '600',
                   textAlign: 'center',
                   marginBottom: 10,
@@ -423,7 +437,7 @@ export function MobileSignIn({
                   borderColor: colors.border,
                   color: colors.textPrimary,
                   backgroundColor: colors.surfaceElevated,
-                  fontSize: 16,
+                  fontSize: typeScale.callout,
                   textAlign: 'center',
                   paddingHorizontal: 20,
                 }}
@@ -458,7 +472,7 @@ export function MobileSignIn({
                     borderColor: colors.border,
                     color: colors.textPrimary,
                     backgroundColor: colors.surfaceElevated,
-                    fontSize: 16,
+                    fontSize: typeScale.callout,
                     textAlign: 'center',
                     paddingHorizontal: 20,
                   }}
@@ -523,7 +537,12 @@ export function MobileSignIn({
           {error ? (
             <Text
               accessibilityRole="alert"
-              style={{ color: colors.agentError, textAlign: 'center', fontSize: 14, marginTop: 14 }}
+              style={{
+                color: colors.agentError,
+                textAlign: 'center',
+                fontSize: typeScale.subhead,
+                marginTop: 14,
+              }}
             >
               {error}
             </Text>
@@ -541,7 +560,7 @@ export function MobileSignIn({
                 marginTop: 8,
               }}
             >
-              <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '600' }}>
+              <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}>
                 Create an account instead
               </Text>
             </Pressable>
@@ -553,7 +572,7 @@ export function MobileSignIn({
             onPress={onNativeFallback}
             style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 20 }}
           >
-            <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '600' }}>
+            <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}>
               {step === 'password' ? 'Forgot password or try another way' : 'More sign-in options'}
             </Text>
           </Pressable>
@@ -566,7 +585,9 @@ export function MobileSignIn({
                 marginTop: 20,
               }}
             >
-              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>New to AGI?</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+                New to AGI?
+              </Text>
               <Pressable
                 testID="cloud-auth-signUp"
                 accessibilityRole="button"
@@ -574,7 +595,9 @@ export function MobileSignIn({
                 onPress={onSignUp}
                 style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 }}
               >
-                <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '600' }}>
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}
+                >
                   Create an account
                 </Text>
               </Pressable>

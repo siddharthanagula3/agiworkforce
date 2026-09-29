@@ -13,7 +13,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { exportAllUserData } from '@/services/dsarExport';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { buildLocalDataExportSnapshot } from './localDataSnapshot';
 import { syncLocalConversationsToCloud } from './localCloudSyncService';
 import {
@@ -249,7 +249,7 @@ export default function DataControlsScreen() {
           }}
         >
           <Download size={19} color={colors.textSecondary} />
-          <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+          <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
             {exporting ? 'Exporting…' : 'Export Local Data'}
           </Text>
         </Pressable>
@@ -298,11 +298,11 @@ export default function DataControlsScreen() {
         >
           <Archive size={19} color={cloudUnlocked ? colors.teal : colors.textMuted} />
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.textPrimary, fontSize: 15 }}>
+            <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>
               {bulkAction === 'archive' ? 'Archiving…' : 'Archive all chats'}
             </Text>
             {!cloudUnlocked ? (
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
                 Requires AGI Cloud sign-in
               </Text>
             ) : null}
@@ -328,13 +328,13 @@ export default function DataControlsScreen() {
             <Text
               style={{
                 color: cloudUnlocked ? colors.agentError : colors.textPrimary,
-                fontSize: 15,
+                fontSize: typeScale.body,
               }}
             >
               {bulkAction === 'delete' ? 'Deleting…' : 'Delete all chats'}
             </Text>
             {!cloudUnlocked ? (
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
                 Requires AGI Cloud sign-in
               </Text>
             ) : null}
@@ -370,11 +370,11 @@ export default function DataControlsScreen() {
         >
           <ArrowUpFromLine size={19} color={cloudUnlocked ? colors.teal : colors.textMuted} />
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.textPrimary, fontSize: 15 }}>
+            <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>
               {syncing ? 'Syncing...' : 'Sync Local Chats to Cloud'}
             </Text>
             {!cloudUnlocked ? (
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
                 Requires AGI Cloud sign-in
               </Text>
             ) : null}

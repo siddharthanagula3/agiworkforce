@@ -6,7 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
 
 interface VoiceReviewProps {
   visible: boolean;
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     minHeight: 80,
   },
   transcriptInput: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     lineHeight: 22,
   },
   actions: {

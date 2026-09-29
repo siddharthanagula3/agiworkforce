@@ -32,7 +32,7 @@ import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { VoiceCaptureError, transcribeAudioFile } from '@/src/features/voice/services/voiceInput';
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { activeSpeechLanguage, speechSettings } from '@/src/features/voice/services/speechSettings';
-import { colors, motion, zIndex } from '@/src/ui/theme';
+import { colors, motion, zIndex, typeScale } from '@/src/ui/theme';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import {
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
   },
   sublabel: {
     color: colors.textMuted,
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     letterSpacing: 0.3,
   },
   orbWrapper: {
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   phaseLabel: {
-    fontSize: 20,
+    fontSize: typeScale.title3,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
@@ -569,16 +569,16 @@ const styles = StyleSheet.create({
   },
   modelLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: typeScale.caption,
     letterSpacing: 1.2,
   },
   latencyLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: typeScale.caption,
   },
   onDeviceBadge: {
     color: colors.terraCotta,
-    fontSize: 10,
+    fontSize: typeScale.caption,
     fontWeight: '700',
     letterSpacing: 1.4,
     opacity: 0.7,
@@ -605,17 +605,17 @@ const styles = StyleSheet.create({
   },
   transcriptSpeaker: {
     color: colors.terraCotta,
-    fontSize: 11,
+    fontSize: typeScale.caption,
     fontWeight: '700',
   },
   transcriptText: {
     color: colors.textSecondary,
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     lineHeight: 20,
   },
   fileSendError: {
     color: colors.agentError,
-    fontSize: 12,
+    fontSize: typeScale.caption,
     textAlign: 'center',
     marginTop: 8,
   },
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
   },
   retryFileSendText: {
     color: colors.textPrimary,
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     fontWeight: '600',
   },
   controls: {
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     color: colors.textPrimary,
-    fontSize: 16,
+    fontSize: typeScale.callout,
   },
   sendButton: {
     width: 44,
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
   },
   typedError: {
     color: colors.agentError,
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     marginHorizontal: 28,
     marginBottom: 8,
   },

@@ -15,7 +15,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
-import { dialogPadding, useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, useThemeColors, typeScale } from '@/src/ui/theme';
 import {
   CLOUD_CODE_OPTIONS_COPY as COPY,
   CLOUD_CODE_TURN_MODE_OPTIONS,
@@ -39,7 +39,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   const colors = useThemeColors();
   return (
     <View style={{ gap: 4 }}>
-      <Text accessibilityRole="header" style={{ color: colors.textSecondary, fontSize: 13 }}>
+      <Text
+        accessibilityRole="header"
+        style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+      >
         {title}
       </Text>
       {children}
@@ -68,8 +71,8 @@ function Choice({
       style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 8 }}
     >
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 15 }}>{label}</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 13 }}>{description}</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>{label}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>{description}</Text>
       </View>
       {selected ? <Check size={16} color={colors.textPrimary} /> : null}
     </Pressable>
@@ -90,9 +93,9 @@ function UsageRow({
   return (
     <View style={{ gap: 6, paddingVertical: 6 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{label}</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>{label}</Text>
         <Text
-          style={{ color: colors.textSecondary, fontSize: 13 }}
+          style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
         >{`${Math.round(clamped)}%`}</Text>
       </View>
       <View
@@ -114,7 +117,9 @@ function UsageRow({
           }}
         />
       </View>
-      {detail ? <Text style={{ color: colors.textMuted, fontSize: 12 }}>{detail}</Text> : null}
+      {detail ? (
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>{detail}</Text>
+      ) : null}
     </View>
   );
 }
@@ -171,7 +176,12 @@ export function CloudCodeTaskOptionsSheet({
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <Text
             accessibilityRole="header"
-            style={{ flex: 1, color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
+            style={{
+              flex: 1,
+              color: colors.textPrimary,
+              fontSize: typeScale.headline,
+              fontWeight: '600',
+            }}
           >
             {COPY.heading}
           </Text>
@@ -215,7 +225,7 @@ export function CloudCodeTaskOptionsSheet({
               </Section>
             </>
           ) : (
-            <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, lineHeight: 19 }}>
               {COPY.ownAgent}
             </Text>
           )}
@@ -256,7 +266,9 @@ export function CloudCodeTaskOptionsSheet({
             ) : loading ? (
               <ActivityIndicator color={colors.textSecondary} />
             ) : (
-              <Text style={{ color: colors.textMuted, fontSize: 13 }}>{COPY.usageUnavailable}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+                {COPY.usageUnavailable}
+              </Text>
             )}
             <Pressable
               onPress={openUsage}
@@ -264,7 +276,14 @@ export function CloudCodeTaskOptionsSheet({
               accessibilityLabel={COPY.usageDetail}
               style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 }}
             >
-              <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{
+                  flex: 1,
+                  color: colors.textPrimary,
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                }}
+              >
                 {COPY.usageDetail}
               </Text>
               <ChevronRight size={16} color={colors.textMuted} />

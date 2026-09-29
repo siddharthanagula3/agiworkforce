@@ -8,7 +8,7 @@ import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { API_URL } from '@/lib/constants';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/common';
-import { useThemeColors, dialogPadding } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
 import {
   INVITABLE_ROLES,
   fetchWorkspaceInvitations,
@@ -346,9 +346,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 10,
   },
-  title: { fontSize: 17, fontWeight: '600' },
-  body: { fontSize: 14, lineHeight: 20 },
-  input: { height: 44, borderRadius: 8, paddingHorizontal: 12, borderWidth: 1, fontSize: 15 },
+  title: { fontSize: typeScale.headline, fontWeight: '600' },
+  body: { fontSize: typeScale.subhead, lineHeight: 20 },
+  input: {
+    height: 44,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    fontSize: typeScale.body,
+  },
   option: {
     minHeight: 44,
     borderWidth: 1,
@@ -358,6 +364,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  optionText: { fontSize: 15 },
+  optionText: { fontSize: typeScale.body },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
 });

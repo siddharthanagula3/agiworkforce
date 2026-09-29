@@ -8,7 +8,7 @@ import {
   extractTrailingUnclosedBlock,
 } from '@agiworkforce/artifacts';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import type { Artifact } from '@/types/chat';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
 
@@ -107,17 +107,22 @@ export function StreamingArtifactCard({
           <Code2 size={14} color={colors.textSecondary} />
           <Text
             numberOfLines={1}
-            style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.textPrimary }}
+            style={{
+              flex: 1,
+              fontSize: typeScale.footnote,
+              fontWeight: '600',
+              color: colors.textPrimary,
+            }}
           >
             {`${STREAMING_ARTIFACT_TITLE} · ${typeLabel}`}
           </Text>
-          <Text style={{ fontSize: 11, color: colors.textMuted }}>Writing…</Text>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>Writing…</Text>
         </View>
         <Text
           style={{
             paddingHorizontal: 12,
             paddingBottom: 10,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 18,
             color: colors.textMuted,
             fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),

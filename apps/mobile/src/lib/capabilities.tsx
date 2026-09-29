@@ -13,7 +13,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import {
@@ -172,13 +172,13 @@ function createUnavailableStyles(colors: ColorScheme) {
     title: {
       color: colors.textPrimary,
       textAlign: 'center',
-      fontSize: 16,
+      fontSize: typeScale.callout,
       fontWeight: '600',
     },
     body: {
       color: colors.textSecondary,
       textAlign: 'center',
-      fontSize: 14,
+      fontSize: typeScale.subhead,
       lineHeight: 20,
       marginTop: 8,
     },
@@ -192,7 +192,7 @@ function createUnavailableStyles(colors: ColorScheme) {
     },
     buttonText: {
       color: colors.accentText,
-      fontSize: 14,
+      fontSize: typeScale.subhead,
       fontWeight: '600',
     },
   });

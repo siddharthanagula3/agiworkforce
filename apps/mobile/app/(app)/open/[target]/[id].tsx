@@ -10,7 +10,7 @@ import {
   productLinkWebFallbackUrl,
 } from '@/src/features/notifications/productLinks';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 export default function ProductLinkRoute() {
@@ -51,7 +51,7 @@ export default function ProductLinkRoute() {
         accessibilityLabel="Cancel"
         style={{ marginTop: 24, minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }}
       >
-        <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>Cancel</Text>
       </Pressable>
     </SafeAreaView>
   );

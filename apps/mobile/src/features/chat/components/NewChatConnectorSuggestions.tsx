@@ -13,7 +13,7 @@ import {
   type ConnectorListing,
 } from '@/services/connectors';
 import { ConnectorLogo } from '@/src/features/settings/cloud-connectors/ConnectorLogo';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 const SUGGESTION_LIMIT = 3;
 const CONNECTED_ENOUGH = 3;
@@ -88,7 +88,9 @@ export function NewChatConnectorSuggestions() {
         gap: 8,
       }}
     >
-      <Text style={{ color: colors.textMuted, fontSize: 14 }}>{t('newChat.connectors.label')}</Text>
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
+        {t('newChat.connectors.label')}
+      </Text>
       {suggestions.map((listing) => (
         <Pressable
           key={listing.id}
@@ -105,7 +107,9 @@ export function NewChatConnectorSuggestions() {
             iconUrl={connectorListingIconUrl(listing)}
             size={24}
           />
-          <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{listing.name}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+            {listing.name}
+          </Text>
         </Pressable>
       ))}
       <Pressable
@@ -113,7 +117,7 @@ export function NewChatConnectorSuggestions() {
         accessibilityRole="button"
         style={chipStyle}
       >
-        <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
           {t('newChat.connectors.seeAll')}
         </Text>
       </Pressable>

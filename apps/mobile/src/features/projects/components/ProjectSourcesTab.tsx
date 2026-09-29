@@ -81,7 +81,7 @@ function SourceRow({
         >
           {source.name}
         </Text>
-        <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+        <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
           {formatBytes(source.size)} · {formatRelativeTime(source.addedAt)}
         </Text>
       </View>

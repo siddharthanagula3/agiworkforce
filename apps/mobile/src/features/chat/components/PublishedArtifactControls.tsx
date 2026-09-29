@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { translatePlural } from '@/src/i18n/plural';
 import {
   publishFailureMessage,
@@ -116,7 +116,9 @@ export function PublishedArtifactControls({
 
   return (
     <View style={{ marginTop: 8, gap: 6 }} testID="artifact-published-controls">
-      <Text style={{ fontSize: 12, color: colors.textMuted }}>Who can open this</Text>
+      <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+        Who can open this
+      </Text>
       <View
         style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}
         accessibilityRole="radiogroup"
@@ -144,7 +146,7 @@ export function PublishedArtifactControls({
             >
               <Text
                 style={{
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   color: colors.textPrimary,
                   fontWeight: selected ? '600' : '400',
                 }}
@@ -164,7 +166,7 @@ export function PublishedArtifactControls({
         testID="artifact-unpublish"
         style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
       >
-        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.agentError }}>
+        <Text style={{ fontSize: typeScale.footnote, fontWeight: '500', color: colors.agentError }}>
           {busy === 'unpublish' ? 'Unpublishing…' : 'Unpublish'}
         </Text>
       </Pressable>

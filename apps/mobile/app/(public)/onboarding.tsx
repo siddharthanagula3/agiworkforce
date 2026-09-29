@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useTheme, type ColorScheme, motion } from '@/src/ui/theme';
+import { useTheme, type ColorScheme, motion, typeScale } from '@/src/ui/theme';
 import {
   assertDownloadAllowed,
   downloadModel,
@@ -574,10 +574,10 @@ function AboutYouScreen({
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: '700' }}>
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.title2, fontWeight: '700' }}>
         What should AGI call you?
       </Text>
-      <Text style={{ color: colors.textSecondary, fontSize: 15, lineHeight: 21 }}>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.body, lineHeight: 21 }}>
         Answers use your name and fit your work. You can change both later in Settings,
         Personalization.
       </Text>
@@ -921,7 +921,7 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   wordmark: {
-    fontSize: 94,
+    fontSize: typeScale.display,
     // Same face as the launch lockup and the chat empty state. A bold sans here
     // made the brand change typeface between the splash and the first screen.
     fontFamily: 'Newsreader_600SemiBold',
@@ -929,14 +929,14 @@ const styles = StyleSheet.create({
     lineHeight: 108,
   },
   tagline: {
-    fontSize: 20,
+    fontSize: typeScale.title3,
     fontWeight: '600',
     lineHeight: 27,
     textAlign: 'center',
     marginBottom: 10,
   },
   heroSubcopy: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     lineHeight: 22,
     fontWeight: '400',
     textAlign: 'center',
@@ -952,10 +952,10 @@ const styles = StyleSheet.create({
   },
   ctaBtnText: {
     fontWeight: '600',
-    fontSize: 17,
+    fontSize: typeScale.headline,
   },
   footer: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     textAlign: 'center',
     position: 'absolute',
     bottom: Platform.OS === 'android' ? 24 : 16,
@@ -966,14 +966,14 @@ const styles = StyleSheet.create({
     paddingTop: 56,
   },
   tierHeadline: {
-    fontSize: 26,
+    fontSize: typeScale.title1,
     lineHeight: 34,
     fontWeight: '700',
     letterSpacing: 0,
     marginBottom: 8,
   },
   tierSubhead: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     lineHeight: 20,
     marginBottom: 24,
   },
@@ -991,7 +991,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   modelName: {
-    fontSize: 17,
+    fontSize: typeScale.headline,
     fontWeight: '600',
     flex: 1,
   },
@@ -1001,11 +1001,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   tierBadgeText: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     fontWeight: '600',
   },
   modelDetail: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     lineHeight: 18,
   },
   cellularRow: {
@@ -1015,7 +1015,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   cellularLabel: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     flex: 1,
   },
   secondaryBtn: {
@@ -1023,7 +1023,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryBtnText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
 
   downloadRoot: {
@@ -1041,7 +1041,7 @@ const styles = StyleSheet.create({
   },
   downloadPct: {
     position: 'absolute',
-    fontSize: 38,
+    fontSize: typeScale.largeTitle,
     lineHeight: 46,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -1049,21 +1049,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   downloadModelName: {
-    fontSize: 16,
+    fontSize: typeScale.callout,
     fontWeight: '600',
     textAlign: 'center',
   },
   downloadMeta: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     textAlign: 'center',
   },
   downloadReassurance: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     textAlign: 'center',
     marginTop: 8,
   },
   downloadHint: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     textAlign: 'center',
     opacity: 0.7,
   },
@@ -1074,7 +1074,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   skipBtnText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontWeight: '500',
   },
 });

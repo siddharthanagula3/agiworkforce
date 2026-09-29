@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 export type OnboardingMode = 'local' | 'cloud' | 'decide_later';
 
@@ -81,7 +81,12 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
         </View>
         <Text
           testID={`${meta.testIdPrefix}-title`}
-          style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary, flex: 1 }}
+          style={{
+            fontSize: typeScale.callout,
+            fontWeight: '600',
+            color: colors.textPrimary,
+            flex: 1,
+          }}
         >
           {meta.title}
         </Text>
@@ -95,7 +100,9 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
               borderColor: colors.border,
             }}
           >
-            <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+            <Text
+              style={{ fontSize: typeScale.caption, color: colors.textMuted, fontWeight: '600' }}
+            >
               SIGN IN
             </Text>
           </View>
@@ -105,7 +112,7 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
       <Text
         testID={`${meta.testIdPrefix}-body`}
         style={{
-          fontSize: 14,
+          fontSize: typeScale.subhead,
           color: colors.textMuted,
           lineHeight: 20,
           marginLeft: 30,
@@ -128,7 +135,7 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
             paddingTop: 4,
           }}
         >
-          <Text style={{ fontSize: 13, color: colors.teal, marginRight: 4 }}>
+          <Text style={{ fontSize: typeScale.footnote, color: colors.teal, marginRight: 4 }}>
             How is this private?
           </Text>
           {privacyExpanded ? (
@@ -143,7 +150,7 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
         <Text
           testID={`${meta.testIdPrefix}-privacy-detail`}
           style={{
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             color: colors.textMuted,
             lineHeight: 19,
             marginLeft: 30,

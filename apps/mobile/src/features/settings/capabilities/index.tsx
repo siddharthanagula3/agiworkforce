@@ -19,7 +19,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import {
@@ -265,7 +265,7 @@ function SectionTitle({ title }: { title: string }) {
       accessibilityRole="header"
       style={{
         color: colors.textMuted,
-        fontSize: 12,
+        fontSize: typeScale.caption,
         fontWeight: '700',
         letterSpacing: 0,
         marginBottom: 8,
@@ -374,13 +374,18 @@ function CapabilityRow({
       <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
         <Text
           numberOfLines={1}
-          style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+          style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
         >
           {row.label}
         </Text>
         <Text
           numberOfLines={2}
-          style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, marginTop: 3 }}
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.footnote,
+            lineHeight: 18,
+            marginTop: 3,
+          }}
         >
           {row.description}
         </Text>
@@ -408,7 +413,10 @@ function CapabilityRow({
               paddingVertical: 4,
             }}
           >
-            <Text numberOfLines={1} style={{ color: tone.text, fontSize: 11, fontWeight: '700' }}>
+            <Text
+              numberOfLines={1}
+              style={{ color: tone.text, fontSize: typeScale.caption, fontWeight: '700' }}
+            >
               {row.value}
             </Text>
           </View>

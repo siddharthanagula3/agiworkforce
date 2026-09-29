@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 export function StreamingIndicator({ label }: { label?: string }) {
   const colors = useThemeColors();
@@ -19,7 +19,9 @@ export function StreamingIndicator({ label }: { label?: string }) {
       accessibilityRole="progressbar"
     >
       <AgiMark size={16} spinning={true} />
-      {label ? <Text style={{ fontSize: 13, color: colors.textMuted }}>{label}</Text> : null}
+      {label ? (
+        <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }}>{label}</Text>
+      ) : null}
     </View>
   );
 }

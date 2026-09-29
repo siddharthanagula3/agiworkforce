@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
 import type { WorkspaceMember, WorkspaceRole } from './service';
 
 interface RolePickerModalProps {
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     padding: dialogPadding,
     gap: 12,
   },
-  title: { fontSize: 17, fontWeight: '600' },
+  title: { fontSize: typeScale.headline, fontWeight: '600' },
   scroll: { flexGrow: 0 },
   scrollContent: { gap: 8 },
   option: {
@@ -156,11 +156,11 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   optionText: { flex: 1, gap: 2 },
-  optionName: { fontSize: 15, fontWeight: '600' },
-  optionBody: { fontSize: 13, lineHeight: 18 },
+  optionName: { fontSize: typeScale.body, fontWeight: '600' },
+  optionBody: { fontSize: typeScale.footnote, lineHeight: 18 },
   abilities: { gap: 4, paddingTop: 8 },
-  abilitiesTitle: { fontSize: 14, fontWeight: '600' },
-  ability: { fontSize: 13, lineHeight: 19 },
-  warning: { fontSize: 13, lineHeight: 19, paddingTop: 4 },
+  abilitiesTitle: { fontSize: typeScale.subhead, fontWeight: '600' },
+  ability: { fontSize: typeScale.footnote, lineHeight: 19 },
+  warning: { fontSize: typeScale.footnote, lineHeight: 19, paddingTop: 4 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
 });

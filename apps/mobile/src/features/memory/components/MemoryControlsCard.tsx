@@ -2,7 +2,7 @@ import { View } from 'react-native';
 import { Brain, MessageSquareText, Sparkles } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 export interface MemoryControlsCardProps {
   isCloud: boolean;
@@ -30,7 +30,7 @@ export function MemoryControlsCard({
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 11,
+          fontSize: typeScale.caption,
           fontWeight: '700',
           letterSpacing: 0.7,
           marginBottom: 8,
@@ -79,7 +79,7 @@ export function MemoryControlsCard({
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           lineHeight: 17,
           marginBottom: 16,
         }}

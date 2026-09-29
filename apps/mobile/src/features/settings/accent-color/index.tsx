@@ -5,7 +5,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import type { AccentColor } from '@/stores/settingsStore';
-import { getAccentSwatch, useTheme } from '@/src/ui/theme';
+import { getAccentSwatch, useTheme, typeScale } from '@/src/ui/theme';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 
 const ACCENTS: Array<{ value: AccentColor; label: string }> = [
@@ -66,7 +66,7 @@ export default function AccentColorScreen() {
                   borderColor: colors.border,
                 }}
               />
-              <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+              <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
                 {accent.label}
               </Text>
               {selected ? <Check size={18} color={colors.teal} /> : null}

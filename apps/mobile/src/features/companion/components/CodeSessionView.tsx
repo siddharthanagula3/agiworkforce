@@ -38,9 +38,7 @@ interface CodeSessionViewProps {
 }
 
 function SectionTitle({ children }: { children: string }) {
-  return (
-    <Text className="mb-2 text-[10px] uppercase tracking-wider text-white/40">{children}</Text>
-  );
+  return <Text className="mb-2 text-xs uppercase tracking-wider text-white/40">{children}</Text>;
 }
 
 export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessionViewProps) {
@@ -288,7 +286,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
                     color={run.status === 'passed' ? 'green' : 'red'}
                   />
                 </View>
-                <Text className="mt-1 text-[10px] text-white/50">
+                <Text className="mt-1 text-xs text-white/50">
                   {[
                     run.passed !== null ? `${run.passed} passed` : null,
                     run.failed !== null ? `${run.failed} failed` : null,
@@ -298,7 +296,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
                     .join(' · ') || 'No counts in the output'}
                 </Text>
                 {run.status === 'failed' && run.output ? (
-                  <Text variant="mono" className="mt-1 text-[10px] text-white/60">
+                  <Text variant="mono" className="mt-1 text-xs text-white/60">
                     {run.output}
                   </Text>
                 ) : null}
@@ -317,7 +315,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
               <Text variant="mono" className="flex-1 text-xs text-white" numberOfLines={1}>
                 {change.path}
               </Text>
-              <Text className="text-[10px] text-white/40">New file</Text>
+              <Text className="text-xs text-white/40">New file</Text>
             </View>
           ))}
           {modified.map((change) => (
@@ -340,7 +338,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
                 <Text
                   key={index}
                   variant="mono"
-                  className="text-[11px]"
+                  className="text-xs"
                   style={{
                     color: line.startsWith('+')
                       ? colors.agentSuccess
@@ -355,7 +353,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
             </View>
           </ScrollView>
           {diff.truncated ? (
-            <Text className="mt-2 text-[10px] text-white/40">
+            <Text className="mt-2 text-xs text-white/40">
               The diff is longer than a phone view. Open it on Desktop to read the rest.
             </Text>
           ) : null}
@@ -368,7 +366,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           <View className="gap-2">
             {thread.messages.map((message, index) => (
               <View key={index}>
-                <Text className="text-[10px] text-white/40">
+                <Text className="text-xs text-white/40">
                   {message.role === 'user' ? 'You' : 'AGI'}
                 </Text>
                 <Text className="text-sm text-white">{message.text}</Text>

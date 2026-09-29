@@ -7,7 +7,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Text } from '@/components/ui/text';
 import { formatRelativeTime } from '@/src/lib/time';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { CLOUD_CODE_STATE_BADGE_COLORS, cloudCodeWorkspaceLabel } from '../presentation';
 
 export function CloudCodeSessionRow({
@@ -45,11 +45,11 @@ export function CloudCodeSessionRow({
       <View style={{ flex: 1, gap: 3 }}>
         <Text
           numberOfLines={1}
-          style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+          style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
         >
           {session.title}
         </Text>
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13 }}>
+        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
           {detail}
         </Text>
       </View>

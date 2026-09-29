@@ -1,6 +1,6 @@
 import { Shield } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import {
   SettingsGroup,
   SettingsInfo,
@@ -100,11 +100,19 @@ export default function CloudPrivacyScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <EyeOff size={15} color={colors.textSecondary} />
-              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                }}
+              >
                 {item.label}
               </Text>
             </View>
-            <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+            <Text
+              style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 18 }}
+            >
               {item.body}
             </Text>
           </View>
@@ -116,7 +124,7 @@ export default function CloudPrivacyScreen() {
           accessibilityRole="header"
           style={{
             color: colors.textMuted,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             fontWeight: '700',
             textTransform: 'uppercase',
             marginBottom: 8,
@@ -137,10 +145,22 @@ export default function CloudPrivacyScreen() {
                 borderBottomColor: colors.border,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                }}
+              >
                 {entry.feature}
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 18,
+                }}
+              >
                 {entry.where}
               </Text>
             </View>
@@ -149,7 +169,7 @@ export default function CloudPrivacyScreen() {
         <Text
           style={{
             color: colors.textMuted,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 17,
             marginTop: 8,
             paddingHorizontal: 2,

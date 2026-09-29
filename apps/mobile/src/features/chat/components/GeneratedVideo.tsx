@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { Download, Film, Play } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, radii } from '@/src/ui/theme';
+import { useThemeColors, radii, typeScale } from '@/src/ui/theme';
 import { prepareLocalVideoPlayer, shareFile, type LocalVideoPlayer } from '@/services/fileCreation';
 import { VideoPlayerModal } from './VideoPlayerModal';
 
@@ -110,7 +110,13 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
           ) : (
             <Play size={13} color={colors.cameraOverlayText} />
           )}
-          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.cameraOverlayText }}>
+          <Text
+            style={{
+              fontSize: typeScale.caption,
+              fontWeight: '600',
+              color: colors.cameraOverlayText,
+            }}
+          >
             {loading === 'play' ? 'Loading' : 'Play'}
           </Text>
         </View>
@@ -118,7 +124,10 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {prompt ? (
-          <Text style={{ flex: 1, fontSize: 12, color: colors.textMuted }} numberOfLines={2}>
+          <Text
+            style={{ flex: 1, fontSize: typeScale.caption, color: colors.textMuted }}
+            numberOfLines={2}
+          >
             {prompt}
           </Text>
         ) : (
@@ -146,7 +155,11 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
           ) : (
             <Download size={15} color={colors.textSecondary} />
           )}
-          <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>Save</Text>
+          <Text
+            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textSecondary }}
+          >
+            Save
+          </Text>
         </Pressable>
       </View>
 

@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Cloud } from 'lucide-react-native';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 
 interface CloudSchedulesGateProps {
   signedIn: boolean;
@@ -47,7 +47,7 @@ export function CloudSchedulesGate({ signedIn, onBack, onContinue }: CloudSchedu
           style={{
             marginTop: 20,
             color: colors.textPrimary,
-            fontSize: 21,
+            fontSize: typeScale.title3,
             fontWeight: '700',
             textAlign: 'center',
           }}
@@ -58,7 +58,7 @@ export function CloudSchedulesGate({ signedIn, onBack, onContinue }: CloudSchedu
           style={{
             marginTop: 9,
             color: colors.textSecondary,
-            fontSize: 14,
+            fontSize: typeScale.subhead,
             lineHeight: 21,
             textAlign: 'center',
           }}

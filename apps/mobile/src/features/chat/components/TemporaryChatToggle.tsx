@@ -4,7 +4,7 @@ import { EyeOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useTheme, motion } from '@/src/ui/theme';
+import { useTheme, motion, typeScale } from '@/src/ui/theme';
 import {
   TEMPORARY_CHAT_CLOUD_EXPLAINER,
   TEMPORARY_CHAT_LOCAL_EXPLAINER,
@@ -58,7 +58,7 @@ export function TemporaryChatToggle() {
           <View>
             <Text
               style={{
-                fontSize: 11,
+                fontSize: typeScale.caption,
                 fontWeight: '600',
                 color: colors.purple,
                 letterSpacing: 0.2,

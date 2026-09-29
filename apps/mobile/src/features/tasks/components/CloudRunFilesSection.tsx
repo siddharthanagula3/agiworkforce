@@ -7,7 +7,7 @@ import { Text } from '@/components/ui/text';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { API_URL } from '@/lib/constants';
 import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import type { CloudRunProducedFile } from '../runPresentation';
 
 export function CloudRunFilesSection({ files }: { files: CloudRunProducedFile[] }) {
@@ -35,7 +35,7 @@ export function CloudRunFilesSection({ files }: { files: CloudRunProducedFile[] 
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           fontWeight: '700',
           textTransform: 'uppercase',
           letterSpacing: 0.6,
@@ -69,11 +69,14 @@ export function CloudRunFilesSection({ files }: { files: CloudRunProducedFile[] 
           >
             <FileText size={18} color={colors.textSecondary} />
             <View style={{ flex: 1, gap: 2 }}>
-              <Text numberOfLines={1} style={{ color: colors.textPrimary, fontSize: 14 }}>
+              <Text
+                numberOfLines={1}
+                style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}
+              >
                 {file.name}
               </Text>
               {file.sizeBytes !== undefined ? (
-                <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
                   {formatBytes(file.sizeBytes, 1)}
                 </Text>
               ) : null}

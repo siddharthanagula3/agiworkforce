@@ -50,7 +50,7 @@ import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useThemeColors, cardRadius } from '@/src/ui/theme';
+import { useThemeColors, cardRadius, typeScale } from '@/src/ui/theme';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
@@ -121,7 +121,7 @@ function SectionCard({ section }: { section: SettingsSection }) {
           accessibilityRole="header"
           style={{
             color: colors.textMuted,
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             fontWeight: '600',
             marginBottom: 8,
             paddingHorizontal: 2,
@@ -177,7 +177,7 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
         style={{
           flex: 1,
           color: row.tone === 'danger' ? colors.agentError : colors.textPrimary,
-          fontSize: 15,
+          fontSize: typeScale.body,
         }}
       >
         {row.label}
@@ -189,7 +189,12 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
         <Text
           numberOfLines={1}
           maxFontSizeMultiplier={2}
-          style={{ color: colors.textMuted, fontSize: 13, flexShrink: 1, textAlign: 'right' }}
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.footnote,
+            flexShrink: 1,
+            textAlign: 'right',
+          }}
         >
           {row.value}
         </Text>
@@ -205,7 +210,9 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
             paddingVertical: 2,
           }}
         >
-          <Text style={{ color: badge.color, fontSize: 10, fontWeight: '700' }}>{row.tag}</Text>
+          <Text style={{ color: badge.color, fontSize: typeScale.caption, fontWeight: '700' }}>
+            {row.tag}
+          </Text>
         </View>
       ) : null}
       {/* A danger row is terminal, Log Out raises a confirm Alert, it does not
@@ -284,11 +291,11 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
         <View style={{ alignItems: 'center', gap: 3 }}>
           <Text
             numberOfLines={1}
-            style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}
+            style={{ color: colors.textPrimary, fontSize: typeScale.title3, fontWeight: '700' }}
           >
             {displayName}
           </Text>
-          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13 }}>
+          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
             {subtitle}
           </Text>
         </View>
@@ -726,7 +733,7 @@ export default function SettingsTabScreen() {
           <Text
             style={{
               color: colors.textPrimary,
-              fontSize: 28,
+              fontSize: typeScale.title1,
               lineHeight: 34,
               fontWeight: '700',
               flex: 1,

@@ -18,7 +18,7 @@ import { X, Zap, ZapOff, Send, RotateCcw, ScanText, Copy, SwitchCamera } from 'l
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, typeScale } from '@/src/ui/theme';
 import { useChatMessageStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { recognizeText, type OcrRegion } from '@/src/features/image/services/ocr';
@@ -635,7 +635,7 @@ function createStyles(colors: ColorScheme) {
     },
     processingLabel: {
       color: colors.cameraOverlayText,
-      fontSize: 15,
+      fontSize: typeScale.body,
       fontWeight: '500',
     },
 
@@ -655,7 +655,7 @@ function createStyles(colors: ColorScheme) {
     },
     screenTitle: {
       color: colors.cameraOverlayText,
-      fontSize: 16,
+      fontSize: typeScale.callout,
       fontWeight: '600',
     },
     iconButton: {
@@ -679,7 +679,7 @@ function createStyles(colors: ColorScheme) {
     },
     topBadgeText: {
       color: colors.cameraOverlayText,
-      fontSize: 12,
+      fontSize: typeScale.caption,
       fontWeight: '500',
     },
 
@@ -746,7 +746,7 @@ function createStyles(colors: ColorScheme) {
     },
     hintText: {
       color: colors.cameraOverlayTextMuted,
-      fontSize: 13,
+      fontSize: typeScale.footnote,
       fontWeight: '400',
     },
 
@@ -806,7 +806,7 @@ function createStyles(colors: ColorScheme) {
     },
     copyPillText: {
       color: colors.cameraOverlayText,
-      fontSize: 12,
+      fontSize: typeScale.caption,
       fontWeight: '500',
     },
     promptContainer: {
@@ -823,7 +823,7 @@ function createStyles(colors: ColorScheme) {
     promptInput: {
       flex: 1,
       color: colors.cameraOverlayText,
-      fontSize: 15,
+      fontSize: typeScale.body,
       lineHeight: 22,
       maxHeight: 140,
       paddingVertical: 0,

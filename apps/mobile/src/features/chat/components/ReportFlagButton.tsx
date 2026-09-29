@@ -27,7 +27,7 @@ import {
 } from 'react-native';
 import { Flag } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, dialogPadding } from '@/src/ui/theme';
+import { useThemeColors, dialogPadding, typeScale } from '@/src/ui/theme';
 import {
   openSupportEmail,
   saveContentReport,
@@ -306,7 +306,13 @@ export function ReportFlagButton({
                     ]}
                   >
                     {sendEmail && (
-                      <Text style={{ color: colors.accentText, fontSize: 10, fontWeight: '700' }}>
+                      <Text
+                        style={{
+                          color: colors.accentText,
+                          fontSize: typeScale.caption,
+                          fontWeight: '700',
+                        }}
+                      >
                         ✓
                       </Text>
                     )}
@@ -327,7 +333,7 @@ export function ReportFlagButton({
                     accessibilityRole="alert"
                     style={{
                       color: colors.agentError,
-                      fontSize: 13,
+                      fontSize: typeScale.footnote,
                       lineHeight: 18,
                       marginBottom: 12,
                     }}
@@ -386,7 +392,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   flagLabel: {
-    fontSize: 11,
+    fontSize: typeScale.caption,
   },
   backdrop: {
     flex: 1,
@@ -399,12 +405,12 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
   },
   sheetTitle: {
-    fontSize: 18,
+    fontSize: typeScale.headline,
     fontWeight: '700',
     marginBottom: 6,
   },
   sheetSubtitle: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     lineHeight: 20,
     marginBottom: 20,
   },
@@ -427,18 +433,18 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   categoryLabel: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     flex: 1,
   },
   noteLabel: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     marginBottom: 8,
   },
   noteInput: {
     borderRadius: 10,
     borderWidth: 1,
     padding: 12,
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     lineHeight: 20,
     minHeight: 80,
     textAlignVertical: 'top',
@@ -463,10 +469,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   emailLabel: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
   emailCaption: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     lineHeight: 16,
   },
   submitBtn: {
@@ -477,21 +483,21 @@ const styles = StyleSheet.create({
   },
   submitBtnText: {
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: typeScale.callout,
   },
   cancelBtn: {
     paddingVertical: 12,
     alignItems: 'center',
   },
   cancelBtnText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
   resultContainer: {
     alignItems: 'center',
     paddingVertical: 16,
   },
   resultBody: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,

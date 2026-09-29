@@ -15,7 +15,7 @@ import {
 import { AgiMark } from '@/components/ui/AgiMark';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,
@@ -301,7 +301,7 @@ export default function CloudBillingScreen() {
             accessibilityRole="header"
             style={{
               color: colors.textMuted,
-              fontSize: 11,
+              fontSize: typeScale.caption,
               fontWeight: '700',
               textTransform: 'uppercase',
               letterSpacing: 0.5,
@@ -322,11 +322,13 @@ export default function CloudBillingScreen() {
         >
           <PlanBadge />
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '700' }}>
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
+            >
               {isFreeTier ? 'Free plan' : `${tierLabel} plan`}
             </Text>
             {isFreeTier && (
-              <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginTop: 2 }}>
                 Try AGI Cloud
               </Text>
             )}
@@ -334,7 +336,7 @@ export default function CloudBillingScreen() {
               <Text
                 style={{
                   color: colors.agentWarning,
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   marginTop: 2,
                   textTransform: 'capitalize',
                 }}
@@ -343,7 +345,7 @@ export default function CloudBillingScreen() {
               </Text>
             )}
             {!isFreeTier && isEntitled && periodEndLabel ? (
-              <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginTop: 2 }}>
                 {billingCancelsAtPeriodEnd
                   ? `Access ends ${periodEndLabel}. You keep ${tierLabel} until then.`
                   : isTrialing
@@ -519,7 +521,9 @@ export default function CloudBillingScreen() {
                 marginBottom: 24,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
+              <Text
+                style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '700' }}
+              >
                 Have an upgrade access code?
               </Text>
               <TextInput

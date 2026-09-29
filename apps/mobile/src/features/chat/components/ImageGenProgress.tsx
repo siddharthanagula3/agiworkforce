@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
 
 interface ImageGenProgressProps {
   prompt: string;
@@ -104,7 +104,7 @@ export function ImageGenProgress({
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                fontSize: 14,
+                fontSize: typeScale.subhead,
                 fontWeight: '600',
                 color: isFailed ? colors.agentError : colors.textPrimary,
               }}
@@ -120,7 +120,7 @@ export function ImageGenProgress({
         {/* Prompt preview */}
         <Text
           style={{
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 17,
             color: colors.textSecondary,
           }}
@@ -134,7 +134,7 @@ export function ImageGenProgress({
           <Animated.View style={pulseStyle}>
             <Text
               style={{
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 color: colors.textMuted,
               }}
             >
@@ -177,7 +177,7 @@ export function ImageGenProgress({
             >
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   color: colors.textMuted,
                 }}
               >
@@ -187,7 +187,7 @@ export function ImageGenProgress({
               {estimatedTime != null && estimatedTime > 0 ? (
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: typeScale.caption,
                     color: colors.textMuted,
                   }}
                 >
@@ -199,7 +199,7 @@ export function ImageGenProgress({
         )}
 
         {status === 'generating' && !hasDeterminateProgress ? (
-          <Text style={{ fontSize: 12, color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
             Generating securely in AGI Cloud…
           </Text>
         ) : null}
@@ -224,7 +224,13 @@ export function ImageGenProgress({
             }}
           >
             <Square size={11} color={colors.textSecondary} />
-            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+            <Text
+              style={{
+                fontSize: typeScale.caption,
+                fontWeight: '600',
+                color: colors.textSecondary,
+              }}
+            >
               Stop generating
             </Text>
           </Pressable>
@@ -236,7 +242,7 @@ export function ImageGenProgress({
             {errorMessage ? (
               <Text
                 style={{
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   lineHeight: 17,
                   color: colors.agentError,
                 }}

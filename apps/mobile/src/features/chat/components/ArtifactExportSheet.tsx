@@ -13,7 +13,7 @@ import {
   type ArtifactExportFormat,
   type ArtifactExportOption,
 } from '@/src/features/chat/utils/artifactExport';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import type { Artifact } from '@/types/chat';
 
 const FORMAT_ICONS: Readonly<Record<ArtifactExportFormat, LucideIcon>> = {
@@ -80,7 +80,13 @@ export function ArtifactExportSheet({
             accessible={false}
           >
             <View style={styles.header}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.callout,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
+              >
                 Download as
               </Text>
               <Pressable
@@ -125,10 +131,22 @@ export function ArtifactExportSheet({
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '500', color: colors.textPrimary }}>
+                      <Text
+                        style={{
+                          fontSize: typeScale.body,
+                          fontWeight: '500',
+                          color: colors.textPrimary,
+                        }}
+                      >
                         {option.label}
                       </Text>
-                      <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                      <Text
+                        style={{
+                          fontSize: typeScale.caption,
+                          color: colors.textMuted,
+                          marginTop: 2,
+                        }}
+                      >
                         {option.detail}
                       </Text>
                     </View>

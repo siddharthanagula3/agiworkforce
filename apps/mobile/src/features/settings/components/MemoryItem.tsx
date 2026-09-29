@@ -13,7 +13,7 @@ import { Pencil, Trash2, Pin, PinOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useThemeColors, motion } from '@/src/ui/theme';
+import { useThemeColors, motion, typeScale } from '@/src/ui/theme';
 import type { MemoryEntry } from '@/src/features/memory/store';
 import { memoryFactOrigin } from '@/src/features/memory/services/consolidation';
 
@@ -195,7 +195,7 @@ export function MemoryItem({
                   numberOfLines={1}
                   style={{
                     color: colors.textSecondary,
-                    fontSize: 11,
+                    fontSize: typeScale.caption,
                     textDecorationLine: 'underline',
                   }}
                 >
@@ -206,12 +206,12 @@ export function MemoryItem({
               <Text
                 numberOfLines={1}
                 className="flex-1"
-                style={{ color: colors.textMuted, fontSize: 11 }}
+                style={{ color: colors.textMuted, fontSize: typeScale.caption }}
               >
                 {originLabel}
               </Text>
             )}
-            <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
               {describeMemoryTime(memory)}
             </Text>
           </View>

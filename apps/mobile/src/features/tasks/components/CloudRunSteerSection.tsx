@@ -10,7 +10,7 @@ import {
 import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, typeScale } from '@/src/ui/theme';
 import { handOffConversationSend } from '@/src/features/chat/conversationSendHandoff';
 import { describeCloudRunSteerError, steerCloudRun, withdrawCloudRunSteer } from '../cloudRunSteer';
 
@@ -65,7 +65,7 @@ export function CloudRunSteerSection({ run }: { run: CloudAgentRun }) {
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           fontWeight: '700',
           textTransform: 'uppercase',
           letterSpacing: 0.6,
@@ -86,10 +86,13 @@ export function CloudRunSteerSection({ run }: { run: CloudAgentRun }) {
             gap: 4,
           }}
         >
-          <Text selectable style={{ color: colors.textPrimary, fontSize: 14, lineHeight: 20 }}>
+          <Text
+            selectable
+            style={{ color: colors.textPrimary, fontSize: typeScale.subhead, lineHeight: 20 }}
+          >
             {steer.text}
           </Text>
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
             {finished
               ? 'Not read before the task finished'
               : 'Queued. The agent reads it at its next step.'}
@@ -110,7 +113,7 @@ export function CloudRunSteerSection({ run }: { run: CloudAgentRun }) {
         <Text
           accessibilityRole="alert"
           selectable
-          style={{ color: colors.agentError, fontSize: 13, lineHeight: 19 }}
+          style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
         >
           {error}
         </Text>
@@ -137,12 +140,12 @@ export function CloudRunSteerSection({ run }: { run: CloudAgentRun }) {
               borderCurve: 'continuous',
               padding: 12,
               color: colors.textPrimary,
-              fontSize: 15,
+              fontSize: typeScale.body,
               minHeight: 72,
               textAlignVertical: 'top',
             }}
           />
-          <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 17 }}>
             {sent
               ? 'Sent. The agent reads your message at its next step.'
               : 'The agent reads your message at its next step and keeps its progress.'}
@@ -151,7 +154,7 @@ export function CloudRunSteerSection({ run }: { run: CloudAgentRun }) {
             <Text
               accessibilityRole="alert"
               selectable
-              style={{ color: colors.agentError, fontSize: 13, lineHeight: 19 }}
+              style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
             >
               {error}
             </Text>
