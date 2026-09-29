@@ -132,7 +132,7 @@ describe('GET /api/mobile/iap/catalog', () => {
 
   it('hides the access gate when the waitlist is turned off and purchases are not configured', async () => {
     vi.stubEnv('MOBILE_IAP_ENABLED', 'false');
-    vi.stubEnv('BILLING_UPGRADE_WAITLIST_ENABLED', 'false');
+    vi.stubEnv('AGI_BILLING_WAITLIST_OPEN', '1');
     const h = harness({ redeemed: false });
 
     const response = await GET(request());
@@ -146,7 +146,7 @@ describe('GET /api/mobile/iap/catalog', () => {
   });
 
   it('offers configured store products without a code after the waitlist is turned off', async () => {
-    vi.stubEnv('BILLING_UPGRADE_WAITLIST_ENABLED', 'false');
+    vi.stubEnv('AGI_BILLING_WAITLIST_OPEN', '1');
     const h = harness({ redeemed: false });
 
     const response = await GET(request());
