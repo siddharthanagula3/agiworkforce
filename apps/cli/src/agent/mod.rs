@@ -2081,6 +2081,15 @@ impl AgentSession {
     ///
     /// No-op under `--no-session-persistence`, including on a `--resume`d
     /// session: the file that was read stays exactly as it was on disk.
+    pub fn start_fresh_managed_session(&mut self) -> Result<()> {
+        self.clear();
+        self.managed_session = None;
+        self.managed_session_path = None;
+        self.checkpoint_log = checkpoints::CheckpointLog::in_memory();
+        self.checkpoint_captures.clear();
+        self.enable_managed_session()
+    }
+
     pub fn persist_managed_session(&mut self) -> Result<()> {
         if !self.session_persistence {
             return Ok(());

@@ -212,6 +212,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash(
+            "background",
+            "Move this conversation to a background run (/bg <instruction>)",
+            false,
+            true,
+            vec!["bg"],
+        ),
+        RegistryCommand::builtin_slash(
             "table",
             "Sort a table from the last response (/table <column> [desc])",
             true,
