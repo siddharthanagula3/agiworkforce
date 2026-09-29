@@ -431,7 +431,7 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
 
   it('answers 503 when the run refuses a model that may train on Google data', async () => {
     mocks.completeArtifactPrompt.mockRejectedValue(
-      new ArtifactRuntimeRouteUnavailableError('This app reads data from your Google account.'),
+      new ArtifactRuntimeRouteUnavailableError("This app can't run right now. Try again later."),
     );
 
     const response = await call({ prompt: 'Summarize', connectors: ['gmail'] });
@@ -440,7 +440,7 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
     const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error).toEqual({
       code: 'model_unavailable',
-      message: 'This app reads data from your Google account.',
+      message: "This app can't run right now. Try again later.",
     });
   });
 

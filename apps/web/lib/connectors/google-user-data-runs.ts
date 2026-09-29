@@ -24,8 +24,10 @@ type GoogleUserDataDb = Pick<DatabaseAdapter, 'query'>;
 // run from what the run can reach: any Google connector offered to the run
 // keeps the whole run on models whose provider does not train on inputs.
 
+// Shown to whoever opens a published app, who may not be its owner, so it says
+// nothing about the owner's accounts or data.
 export const GOOGLE_USER_DATA_ARTIFACT_NO_MODEL_MESSAGE =
-  'This app reads data from your Google account, and no model on your plan that keeps it out of training is available right now. Try again later.';
+  "This app can't run right now. Try again later.";
 
 export const GOOGLE_USER_DATA_SLACK_RESUME_MESSAGE =
   'This answer used data from your Google account, and its model does not keep that data out of training, so it cannot continue. Ask again in Slack.';
