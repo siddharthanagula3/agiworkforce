@@ -11,6 +11,11 @@ const WORD_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/m
 const DRAWING_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
 pub const DEFAULT_PDF_PAGES: usize = 10;
 pub const MAX_PDF_PAGES_PER_READ: usize = 20;
+pub const MAX_ATTACHED_PDF_PAGES: usize = 100;
+pub const MAX_DOCUMENT_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_UNPACKED_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRIES: usize = 10_000;
+const MAX_TEXT_CHARS: usize = 400_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DocumentKind {
@@ -48,11 +53,27 @@ pub struct ExtractedDocument {
     pub note: Option<String>,
 }
 
+pub fn untrusted(name: &str, text: &str) -> String {
+    let name = name.replace(['"', '<', '>', '\n'], "_");
+    format!("<document_result untrusted=\"true\" path=\"{name}\">\n{text}\n</document_result>")
+}
+
 pub async fn extract(
     path: &Path,
     kind: DocumentKind,
     pages: Option<&str>,
 ) -> Result<ExtractedDocument> {
+    let size = tokio::fs::metadata(path)
+        .await
+        .with_context(|| format!("could not read {}", path.display()))?
+        .len();
+    if size > MAX_DOCUMENT_BYTES {
+        bail!(
+            "the file is {} MB; documents up to {} MB can be read",
+            size / (1024 * 1024),
+            MAX_DOCUMENT_BYTES / (1024 * 1024)
+        );
+    }
     let bytes = tokio::fs::read(path)
         .await
         .with_context(|| format!("could not read {}", path.display()))?;
@@ -69,16 +90,55 @@ pub fn extract_bytes(
     kind: DocumentKind,
     pages: Option<RangeInclusive<usize>>,
 ) -> Result<ExtractedDocument> {
-    match kind {
-        DocumentKind::Pdf => pdf_text(bytes, pages),
-        DocumentKind::Word => Ok(whole(docx_text(bytes)?)),
-        DocumentKind::Slides => Ok(whole(pptx_text(bytes)?)),
-        DocumentKind::Spreadsheet => Ok(whole(spreadsheet_text(bytes)?)),
+    if bytes.len() as u64 > MAX_DOCUMENT_BYTES {
+        bail!(
+            "the file is larger than {} MB",
+            MAX_DOCUMENT_BYTES / (1024 * 1024)
+        );
     }
+    if bytes.starts_with(b"PK") {
+        check_archive(bytes)?;
+    }
+    let mut document = match kind {
+        DocumentKind::Pdf => pdf_text(bytes, pages)?,
+        DocumentKind::Word => whole(docx_text(bytes)?),
+        DocumentKind::Slides => whole(pptx_text(bytes)?),
+        DocumentKind::Spreadsheet => whole(spreadsheet_text(bytes)?),
+    };
+    if let Some((cut, _)) = document.text.char_indices().nth(MAX_TEXT_CHARS) {
+        document.text.truncate(cut);
+        document.note = Some(format!(
+            "[text cut at {MAX_TEXT_CHARS} characters]{}",
+            document
+                .note
+                .map(|note| format!(" {note}"))
+                .unwrap_or_default()
+        ));
+    }
+    Ok(document)
 }
 
 fn whole(text: String) -> ExtractedDocument {
     ExtractedDocument { text, note: None }
+}
+
+fn check_archive(bytes: &[u8]) -> Result<()> {
+    let mut archive =
+        ZipArchive::new(Cursor::new(bytes)).context("the file is not a valid Office document")?;
+    if archive.len() > MAX_ARCHIVE_ENTRIES {
+        bail!("the document holds too many parts to read");
+    }
+    let mut unpacked: u64 = 0;
+    for index in 0..archive.len() {
+        unpacked = unpacked.saturating_add(archive.by_index_raw(index)?.size());
+        if unpacked > MAX_UNPACKED_BYTES {
+            bail!(
+                "the document unpacks to more than {} MB",
+                MAX_UNPACKED_BYTES / (1024 * 1024)
+            );
+        }
+    }
+    Ok(())
 }
 
 fn parse_page_range(raw: &str) -> Result<RangeInclusive<usize>> {
@@ -102,16 +162,30 @@ fn parse_page_range(raw: &str) -> Result<RangeInclusive<usize>> {
 }
 
 fn pdf_text(bytes: &[u8], pages: Option<RangeInclusive<usize>>) -> Result<ExtractedDocument> {
-    let all = pdf_extract::extract_text_from_mem_by_pages(bytes)
-        .map_err(|error| anyhow!("the PDF could not be read: {error}"))?;
-    let total = all.len();
+    let unreadable = |error: &dyn std::fmt::Display| anyhow!("the PDF could not be read: {error}");
+    let mut doc = pdf_extract::Document::load_mem(bytes).map_err(|error| unreadable(&error))?;
+    if doc.is_encrypted() {
+        doc.decrypt("")
+            .map_err(|_| anyhow!("the PDF is password protected"))?;
+    }
+    let total = doc.get_pages().len();
     let requested = pages.clone();
     let range = pages.unwrap_or(1..=DEFAULT_PDF_PAGES.min(total.max(1)));
     if *range.start() > total {
         bail!("the PDF has {total} pages");
     }
     let end = (*range.end()).min(total);
-    let selected = &all[*range.start() - 1..end];
+    let mut selected = Vec::with_capacity(end + 1 - range.start());
+    for number in *range.start()..=end {
+        let mut page = String::new();
+        pdf_extract::output_doc_page(
+            &doc,
+            &mut pdf_extract::PlainTextOutput::new(&mut page),
+            number as u32,
+        )
+        .map_err(|error| unreadable(&error))?;
+        selected.push(page);
+    }
     let mut text = String::new();
     for (offset, page) in selected.iter().enumerate() {
         text.push_str(&format!(
@@ -187,7 +261,10 @@ fn pptx_text(bytes: &[u8]) -> Result<String> {
     let mut output = String::new();
     for (number, name) in slides {
         let mut xml = String::new();
-        archive.by_name(&name)?.read_to_string(&mut xml)?;
+        archive
+            .by_name(&name)?
+            .take(MAX_UNPACKED_BYTES)
+            .read_to_string(&mut xml)?;
         let document = XmlDocument::parse(&xml).context("the presentation is not valid")?;
         let lines: Vec<String> = document
             .descendants()
@@ -242,6 +319,7 @@ fn archive_entry(bytes: &[u8], entry: &str) -> Result<String> {
     archive
         .by_name(entry)
         .with_context(|| format!("the file is missing {entry}"))?
+        .take(MAX_UNPACKED_BYTES)
         .read_to_string(&mut contents)?;
     Ok(contents)
 }

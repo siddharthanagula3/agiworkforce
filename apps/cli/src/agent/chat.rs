@@ -677,14 +677,22 @@ impl AgentSession {
                     .with_context(|| format!("{name} is not a PDF or Office document"))?;
             let document = tokio::task::spawn_blocking(move || {
                 std::panic::catch_unwind(|| {
-                    crate::documents::extract_bytes(&bytes, kind, Some(1..=usize::MAX))
+                    crate::documents::extract_bytes(
+                        &bytes,
+                        kind,
+                        Some(1..=crate::documents::MAX_ATTACHED_PDF_PAGES),
+                    )
                 })
                 .unwrap_or_else(|_| Err(anyhow::anyhow!("the file could not be parsed")))
             })
             .await?
             .with_context(|| format!("{name} could not be read"))?;
+            let text = match document.note {
+                Some(note) => format!("{}\n{note}", document.text),
+                None => document.text,
+            };
             *block = ContentBlock::Text {
-                text: format!("<file path=\"{name}\">\n{}\n</file>\n\n", document.text),
+                text: crate::documents::untrusted(name, &text),
             };
         }
         Ok(())
