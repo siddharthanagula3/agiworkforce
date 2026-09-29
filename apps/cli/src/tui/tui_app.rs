@@ -652,8 +652,11 @@ impl TuiApp {
         if !resolved.is_file() {
             return Err(format!("{path} is not a file"));
         }
+        if crate::documents::DocumentKind::for_path(&resolved).is_some() {
+            return self.stage_document(&resolved, &root);
+        }
         if !crate::is_image_extension(path) {
-            return Err(format!("{path} is not an image"));
+            return Err(format!("{path} is not an image, PDF or Office document"));
         }
         if crate::model_catalog::find(&self.session.model)
             .is_some_and(|model| !model.supports_vision)
@@ -688,6 +691,32 @@ impl TuiApp {
         self.session
             .pending_image_blocks
             .push(attachment.into_image_block());
+        self.staged_images.push(label.clone());
+        Ok(label)
+    }
+
+    fn stage_document(
+        &mut self,
+        resolved: &std::path::Path,
+        root: &std::path::Path,
+    ) -> Result<String, String> {
+        let block = crate::load_document_attachment(&resolved.to_string_lossy())
+            .map_err(|error| format!("{error:#}"))?;
+        let size = std::fs::metadata(resolved)
+            .map(|meta| meta.len())
+            .unwrap_or(0);
+        let label = format!(
+            "{} ({})",
+            resolved
+                .strip_prefix(root)
+                .unwrap_or(resolved)
+                .to_string_lossy(),
+            crate::tools::format_size(size)
+        );
+        if self.staged_images.contains(&label) {
+            return Err(format!("{label} is already attached"));
+        }
+        self.session.pending_image_blocks.push(block);
         self.staged_images.push(label.clone());
         Ok(label)
     }
@@ -3467,7 +3496,10 @@ fn open_command_popup(app: &mut TuiApp) {
     // would reject them). They are still dispatched by `handle_slash_command`
     // below, so surface them here so `/` makes them discoverable in the TUI.
     for (name, desc) in [
-        ("attach", "Attach an image to the next message"),
+        (
+            "attach",
+            "Attach an image, PDF or Office file to the next message",
+        ),
         ("memories", "Configure auto-memory settings"),
         ("skills-toggle", "Enable or disable individual skills"),
         ("title", "Configure the terminal window title"),
@@ -4094,7 +4126,7 @@ enum SlashResult {
 const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
   @path            Inline a file, or list a folder with @dir/
   @agent-<name>    Hand the message to one of your agents
-  /attach <image>  Attach an image file (png, jpg, gif, webp)
+  /attach <file>   Attach an image, PDF or Office file
   /attach --full <image>  Attach it without scaling it down, for fine detail
   /attach <url>    Fetch a web page and add its text to the conversation
   Ctrl+V           Attach the image on the clipboard
@@ -4413,16 +4445,24 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage("Started new conversation.".to_string())
         }
 
+        "/models" if !arg.is_empty() => SlashResult::SystemMessage(
+            crate::provider::find_model(arg)
+                .map(|model| crate::provider::format_model_detail(&model))
+                .unwrap_or_else(|| format!("No model named {arg} in the catalog.")),
+        ),
+
         "/models" | "/providers" => {
             let models_output = crate::model_catalog::catalog()
                 .all()
                 .iter()
                 .map(|m| {
                     let flags = format!(
-                        "{}{}{}",
+                        "{}{}{}{}{}",
                         if m.supports_tools { "T" } else { " " },
                         if m.supports_vision { "V" } else { " " },
                         if m.supports_reasoning { "R" } else { " " },
+                        if m.supports_pdf { "P" } else { " " },
+                        if m.supports_audio_input { "A" } else { " " },
                     );
                     format!(
                         "  {} [{}] {:>6}K ctx  {} {}",
@@ -4443,7 +4483,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .collect::<Vec<_>>()
                 .join("\n");
             SlashResult::SystemMessage(format!(
-                "Available models:\n{models_output}\n\nPrices are per 1M input/output tokens; `base+tiered` has request-input bands shown by `agi --cost MODEL`.\nLive local discovery: run `agi models scan` or `agi models status`."
+                "Available models:\n{models_output}\n\nFlags: T=tools, V=vision, R=reasoning, P=reads PDFs, A=audio input. /models <id> shows one model.\nPrices are per 1M input/output tokens; `base+tiered` has request-input bands shown by `agi --cost MODEL`.\nLive local discovery: run `agi models scan` or `agi models status`."
             ))
         }
 
@@ -4772,7 +4812,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     SlashResult::RunAttachUrl(url.to_string())
                 }
                 "list" => SlashResult::SystemMessage(if app.staged_images.is_empty() {
-                    "No images staged for the next turn.".to_string()
+                    "Nothing staged for the next turn.".to_string()
                 } else {
                     let rows: Vec<String> = app
                         .staged_images

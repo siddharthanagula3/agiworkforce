@@ -518,7 +518,9 @@ fn is_root_user_prompt(message: &Message) -> bool {
         MessageContent::Blocks(blocks) => blocks.iter().any(|block| {
             matches!(
                 block,
-                ContentBlock::Text { .. } | ContentBlock::Image { .. }
+                ContentBlock::Text { .. }
+                    | ContentBlock::Image { .. }
+                    | ContentBlock::Document { .. }
             )
         }),
     }

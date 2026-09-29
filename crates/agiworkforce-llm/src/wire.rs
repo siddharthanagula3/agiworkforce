@@ -23,6 +23,15 @@ pub enum ContentBlock {
         /// serializer so each provider receives the format it expects).
         data_b64: String,
     },
+    #[serde(rename = "document")]
+    Document {
+        name: String,
+        mime: String,
+        #[serde(default)]
+        data_b64: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        asset_id: Option<String>,
+    },
     #[serde(rename = "tool_use")]
     ToolUse {
         id: String,
@@ -171,6 +180,7 @@ impl Message {
                 .filter_map(|b| match b {
                     ContentBlock::Text { text } => Some(text.as_str()),
                     ContentBlock::Image { .. }
+                    | ContentBlock::Document { .. }
                     | ContentBlock::ToolUse { .. }
                     | ContentBlock::ToolResult { .. } => None,
                 })

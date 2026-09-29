@@ -153,6 +153,7 @@ dependencies = [
  "axum",
  "base64 0.23.1",
  "bytes",
+ "calamine",
  "chrono",
  "clap",
  "clap_complete",
@@ -175,11 +176,13 @@ dependencies = [
  "nix 0.31.3",
  "notify 7.0.0",
  "once_cell",
+ "pdf-extract",
  "pulldown-cmark",
  "rand 0.10.2",
  "ratatui",
  "regex",
  "reqwest",
+ "roxmltree",
  "rustyline 18.0.1",
  "seccompiler",
  "semver",
@@ -199,6 +202,7 @@ dependencies = [
  "urlencoding",
  "uuid",
  "webbrowser",
+ "zip 1.1.4",
 ]
 
 [[package]]
