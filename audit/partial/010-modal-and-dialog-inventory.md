@@ -45,29 +45,23 @@ nothing is left.
 
 - Done when: Archiving asks to confirm, or confirms afterwards with a way to undo, and says where archived items can be found.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Archiving shows 'Chat archived. Find it in Settings, Archived chats.' with Undo, which restores it on the server and puts the row back where it was, in the S8.45 post-codex patch. | codex |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/archived-chats/service.ts:69-69`
 
 ## S10.08: Share conversation.
 
 - Done when: A share dialog creates a link to the conversation, shows it for copying, and states who can open it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/chat-gates-s18.19-mobile-share-link.patch (in the ordered series) creates the link after saying who can open it ('Anyone with the link can read the messages in this chat until the link expires') and hands it to the share sheet to copy or send. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/shared-links/service.ts:1-1`
 
 ## S10.09: Share file or folder.
 
@@ -80,18 +74,6 @@ Code: `apps/mobile/src/features/shared-links/service.ts:1-1`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S10.10: Share artifact.
-
-- Done when: An artifact share dialog publishes it to a link, lets the user copy it and choose who can open it, and can take it down.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates 1228dfd07d: who can open it (anyone with the link, or the workspace with its member count) and Unpublish, each confirmed with the web's copy, over PATCH and DELETE /api/artifacts/publish/[token]. post-codex/w-chat-s10.10-mobile-artifact-audience-and-unpublish.patch loads the artifact's publication in the held ArtifactFullScreen and mounts the controls under the link. | codex |
-
-Code: `apps/mobile/src/features/chat/components/PublishedArtifactControls.tsx:41-41`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:93-93`
 
 ## S10.11: Publish generated application.
 
@@ -256,14 +238,11 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/cli/src/tui/t
 
 - Done when: As a conversation nears or passes the model's context limit, the user gets a clear warning with what to do (trim, compact, new chat).
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Codex's held chat screen mounts ContextWarningChip above the composer (chat/[id].tsx:1497 in the Codex copy). For every model it warns before sending once the thread nears the model's context window, and offers New chat. Done once Codex commits. | codex |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ContextWarningChip.tsx:15-15`
 
 ## S10.29: Credit-purchase dialog.
 
@@ -274,7 +253,7 @@ Code: `apps/mobile/src/features/chat/components/ContextWarningChip.tsx:15-15`
 | --- | --- | --- | --- |
 | web | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
 | desktop | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
-| mobile | partial | Native top-up products exist but are gated off by default (MOBILE_IAP_ENABLED unset), so mobile cannot sell extra usage. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
+| mobile | partial | Native top-up is gated off by default (MOBILE_IAP_ENABLED unset) and billing is off, so mobile cannot sell extra credits; the app points to web billing. | flag-off |
 
 Code: `apps/web/lib/server/billing-waitlist-access.ts:22-24`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
@@ -286,7 +265,7 @@ Code: `apps/web/lib/server/billing-waitlist-access.ts:22-24`, `apps/mobile/src/f
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Build a plan comparison in the app; mobile shows only the current plan, and the native product list (name, interval, price, no features) is gated off by MOBILE_IAP_ENABLED. | ui, flag-off |
+| mobile | partial | Settings > Plans compares limits and features but shows no prices and has no pick/upgrade action (billing off, native product list gated). | ui, flag-off |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 
@@ -298,7 +277,7 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile sends cancellation to the store (store-billed) or to web billing (Stripe-billed); no cancel in the app. | surface-only |
+| mobile | partial | No cancel dialog in the app; cancellation is sent to the store or to web billing. | surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`
 
@@ -310,7 +289,7 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows no card; management is behind FEATURES.billing and otherwise opens web billing. | flag-off, surface-only |
+| mobile | partial | Mobile shows no card and has no payment-method dialog; it opens web billing. | flag-off, surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
 
@@ -333,18 +312,6 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-
-## S10.40: Remote-device pairing.
-
-- Done when: A pairing dialog links a phone or another device to this machine by code or QR, bound to the signed-in account.
-- Wave: 3
-- Already works on: desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The pairing steps now point to Desktop Settings > Capabilities > Pair a phone, where RemoteControlSection lives, in post-codex/w-chat-s10.40-mobile-pairing-steps.patch. ConnectionStateViews is held. | codex |
-
-Code: `apps/web/features/settings/sections/CapabilitiesSection.tsx:90-90`
 
 ## S10.41: Unsaved-changes warning.
 
@@ -400,18 +367,6 @@ Code: `apps/web/features/settings/sections/CapabilitiesSection.tsx:90-90`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
-
-## S10.46: Diagnostic-sharing consent.
-
-- Done when: Before diagnostics or crash reports leave the device, the user is told what is included and chooses (or sets a preference that is honoured).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Export Diagnostics sends the bundle to the server for redaction before the user sees anything. post-codex/w-chat-s10.46-mobile-diagnostics-consent.patch asks first, saying what the file holds and where it goes; the settings screen that calls it is held. | ui |
-
-Code: `apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts:1-1`
 
 ## S10.47: Data-export request.
 

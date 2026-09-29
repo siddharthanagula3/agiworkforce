@@ -144,18 +144,6 @@ Code: `apps/web/lib/artifact-sandbox.ts:95-95`, `apps/cli/src/lib.rs:1955-1975`,
 
 Code: `apps/web/lib/artifact-sandbox.ts:95-95`, `apps/cli/src/lib.rs:1955-1975`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
-## S28.16: Runtime-error overlay.
-
-- Done when: Runtime errors in the preview appear as an overlay with a way to recover.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Same as S26.35: overlay with Retry is in; View source waits on post-codex/w-work-s28-mobile-preview-view-source.patch. | ui |
-
-Code: `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:69-69`
-
 ## S28.18: Preview reload.
 
 - Done when: The user can reload the preview.

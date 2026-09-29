@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S59.03: Per-session approval.
-
-- Done when: The user can allow a tool for the rest of the current session so it stops asking until the session ends.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Allow for this chat is built as post-codex/chat-gates-s59.03-mobile-after-s59.patch (applies after chat-gates-s59.patch); its handler lives in Codex-held MessageBubble.tsx. | ui |
-
-Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`
-
 ## S59.04: Per-application permission.
 
 - Done when: The user can set allow/ask/deny per connected app (and per tool within it), and the runtime enforces it.
@@ -55,15 +43,3 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596
 | vscode | partial | The runtime asks only for internal fetch destinations; no per-domain setting. | ui |
 
 Code: `apps/desktop/src/api/cloudApi.ts:965-965`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4174-4176`, `apps/desktop/src-tauri/src/core/llm/server_tools.rs:207-207`, `apps/cli/src/features/exec/tools/mod.rs:706-711`
-
-## S59.22: Ask for an alternative.
-
-- Done when: Instead of just denying, the user can tell the agent what to do instead, and the agent continues with that guidance.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Guidance input and resume wiring are held in post-codex/chat-gates-s59.patch because the handler lives in Codex-held files ([id].tsx, streaming.ts, MessageBubble.tsx, chatExecutionStore.ts, chatStore.ts). | ui |
-
-Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`

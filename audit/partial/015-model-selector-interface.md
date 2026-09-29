@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S15.03: Model-family grouping.
-
-- Done when: Models are grouped by family (e.g. all versions of one model line together) so related models sit side by side.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Within each tier, the picker keeps a model family's versions together (getModelFamilySlotForModel). ModelPickerSheet is held: post-codex/w-chat-s15.03-s15.07-mobile-model-picker-families.patch. | codex |
-
-Code: `packages/contracts/types/src/model-catalog.ts:1753-1753`
-
 ## S15.04: Searchable model list.
 
 - Done when: The user can type to filter the model list by name.
@@ -56,14 +44,11 @@ Code: `packages/contracts/types/src/model-catalog.ts:1753-1753`
 
 - Done when: The selector highlights a short list of recommended models for the user.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A Recommended section lists the registry's picker recommendations (listPickerRecommendedModelIds), in the same post-codex patch as S15.03. | codex |
 | cli | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/types/src/model-catalog.ts:2174-2174`
 
 ## S15.12: Input-modality badges.
 

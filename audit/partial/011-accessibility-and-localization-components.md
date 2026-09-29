@@ -23,7 +23,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates 4c1978e857: heading and subheading text is a header for screen readers, which covers projects, companion and about. Settings section titles are held: post-codex/w-chat-s11.02-mobile-settings-headers.patch. | ui |
+| mobile | partial | Text with heading variants is a header, but SettingsScreenShell titles (common.tsx) and settings section titles carry no header role, so most settings screens have no heading to jump to. | ui |
 
 Code: `apps/mobile/components/ui/text.tsx:38-38`
 
@@ -50,13 +50,10 @@ Code: `apps/mobile/components/ui/text.tsx:38-38`
 
 - Done when: Text scales with the user's text-size setting (browser, OS or app) up to at least 200% without being cut off.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates 9d7c2a2985: the mode toggle scales to 2x. The chats list and settings rows are held: post-codex/w-chat-s11.12-mobile-text-scale.patch. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:104-104`
 
 ## S11.13: Browser-zoom reflow.
 
@@ -96,22 +93,10 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:104-104`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates 5760fe27ab: schedule cards and the PDF export follow the device locale. Usage and connector dates are held and are in post-codex/w-chat-s11.22-mobile-device-locale.patch, which composes with no-yearly-s82-mobile-usage.patch in either order. | ui |
+| mobile | partial | Schedule cards and PDF export follow device locale, but cloud-usage/index.tsx and settings/plans/index.tsx still hard-code en-US date and number formats. | ui |
 | cli | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/schedules/components/ScheduleCard.tsx:56-56`
-
-## S11.23: Currency formatting.
-
-- Done when: Prices and money amounts show the right currency symbol and the user's number format.
-- Wave: 2
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Store prices come from the store's localized displayPrice, but the billing screen is behind FEATURES.billing=false and its copy hard-codes $ amounts. | flag-off |
-
-Code: `apps/mobile/src/features/billing/storePricing.ts:66-66`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
 
 ## S11.24: Pluralization.
 
@@ -121,7 +106,7 @@ Code: `apps/mobile/src/features/billing/storePricing.ts:66-66`, `apps/mobile/lib
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates aa8c3e8703: counts use each language's plural rules through translatePlural over the shared catalogs, with five new keys in all twelve locales. The held archived-chats and workspace screens are in post-codex/w-chat-s11.24-mobile-held-plurals.patch. The Russian and Arabic forms await the owner's native-speaker review. | ui |
+| mobile | partial | translatePlural covers 19 call sites, but hard-coded English s suffixes remain (ArtifactChangesView, scan.tsx, memory-import.tsx, reflect.tsx). | ui |
 
 Code: `apps/mobile/src/i18n/plural.ts:16-16`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:94-94`
 

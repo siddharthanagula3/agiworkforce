@@ -26,7 +26,7 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Works only through the phone's share sheet; there is no selection action inside a browser and the source page is not attached. | surface-only |
+| mobile | partial | Works only through the share sheet; there is no selection action inside a browser and the source page is not attached. | surface-only |
 
 Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
 
@@ -38,7 +38,7 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only shared text or an address arrives through the share sheet; there is no summarize-this-page action. | surface-only |
+| mobile | partial | Only shared text or an address arrives; there is no summarize-this-page action. | surface-only |
 | cli | partial | No summarize command: the user has to ask in chat and the agent calls browser_read_page. | ui |
 
 Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`, `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`

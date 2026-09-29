@@ -138,14 +138,11 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 
 - Done when: The user can explicitly invoke a Skill from the composer so the next message runs with it.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The add-to-chat sheet's Skills row (5799eb1bf8) shows once a screen passes onOpenSkills. post-codex/chat-gates-s13.23-mobile-skill-in-conversation.patch passes it on both chat screens, returns from Skills to the composer, and sends the chosen skill from an existing conversation (Codex holds chat.tsx, [id].tsx, Composer.tsx and SkillsScreen.tsx). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:959-959`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:74-74`
 
 ## S13.24: Agent or assistant mention.
 
@@ -225,7 +222,7 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Deferred under D-2026-09-28-26 until Codex's connectors screen lands; source chips need a connector or resource picker on mobile. | codex |
+| mobile | partial | The composer shows only a media-mode chip; there are no chips for web search, connector resources or page sources chosen for the next message. | codex |
 | cli | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
@@ -245,15 +242,12 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
 
 - Done when: Before sending, the user can choose the output format for the reply (e.g. table, document, code, slides).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The add-to-chat Output choice (document, presentation, spreadsheet, from the shared list now in cloud-contracts, 82cb7643d7) appears once the screens pass offersOutputFormat and the store sends office_format, in post-codex/chat-gates-s13.34-mobile-output-format.patch. apps/web/lib/chat-output-format.ts should re-export CHAT_OUTPUT_FORMATS and CHAT_OUTPUT_FORMAT_LABEL from @agiworkforce/cloud-contracts so the list lives once. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:892-892`, `packages/contracts/cloud-contracts/src/skills.ts:20-20`
 
 ## S13.36: Dictation control.
 
@@ -291,27 +285,12 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:892-892`, `pa
 
 - Done when: A queued message can be edited or cancelled before it is sent.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A queued message gets Edit beside Cancel, which takes it out of the queue into the message box, in post-codex/w-chat-s13.39-s14.31-mobile-queue-edit-and-duplicates.patch. ChatInput is held. | codex |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:1-1`
-
-## S13.40: Mid-task steering input.
-
-- Done when: While an agent is working, the user can send guidance that steers the running task without stopping it.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A running agent turn offers Message the agent in its timeline (24f4239b00): the text goes to the run's steer queue and the agent reads it at its next step. It shows once MessageBubble passes the run id, in post-codex/chat-gates-s13.40-mobile-steer-running-turn.patch. The Tasks screen already steers runs. | ui |
-
-Code: `apps/mobile/src/features/chat/components/RunSteerInput.tsx:24-24`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:523-523`
 
 ## S13.41: Separate side question that does not modify the main task.
 

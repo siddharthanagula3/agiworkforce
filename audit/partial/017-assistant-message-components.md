@@ -137,15 +137,12 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 
 - Done when: From an answer, the user can regenerate it with a different model in one step.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Retry with Another Model' on an answer opens the model picker and reruns the question with the chosen model (retryMessage takes a model override; threaded Cloud chats keep the old answer as a sibling), in post-codex/chat-gates-s17.22-mobile-retry-with-model.patch. ChatGPT's iOS app runs a message on a chosen model (help.openai.com 6825453, 2026-06-08). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2987-2987`
 
 ## S17.23: Shorten answer.
 
@@ -187,17 +184,15 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2987-2987`
 
 - Done when: The user can select part of an answer and ask for that span to be revised or asked about.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | post-codex/w-chat-s17.26-mobile-quote-selection.patch (plus -test.patch): Select text now tracks the selected span and offers 'Quote in reply', which quotes only that span through the existing quoted-reply bar. The whole-message swipe quote is unchanged. | codex |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageList.tsx:117-117`
 
 ## S17.27: Branch from answer.
 
@@ -213,16 +208,13 @@ Code: `apps/mobile/src/features/chat/components/MessageList.tsx:117-117`
 
 - Done when: When an answer has several attempts, the user can page between them (e.g. '2 of 3').
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same pager as S16.11, in post-codex/chat-gates-s16.11-s17.28-mobile-version-pager.patch. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 
 ## S17.29: Positive feedback.
 
@@ -293,39 +285,12 @@ Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S17.36: Actual-model and usage details.
-
-- Done when: For each answer the user can see which model actually answered and its usage (tokens/cost/time).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | An answer shows its tokens and time under the model line from the usage the server persists (tokensUsed, inputTokens, outputTokens, totalDurationMs), in post-codex/chat-gates-s17.36-mobile-answer-usage.patch. Cost is not shown, as users see credits. | ui |
-
-Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`
-
 ## S17.38: Refusal state.
 
 - Done when: When the model/safety layer refuses, the answer shows a distinct refusal state (not a generic error or a normal answer), with a next step.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A refused answer (finishReason refusal or content_filter, already stored) gets the web's refusal notice with a next step in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch; applies once Codex releases MessageBubble. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2050-2050`
-
-## S17.39: Interrupted state.
-
-- Done when: An answer the user stopped (or that was interrupted) is marked as stopped, keeps what arrived, and offers to try again.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Stop now stamps finishReason 'stopped' (the web's marker, so it syncs) and the answer keeps what arrived with 'Response stopped.' and Try again, in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch (chatExecutionStore and MessageBubble are held). | ui |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`

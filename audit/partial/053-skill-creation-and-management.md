@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: A user can browse a catalogue of available skills, including ones not yet installed, and open any of them.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S53.01-S49.03-skills-speech-held.patch (skills service committed e20a7db581) | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
 
 ## S53.02: Installed Skills.
 
@@ -41,7 +38,7 @@ Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
-| mobile | partial | Mobile would list personal skills the server returns but cannot create one; web creation is itself flag-off. | ui, flag-off |
+| mobile | partial | Mobile lists personal skills the server returns but has no way to create or add one. | ui, flag-off |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/mobile/src/features/skills/service.ts:19-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:240-275`
