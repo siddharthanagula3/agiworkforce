@@ -164,6 +164,14 @@
     {
       "doc": "workspace-roles-and-groups",
       "sha256": "110f4d6032a6dbd15cd28826e2077ff2728304b193a0e1573b4885e0736b807a"
+    },
+    {
+      "doc": "configuration",
+      "indexed": true
+    },
+    {
+      "doc": "custom-instructions",
+      "indexed": true
     }
   ],
   "claims": [
@@ -4060,6 +4068,206 @@
           "kind": "copy",
           "file": "apps/web/features/support/components/HelpSearch.tsx",
           "text": "Nothing here covers that yet. Email contact@agiworkforce.com for support."
+        }
+      ]
+    },
+    {
+      "id": "config-repository-file-needs-trust",
+      "doc": "configuration",
+      "section": "Which setting wins",
+      "kind": "prose",
+      "sentence": "A repository's file is only applied once you trust that folder, and an organization can switch repository files off altogether.",
+      "implementation": ["apps/cli/src/config.rs", "apps/cli/src/trust/mod.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "Two layers above the repository can withhold it: an organization's"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/trust/mod.rs",
+          "text": "repository config and policy are not applied"
+        }
+      ]
+    },
+    {
+      "id": "config-default-keys",
+      "doc": "configuration",
+      "section": "Common settings",
+      "kind": "prose",
+      "sentence": "`[default]` holds `model`, `provider`, `max_tokens` (8192 unless you set it), `temperature`, `reasoning_effort` (low, medium, high or max) and `sandbox_mode` (off, read-only, workspace or full-auto).",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "assert_eq!(config.default.max_tokens, 8192);"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "Reasoning effort chosen at onboarding: low, medium, high, max."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "Sandbox mode: off, read-only, workspace, full-auto."
+        }
+      ]
+    },
+    {
+      "id": "config-permission-mode-values",
+      "doc": "configuration",
+      "section": "Common settings",
+      "kind": "prose",
+      "sentence": "`permission_mode` takes `default`, `plan`, `acceptEdits` or `dontAsk`.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "`default`, `plan`, `acceptEdits` or `dontAsk`."
+        }
+      ]
+    },
+    {
+      "id": "config-bypass-not-storable",
+      "doc": "configuration",
+      "section": "Common settings",
+      "kind": "prose",
+      "sentence": "Bypassing permissions cannot be saved in the file; pass it for one run instead.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "`bypassPermissions` is deliberately not storable here. A persisted"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "per-run flag or a per-turn choice."
+        }
+      ]
+    },
+    {
+      "id": "config-env-overrides",
+      "doc": "configuration",
+      "section": "Common settings",
+      "kind": "prose",
+      "sentence": "`AGIWORKFORCE_MODEL`, `AGIWORKFORCE_PROVIDER` and `AGIWORKFORCE_MAX_TOKENS` override the file for one run, and an empty value is ignored.",
+      "implementation": ["apps/cli/src/config.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/config.rs",
+          "name": "test_merge_env_model_override"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/config.rs",
+          "name": "test_merge_env_ignores_empty_values"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "`AGIWORKFORCE_MAX_TOKENS` -> `default.max_tokens`"
+        }
+      ]
+    },
+    {
+      "id": "config-unreadable-policy-stops",
+      "doc": "configuration",
+      "section": "Organization policy",
+      "kind": "prose",
+      "sentence": "A policy file that exists but cannot be read stops the CLI rather than being skipped.",
+      "implementation": ["apps/cli/src/config.rs", "apps/cli/src/platform/policy/managed.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/config.rs",
+          "text": "an unreadable managed layer must stop the load, not fall away"
+        }
+      ]
+    },
+    {
+      "id": "config-vscode-settings",
+      "doc": "configuration",
+      "section": "VS Code settings",
+      "kind": "prose",
+      "sentence": "The extension's own settings are under `agiWorkforce` in VS Code's Settings, for example `agiWorkforce.model` (Auto by default), `agiWorkforce.cliPath` (the `agi` command by default) and `agiWorkforce.memory.enabled`.",
+      "implementation": ["apps/extension-vscode/package.json"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/extension-vscode/package.json",
+          "text": "\"agiWorkforce.cliPath\""
+        },
+        {
+          "kind": "copy",
+          "file": "apps/extension-vscode/package.json",
+          "text": "\"agiWorkforce.memory.enabled\""
+        }
+      ]
+    },
+    {
+      "id": "instructions-never-twice",
+      "doc": "custom-instructions",
+      "section": "Instruction files",
+      "kind": "prose",
+      "sentence": "The same file is never read twice.",
+      "implementation": ["apps/cli/src/compaction.rs"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/compaction.rs",
+          "text": "if sources.iter().any(|source| same_file(&source.path, &path)) {"
+        }
+      ]
+    },
+    {
+      "id": "instructions-reach-next-turn",
+      "doc": "custom-instructions",
+      "section": "Instruction files",
+      "kind": "prose",
+      "sentence": "An edited, added or removed file reaches the next turn, and so does moving to another worktree.",
+      "implementation": ["apps/cli/src/agent/mod.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/agent/mod.rs",
+          "name": "edited_added_and_removed_instruction_files_each_reach_the_conversation"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/agent/mod.rs",
+          "name": "moving_to_another_worktree_delivers_that_worktrees_instructions"
+        }
+      ]
+    },
+    {
+      "id": "instructions-vscode-scopes",
+      "doc": "custom-instructions",
+      "section": "Instructions set in VS Code",
+      "kind": "prose",
+      "sentence": "Settings, Custom instructions in the extension holds instructions of up to 8,000 characters, either for every workspace on this computer or for the open workspace only.",
+      "implementation": ["apps/extension-vscode/src/features/instructions/customInstructions.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/extension-vscode/src/features/instructions/customInstructions.ts",
+          "text": "export const MAX_CUSTOM_INSTRUCTION_CHARS = 8_000;"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/extension-vscode/src/features/instructions/customInstructions.ts",
+          "text": "const workspace = readBounded(context.workspaceState, WORKSPACE_CUSTOM_INSTRUCTIONS_KEY);"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/extension-vscode/src/features/instructions/customInstructions.ts",
+          "text": "const host = readBounded(context.globalState, HOST_CUSTOM_INSTRUCTIONS_KEY);"
         }
       ]
     }
