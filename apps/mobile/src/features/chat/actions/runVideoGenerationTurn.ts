@@ -2,6 +2,8 @@ import { ApiPaywallError } from '@/services/api';
 import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
 import {
   MediaGenerationAdmissionError,
+  MEDIA_USAGE_LIMIT_MESSAGE,
+  isUsageLimitRefusal,
   mediaGenerationFailureMessage,
 } from './mediaGenerationError';
 import {
@@ -149,6 +151,11 @@ export async function runVideoGenerationTurn(
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);
       return { status: 'paywall', assistantMessageId };
+    }
+
+    if (isUsageLimitRefusal(error)) {
+      input.fail(input.conversationId, assistantMessageId, MEDIA_USAGE_LIMIT_MESSAGE);
+      return { status: 'failed', assistantMessageId };
     }
 
     input.onUnexpectedError?.(error);
