@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0344: let a GitHub app install started on the phone finish on it
+-- Migration 0343: let a GitHub app install started on the phone finish on it
 --
 -- Why    : the phone opens the GitHub App install in its own browser session,
 --          which has no web cookie session. Every hop of the install (start,
