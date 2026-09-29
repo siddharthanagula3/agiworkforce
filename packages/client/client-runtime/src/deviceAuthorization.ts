@@ -108,8 +108,30 @@ export async function pollDeviceAuthorization(
 
   const body = parseRecord(response.body);
   const error = typeof body['error'] === 'string' ? body['error'] : undefined;
-  if (response.status === 403 && error === 'authorization_pending') {
+  if (
+    (response.status === 403 && error === 'authorization_pending') ||
+    (response.status === 429 && error === 'slow_down')
+  ) {
     return { kind: 'pending' };
+  }
+  if (response.status === 403 && error === 'terms_acceptance_required') {
+    const acceptanceUrl =
+      typeof body['acceptance_url'] === 'string' ? body['acceptance_url'] : undefined;
+    return {
+      kind: 'rejected',
+      message: acceptanceUrl
+        ? `Accept the updated Terms of Service at ${acceptanceUrl}, then sign in again.`
+        : 'Accept the updated Terms of Service on agiworkforce.com, then sign in again.',
+    };
+  }
+  if (response.status === 403 && error === 'account_unavailable') {
+    return {
+      kind: 'rejected',
+      message:
+        typeof body['error_description'] === 'string'
+          ? body['error_description']
+          : 'This AGI Workforce account cannot sign in right now.',
+    };
   }
   if (response.status === 400 && error === 'access_denied') {
     return { kind: 'denied' };

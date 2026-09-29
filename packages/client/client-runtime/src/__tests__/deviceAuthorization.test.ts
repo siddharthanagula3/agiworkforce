@@ -87,6 +87,39 @@ describe('shared device authorization client', () => {
     },
   );
 
+  it('keeps waiting when the poll is told to slow down', async () => {
+    const post = vi.fn().mockResolvedValue({ status: 429, body: '{"error":"slow_down"}' });
+
+    const result = await pollDeviceAuthorization(
+      'https://agiworkforce.com',
+      '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
+      post,
+    );
+
+    expect(result.kind).toBe('pending');
+  });
+
+  it('names the terms step and its link when the account must accept first', async () => {
+    const post = vi.fn().mockResolvedValue({
+      status: 403,
+      body: JSON.stringify({
+        error: 'terms_acceptance_required',
+        acceptance_url: 'https://agiworkforce.com/login/complete?redirectTo=%2F',
+      }),
+    });
+
+    const result = await pollDeviceAuthorization(
+      'https://agiworkforce.com',
+      '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
+      post,
+    );
+
+    expect(result.kind).toBe('rejected');
+    expect(result.kind === 'rejected' ? result.message : '').toContain(
+      'https://agiworkforce.com/login/complete?redirectTo=%2F',
+    );
+  });
+
   it('names the status for a non-2xx below 500 instead of claiming a rejection', async () => {
     const post = vi.fn().mockResolvedValue({ status: 404, body: '{}' });
 
