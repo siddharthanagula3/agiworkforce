@@ -46,6 +46,7 @@ import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAtt
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
+import { buildAgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
 import { ContextDetailsSheet } from '@/src/features/chat/components/ContextDetailsSheet';
 import {
@@ -110,7 +111,7 @@ import {
   isSelectableModelIdForAccess,
   getShortDisplayName,
 } from '@/src/features/model-picker/service';
-import { useTierStore } from '@/src/features/billing/store';
+import { isCapabilityRequestable, useTierStore } from '@/src/features/billing/store';
 import {
   executionModeForConversation,
   executionModeForSelection,
@@ -1236,6 +1237,16 @@ export default function ChatScreen() {
 
   const handleEnsureVoiceConversation = useCallback(async () => id ?? null, [id]);
 
+  const handleVoiceStartWorkTask = useCallback(
+    (goal: string) => {
+      const agiWorkGoal = buildAgiWorkGoalInput(goal);
+      if (!id || !agiWorkGoal || !isCapabilityRequestable('canUseAgiWork')) return false;
+      void sendMessage(id, goal, selectedModel, undefined, { workMode: 'agiwork', agiWorkGoal });
+      return true;
+    },
+    [id, selectedModel, sendMessage],
+  );
+
   useEffect(() => {
     if (requestedVoiceMode !== 'live') return;
     startVoiceMode();
@@ -2003,6 +2014,7 @@ export default function ChatScreen() {
           ensureConversation={handleEnsureVoiceConversation}
           onSwitchToText={handleSwitchLiveVoiceToText}
           onEnded={handleLiveVoiceEnded}
+          onStartWorkTask={handleVoiceStartWorkTask}
         />
 
         {/* Conversation export bottom sheet */}
