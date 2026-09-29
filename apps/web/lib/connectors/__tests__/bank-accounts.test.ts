@@ -116,6 +116,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 import {
   connectBankAccounts,
   executeBankAccountsTool,
+  removeBankAccountsItem,
   removeBankItem,
   setBankItemExcludedAccounts,
 } from '../bank-accounts';
@@ -131,6 +132,11 @@ function seed(id: string, token: string, excluded: string[] | null = null) {
     institution_name: `Bank ${token}`,
     excluded_account_ids: excluded,
   });
+}
+
+function seedCarriedOver(id: string, token: string) {
+  seed(id, token);
+  state.rows.at(-1)!.plaid_item_id = null;
 }
 
 const plaidError = (code: string, status = 400): PlaidAnswer => ({
@@ -180,6 +186,44 @@ describe('removing one bank', () => {
 
     await expect(removeBankItem(USER, ITEM_A)).rejects.toThrow('Try again in a few minutes');
     expect(state.rows.map((row) => row.id)).toEqual([ITEM_A]);
+  });
+
+  it('removes a carried-over link whose token Plaid rejects, and never points the grant at it', async () => {
+    seedCarriedOver(ITEM_A, 'token-dead');
+    seed(ITEM_B, 'token-b');
+    state.grantToken = 'token-b';
+    state.plaid['/item/remove'] = (body) =>
+      body['access_token'] === 'token-dead' ? plaidError('INVALID_ACCESS_TOKEN') : { body: {} };
+
+    await expect(removeBankItem(USER, ITEM_B)).resolves.toBe(true);
+    expect(state.revokeGrant).toHaveBeenCalled();
+    expect(state.upsertGrant).not.toHaveBeenCalled();
+
+    await expect(removeBankItem(USER, ITEM_A)).resolves.toBe(true);
+    expect(state.rows).toEqual([]);
+  });
+
+  it('disconnects everything even when a carried-over link holds a rejected token', async () => {
+    seedCarriedOver(ITEM_A, 'token-dead');
+    seed(ITEM_B, 'token-b');
+    state.plaid['/item/remove'] = (body) =>
+      body['access_token'] === 'token-dead' ? plaidError('INVALID_ACCESS_TOKEN') : { body: {} };
+
+    await expect(removeBankAccountsItem(USER)).resolves.toBeUndefined();
+    expect(state.rows).toEqual([]);
+  });
+
+  it('never re-points the grant at a carried-over link when a live bank survives', async () => {
+    seedCarriedOver(ITEM_A, 'token-dead');
+    seed(ITEM_B, 'token-b');
+    state.plaid['/item/remove'] = (body) =>
+      body['access_token'] === 'token-dead'
+        ? plaidError('INVALID_ACCESS_TOKEN')
+        : plaidError('INTERNAL_SERVER_ERROR', 500);
+
+    await expect(removeBankAccountsItem(USER)).rejects.toThrow('Try again in a few minutes');
+    expect(state.rows.map((row) => row.id)).toEqual([ITEM_B]);
+    expect(state.grantToken).toBe('token-b');
   });
 
   it('drops the link when Plaid no longer knows the item', async () => {
