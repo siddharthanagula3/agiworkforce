@@ -318,6 +318,7 @@ import {
 } from './tool-metadata';
 import {
   batchIntroducesUntrustedContent,
+  privateToolContentInContext,
   resolveToolCallGate,
   sensitiveSourceReachable,
   untrustedToolContentInContext,
@@ -2895,7 +2896,18 @@ export function hasPrivateContext(
     processed.sensitiveContextPresent === true ||
     (processed.autoMemoryFacts?.length ?? 0) > 0 ||
     messages.filter((message) => message.role === 'user').length > 1 ||
-    messages.some((message) => hasNonTextPart(message))
+    messages.some((message) => hasNonTextPart(message)) ||
+    privateToolContentInContext(priorToolCallNames(messages))
+  );
+}
+
+function priorToolCallNames(
+  messages: readonly ProcessedRequest['llmRequest']['messages'][number][],
+): string[] {
+  return messages.flatMap((message) =>
+    Array.isArray(message.tool_calls)
+      ? parseAssistantToolCalls(message.tool_calls).map((call) => call.qualifiedName)
+      : [],
   );
 }
 
@@ -2923,13 +2935,7 @@ export function hasUntrustedContext(
   return (
     processed.untrustedContextPresent === true ||
     messages.some((message) => hasNonTextPart(message)) ||
-    untrustedToolContentInContext(
-      messages.flatMap((message) =>
-        Array.isArray(message.tool_calls)
-          ? parseAssistantToolCalls(message.tool_calls).map((call) => call.qualifiedName)
-          : [],
-      ),
-    )
+    untrustedToolContentInContext(priorToolCallNames(messages))
   );
 }
 
