@@ -54,6 +54,7 @@ pub mod output_styles;
 pub mod path_security;
 pub mod permissions;
 pub mod plans;
+pub mod pr_feedback;
 pub(crate) mod process_tree;
 // plan_mode lives at features::plan::plan_mode; re-exported here so all
 // internal callers using `crate::plan_mode::*` continue to resolve unchanged.
