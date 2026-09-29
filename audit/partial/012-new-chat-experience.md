@@ -75,7 +75,7 @@ Code: `crates/agiworkforce-command-registry/src/lib.rs:248-248`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Recommend connectors on the new-chat screen; the "+" sheet's Connectors row only opens the Connectors screen. | handler, ui |
+| mobile | partial | Deferred under D-2026-09-28-26 until Codex's connectors screen lands; the connector catalogue and names live in that screen. | codex |
 | cli | partial | Recommend MCP servers to connect; today /mcp only lists what is configured. | handler, ui |
 
 Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `crates/agiworkforce-command-registry/src/lib.rs:247-247`

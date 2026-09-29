@@ -113,10 +113,9 @@ Code: `apps/cli/src/provider.rs:341-341`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The phone can pair with and drive the desktop app, but a blocked feature never offers to continue on the desktop. | ui |
 | cli | partial | The CLI can receive a selection handed off from Chrome, but never offers to continue its own work on another device. | ui |
 
-Code: `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:69-71`, `apps/cli/src/context_handoff.rs:1-5`
+Code: `apps/cli/src/context_handoff.rs:1-5`
 
 ## S78.25: Attachment-preservation choice after model change.
 
