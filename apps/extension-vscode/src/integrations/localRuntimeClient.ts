@@ -161,7 +161,6 @@ const capabilitiesSchema = z.object({
   pluginUpdates: z.boolean().optional(),
   planDecisions: z.boolean().optional(),
   permissionRules: z.boolean().optional(),
-  providerKeys: z.boolean().optional(),
 });
 
 const worktreeSummarySchema = z.object({
@@ -392,21 +391,6 @@ const savedPermissionsResponseSchema = z.object({
 });
 
 export type SavedPermissionList = z.infer<typeof savedPermissionsResponseSchema>;
-
-const providerKeysResponseSchema = z.object({
-  providers: z
-    .array(
-      z.object({
-        id: z.string().min(1).max(64),
-        label: z.string().max(200),
-        envVar: z.string().max(200),
-        source: z.enum(['stored', 'environment']).optional().catch(undefined),
-      }),
-    )
-    .max(200),
-});
-
-export type ProviderKeyList = z.infer<typeof providerKeysResponseSchema>;
 
 const mcpServerInspectionSchema = z.object({
   name: z.string().min(1).max(512),
@@ -1345,25 +1329,6 @@ export class LocalRuntimeClient {
   async listSavedPermissions(): Promise<SavedPermissionList> {
     const connection = await this.readyConnection();
     return savedPermissionsResponseSchema.parse(await connection.request('permissions/list', {}));
-  }
-
-  async listProviderKeys(): Promise<ProviderKeyList> {
-    const connection = await this.readyConnection();
-    return providerKeysResponseSchema.parse(await connection.request('providerKeys/list', {}));
-  }
-
-  async setProviderKey(provider: string, key: string): Promise<ProviderKeyList> {
-    const connection = await this.readyConnection();
-    return providerKeysResponseSchema.parse(
-      await connection.request('providerKeys/set', { provider, key }),
-    );
-  }
-
-  async removeProviderKey(provider: string): Promise<ProviderKeyList> {
-    const connection = await this.readyConnection();
-    return providerKeysResponseSchema.parse(
-      await connection.request('providerKeys/remove', { provider }),
-    );
   }
 
   async addSavedPermission(rule: {

@@ -498,19 +498,6 @@ const en = {
   'savedApprovals.allowCommandDetail':
     'AGI runs any command that starts with this, in every session, without asking.',
   'savedApprovals.allowConfirm': 'Always allow',
-  'providerKeys.title': 'Provider API keys',
-  'providerKeys.placeholder': 'Keys the AGI CLI uses to call a provider with your own account',
-  'providerKeys.empty': 'This AGI CLI lists no providers that take an API key',
-  'providerKeys.stored': 'Key saved',
-  'providerKeys.fromEnvironment': 'From {envVar}',
-  'providerKeys.notSet': 'Not set',
-  'providerKeys.setDetail': 'Choose to enter a key; it is kept in your system keychain',
-  'providerKeys.prompt': '{provider} API key',
-  'providerKeys.removeTitle': 'Remove the saved {provider} key?',
-  'providerKeys.removeDetail':
-    'Models from {provider} stop working through your own account until a key is added again.',
-  'providerKeys.saved': 'AGI Workforce: {provider} key saved.',
-  'providerKeys.noun': 'provider API keys',
   'savedApprovals.noun': 'saved approvals',
   'webview.alwaysAllow': 'Always allow',
   'webview.alwaysAllowHint':

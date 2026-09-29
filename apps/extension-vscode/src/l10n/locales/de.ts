@@ -551,21 +551,6 @@ const de = {
   'savedApprovals.allowCommandDetail':
     'AGI führt jeden Befehl, der damit beginnt, in jeder Sitzung ohne Rückfrage aus.',
   'savedApprovals.allowConfirm': 'Immer erlauben',
-  'providerKeys.title': 'API-Schlüssel der Anbieter',
-  'providerKeys.placeholder':
-    'Schlüssel, mit denen die AGI CLI einen Anbieter über Ihr eigenes Konto aufruft',
-  'providerKeys.empty': 'Diese AGI CLI führt keine Anbieter auf, die einen API-Schlüssel annehmen',
-  'providerKeys.stored': 'Schlüssel gespeichert',
-  'providerKeys.fromEnvironment': 'Aus {envVar}',
-  'providerKeys.notSet': 'Nicht festgelegt',
-  'providerKeys.setDetail':
-    'Auswählen, um einen Schlüssel einzugeben; er wird im Schlüsselbund des Systems gespeichert',
-  'providerKeys.prompt': '{provider}-API-Schlüssel',
-  'providerKeys.removeTitle': 'Gespeicherten {provider}-Schlüssel entfernen?',
-  'providerKeys.removeDetail':
-    'Modelle von {provider} funktionieren über Ihr eigenes Konto erst wieder, wenn erneut ein Schlüssel hinzugefügt wird.',
-  'providerKeys.saved': 'AGI Workforce: {provider}-Schlüssel gespeichert.',
-  'providerKeys.noun': 'Anbieter-API-Schlüssel',
   'savedApprovals.noun': 'gespeicherte Genehmigungen',
   'webview.alwaysAllow': 'Immer erlauben',
   'webview.alwaysAllowHint':

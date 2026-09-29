@@ -93,11 +93,6 @@ export const BUILT_IN_SLASH_COMMANDS: readonly SlashCommandItem[] = [
     command: 'agi-workforce.showSavedApprovals',
   },
   {
-    name: '/keys',
-    description: 'API keys for your own provider accounts',
-    command: 'agi-workforce.showProviderKeys',
-  },
-  {
     name: '/remote-control',
     description: "Continue this window's sessions from your phone",
     command: 'agi-workforce.remoteControl',

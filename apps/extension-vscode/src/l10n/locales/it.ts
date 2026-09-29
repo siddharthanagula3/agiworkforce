@@ -611,21 +611,6 @@ const it = {
   'savedApprovals.allowCommandDetail':
     'AGI esegue qualsiasi comando che inizi così, in ogni sessione, senza chiedere.',
   'savedApprovals.allowConfirm': 'Consenti sempre',
-  'providerKeys.title': 'Chiavi API dei provider',
-  'providerKeys.placeholder':
-    'Chiavi che la AGI CLI usa per chiamare un provider con il tuo account',
-  'providerKeys.empty': 'Questa AGI CLI non elenca provider che accettano una chiave API',
-  'providerKeys.stored': 'Chiave salvata',
-  'providerKeys.fromEnvironment': 'Da {envVar}',
-  'providerKeys.notSet': 'Non impostata',
-  'providerKeys.setDetail':
-    'Scegli per inserire una chiave; viene conservata nel portachiavi di sistema',
-  'providerKeys.prompt': 'Chiave API di {provider}',
-  'providerKeys.removeTitle': 'Rimuovere la chiave salvata di {provider}?',
-  'providerKeys.removeDetail':
-    'I modelli di {provider} smettono di funzionare con il tuo account finché non aggiungi di nuovo una chiave.',
-  'providerKeys.saved': 'AGI Workforce: chiave di {provider} salvata.',
-  'providerKeys.noun': 'chiavi API dei provider',
   'savedApprovals.noun': 'approvazioni salvate',
   'webview.alwaysAllow': 'Consenti sempre',
   'webview.alwaysAllowHint':

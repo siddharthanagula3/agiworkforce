@@ -11,11 +11,10 @@ use agiworkforce_protocol::developer_session::{
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
     PermissionsAddParams, PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams,
     PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
-    PluginUpdateResponse, ProtocolVersionUnsupportedData, ProviderKeyRemoveParams,
-    ProviderKeySetParams, ProviderKeysListResponse, SettingsReadResponse, SettingsWriteParams,
-    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
-    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
+    PluginUpdateResponse, ProtocolVersionUnsupportedData, SettingsReadResponse,
+    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillInstallParams,
+    SkillListResponse, SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse,
+    SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
     ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
     ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
     ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
@@ -439,26 +438,6 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: PermissionsAddParams,
     ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
         Err(unsupported(method::PERMISSIONS_ADD))
-    }
-
-    async fn list_provider_keys(
-        &self,
-    ) -> Result<ProviderKeysListResponse, DeveloperSessionHostError> {
-        Err(unsupported(method::PROVIDER_KEYS_LIST))
-    }
-
-    async fn set_provider_key(
-        &self,
-        _params: ProviderKeySetParams,
-    ) -> Result<ProviderKeysListResponse, DeveloperSessionHostError> {
-        Err(unsupported(method::PROVIDER_KEYS_SET))
-    }
-
-    async fn remove_provider_key(
-        &self,
-        _params: ProviderKeyRemoveParams,
-    ) -> Result<ProviderKeysListResponse, DeveloperSessionHostError> {
-        Err(unsupported(method::PROVIDER_KEYS_REMOVE))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1165,35 +1144,6 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .remove_permission(params)
-                    .await
-                    .map(serde_json::to_value)
-            }
-            method::PROVIDER_KEYS_LIST => {
-                if let Err(response) = parse_optional_params::<NoParams>(&request) {
-                    return *response;
-                }
-                self.host
-                    .list_provider_keys()
-                    .await
-                    .map(serde_json::to_value)
-            }
-            method::PROVIDER_KEYS_SET => {
-                let params = match parse_params::<ProviderKeySetParams>(&request) {
-                    Ok(params) => params,
-                    Err(response) => return *response,
-                };
-                self.host
-                    .set_provider_key(params)
-                    .await
-                    .map(serde_json::to_value)
-            }
-            method::PROVIDER_KEYS_REMOVE => {
-                let params = match parse_params::<ProviderKeyRemoveParams>(&request) {
-                    Ok(params) => params,
-                    Err(response) => return *response,
-                };
-                self.host
-                    .remove_provider_key(params)
                     .await
                     .map(serde_json::to_value)
             }

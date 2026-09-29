@@ -47,7 +47,6 @@ export {
   manageMcpServers,
   managePlugins,
   manageSavedApprovals,
-  manageProviderKeys,
   manageSkills,
 } from './capabilityManagement';
 export { MCP_SERVER_DETAILS_SCHEME, McpServerDetailsProvider } from './mcpServerDetails';

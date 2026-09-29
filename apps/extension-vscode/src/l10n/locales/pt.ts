@@ -613,20 +613,6 @@ const pt = {
   'savedApprovals.allowCommandDetail':
     'O AGI executa qualquer comando que comece assim, em todas as sessões, sem perguntar.',
   'savedApprovals.allowConfirm': 'Sempre permitir',
-  'providerKeys.title': 'Chaves de API dos provedores',
-  'providerKeys.placeholder':
-    'Chaves que a AGI CLI usa para chamar um provedor com sua própria conta',
-  'providerKeys.empty': 'Esta AGI CLI não lista provedores que aceitam chave de API',
-  'providerKeys.stored': 'Chave salva',
-  'providerKeys.fromEnvironment': 'De {envVar}',
-  'providerKeys.notSet': 'Não definida',
-  'providerKeys.setDetail': 'Escolha para inserir uma chave; ela fica no chaveiro do sistema',
-  'providerKeys.prompt': 'Chave de API de {provider}',
-  'providerKeys.removeTitle': 'Remover a chave salva de {provider}?',
-  'providerKeys.removeDetail':
-    'Os modelos de {provider} deixam de funcionar pela sua conta até que uma chave seja adicionada novamente.',
-  'providerKeys.saved': 'AGI Workforce: chave de {provider} salva.',
-  'providerKeys.noun': 'chaves de API dos provedores',
   'savedApprovals.noun': 'aprovações salvas',
   'webview.alwaysAllow': 'Sempre permitir',
   'webview.alwaysAllowHint':
