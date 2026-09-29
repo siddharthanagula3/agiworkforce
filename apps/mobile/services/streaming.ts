@@ -268,6 +268,7 @@ interface InitialStreamRequest {
   thinking?: boolean;
   effort?: Effort | 'none' | 'minimal';
   web_search?: boolean;
+  web_fetch?: boolean;
   research?: boolean;
   research_resume?: {
     sources?: Array<{ url: string; title?: string; snippet?: string }>;
