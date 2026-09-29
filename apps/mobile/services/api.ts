@@ -20,6 +20,7 @@ import {
   MAX_CHAT_ATTACHMENT_BYTES,
   ManagedCloudChatAttachmentCompleteResponseSchema,
   ManagedCloudChatAttachmentPresignResponseSchema,
+  chatAttachmentSizeLabel,
   resolveChatAttachmentMimeType,
 } from '@agiworkforce/cloud-contracts';
 import { readPasskeyRequired } from '@agiworkforce/cloud-contracts/account-security';
@@ -582,7 +583,9 @@ export const api = {
       throw new Error(`"${file.name}" is empty and cannot be attached.`);
     }
     if (byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
-      throw new Error(`"${file.name}" is larger than the 12 MiB chat attachment limit.`);
+      throw new Error(
+        `"${file.name}" is larger than the ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_BYTES)} chat attachment limit.`,
+      );
     }
 
     const token = await getAuthToken();

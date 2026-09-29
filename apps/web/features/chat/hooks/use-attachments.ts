@@ -5,6 +5,7 @@ import {
   CHAT_ATTACHMENT_MIME_TYPES,
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   chatAttachmentAcceptAttribute,
   isSupportedChatAttachment,
 } from '@/lib/chat-attachment-policy';
@@ -18,6 +19,7 @@ import {
 
 const MAX_FILE_COUNT = MAX_CHAT_ATTACHMENT_COUNT;
 const MAX_FILE_SIZE_BYTES = MAX_CHAT_ATTACHMENT_BYTES;
+const MAX_MESSAGE_BYTES = MAX_CHAT_ATTACHMENT_MESSAGE_BYTES;
 
 /**
  * MIME allowlist for `addFiles`. Exported (with the helpers below) so the
@@ -54,6 +56,7 @@ export interface AttachmentPreview {
 export interface UseAttachmentsOptions {
   maxFiles?: number;
   maxFileSize?: number;
+  maxTotalBytes?: number;
   onError?: (message: string) => void;
 }
 
@@ -89,6 +92,7 @@ type IntakeIssueReason =
   | 'too_large'
   | 'unsupported'
   | 'too_many'
+  | 'over_message_budget'
   | 'duplicate'
   | typeof PICTURE_METADATA_REFUSAL;
 
@@ -105,6 +109,7 @@ interface HeldFile {
 interface IntakeLimits {
   maxFiles: number;
   maxFileSize: number;
+  maxTotalBytes: number;
 }
 
 function fileIdentity(file: File): string {
@@ -122,6 +127,8 @@ function singleIssueNotice(issue: IntakeIssue, limits: IntakeLimits): string {
       return `"${file.name}" has an unsupported file type (${file.type || 'unknown'}).`;
     case 'too_many':
       return `Maximum ${limits.maxFiles} files allowed.`;
+    case 'over_message_budget':
+      return `"${file.name}" was not attached. Files on one message must total ${formatFileSize(limits.maxTotalBytes)} or less.`;
     case 'duplicate':
       return `"${file.name}" is already attached.`;
     default:
@@ -139,6 +146,8 @@ function issueReasonPhrase(reason: IntakeIssueReason, limits: IntakeLimits): str
       return 'unsupported file type';
     case 'too_many':
       return `over the ${limits.maxFiles}-file limit`;
+    case 'over_message_budget':
+      return `over the ${formatFileSize(limits.maxTotalBytes)} total for one message`;
     case 'duplicate':
       return 'already attached';
     default:
@@ -182,7 +191,12 @@ export function isAllowedType(file: File): boolean {
 }
 
 export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachmentsReturn {
-  const { maxFiles = MAX_FILE_COUNT, maxFileSize = MAX_FILE_SIZE_BYTES, onError } = options;
+  const {
+    maxFiles = MAX_FILE_COUNT,
+    maxFileSize = MAX_FILE_SIZE_BYTES,
+    maxTotalBytes = MAX_MESSAGE_BYTES,
+    onError,
+  } = options;
 
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<AttachmentPreview[]>([]);
@@ -190,7 +204,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
   const [preparing, setPreparing] = useState(false);
   const previewUrlsRef = useRef<string[]>([]);
   const previewKeysRef = useRef<string[]>([]);
-  const heldKeysRef = useRef<Set<string>>(new Set());
+  const heldBytesRef = useRef<Map<string, number>>(new Map());
   const heldCountRef = useRef(0);
   const draftGenerationRef = useRef(0);
   const pendingBatchesRef = useRef(0);
@@ -218,7 +232,8 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
 
   const admit = useCallback((accepted: readonly HeldFile[], unreadable: readonly HeldFile[]) => {
     heldCountRef.current -= unreadable.length;
-    for (const entry of unreadable) heldKeysRef.current.delete(entry.key);
+    for (const entry of unreadable) heldBytesRef.current.delete(entry.key);
+    for (const entry of accepted) heldBytesRef.current.set(entry.key, entry.file.size);
     if (unreadable.length > 0) {
       setRefused((prev) => [
         ...prev,
@@ -243,7 +258,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     (incoming: File[]) => {
       if (incoming.length === 0) return;
 
-      const limits: IntakeLimits = { maxFiles, maxFileSize };
+      const limits: IntakeLimits = { maxFiles, maxFileSize, maxTotalBytes };
       const report = (attached: number, issues: readonly IntakeIssue[]) => {
         const notice = intakeNotice(incoming.length, attached, issues, limits);
         if (notice) onError?.(notice);
@@ -252,10 +267,11 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       const batch: HeldFile[] = [];
       const batchKeys = new Set<string>();
       const availableSlots = maxFiles - heldCountRef.current;
+      let messageBytes = [...heldBytesRef.current.values()].reduce((sum, bytes) => sum + bytes, 0);
 
       for (const file of incoming) {
         const key = fileIdentity(file);
-        if (heldKeysRef.current.has(key) || batchKeys.has(key)) {
+        if (heldBytesRef.current.has(key) || batchKeys.has(key)) {
           issues.push({ file, reason: 'duplicate' });
           continue;
         }
@@ -275,6 +291,11 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           issues.push({ file, reason: 'unsupported' });
           continue;
         }
+        if (messageBytes + file.size > maxTotalBytes) {
+          issues.push({ file, reason: 'over_message_budget' });
+          continue;
+        }
+        messageBytes += file.size;
         batchKeys.add(key);
         batch.push({ file, key });
       }
@@ -287,7 +308,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       }
 
       heldCountRef.current += batch.length;
-      for (const entry of batch) heldKeysRef.current.add(entry.key);
+      for (const entry of batch) heldBytesRef.current.set(entry.key, entry.file.size);
       const generation = draftGenerationRef.current;
       if (
         pendingBatchesRef.current === 0 &&
@@ -333,7 +354,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           if (pendingBatchesRef.current === 0) setPreparing(false);
         });
     },
-    [admit, maxFiles, maxFileSize, onError],
+    [admit, maxFiles, maxFileSize, maxTotalBytes, onError],
   );
 
   const removeFile = useCallback(
@@ -346,7 +367,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       }
 
       const [key] = previewKeysRef.current.splice(index, 1);
-      if (key) heldKeysRef.current.delete(key);
+      if (key) heldBytesRef.current.delete(key);
       heldCountRef.current = Math.max(0, heldCountRef.current - 1);
       setAttachments((prev) => prev.filter((_, i) => i !== index));
       setPreviews((prev) => prev.filter((_, i) => i !== index));
@@ -357,7 +378,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
   const clearAll = useCallback(() => {
     draftGenerationRef.current += 1;
     heldCountRef.current = 0;
-    heldKeysRef.current.clear();
+    heldBytesRef.current.clear();
     previewKeysRef.current = [];
     revokeAllUrls();
     setAttachments([]);
