@@ -5,7 +5,6 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { parseLockdownEnabled } from '@shared/types/lockdownMode';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readConnectorPolicySafely } from '@/lib/services/connector-policy-service';
 import { resolveConnectorToolMetadata } from './tool-metadata';
 
@@ -169,42 +168,39 @@ export function withoutStandingApprovals(
 }
 
 /**
- * A workspace administrator's verdicts on connector tools, applied over each
+ * A workspace administrator's verdicts on connector tools, merged into each
  * member's own. The stricter answer wins: a workspace block or approval
  * requirement holds whatever the member saved, and a workspace allow only
- * settles tools the member has not decided on.
+ * settles tools the member has not decided on. The result is a plain set of
+ * entries, so a durable run that stores and rebuilds them keeps the same
+ * effective verdicts.
  */
 export function withWorkspaceToolRules(
   permissions: ConnectorToolPermissions,
   rules: ReadonlyArray<ConnectorToolPermissionEntry>,
 ): ConnectorToolPermissions {
   if (rules.length === 0) return permissions;
+  const member = new Map(
+    permissions.entries.map((entry) => [levelKey(entry.connectorId, entry.toolName), entry.level]),
+  );
   const workspace = new Map(
     rules.map((rule) => [levelKey(rule.connectorId, rule.toolName), rule.level]),
   );
-  const levelForConnectorTool = (
-    connectorId: string,
-    toolName: string,
-  ): ConnectorToolPermissionLevel | undefined => {
-    const member = permissions.levelForConnectorTool(connectorId, toolName);
-    const ruled = lookupLevel(workspace, connectorId, toolName);
-    if (ruled === 'deny' || member === 'deny') return 'deny';
-    if (ruled === 'ask' || member === 'ask') return 'ask';
-    return member ?? ruled;
-  };
-  const levelFor = (qualifiedName: string): ConnectorToolPermissionLevel | undefined => {
-    const parsed = parseQualifiedToolName(qualifiedName);
-    if (!parsed) return permissions.levelFor(qualifiedName);
-    return levelForConnectorTool(parsed.serverId, parsed.toolName);
-  };
-  return {
-    ...permissions,
-    levelFor,
-    levelForConnectorTool,
-    isDenied: (qualifiedName) => levelFor(qualifiedName) === 'deny',
-    isConnectorToolDenied: (connectorId, toolName) =>
-      levelForConnectorTool(connectorId, toolName) === 'deny',
-  };
+  const merged = new Map<string, ConnectorToolPermissionLevel>();
+  for (const entry of [...permissions.entries, ...rules]) {
+    const key = levelKey(entry.connectorId, entry.toolName);
+    if (merged.has(key)) continue;
+    const own = lookupLevel(member, entry.connectorId, entry.toolName);
+    const ruled = lookupLevel(workspace, entry.connectorId, entry.toolName);
+    const level =
+      ruled === 'deny' || own === 'deny'
+        ? 'deny'
+        : ruled === 'ask' || own === 'ask'
+          ? 'ask'
+          : (own ?? ruled);
+    if (level) merged.set(key, level);
+  }
+  return buildPermissions(merged);
 }
 
 export function connectorToolPermissionsFromEntries(
@@ -254,6 +250,7 @@ export async function isLockedDown(db: DatabaseAdapter, userId: string): Promise
 export async function loadConnectorToolPermissions(
   db: DatabaseAdapter,
   userId: string,
+  organizationId: string | null,
 ): Promise<ConnectorToolPermissions> {
   if (!userId) return EMPTY_CONNECTOR_TOOL_PERMISSIONS;
   // Checked here rather than at each caller: the completions, approve and
@@ -277,7 +274,7 @@ export async function loadConnectorToolPermissions(
     }
     return withWorkspaceToolRules(
       EMPTY_CONNECTOR_TOOL_PERMISSIONS,
-      await workspaceToolRules(db, userId),
+      await workspaceToolRules(db, organizationId),
     );
   }
 
@@ -287,14 +284,16 @@ export async function loadConnectorToolPermissions(
     if (!level) continue;
     levels.set(levelKey(row.connector_id, row.tool_name), level);
   }
-  return withWorkspaceToolRules(buildPermissions(levels), await workspaceToolRules(db, userId));
+  return withWorkspaceToolRules(
+    buildPermissions(levels),
+    await workspaceToolRules(db, organizationId),
+  );
 }
 
 async function workspaceToolRules(
   db: DatabaseAdapter,
-  userId: string,
+  organizationId: string | null,
 ): Promise<ReadonlyArray<ConnectorToolPermissionEntry>> {
-  const organizationId = await resolveActiveOrganizationId(db, userId).catch(() => null);
   const policy = await readConnectorPolicySafely(db, organizationId);
   return policy?.toolRules ?? [];
 }

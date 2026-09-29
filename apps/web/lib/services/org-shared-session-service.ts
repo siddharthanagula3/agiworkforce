@@ -257,8 +257,9 @@ export async function getPublicSharedSessionByToken(
               total_messages, expires_at, created_at
          from public.shared_sessions
         where token = $1
+          and ${ownerMayRunUnattendedSql('shared_sessions.owner_id', 2)}
         limit 1`,
-      [token],
+      [token, UNATTENDED_RUN_DENIED_STATUSES],
     );
   }
   return rows[0] ? rowToSession(rows[0]) : null;
