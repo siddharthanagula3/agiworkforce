@@ -374,6 +374,18 @@ const zh = {
   'savedApprovals.removeTitle': '要删除这条已保存的批准吗？',
   'savedApprovals.removeAllowed': '下次要执行此操作时，AGI 会再次询问：{label}',
   'savedApprovals.removeDenied': 'AGI 可能会再次请求执行此操作，而不是直接被拒绝：{label}',
+  'pullRequest.titlePrompt': '拉取请求标题',
+  'pullRequest.basePrompt': '要合并到的分支',
+  'pullRequest.confirmPush':
+    '将 {branch} 的 {count} 个提交推送到 {remote}，并打开合并到 {base} 的拉取请求？',
+  'pullRequest.confirmOpen': '打开从 {branch} 合并到 {base} 的拉取请求？',
+  'pullRequest.confirmAction': '推送并打开',
+  'pullRequest.openAction': '打开拉取请求',
+  'pullRequest.created': 'AGI Workforce：已打开拉取请求。',
+  'pullRequest.finishOnGitHub': 'AGI Workforce：{note}。',
+  'pullRequest.view': '查看',
+  'pullRequest.blocked': 'AGI Workforce：无法打开拉取请求：{reason}。',
+  'pullRequest.failed': 'AGI Workforce：{reason}',
   'savedApprovals.noun': '已保存的批准',
   'webview.alwaysAllow': '始终允许',
   'webview.alwaysAllowHint':

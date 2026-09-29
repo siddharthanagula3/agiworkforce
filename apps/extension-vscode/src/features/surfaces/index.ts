@@ -50,6 +50,7 @@ export {
   manageSkills,
 } from './capabilityManagement';
 export { MCP_SERVER_DETAILS_SCHEME, McpServerDetailsProvider } from './mcpServerDetails';
+export { CREATE_PULL_REQUEST_COMMAND, createPullRequest } from './pullRequest';
 export type {
   SessionListSource,
   SessionOrigin,

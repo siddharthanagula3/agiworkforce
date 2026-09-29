@@ -436,6 +436,18 @@ const ja = {
   'savedApprovals.removeAllowed': '次にこれを行おうとするとき、AGI は再び確認します: {label}',
   'savedApprovals.removeDenied':
     '拒否される代わりに、AGI が再びこれの許可を求めることがあります: {label}',
+  'pullRequest.titlePrompt': 'プルリクエストのタイトル',
+  'pullRequest.basePrompt': 'マージ先のブランチ',
+  'pullRequest.confirmPush':
+    '{branch} の {count} 件のコミットを {remote} にプッシュし、{base} へのプルリクエストを開きますか？',
+  'pullRequest.confirmOpen': '{branch} から {base} へのプルリクエストを開きますか？',
+  'pullRequest.confirmAction': 'プッシュして開く',
+  'pullRequest.openAction': 'プルリクエストを開く',
+  'pullRequest.created': 'AGI Workforce: プルリクエストを開きました。',
+  'pullRequest.finishOnGitHub': 'AGI Workforce: {note}。',
+  'pullRequest.view': '表示',
+  'pullRequest.blocked': 'AGI Workforce: プルリクエストを開けません: {reason}。',
+  'pullRequest.failed': 'AGI Workforce: {reason}',
   'savedApprovals.noun': '保存済みの承認',
   'webview.alwaysAllow': '常に許可',
   'webview.alwaysAllowHint':

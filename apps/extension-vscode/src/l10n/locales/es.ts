@@ -598,6 +598,19 @@ const es = {
     'AGI volverá a preguntar la próxima vez que quiera hacer esto: {label}',
   'savedApprovals.removeDenied':
     'AGI podrá volver a pedir hacer esto en lugar de recibir un rechazo: {label}',
+  'pullRequest.titlePrompt': 'Título de la solicitud de incorporación',
+  'pullRequest.basePrompt': 'Rama en la que fusionar',
+  'pullRequest.confirmPush':
+    '¿Enviar {count} commit(s) de {branch} a {remote} y abrir una solicitud de incorporación a {base}?',
+  'pullRequest.confirmOpen': '¿Abrir una solicitud de incorporación de {branch} a {base}?',
+  'pullRequest.confirmAction': 'Enviar y abrir',
+  'pullRequest.openAction': 'Abrir solicitud',
+  'pullRequest.created': 'AGI Workforce: solicitud de incorporación abierta.',
+  'pullRequest.finishOnGitHub': 'AGI Workforce: {note}.',
+  'pullRequest.view': 'Ver',
+  'pullRequest.blocked':
+    'AGI Workforce: no se puede abrir una solicitud de incorporación: {reason}.',
+  'pullRequest.failed': 'AGI Workforce: {reason}',
   'savedApprovals.noun': 'aprobaciones guardadas',
   'webview.alwaysAllow': 'Permitir siempre',
   'webview.alwaysAllowHint':
