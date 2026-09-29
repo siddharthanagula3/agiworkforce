@@ -104,6 +104,7 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'context_manifests', column: 'organization_id' },
   { table: 'notebook_runs', column: 'organization_id' },
   { table: 'file_lineage', column: 'organization_id' },
+  { table: 'mobile_intent_tokens', column: 'organization_id' },
 ];
 
 /**

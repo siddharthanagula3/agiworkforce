@@ -81,6 +81,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'mobile/feedback/route.ts', reason: 'own_content' },
   { route: 'mobile/iap/apple-notifications/route.ts', reason: 'inbound_callback' },
   { route: 'mobile/iap/google-notifications/route.ts', reason: 'inbound_callback' },
+  { route: 'mobile/intent/ask/route.ts', reason: 'own_content' },
   { route: 'mobile/push-token/route.ts', reason: 'no_governed_state' },
   { route: 'notifications/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/duplicate/route.ts', reason: 'own_content' },

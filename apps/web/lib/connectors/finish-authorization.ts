@@ -48,7 +48,7 @@ export async function finishConnectorAuthorization(input: {
   const { request, userId, state, code, iss, providerError } = input;
   let pending;
   try {
-    pending = await consumePendingAuthorization(state);
+    pending = await consumePendingAuthorization(state, userId);
   } catch (error) {
     if (error instanceof ConnectorOAuthStoreUnavailableError) {
       return { returnPath: '/connectors', connectorId: '', status: 'unavailable' };
@@ -56,20 +56,10 @@ export async function finishConnectorAuthorization(input: {
     throw error;
   }
   if (!pending) {
-    logger.warn('[connector-oauth] callback rejected: unknown, expired, or replayed state');
-    return { returnPath: '/connectors', connectorId: '', status: 'invalid_state' };
-  }
-
-  if (pending.userId !== userId) {
     logger.warn(
-      { connectorId: pending.connectorId },
-      '[connector-oauth] callback rejected: state belongs to a different account',
+      '[connector-oauth] callback rejected: unknown, expired, replayed, or another account state',
     );
-    return {
-      returnPath: pending.returnPath,
-      connectorId: pending.connectorId,
-      status: 'invalid_state',
-    };
+    return { returnPath: '/connectors', connectorId: '', status: 'invalid_state' };
   }
 
   if (!authorizationResponseIssuerMatches(pending, iss)) {

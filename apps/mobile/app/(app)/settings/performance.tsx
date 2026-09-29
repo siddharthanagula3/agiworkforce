@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -42,6 +43,7 @@ import {
   type PerfEvent,
   type BenchmarkResult,
 } from '@/services/performanceMonitor';
+import { readMemoryFootprintMB } from '@/services/processFootprint';
 
 export const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
 
@@ -322,6 +324,24 @@ export default function PerformanceScreen() {
   const [lastBenchmark, setLastBenchmark] = useState<BenchmarkResult | null>(null);
 
   const [chartWidth, setChartWidth] = useState(280);
+  const [memoryNowMB, setMemoryNowMB] = useState<number | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const sample = () => {
+        void readMemoryFootprintMB().then((mb) => {
+          if (active) setMemoryNowMB(mb);
+        });
+      };
+      sample();
+      const timer = setInterval(sample, 2_000);
+      return () => {
+        active = false;
+        clearInterval(timer);
+      };
+    }, []),
+  );
 
   useEffect(() => {
     getCapabilities()
@@ -746,6 +766,11 @@ export default function PerformanceScreen() {
                   Rolling average over last {rollingStats.sampleCount} inferences
                 </Text>
               )}
+              {memoryNowMB !== null && (
+                <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginTop: 4 }}>
+                  The app is using {Math.round(memoryNowMB)}MB of memory now
+                </Text>
+              )}
             </>
           ) : (
             <Text style={{ fontSize: typeScale.subhead, color: c.textMuted }}>
@@ -777,6 +802,13 @@ export default function PerformanceScreen() {
                   value={`${lastBenchmark.firstTokenLatencyMs}ms`}
                   color={c.terraCotta}
                 />
+                {lastBenchmark.peakMemoryMB > 0 && (
+                  <StatChip
+                    label="mem peak"
+                    value={`${Math.round(lastBenchmark.peakMemoryMB)}MB`}
+                    color={c.textSecondary}
+                  />
+                )}
                 <StatChip
                   label="thermal"
                   value={lastBenchmark.thermalState}

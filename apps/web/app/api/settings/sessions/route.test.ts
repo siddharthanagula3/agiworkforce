@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/mobile-intent-tokens')>()),
+  revokeEveryMobileIntentToken: vi.fn().mockResolvedValue(undefined),
+  revokeMobileIntentTokens: vi.fn().mockResolvedValue(undefined),
+  revokeOrganizationMobileIntentTokens: vi.fn().mockResolvedValue(0),
+}));
+
 vi.mock('server-only', () => ({}));
 
 const {
