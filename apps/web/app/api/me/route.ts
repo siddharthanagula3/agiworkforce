@@ -307,6 +307,7 @@ async function handleGetMe(request: NextRequest) {
         ? new Date(subscription.current_period_end).getTime() / 1000
         : null,
       cancel_at_period_end: subscription?.cancel_at_period_end ?? false,
+      effective_tier: effectiveTier,
       ...(subscriptionSource === 'unverified' ? {} : { subscription_source: subscriptionSource }),
     };
 

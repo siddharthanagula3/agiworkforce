@@ -47,6 +47,12 @@ export function withFailureReference(message: string, requestId: string | undefi
 const STAGED_UPGRADE_SENTENCE = /Paid upgrades are opening in stages[^.]*\./g;
 const STAGED_UPGRADE_FACT = 'Paid upgrades are opening in stages.';
 
+const OUTSIDE_PURCHASE_SENTENCES =
+  /\s*(Upgrade your plan or add credits|Top up credits and try again)\./g;
+const USAGE_LIMIT_NEXT_STEP = ' See Usage in Settings for when it resets.';
+
 export function withoutExternalPurchaseSteering(message: string): string {
-  return message.replace(STAGED_UPGRADE_SENTENCE, STAGED_UPGRADE_FACT);
+  const staged = message.replace(STAGED_UPGRADE_SENTENCE, STAGED_UPGRADE_FACT);
+  const stripped = staged.replace(OUTSIDE_PURCHASE_SENTENCES, '');
+  return stripped === staged ? staged : `${stripped.trimEnd()}${USAGE_LIMIT_NEXT_STEP}`;
 }

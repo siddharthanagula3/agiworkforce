@@ -6,6 +6,8 @@ import { readReferenceImageBase64 } from '@/src/features/image/services/imageRef
 import type { MobileImageReferenceAttachment } from './resolveMobileImageGenerationRequest';
 import {
   MediaGenerationAdmissionError,
+  MEDIA_USAGE_LIMIT_MESSAGE,
+  isUsageLimitRefusal,
   mediaGenerationFailureMessage,
 } from './mediaGenerationError';
 import {
@@ -230,6 +232,11 @@ export async function runImageGenerationTurn(
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);
       return { status: 'paywall', assistantMessageId };
+    }
+
+    if (isUsageLimitRefusal(error)) {
+      input.fail(input.conversationId, assistantMessageId, MEDIA_USAGE_LIMIT_MESSAGE);
+      return { status: 'failed', assistantMessageId };
     }
 
     if (error instanceof ImageGenerationTimeout) {
