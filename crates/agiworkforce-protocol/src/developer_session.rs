@@ -763,6 +763,7 @@ pub struct DeveloperSessionApproval {
 pub enum DeveloperFileChangeKind {
     Created,
     Modified,
+    Deleted,
 }
 
 /// What kind of file a change touched. A surface renders a test, a manifest
