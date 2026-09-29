@@ -337,12 +337,6 @@
       "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
-      "file": "apps/mobile/lib/providerStreamClient.ts",
-      "symbol": "Provider",
-      "family": "provider identity",
-      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
-    },
-    {
       "file": "apps/mobile/services/cloudSyncEngine.ts",
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",

@@ -1,16 +1,11 @@
-
 import { streamFromProvider as sharedStreamFromProvider } from '@agiworkforce/provider-runtime';
+import type { Provider } from '@agiworkforce/types';
 import { guardedFetch } from '@/lib/egressGuard';
 
-export type ProviderStreamProvider =
-  | 'anthropic'
-  | 'openai'
-  | 'ollama'
-  | 'google'
-  | 'xai'
-  | 'deepseek'
-  | 'qwen'
-  | 'moonshot';
+export type ProviderStreamProvider = Extract<
+  Provider,
+  'anthropic' | 'openai' | 'ollama' | 'google' | 'xai' | 'deepseek' | 'qwen' | 'moonshot'
+>;
 
 export interface ProviderStreamMessage {
   role: 'user' | 'assistant' | 'system';
