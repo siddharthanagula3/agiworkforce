@@ -193,10 +193,7 @@ Code: `apps/cli/src/lib.rs:2557-2571`, `apps/cli/src/mcp/mod.rs:658-670`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Per-tool Allow/Ask/Block only, and only for tools that already have a saved permission; no read-only switch. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:53-56`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:278-282`
 
 ## S55.27: Write-action settings.
 
@@ -222,30 +219,6 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:1-1`, `apps/
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S55.29: Source-provider attribution.
-
-- Done when: Answers or steps that used a connector name the provider that supplied the data.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile tool rows show a humanized tool name with a one-letter server badge, not the provider name. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:84-87`, `packages/contracts/types/src/tool-display.ts:137-148`
-
-## S55.30: Missing-scope request.
-
-- Done when: When a task needs a scope the grant lacks, the product asks the user to grant that permission.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Reconnect on the connector screen re-requests the wider scopes, but chat never shows which permission is missing (no connect card on mobile). | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-348`, `apps/web/app/api/connectors/oauth/start/route.ts:261-271`
 
 ## S55.32: Private-network setup where offered.
 

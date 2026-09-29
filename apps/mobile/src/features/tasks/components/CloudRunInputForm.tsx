@@ -30,6 +30,9 @@ interface CallPrompts {
 const SUBMIT_LABEL = 'Send answer';
 const DECLINE_LABEL = 'Decline';
 const OPEN_LINK_LABEL = 'Open link';
+const PUNYCODE_WARNING =
+  'This address uses characters that can imitate another site. Check the domain before you open it.';
+const UNOPENABLE_LINK_NOTE = "This link can't be opened from here.";
 const UNSUPPORTED_NOTE =
   'This question needs a form the phone cannot show. Answer it on the web, or decline it here.';
 const DATE_TIME_PLACEHOLDER = 'YYYY-MM-DDTHH:MM';
@@ -268,9 +271,27 @@ export function CloudRunInputForm({
                   <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
                     {prompt.message}
                   </Text>
-                  {prompt.link ? (
+                  <Text selectable style={{ color: colors.textMuted, fontSize: 12 }}>
+                    {prompt.link ? (
+                      <>
+                        {prompt.link.prefix}
+                        <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>
+                          {prompt.link.host}
+                        </Text>
+                        {prompt.link.rest}
+                      </>
+                    ) : (
+                      prompt.url
+                    )}
+                  </Text>
+                  {prompt.link?.punycode ? (
+                    <Text style={{ color: colors.agentWarning, fontSize: 12, lineHeight: 17 }}>
+                      {PUNYCODE_WARNING}
+                    </Text>
+                  ) : null}
+                  {prompt.link && !prompt.link.openable ? (
                     <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-                      {prompt.link.host}
+                      {UNOPENABLE_LINK_NOTE}
                     </Text>
                   ) : null}
                   {prompt.link?.openable ? (

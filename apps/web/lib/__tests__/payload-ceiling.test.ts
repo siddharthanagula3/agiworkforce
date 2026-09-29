@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import {
+  ARTIFACT_RUNTIME_BODY_CEILING_BYTES,
+  ARTIFACT_STORAGE_VALUE_LIMIT_BYTES,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '../error-handler';
 import {
   DEFAULT_API_PAYLOAD_CEILING_BYTES,
@@ -27,6 +31,17 @@ describe('findPayloadCeilingBreach', () => {
     expect(findPayloadCeilingBreach(post('/api/projects', 50 * 1024 * 1024))).toMatchObject({
       ceilingBytes: DEFAULT_API_PAYLOAD_CEILING_BYTES,
     });
+  });
+
+  it('lets a published app send a value just over its storage cap, so the route names the limit', () => {
+    const justOver = ARTIFACT_STORAGE_VALUE_LIMIT_BYTES + 1024;
+    expect(
+      findPayloadCeilingBreach(post('/api/artifacts/runtime/abc123/storage', justOver)),
+    ).toBeNull();
+    expect(payloadCeilingBytes('/api/artifacts/runtime/abc123/storage')).toBe(
+      ARTIFACT_RUNTIME_BODY_CEILING_BYTES,
+    );
+    expect(ARTIFACT_RUNTIME_BODY_CEILING_BYTES).toBeGreaterThan(ARTIFACT_STORAGE_VALUE_LIMIT_BYTES);
   });
 
   it('lets a legitimate attachment through on the upload route', () => {

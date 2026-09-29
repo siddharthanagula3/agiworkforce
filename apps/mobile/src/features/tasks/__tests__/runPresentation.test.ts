@@ -22,6 +22,7 @@ import {
   cloudRunFilterStates,
   cloudRunTextDelta,
   cloudRunTitle,
+  collectCloudRunFile,
   groupCloudRunsByRecency,
   isCloudRunSteerable,
   mergeCloudRuns,
@@ -31,6 +32,7 @@ import {
   CLOUD_RUN_ORIGIN_LABELS,
   CLOUD_RUN_STATE_LABELS,
   CLOUD_RUN_WORK_MODE_LABELS,
+  type CloudRunProducedFile,
 } from '../runPresentation';
 
 // The list endpoint caps `state` at the size of the enum itself
@@ -182,6 +184,55 @@ describe('cloud run grouping', () => {
     const merged = mergeCloudRuns([first], [updated, second]);
     expect(merged).toHaveLength(2);
     expect(merged[0].state).toBe('completed');
+  });
+});
+
+describe('cloud run produced files', () => {
+  const report = envelope(
+    {
+      type: 'artifact-produced',
+      artifactId: 'file-1',
+      name: 'report.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      uri: '/api/files/file-1',
+      sizeBytes: 2048,
+    },
+    3,
+  );
+
+  it('keeps each file the run produced once, in the order it arrived', () => {
+    const chart = envelope(
+      {
+        type: 'artifact-produced',
+        artifactId: 'file-2',
+        name: 'chart.png',
+        mimeType: 'image/png',
+        uri: '/api/files/file-2',
+      },
+      4,
+    );
+
+    const files = [report, chart, report].reduce<CloudRunProducedFile[]>(
+      (collected, next) => collectCloudRunFile(collected, next),
+      [],
+    );
+
+    expect(files).toEqual([
+      {
+        artifactId: 'file-1',
+        name: 'report.docx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        uri: '/api/files/file-1',
+        sizeBytes: 2048,
+      },
+      { artifactId: 'file-2', name: 'chart.png', mimeType: 'image/png', uri: '/api/files/file-2' },
+    ]);
+  });
+
+  it('ignores every other event', () => {
+    const files = collectCloudRunFile([], envelope({ type: 'text-delta', delta: 'Done' }));
+
+    expect(files).toEqual([]);
   });
 });
 

@@ -159,6 +159,18 @@ function normalizeAccessString(value: unknown, maxLength: number): string | unde
 }
 
 const ACCOUNT_UNAVAILABLE_CODE = 'ACCOUNT_UNAVAILABLE';
+const TERMS_ACCEPTANCE_REQUIRED_CODE = 'TERMS_ACCEPTANCE_REQUIRED';
+const TERMS_ACCEPTANCE_REQUIRED_MESSAGE =
+  'Accept the updated AGI Workforce Terms of Service on agiworkforce.com to keep using AGI Cloud chat.';
+
+/**
+ * The account routes send upper-case codes and the chat gateway sends lower
+ * case, so a refusal matched with === only on one casing fell through to the
+ * generic "not available for this account" answer.
+ */
+function isGatewayCode(code: string | undefined, expected: string): boolean {
+  return code?.toUpperCase() === expected;
+}
 const ACCOUNT_UNAVAILABLE_MESSAGE =
   'This AGI account cannot be used right now. Open your account on the web to see why.';
 
@@ -195,7 +207,7 @@ export async function getManagedModelAccess(
     const status = failed.status;
     if (status === 403) {
       const refusal = readGatewayErrorBody(await readBoundedErrorBody(failed));
-      if (refusal.code === ACCOUNT_UNAVAILABLE_CODE) {
+      if (isGatewayCode(refusal.code, ACCOUNT_UNAVAILABLE_CODE)) {
         throw new AccountUnavailableError(
           refusal.message ?? ACCOUNT_UNAVAILABLE_MESSAGE,
           refusal.recoveryPath ?? null,
@@ -647,6 +659,7 @@ export type FreeTrialChunk =
         | 'quota_exceeded'
         | 'auth_required'
         | 'account_suspended'
+        | 'terms_required'
         | 'plan_required'
         | 'rate_limited'
         | 'server_error'
@@ -1075,11 +1088,18 @@ const ACCOUNT_REFUSAL_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 42
 
 function accountRefusal(status: number, body: string): Extract<FreeTrialChunk, { type: 'error' }> {
   const gatewayError = readGatewayErrorBody(body);
-  if (gatewayError.code === ACCOUNT_UNAVAILABLE_CODE) {
+  if (isGatewayCode(gatewayError.code, ACCOUNT_UNAVAILABLE_CODE)) {
     return {
       type: 'error',
       code: 'account_suspended',
       message: gatewayError.message ?? ACCOUNT_UNAVAILABLE_MESSAGE,
+    };
+  }
+  if (isGatewayCode(gatewayError.code, TERMS_ACCEPTANCE_REQUIRED_CODE)) {
+    return {
+      type: 'error',
+      code: 'terms_required',
+      message: gatewayError.message ?? TERMS_ACCEPTANCE_REQUIRED_MESSAGE,
     };
   }
   const block = accountLimitBlock(gatewayError.code);

@@ -46,7 +46,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Exactly one reference photo, only with an edit-capable model; no slots. | ui |
+| mobile | partial | post-codex/w-work-s44-s46-mobile-media-options.patch: up to 4 attached images for an edit-capable model, the first edited and the rest sent as reference_images, with web's 4-image cap and wording. Waits on the Codex hold. | handler |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -61,11 +61,8 @@ Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Shows a provider revisedPrompt under the image, but the user never sees or controls a rewrite before generating. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/GeneratedImage.tsx:165-170`
 
 ## S44.07: Aspect-ratio selector.
 
@@ -85,7 +82,7 @@ Code: `apps/mobile/src/features/chat/components/GeneratedImage.tsx:165-170`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s44.11-s46.06-mobile-media-options.patch: Transparent background toggle in the image options for edit-capable models (as on web), sent as transparent_background. Held: chatViewStore.ts, chat/[id].tsx, runImageGenerationTurn.ts. | ui, handler |
+| mobile | partial | post-codex/w-work-s44-s46-mobile-media-options.patch: Transparent background toggle in the image options for edit-capable models (as on web), sent as transparent_background. Held: chatViewStore.ts, chat/[id].tsx, runImageGenerationTurn.ts. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`
@@ -98,7 +95,7 @@ Code: `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | post-codex/w-work-s44.18-mobile-cancel-image-job.patch: Stop calls /api/media/image/cancel with the job's idempotency key (keyed by the assistant message id) and says so when the cancel cannot reach AGI Cloud. Held: chatMessageStore.ts, runImageGenerationTurn.ts; free: imagegen.ts. | handler |
+| mobile | partial | post-codex/w-work-s44-s46-mobile-media-options.patch: Stop calls /api/media/image/cancel with the job's idempotency key (keyed by the assistant message id) and says so when the cancel cannot reach AGI Cloud. Held: chatMessageStore.ts, runImageGenerationTurn.ts; free: imagegen.ts. | handler |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/app/api/media/image/cancel/route.ts:1-1`
@@ -153,7 +150,7 @@ Code: `apps/web/app/api/media/image/cancel/route.ts:1-1`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Prompt shows in the full-screen viewer and Library; model and settings are not shown for the image. | ui |
+| mobile | partial | post-codex/w-work-s44.23-mobile-image-settings-caption.patch: image messages keep the requested aspect ratio and the full-screen viewer shows "Generated with {model name} · {ratio}" under the prompt, ratio omitted for auto, as web ImageGenerationCard. Waits on the Codex hold. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`
@@ -177,7 +174,7 @@ Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Model and ratio stay selected in the sheet, but an earlier image's settings cannot be restored. | ui |
+| mobile | partial | post-codex/w-work-s24-s25.07-mobile-library.patch: Remix on a Library image opens a new chat in image mode with that image's model (when still available), the image attached and its prompt as the draft, as web's Library Remix. Waits on the Codex hold. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`
@@ -212,7 +209,7 @@ Code: `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only through the OS share sheet (which may offer Save Image); no direct Save to Photos. | ui |
+| mobile | partial | Share sheet matches web download, accepted by lead. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`, `apps/mobile/services/fileCreation.ts:395-408`

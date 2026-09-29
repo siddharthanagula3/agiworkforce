@@ -5671,6 +5671,8 @@ function mapInPagePromptFailure(
       return inPagePromptFailure('account_unavailable', result.message, true);
     case 'account_suspended':
       return inPagePromptFailure('account_unavailable', result.message);
+    case 'terms_required':
+      return inPagePromptFailure('terms_required', result.message);
     case 'rate_limited':
       return inPagePromptFailure('rate_limited', result.message, true);
     case 'cancelled':

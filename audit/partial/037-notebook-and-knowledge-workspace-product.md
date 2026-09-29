@@ -14,7 +14,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sources are a tab on the project screen, not beside the conversation. | ui |
+| mobile | partial | post-codex/w-work-s37.04-mobile-chat-project-sources.patch: a chat in a project shows a Project sources header button opening a sheet "{project} sources" with the existing ProjectSourcesTab, as web ProjectSourcesToggleButton + ProjectSourcesPanel (a sheet on narrow layouts). Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

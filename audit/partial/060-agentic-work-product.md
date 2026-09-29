@@ -46,10 +46,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The New task sheet offers only a project choice; files and connectors cannot be chosen for a task. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:172-180`, `apps/mobile/src/features/tasks/startWork.ts:38-68`
 
 ## S60.06: Tool selection.
 
@@ -87,10 +84,7 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The New task sheet neither shows nor lets the user change the model; it silently uses the last cloud model picked in chat. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/startWork.ts:32-36`, `apps/mobile/src/features/tasks/startWork.ts:38-68`
 
 ## S60.09: Effort selection.
 
@@ -100,10 +94,7 @@ Code: `apps/mobile/src/features/tasks/startWork.ts:32-36`, `apps/mobile/src/feat
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Effort is set only in the chat model picker; the New task sheet neither shows nor changes it. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1725-1731`, `apps/mobile/src/features/tasks/startWork.ts:38-68`
 
 ## S60.10: Spend budget.
 
@@ -127,10 +118,10 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1725-1731`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Research runs wait for Approve plan before starting; AGI Work plan steps appear only as Activity log lines, with no plan view and no approve, edit or reject. | ui, handler |
+| mobile | partial | codex: apply post-codex/w-connect-S57.26-S60.13-clarify-plan-held.patch (free part committed 9b36ba0b67) | handler |
 | vscode | partial | VS Code shows a plan card and offers Plan mode, but has no approve/reject control for the plan. | ui |
 
-Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:262-270`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5576-5606`
+Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5576-5606`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550-3554`
 
 ## S60.17: Parallel-work indicator.
 
@@ -227,18 +218,6 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S60.30: Generated deliverables.
-
-- Done when: Files the task produced are listed and can be opened or downloaded.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Produced files appear only as an Activity line "Produced <name>" with no open or download. | ui |
-
-Code: `apps/mobile/src/features/tasks/runPresentation.ts:248-249`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`
 
 ## S60.31: Partial-outcome summary.
 

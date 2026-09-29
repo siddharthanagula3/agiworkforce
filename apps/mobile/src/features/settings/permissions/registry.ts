@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy';
 import { Platform } from 'react-native';
 import { Camera } from 'expo-camera';
 import {

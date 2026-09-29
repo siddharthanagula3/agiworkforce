@@ -13,12 +13,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | All lists media_assets plus local/cloud artifacts; project files are absent, and type filters and artifact search run only over pages already loaded. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/library/index.tsx:1-8`, `apps/mobile/src/features/library/index.tsx:249-270`, `apps/mobile/src/features/library/index.tsx:91-120`, `apps/mobile/src/features/library/libraryClient.ts:53-80`
 
 ## S24.02: Uploaded-files view.
 
@@ -28,7 +25,7 @@ Code: `apps/mobile/app/(app)/library/index.tsx:1-8`, `apps/mobile/src/features/l
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Rows carry a source label ("Upload") but no view shows uploaded files only. | ui |
+| mobile | partial | post-codex/w-work-s24-s25.07-mobile-library.patch: Uploads chip (origin=uploaded), as on web. Waits on the Codex hold. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -43,7 +40,7 @@ Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/fea
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Rows show the generating model as a source label, but there is no generated-only view. | ui |
+| mobile | partial | Same patch: Generated files chip (kind=file, origin=generated), as on web. Waits on the Codex hold. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -82,7 +79,7 @@ Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/fea
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Library is always newest-first, but there is no recent-files view or shortcut. | ui |
+| mobile | partial | Cloud: Add to chat already lists the account library newest-first with a picker limit (fetchLibraryPage), matching web ComposerFilesMenu recent files. Local: 761f654106 orders chat-attachment picks newest first (recentMobileFiles). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -197,7 +194,7 @@ Code: `apps/mobile/src/features/library/libraryClient.ts:60-62`, `apps/mobile/ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The composer's "Attach from Library" re-attaches only non-image documents already in local chat history; the Library screen and cloud Library files cannot be attached. | ui, handler |
+| mobile | partial | post-codex/w-work-s24-s25.07-mobile-library.patch: Library rows (cloud, non-video) offer Add to chat, which stages the saved file into a new chat as web's Library does; the composer sheet already attaches recent Library files. Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -237,7 +234,7 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:404-420`, `ap
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Settings > Storage shows on-device bytes (downloaded models, cache, free space), not cloud Library usage. | ui |
+| mobile | partial | Same patch: 'X of Y file storage used' under the Library header from the list response, as on web. Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -252,7 +249,7 @@ Code: `apps/mobile/app/(app)/settings/storage.tsx:260-300`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Delete moves a file to "deleted items", but mobile has no deleted view or restore. | ui |
+| mobile | partial | Same patch: Recently deleted view (deleted=true) with Restore (POST /api/media) and Delete permanently (DELETE ...&permanent=true, confirmed), as on web. Waits on the Codex hold. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |

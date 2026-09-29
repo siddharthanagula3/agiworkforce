@@ -1,4 +1,4 @@
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy';
 
 export interface CalendarEvent {
   id: string;

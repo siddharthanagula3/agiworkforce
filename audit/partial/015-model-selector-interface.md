@@ -66,18 +66,6 @@ Code: `packages/contracts/types/src/model-catalog.ts:1753-1753`, `apps/cli/src/t
 
 Code: `packages/contracts/types/src/model-catalog.ts:2174-2174`
 
-## S15.09: Default-profile option.
-
-- Done when: The user can set which model or profile new chats start with, as a lasting default.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Add an explicit default model setting; today the last model picked carries over (persisted model-store) and there is no separate default. | ui |
-
-Code: `apps/mobile/src/features/model-picker/store.ts:189-203`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:383-393`
-
 ## S15.12: Input-modality badges.
 
 - Done when: Models show which inputs they accept (e.g. images, audio) as badges.

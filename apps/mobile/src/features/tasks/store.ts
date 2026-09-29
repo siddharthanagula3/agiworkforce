@@ -14,6 +14,7 @@ import {
 import {
   applyCloudRunPlanEvent,
   cloudRunFilterStates,
+  collectCloudRunFile,
   cloudRunTextDelta,
   isCloudRunPlanOverview,
   mergeCloudRuns,
@@ -22,6 +23,7 @@ import {
   type CloudRunActivityLine,
   type CloudRunFilterKey,
   type CloudRunPlanStep,
+  type CloudRunProducedFile,
 } from './runPresentation';
 import {
   cancelCloudRun,
@@ -52,6 +54,7 @@ export interface CloudRunDetail {
   transcript: string;
   activity: CloudRunActivityLine[];
   plan: CloudRunPlanStep[];
+  files: CloudRunProducedFile[];
   status: CloudRunDetailStatus;
   error: string | null;
   pendingAction: CloudRunPendingAction | null;
@@ -101,9 +104,11 @@ function applySnapshot(
   let transcript = detail.transcript;
   const activity = [...detail.activity];
   let plan = detail.plan;
+  let files = detail.files;
   for (const envelope of snapshot.events) {
     transcript += cloudRunTextDelta(envelope);
     plan = applyCloudRunPlanEvent(plan, envelope);
+    files = collectCloudRunFile(files, envelope);
     if (isCloudRunPlanOverview(envelope)) continue;
     const line = summarizeCloudRunEvent(envelope);
     if (line) activity.push(line);
@@ -115,6 +120,7 @@ function applySnapshot(
     transcript: trimTranscript(transcript),
     activity: activity.slice(-MAX_ACTIVITY_LINES),
     plan,
+    files,
     status: isCloudAgentRunFollowBoundary(snapshot.run.state) ? 'settled' : 'live',
     error: null,
   };
@@ -195,6 +201,7 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
         transcript: '',
         activity: [],
         plan: [],
+        files: [],
         status: 'loading',
         error: null,
         pendingAction: null,

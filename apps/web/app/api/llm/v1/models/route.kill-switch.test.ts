@@ -19,7 +19,10 @@ vi.mock('@/lib/server/rls-db', () => ({
     return { db: authMocks.db, userId, organizationId: null };
   },
 }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authMocks.getClerkAuthUser }));
+vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
+  getClerkAuthUser: authMocks.getClerkAuthUser,
+}));
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => null) },
 }));

@@ -13,6 +13,8 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 vi.mock('@/lib/api-auth', () => ({ assertAccountActive: vi.fn(async () => {}) }));
 vi.mock('@/lib/server/account-security/gate', () => ({
+  assertAccountSecurity: vi.fn(async () => undefined),
+  isPasskeyRequiredError: vi.fn(() => false),
   PasskeyRequiredError: class PasskeyRequiredError extends Error {},
   subjectSessionPassesAccountSecurity: vi.fn(async () => true),
 }));

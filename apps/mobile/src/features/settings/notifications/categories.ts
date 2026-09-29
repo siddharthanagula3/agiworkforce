@@ -8,7 +8,7 @@ export interface NotificationCategoryCopy {
 export const NOTIFICATION_CATEGORY_COPY: Record<NotificationCategory, NotificationCategoryCopy> = {
   approvals: {
     label: 'Approvals',
-    description: 'Agent action approval requests',
+    description: 'Agent approval requests and questions',
   },
   task_updates: {
     label: 'Work Updates',

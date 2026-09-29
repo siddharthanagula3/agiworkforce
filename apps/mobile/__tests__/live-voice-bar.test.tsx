@@ -27,6 +27,8 @@ function renderLiveBar(props: Partial<React.ComponentProps<typeof LiveVoiceBar>>
         turns={[]}
         error={null}
         approvals={[]}
+        toolActivity={[]}
+        toolOutcomes={[]}
         onDecideApproval={jest.fn()}
         onToggleMute={jest.fn()}
         onStopTask={jest.fn()}
@@ -90,6 +92,8 @@ describe('LiveVoiceBar', () => {
           turns={[]}
           error={null}
           approvals={[]}
+          toolActivity={[]}
+          toolOutcomes={[]}
           onDecideApproval={jest.fn()}
           onToggleMute={jest.fn()}
           onStopTask={jest.fn()}
@@ -132,6 +136,8 @@ describe('LiveVoiceBar', () => {
           turns={[]}
           error={null}
           approvals={[]}
+          toolActivity={[]}
+          toolOutcomes={[]}
           onDecideApproval={jest.fn()}
           onToggleMute={jest.fn()}
           onStopTask={jest.fn()}
@@ -143,6 +149,74 @@ describe('LiveVoiceBar', () => {
       </SafeAreaProvider>,
     );
     expect(queryByTestId('live-voice-activity')).toBeNull();
+  });
+
+  it('names the running tool and says when it is slow', () => {
+    const { getByText, queryByText } = renderLiveBar({
+      backendBusy: true,
+      toolActivity: [
+        {
+          delegationId: 'del_1',
+          toolId: 'calendar',
+          label: 'Checking your calendar',
+          state: 'running',
+          startedAt: 0,
+        },
+        {
+          delegationId: 'del_2',
+          toolId: 'web_search',
+          label: 'Searching the web',
+          state: 'timed_out',
+          startedAt: 0,
+        },
+      ],
+    });
+    getByText('Checking your calendar');
+    getByText('Searching the web is taking longer than usual');
+    expect(queryByText('Working on your request')).toBeNull();
+  });
+
+  it('shows what the actions returned, and marks one that failed', () => {
+    const { getAllByTestId, getByText } = renderLiveBar({
+      toolOutcomes: [
+        {
+          callId: 'a',
+          label: 'Checking your calendar',
+          output: 'Two meetings today',
+          isError: false,
+        },
+        {
+          callId: 'b',
+          label: 'Sending the email',
+          output: 'The mailbox refused it',
+          isError: true,
+        },
+      ],
+    });
+    expect(getAllByTestId('live-voice-tool-result')).toHaveLength(2);
+    getByText('What the actions returned');
+    getByText('Two meetings today');
+    getByText('Sending the email · Did not complete');
+  });
+
+  it('sends the on-screen approval decision for that call', () => {
+    const onDecideApproval = jest.fn();
+    const { getByTestId } = renderLiveBar({
+      onDecideApproval,
+      approvals: [
+        {
+          callId: 'call_1',
+          name: 'gmail_send',
+          summary: 'Send an email to Sam',
+          input: null,
+          deciding: false,
+        },
+      ],
+    });
+    fireEvent.press(getByTestId('live-voice-deny'));
+    expect(onDecideApproval).toHaveBeenCalledWith('call_1', 'rejected');
+    fireEvent.press(getByTestId('live-voice-approve'));
+    expect(onDecideApproval).toHaveBeenCalledWith('call_1', 'approved');
   });
 
   it('keeps mute and end apart, and ending is not a mute', () => {

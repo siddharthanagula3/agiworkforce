@@ -84,6 +84,7 @@ import {
   isAutoModeModelId,
   isBrowserCommand,
   isImageChatToolName,
+  isPhoneWriteStep,
   resolveMaxOutputTokens,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -6355,9 +6356,10 @@ export async function* runToolLoop(
               summary,
               input: {
                 ...step,
-                ...(untrustedContentInContext &&
-                sensitiveSourceAvailable &&
-                toolCreatesEgressPath(step.tool)
+                ...(isPhoneWriteStep(step.tool) ||
+                (untrustedContentInContext &&
+                  sensitiveSourceAvailable &&
+                  toolCreatesEgressPath(step.tool))
                   ? { review: summary }
                   : {}),
               } as Record<string, unknown>,

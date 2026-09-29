@@ -113,11 +113,8 @@ Code: `apps/cli/src/subagent.rs:45-61`
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Compare shows only a rough token estimate (characters/4) and timing per model, not real usage or cost. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/compare/index.tsx:575-589`, `apps/mobile/src/features/compare/index.tsx:210-212`
 
 ## S62.10: Needs-input prioritization.
 
