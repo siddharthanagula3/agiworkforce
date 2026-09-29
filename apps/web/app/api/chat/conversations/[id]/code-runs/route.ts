@@ -6,7 +6,7 @@ import { ChatCodeRunRequestSchema, type ChatCodeRunResponse } from '@agiworkforc
 import { requireCsrfToken } from '@/lib/csrf';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
-import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
+import { getE2BExecutor } from '@/lib/e2b/runtime';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import {
   codeExecutionUnavailableMessage,
@@ -120,10 +120,9 @@ async function handleCodeRun(request: NextRequest, context: RouteContext) {
     return NextResponse.json(body);
   } finally {
     try {
-      if (executor.pause) await executor.pause();
-      else await pauseE2BSession(scope);
+      await executor.dispose();
     } catch (error) {
-      logger.warn({ error, conversationId: id }, '[code-runs] sandbox was not released');
+      logger.warn({ error, conversationId: id }, '[code-runs] sandbox session was not saved');
     }
   }
 }
