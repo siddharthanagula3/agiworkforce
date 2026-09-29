@@ -250,15 +250,3 @@ Code: `apps/mobile/src/features/chat/components/ContextDetailsSheet.tsx:25-25`, 
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S18.28: Continuation on another device.
-
-- Done when: A conversation started on one device can be continued on another.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | CLI sessions stay on this machine: they can move to VS Code here, and /continue-with-cloud only drafts a managed-cloud turn; add opening a CLI session on web/mobile. | ui |
-
-Code: `apps/cli/src/claude_parity.rs:169-176`
