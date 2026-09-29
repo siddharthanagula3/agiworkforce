@@ -22,6 +22,9 @@ import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
+import { Download } from 'lucide-react-native';
+import { exportSourceFile, shareFile } from '@/services/fileCreation';
+import { markdownTableToCsv } from '@/src/features/chat/utils/tableCsv';
 
 const MIN_TABLE_COLUMN_WIDTH = 120;
 const MAX_TABLE_COLUMN_WIDTH = 260;
@@ -385,6 +388,28 @@ function MarkdownTable({
           </View>
         ))}
       </ScrollView>
+      <Pressable
+        onPress={() => {
+          void exportSourceFile(markdownTableToCsv([header, ...sortedBody]), 'table', 'csv')
+            .then((result) => shareFile(result.uri))
+            .catch(() => {
+              Alert.alert('Download failed', 'Could not save this table as CSV. Try again.');
+            });
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Download table as CSV"
+        style={{
+          alignSelf: 'flex-end',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+          minHeight: 44,
+          paddingHorizontal: 8,
+        }}
+      >
+        <Download size={14} color={renderColors.textSecondary} />
+        <Text style={{ fontSize: 12, color: renderColors.textSecondary }}>CSV</Text>
+      </Pressable>
     </View>
   );
 }
