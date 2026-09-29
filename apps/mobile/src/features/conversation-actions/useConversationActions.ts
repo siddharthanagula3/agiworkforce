@@ -103,11 +103,8 @@ export function useConversationActions(): ConversationActions {
             // still present on web and desktop.
             if (!isAccountScopedUiStateOwned(ownership)) return;
             useChatCloudMessageStore.getState().removeCloudConversation(conversationId);
-          } catch (error) {
-            Alert.alert(
-              'Could not archive',
-              error instanceof Error ? error.message : 'Check your connection and try again.',
-            );
+          } catch {
+            Alert.alert('Could not archive', 'Check your connection and try again.');
           }
         })();
       });

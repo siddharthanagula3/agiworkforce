@@ -86,15 +86,13 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         const cloudEntries = useCloudMemoryStore
           .getState()
           .entries.filter((e) => !e.isDeleted)
-          .map(
-            (e): MemoryFact => ({
-              id: e.id,
-              fact: e.content,
-              source_conversation_id: null,
-              pinned: e.pinned,
-              created_at: new Date(e.createdAt).getTime(),
-            }),
-          )
+          .map((e): MemoryFact => ({
+            id: e.id,
+            fact: e.content,
+            source_conversation_id: null,
+            pinned: e.pinned,
+            created_at: new Date(e.createdAt).getTime(),
+          }))
           .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at);
         entries = cloudEntries;
       } else {
@@ -114,7 +112,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       if (!isMemoryOperationScopeCurrent(operationScope)) return;
       set({
         loading: false,
-        error: err instanceof Error ? err.message : 'Failed to load memories',
+        error: 'Could not load memories. Try again.',
       });
     }
   },
@@ -185,7 +183,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       }
     } catch (err) {
       if (!isMemoryOperationScopeCurrent(operationScope)) return;
-      set({ error: err instanceof Error ? err.message : 'Failed to add memory' });
+      set({ error: 'Could not add this memory. Try again.' });
     }
   },
 
@@ -227,8 +225,9 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       }
     } catch (err) {
       if (!isMemoryOperationScopeCurrent(operationScope)) return;
-      set({ error: err instanceof Error ? err.message : 'Failed to update memory' });
       await get().fetchMemories();
+      if (!isMemoryOperationScopeCurrent(operationScope)) return;
+      set({ error: 'Could not update this memory. Try again.' });
     }
   },
 
@@ -267,7 +266,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       set({
         entries: prev,
         filteredEntries: prevFiltered,
-        error: err instanceof Error ? err.message : 'Failed to delete memory',
+        error: 'Could not delete this memory. Try again.',
       });
     }
   },
@@ -306,8 +305,9 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       }
     } catch (err) {
       if (!isMemoryOperationScopeCurrent(operationScope)) return;
-      set({ error: err instanceof Error ? err.message : 'Failed to update pin' });
       await get().fetchMemories();
+      if (!isMemoryOperationScopeCurrent(operationScope)) return;
+      set({ error: 'Could not update this memory. Try again.' });
     }
   },
 
@@ -343,7 +343,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       const q = query.toLowerCase();
       set((state) => ({
         filteredEntries: state.entries.filter((e) => e.fact.toLowerCase().includes(q)),
-        error: err instanceof Error ? err.message : 'Search failed',
+        error: 'Could not search memories. Showing local matches instead.',
       }));
     }
   },

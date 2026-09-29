@@ -1,8 +1,13 @@
 import type { ManagedMediaImageOperation } from '@agiworkforce/cloud-contracts';
 import type { MessageAttachment } from '@/types/chat';
 import { ApiPaywallError } from '@/services/api';
+import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
 import { readReferenceImageBase64 } from '@/src/features/image/services/imageReference';
 import type { MobileImageReferenceAttachment } from './resolveMobileImageGenerationRequest';
+import {
+  MediaGenerationAdmissionError,
+  mediaGenerationFailureMessage,
+} from './mediaGenerationError';
 import {
   generateImage,
   getDurableGeneratedImagePath,
@@ -33,6 +38,7 @@ export interface RunImageGenerationTurnInput {
   operation?: ManagedMediaImageOperation;
   sourceImage?: MobileImageReferenceAttachment;
   ownerId: string;
+  onStarted?: () => void;
   begin: (
     conversationId: string,
     displayText: string,
@@ -103,14 +109,14 @@ export async function runImageGenerationTurn(
 ): Promise<ImageGenerationTurnOutcome> {
   const accountEpoch = captureCloudAccountEpoch();
   if (!accountEpoch) {
-    input.onUnexpectedError?.(
-      new Error('Sign in to an active AGI Cloud account before generating an image.'),
-    );
+    input.onUnexpectedError?.(new MediaGenerationAdmissionError(CLOUD_SIGN_IN_MESSAGE));
     return { status: 'failed', assistantMessageId: null };
   }
   if (accountEpoch.ownerId !== input.ownerId) {
     input.onUnexpectedError?.(
-      new Error('The active AGI Cloud account changed before image generation started.'),
+      new MediaGenerationAdmissionError(
+        'The active AGI Cloud account changed before image generation started.',
+      ),
     );
     return { status: 'failed', assistantMessageId: null };
   }
@@ -132,16 +138,30 @@ export async function runImageGenerationTurn(
         referenceAttachment,
       ])
     : input.begin(input.conversationId, input.displayText, input.prompt, input.model);
+  input.onStarted?.();
 
   try {
     const referenceOperation =
       input.sourceImage && input.operation && input.operation !== 'generate'
         ? input.operation
         : null;
-    const referenceBase64 =
-      referenceOperation && input.sourceImage
-        ? await (dependencies.readReferenceImage ?? readReferenceImageBase64)(input.sourceImage.uri)
-        : null;
+    let referenceBase64: string | null = null;
+    if (referenceOperation && input.sourceImage) {
+      try {
+        referenceBase64 = await (dependencies.readReferenceImage ?? readReferenceImageBase64)(
+          input.sourceImage.uri,
+        );
+      } catch (error) {
+        if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+        input.onUnexpectedError?.(error);
+        input.fail(
+          input.conversationId,
+          assistantMessageId,
+          'The reference image could not be read from this device.',
+        );
+        return { status: 'failed', assistantMessageId };
+      }
+    }
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
     const result = await withTimeout(
       dependencies.generate({
@@ -161,7 +181,7 @@ export async function runImageGenerationTurn(
       input.fail(
         input.conversationId,
         assistantMessageId,
-        result.error ?? 'AGI Cloud did not return an image.',
+        'AGI Cloud did not return an image. Try again.',
       );
       return { status: 'failed', assistantMessageId };
     }
@@ -195,11 +215,7 @@ export async function runImageGenerationTurn(
     }
 
     input.onUnexpectedError?.(error);
-    input.fail(
-      input.conversationId,
-      assistantMessageId,
-      error instanceof Error ? error.message : String(error),
-    );
+    input.fail(input.conversationId, assistantMessageId, mediaGenerationFailureMessage('image'));
     return { status: 'failed', assistantMessageId };
   }
 }

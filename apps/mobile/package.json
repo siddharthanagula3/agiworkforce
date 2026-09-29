@@ -24,7 +24,7 @@
     "release:verify-integrity": "node scripts/release/verify-release-integrity.mjs",
     "release:scan-bundle": "node scripts/release/scan-release-bundle.mjs",
     "release:check-build-env": "node scripts/release/check-build-env.mjs",
-    "release:export-bundle": "expo export --platform all --output-dir dist --clear",
+    "release:export-bundle": "expo export --platform ios --output-dir dist/ios --clear && expo export --platform android --output-dir dist/android --clear",
     "test:release-associations": "node --test scripts/release/verify-production-associations.test.mjs",
     "test:ios-device-dev": "node --test scripts/ios-device-dev.test.mjs",
     "test:release-store-listings": "node --test scripts/release/verify-store-listings.test.mjs",
@@ -39,7 +39,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "lint": "eslint . --ext .ts,.tsx --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "test": "pnpm run test:node && jest --runInBand --forceExit",
-    "test:node": "node --test scripts/ios-device-dev.test.mjs scripts/release/*.test.mjs",
+    "test:node": "node --test scripts/ios-device-dev.test.mjs scripts/release/*.test.mjs && python3 -m unittest discover -s scripts/release -p 'test_verify_ios_ipa.py'",
     "test:local": "jest --runInBand --forceExit",
     "test:handles": "jest --runInBand --detectOpenHandles --openHandlesTimeout=5000",
     "test:e2e:ios:ci": "detox test --configuration ios.sim.release --artifacts-location artifacts/mobile-e2e scripts/screenshots/specs/ci-smoke.spec.ts",
@@ -85,7 +85,6 @@
     "expo-camera": "~57.0.5",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.19",
-    "expo-contacts": "~57.0.6",
     "expo-crypto": "~57.0.3",
     "expo-dev-client": "~57.0.19",
     "expo-document-picker": "~57.0.2",
@@ -174,13 +173,6 @@
           "react-native-executorch",
           "react-native-executorch-expo-resource-fetcher",
           "llama.rn"
-        ]
-      }
-    },
-    "autolinking": {
-      "ios": {
-        "buildFromSource": [
-          "expo-contacts"
         ]
       }
     }

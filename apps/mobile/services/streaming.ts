@@ -3,6 +3,7 @@ import { combineAbortSignals } from '@/lib/abortSignal';
 import { AbortError } from '@agiworkforce/utils/async';
 import {
   getModelMetadataById,
+  getProviderOffering,
   type CloudWorkMode,
   type Effort,
   type Provider,
@@ -26,8 +27,10 @@ import {
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
   TOOL_APPROVAL_RESUME_PATH,
+  FREE_QUOTA_COMPLETIONS_PATH,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunReference,
+  type FreeQuotaMessageContent,
 } from '@agiworkforce/cloud-contracts';
 import { platformRequestHeaders } from '../lib/platformHeaders';
 
@@ -148,18 +151,19 @@ function processSseLine(line: string, callbacks: StreamCallbacks): boolean {
   const payload = trimmed.slice(6);
   if (payload === '[DONE]') return true;
 
+  let parsed;
   try {
-    const parsed = JSON.parse(payload);
-    const choice = parsed.choices?.[0];
-    if (choice?.delta) {
-      sanitizeToolEventFields(choice.delta);
-      callbacks.onDelta(choice.delta);
-    }
-    if (choice?.finish_reason) {
-      callbacks.onDelta({ finish_reason: choice.finish_reason });
-    }
+    parsed = JSON.parse(payload);
   } catch {
-    // Skip malformed JSON lines
+    return false;
+  }
+  const choice = parsed?.choices?.[0];
+  if (choice?.delta) {
+    sanitizeToolEventFields(choice.delta);
+    callbacks.onDelta(choice.delta);
+  }
+  if (choice?.finish_reason) {
+    callbacks.onDelta({ finish_reason: choice.finish_reason });
   }
   return false;
 }
@@ -211,13 +215,31 @@ interface ApprovalResumeRequest {
   tool_approvals: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>;
 }
 
+export interface FreeQuotaStreamRequest {
+  model: string;
+  conversation_id: string;
+  assistant_message_id: string;
+  operationId: string;
+  user_message?: {
+    id: string;
+    metadata?: Record<string, unknown>;
+    parent_id?: string | null;
+  };
+  messages: Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: FreeQuotaMessageContent;
+  }>;
+}
+
 async function attemptStream(
-  body: InitialStreamRequest | ApprovalResumeRequest,
+  body: InitialStreamRequest | ApprovalResumeRequest | FreeQuotaStreamRequest,
   callbacks: StreamCallbacks,
   signal: AbortSignal,
   path: string = COMPLETIONS_PATH,
 ): Promise<boolean> {
   const token = await getAuthToken();
+  if (signal.aborted) throw new AbortError('Stream cancelled before network egress');
+  if (!token) throw httpErrorFrom(401, '');
 
   const { operationId, ...requestBody } = body;
   const payload =
@@ -244,7 +266,7 @@ async function attemptStream(
           purpose: path === TOOL_APPROVAL_RESUME_PATH ? 'tool-resume' : 'send',
           operationId,
         }),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
       signal,
@@ -290,9 +312,14 @@ async function attemptStream(
 
   if (!reader) {
     const full = await response.text();
+    let completed = false;
     for (const line of full.split('\n')) {
-      if (processSseLine(line, callbacks)) break;
+      if (processSseLine(line, callbacks)) {
+        completed = true;
+        break;
+      }
     }
+    if (!completed) throw new Error('The response ended before completion. Please retry.');
     callbacks.onDone();
     return true;
   }
@@ -322,13 +349,67 @@ async function attemptStream(
       }
     }
 
-    if (!doneCalled) {
-      doneCalled = true;
-      callbacks.onDone();
+    buffer += decoder.decode();
+    for (const line of buffer.split('\n')) {
+      if (processSseLine(line, callbacks)) {
+        if (!doneCalled) {
+          doneCalled = true;
+          callbacks.onDone();
+        }
+        return true;
+      }
     }
-    return true;
+
+    throw new Error('The response ended before completion. Please retry.');
   } finally {
     reader.releaseLock();
+  }
+}
+
+export async function streamFreeQuotaChat(
+  body: FreeQuotaStreamRequest,
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  try {
+    const offering = getProviderOffering(body.model);
+    if (offering?.category !== 'chat' || offering.quotaProbeProtocol !== 'chat') {
+      callbacks.onError(new Error('This model is not a provider-funded Free chat offering.'));
+      return;
+    }
+    assertRemoteChatAllowed(undefined, {
+      cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
+    });
+    const timeoutController = new AbortController();
+    let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
+    const combinedSignal = signal
+      ? combineAbortSignals([signal, timeoutController.signal])
+      : timeoutController.signal;
+    const timedCallbacks: StreamCallbacks = {
+      ...callbacks,
+      onActivity: () => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
+        callbacks.onActivity?.();
+      },
+    };
+    try {
+      await attemptStream(body, timedCallbacks, combinedSignal, FREE_QUOTA_COMPLETIONS_PATH);
+    } catch (error) {
+      if (signal?.aborted) return;
+      callbacks.onError(
+        timeoutController.signal.aborted
+          ? new Error('The request timed out. Please check your connection and try again.')
+          : error instanceof Error
+            ? error
+            : new Error(String(error)),
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch (error) {
+    if (!signal?.aborted)
+      callbacks.onError(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -362,10 +443,15 @@ function isNetworkError(err: unknown): boolean {
 }
 
 export async function streamChat(
-  body: InitialStreamRequest,
+  body: InitialStreamRequest | FreeQuotaStreamRequest,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
+  if ('conversation_id' in body) return streamFreeQuotaChat(body, callbacks, signal);
+  if (getProviderOffering(body.model)) {
+    callbacks.onError(new Error('Provider-funded Free models require the Free chat route.'));
+    return;
+  }
   try {
     assertRemoteChatAllowed(undefined, {
       cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,

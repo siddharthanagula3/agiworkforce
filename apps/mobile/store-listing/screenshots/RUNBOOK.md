@@ -68,6 +68,9 @@ pnpm exec detox build --configuration android.emu.release   # only if shipping t
 
 The pipeline installs the built app onto each device itself, so you do not need to install
 anything by hand.
+It shuts down its selected iOS Simulator when a device class finishes and shuts
+down Detox clones booted by each spec. A force-killed pipeline cannot run this
+cleanup; check `xcrun simctl list devices booted` before starting another run.
 
 ## Step 2: verify the capture wiring (60 seconds)
 
@@ -95,6 +98,14 @@ pnpm exec tsx scripts/screenshots/pipeline.ts ipad-pro-13
 pnpm exec tsx scripts/screenshots/pipeline.ts phone
 ```
 
+Capture one frame when another spec is failing or needs separate review:
+
+```bash
+pnpm exec tsx scripts/screenshots/pipeline.ts iphone-17-pro-max --shot=04
+```
+
+The device must already have completed onboarding for chat or Cloud frames.
+
 Other targets: `all`, `ios`, `android`, or any single class name from the table above.
 Add `--debug` to capture from a debug build instead (needs Metro running; not for
 submission).
@@ -114,11 +125,17 @@ Upload `final/` contents:
 - Play Console → phone screenshots ← `android/phone/final/`
 
 Apple accepts one to ten screenshots per slot. The pipeline is configured for
-five frames. On 2026-09-26, only `02-onboarding-local` was captured and visually
+five frames. On 2026-09-26, `02-onboarding-local` was captured and visually
 checked on isolated iPhone 17 Pro Max and iPad Pro 13 Simulators. Their `final/`
-files are opaque direct JPEG captures at 1320 × 2868 and 2064 × 2752. The other
-four specs and the full pipeline still need a live run before treating the
-five-frame set as complete.
+files are opaque direct JPEG captures at 1320 × 2868 and 2064 × 2752. A later
+current-source iPhone run captured `01-local-demo-chat` and verified the
+capture wiring with Detox cleanup. On 2026-09-27, `03-first-message` passed on
+the iPhone 17 Pro Max Release Simulator: the send action streamed and completed
+an Apple Intelligence reply, and the 1320 × 2868 final frame was visually
+reviewed. The `04-cloud-sign-in` iPhone frame also passed on 2026-09-27. The spec completed
+the signed-out Cloud age review, opened the native sign-in screen, and produced
+a visually reviewed 1320 × 2868 frame. The remaining iPhone voice frame and
+iPad frames beyond onboarding still need capture and review.
 
 Re-run just the compositing (no simulator needed) after a heading or subhead edit:
 

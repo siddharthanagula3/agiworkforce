@@ -1,5 +1,4 @@
 import { api } from './api';
-import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   parseManagedUsageSummaryResponse,
   type ManagedUsageCredits,
@@ -43,7 +42,6 @@ function project(summary: ManagedUsageSummaryResponse): UsageSnapshot {
 }
 
 export async function fetchUsageSnapshot(): Promise<UsageSnapshot> {
-  if (!FEATURES.usageDashboard) throw new Error('usage: cloud usage not available in v1');
   const data = await api.get<unknown>('/api/usage');
   return project(parseManagedUsageSummaryResponse(data));
 }

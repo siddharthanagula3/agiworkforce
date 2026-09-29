@@ -243,7 +243,7 @@ export function ReportsScreen() {
         setState('loaded');
       } catch (loadError) {
         if (signal?.aborted) return;
-        setError(loadError instanceof Error ? loadError.message : 'Could not load reports.');
+        setError('Could not load reports. Check your connection and try again.');
         setState('error');
       }
     },

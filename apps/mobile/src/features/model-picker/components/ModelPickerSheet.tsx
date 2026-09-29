@@ -11,11 +11,15 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuotaCatalogue';
+import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAccountSession';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAgentControlStore, type PickerEffort } from '@/stores/agentControlStore';
 import {
+  EFFORT_DESCRIPTION,
   EFFORT_LABEL,
   canAccessAutoRoutingProfileForTier,
   getAutoRoutingProfileTiers,
@@ -41,16 +45,6 @@ const EFFORT_LADDER_ORDER: readonly string[] = [
   'xhigh',
   'max',
 ];
-
-const REASONING_EFFORT_TRADEOFF: Readonly<Record<string, string>> = {
-  none: 'Answers straight away. Cheapest, weakest on hard problems.',
-  minimal: 'Barely pauses to think. Best for quick lookups and rewrites.',
-  low: 'A short think. Faster and cheaper than the default.',
-  medium: 'Balanced thinking time for everyday work.',
-  high: 'Thinks longer. Better on tricky reasoning, slower and pricier.',
-  xhigh: 'Thinks much longer. Use when accuracy matters more than the wait.',
-  max: 'Thinks as long as it can. Slowest and most expensive.',
-};
 
 function sortEffortLadder(efforts: readonly string[]): PickerEffort[] {
   return [...efforts]
@@ -174,6 +168,11 @@ export function ModelPickerSheet({
   const recentModels = useModelStore((s) => s.recentModels);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const freeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.catalogue);
+  const freeQuotaAccount = useFreeQuotaCatalogueStore((s) => s.account);
+  const freeQuotaLoading = useFreeQuotaCatalogueStore((s) => s.loading);
+  const freeQuotaError = useFreeQuotaCatalogueStore((s) => s.error);
+  const refreshFreeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.refresh);
   const subscriptionTier = useTierStore((s) => s.tier);
   const setModel = useModelStore((s) => s.setModel);
   const toggleFavorite = useModelStore((s) => s.toggleFavorite);
@@ -203,8 +202,8 @@ export function ModelPickerSheet({
     [conversationId],
   );
   const completeModelList = useMemo(
-    () => getModelListForCloudAccess(cloudUnlocked, subscriptionTier),
-    [cloudUnlocked, subscriptionTier],
+    () => getModelListForCloudAccess(cloudUnlocked, subscriptionTier, freeQuotaCatalogue),
+    [cloudUnlocked, subscriptionTier, freeQuotaCatalogue],
   );
   // Auto's plan floor is a managed cloud rule: on-device routing costs nothing,
   // so the local picker offers Auto on every plan.
@@ -265,10 +264,11 @@ export function ModelPickerSheet({
 
   useEffect(() => {
     if (!openSignal) return;
+    if (cloudUnlocked && modelScope !== 'local') void refreshFreeQuotaCatalogue();
     requestAnimationFrame(() => {
       sheetRef.current?.snapToIndex(0);
     });
-  }, [openSignal, sheetRef]);
+  }, [cloudUnlocked, modelScope, openSignal, refreshFreeQuotaCatalogue, sheetRef]);
 
   const query = search.trim().toLowerCase();
   const filteredModels = useMemo(() => {
@@ -322,7 +322,7 @@ export function ModelPickerSheet({
         onOpenCloudAccess('invite');
         return;
       }
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent());
     });
   }, [onOpenCloudAccess, router, sheetRef]);
 
@@ -510,6 +510,36 @@ export function ModelPickerSheet({
                 ? 'Local and AGI Cloud models are shown in separate groups.'
                 : 'Local models run on this device. AGI Cloud is managed separately.'}
           </Text>
+          {cloudUnlocked && modelScope !== 'local' && freeQuotaLoading ? (
+            <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 6 }}>
+              Checking provider-funded Free models…
+            </Text>
+          ) : null}
+          {cloudUnlocked && modelScope !== 'local' && freeQuotaError ? (
+            <View style={{ marginTop: 6 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{freeQuotaError}</Text>
+              <Pressable
+                onPress={() => void refreshFreeQuotaCatalogue()}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading provider-funded Free models"
+                style={{ minHeight: 40, justifyContent: 'center' }}
+              >
+                <Text style={{ color: colors.teal, fontSize: 12 }}>Retry Free models</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {cloudUnlocked &&
+          modelScope !== 'local' &&
+          isCloudAccountEpochCurrent(freeQuotaAccount) &&
+          !freeQuotaLoading &&
+          !freeQuotaError &&
+          !freeQuotaCatalogue?.models.some(
+            (model) => model.category === 'chat' && model.status === 'ready',
+          ) ? (
+            <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 6 }}>
+              No provider-funded Free chat models are available right now.
+            </Text>
+          ) : null}
         </View>
 
         <View
@@ -594,7 +624,7 @@ export function ModelPickerSheet({
             </View>
             {effortOptions.map((effort) => {
               const label = EFFORT_LABEL[effort] ?? effort;
-              const tradeoff = REASONING_EFFORT_TRADEOFF[effort];
+              const tradeoff = EFFORT_DESCRIPTION[effort];
               const active = effort === selectedEffort;
               return (
                 <Pressable

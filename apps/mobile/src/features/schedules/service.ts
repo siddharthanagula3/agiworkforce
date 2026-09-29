@@ -4,6 +4,7 @@ import * as Crypto from 'expo-crypto';
 import {
   ManagedCloudScheduleListResponseSchema,
   ManagedCloudScheduleResponseSchema,
+  ManagedCloudScheduleDeleteResponseSchema,
   ManagedCloudScheduleRunListResponseSchema,
   ManagedCloudScheduleRunResponseSchema,
   managedCloudSchedulePath,
@@ -91,6 +92,13 @@ function resultText(run: ManagedCloudScheduleRun): string | null {
 }
 
 function mapRun(run: ManagedCloudScheduleRun): ScheduleRun {
+  const error = run.error
+    ? run.status === 'timeout'
+      ? 'This run exceeded its time limit. Try again.'
+      : run.status === 'cancelled'
+        ? 'This run was canceled.'
+        : 'This run could not finish. Try again.'
+    : null;
   return {
     id: run.id,
     scheduleId: run.taskId,
@@ -98,7 +106,7 @@ function mapRun(run: ManagedCloudScheduleRun): ScheduleRun {
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     result: resultText(run),
-    error: run.error,
+    error,
   };
 }
 
@@ -144,7 +152,12 @@ export async function updateSchedule(
 
 export async function deleteSchedule(id: string): Promise<void> {
   assertSchedulesAvailable();
-  await api.delete(managedCloudSchedulePath(id));
+  const value = await api.delete<unknown>(managedCloudSchedulePath(id));
+  parseResponse(
+    ManagedCloudScheduleDeleteResponseSchema,
+    value,
+    'Schedule deletion returned an invalid response.',
+  );
 }
 
 export async function toggleSchedule(id: string, isActive: boolean): Promise<Schedule> {

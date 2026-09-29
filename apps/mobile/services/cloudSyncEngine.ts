@@ -52,6 +52,7 @@ import {
   toMemoryPushItem,
   memorySyncContentMatches,
   mapProjectWireDelta,
+  bigintGreater,
   mergeCloudSafeSettings,
   rebaseCloudSafeSettings,
   shouldPushSettings,
@@ -627,14 +628,20 @@ async function pullProjects(account: CloudAccountEpoch): Promise<void> {
     assertCloudAccountEpochCurrent(account);
     const items = res.projects;
     if (items.length > 0) {
-      const deltas: CloudProject[] = items.map(mapProjectWireDelta);
+      const deltas = items.map(mapProjectWireDelta);
       const dirtyIds = new Set(useProjectSyncStateStore.getState().dirtyProjectIds);
       const preserved: CloudProject[] = [];
       const authoritative: CloudProject[] = [];
       for (const delta of deltas) {
         const local = useCloudProjectStore.getState().projects.find((p) => p.id === delta.id);
         if (dirtyIds.has(delta.id) && local && delta.deletedAt === null) {
-          preserved.push({ ...local, serverVersion: delta.serverVersion });
+          preserved.push({
+            ...local,
+            serverVersion:
+              local.serverVersion && bigintGreater(local.serverVersion, delta.serverVersion)
+                ? local.serverVersion
+                : delta.serverVersion,
+          });
         } else {
           authoritative.push(delta);
         }

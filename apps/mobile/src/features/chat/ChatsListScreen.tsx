@@ -1,14 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, SectionList, TextInput, View, type SectionListData } from 'react-native';
-import { useNavigation } from 'expo-router';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  RefreshControl,
+  SectionList,
+  TextInput,
+  View,
+  type SectionListData,
+} from 'react-native';
+import { useFocusEffect, useNavigation } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   MessageSquare,
   Pin,
   ChevronRight,
+  Search,
   SlidersHorizontal,
   SquarePen,
+  X,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { PressableBox } from '@/components/ui/pressable-box';
@@ -119,22 +130,29 @@ function searchSection(
   };
 }
 
-export function ChatsListScreen() {
+export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }) {
   const colors = useThemeColors();
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ focusSearch?: string | string[] }>();
   const autoFocusSearch =
+    searchOnly ||
     (Array.isArray(params.focusSearch) ? params.focusSearch[0] : params.focusSearch) === '1';
   const searchInputRef = useRef<TextInput>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ChatListFilter>('all');
   const appMode = useChatAppModeStore((state) => state.appMode);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
 
   const conversations = useChatStore((state) => state.conversations);
   const messages = useChatStore((state) => state.messages);
   const loadConversations = useChatStore((state) => state.loadConversations);
+  const loadMoreConversations = useChatStore((state) => state.loadMoreConversations);
+  const isLoadingConversations = useChatStore((state) => state.isLoadingConversations);
+  const isLoadingMoreConversations = useChatStore((state) => state.isLoadingMoreConversations);
+  const hasMoreCloudConversations = useChatStore((state) => state.hasMoreCloudConversations);
+  const conversationLoadError = useChatStore((state) => state.conversationLoadError);
   const cloudConversations = useChatCloudMessageStore((state) => state.conversations);
   const cloudMessages = useChatCloudMessageStore((state) => state.messages);
   const searchConversations = useChatViewStore((state) => state.searchConversations);
@@ -149,9 +167,12 @@ export function ChatsListScreen() {
   const cloudArtifacts = useArtifactStore((state) => state.cloudArtifacts);
   const cloudArtifactsOwnerId = useArtifactStore((state) => state.cloudArtifactsOwnerId);
 
-  useEffect(() => {
-    void loadConversations();
-  }, [appMode, isClerkSignedIn, loadConversations]);
+  useFocusEffect(
+    useCallback(() => {
+      if (appMode === 'cloud' && (!isClerkSignedIn || !clerkUserId)) return;
+      void loadConversations({ firstPageOnly: appMode === 'cloud' });
+    }, [appMode, clerkUserId, isClerkSignedIn, loadConversations]),
+  );
 
   useEffect(() => {
     searchConversations(query);
@@ -263,7 +284,7 @@ export function ChatsListScreen() {
 
   const isSearching = query.trim().length > 0;
   const sections = useMemo<ChatsListSection[]>(() => {
-    if (!isSearching) return groupHistory(filteredHistory);
+    if (!isSearching) return searchOnly ? [] : groupHistory(filteredHistory);
     return [
       searchSection('Chats', 'chat', globalResults.chats),
       searchSection('Projects', 'project', globalResults.projects),
@@ -271,7 +292,7 @@ export function ChatsListScreen() {
       searchSection('Library', 'library', globalResults.library),
       searchSection('Artifacts', 'artifact', globalResults.artifacts),
     ].filter((section): section is ChatsListSection => section !== null);
-  }, [filteredHistory, globalResults, isSearching]);
+  }, [filteredHistory, globalResults, isSearching, searchOnly]);
 
   const openFilter = useCallback(() => {
     const option = (value: ChatListFilter) => ({
@@ -400,43 +421,78 @@ export function ChatsListScreen() {
           gap: 8,
         }}
       >
-        <DrawerButton onPress={() => openNearestDrawer(navigation)} />
+        {searchOnly ? (
+          <Pressable
+            onPress={() => router.replace('/(app)/chats')}
+            accessibilityRole="button"
+            accessibilityLabel="Close search"
+            hitSlop={8}
+            style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <X size={21} color={colors.textSecondary} />
+          </Pressable>
+        ) : (
+          <DrawerButton onPress={() => openNearestDrawer(navigation)} />
+        )}
         <View style={{ flex: 1 }}>
           <Text
             maxFontSizeMultiplier={1.4}
             style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}
           >
-            Chats
+            {searchOnly ? 'Search' : 'Chats'}
           </Text>
           <Text maxFontSizeMultiplier={1.4} style={{ color: colors.textMuted, fontSize: 11 }}>
             {appMode === 'cloud' ? 'Managed Cloud' : 'Local on this device'}
           </Text>
         </View>
-        <Pressable
-          onPress={openFilter}
-          accessibilityRole="button"
-          accessibilityLabel={`Filter chats. ${FILTER_LABELS[filter]}`}
-          hitSlop={8}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: filter === 'all' ? colors.transparent : colors.accentSurface,
-          }}
-        >
-          <SlidersHorizontal
-            size={19}
-            color={filter === 'all' ? colors.textSecondary : colors.teal}
-          />
-        </Pressable>
+        {!searchOnly && (
+          <Pressable
+            onPress={openFilter}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter chats. ${FILTER_LABELS[filter]}`}
+            hitSlop={8}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: filter === 'all' ? colors.transparent : colors.accentSurface,
+            }}
+          >
+            <SlidersHorizontal
+              size={19}
+              color={filter === 'all' ? colors.textSecondary : colors.teal}
+            />
+          </Pressable>
+        )}
       </View>
 
       <SectionList
         testID="chats-list"
+        refreshControl={
+          appMode === 'cloud' ? (
+            <RefreshControl
+              refreshing={isLoadingConversations}
+              onRefresh={() => void loadConversations({ firstPageOnly: true })}
+              tintColor={colors.textMuted}
+            />
+          ) : undefined
+        }
         initialNumToRender={20}
         sections={sections}
+        onEndReached={() => {
+          if (
+            appMode === 'cloud' &&
+            hasMoreCloudConversations &&
+            !searchOnly &&
+            !isSearching &&
+            !conversationLoadError
+          ) {
+            void loadMoreConversations();
+          }
+        }}
+        onEndReachedThreshold={0.4}
         keyExtractor={(item) => `${item.kind}-${item.id}`}
         renderItem={renderItem}
         renderSectionHeader={({ section }) => (
@@ -468,44 +524,103 @@ export function ChatsListScreen() {
         }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          appMode === 'cloud' && conversationLoadError && !hasMoreCloudConversations ? (
+            <View
+              accessibilityRole="alert"
+              style={{ paddingHorizontal: 18, paddingVertical: 14, gap: 8 }}
+            >
+              <Text style={{ color: colors.agentError, fontSize: 13 }}>
+                {conversationLoadError}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading chats"
+                onPress={() => void loadConversations({ firstPageOnly: true })}
+              >
+                <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          appMode === 'cloud' && hasMoreCloudConversations && !isSearching && !searchOnly ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Load older chats"
+              disabled={isLoadingMoreConversations}
+              onPress={() => void loadMoreConversations()}
+              style={{ alignItems: 'center', paddingVertical: 18, gap: 8 }}
+            >
+              {conversationLoadError ? (
+                <Text accessibilityRole="alert" style={{ color: colors.agentError, fontSize: 13 }}>
+                  {conversationLoadError}
+                </Text>
+              ) : null}
+              {isLoadingMoreConversations ? (
+                <ActivityIndicator color={colors.teal} accessibilityLabel="Loading older chats" />
+              ) : (
+                <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>
+                  Load older chats
+                </Text>
+              )}
+            </Pressable>
+          ) : null
+        }
         ListEmptyComponent={
-          <View
-            style={{
-              flex: 1,
-              minHeight: 360,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingHorizontal: 36,
-              gap: 10,
-            }}
-          >
-            <MessageSquare size={34} color={colors.textMuted} />
-            <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}>
-              {isSearching ? 'No matches' : filter === 'all' ? 'No chats yet' : 'No chats here'}
-            </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>
-              {isSearching
-                ? `Nothing in ${appMode === 'cloud' ? 'Managed Cloud' : 'Local Mode'} matches “${query.trim()}”.`
-                : filter === 'all'
-                  ? 'Start a new chat to begin your history.'
-                  : `No ${FILTER_LABELS[filter].toLocaleLowerCase()} are available in this mode.`}
-            </Text>
-          </View>
+          appMode === 'cloud' && conversationLoadError ? null : (
+            <View
+              style={{
+                flex: 1,
+                minHeight: 360,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 36,
+                gap: 10,
+              }}
+            >
+              {searchOnly && !isSearching ? (
+                <Search size={34} color={colors.textMuted} />
+              ) : appMode === 'cloud' && isLoadingConversations ? (
+                <ActivityIndicator color={colors.teal} accessibilityLabel="Loading chats" />
+              ) : (
+                <MessageSquare size={34} color={colors.textMuted} />
+              )}
+              <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}>
+                {searchOnly && !isSearching
+                  ? 'Search your workspace'
+                  : appMode === 'cloud' && isLoadingConversations
+                    ? 'Loading chats'
+                    : isSearching
+                      ? 'No matches'
+                      : filter === 'all'
+                        ? 'No chats yet'
+                        : 'No chats here'}
+              </Text>
+              {appMode === 'cloud' && isLoadingConversations ? null : (
+                <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>
+                  {searchOnly && !isSearching
+                    ? 'Find chats, projects, files, library images, and artifacts in this mode.'
+                    : isSearching
+                      ? `Nothing in ${appMode === 'cloud' ? 'Managed Cloud' : 'Local Mode'} matches “${query.trim()}”.`
+                      : filter === 'all'
+                        ? 'Start a new chat to begin your history.'
+                        : `No ${FILTER_LABELS[filter].toLocaleLowerCase()} are available in this mode.`}
+                </Text>
+              )}
+            </View>
+          )
         }
       />
 
-      <FloatingPrimaryAction
-        label="New chat"
-        icon={SquarePen}
-        onPress={() => router.push('/(app)/(tabs)/chat')}
-      />
+      {!searchOnly && (
+        <FloatingPrimaryAction
+          label="New chat"
+          icon={SquarePen}
+          onPress={() => router.push('/(app)/(tabs)/chat')}
+        />
+      )}
 
-      {/* Search is bottom-anchored: both references put it within thumb
-          reach at the bottom of the list (claude_reference/117 puts it below
-          the New-chat pill; ChatGPT does the same on Projects, IMG_0691).
-          It sat at the top here, and was ALSO duplicated in the drawer.
-          Now the shared implementation Library, Projects and the connectors
-          directory adopt too, so sibling list screens cannot drift apart. */}
       <BottomSearchBar
         value={query}
         onChangeText={setQuery}
