@@ -1124,6 +1124,7 @@ export async function buildAdapterStreamResponse(
             organizationId: processed.organizationId ?? null,
             refs: [...generatedFileRefs.values()],
             model: modelUsed,
+            conversationId: processed.conversationId,
           });
           if (files.length > 0) {
             // This frame is built here rather than by the assembler, so it is

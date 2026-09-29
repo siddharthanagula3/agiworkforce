@@ -16,18 +16,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
-## S60.02: Task title.
-
-- Done when: Each work task shows a readable title in the task list, and the user can set or change it.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Cloud task rows are labelled by work mode and state, not by a task title; there is no way to name a task. | ui |
-
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts:78-86`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:101-105`
-
 ## S60.03: Objective.
 
 - Done when: The user states the objective of the task, and the objective is stored with the run and shown back.

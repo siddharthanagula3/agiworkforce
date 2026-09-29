@@ -2195,6 +2195,9 @@ async function runMcpTool(
       provider: 'agi-managed-office',
       origin: 'managed-office-tool',
       model: executionContext.model,
+      ...(executionContext.conversationId
+        ? { conversationId: executionContext.conversationId }
+        : {}),
       extraMetadata: { format: toolCall.args['format'] },
     });
     if (!persisted.ok) {
@@ -2425,6 +2428,7 @@ async function runMcpTool(
       toolCall.args,
       undefined,
       cause,
+      executionContext?.signal,
     );
     const referenced =
       result.ok && result.overflow
@@ -4132,6 +4136,7 @@ export async function* runToolLoop(
           organizationId: processed.organizationId ?? null,
           refs: [...providerGeneratedFileRefs.values()],
           model: responseModel,
+          conversationId: processed.conversationId,
         });
         files.push(...persisted.files.map((file) => file.wire));
         failedCount += persisted.failedCount;

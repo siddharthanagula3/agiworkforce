@@ -52,18 +52,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S34.06: Search connected company sources.
-
-- Done when: The assistant can search the user's connected work sources (Drive, Slack, Notion...) during a chat once they are connected.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Only MCP servers configured for the local CLI runtime; the first-party web connectors are not offered. | handler |
-
-Code: `apps/extension-vscode/package.json:638-639`
-
 ## S34.15: Date-range filters.
 
 - Done when: The user can limit a search to a date range and get only results inside it.
