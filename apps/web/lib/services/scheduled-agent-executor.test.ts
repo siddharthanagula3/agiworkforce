@@ -80,9 +80,13 @@ import {
   markManagedUsageProviderStarted,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
-import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
+import {
+  buildServerProviderAdapter,
+  listAvailableManagedProviderIds,
+} from '@/lib/services/provider-adapter-service';
+import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
-import { executeScheduledAgent } from './scheduled-agent-executor';
+import { executeScheduledAgent, scheduledAgentExecutor } from './scheduled-agent-executor';
 import type { ScheduleTask } from './schedule-service';
 import { createWorkspaceMemberDatabaseFake } from '@/test/database-adapter-fake';
 
@@ -288,6 +292,45 @@ describe('scheduled managed agent executor', () => {
       provider: 'openai',
       billingStatus: 'succeeded',
     });
+  });
+
+  it('keeps a run started by a Gmail event on providers that do not train on inputs', async () => {
+    const providers = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'mistral'];
+    const noTraining = providers.filter(providerKeepsInputsOutOfTraining);
+    const training = providers.filter((provider) => !providerKeepsInputsOutOfTraining(provider));
+    expect(noTraining.length, 'a provider that keeps inputs out of training').toBeGreaterThan(0);
+    expect(training.length, 'a provider that may train on inputs').toBeGreaterThan(0);
+    vi.mocked(listAvailableManagedProviderIds).mockReturnValueOnce(new Set(providers));
+
+    await expect(
+      scheduledAgentExecutor({ googleUserDataEvent: true })(
+        task,
+        new AbortController().signal,
+        'run-gmail',
+        executionScope,
+      ),
+    ).rejects.toThrow('reads data from your Google account');
+
+    expect(resolveAutoRoute).toHaveBeenCalledWith(
+      expect.objectContaining({ availableProviderIds: new Set(noTraining) }),
+    );
+    expect(markManagedUsageProviderStarted).not.toHaveBeenCalled();
+  });
+
+  it('refuses a Google-triggered run when no provider keeps inputs out of training', async () => {
+    vi.mocked(listAvailableManagedProviderIds).mockReturnValueOnce(
+      new Set(['openai', 'google', 'xai'].filter((p) => !providerKeepsInputsOutOfTraining(p))),
+    );
+
+    await expect(
+      scheduledAgentExecutor({ googleUserDataEvent: true })(
+        task,
+        new AbortController().signal,
+        'run-gmail-none',
+        executionScope,
+      ),
+    ).rejects.toThrow('reads data from your Google account');
+    expect(resolveAutoRoute).not.toHaveBeenCalled();
   });
 
   it('classifies a scheduled flagship route for the rolling flagship ceiling', async () => {

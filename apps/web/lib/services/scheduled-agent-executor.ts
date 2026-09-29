@@ -14,6 +14,12 @@ import {
   sideCallTrainingOptOut,
 } from '@/lib/server/side-call-training-policy';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
+import {
+  connectedGoogleUserDataConnectorIds,
+  projectHoldsGoogleUserData,
+  readsGoogleUserData,
+  userHoldsGoogleUserDataConversation,
+} from '@/lib/connectors/google-user-data';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
@@ -680,11 +686,32 @@ export async function runScheduledCompletion(input: {
 const NO_TRAINING_MODEL_MESSAGE =
   'No model on your plan keeps your chats out of training right now, so this scheduled run did not start.';
 
+const GOOGLE_USER_DATA_ROUTE_MESSAGE =
+  'This task reads data from your Google account, and no model on your plan that keeps it out of training is available right now, so this scheduled run did not start.';
+
+async function scheduledRunReachesGoogleUserData(
+  db: Parameters<typeof connectedGoogleUserDataConnectorIds>[0],
+  userId: string,
+  task: ScheduleTask,
+  sources: { project: boolean; recentChats?: boolean | undefined },
+): Promise<boolean> {
+  const connected = await connectedGoogleUserDataConnectorIds(db, userId);
+  const connectors = task.connectors ?? null;
+  if (connected.some((connectorId) => connectors === null || connectors.includes(connectorId))) {
+    return true;
+  }
+  if (task.projectId && sources.project && (await projectHoldsGoogleUserData(db, task.projectId))) {
+    return true;
+  }
+  return sources.recentChats === true && (await userHoldsGoogleUserDataConversation(db, userId));
+}
+
 async function selectScheduledRoute(
   scope: { db: Parameters<typeof sideCallRoutingRequest>[0]; userId: string },
   task: ScheduleTask,
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
+  googleUserData: boolean,
 ): Promise<ScheduledRunRoute> {
   const baseRouting: AutoRoutingRequest = {
     selection: task.model ?? 'auto',
@@ -694,15 +721,23 @@ async function selectScheduledRoute(
     runtimeProfileId: 'web/cloud-chat',
     retiredModelKeys: modelsPastDeprecationDate(),
   };
-  const routing = await sideCallRoutingRequest(scope.db, scope.userId, baseRouting);
-  if (!routing) throw new Error(NO_TRAINING_MODEL_MESSAGE);
+  const routing = await sideCallRoutingRequest(scope.db, scope.userId, baseRouting, {
+    forceNoTraining: googleUserData,
+  });
+  const noTrainingMessage = googleUserData
+    ? GOOGLE_USER_DATA_ROUTE_MESSAGE
+    : NO_TRAINING_MODEL_MESSAGE;
+  if (!routing) throw new Error(noTrainingMessage);
   const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {
     throw new Error(
       routing === baseRouting
         ? 'The selected model is not available for scheduled managed execution'
-        : NO_TRAINING_MODEL_MESSAGE,
+        : noTrainingMessage,
     );
+  }
+  if (googleUserData && !modelKeepsInputsOutOfTraining(route.modelKey)) {
+    throw new Error(GOOGLE_USER_DATA_ROUTE_MESSAGE);
   }
   if (route.harnessId.endsWith('/media')) {
     throw new Error('Scheduled media generation is unavailable');
@@ -745,12 +780,27 @@ export function approvalToolCalls(
   });
 }
 
-export const executeScheduledAgent: ScheduledTaskExecutor = async function executeScheduledAgent(
+export interface ScheduledAgentRunOptions {
+  /** The run was started by an event carrying Google user data, such as a Gmail trigger. */
+  googleUserDataEvent?: boolean;
+}
+
+export function scheduledAgentExecutor(
+  options: ScheduledAgentRunOptions = {},
+): ScheduledTaskExecutor {
+  return (task, signal, runId, scope, resume) =>
+    runScheduledAgent(task, signal, runId, scope, resume, options);
+}
+
+export const executeScheduledAgent: ScheduledTaskExecutor = scheduledAgentExecutor();
+
+async function runScheduledAgent(
   task: ScheduleTask,
   signal: AbortSignal,
   runId: string,
-  scope,
-  resume,
+  scope: Parameters<ScheduledTaskExecutor>[3],
+  resume: Parameters<ScheduledTaskExecutor>[4],
+  options: ScheduledAgentRunOptions,
 ): Promise<ScheduledExecutionResult> {
   const prompt = validateAgentTask(task);
   if (task.userId !== scope.userId) {
@@ -781,20 +831,22 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   }
 
   const taskType = classifyTaskLocally(prompt, []).type;
+  const sources = task.sources ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES;
+  const googleUserData =
+    options.googleUserDataEvent === true ||
+    (await scheduledRunReachesGoogleUserData(scope.db, scope.userId, task, sources));
   const route = resume
     ? resumedRoute(resume.checkpoint.route)
-    : await selectScheduledRoute(scope, task, taskType, subscriptionTier);
-  if (
-    resume &&
-    !modelKeepsInputsOutOfTraining(route.modelKey) &&
-    (await sideCallTrainingOptOut(scope.db, scope.userId))
-  ) {
-    throw new Error(NO_TRAINING_MODEL_MESSAGE);
+    : await selectScheduledRoute(scope, task, taskType, subscriptionTier, googleUserData);
+  if (resume && !modelKeepsInputsOutOfTraining(route.modelKey)) {
+    if (googleUserData) throw new Error(GOOGLE_USER_DATA_ROUTE_MESSAGE);
+    if (await sideCallTrainingOptOut(scope.db, scope.userId)) {
+      throw new Error(NO_TRAINING_MODEL_MESSAGE);
+    }
   }
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const isFlagshipRoute = isFlagshipRoutingSlot(getSlotForModel(route.modelKey));
 
-  const sources = task.sources ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES;
   const plan = await buildScheduledToolPlan({
     db: scope.db,
     userId: scope.userId,
@@ -805,6 +857,12 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     webAllowed: sources.web,
     connectors: task.connectors ?? null,
   });
+  if (
+    !modelKeepsInputsOutOfTraining(route.modelKey) &&
+    plan.mcpTools.some((tool) => readsGoogleUserData(tool.serverId, tool.toolName))
+  ) {
+    throw new Error(GOOGLE_USER_DATA_ROUTE_MESSAGE);
+  }
   const loopInputs = classifyToolLoopInputs(plan.mcpTools, plan.tools, plan.toolApprovalPolicy);
   const toolLoopRunnable = loopInputs.shouldRun && Boolean(ADAPTER_PROVIDERS[dispatchProvider]);
   if (resume && !toolLoopRunnable) {
@@ -1008,4 +1066,4 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     }
     throw error;
   }
-};
+}

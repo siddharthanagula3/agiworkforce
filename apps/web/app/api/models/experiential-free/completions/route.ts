@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { assertAccountActive } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -31,6 +32,10 @@ import {
 import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
 import { logger } from '@/lib/logger';
+import {
+  conversationHoldsGoogleUserData,
+  GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE,
+} from '@/lib/connectors/google-user-data';
 import { persistFreeOfferingUser } from '@/lib/server/persist-free-offering-user';
 import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
 
@@ -108,6 +113,12 @@ async function handlePost(request: NextRequest): Promise<Response> {
     [body.conversation_id, scoped.userId, scoped.organizationId],
   );
   if (!conversation) return refusal(404, 'conversation_not_found', 'Conversation not found.');
+  if (
+    !providerKeepsInputsOutOfTraining(selected.offering.provider) &&
+    (await conversationHoldsGoogleUserData(scoped.db, scoped.userId, body.conversation_id))
+  ) {
+    return refusal(403, 'model_may_train', GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE);
+  }
 
   const privacy = await evaluateActiveWorkspacePolicy(
     scoped.db,

@@ -1,4 +1,15 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/lib/connectors/google-user-data.ts",
+      "migration": 343,
+      "reason": "Google Limited Use routing reads web_conversations.google_user_data_at; the deploy applies 0343 before this code ships, and until then every turn fails closed to no-training providers."
+    },
+    {
+      "file": "apps/web/lib/server/support-access-service.ts",
+      "migration": 344,
+      "reason": "Break-glass grants read and write support_access_grants.purpose; the deploy applies 0344 before this code ships."
+    }
+  ]
 }

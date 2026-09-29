@@ -59,6 +59,11 @@ import {
   type OperationIdentity,
 } from '@/lib/identity/operation-identity';
 import { logger } from '@/lib/logger';
+import {
+  GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE,
+  markConversationGoogleUserData,
+  readsGoogleUserData,
+} from '@/lib/connectors/google-user-data';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { recordBrowserTask, recordToolOutcome } from '@/lib/observability/metrics';
 import { withSpan } from '@/lib/observability/span';
@@ -1988,6 +1993,29 @@ function callerScopedDb(
   });
 }
 
+async function recordGoogleUserDataToolUse(
+  executionContext:
+    { userId?: string; organizationId: string | null; conversationId?: string | null } | undefined,
+): Promise<ToolLoopToolResult | null> {
+  const userId = executionContext?.userId;
+  const conversationId = executionContext?.conversationId;
+  if (!userId || !conversationId) return null;
+  try {
+    await markConversationGoogleUserData(
+      callerScopedDb(executionContext, userId),
+      userId,
+      conversationId,
+    );
+    return null;
+  } catch (error) {
+    logger.error(
+      { error, userId, conversationId },
+      'Google connector withheld: the conversation could not be marked as holding Google data',
+    );
+    return { content: GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE, isError: true };
+  }
+}
+
 function placesSearchBilling(
   executionContext:
     | {
@@ -2464,6 +2492,11 @@ async function runMcpTool(
       content: `Unknown tool: ${toolCall.qualifiedName}`,
       isError: true,
     };
+  }
+
+  if (readsGoogleUserData(parsed.serverId, parsed.toolName)) {
+    const unrecorded = await recordGoogleUserDataToolUse(executionContext);
+    if (unrecorded) return unrecorded;
   }
 
   if (connectorExecutor) {

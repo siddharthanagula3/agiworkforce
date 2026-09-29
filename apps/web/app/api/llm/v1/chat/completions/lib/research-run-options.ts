@@ -2,6 +2,10 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import {
+  isGoogleUserDataConnector,
+  markConversationGoogleUserData,
+} from '@/lib/connectors/google-user-data';
 import { notifyResearchReportSettled } from '@/lib/services/agent-notification-service';
 import {
   isCloudAgentRunCancellationRequested,
@@ -92,8 +96,11 @@ export function buildResearchRunOptions(context: ResearchRunContext): ResearchLo
     },
     ...(connectorIds.length > 0
       ? {
-          readConnectorSources: (queries: readonly string[]) =>
-            readResearchConnectorSources({
+          readConnectorSources: async (queries: readonly string[]) => {
+            if (processed.conversationId && connectorIds.some(isGoogleUserDataConnector)) {
+              await markConversationGoogleUserData(db, userId, processed.conversationId);
+            }
+            return readResearchConnectorSources({
               userId,
               organizationId: processed.organizationId ?? null,
               planTier: processed.subscriptionTier ?? null,
@@ -101,7 +108,8 @@ export function buildResearchRunOptions(context: ResearchRunContext): ResearchLo
               queries,
               isToolDenied: context.connectorPermissions.isConnectorToolDenied,
               signal: context.signal,
-            }),
+            });
+          },
         }
       : {}),
     fileSources: context.fileSources,

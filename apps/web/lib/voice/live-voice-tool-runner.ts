@@ -20,11 +20,16 @@ import {
   recordToolCallAudit,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { policyAutoApprovesTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
+import {
+  markConversationGoogleUserData,
+  readsGoogleUserData,
+} from '@/lib/connectors/google-user-data';
 import { bindMcpTask } from '@/lib/connectors/mcp-state-store';
 import { capOutput, EXECUTE_CODE_TOOL, isExecutionTool } from '@/lib/e2b/execution-tools';
 import { logger } from '@/lib/logger';
 import { executeWebMcpTool, parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
+import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import {
   generateManagedOfficeFile,
@@ -42,6 +47,8 @@ const MESSAGE = {
   declined: 'The user declined this action, so it did not run.',
   malformed: 'The arguments for this call were not a JSON object, so it did not run.',
   workTaskGoal: 'The task needs a goal in words, so it did not start.',
+  googleUserDataMayTrain:
+    "Google connectors do not run in this voice session because its model's provider may train on what it is sent.",
   workTaskHandedOff:
     'The task is starting in the chat as an AGI Work task. It runs in the background and is tracked in Tasks, so tell the user where to follow it.',
 } as const;
@@ -154,6 +161,12 @@ async function runMcpTool(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<ToolRunResult> {
+  if (readsGoogleUserData(serverId, toolName)) {
+    if (!modelKeepsInputsOutOfTraining(input.modelId)) {
+      return { content: MESSAGE.googleUserDataMayTrain, isError: true };
+    }
+    await markConversationGoogleUserData(input.db, input.userId, input.conversationId);
+  }
   const connectorExecutor = makeUserConnectorExecutor(input.userId, input.organizationId);
   const connector = await connectorExecutor(
     serverId,

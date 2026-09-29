@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { HealthSpaceUnavailableReason } from '@agiworkforce/cloud-contracts';
+import { conversationHoldsGoogleUserData } from '@/lib/connectors/google-user-data';
 import { isConnectorOAuthConfigured } from '@/lib/connectors/oauth-registry';
 import {
   HEALTHEX_CONNECTOR_ID,
@@ -83,7 +84,10 @@ export async function conversationKeepsOutOfTraining(
   conversationId: string,
 ): Promise<boolean> {
   try {
-    return (await conversationHealthSpaceId(db, userId, conversationId)) !== null;
+    return (
+      (await conversationHealthSpaceId(db, userId, conversationId)) !== null ||
+      (await conversationHoldsGoogleUserData(db, userId, conversationId))
+    );
   } catch {
     return true;
   }
