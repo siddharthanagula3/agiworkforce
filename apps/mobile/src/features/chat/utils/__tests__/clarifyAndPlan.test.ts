@@ -48,7 +48,14 @@ describe('clarify card helpers', () => {
       clarifyCardAcceptsResponse(
         clarify(
           {},
-          { interaction: { awaitingResponse: true, expiresAt: '2026-09-01T00:01:00.000Z' } },
+          {
+            interaction: {
+              runId: 'run-1',
+              awaitingResponse: true,
+              expiresAt: '2026-09-01T00:01:00.000Z',
+              executionMode: 'cloud_managed',
+            },
+          },
         ),
         Date.parse('2026-09-01T00:02:00.000Z'),
       ),
