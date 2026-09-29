@@ -253,7 +253,9 @@ pub fn build_push(snapshot: &SessionSnapshot, state: &SyncState) -> ChatPushRequ
 /// Applied rows record the version the server assigned. A conflict means the
 /// hosted row moved on without this device, so the hosted copy wins: its
 /// version is adopted so the next push is an update of the server's row rather
-/// than a losing re-insert, and nothing local is deleted.
+/// than a losing re-insert, and nothing local is deleted. The pull cursor is
+/// left alone: the push reply's cursor can pass rows another device wrote since
+/// the last pull, and only a pull may move it.
 pub fn apply_push_response(response: &ChatPushResponse, state: &mut SyncState) {
     for row in &response.applied.conversations {
         state.conversations.record(&row.id, &row.server_version);
@@ -273,7 +275,6 @@ pub fn apply_push_response(response: &ChatPushResponse, state: &mut SyncState) {
             state.messages.record(&conflict.id, &current.server_version);
         }
     }
-    state.conversations.advance(&response.cursor);
 }
 
 pub fn apply_pull_response(response: &ChatPullResponse, state: &mut SyncState) {
@@ -516,7 +517,7 @@ mod tests {
             .messages
             .iter()
             .all(|message| message.base_version == "12"));
-        assert_eq!(state.conversations.cursor, "12");
+        assert_eq!(state.conversations.cursor, INITIAL_CURSOR);
     }
 
     #[test]
