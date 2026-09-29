@@ -148,14 +148,11 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/
 
 - Done when: The agent can pause a task to ask the user a clarifying question and continue with the answer.
 - Wave: 3
-- Already works on: web, desktop, cli, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows "Waiting for connector input" but cannot answer it ("answered where the task was started"); no clarifying questions. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265`
 
 ## S60.21: Pause.
 
