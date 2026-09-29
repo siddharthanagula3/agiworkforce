@@ -135,6 +135,7 @@ function dbStub({
   shares = [] as ShareFixture[],
   discoveryThrows = false,
   unshareThrows = false,
+  otherMembership = false,
 } = {}) {
   const statements: string[] = [];
   /** Share rows still in the table, mutated by the unshare DELETE below. */
@@ -159,6 +160,9 @@ function dbStub({
     if (/user_settings/.test(text)) {
       if (settingsThrows) throw new Error('settings table unavailable');
       return [{ organization_id: activeWorkspace }];
+    }
+    if (/organization_members/.test(text)) {
+      return otherMembership ? [{ organization_id: OTHER_ORG }] : [];
     }
     if (/device_refresh_tokens/.test(text)) {
       if (deviceThrows) throw new Error('device table unavailable');
@@ -197,7 +201,20 @@ function dbStub({
     }
     return [];
   });
-  return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query, statements, live };
+  const execute = vi.fn(async (sql: string, _params: unknown[] = []) => {
+    statements.push(String(sql));
+  });
+  const intentCalls = () =>
+    [...query.mock.calls, ...execute.mock.calls].filter(([sql]) =>
+      /mobile_intent_tokens/.test(String(sql)),
+    );
+  return {
+    db: { query, execute } as unknown as DatabaseAdapter,
+    query,
+    statements,
+    live,
+    intentCalls,
+  };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -220,14 +237,33 @@ describe('deprovisionMember', () => {
   });
 
   it('revokes only the Ask from Siri tokens issued in the workspace being left', async () => {
+    const db = dbStub({ activeWorkspace: OTHER_ORG, otherMembership: true });
+
+    await deprovisionMember(db.db, identityStub().identity, { userId: USER, organizationId: ORG });
+
+    const calls = db.intentCalls();
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0]![0])).toMatch(/user_id = \$1 and organization_id = \$2/);
+    expect(calls[0]![1]).toEqual([USER, ORG]);
+  });
+
+  it('revokes every Ask from Siri token when the member’s sessions end with this workspace', async () => {
     const db = dbStub();
 
     await deprovisionMember(db.db, identityStub().identity, { userId: USER, organizationId: ORG });
 
-    const calls = db.query.mock.calls.filter(([sql]) => /mobile_intent_tokens/.test(String(sql)));
+    const calls = db.intentCalls();
     expect(calls).toHaveLength(1);
-    expect(String(calls[0]![0])).toMatch(/user_id = \$1 and organization_id = \$2/);
-    expect(calls[0]![1]).toEqual([USER, ORG]);
+    expect(calls[0]![1]).toEqual([USER, null]);
+  });
+
+  it('revokes every Ask from Siri token when this was the member’s only workspace', async () => {
+    const db = dbStub({ activeWorkspace: OTHER_ORG });
+
+    await deprovisionMember(db.db, identityStub().identity, { userId: USER, organizationId: ORG });
+
+    const calls = db.intentCalls();
+    expect(calls[0]![1]).toEqual([USER, null]);
   });
 
   describe('credentials outside the workspace being left', () => {
@@ -250,7 +286,8 @@ describe('deprovisionMember', () => {
 
       expect(result.deviceTokensRevoked).toBe(1);
       expect(result.apiKeysRevoked).toBe(1);
-      for (const sql of db.statements.filter((text) => /^\s*update/i.test(text))) {
+      const updates = db.statements.filter((text) => /^\s*update/i.test(text));
+      for (const sql of updates.filter((text) => !/mobile_intent_tokens/.test(text))) {
         expect(sql, 'a revocation with no organization bound revokes the whole account').toMatch(
           /organization_id = \$2/,
         );
@@ -372,7 +409,7 @@ describe('deprovisionMember', () => {
     for (const sql of revocations) {
       expect(sql).toMatch(/revoked_at is null/);
       expect(sql).toMatch(/user_id = \$1/);
-      expect(sql).toMatch(/organization_id = \$2/);
+      if (!/mobile_intent_tokens/.test(sql)) expect(sql).toMatch(/organization_id = \$2/);
     }
   });
 

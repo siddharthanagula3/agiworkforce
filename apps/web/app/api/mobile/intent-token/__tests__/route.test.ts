@@ -17,6 +17,14 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: null,
   })),
 }));
+vi.mock('@/app/api/settings/sessions/session-principal', () => ({
+  resolveSessionsPrincipal: vi.fn(async () => ({
+    db: { query: (...args: unknown[]) => mockQuery(...args) },
+    userId: 'user-1',
+    organizationId: null,
+    currentSessionId: 'sess_phone',
+  })),
+}));
 vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/server/mobile-intent-tokens')>()),
   issueMobileIntentToken: (...args: unknown[]) => mockIssue(...args),
@@ -48,6 +56,11 @@ describe('/api/mobile/intent-token', () => {
     const res = await POST(request('POST', { installId: INSTALL_ID }));
     expect(res.status).toBe(201);
     await expect(res.json()).resolves.toMatchObject({ tokenId: TOKEN_ID });
+    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('identity_session_id = $3'), [
+      'user-1',
+      INSTALL_ID,
+      'sess_phone',
+    ]);
     expect(mockIssue).toHaveBeenCalledWith(expect.anything(), {
       userId: 'user-1',
       organizationId: null,

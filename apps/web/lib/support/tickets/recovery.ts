@@ -6,7 +6,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { readEnrolledAt } from '@/lib/server/account-security/store';
 import { getIdentityProvider } from '@/lib/server/identity';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
+import { finishIntentRevocation, revokeEveryOtherSession } from '@/lib/server/session-revocation';
 import { sendCustomerTicketEmail } from '@/lib/support/handoff/escalation-email';
 
 import { openTicket, readTicketForStaff } from './service';
@@ -162,5 +162,10 @@ export async function completeAccountRecovery(input: {
     },
   });
 
+  if (!(await finishIntentRevocation(sweep, ticket.userId))) {
+    throw new RecoveryTicketError(
+      'Access was restored, but a signed-in device could not be signed out. Complete the recovery again to finish.',
+    );
+  }
   return { sessionsEnded: sweep.ended.length };
 }

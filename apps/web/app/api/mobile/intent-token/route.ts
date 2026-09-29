@@ -14,13 +14,14 @@ import {
   revokeMobileIntentTokens,
 } from '@/lib/server/mobile-intent-tokens';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { resolveSessionsPrincipal } from '@/app/api/settings/sessions/session-principal';
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' };
 
 async function handleIssue(request: NextRequest) {
   const limited = await withRateLimit(request, 'mobile-intent-token');
   if (limited) return limited;
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId, currentSessionId } = await resolveSessionsPrincipal(request);
   const csrfResponse = await requireCsrfToken(request, userId);
   if (csrfResponse) return csrfResponse;
 
@@ -33,8 +34,9 @@ async function handleIssue(request: NextRequest) {
   const registered = await db.query<{ id: string }>(
     `select id from public.device_registrations
       where user_id = $1 and surface = 'mobile' and install_id = $2
+        and identity_session_id = $3
       limit 1`,
-    [userId, installId],
+    [userId, installId, currentSessionId],
   );
   if (!registered[0]) {
     throw createError

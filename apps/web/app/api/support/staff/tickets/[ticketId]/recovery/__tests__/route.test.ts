@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     addEmailAddress: vi.fn(),
     setPrimaryEmailAddress: vi.fn(),
     revokeEveryOtherSession: vi.fn(),
+    finishIntentRevocation: vi.fn(),
     recordAuditEvent: vi.fn(),
     query: vi.fn(),
   };
@@ -132,10 +133,10 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
   getNeonDb: () => ({ query: mocks.query }),
 }));
-vi.mock('@/lib/server/session-revocation', () => ({
-  listActiveIdentitySessions: vi.fn(),
-  revokeInBatches: vi.fn(),
+vi.mock('@/lib/server/session-revocation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/session-revocation')>()),
   revokeEveryOtherSession: mocks.revokeEveryOtherSession,
+  finishIntentRevocation: mocks.finishIntentRevocation,
 }));
 vi.mock('@/lib/security-audit', () => ({
   BLOCK_APPEAL_PATH: '/support',
@@ -207,6 +208,7 @@ beforeEach(() => {
   });
   mocks.readEnrolledAt.mockResolvedValue(null);
   mocks.revokeEveryOtherSession.mockResolvedValue({ ended: ['sess_1', 'sess_2'] });
+  mocks.finishIntentRevocation.mockResolvedValue(true);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -284,6 +286,17 @@ describe('POST /api/support/staff/tickets/[ticketId]/recovery', () => {
 
     expect(response.status).toBe(403);
     expect(mocks.getClerkAuthUser).not.toHaveBeenCalled();
+  });
+
+  it('does not report a finished recovery while an Ask from Siri token may still be live', async () => {
+    mocks.finishIntentRevocation.mockResolvedValueOnce(false);
+    const response = await POST(request({ action: 'remove_second_factor' }), context());
+
+    expect(response.status).toBe(400);
+    expect(mocks.finishIntentRevocation).toHaveBeenCalledWith(
+      { ended: ['sess_1', 'sess_2'] },
+      CUSTOMER,
+    );
   });
 
   it('removes the second factor for an operator, ends sessions and audits under the operator', async () => {

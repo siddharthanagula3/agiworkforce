@@ -153,6 +153,10 @@ async function revokeIntentTokensAfterSweep(userId: string): Promise<boolean> {
   }
 }
 
+export async function finishIntentRevocation(sweep: RevokeSweep, userId: string): Promise<boolean> {
+  return !sweep.incomplete || revokeIntentTokensAfterSweep(userId);
+}
+
 export async function revokeEveryOtherSession(
   identity: IdentitySessionOperations,
   userId: string,

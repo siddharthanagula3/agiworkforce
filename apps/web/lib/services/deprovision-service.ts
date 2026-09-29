@@ -7,7 +7,10 @@ import { logger } from '@/lib/logger';
 import { readRecordedActiveWorkspaceId } from '@/lib/services/active-workspace-service';
 import { unshareConnector } from '@/lib/services/org-shared-connector-service';
 import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
-import { revokeOrganizationMobileIntentTokens } from '@/lib/server/mobile-intent-tokens';
+import {
+  revokeMobileIntentTokens,
+  revokeOrganizationMobileIntentTokens,
+} from '@/lib/server/mobile-intent-tokens';
 
 /**
  * Cuts off a member's live access when they leave a workspace.
@@ -100,6 +103,20 @@ async function revokeProviderSessions(
   return { revoked, failed, errors };
 }
 
+async function belongsToAnotherOrganization(
+  db: DatabaseAdapter,
+  userId: string,
+  organizationId: string,
+): Promise<boolean> {
+  const rows = await db.query<{ organization_id: string }>(
+    `select organization_id from public.organization_members
+      where user_id = $1 and organization_id <> $2
+      limit 1`,
+    [userId, organizationId],
+  );
+  return rows.length > 0;
+}
+
 /**
  * Whether the member's browser sessions were operating in this workspace.
  *
@@ -152,7 +169,8 @@ export async function deprovisionMember(
   const { userId, organizationId } = input;
   const errors: string[] = [];
 
-  const sessions = (await sessionsBelongToWorkspace(db, userId, organizationId, errors))
+  const sessionsEnd = await sessionsBelongToWorkspace(db, userId, organizationId, errors);
+  const sessions = sessionsEnd
     ? await revokeProviderSessions(identity, userId)
     : { revoked: 0, failed: 0, errors: [] };
   errors.push(...sessions.errors);
@@ -174,7 +192,11 @@ export async function deprovisionMember(
   }
 
   try {
-    await revokeOrganizationMobileIntentTokens(db, userId, organizationId);
+    if (sessionsEnd || !(await belongsToAnotherOrganization(db, userId, organizationId))) {
+      await revokeMobileIntentTokens(db, userId, null);
+    } else {
+      await revokeOrganizationMobileIntentTokens(db, userId, organizationId);
+    }
   } catch (error) {
     errors.push(
       `Ask from Siri tokens were not revoked: ${
