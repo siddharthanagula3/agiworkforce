@@ -234,7 +234,8 @@
       "./en": "universal",
       "./languages": "universal",
       "./lazy": "universal",
-      "./resources": "universal"
+      "./resources": "universal",
+      "./vscode": "universal"
     },
     "packages/ui/icons": {
       ".": "universal"
