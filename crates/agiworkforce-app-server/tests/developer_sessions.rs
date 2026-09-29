@@ -1587,6 +1587,11 @@ async fn rules_keys_and_trust_are_not_changed_over_a_connection_that_did_not_pro
             serde_json::json!({ "kind": "command", "target": "git status", "decision": "allow" }),
         ),
         (
+            6,
+            method::GIT_PULL_REQUEST,
+            serde_json::json!({ "threadId": "thread-1" }),
+        ),
+        (
             4,
             method::PROVIDERS_REMOVE_KEY,
             serde_json::json!({ "provider": "openai" }),
@@ -1607,6 +1612,17 @@ async fn rules_keys_and_trust_are_not_changed_over_a_connection_that_did_not_pro
         assert_eq!(error.code, -32006, "{method}");
         assert!(refused.result.is_none(), "{method}");
     }
+    let plan = processor
+        .process(request(
+            7,
+            method::GIT_PULL_REQUEST_PLAN,
+            serde_json::json!({}),
+        ))
+        .await;
+    assert!(
+        plan.error.is_none_or(|error| error.code != -32006),
+        "planning a pull request only reads, so it stays open"
+    );
 }
 
 #[tokio::test]
