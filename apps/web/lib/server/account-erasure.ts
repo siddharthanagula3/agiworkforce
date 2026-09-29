@@ -27,6 +27,7 @@ import {
   purgeMcpResponseCachePartitions,
 } from '@/lib/connectors/mcp-runtime-cache';
 import { removeBankAccountsItem } from '@/lib/connectors/bank-accounts';
+import { revokeAllConnectorTokensAtProviders } from '@/lib/connectors/oauth-access';
 
 export const USER_SCOPED_TABLES: ReadonlyArray<{
   table: string;
@@ -69,6 +70,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'user_custom_connectors', column: 'user_id' },
   { table: 'connector_tool_permissions', column: 'user_id' },
   { table: 'connector_oauth_grants', column: 'user_id' },
+  { table: 'bank_account_items', column: 'user_id' },
   { table: 'connector_oauth_authorizations', column: 'user_id' },
   { table: 'mcp_app_payloads', column: 'user_id' },
   { table: 'mcp_task_bindings', column: 'user_id' },
@@ -102,6 +104,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'desktop_devices', column: 'user_id' },
   { table: 'mobile_devices', column: 'user_id' },
   { table: 'device_registrations', column: 'user_id' },
+  { table: 'mobile_intent_tokens', column: 'user_id' },
   { table: 'connector_call_events', column: 'user_id' },
   { table: 'event_trigger_events', column: 'user_id' },
   { table: 'event_triggers', column: 'user_id' },
@@ -974,6 +977,14 @@ export async function eraseUserAccountData(
       }
     }
     await eraseConnectorResponseCache(db, userId);
+    // Hand each connector credential back to its provider before the grant rows
+    // go, as disconnect does. Best effort, so it never holds up the erasure.
+    await revokeAllConnectorTokensAtProviders(userId).catch((error: unknown) => {
+      logger.warn(
+        { userId, error: error instanceof Error ? error.name : 'unknown' },
+        'Account erasure could not revoke connector tokens upstream',
+      );
+    });
     await removeBankAccountsItem(userId).catch((error: unknown) => {
       logger.warn(
         { userId, error: error instanceof Error ? error.name : 'unknown' },

@@ -26,6 +26,18 @@
       "reason": "RFC 8628 device flow, the row is resolved by device_id and user_code, not the caller, until the poll succeeds and a developer token is minted"
     },
     {
+      "path": "apps/web/lib/connectors/bank-accounts.ts",
+      "reason": "bank tools and account erasure run with no request scope, so the Plaid items are read and changed on the owner connection, and every statement is constrained by the caller's user_id"
+    },
+    {
+      "path": "apps/web/lib/server/mobile-intent-tokens.ts",
+      "reason": "the Ask from Siri token is the subject: it is resolved by its hash before any caller is known, and every revoke is constrained by the owner's user_id"
+    },
+    {
+      "path": "apps/web/lib/server/mobile-intent.ts",
+      "reason": "the claimed-user connection bound to the Ask token's owner is built on the owner pool; every statement runs as that owner"
+    },
+    {
       "path": "apps/web/app/api/billing/top-up/route.ts",
       "reason": "the only owner-pool call is the workspace policy gate, which reads the organization admin policy, billing contract and funding-membership rows a member scoped connection cannot see and whose read failure fails the gate open; the storage probe, the subscription read and every other statement run on the caller connection"
     },

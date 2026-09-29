@@ -56,6 +56,8 @@ export const USER_OWNED_TABLES = new Set([
   'desktop_devices',
   'mobile_devices',
   'device_registrations',
+  'mobile_intent_tokens',
+  'bank_account_items',
   'connector_call_events',
   'sync_data',
   'github_installations',

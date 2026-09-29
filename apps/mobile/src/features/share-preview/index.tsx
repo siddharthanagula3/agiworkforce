@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { View, ScrollView, Pressable, Alert } from 'react-native';
+import { View, ScrollView, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -206,14 +207,14 @@ export default function SharePreviewScreen() {
         >
           Shared Content
         </Text>
-        <Pressable
+        <PressableBox
           onPress={handleDismiss}
           hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Dismiss share preview"
         >
           <X size={22} color={themeColors.textMuted} />
-        </Pressable>
+        </PressableBox>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
@@ -319,7 +320,7 @@ export default function SharePreviewScreen() {
 
         {pageUrl && !hasAttachments ? (
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable
+            <PressableBox
               onPress={() => void handleSummarize()}
               disabled={sending}
               accessibilityRole="button"
@@ -330,8 +331,8 @@ export default function SharePreviewScreen() {
               <Text style={{ color: themeColors.textPrimary, fontWeight: '600' }}>
                 Summarize this page
               </Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               onPress={handleAskAbout}
               disabled={sending || !provenance}
               accessibilityRole="button"
@@ -342,7 +343,7 @@ export default function SharePreviewScreen() {
               <Text style={{ color: themeColors.textPrimary, fontWeight: '600' }}>
                 Ask about this page
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         ) : null}
 
@@ -365,7 +366,7 @@ export default function SharePreviewScreen() {
           borderTopColor: themeColors.border,
         }}
       >
-        <Pressable
+        <PressableBox
           onPress={handleDismiss}
           style={{
             flex: 1,
@@ -377,9 +378,9 @@ export default function SharePreviewScreen() {
           }}
         >
           <Text style={{ color: themeColors.textPrimary, fontWeight: '600' }}>Dismiss</Text>
-        </Pressable>
+        </PressableBox>
 
-        <Pressable
+        <PressableBox
           onPress={hasAttachments ? handleAttachToComposer : handleSend}
           disabled={sending || (!hasAttachments && !rawText.trim())}
           accessibilityRole="button"
@@ -401,7 +402,7 @@ export default function SharePreviewScreen() {
             <Send size={16} color={themeColors.accentText} />
           )}
           <Text style={{ color: themeColors.accentText, fontWeight: '600' }}>{primaryLabel}</Text>
-        </Pressable>
+        </PressableBox>
       </View>
     </SafeAreaView>
   );

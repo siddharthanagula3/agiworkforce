@@ -75,6 +75,7 @@
         "device_pairings",
         "device_registrations",
         "mobile_devices",
+        "mobile_intent_tokens",
         "web_push_subscriptions"
       ]
     },
@@ -487,6 +488,7 @@
       "capabilities": [],
       "concepts": [],
       "tables": [
+        "bank_account_items",
         "connector_oauth_authorizations",
         "connector_oauth_grants",
         "messaging_connections",

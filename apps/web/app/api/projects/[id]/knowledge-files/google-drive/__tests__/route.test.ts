@@ -289,6 +289,30 @@ describe('POST /api/projects/[id]/knowledge-files/google-drive', () => {
     );
   });
 
+  it('keeps a file whose scanned text was withheld and passes the notice on', async () => {
+    mocks.downloadGoogleDriveFile.mockResolvedValue(driveFile('scan.pdf'));
+    mocks.registerProjectKnowledgeFile.mockResolvedValue({
+      status: 'created',
+      file: { id: 'kf-2' },
+      notice: 'Scanned text was not extracted.',
+    });
+
+    const response = await post({ fileIds: [DRIVE_A] });
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      results: [
+        {
+          fileId: DRIVE_A,
+          status: 'added',
+          file: { id: 'kf-2' },
+          notice: 'Scanned text was not extracted.',
+        },
+      ],
+    });
+    expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
+  });
+
   it('removes the stored object and answers 422 when registration is unavailable', async () => {
     mocks.downloadGoogleDriveFile.mockResolvedValue(driveFile('notes.txt'));
     mocks.registerProjectKnowledgeFile.mockResolvedValue({ status: 'unavailable' });

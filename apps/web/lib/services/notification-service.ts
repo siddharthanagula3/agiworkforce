@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { NOTIFICATION_FEED_MAX_LIMIT } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import {
@@ -16,7 +17,7 @@ const MAX_TITLE_CHARS = 200;
 const MAX_MESSAGE_CHARS = 1000;
 const MAX_DEDUPE_KEY_CHARS = 200;
 export const DEFAULT_FEED_LIMIT = 30;
-export const MAX_FEED_LIMIT = 100;
+export const MAX_FEED_LIMIT = NOTIFICATION_FEED_MAX_LIMIT;
 
 export interface NotificationInput {
   userId: string;

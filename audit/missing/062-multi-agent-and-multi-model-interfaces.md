@@ -12,6 +12,12 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
+## S62.15: Summary-only handoff.
+
+- Done when: A handoff can pass only a summary, not the full history, and the user can see that.
+- Wave: 4
+- Build on: web, desktop, mobile, vscode, chrome
+
 ## S62.21: Synthesis answer.
 
 - Done when: After parallel answers, the product produces one synthesized answer.

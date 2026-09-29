@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ConversationShareAudienceChangeSchema,
+  type ConversationShareAudienceResponse,
+  type ConversationShareRevoked,
+  type SharedConversation,
+} from '@agiworkforce/cloud-contracts';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getCurrentUserRlsDb, getUserScopedDb } from '@/lib/server/rls-db';
 import {
@@ -24,14 +29,9 @@ import {
   setSharedSessionVisibility,
   shareSessionWithOrganization,
   unshareSessionFromOrganization,
-  SHARED_SESSION_VISIBILITIES,
 } from '@/lib/services/org-shared-session-service';
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
-
-const VisibilitySchema = z.object({
-  visibility: z.enum(SHARED_SESSION_VISIBILITIES),
-});
 
 function sharingUnavailableResponse(): NextResponse {
   return NextResponse.json(
@@ -91,18 +91,19 @@ async function handleGetShare(request: NextRequest, context: RouteContext) {
     );
   }
 
-  return NextResponse.json({
+  const shared: SharedConversation = {
     id: data.id,
     token: data.token,
     title: data.title,
     model_id: data.modelId,
     provider: data.provider,
-    messages: data.messages,
+    messages: Array.isArray(data.messages) ? data.messages : [],
     total_messages: data.messageCount,
     visibility: data.visibility,
     expires_at: data.expiresAt,
     created_at: data.createdAt,
-  });
+  };
+  return NextResponse.json(shared);
 }
 
 async function handleDeleteShare(request: NextRequest, context: RouteContext) {
@@ -156,7 +157,8 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
     logger.error({ error, userId }, 'Failed to record share-link audit event');
   });
 
-  return NextResponse.json({ success: true });
+  const answer: ConversationShareRevoked = { success: true };
+  return NextResponse.json(answer);
 }
 
 /**
@@ -188,7 +190,7 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
     throw createError.validation('Request body must be JSON');
   }
 
-  const parsed = VisibilitySchema.safeParse(rawBody);
+  const parsed = ConversationShareAudienceChangeSchema.safeParse(rawBody);
   if (!parsed.success) {
     throw createError.validation('Invalid share visibility request', parsed.error.flatten());
   }
@@ -239,13 +241,14 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
     }
 
     const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
-    return NextResponse.json({
+    const changed: ConversationShareAudienceResponse = {
       token: updated.token,
       shareUrl: `${appUrl}/share/${updated.token}`,
       visibility: updated.visibility,
       organizationId: visibility === 'organization' ? target.organizationId : null,
       expiresAt: updated.expiresAt,
-    });
+    };
+    return NextResponse.json(changed);
   } catch (error) {
     if (isConversationSharingSchemaUnavailable(error)) return sharingUnavailableResponse();
     throw error;

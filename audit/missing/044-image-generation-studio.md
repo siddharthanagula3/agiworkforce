@@ -12,6 +12,12 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, chrome
 
+## S44.06: Prompt enhancement with user control.
+
+- Done when: User can have the product rewrite/enhance the image prompt and review or reject the rewrite before generating.
+- Wave: 4
+- Build on: web, desktop, cli, chrome
+
 ## S44.12: Supported seed control.
 
 - Done when: User sets a seed (on models that support it) to reproduce an image.

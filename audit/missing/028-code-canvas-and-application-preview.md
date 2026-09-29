@@ -6,6 +6,12 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S28.07: Code completion where offered.
+
+- Done when: The code editor offers code completion (where the product offers it).
+- Wave: 4
+- Build on: web, desktop, mobile, chrome
+
 ## S28.12: Responsive preview sizes.
 
 - Done when: The preview can be switched between device sizes (phone, tablet, desktop).
@@ -48,17 +54,11 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, chrome
 
-## S28.22: AI-backed app behavior through a brokered API.
+## S28.28: Publish production version.
 
-- Done when: An app can call AI through a brokered product API instead of embedding keys.
+- Done when: The user can publish a separate production version (stable URL or domain) distinct from previews.
 - Wave: 4
-- Build on: desktop, mobile, chrome
-
-## S28.23: App-local storage or database configuration.
-
-- Done when: An app can be given persistent local storage or a database, configured by the user.
-- Wave: 4
-- Build on: desktop, mobile, chrome
+- Build on: vscode
 
 ## S28.29: Version comparison.
 

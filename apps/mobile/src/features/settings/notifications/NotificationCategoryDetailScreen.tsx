@@ -10,7 +10,7 @@ import {
 } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { NOTIFICATION_CATEGORY_COPY, resolveNotificationCategory } from './categories';
+import { PUSH_PREFERENCE_GROUP_COPY, resolvePushPreferenceGroup } from './categories';
 import { View } from 'react-native';
 
 export default function NotificationCategoryDetailScreen({
@@ -22,7 +22,7 @@ export default function NotificationCategoryDetailScreen({
   const categoryEnabled = useNotificationPrefsStore((state) => state.categoryEnabled);
   const setCategoryEnabled = useNotificationPrefsStore((state) => state.setCategoryEnabled);
 
-  const category = resolveNotificationCategory(requestedCategory);
+  const category = resolvePushPreferenceGroup(requestedCategory);
 
   if (!category) {
     return (
@@ -36,7 +36,7 @@ export default function NotificationCategoryDetailScreen({
     );
   }
 
-  const copy = NOTIFICATION_CATEGORY_COPY[category];
+  const copy = PUSH_PREFERENCE_GROUP_COPY[category];
 
   return (
     <SettingsScreenShell title={copy.label} backHref="/(app)/settings/notifications">

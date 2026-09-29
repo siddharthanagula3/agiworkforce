@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { CloudCodePullRequestReply } from '@agiworkforce/cloud-contracts';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -55,9 +56,12 @@ async function handlePullRequest(request: NextRequest, context: RouteContext) {
 
   const { sessionId } = await context.params;
   try {
-    return NextResponse.json(
-      await openCloudCodeSessionPullRequest(db, { userId, organizationId }, sessionId),
+    const opened: CloudCodePullRequestReply = await openCloudCodeSessionPullRequest(
+      db,
+      { userId, organizationId },
+      sessionId,
     );
+    return NextResponse.json(opened);
   } catch (error) {
     rethrowCloudCodeError(error);
   }

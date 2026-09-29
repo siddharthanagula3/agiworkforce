@@ -98,11 +98,16 @@ const declaresTitle = (segment: Segment) =>
 
 /**
  * Routes whose server work is awaited but which paint no loading boundary of
- * their own. Each entry says why that is the right answer; a seventh route
- * joining them fails, which is the point of holding the list here.
+ * their own. Each entry says why that is the right answer; a route joining
+ * them unlisted fails, which is the point of holding the list here.
  */
 const ROUTES_WITHOUT_A_LOADING_BOUNDARY: Record<string, string> = {
+  'auth/desktop': 'awaits only its own searchParams, so there is no request to wait on',
   'auth/sso-callback': 'awaits only its own searchParams, so there is no request to wait on',
+  'legal/archive/[policy]':
+    'prerendered through generateStaticParams with dynamicParams off, so nothing resolves at request time',
+  'legal/archive/[policy]/[date]':
+    'prerendered through generateStaticParams with dynamicParams off, so nothing resolves at request time',
   'copyright/report': 'awaits only its own searchParams, so there is no request to wait on',
   'use-cases/[slug]':
     'prerendered through generateStaticParams, so nothing resolves at request time',

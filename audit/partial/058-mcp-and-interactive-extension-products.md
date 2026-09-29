@@ -219,19 +219,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S58.26: Extension debugging console.
-
-- Done when: Extension developers get a console to watch MCP traffic and debug their server.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S58.27: Developer-mode connection flow.
 
 - Done when: A developer can connect an in-development server (e.g. localhost) through a developer-mode flow.

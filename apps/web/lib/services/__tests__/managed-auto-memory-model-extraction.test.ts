@@ -9,7 +9,8 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock('next/server', () => ({ after: hoisted.after }));
-vi.mock('../model-memory-extraction', () => ({
+vi.mock('../model-memory-extraction', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   extractAutoMemoryFactsWithModel: hoisted.extract,
   isModelMemoryExtractionEnabled: hoisted.enabled,
 }));
@@ -31,9 +32,10 @@ function processed(
     subscriptionTier: 'pro',
     autoMemoryFacts: ["User's name is Sid"],
     autoMemorySourceText: 'My name is Sid. I just moved to Berlin.',
+    chatRequest: { messages: [] },
     ...(meteringDb ? { managedUsage: { db: meteringDb, userId: 'user-1' } } : {}),
     ...overrides,
-  } as ProcessedRequest;
+  } as unknown as ProcessedRequest;
 }
 
 function insertedCandidates(query: ReturnType<typeof vi.fn>): string[] {

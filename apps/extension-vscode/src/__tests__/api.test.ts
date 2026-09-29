@@ -227,6 +227,30 @@ describe('AGI Cloud silent reauthentication', () => {
     await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
   });
 
+  it('warns once about an unavailable account and stops rotating until the next sign-in', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
+    refreshDeviceSession.mockResolvedValue({
+      kind: 'account-unavailable',
+      message: 'This account is suspended.',
+    });
+    const warn = vi.mocked(vscode.window.showWarningMessage);
+    warn.mockClear();
+
+    await expect(renewAccountSession(secrets)).resolves.toBe('account-unavailable');
+    await expect(renewAccountSession(secrets)).resolves.toBe('account-unavailable');
+    await expect(getAccountToken(secrets)).resolves.toBeUndefined();
+
+    expect(refreshDeviceSession).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith('This account is suspended.', 'Sign in again');
+
+    await setAccountToken(secrets, 'expired-again', NOW - 1, 'fresh-renewal');
+    await renewAccountSession(secrets);
+    expect(refreshDeviceSession).toHaveBeenCalledTimes(2);
+    await clearAccountToken(secrets);
+  });
+
   it('does not rotate when the caller asked for the stored credential as it is', async () => {
     const secrets = expiredSession();
     await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
@@ -361,7 +385,9 @@ describe('cloud completion error envelopes', () => {
     );
 
     expect(error).toBeInstanceOf(AgiWorkforceUsageLimitError);
-    expect(error.message).toBe(classifyManagedQuotaErrorCode('monthly_credit_limit_reached')?.reason);
+    expect(error.message).toBe(
+      classifyManagedQuotaErrorCode('monthly_credit_limit_reached')?.reason,
+    );
     expect((error as AgiWorkforceUsageLimitError).recovery).toBeUndefined();
   });
 
@@ -703,8 +729,14 @@ describe('billed credits for a settled turn', () => {
 
   it('reads the credits a turn was billed once the ledger settles it', async () => {
     const paths = answerTurnPolls(
-      { status: 200, body: { requestId: 'agi.vscode.chat.turn-1', status: 'pending', credits: null } },
-      { status: 200, body: { requestId: 'agi.vscode.chat.turn-1', status: 'settled', credits: 0.35 } },
+      {
+        status: 200,
+        body: { requestId: 'agi.vscode.chat.turn-1', status: 'pending', credits: null },
+      },
+      {
+        status: 200,
+        body: { requestId: 'agi.vscode.chat.turn-1', status: 'settled', credits: 0.35 },
+      },
     );
 
     await expect(billedCredits('agi.vscode.chat.turn-1')).resolves.toBe(0.35);

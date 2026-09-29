@@ -4,7 +4,7 @@ use std::sync::Arc;
 use agiworkforce_app_server::DeveloperSessionHost;
 use agiworkforce_protocol::developer_session::{
     AppServerClientInfo, AppServerNotification, DeveloperFileChangeKind, DeveloperSessionSource,
-    ThreadIdParams, ThreadListParams, ThreadStartParams, ThreadStatus,
+    ThreadIdParams, ThreadListParams, ThreadLocation, ThreadStartParams, ThreadStatus,
 };
 use serde_json::{json, Value};
 
@@ -242,6 +242,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             .list_threads(ThreadListParams {
                 cwd: Some(self.cwd.clone()),
                 limit: Some(SESSIONS),
+                include_cloud: true,
                 ..ThreadListParams::default()
             })
             .await;
@@ -276,6 +277,9 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                 });
                 if let Some(origin) = origin_name(thread.created_by) {
                     summary["origin"] = json!(origin);
+                }
+                if thread.location == Some(ThreadLocation::Cloud) {
+                    summary["location"] = json!("cloud");
                 }
                 summary
             })

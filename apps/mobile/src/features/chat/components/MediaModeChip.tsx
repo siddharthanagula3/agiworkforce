@@ -1,4 +1,5 @@
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Film, Paintbrush, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -48,7 +49,7 @@ export function MediaModeChip({ mode, modelName, onExit }: MediaModeChipProps) {
             {modelName}
           </Text>
         ) : null}
-        <Pressable
+        <PressableBox
           onPress={onExit}
           hitSlop={10}
           accessibilityRole="button"
@@ -62,7 +63,7 @@ export function MediaModeChip({ mode, modelName, onExit }: MediaModeChipProps) {
           }}
         >
           <X size={13} color={colors.textMuted} />
-        </Pressable>
+        </PressableBox>
       </View>
     </Animated.View>
   );

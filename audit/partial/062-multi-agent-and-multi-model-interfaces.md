@@ -138,19 +138,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S62.15: Summary-only handoff.
-
-- Done when: A handoff can pass only a summary, not the full history, and the user can see that.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S62.16: Background fork.
 
 - Done when: The user can fork a side task that runs in the background without disturbing the main one.

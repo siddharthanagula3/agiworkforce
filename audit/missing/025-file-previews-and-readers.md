@@ -30,6 +30,12 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, vscode, chrome
 
+## S25.13: Page navigation.
+
+- Done when: Users can navigate pages of a multi-page document.
+- Wave: 4
+- Build on: mobile, vscode, chrome
+
 ## S25.15: Fit-to-width.
 
 - Done when: Viewers can fit content to width.
@@ -59,6 +65,12 @@ nothing is left.
 - Done when: Search matches are highlighted in the file.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
+
+## S25.22: Citation-linked highlighting.
+
+- Done when: Opening a citation highlights the cited passage in the file.
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome
 
 ## S25.23: Transcript panel for audio/video.
 

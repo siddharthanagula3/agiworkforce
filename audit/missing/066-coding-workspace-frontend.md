@@ -6,6 +6,24 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S66.08: File tree.
+
+- Done when: The coding workspace shows a browsable tree of the repository's files.
+- Wave: 4
+- Build on: web, desktop, mobile, cli
+
+## S66.12: Editor tabs.
+
+- Done when: Several files can be open at once in editor tabs.
+- Wave: 4
+- Build on: web, desktop, mobile, cli
+
+## S66.16: Terminal tabs.
+
+- Done when: The user keeps several terminals open side by side or in tabs within the coding surface.
+- Wave: 4
+- Build on: web, desktop, mobile, cli
+
 ## S66.20: Inline review comments.
 
 - Done when: The user leaves review comments on specific lines of a change, and the agent can act on them.

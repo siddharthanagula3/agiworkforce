@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, TextInput, Pressable, StyleSheet } from 'react-native';
+import { View, TextInput, StyleSheet } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { X, Check, Mic } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -99,29 +100,29 @@ export function VoiceReview({
       {/* Action row */}
       <View style={styles.actions}>
         {/* Cancel */}
-        <Pressable
+        <PressableBox
           onPress={handleCancel}
           style={[styles.cancelBtn, { backgroundColor: colors.neutralSurface }]}
           accessibilityLabel="Cancel and discard"
           accessibilityRole="button"
         >
           <X size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
 
         {/* Re-record */}
         {onReRecord && (
-          <Pressable
+          <PressableBox
             onPress={handleReRecord}
             style={[styles.reRecordBtn, { backgroundColor: colors.accentSurface }]}
             accessibilityLabel="Re-record voice"
             accessibilityRole="button"
           >
             <Mic size={20} color={colors.terraCotta} />
-          </Pressable>
+          </PressableBox>
         )}
 
         {/* Confirm */}
-        <Pressable
+        <PressableBox
           onPress={handleConfirm}
           style={[
             styles.confirmBtn,
@@ -133,7 +134,7 @@ export function VoiceReview({
           accessibilityState={{ disabled: !editedText.trim() }}
         >
           <Check size={22} color={colors.accentText} />
-        </Pressable>
+        </PressableBox>
       </View>
     </Animated.View>
   );

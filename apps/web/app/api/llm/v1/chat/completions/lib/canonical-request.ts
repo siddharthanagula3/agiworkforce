@@ -239,6 +239,7 @@ export function buildAnthropicChatRequest(processed: ProcessedRequest): ChatRequ
   if (thinking !== undefined) chatRequest.thinking = thinking;
   const effort = toCanonicalEffort(processed.provider, processed.llmRequest.effort);
   if (effort !== undefined) chatRequest.effort = effort;
+  if (processed.llmRequest.speed === 'fast') chatRequest.speed = 'fast';
   return chatRequest;
 }
 

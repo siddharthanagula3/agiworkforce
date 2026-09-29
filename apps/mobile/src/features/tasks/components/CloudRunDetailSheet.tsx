@@ -1,4 +1,5 @@
-import { ActivityIndicator, Modal, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import type { ManagedCloudAgentRunApprovalDecision } from '@agiworkforce/cloud-contracts';
@@ -116,7 +117,7 @@ export function CloudRunDetailSheet({
           >
             {title}
           </Text>
-          <Pressable
+          <PressableBox
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Close task"
@@ -124,7 +125,7 @@ export function CloudRunDetailSheet({
             style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
           >
             <X size={20} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         </View>
 
         {detail?.status === 'loading' && !run ? (

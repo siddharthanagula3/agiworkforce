@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S24.01: All-files view.
-
-- Done when: One Library view lists every file the user owns across chats, generation, uploads and projects.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S24.02: Uploaded-files view.
 
 - Done when: A view shows only the files the user uploaded.
@@ -73,30 +62,6 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S24.10: Shared-with-me view.
-
-- Done when: A Shared-with-me view lists files and items others shared with the user.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S24.11: Folder hierarchy.
-
-- Done when: Files can be organised in a folder hierarchy that can be browsed in the Library.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -202,18 +167,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S24.32: Version history.
-
-- Done when: Users can see and restore earlier versions of a file.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S24.33: Storage-consumption display.
 
 - Done when: The product shows how much storage the user's files consume against their allowance.
@@ -243,18 +196,6 @@ nothing is left.
 - Done when: Expired or no-longer-available files are clearly marked in the Library.
 - Wave: 3
 - Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S24.36: Processing-status display.
-
-- Done when: The Library shows a file's processing status (uploading, processing, ready, failed).
-- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

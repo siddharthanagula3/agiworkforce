@@ -1,6 +1,6 @@
-
 import { storage } from '@/lib/mmkv';
 import { isThermallyThrottled } from '@agiworkforce/local-llm';
+import { startPeakMemorySampler } from '@/services/processFootprint';
 
 export type ThermalState = 'nominal' | 'fair' | 'serious' | 'critical';
 export type BackendName = 'foundation_models' | 'aicore' | 'executorch' | 'llama_rn';
@@ -138,15 +138,22 @@ export async function runBenchmark(opts: {
   let firstTokenTs = 0;
   let outputTokens = 0;
 
-  const result = await opts.generate({
-    prompt: BENCHMARK_PROMPT,
-    onToken: (_tok) => {
-      if (firstTokenTs === 0) {
-        firstTokenTs = Date.now();
-      }
-      outputTokens += 1;
-    },
-  });
+  const memorySampler = startPeakMemorySampler();
+  let peakMemoryMB = 0;
+  let result: Awaited<ReturnType<typeof opts.generate>>;
+  try {
+    result = await opts.generate({
+      prompt: BENCHMARK_PROMPT,
+      onToken: (_tok) => {
+        if (firstTokenTs === 0) {
+          firstTokenTs = Date.now();
+        }
+        outputTokens += 1;
+      },
+    });
+  } finally {
+    peakMemoryMB = await memorySampler.stop();
+  }
 
   const endTs = Date.now();
   const promptTokens = Math.ceil(BENCHMARK_PROMPT.length / 4);
@@ -162,7 +169,7 @@ export async function runBenchmark(opts: {
     backend: opts.backend,
     tokensPerSecond,
     firstTokenLatencyMs,
-    peakMemoryMB: 0, // native module exposes this post-hoc on supported tiers
+    peakMemoryMB,
     thermalState,
     promptTokens,
     outputTokens: totalOutputTokens,

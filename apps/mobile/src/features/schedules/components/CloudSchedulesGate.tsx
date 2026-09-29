@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Cloud } from 'lucide-react-native';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ export function CloudSchedulesGate({ signedIn, onBack, onContinue }: CloudSchedu
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
       <View style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 12 }}>
-        <Pressable
+        <PressableBox
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -26,7 +27,7 @@ export function CloudSchedulesGate({ signedIn, onBack, onContinue }: CloudSchedu
           style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
         >
           <ArrowLeft size={21} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       </View>
 
       <View

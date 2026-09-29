@@ -1,6 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type {
+  CloudCodeAgentApprovalsReply,
+  CloudCodeAgentTurnReply,
+} from '@agiworkforce/cloud-contracts';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -61,7 +65,8 @@ async function handleListApprovals(request: NextRequest, context: RouteContext) 
   const { sessionId } = await context.params;
   try {
     const approvals = await listCloudCodeAgentApprovals(db, { userId, organizationId }, sessionId);
-    return NextResponse.json({ approvals });
+    const listed: CloudCodeAgentApprovalsReply = { approvals };
+    return NextResponse.json(listed);
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) return managedUsageErrorResponse(error);
     rethrowCloudCodeError(error);
@@ -129,7 +134,8 @@ async function handleDecideApproval(request: NextRequest, context: RouteContext)
       planTier,
       signal: request.signal,
     });
-    return NextResponse.json(result);
+    const decided: CloudCodeAgentTurnReply = result;
+    return NextResponse.json(decided);
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) return managedUsageErrorResponse(error);
     rethrowCloudCodeError(error);

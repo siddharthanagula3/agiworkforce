@@ -185,6 +185,8 @@ vi.mock('@shared/stores/thinking-store', () => ({
     selector({
       enabled: thinking.enabled,
       effort: thinking.effort,
+      fast: false,
+      setFast: () => undefined,
       setEnabled: (v: boolean) => {
         thinking.enabled = v;
       },

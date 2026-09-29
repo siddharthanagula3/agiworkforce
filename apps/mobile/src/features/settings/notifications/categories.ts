@@ -1,11 +1,11 @@
-import type { NotificationCategory } from '@/stores/notificationPrefsStore';
+import type { PushPreferenceGroup } from '@/stores/notificationPrefsStore';
 
-export interface NotificationCategoryCopy {
+export interface PushPreferenceGroupCopy {
   label: string;
   description: string;
 }
 
-export const NOTIFICATION_CATEGORY_COPY: Record<NotificationCategory, NotificationCategoryCopy> = {
+export const PUSH_PREFERENCE_GROUP_COPY: Record<PushPreferenceGroup, PushPreferenceGroupCopy> = {
   chat_replies: {
     label: 'Chat replies',
     description: 'When a reply to your message is ready',
@@ -20,28 +20,28 @@ export const NOTIFICATION_CATEGORY_COPY: Record<NotificationCategory, Notificati
   },
 };
 
-export const NOTIFICATION_CATEGORIES = Object.keys(
-  NOTIFICATION_CATEGORY_COPY,
-) as NotificationCategory[];
+export const PUSH_PREFERENCE_GROUPS = Object.keys(
+  PUSH_PREFERENCE_GROUP_COPY,
+) as PushPreferenceGroup[];
 
-export function isNotificationCategory(value: unknown): value is NotificationCategory {
+export function isPushPreferenceGroup(value: unknown): value is PushPreferenceGroup {
   return (
     typeof value === 'string' &&
-    Object.prototype.hasOwnProperty.call(NOTIFICATION_CATEGORY_COPY, value)
+    Object.prototype.hasOwnProperty.call(PUSH_PREFERENCE_GROUP_COPY, value)
   );
 }
 
-const LEGACY_NOTIFICATION_CATEGORY: Readonly<Record<string, NotificationCategory>> = {
+const LEGACY_PUSH_PREFERENCE_GROUP: Readonly<Record<string, PushPreferenceGroup>> = {
   approvals: 'tasks',
   task_updates: 'tasks',
   errors: 'tasks',
   status: 'product',
 };
 
-export function resolveNotificationCategory(value: unknown): NotificationCategory | null {
-  if (isNotificationCategory(value)) return value;
+export function resolvePushPreferenceGroup(value: unknown): PushPreferenceGroup | null {
+  if (isPushPreferenceGroup(value)) return value;
   if (typeof value !== 'string') return null;
-  return Object.prototype.hasOwnProperty.call(LEGACY_NOTIFICATION_CATEGORY, value)
-    ? (LEGACY_NOTIFICATION_CATEGORY[value] ?? null)
+  return Object.prototype.hasOwnProperty.call(LEGACY_PUSH_PREFERENCE_GROUP, value)
+    ? (LEGACY_PUSH_PREFERENCE_GROUP[value] ?? null)
     : null;
 }

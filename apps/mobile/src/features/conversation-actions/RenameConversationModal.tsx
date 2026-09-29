@@ -3,12 +3,12 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check } from 'lucide-react-native';
 import { CONVERSATION_TITLE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -58,7 +58,7 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
       onDismiss={runPending}
       accessibilityViewIsModal
     >
-      <Pressable
+      <PressableBox
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
         onPress={menu.close}
         accessibilityLabel="Dismiss chat actions"
@@ -66,7 +66,7 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
         accessible={false}
       >
         <SafeAreaView edges={['bottom']} style={{ width: '100%' }}>
-          <Pressable
+          <PressableBox
             style={{
               backgroundColor: colors.surfaceElevated,
               borderTopLeftRadius: 20,
@@ -90,7 +90,7 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
             </Text>
             <ScrollView style={{ maxHeight: height * 0.6 }} bounces={false}>
               {menu.actions.map((action, index) => (
-                <Pressable
+                <PressableBox
                   key={action.key}
                   testID={`conversation-action-${action.key}`}
                   onPress={() => select(action)}
@@ -119,10 +119,10 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
                     {action.label}
                   </Text>
                   {action.selected ? <Check size={18} color={colors.textPrimary} /> : null}
-                </Pressable>
+                </PressableBox>
               ))}
             </ScrollView>
-            <Pressable
+            <PressableBox
               testID="conversation-action-cancel"
               onPress={menu.close}
               accessibilityRole="button"
@@ -144,10 +144,10 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
               >
                 Cancel
               </Text>
-            </Pressable>
-          </Pressable>
+            </PressableBox>
+          </PressableBox>
         </SafeAreaView>
-      </Pressable>
+      </PressableBox>
     </Modal>
   );
 }
@@ -175,7 +175,7 @@ export function RenameConversationModal({
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <Pressable
+          <PressableBox
             style={{
               flex: 1,
               backgroundColor: colors.scrim,
@@ -185,7 +185,7 @@ export function RenameConversationModal({
             }}
             onPress={rename.cancel}
           >
-            <Pressable
+            <PressableBox
               style={{
                 width: '100%',
                 backgroundColor: colors.surfaceElevated,
@@ -227,7 +227,7 @@ export function RenameConversationModal({
                 accessibilityLabel="Chat title"
               />
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16 }}>
-                <Pressable
+                <PressableBox
                   style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
                   onPress={rename.cancel}
                   accessibilityRole="button"
@@ -236,8 +236,8 @@ export function RenameConversationModal({
                   <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>
                     Cancel
                   </Text>
-                </Pressable>
-                <Pressable
+                </PressableBox>
+                <PressableBox
                   style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
                   onPress={rename.submit}
                   accessibilityRole="button"
@@ -246,10 +246,10 @@ export function RenameConversationModal({
                   <Text style={{ color: colors.teal, fontSize: typeScale.body, fontWeight: '600' }}>
                     Rename
                   </Text>
-                </Pressable>
+                </PressableBox>
               </View>
-            </Pressable>
-          </Pressable>
+            </PressableBox>
+          </PressableBox>
         </KeyboardAvoidingView>
       </Modal>
     </>

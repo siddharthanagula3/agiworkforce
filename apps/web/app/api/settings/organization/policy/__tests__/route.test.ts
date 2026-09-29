@@ -208,6 +208,38 @@ describe('PATCH /api/settings/organization/policy', () => {
     expect(upsertParams()).toEqual([]);
   });
 
+  it('lets only the Owner turn on fast mode', async () => {
+    bindCaller({ role: 'admin', policyRow: SAVED_POLICY });
+    const refused = await PATCH(
+      request({ controls: { featureAccess: { fast_mode: true } } }) as never,
+    );
+    expect(refused.status).toBe(403);
+    expect(upsertParams()).toEqual([]);
+
+    bindCaller({ role: 'owner', policyRow: SAVED_POLICY });
+    const allowed = await PATCH(
+      request({ controls: { featureAccess: { fast_mode: true } } }) as never,
+    );
+    expect(allowed.status).toBe(200);
+    expect(upsertParams()).not.toEqual([]);
+  });
+
+  it('lets an admin turn fast mode off', async () => {
+    bindCaller({
+      role: 'admin',
+      policyRow: {
+        ...SAVED_POLICY,
+        metadata: { controls: { featureAccess: { fast_mode: true } } },
+      },
+    });
+
+    const response = await PATCH(
+      request({ controls: { featureAccess: { fast_mode: false } } }) as never,
+    );
+
+    expect(response.status).toBe(200);
+  });
+
   it('merges a partial patch onto the SAVED policy, never onto the table defaults', async () => {
     bindCaller({ policyRow: SAVED_POLICY });
 

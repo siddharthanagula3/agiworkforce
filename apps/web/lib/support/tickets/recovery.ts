@@ -6,7 +6,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { readEnrolledAt } from '@/lib/server/account-security/store';
 import { getIdentityProvider } from '@/lib/server/identity';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
+import { finishIntentRevocation, revokeEveryOtherSession } from '@/lib/server/session-revocation';
 import { sendCustomerTicketEmail } from '@/lib/support/handoff/escalation-email';
 
 import { openTicket, readTicketForStaff } from './service';
@@ -131,15 +131,20 @@ export async function completeAccountRecovery(input: {
   } else {
     const email = input.email?.trim().toLowerCase();
     if (!email) throw new RecoveryTicketError('Enter the new sign-in email address.');
-    const added = await identity.addEmailAddress(ticket.userId, email);
-    const { emitIdentitySecurityEvent } = await import('@/lib/services/identity-events');
-    await emitIdentitySecurityEvent(getNeonDb(), {
-      userId: ticket.userId,
-      event: 'email_changed',
-      subjectRef: ticket.id,
-      context: 'Support changed it while restoring access to the account.',
-      detail: { source: 'support_recovery' },
-    });
+    const existing = (await identity.getUser(ticket.userId))?.emailAddresses.find(
+      (address) => address.emailAddress.toLowerCase() === email,
+    );
+    const added = existing ?? (await identity.addEmailAddress(ticket.userId, email));
+    if (!existing) {
+      const { emitIdentitySecurityEvent } = await import('@/lib/services/identity-events');
+      await emitIdentitySecurityEvent(getNeonDb(), {
+        userId: ticket.userId,
+        event: 'email_changed',
+        subjectRef: ticket.id,
+        context: 'Support changed it while restoring access to the account.',
+        detail: { source: 'support_recovery' },
+      });
+    }
     await identity.setPrimaryEmailAddress(ticket.userId, added.id);
     await getNeonDb().query(`update public.profiles set email = $2 where id = $1`, [
       ticket.userId,
@@ -162,5 +167,10 @@ export async function completeAccountRecovery(input: {
     },
   });
 
+  if (!(await finishIntentRevocation(sweep, ticket.userId))) {
+    throw new RecoveryTicketError(
+      'Access was restored, but a signed-in device could not be signed out. Complete the recovery again to finish.',
+    );
+  }
   return { sessionsEnded: sweep.ended.length };
 }

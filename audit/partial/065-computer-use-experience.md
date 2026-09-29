@@ -121,15 +121,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S65.17: Native file-dialog interaction.
-
-- Done when: The agent can work native open/save file dialogs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-
 ## S65.18: Background application operation where supported.
 
 - Done when: The agent can operate an application in the background without taking over the user's screen.

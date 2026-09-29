@@ -122,7 +122,7 @@ The most used ones:
 | `agiWorkforce.inlineCompletions.debounceMs` | `300`                                 | Delay before requesting a completion.                                                            |
 | `agiWorkforce.inlineCompletions.maxLength`  | `500`                                 | Maximum completion length in characters.                                                         |
 | `agiWorkforce.apiEndpoint`                  | `https://agiworkforce.com/api/llm/v1` | API base URL for cloud-backed editor utilities.                                                  |
-| `agiWorkforce.telemetryEnabled`             | `false`                               | Anonymous usage telemetry, also subject to VS Code's own telemetry setting.                      |
+| `agiWorkforce.telemetryEnabled`             | `false`                               | Product usage events and crash reports, also subject to VS Code's own telemetry setting.         |
 
 Run **AGI Workforce: Open Settings** for the full list with inline
 explanations.
@@ -149,12 +149,17 @@ explanations.
 ## Error reporting
 
 Uncaught exceptions and unhandled rejections in the extension host can be
-reported for crash diagnosis, using the same `agiWorkforce.telemetryEnabled`
-setting and endpoint as usage telemetry above. A report is sent only when
+reported for crash diagnosis to `agiWorkforce.telemetryEndpoint`, under the
+same `agiWorkforce.telemetryEnabled` setting. A report is sent only when
 both that setting and VS Code's own telemetry setting allow it. Every report
 is scrubbed before it leaves your machine: message text, file names, and
 URLs are dropped, leaving only the error's type name and the bare function
 names from its stack.
+
+Usage events use the product analytics vocabulary shared by every AGI
+Workforce app and go to your account at `/api/analytics/events`. They are sent
+only when this setting, VS Code's telemetry setting and your account's privacy
+choices all allow product analytics, and carry no prompt, code or file names.
 
 ## Support
 

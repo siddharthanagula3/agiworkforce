@@ -62,25 +62,6 @@ nothing is left.
 
 Code: `apps/web/public/voice-samples/manifest.json:2-2`, `apps/mobile/src/features/voice/components/VoicePickerSheet.tsx:270-270`
 
-## S48.18: Input-device selection.
-
-- Done when: The user can choose which microphone (input device) voice uses.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-## S48.20: Speaker/Bluetooth routing.
-
-- Done when: On devices with a speaker and Bluetooth, the user can route voice audio between speaker, earpiece/headset and Bluetooth.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S48.28: Open a generated document from Voice.
 
 - Done when: A document generated during voice can be opened from the voice view.
@@ -90,16 +71,6 @@ Code: `apps/web/public/voice-samples/manifest.json:2-2`, `apps/mobile/src/featur
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-
-## S48.29: Attach image during Voice.
-
-- Done when: The user can attach an image to the conversation while voice continues.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
 
 ## S48.40: Remote coding-session voice control.
 

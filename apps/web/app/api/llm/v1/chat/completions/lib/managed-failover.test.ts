@@ -37,6 +37,9 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 vi.mock('./request-processor', () => ({
   resolveRequestEffort: vi.fn(() => undefined),
   buildThinkingConfig: vi.fn(() => undefined),
+  fastTierFor: vi.fn((provider: string, model: string) =>
+    provider === 'anthropic' && model === 'fast-capable' ? { priceMultiplier: 2 } : null,
+  ),
 }));
 
 import {
@@ -656,6 +659,24 @@ describe('attempt view (attribution + single reservation)', () => {
     expect(view.requestId).toBe(processed.requestId);
     expect(processed.chatRequest.model).toBe('primary-model');
     expect(processed.usedFallback).toBe(false);
+  });
+
+  it('keeps fast mode only when the failover model offers it on the first-party route', () => {
+    const processed = makeProcessed();
+    const fast = { ...processed, llmRequest: { ...processed.llmRequest, speed: 'fast' as const } };
+
+    expect(buildFailoverAttemptView(fast, 'fast-capable', 'anthropic').llmRequest.speed).toBe(
+      'fast',
+    );
+    expect(buildFailoverAttemptView(fast, 'fast-capable', 'openrouter').llmRequest.speed).toBe(
+      undefined,
+    );
+    expect(buildFailoverAttemptView(fast, 'candidate-a', 'anthropic').llmRequest.speed).toBe(
+      undefined,
+    );
+    expect(buildFailoverAttemptView(processed, 'fast-capable', 'anthropic').llmRequest.speed).toBe(
+      undefined,
+    );
   });
 
   it('counts each rotation as one retry and leaves the un-rotated request unknown', () => {

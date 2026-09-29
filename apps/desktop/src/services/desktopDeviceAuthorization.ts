@@ -1,6 +1,7 @@
 import {
   pollDeviceAuthorization,
   requestDeviceAuthorization,
+  slowedDevicePollIntervalMs,
   type DeviceAuthorizationPost,
 } from '@agiworkforce/client-runtime';
 
@@ -53,13 +54,18 @@ export async function authorizeDesktopDevice({
   const authorization = await requestDeviceAuthorization(origin, post, 'desktop');
   await openAuthorization(authorization.verificationUrl);
 
-  const maxPolls = Math.max(1, Math.ceil(authorization.expiresInMs / authorization.pollIntervalMs));
-  for (let attempt = 0; attempt < maxPolls; attempt += 1) {
+  const deadline = Date.now() + authorization.expiresInMs;
+  let pollIntervalMs = authorization.pollIntervalMs;
+  while (Date.now() + pollIntervalMs <= deadline) {
     if (signal?.aborted) throw abortError();
-    await wait(authorization.pollIntervalMs, signal);
+    await wait(pollIntervalMs, signal);
     if (signal?.aborted) throw abortError();
 
     const result = await pollDeviceAuthorization(origin, authorization.deviceCode, post);
+    if (result.kind === 'slow_down') {
+      pollIntervalMs = slowedDevicePollIntervalMs(pollIntervalMs, result);
+      continue;
+    }
     if (result.kind === 'approved') {
       return {
         accessToken: result.token,

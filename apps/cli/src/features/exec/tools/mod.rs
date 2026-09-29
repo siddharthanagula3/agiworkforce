@@ -2918,6 +2918,7 @@ decision = "deny"
         let catalog_names: BTreeSet<String> =
             crate::runtime::tool_catalog::all_builtin_tool_definitions()
                 .into_iter()
+                .chain(crate::runtime::tool_catalog::image_tool_definitions(None))
                 .map(|tool| tool.name)
                 .collect();
         let mut dispatched_names = dispatched_tool_names_from_source();
@@ -2934,7 +2935,9 @@ decision = "deny"
         );
         let agent_runtime_tools = BTreeSet::from(["task".to_string(), "update_plan".to_string()]);
 
-        for dispatched_name in &dispatched_names {
+        let retired_with_refusal = BTreeSet::from(["lsp_diagnostics".to_string()]);
+
+        for dispatched_name in dispatched_names.difference(&retired_with_refusal) {
             assert!(
                 catalog_names.contains(dispatched_name),
                 "{dispatched_name} has a runtime dispatcher but no tool catalog entry"

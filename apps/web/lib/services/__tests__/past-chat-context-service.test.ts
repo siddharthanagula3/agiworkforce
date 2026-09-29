@@ -6,6 +6,7 @@ import {
   retrievePastChatContext,
   selectRelevantPastChatExcerpts,
   PAST_CHAT_DEGRADED_NOTICE,
+  recentChatsContextLoader,
   type PastChatExcerpt,
 } from '../past-chat-context-service';
 
@@ -43,6 +44,7 @@ describe('loadPastChatExcerpts', () => {
     expect(sql).toContain('($3::uuid is null or c.id <> $3::uuid)');
     expect(sql).toContain('c.deleted_at is null');
     expect(sql).toContain('coalesce(c.is_temporary, false) = false');
+    expect(sql).toContain('c.google_user_data_at is null');
     expect(params.slice(0, 3)).toEqual(['user-1', 'org-1', 'conversation-current']);
     expect(params.slice(3)).toContain('%favourite%');
   });
@@ -232,6 +234,7 @@ describe('semantic recall', () => {
     expect(hydrateSql).toContain('c.user_id = $1');
     expect(hydrateSql).toContain('coalesce(c.is_temporary, false) = false');
     expect(hydrateSql).toContain('m.id = any($4::uuid[])');
+    expect(hydrateSql).toContain('c.google_user_data_at is null');
     expect(result.prompt).toContain('bowline');
   });
 
@@ -250,5 +253,18 @@ describe('semantic recall', () => {
 
     expect(result.mode).toBe('keyword');
     expect(result.citations).toHaveLength(1);
+  });
+});
+
+describe('recent chats', () => {
+  it('never reads a conversation that holds Google user data', async () => {
+    const query = vi.fn().mockResolvedValue([row()]);
+
+    await recentChatsContextLoader({ query }, { userId: 'user-1', organizationId: null }).load(
+      {} as never,
+    );
+
+    const [sql] = query.mock.calls[0] as [string];
+    expect(sql).toContain('c.google_user_data_at is null');
   });
 });

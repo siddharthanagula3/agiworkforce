@@ -45,6 +45,8 @@ export interface RetentionSweepResult {
   cutoff: string;
   conversationsDeleted: number;
   conversationsHeld: number;
+  /** Finished runs of workspace routines deleted on the same window. */
+  routineRunsDeleted: number;
   activeHolds: number;
   dryRun: boolean;
   error: string | null;
@@ -233,6 +235,7 @@ export async function sweepOrganizationRetention(
     cutoff,
     conversationsDeleted: 0,
     conversationsHeld: 0,
+    routineRunsDeleted: 0,
     activeHolds: 0,
     dryRun,
     error: null as string | null,
@@ -338,10 +341,17 @@ export async function sweepOrganizationRetention(
       remaining = batch === RETENTION_SWEEP_MAX_BATCHES - 1;
     }
 
+    // A routine's run output holds what it fetched, connector data included,
+    // so it keeps the conversation clock. Held workspaces keep every run: a
+    // run carries no subject column for a hold to be matched against.
+    const routineRunsDeleted =
+      activeHolds === 0 ? await sweepRoutineRuns(db, organizationId, cutoff) : 0;
+
     const result: RetentionSweepResult = {
       ...base,
-      outcome: totalDeleted > 0 ? 'deleted' : 'nothing_due',
+      outcome: totalDeleted > 0 || routineRunsDeleted > 0 ? 'deleted' : 'nothing_due',
       conversationsDeleted: totalDeleted,
+      routineRunsDeleted,
       conversationsHeld,
       activeHolds,
       // Said out loud so a workspace clearing a large backlog can see it is
@@ -362,6 +372,36 @@ export async function sweepOrganizationRetention(
     await recordSweep(db, result).catch(() => undefined);
     return result;
   }
+}
+
+// Only settled runs: a running or awaiting_approval run is live work, and a
+// status added later stays untouched until it is named here.
+const TERMINAL_ROUTINE_RUN_STATUSES = ['success', 'failed', 'timeout', 'cancelled'] as const;
+
+async function sweepRoutineRuns(
+  db: DatabaseAdapter,
+  organizationId: string,
+  cutoff: string,
+): Promise<number> {
+  let deleted = 0;
+  for (let batch = 0; batch < RETENTION_SWEEP_MAX_BATCHES; batch++) {
+    const rows = await db.query<{ id: string }>(
+      `delete from public.scheduled_task_runs
+        where id in (
+          select run.id from public.scheduled_task_runs run
+            join public.scheduled_tasks task on task.id = run.task_id
+           where task.organization_id = $1
+             and run.status = any ($4::text[])
+             and coalesce(run.completed_at, run.started_at) < $2
+           limit $3
+        )
+        returning id`,
+      [organizationId, cutoff, RETENTION_SWEEP_BATCH, TERMINAL_ROUTINE_RUN_STATUSES],
+    );
+    deleted += rows.length;
+    if (rows.length < RETENTION_SWEEP_BATCH) break;
+  }
+  return deleted;
 }
 
 // Least-recently-swept first: ordered by id, the same head was swept nightly

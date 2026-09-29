@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { CloudCodePullRequestStatusReply } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -24,9 +25,12 @@ async function handleStatus(request: NextRequest, context: RouteContext) {
 
   const { sessionId } = await context.params;
   try {
-    return NextResponse.json(
-      await readCloudCodeSessionPullRequestStatus(db, { userId, organizationId }, sessionId),
+    const status: CloudCodePullRequestStatusReply = await readCloudCodeSessionPullRequestStatus(
+      db,
+      { userId, organizationId },
+      sessionId,
     );
+    return NextResponse.json(status);
   } catch (error) {
     if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
     if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);

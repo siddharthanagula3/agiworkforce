@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from 'expo-router';
@@ -85,7 +86,7 @@ function ProjectNotice({
       </Text>
       <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>{message}</Text>
       {action && onPress ? (
-        <Pressable
+        <PressableBox
           accessibilityRole="button"
           accessibilityLabel={action}
           onPress={onPress}
@@ -94,7 +95,7 @@ function ProjectNotice({
           <Text style={{ color: colors.teal, fontSize: typeScale.subhead, fontWeight: '600' }}>
             {action}
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -134,7 +135,7 @@ function TabBar({
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         return (
-          <Pressable
+          <PressableBox
             key={tab.id}
             onPress={() => onTabChange(tab.id)}
             style={{
@@ -157,7 +158,7 @@ function TabBar({
             >
               {tab.label}
             </Text>
-          </Pressable>
+          </PressableBox>
         );
       })}
     </View>
@@ -267,14 +268,14 @@ export default function ProjectDetailScreen() {
           borderBottomColor: colors.border,
         }}
       >
-        <Pressable
+        <PressableBox
           onPress={handleBack}
           style={{ padding: 8, borderRadius: 8 }}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
           <ArrowLeft size={22} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
 
         <Text
           numberOfLines={1}
@@ -290,14 +291,14 @@ export default function ProjectDetailScreen() {
           {screenTitle}
         </Text>
 
-        <Pressable
+        <PressableBox
           onPress={handleOpenDrawer}
           style={{ padding: 8, borderRadius: 8 }}
           accessibilityLabel="Open menu"
           accessibilityRole="button"
         >
           <Menu size={22} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       </View>
 
       <View style={{ flex: 1 }} testID="project-detail-scroll">

@@ -5,4 +5,9 @@ export type ThreadListParams = {
   limit?: number;
   cwd?: string;
   includeArchived?: boolean;
+  /**
+   * Also list the account's open cloud Code sessions, after the local
+   * threads on the first page.
+   */
+  includeCloud?: boolean;
 };

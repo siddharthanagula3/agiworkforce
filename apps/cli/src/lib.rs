@@ -66,6 +66,7 @@ pub mod repl;
 pub mod repo;
 pub mod safety;
 pub mod secret_redaction;
+pub mod secure_store;
 pub mod sensitive_files;
 pub mod sessions;
 pub mod skills;

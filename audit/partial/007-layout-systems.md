@@ -53,15 +53,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S7.19: Compact companion mode.
-
-- Done when: A compact companion mode shows a reduced chat UI (no sidebar or side panels) sized for quick questions.
-- Wave: 3
-- Already works on: desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S7.24: Sticky table headers.
 
 - Done when: Table headers stay pinned while a long table scrolls.

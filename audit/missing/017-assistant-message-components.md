@@ -18,6 +18,30 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
+## S17.23: Shorten answer.
+
+- Done when: One action rewrites an answer shorter.
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome
+
+## S17.24: Expand answer.
+
+- Done when: One action rewrites an answer longer/more detailed.
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome
+
+## S17.25: Change tone.
+
+- Done when: One action rewrites an answer in a different tone.
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome
+
+## S17.33: Save answer to Project knowledge.
+
+- Done when: From an answer, the user can save it into a Project's knowledge/sources.
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome
+
 ## S17.34: Save answer as a document.
 
 - Done when: From an answer, the user can save it as an editable document inside the product.

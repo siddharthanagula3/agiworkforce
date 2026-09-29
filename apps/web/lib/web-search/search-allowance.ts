@@ -1,4 +1,1 @@
-export type SearchAllowance =
-  | { status: 'available' | 'exhausted'; used: number; limit: number; windowDays: number }
-  | { status: 'unknown'; limit: number; windowDays: number }
-  | { status: 'paid' };
+export type { WebSearchAllowance as SearchAllowance } from '@agiworkforce/cloud-contracts';

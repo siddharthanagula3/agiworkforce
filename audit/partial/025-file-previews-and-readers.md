@@ -96,17 +96,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S25.13: Page navigation.
-
-- Done when: Users can navigate pages of a multi-page document.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S25.14: Zoom controls.
 
 - Done when: Viewers offer zoom controls.
@@ -141,18 +130,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S25.22: Citation-linked highlighting.
-
-- Done when: Opening a citation highlights the cited passage in the file.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
 ## S25.25: Full-screen mode.

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -120,7 +121,7 @@ export function RecordingOverlay({
       {/* Action buttons */}
       <View className="flex-row items-center justify-center gap-8">
         {/* Cancel */}
-        <Pressable
+        <PressableBox
           onPress={handleCancel}
           className="w-12 h-12 rounded-full items-center justify-center"
           style={{ backgroundColor: colors.voiceControlSurface }}
@@ -128,10 +129,10 @@ export function RecordingOverlay({
           accessibilityRole="button"
         >
           <X size={22} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
 
         {/* Send */}
-        <Pressable
+        <PressableBox
           onPress={handleSend}
           className="w-14 h-14 rounded-full items-center justify-center active:opacity-80"
           style={{ backgroundColor: colors.terraCotta }}
@@ -139,7 +140,7 @@ export function RecordingOverlay({
           accessibilityRole="button"
         >
           <Check size={24} color={colors.accentText} />
-        </Pressable>
+        </PressableBox>
       </View>
     </Animated.View>
   );

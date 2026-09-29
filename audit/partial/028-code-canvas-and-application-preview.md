@@ -79,18 +79,6 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S28.07: Code completion where offered.
-
-- Done when: The code editor offers code completion (where the product offers it).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S28.08: Search across generated files.
 
 - Done when: The user can search across all the generated files of a project.
@@ -150,6 +138,30 @@ Code: `apps/web/lib/artifact-sandbox.ts:95-95`
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
+## S28.22: AI-backed app behavior through a brokered API.
+
+- Done when: An app can call AI through a brokered product API instead of embedding keys.
+- Wave: 3
+- Already works on: web
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| desktop | missing | Not built on this surface. |  |
+| mobile | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
+
+## S28.23: App-local storage or database configuration.
+
+- Done when: An app can be given persistent local storage or a database, configured by the user.
+- Wave: 3
+- Already works on: web
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| desktop | missing | Not built on this surface. |  |
+| mobile | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
+
 ## S28.25: Export project archive.
 
 - Done when: The user can export a whole multi-file project as an archive (e.g. zip).
@@ -180,15 +192,6 @@ Code: `apps/web/lib/artifact-sandbox.ts:95-95`
 - Done when: The user can publish the app to a shareable preview link.
 - Wave: 3
 - Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | missing | Not built on this surface. |  |
-
-## S28.28: Publish production version.
-
-- Done when: The user can publish a separate production version (stable URL or domain) distinct from previews.
-- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

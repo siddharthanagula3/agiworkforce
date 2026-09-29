@@ -6,11 +6,23 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S48.18: Input-device selection.
+
+- Done when: The user can choose which microphone (input device) voice uses.
+- Wave: 4
+- Build on: web, desktop, cli
+
 ## S48.25: View images and maps during Voice.
 
 - Done when: Voice replies can put images or maps on screen during the conversation.
 - Wave: 4
 - Build on: web, desktop, mobile
+
+## S48.29: Attach image during Voice.
+
+- Done when: The user can attach an image to the conversation while voice continues.
+- Wave: 4
+- Build on: web, desktop
 
 ## S48.31: Screen sharing.
 

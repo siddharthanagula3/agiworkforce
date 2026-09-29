@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import {
+  CONVERSATION_SHARES_PATH,
+  ConversationShareListResponseSchema,
+  conversationSharePath,
+  type ConversationShareSummary,
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudDeleteConversationResponseSchema,
@@ -22,25 +26,8 @@ const BulkConversationResponseSchema = z.object({
   affectedCount: z.number().int().nonnegative(),
 });
 
-const SharedLinkSchema = z.object({
-  token: z.string().min(1),
-  title: z.string(),
-  shareUrl: z.string().url(),
-  modelId: z.string().nullable(),
-  provider: z.string().nullable(),
-  messageCount: z.number().int().nonnegative(),
-  visibility: z.enum(['public', 'organization']).default('public'),
-  createdAt: z.string(),
-  expiresAt: z.string(),
-  expired: z.boolean(),
-});
-
-const SharedLinkListResponseSchema = z.object({
-  shares: z.array(SharedLinkSchema),
-});
-
 export type BulkConversationAction = z.infer<typeof BulkConversationResponseSchema>['action'];
-export type SharedLinkSummary = z.infer<typeof SharedLinkSchema>;
+export type SharedLinkSummary = ConversationShareSummary;
 
 export interface ArchivedConversationSummary {
   id: string;
@@ -197,15 +184,15 @@ export async function applyBulkConversationAction(action: BulkConversationAction
 }
 
 export async function listSharedLinks(signal?: AbortSignal): Promise<SharedLinkSummary[]> {
-  const response = await fetch('/api/share', { credentials: 'include', signal });
+  const response = await fetch(CONVERSATION_SHARES_PATH, { credentials: 'include', signal });
   if (!response.ok) {
     throw await responseError(response, 'Failed to load shared links');
   }
-  return SharedLinkListResponseSchema.parse(await response.json()).shares;
+  return ConversationShareListResponseSchema.parse(await response.json()).shares;
 }
 
 export async function revokeSharedLink(token: string): Promise<void> {
-  const response = await fetch(`/api/share/${encodeURIComponent(token)}`, {
+  const response = await fetch(conversationSharePath(token), {
     method: 'DELETE',
     credentials: 'include',
     headers: await addCsrfHeaders(),

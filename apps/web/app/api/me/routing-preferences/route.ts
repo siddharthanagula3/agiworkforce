@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { RoutingPreferencesSchema, type RoutingPreferences } from '@agiworkforce/cloud-contracts';
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
@@ -12,12 +12,17 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 
-const RoutingPreferencesSchema = z.object({
-  us_only: z.boolean().optional(),
-  geo_overlay: z.enum(['auto', 'us', 'in', 'cn']).optional(),
-});
-
-type RoutingPreferences = z.infer<typeof RoutingPreferencesSchema>;
+/** Each stored field is read on its own, so one invalid value never hides the rest. */
+function readStoredPreferences(value: unknown): RoutingPreferences {
+  if (!value || typeof value !== 'object') return {};
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(RoutingPreferencesSchema.shape).flatMap(([key, field]) => {
+      const parsed = field.safeParse(record[key]);
+      return parsed.success && parsed.data !== undefined ? [[key, parsed.data]] : [];
+    }),
+  ) as RoutingPreferences;
+}
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'me');
@@ -30,17 +35,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       'select routing_preferences from profiles where id = $1 limit 1',
       [userId],
     );
-    const raw = row?.routing_preferences;
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-      return NextResponse.json({});
-    }
-    return NextResponse.json(raw);
+    return NextResponse.json(readStoredPreferences(row?.routing_preferences));
   } catch (error) {
     logger.warn(
       { userId, error: error instanceof Error ? error.message : String(error) },
       '[routing-preferences] read failed · returning {}',
     );
-    return NextResponse.json({});
+    const preferences: RoutingPreferences = {};
+    return NextResponse.json(preferences);
   }
 }
 

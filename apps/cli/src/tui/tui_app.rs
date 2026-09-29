@@ -7194,6 +7194,11 @@ async fn send_message_with_prompt(
             let partial = app.stream_buffer.clone();
             render(terminal, app)?;
             app.session.cancel_turn(&partial).await;
+            crate::cloud::product_analytics::record(
+                &app.config,
+                app.session.privacy_mode,
+                "generation_stopped",
+            );
             app.status_notice = Some(("stopped the turn".to_string(), Instant::now()));
             if !partial.is_empty() {
                 app.chat_messages.push(ChatMessage {

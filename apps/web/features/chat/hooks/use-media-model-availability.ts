@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  MANAGED_MEDIA_AVAILABILITY_PATH,
   ManagedMediaModelAvailabilityResponseSchema,
   type ManagedMediaModelAdmission,
 } from '@agiworkforce/cloud-contracts';
@@ -62,7 +63,7 @@ async function requestMediaModelAvailability(
 ): Promise<ManagedMediaModelAdmission[]> {
   let response: Response | undefined;
   for (let requestAttempt = 0; requestAttempt < 2; requestAttempt += 1) {
-    response = await fetch('/api/media/availability', {
+    response = await fetch(MANAGED_MEDIA_AVAILABILITY_PATH, {
       method: 'GET',
       cache: 'no-store',
       credentials: 'same-origin',

@@ -73,6 +73,7 @@ export interface ProviderUsageObservation {
   routeId?: string | null;
   upstreamProvider?: string;
   providerReportedCostUsd?: number;
+  speed?: 'standard' | 'fast';
 }
 
 export interface ServerToolUsageInput {
@@ -186,6 +187,7 @@ function toTokenUsage(observation: ProviderUsageObservation): TokenUsage {
     cacheReadInputTokens: observation.cacheReadTokens,
     cacheCreationInputTokens: observation.cacheWriteTokens,
     cacheCreation1hInputTokens: observation.cacheWrite1hTokens,
+    ...(observation.speed ? { speed: observation.speed } : {}),
   };
 }
 
@@ -217,6 +219,7 @@ function normalizeObservation(
     reasoningTokens: nonNegative(observation.reasoningTokens),
     ...(observation.upstreamProvider ? { upstreamProvider: observation.upstreamProvider } : {}),
     ...(providerReportedCostUsd !== undefined ? { providerReportedCostUsd } : {}),
+    ...(observation.speed ? { speed: observation.speed } : {}),
   };
 }
 
@@ -313,43 +316,86 @@ export function addToolSpend(target: ObservedProviderUsage, microusd: number | u
   if (toolSpendMicrousd > 0) target.toolSpendMicrousd = toolSpendMicrousd;
 }
 
+/**
+ * The aggregate split for pricing when calls were not all observed: each call
+ * observed as fast is priced on its own at its tier, and the rest of the tokens
+ * at the standard rate, so one fast call never reprices the whole turn.
+ */
+function splitAggregateBySpeed(usage: ObservedProviderUsage): {
+  fast: ProviderUsageObservation[];
+  standard: TokenUsage;
+} {
+  const fast = (usage.providerCallObservations ?? []).filter(
+    (observation) => observation.speed === 'fast',
+  );
+  const less = (total: number, pick: (observation: ProviderUsageObservation) => number) =>
+    nonNegative(total - fast.reduce((sum, observation) => sum + pick(observation), 0));
+  const inputTokens = less(usage.inputTokens, (observation) => observation.inputTokens);
+  const outputTokens = less(usage.outputTokens, (observation) => observation.outputTokens);
+  return {
+    fast,
+    standard: {
+      promptTokens: inputTokens,
+      completionTokens: outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      cacheReadInputTokens: less(
+        usage.cacheReadTokens,
+        (observation) => observation.cacheReadTokens,
+      ),
+      cacheCreationInputTokens: less(
+        usage.cacheWriteTokens,
+        (observation) => observation.cacheWriteTokens,
+      ),
+      cacheCreation1hInputTokens: less(
+        usage.cacheWrite1hTokens,
+        (observation) => observation.cacheWrite1hTokens,
+      ),
+    },
+  };
+}
+
+function observedCallProviderCostDollars(
+  observation: ProviderUsageObservation,
+  fallbackPricing: ProviderUsagePricingContext,
+): number {
+  const recordedCost = observation.costDollars;
+  if (Number.isFinite(recordedCost) && recordedCost !== undefined && recordedCost >= 0) {
+    return recordedCost;
+  }
+  return LLMCostCalculator.calculateCostDollars(
+    observation.provider ?? fallbackPricing.provider,
+    observation.model ?? fallbackPricing.model,
+    toTokenUsage(observation),
+    undefined,
+    observation.routeId ?? fallbackPricing.routeId,
+  );
+}
+
 export function calculateObservedProviderUsageCostDollars(
   usage: ObservedProviderUsage,
   fallbackPricing: ProviderUsagePricingContext,
 ): number {
   const observations = usage.providerCallObservations;
   if (observations?.length === usage.providerCalls && observations.length > 0) {
-    return observations.reduce((total, observation) => {
-      const recordedCost = observation.costDollars;
-      if (Number.isFinite(recordedCost) && recordedCost !== undefined && recordedCost >= 0) {
-        return total + recordedCost;
-      }
-      return (
-        total +
-        LLMCostCalculator.calculateCostDollars(
-          observation.provider ?? fallbackPricing.provider,
-          observation.model ?? fallbackPricing.model,
-          toTokenUsage(observation),
-          undefined,
-          observation.routeId ?? fallbackPricing.routeId,
-        )
-      );
-    }, 0);
+    return observations.reduce(
+      (total, observation) => total + observedCallProviderCostDollars(observation, fallbackPricing),
+      0,
+    );
   }
 
-  return LLMCostCalculator.calculateCostDollars(
-    fallbackPricing.provider,
-    fallbackPricing.model,
-    {
-      promptTokens: usage.inputTokens,
-      completionTokens: usage.outputTokens,
-      totalTokens: usage.inputTokens + usage.outputTokens,
-      cacheReadInputTokens: usage.cacheReadTokens,
-      cacheCreationInputTokens: usage.cacheWriteTokens,
-      cacheCreation1hInputTokens: usage.cacheWrite1hTokens,
-    },
-    undefined,
-    fallbackPricing.routeId,
+  const { fast, standard } = splitAggregateBySpeed(usage);
+  return (
+    fast.reduce(
+      (total, observation) => total + observedCallProviderCostDollars(observation, fallbackPricing),
+      0,
+    ) +
+    LLMCostCalculator.calculateCostDollars(
+      fallbackPricing.provider,
+      fallbackPricing.model,
+      standard,
+      undefined,
+      fallbackPricing.routeId,
+    )
   );
 }
 
@@ -367,43 +413,36 @@ export function calculateObservedListCostDollars(
   usage: ObservedProviderUsage,
   fallbackPricing: ProviderUsagePricingContext,
 ): number {
+  const observedCallListCost = (observation: ProviderUsageObservation): number =>
+    LLMCostCalculator.calculateListCost(
+      observation.model ?? fallbackPricing.model,
+      toTokenUsage(observation),
+    ) ?? observedCallProviderCostDollars(observation, fallbackPricing);
+
   const observations = usage.providerCallObservations;
   if (observations?.length === usage.providerCalls && observations.length > 0) {
-    return observations.reduce((total, observation) => {
-      const tokenUsage = toTokenUsage(observation);
-      const listCost = LLMCostCalculator.calculateListCost(
-        observation.model ?? fallbackPricing.model,
-        tokenUsage,
-      );
-      if (listCost !== null) return total + listCost;
-      const recordedCost = observation.costDollars;
-      if (Number.isFinite(recordedCost) && recordedCost !== undefined && recordedCost >= 0) {
-        return total + recordedCost;
-      }
-      return (
-        total +
-        LLMCostCalculator.calculateCostDollars(
-          observation.provider ?? fallbackPricing.provider,
-          observation.model ?? fallbackPricing.model,
-          tokenUsage,
-          undefined,
-          observation.routeId ?? fallbackPricing.routeId,
-        )
-      );
-    }, 0);
+    return observations.reduce(
+      (total, observation) => total + observedCallListCost(observation),
+      0,
+    );
   }
 
-  const aggregateUsage: TokenUsage = {
-    promptTokens: usage.inputTokens,
-    completionTokens: usage.outputTokens,
-    totalTokens: usage.inputTokens + usage.outputTokens,
-    cacheReadInputTokens: usage.cacheReadTokens,
-    cacheCreationInputTokens: usage.cacheWriteTokens,
-    cacheCreation1hInputTokens: usage.cacheWrite1hTokens,
-  };
-  const listCost = LLMCostCalculator.calculateListCost(fallbackPricing.model, aggregateUsage);
-  if (listCost !== null) return listCost;
-  return calculateObservedProviderUsageCostDollars(usage, fallbackPricing);
+  const { fast, standard } = splitAggregateBySpeed(usage);
+  const standardList = LLMCostCalculator.calculateListCost(fallbackPricing.model, standard);
+  if (standardList === null && fast.length === 0) {
+    return calculateObservedProviderUsageCostDollars(usage, fallbackPricing);
+  }
+  return (
+    fast.reduce((total, observation) => total + observedCallListCost(observation), 0) +
+    (standardList ??
+      LLMCostCalculator.calculateCostDollars(
+        fallbackPricing.provider,
+        fallbackPricing.model,
+        standard,
+        undefined,
+        fallbackPricing.routeId,
+      ))
+  );
 }
 
 const MICROUSD_PER_USD = 1_000_000;

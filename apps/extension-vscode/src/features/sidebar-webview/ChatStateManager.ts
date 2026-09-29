@@ -1,4 +1,11 @@
 import * as path from 'node:path';
+import {
+  applyAgentActivityEvent,
+  createMessageQueue,
+  type AgentActivityEntry,
+  type AgentActivityState,
+  type MessageQueue,
+} from '@agiworkforce/client-runtime';
 import * as vscode from 'vscode';
 import {
   formatRelativeTime,
@@ -31,6 +38,7 @@ import {
   managedUsageBucketLabel,
   modelDisplayNameById,
   type AgentEventApprovalRiskLevel,
+  type AgentEventEnvelope,
   type AgentEventSource,
   type AgentEventToolCategory,
   type AgentMode,
@@ -100,6 +108,7 @@ import {
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
 import { SHOW_ARCHIVED_SESSIONS_COMMAND } from '../trees/sessionPickers';
+import { isCloudThread, showCloudSession } from '../trees/cloudSessions';
 import { rememberTypedText, typedTextFor } from './typedMessages';
 import {
   CONTINUE_IN_CLOUD_COMMAND,
@@ -179,6 +188,7 @@ import {
   type ExtensionUsageMeter,
 } from '../../data/usageMeter';
 import { developerAccessPlanLabel, planDisplayLabel } from '../account-auth/planLabel';
+import { trackProductEvent } from '../analytics/productAnalytics';
 
 type DeveloperSessionTrustMode = ThreadSummary['trustMode'];
 
@@ -799,6 +809,7 @@ export class ChatStateManager {
     isUiSettled: () => boolean;
   };
   private _cancelRequested = false;
+  private _agentActivity?: AgentActivityState;
   private _conversationEpoch = 0;
 
   conversationEpoch(): number {
@@ -812,7 +823,13 @@ export class ChatStateManager {
   private _resumeAttemptSeq = 0;
   private _turnLifecycleActive = false;
   private _turnLifecycleEpoch: number | undefined;
-  private readonly _queuedSends: PendingChatSend[] = [];
+  /**
+   * Follow-ups wait in the shared client send queue, as they do on web, mobile
+   * and Chrome; the queue holds their order and each id's payload stays here,
+   * since editor context and attachments are not queue commands.
+   */
+  private readonly _sendQueue: MessageQueue = createMessageQueue({ laneCap: MAX_QUEUED_SENDS });
+  private readonly _queuedSendPayloads = new Map<string, PendingChatSend>();
   private _inFlightSend?: PendingChatSend;
   private readonly _steeringSends = new Set<PendingChatSend>();
   private _loadedConversation?: ConversationLoadedPayload;
@@ -1073,6 +1090,7 @@ export class ChatStateManager {
       case 'cancel': {
         this._resumeAttemptSeq++;
         this._dropSteeringSends('Steer cancelled by Stop.');
+        trackProductEvent('generation_stopped', this._thread?.trustMode);
         await this._interruptActiveTurn();
         break;
       }
@@ -1274,16 +1292,16 @@ export class ChatStateManager {
       }
 
       case 'cancelQueuedMessage': {
-        const index = this._queuedSends.findIndex(
-          (request) => request.clientMessageId === msg.payload.clientMessageId,
+        const [command] = this._sendQueue.dequeueAllMatching(
+          (queued) => queued.id === msg.payload.clientMessageId,
         );
-        if (index === -1) break;
-        const [request] = this._queuedSends.splice(index, 1);
+        const request = command ? this._releaseQueuedPayload(command.id) : undefined;
         if (request !== undefined) this._dropSend(request, 'Queued follow-up cancelled.');
         break;
       }
 
       case 'regenerate': {
+        trackProductEvent('response_regenerated', this._thread?.trustMode);
         await vscode.commands.executeCommand(RETRY_LAST_MESSAGE_COMMAND);
         break;
       }
@@ -1718,7 +1736,7 @@ export class ChatStateManager {
         const index = this._pendingAttachments.findIndex((entry) => entry.id === id);
         if (index !== -1) this._pendingAttachments.splice(index, 1);
         this._removeOwnedAttachment(this._inFlightSend, id);
-        for (const queued of this._queuedSends) this._removeOwnedAttachment(queued, id);
+        for (const queued of this._queuedSendList()) this._removeOwnedAttachment(queued, id);
         for (const steering of this._steeringSends) this._removeOwnedAttachment(steering, id);
         break;
       }
@@ -1965,7 +1983,9 @@ export class ChatStateManager {
 
   private async _pushSessions(source: SessionListSource): Promise<void> {
     if (source === 'local') {
-      const threads = (await this._conversationTreeProvider?.getThreads()) ?? [];
+      const threads = ((await this._conversationTreeProvider?.getThreads()) ?? []).filter(
+        (thread) => !isCloudThread(thread),
+      );
       const inputs: SessionRowInput[] = threads.map((thread) => ({
         id: thread.id,
         title: thread.title,
@@ -2161,6 +2181,10 @@ export class ChatStateManager {
       }
 
       const listed = resolved.response.thread;
+      if (isCloudThread(listed)) {
+        void showCloudSession(resolved.response);
+        return false;
+      }
       const statusError = resumeStatusError(listed);
       if (statusError !== undefined) return this._rejectResume(statusError, RUNTIME_REFUSAL);
       if (listed.trustMode === 'unknown') {
@@ -2374,7 +2398,7 @@ export class ChatStateManager {
         if (this._activeTurn?.turnId === snapshot?.turnId) delete this._activeTurn;
         this._turnLifecycleActive = false;
         this._turnLifecycleEpoch = undefined;
-        const next = this._queuedSends.shift();
+        const next = this._takeQueuedSend();
         if (next !== undefined) void this._drainSendLifecycle(next, true);
       }
     }
@@ -2867,8 +2891,9 @@ export class ChatStateManager {
   }
 
   private _dropQueuedSends(message: string): void {
-    for (const request of this._queuedSends.splice(0)) {
-      this._dropSend(request, message);
+    for (const command of this._sendQueue.dequeueAll()) {
+      const request = this._releaseQueuedPayload(command.id);
+      if (request !== undefined) this._dropSend(request, message);
     }
   }
 
@@ -2892,7 +2917,7 @@ export class ChatStateManager {
       payload: {
         kind: 'cancelled',
         message,
-        queueDepth: this._queuedSends.length,
+        queueDepth: this._sendQueue.size(),
         attachmentIds: [],
         clientMessageId: request.clientMessageId,
       },
@@ -3091,7 +3116,7 @@ export class ChatStateManager {
     this.pushEditorContext();
 
     if (this._turnLifecycleActive) {
-      if (this._queuedSends.length + this._steeringSends.size >= MAX_QUEUED_SENDS) {
+      if (this._sendQueue.size() + this._steeringSends.size >= MAX_QUEUED_SENDS) {
         this._rejectFollowUpCapacity(request);
         return;
       }
@@ -3134,7 +3159,7 @@ export class ChatStateManager {
             payload: {
               kind: 'error',
               message: t('chatNotice.queuedNotStarted'),
-              queueDepth: this._queuedSends.length,
+              queueDepth: this._sendQueue.size(),
               attachmentIds: [],
               clientMessageId: current.clientMessageId,
             },
@@ -3143,9 +3168,8 @@ export class ChatStateManager {
         this._restoreUnconsumedAttachments(current);
         delete this._inFlightSend;
         current =
-          conversationEpoch === this._conversationEpoch &&
-          this._queuedSends[0]?.epoch === conversationEpoch
-            ? this._queuedSends.shift()
+          conversationEpoch === this._conversationEpoch
+            ? this._takeQueuedSend((next) => next.epoch === conversationEpoch)
             : undefined;
         queued = current !== undefined;
       }
@@ -3156,18 +3180,24 @@ export class ChatStateManager {
       }
       this._turnLifecycleActive = false;
       this._turnLifecycleEpoch = undefined;
-      const nextEpochRequest = this._queuedSends.shift();
+      const nextEpochRequest = this._takeQueuedSend();
       if (nextEpochRequest !== undefined) void this._drainSendLifecycle(nextEpochRequest, true);
     }
   }
 
   private _enqueueSend(request: PendingChatSend, kind: 'queued' | 'queue-fallback'): void {
-    if (this._queuedSends.length >= MAX_QUEUED_SENDS) {
+    if (this._sendQueue.size() >= MAX_QUEUED_SENDS) {
       this._rejectFollowUpCapacity(request);
       return;
     }
-    this._queuedSends.push(request);
-    const queueDepth = this._queuedSends.length;
+    this._queuedSendPayloads.set(request.clientMessageId, request);
+    this._sendQueue.enqueue({
+      id: request.clientMessageId,
+      value: request.text,
+      mode: 'prompt',
+      priority: 'next',
+    });
+    const queueDepth = this._sendQueue.size();
     this._post({
       type: 'followUpStatus',
       payload: {
@@ -3183,6 +3213,29 @@ export class ChatStateManager {
     });
   }
 
+  private _releaseQueuedPayload(id: string): PendingChatSend | undefined {
+    const request = this._queuedSendPayloads.get(id);
+    this._queuedSendPayloads.delete(id);
+    return request;
+  }
+
+  private _queuedSendList(): PendingChatSend[] {
+    return this._sendQueue
+      .getSnapshot()
+      .flatMap((command) => this._queuedSendPayloads.get(command.id) ?? []);
+  }
+
+  /** The next follow-up in order, taken only when the head is one `accept` allows. */
+  private _takeQueuedSend(
+    accept: (request: PendingChatSend) => boolean = () => true,
+  ): PendingChatSend | undefined {
+    const head = this._sendQueue.peek();
+    const request = head ? this._queuedSendPayloads.get(head.id) : undefined;
+    if (head === undefined || request === undefined || !accept(request)) return undefined;
+    this._sendQueue.dequeueIf(head.id);
+    return this._releaseQueuedPayload(head.id);
+  }
+
   private _rejectFollowUpCapacity(request: PendingChatSend): void {
     const attachmentIds = request.attachments.map((entry) => entry.id);
     const message = tPlural('chatNotice.followUpCapacity', MAX_QUEUED_SENDS);
@@ -3192,7 +3245,7 @@ export class ChatStateManager {
       payload: {
         kind: 'error',
         message,
-        queueDepth: this._queuedSends.length,
+        queueDepth: this._sendQueue.size(),
         attachmentIds,
         clientMessageId: request.clientMessageId,
       },
@@ -3241,7 +3294,7 @@ export class ChatStateManager {
           message: turnStillActive
             ? 'Steering the active turn.'
             : 'Steer was accepted just as the active turn finished.',
-          queueDepth: this._queuedSends.length,
+          queueDepth: this._sendQueue.size(),
           attachmentIds: [],
           clientMessageId: request.clientMessageId,
         },
@@ -3263,7 +3316,7 @@ export class ChatStateManager {
         payload: {
           kind: 'error',
           message: error instanceof Error ? error.message : t('chatNotice.steerFailed'),
-          queueDepth: this._queuedSends.length,
+          queueDepth: this._sendQueue.size(),
           attachmentIds: [],
           clientMessageId: request.clientMessageId,
         },
@@ -3361,7 +3414,7 @@ export class ChatStateManager {
         payload: {
           kind: 'error',
           message,
-          queueDepth: this._queuedSends.length,
+          queueDepth: this._sendQueue.size(),
           attachmentIds: [],
           clientMessageId: request.clientMessageId,
         },
@@ -3552,7 +3605,7 @@ export class ChatStateManager {
         const customInstructionInput = buildCustomInstructionInput(this._context, {
           projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
         });
-        const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.cachedFacts() ?? []);
+        const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
         const contextFiles = contextFilesForWorkspace(cwd, request.editorContext.contextFiles);
         const editorContextInputs: UserInput[] = request.editorContext.texts.map((text) => ({
           type: 'text',
@@ -3634,7 +3687,7 @@ export class ChatStateManager {
             type: 'turnStarted',
             payload: {
               queued: true,
-              queueRemaining: this._queuedSends.length,
+              queueRemaining: this._sendQueue.size(),
               clientMessageId: request.clientMessageId,
               text: request.text,
             },
@@ -4027,6 +4080,26 @@ export class ChatStateManager {
     }
   }
 
+  private _foldAgentEvent(envelope: AgentEventEnvelope): boolean {
+    const previous = this._agentActivity;
+    const next = applyAgentActivityEvent(previous, envelope);
+    this._agentActivity = next;
+    return next !== previous;
+  }
+
+  private _activityEntry<K extends 'progress' | 'tool'>(
+    kind: K,
+    id: string,
+  ): Extract<AgentActivityEntry, { kind: K }> | undefined {
+    return this._agentActivity?.entries.find(
+      (entry): entry is Extract<AgentActivityEntry, { kind: K }> =>
+        entry.kind === kind &&
+        (entry.kind === 'tool'
+          ? entry.toolCallId === id
+          : entry.kind === 'progress' && entry.progressId === id),
+    );
+  }
+
   private async _handleRuntimeEvent(
     runtime: LocalRuntimeClient,
     event: LocalRuntimeEvent,
@@ -4052,6 +4125,17 @@ export class ChatStateManager {
       this._post({ type: 'token', payload: { text: event.delta } });
       return;
     }
+    if (event.type === 'agent_event') {
+      this._foldAgentEvent(event.envelope);
+      return;
+    }
+    if (
+      'envelope' in event &&
+      event.envelope !== undefined &&
+      !this._foldAgentEvent(event.envelope)
+    ) {
+      return;
+    }
     if (event.type === 'source_list') {
       this._post({
         type: 'sourceList',
@@ -4060,13 +4144,15 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'progress_update') {
+      const entry = this._activityEntry('progress', event.progressId);
+      const detail = entry?.detail ?? event.detail;
       this._post({
         type: 'progressUpdate',
         payload: {
           progressId: event.progressId,
-          summary: event.summary,
-          ...(event.detail === undefined ? {} : { detail: event.detail }),
-          status: event.status,
+          summary: entry?.summary ?? event.summary,
+          ...(detail === undefined ? {} : { detail }),
+          status: entry?.status === 'cancelled' ? 'failed' : (entry?.status ?? event.status),
         },
       });
       return;
@@ -4077,26 +4163,29 @@ export class ChatStateManager {
         this._post({ type: 'planUpdate', payload: plan });
         return;
       }
+      const entry = this._activityEntry('tool', event.toolCallId);
       this._post({
         type: 'toolCallStart',
         payload: {
           toolUseId: event.toolCallId,
-          name: event.name,
-          category: event.category,
-          summary: event.summary,
-          input: event.input,
+          name: entry?.name ?? event.name,
+          category: entry?.category ?? event.category,
+          summary: entry?.summary ?? event.summary,
+          input: entry?.input ?? event.input,
         },
       });
       return;
     }
     if (event.type === 'tool_execution_end') {
+      const entry = this._activityEntry('tool', event.toolCallId);
+      const elapsedMs = entry?.elapsedMs ?? event.elapsedMs;
       this._post({
         type: 'toolCallEnd',
         payload: {
           toolUseId: event.toolCallId,
-          output: event.output,
-          isError: event.isError,
-          ...(event.elapsedMs === undefined ? {} : { elapsedMs: event.elapsedMs }),
+          output: entry?.output ?? event.output,
+          isError: entry === undefined ? event.isError : entry.status === 'failed',
+          ...(elapsedMs === undefined ? {} : { elapsedMs }),
         },
       });
       return;

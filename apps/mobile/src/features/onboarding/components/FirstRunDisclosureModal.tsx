@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Modal, View, ScrollView, StyleSheet } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useThemeColors, elevation } from '@/src/ui/theme';
@@ -97,22 +98,22 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               <Text style={[styles.privacyBody, { color: colors.textSecondary }]}>
                 {PRIVACY_NOTICE_BODY}
               </Text>
-              <Pressable
+              <PressableBox
                 testID="disclosure-privacy-policy-link"
                 onPress={() => void openInAppBrowser(PRIVACY_POLICY_URL)}
                 accessibilityRole="link"
                 accessibilityLabel="Read the AGI privacy policy"
               >
                 <Text style={[styles.privacyLink, { color: colors.teal }]}>Privacy Policy</Text>
-              </Pressable>
-              <Pressable
+              </PressableBox>
+              <PressableBox
                 testID="disclosure-dpdp-notice-link"
                 onPress={() => void openInAppBrowser(INDIA_DPDP_NOTICE_URL)}
                 accessibilityRole="link"
                 accessibilityLabel="Read the India DPDP notice"
               >
                 <Text style={[styles.privacyLink, { color: colors.teal }]}>India DPDP notice</Text>
-              </Pressable>
+              </PressableBox>
             </View>
 
             {copy.chineseHqProviderRows.length > 0 && (
@@ -150,7 +151,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               </View>
             )}
 
-            <Pressable
+            <PressableBox
               onPress={() => setLegalExpanded((v) => !v)}
               accessibilityRole="button"
               accessibilityLabel={legalExpanded ? 'Collapse legal detail' : 'Why we show this'}
@@ -159,7 +160,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               <Text style={[styles.legalToggleText, { color: colors.teal }]}>
                 {legalExpanded ? 'Hide legal detail' : 'Why we show this'}
               </Text>
-            </Pressable>
+            </PressableBox>
 
             {legalExpanded && (
               <View
@@ -177,7 +178,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
           </ScrollView>
 
           <View style={[styles.actions, { borderTopColor: colors.border }]}>
-            <Pressable
+            <PressableBox
               testID="disclosure-accept-btn"
               onPress={handleAccept}
               accessibilityRole="button"
@@ -187,8 +188,8 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               <Text style={[styles.acceptBtnText, { color: colors.accentText }]}>
                 {copy.acceptLabel}
               </Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               testID="disclosure-decline-btn"
               onPress={onDecline}
               accessibilityRole="button"
@@ -198,7 +199,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               <Text style={[styles.declineBtnText, { color: colors.textMuted }]}>
                 {copy.declineLabel}
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </View>

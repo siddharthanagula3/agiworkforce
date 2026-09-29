@@ -3,6 +3,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  CLOUD_CODE_HANDOFF_BODY_LIMIT_BYTES,
   CLOUD_CODE_HANDOFF_REFUSED_CODE,
   CloudCodeHandoffRequestSchema,
   admitCloudCodeHandoff,
@@ -18,6 +19,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { readBodyCapped } from '@/lib/url-fetch/guarded-fetch';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { openCloudCodeSession } from '@/lib/services/cloud-code-session-open';
 
@@ -61,9 +63,19 @@ async function handleHandoff(request: NextRequest) {
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
 
+  const tooLarge =
+    'This handoff record is larger than managed Code accepts. Hand off with a shorter plan and history.';
+  if (Number(request.headers.get('content-length') ?? 0) > CLOUD_CODE_HANDOFF_BODY_LIMIT_BYTES) {
+    throw createError.payloadTooLarge(tooLarge);
+  }
+  const bytes = await readBodyCapped(
+    new Response(request.body),
+    CLOUD_CODE_HANDOFF_BODY_LIMIT_BYTES,
+  );
+  if (bytes === null) throw createError.payloadTooLarge(tooLarge);
   let raw: unknown;
   try {
-    raw = await request.json();
+    raw = JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     throw createError.validation('Invalid JSON request body');
   }
@@ -71,7 +83,7 @@ async function handleHandoff(request: NextRequest) {
   if (!parsed.success) {
     throw createError.validation('The handoff record is not one managed Code can read');
   }
-  const { handoff, networkAccess, runtimeId, repository } = parsed.data;
+  const { handoff, networkAccess, fullNetworkAcknowledged, runtimeId, repository } = parsed.data;
 
   const admitted = admitCloudCodeHandoff(handoff, {
     now: new Date(),
@@ -109,6 +121,7 @@ async function handleHandoff(request: NextRequest) {
       requestId: handoffRequestId(userId, handoff),
       title: handoffTitle(handoff),
       networkAccess,
+      ...(fullNetworkAcknowledged === undefined ? {} : { fullNetworkAcknowledged }),
       ...(runtimeId ? { runtimeId } : {}),
       ...(repository
         ? { repository: { ...repository, branch } }

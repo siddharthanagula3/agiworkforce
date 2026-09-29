@@ -28,6 +28,7 @@ import {
   type TaskChipType,
 } from '@/src/features/chat/components/TaskChips';
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
+import { trackProductEvent } from '@/services/productAnalytics';
 import { ContextWarningChip } from '@/src/features/chat/components/ContextWarningChip';
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { confirmShareConversation } from '@/src/features/shared-links/shareConversation';
@@ -700,6 +701,7 @@ export default function ChatScreen() {
   }, [handleSend, id, isLoadingMessages, isStreaming]);
 
   const handleStop = useCallback(() => {
+    trackProductEvent('generation_stopped');
     stopStreaming();
   }, [stopStreaming]);
 
@@ -938,6 +940,7 @@ export default function ChatScreen() {
       modelPickerRef.current?.close();
       if (id && retryTarget) {
         stopSpeaking();
+        trackProductEvent('response_regenerated');
         retryMessage(id, retryTarget, newModelId);
       }
     },
@@ -1356,6 +1359,7 @@ export default function ChatScreen() {
           return;
         }
       }
+      trackProductEvent('response_regenerated');
       retryMessage(id, messageId);
     },
     [conversationMessages, handleSend, id, retryMessage, stopSpeaking],

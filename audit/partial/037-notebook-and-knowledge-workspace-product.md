@@ -66,22 +66,6 @@ Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S37.16: Saved chat responses.
-
-- Done when: The user can save a chat response into the notebook (as a note or source) in one action.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S37.17: Notebook notes.
-
-- Done when: The notebook holds user notes that can be listed, opened and edited.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S37.19: Citation-linked navigation.
 
 - Done when: A citation in an answer links to the cited source passage, opening it at that place.
@@ -198,11 +182,3 @@ Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S37.35: Notebook export.
-
-- Done when: The user can export a notebook (sources, notes, chats) as a file.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |

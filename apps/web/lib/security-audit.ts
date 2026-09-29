@@ -438,6 +438,9 @@ export interface AuditEventDetail {
   isCurrent?: boolean;
   deleted?: number;
   held?: number;
+  routineRunsDeleted?: number;
+  googleUserDataWithheld?: number;
+  purpose?: string;
   dryRun?: boolean;
   scope?: string;
   enabled?: boolean;
@@ -537,6 +540,9 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'ipAllowListAfter',
   'deleted',
   'held',
+  'routineRunsDeleted',
+  'googleUserDataWithheld',
+  'purpose',
   'dryRun',
   'scope',
   'count',

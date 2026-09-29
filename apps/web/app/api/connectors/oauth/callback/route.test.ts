@@ -228,10 +228,13 @@ describe('GET /api/connectors/oauth/callback', () => {
   });
 
   it('refuses to bind a grant when the callback arrives on a different account', async () => {
-    mocks.consumePending.mockResolvedValue(pending({ userId: 'victim-user' }));
+    mocks.consumePending.mockImplementation(async (_state: string, userId: string) =>
+      userId === 'victim-user' ? pending({ userId: 'victim-user' }) : null,
+    );
 
     const response = await GET(request(`?state=${STATE}&code=auth-code`));
 
+    expect(mocks.consumePending).toHaveBeenCalledWith(STATE, 'user-1');
     expect(location(response).searchParams.get('status')).toBe('invalid_state');
     expect(mocks.exchange).not.toHaveBeenCalled();
     expect(mocks.upsertGrant).not.toHaveBeenCalled();

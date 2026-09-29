@@ -176,6 +176,8 @@ export interface ChatRequest {
   endUserId?: string;
   thinking?: ThinkingConfig;
   effort?: Effort;
+  /** The model's fast output tier, sent only to a model whose catalogue entry has a fastTier. */
+  speed?: 'fast';
   responseFormat?: ChatResponseFormat;
   /**
    * The caller's zero-retention requirement, the same signal Auto routing's
@@ -326,6 +328,8 @@ export interface StreamChunkUsage {
   webFetchRequests?: number;
   codeExecutionRequests?: number;
   codeExecutionContainerIds?: string[];
+  /** The output tier the provider says served the call; the bill follows it. */
+  speed?: 'standard' | 'fast';
 }
 
 /**

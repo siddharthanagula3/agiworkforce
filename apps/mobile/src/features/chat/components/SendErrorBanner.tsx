@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { AlertTriangle, RotateCcw, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -78,7 +79,7 @@ export function SendErrorBanner({
         {message}
       </Text>
       {action && !waitingForCapacity ? (
-        <Pressable
+        <PressableBox
           testID="send-error-action"
           onPress={action.onPress}
           hitSlop={8}
@@ -91,10 +92,10 @@ export function SendErrorBanner({
           >
             {action.label}
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
       {onRetry && (
-        <Pressable
+        <PressableBox
           onPress={onRetry}
           disabled={waitingForCapacity}
           hitSlop={8}
@@ -107,16 +108,16 @@ export function SendErrorBanner({
           <Text style={{ fontSize: typeScale.caption, color: retryColor, fontWeight: '600' }}>
             Retry
           </Text>
-        </Pressable>
+        </PressableBox>
       )}
-      <Pressable
+      <PressableBox
         onPress={onDismiss}
         hitSlop={8}
         accessibilityLabel="Dismiss error"
         accessibilityRole="button"
       >
         <X size={14} color={colors.agentError} />
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

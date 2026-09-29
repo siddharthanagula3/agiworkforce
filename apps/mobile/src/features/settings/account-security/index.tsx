@@ -37,6 +37,7 @@ import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { TwoFactorSection } from './TwoFactorSection';
+import { AskFromSiriSetting } from '@/src/features/siri/AskFromSiriSetting';
 import {
   DEFAULT_SESSION_TIMEOUT,
   SESSION_TIMEOUT_MINUTES,
@@ -421,6 +422,7 @@ export default function AccountSecurityScreen() {
         <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
       ) : null}
 
+      {appMode === 'cloud' ? <AskFromSiriSetting /> : null}
       <TwoFactorSection
         status={appMode === 'cloud' ? status : null}
         statusLabel={twoFactorValue}

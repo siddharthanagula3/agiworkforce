@@ -1,4 +1,5 @@
 import { Alert } from 'react-native';
+import type { AgentEventSource } from '@agiworkforce/types';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { ExternalLink } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -16,10 +17,7 @@ function previewSnippet(snippet: string | undefined): string {
     : text;
 }
 
-export interface CitationSource {
-  title?: string;
-  url?: string;
-  snippet?: string;
+export interface CitationSource extends Partial<AgentEventSource> {
   publishedDate?: string;
 }
 

@@ -97,18 +97,6 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`
 
-## S66.08: File tree.
-
-- Done when: The coding workspace shows a browsable tree of the repository's files.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
 ## S66.09: File search.
 
 - Done when: The user searches the workspace for files by name from inside the coding surface.
@@ -142,18 +130,6 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-## S66.12: Editor tabs.
-
-- Done when: Several files can be open at once in editor tabs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
@@ -193,18 +169,6 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | mobile | missing | Not built on this surface. |  |
 
 Code: `apps/web/lib/e2b/gate.ts:16-16`
-
-## S66.16: Terminal tabs.
-
-- Done when: The user keeps several terminals open side by side or in tabs within the coding surface.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
 
 ## S66.17: Command-history view.
 

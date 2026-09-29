@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+import { GOOGLE_USER_DATA_FILE_HELD_MESSAGE } from '@/lib/connectors/google-user-data';
 import {
   OPEN_FILE_TOOL_NAME,
   executeFileTool,
@@ -16,8 +17,10 @@ function chunk(
   start: number | null,
   end: number | null,
   documentEnd: number | null = end,
+  googleUserData = false,
 ) {
   return {
+    google_user_data: googleUserData,
     source_kind: 'library_file',
     title: 'Q3 plan.pdf',
     content,
@@ -123,5 +126,38 @@ describe('open_file', () => {
     const result = await executeFileTool(OPEN_FILE_TOOL_NAME, { file_id: FILE_ID }, ctx);
 
     expect(result.content).not.toContain('The file continues');
+  });
+});
+
+describe('open_file on a file holding Google user data', () => {
+  const CONVERSATION_ID = '52d14f7e-0b3d-40c7-952d-987e841033c5';
+  const googleRows = [chunk('Drive notes', 0, 11, 11, true)];
+
+  function marks(query: ReturnType<typeof vi.fn>) {
+    return query.mock.calls.filter(([sql]) =>
+      String(sql).includes('set google_user_data_at = now()'),
+    );
+  }
+
+  it('marks the chat and holds the file back when the turn may reach a model that trains', async () => {
+    const { ctx, query } = context(googleRows, { conversationId: CONVERSATION_ID });
+
+    const result = await executeFileTool(OPEN_FILE_TOOL_NAME, { file_id: FILE_ID }, ctx);
+
+    expect(result).toEqual({ content: GOOGLE_USER_DATA_FILE_HELD_MESSAGE, isError: true });
+    expect(marks(query)[0]?.[1]).toEqual([CONVERSATION_ID, 'user-1']);
+  });
+
+  it('marks the chat and reads the file when the turn keeps to models that do not train', async () => {
+    const { ctx, query } = context(googleRows, {
+      conversationId: CONVERSATION_ID,
+      googleUserDataRouted: true,
+    });
+
+    const result = await executeFileTool(OPEN_FILE_TOOL_NAME, { file_id: FILE_ID }, ctx);
+
+    expect(result.isError).toBe(false);
+    expect(result.content).toContain('Drive notes');
+    expect(marks(query)).toHaveLength(1);
   });
 });

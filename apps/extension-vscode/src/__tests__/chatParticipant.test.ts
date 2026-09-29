@@ -85,6 +85,7 @@ function mockConfiguredModel(model: string): void {
 function installAccountMemory(facts: Array<{ id: string; text: string; createdAt: string }>): void {
   setAccountMemoryStore({
     cachedFacts: () => facts,
+    turnFacts: () => facts,
   } as unknown as AccountMemoryStore);
 }
 
