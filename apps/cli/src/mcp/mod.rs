@@ -604,6 +604,13 @@ pub async fn login_to_remote_server_for_client(
     Ok(credential_state(config))
 }
 
+fn remote_config_url(config: &McpServerConfig) -> Option<String> {
+    match config.as_transport() {
+        McpTransport::Stdio { .. } => None,
+        McpTransport::Sse { url, .. } | McpTransport::Http { url, .. } => Some(url),
+    }
+}
+
 pub fn is_remote_server(config: &McpServerConfig) -> bool {
     !matches!(config.as_transport(), McpTransport::Stdio { .. })
 }
@@ -624,6 +631,12 @@ async fn sign_in(
 ) -> Result<()> {
     if matches!(config.as_transport(), McpTransport::Stdio { .. }) {
         bail!("MCP server '{name}' runs locally over stdio and has nothing to sign in to");
+    }
+    if let Some(refusal) = crate::cloud::workspace_policy::mcp_server_refusal(
+        name,
+        remote_config_url(config).as_deref(),
+    ) {
+        bail!(refusal);
     }
     let hooks = build_client_hooks_with_browser(Arc::new(AutoDeclineHandler), browser);
     if let TransportConfig::Http {
@@ -841,6 +854,12 @@ impl McpConnection {
         config: &McpServerConfig,
         elicitation: Arc<dyn ElicitationHandler>,
     ) -> Result<Self> {
+        if let Some(refusal) = crate::cloud::workspace_policy::mcp_server_refusal(
+            name,
+            remote_config_url(config).as_deref(),
+        ) {
+            bail!(refusal);
+        }
         let transport = sandboxed_transport_config(config)
             .with_context(|| format!("MCP server '{name}' must run sandboxed"))?;
         let timeouts = McpTimeouts::default();
