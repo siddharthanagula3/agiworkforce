@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
       `https://github.com/login/oauth/authorize?client_id=Iv1.client-id&state=${'a'.repeat(64)}`,
   ),
   linkingAvailable: vi.fn(() => false),
+  recordAppInstallation: vi.fn(async (..._args: unknown[]): Promise<string | null> => null),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -47,6 +48,11 @@ vi.mock('@/lib/github-app', () => ({
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
 }));
 
+vi.mock('@/lib/github-install-app-return', async (importActual) => ({
+  ...(await importActual<typeof import('@/lib/github-install-app-return')>()),
+  recordAppInstallation: (...args: unknown[]) => mocks.recordAppInstallation(...args),
+}));
+
 import { GET } from './route';
 
 describe('GitHub installation callback ownership proof', () => {
@@ -55,6 +61,7 @@ describe('GitHub installation callback ownership proof', () => {
     mocks.execute.mockResolvedValue(undefined);
     mocks.cookieGet.mockReturnValue({ value: 'c'.repeat(64) });
     mocks.linkingAvailable.mockReturnValue(false);
+    mocks.recordAppInstallation.mockResolvedValue(null);
   });
 
   it('does not let a valid CSRF state claim an unverified installation id', async () => {
@@ -130,5 +137,42 @@ describe('GitHub installation callback ownership proof', () => {
       'http://localhost:3000/connectors?github=invalid_state',
     );
     expect(mocks.getAuthorizationUrl).not.toHaveBeenCalled();
+  });
+
+  it('records an app install against its pending row without a cookie or web session', async () => {
+    mocks.linkingAvailable.mockReturnValue(true);
+    mocks.cookieGet.mockReturnValue(undefined as never);
+    mocks.recordAppInstallation.mockResolvedValue('d'.repeat(64));
+
+    const response = await GET(
+      new NextRequest(
+        `http://localhost:3000/api/github/install?installation_id=987654&state=${'e'.repeat(64)}`,
+      ),
+    );
+
+    expect(mocks.recordAppInstallation).toHaveBeenCalledWith('e'.repeat(64), 987654);
+    expect(response.status).toBe(307);
+    expect(mocks.getAuthorizationUrl).toHaveBeenCalledWith(
+      'd'.repeat(64),
+      'http://localhost:3000/api/github/oauth/callback',
+    );
+    expect(mocks.cookieSet).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('keeps the cookie flow when the state belongs to no app install', async () => {
+    mocks.linkingAvailable.mockReturnValue(true);
+
+    const response = await GET(
+      new NextRequest(
+        `http://localhost:3000/api/github/install?installation_id=987654&state=${'c'.repeat(64)}`,
+      ),
+    );
+
+    expect(mocks.recordAppInstallation).toHaveBeenCalledWith('c'.repeat(64), 987654);
+    expect(response.status).toBe(307);
+    expect(mocks.cookieSet).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'github_pending_installation_id', value: '987654' }),
+    );
   });
 });
