@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Image as ImageIcon, PenLine, Search } from 'lucide-react-native';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { isWebSearchAvailable } from '@agiworkforce/search';
@@ -97,7 +98,7 @@ export function TaskChips({
         const active = activeChip === chip.type;
         const contentColor = active ? colors.teal : colors.textSecondary;
         return (
-          <Pressable
+          <PressableBox
             key={chip.type}
             onPress={() => handlePress(chip.type)}
             accessibilityLabel={chip.label}
@@ -132,7 +133,7 @@ export function TaskChips({
                 </Text>
               </View>
             )}
-          </Pressable>
+          </PressableBox>
         );
       })}
     </View>

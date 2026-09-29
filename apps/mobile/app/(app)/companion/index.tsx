@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Pressable, Alert } from 'react-native';
+import { View, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, RefreshCw, HelpCircle } from 'lucide-react-native';
@@ -193,33 +194,33 @@ export default function CompanionScreen() {
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       <View className="flex-row items-center px-3 h-12">
-        <Pressable
+        <PressableBox
           onPress={handleBack}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
         <Text variant="subheading" className="ml-2 flex-1">
           Remote
         </Text>
-        <Pressable
+        <PressableBox
           onPress={() => setShowDemo(true)}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Show companion walkthrough"
           accessibilityRole="button"
         >
           <HelpCircle size={18} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
         {status === 'connected' && (
-          <Pressable
+          <PressableBox
             onPress={() => requestAgentRefresh()}
             className="p-2 rounded-lg active:bg-white/5"
             accessibilityLabel="Refresh agents"
           >
             <RefreshCw size={18} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         )}
       </View>
 

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { View, Pressable, Modal, Dimensions } from 'react-native';
+import { View, Modal, Dimensions } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import {
   QrCode,
@@ -182,7 +183,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
         }}
       >
         {/* Dismiss tap zone (above the card) */}
-        <Pressable
+        <PressableBox
           style={{ flex: 1 }}
           onPress={handleSkip}
           accessibilityLabel="Dismiss walkthrough"
@@ -209,14 +210,14 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
           <View className="flex-row items-center justify-between mb-5">
             <View className="w-10 h-1 rounded-full bg-white/20 mx-auto" style={{ flex: 0 }} />
             <View style={{ flex: 1 }} />
-            <Pressable
+            <PressableBox
               onPress={handleSkip}
               className="p-1.5 rounded-full bg-white/5 active:bg-white/10"
               accessibilityLabel="Skip walkthrough"
               accessibilityRole="button"
             >
               <X size={16} color={colors.textMuted} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           {/* Step icon */}
@@ -258,14 +259,14 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
           <View className="flex-row items-center gap-3">
             {/* Prev button, only shown after first step */}
             {currentStep > 0 ? (
-              <Pressable
+              <PressableBox
                 onPress={handlePrev}
                 className="px-4 py-3 rounded-xl bg-white/5 active:bg-white/10"
                 accessibilityLabel="Previous step"
                 accessibilityRole="button"
               >
                 <ChevronLeft size={18} color={colors.textMuted} />
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {/* Step dots */}
@@ -274,7 +275,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             </View>
 
             {/* Next / Finish button */}
-            <Pressable
+            <PressableBox
               onPress={handleNext}
               className="flex-row items-center gap-2 px-5 py-3 rounded-xl active:opacity-80"
               style={{ backgroundColor: colors.teal }}
@@ -296,7 +297,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
                   <ChevronRight size={16} color={colors.accentText} />
                 </>
               )}
-            </Pressable>
+            </PressableBox>
           </View>
         </Animated.View>
       </Animated.View>

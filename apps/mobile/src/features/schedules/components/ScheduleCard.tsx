@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { View, Pressable, type GestureResponderEvent } from 'react-native';
+import { View, type GestureResponderEvent } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Clock, Trash2, ChevronDown, ChevronUp, Play } from 'lucide-react-native';
@@ -220,7 +221,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
         .delay(index * 60)
         .springify()}
     >
-      <Pressable
+      <PressableBox
         onPress={() => onPress(schedule.id)}
         className="mb-3 active:opacity-80"
         accessibilityLabel={`Schedule: ${schedule.name}, ${formatRecurrence(schedule)}`}
@@ -275,7 +276,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
               Next run: {formatRelativeTime(schedule.nextRunAt)}
             </Text>
             <View className="flex-row items-center gap-1">
-              <Pressable
+              <PressableBox
                 onPress={handleRunNow}
                 disabled={starting}
                 hitSlop={8}
@@ -286,9 +287,9 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
               >
                 <Play size={11} color={colors.textMuted} />
                 <Text className="text-xs text-white/40">{starting ? 'Starting…' : 'Run now'}</Text>
-              </Pressable>
+              </PressableBox>
               {/* History toggle */}
-              <Pressable
+              <PressableBox
                 onPress={handleToggleHistory}
                 hitSlop={8}
                 className="flex-row items-center gap-1 px-2 py-1 rounded-md active:bg-white/5"
@@ -301,8 +302,8 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
                 ) : (
                   <ChevronDown size={11} color={colors.textMuted} />
                 )}
-              </Pressable>
-              <Pressable
+              </PressableBox>
+              <PressableBox
                 onPress={handleDelete}
                 hitSlop={12}
                 className="p-1.5 rounded-md active:bg-red-500/10"
@@ -310,7 +311,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
                 accessibilityRole="button"
               >
                 <Trash2 size={14} color={colors.agentError} />
-              </Pressable>
+              </PressableBox>
             </View>
           </View>
 
@@ -328,7 +329,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             </>
           )}
         </Card>
-      </Pressable>
+      </PressableBox>
     </Animated.View>
   );
 }

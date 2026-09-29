@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { AlertCircle, Film, Square } from 'lucide-react-native';
 import Animated, {
   FadeInDown,
@@ -127,7 +128,7 @@ export function VideoGenProgress({
       ) : null}
 
       {onStop && !isError ? (
-        <Pressable
+        <PressableBox
           testID="video-gen-stop"
           onPress={onStop}
           disabled={stopping === true}
@@ -153,7 +154,7 @@ export function VideoGenProgress({
           >
             {stopping === true ? 'Stopping…' : 'Stop generating'}
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
 
       {stopError ? (

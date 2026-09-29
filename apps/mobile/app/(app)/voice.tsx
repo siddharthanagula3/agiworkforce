@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Alert,
   View,
-  Pressable,
   StatusBar,
   useWindowDimensions,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   ScrollView,
   TextInput,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -114,7 +114,7 @@ function CompanionOrb({
   onPressOut?: () => void;
 }) {
   return (
-    <Pressable
+    <PressableBox
       testID="voice-companion-orb"
       onPress={onPress}
       onPressIn={onPressIn}
@@ -126,7 +126,7 @@ function CompanionOrb({
       <View style={styles.orbWrapper}>
         <VoiceOrb phase={phase} audioLevel={audioLevel} size={120} glow />
       </View>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -332,14 +332,14 @@ export default function VoiceScreen() {
       <DarkGradientBg />
 
       {/* Close button */}
-      <Pressable
+      <PressableBox
         onPress={handleClose}
         style={[styles.closeBtn, { top: insets.top + 10 }]}
         accessibilityLabel="Close voice companion"
         accessibilityRole="button"
       >
         <X size={20} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
 
       <KeyboardAvoidingView
         style={styles.keyboardContent}
@@ -421,7 +421,7 @@ export default function VoiceScreen() {
                   <Text style={styles.fileSendError}>
                     The recording was transcribed, but could not be sent.
                   </Text>
-                  <Pressable
+                  <PressableBox
                     onPress={() => void handleRetryFileSend()}
                     disabled={retryingFileSend}
                     accessibilityRole="button"
@@ -431,7 +431,7 @@ export default function VoiceScreen() {
                     <Text style={styles.retryFileSendText}>
                       {retryingFileSend ? 'Sending…' : 'Retry sending'}
                     </Text>
-                  </Pressable>
+                  </PressableBox>
                 </>
               ) : null}
             </Animated.View>
@@ -457,7 +457,7 @@ export default function VoiceScreen() {
             editable={!sendingTyped}
             style={styles.composerInput}
           />
-          <Pressable
+          <PressableBox
             onPress={() => void handleSendTyped()}
             disabled={!typedDraft.trim() || sendingTyped}
             accessibilityRole="button"
@@ -466,7 +466,7 @@ export default function VoiceScreen() {
             style={[styles.sendButton, (!typedDraft.trim() || sendingTyped) && styles.sendDisabled]}
           >
             <ArrowUp size={20} color={colors.voiceCompanionBgEnd} />
-          </Pressable>
+          </PressableBox>
         </View>
         {typedError ? (
           <Text accessibilityLiveRegion="polite" style={styles.typedError}>
@@ -478,7 +478,7 @@ export default function VoiceScreen() {
         {!isTyping ? (
           <View style={[styles.controls, { paddingBottom: insets.bottom + 20 }]}>
             {/* Mute */}
-            <Pressable
+            <PressableBox
               onPress={toggleMute}
               style={[
                 styles.controlBtn,
@@ -492,10 +492,10 @@ export default function VoiceScreen() {
               ) : (
                 <Mic size={22} color={colors.textSecondary} />
               )}
-            </Pressable>
+            </PressableBox>
 
             {/* Push-to-talk mode toggle */}
-            <Pressable
+            <PressableBox
               testID="voice-companion-ptt-toggle"
               onPress={handlePttToggle}
               style={[
@@ -509,7 +509,7 @@ export default function VoiceScreen() {
               accessibilityState={{ selected: pttMode }}
             >
               <Hand size={22} color={pttMode ? colors.agentThinking : colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
 
             {/* TTS indicator, static, shows TTS is always on-device */}
             <View style={styles.controlBtn}>

@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { View, ScrollView, Pressable, Alert } from 'react-native';
+import { View, ScrollView, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -119,14 +120,14 @@ export default function AgentDetailScreen() {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
         <View className="flex-row items-center px-3 h-12">
-          <Pressable
+          <PressableBox
             onPress={handleBack}
             className="p-2 rounded-lg active:bg-white/5"
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
             <ArrowLeft size={20} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
           <Text variant="subheading" className="ml-2 flex-1">
             Agent Detail
           </Text>
@@ -136,7 +137,7 @@ export default function AgentDetailScreen() {
           <Text className="text-white/50 text-center text-sm mt-4">
             This agent is no longer running.
           </Text>
-          <Pressable
+          <PressableBox
             onPress={handleBack}
             className="mt-4 px-5 py-2.5 rounded-xl"
             style={({ pressed }) => ({
@@ -147,7 +148,7 @@ export default function AgentDetailScreen() {
             <Text className="text-sm font-medium" style={{ color: colors.teal }}>
               Back to Dashboard
             </Text>
-          </Pressable>
+          </PressableBox>
         </View>
       </SafeAreaView>
     );
@@ -170,25 +171,25 @@ export default function AgentDetailScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <View className="flex-row items-center px-3 h-12">
-        <Pressable
+        <PressableBox
           onPress={handleBack}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
         <Text variant="subheading" className="ml-2 flex-1" numberOfLines={1}>
           {agent.name}
         </Text>
-        <Pressable
+        <PressableBox
           onPress={handleRefresh}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Refresh agent status"
           accessibilityRole="button"
         >
           <RefreshCw size={18} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       </View>
 
       <ScrollView
@@ -268,7 +269,7 @@ export default function AgentDetailScreen() {
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">Controls</Text>
             <View className="flex-row gap-3">
               {agent.status === 'running' ? (
-                <Pressable
+                <PressableBox
                   onPress={() => handleCommand('pause')}
                   className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-amber-500/10 active:bg-amber-500/20"
                   accessibilityLabel="Pause agent"
@@ -276,9 +277,9 @@ export default function AgentDetailScreen() {
                 >
                   <Pause size={14} color={colors.agentWarning} />
                   <Text className="text-sm text-amber-400 font-medium">Pause</Text>
-                </Pressable>
+                </PressableBox>
               ) : (
-                <Pressable
+                <PressableBox
                   onPress={() => handleCommand('resume')}
                   className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl"
                   style={({ pressed }) => ({
@@ -291,9 +292,9 @@ export default function AgentDetailScreen() {
                   <Text className="text-sm font-medium" style={{ color: colors.teal }}>
                     Resume
                   </Text>
-                </Pressable>
+                </PressableBox>
               )}
-              <Pressable
+              <PressableBox
                 onPress={handleCancelWithConfirm}
                 className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 active:bg-red-500/20"
                 accessibilityLabel="Cancel agent"
@@ -301,7 +302,7 @@ export default function AgentDetailScreen() {
               >
                 <Square size={14} color={colors.agentError} />
                 <Text className="text-sm text-red-400 font-medium">Cancel</Text>
-              </Pressable>
+              </PressableBox>
             </View>
           </Animated.View>
         )}

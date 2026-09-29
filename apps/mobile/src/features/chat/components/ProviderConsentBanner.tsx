@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Alert, View, Pressable } from 'react-native';
+import { Alert, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Globe, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -76,7 +77,7 @@ export function ProviderConsentBanner({ state, onEnabled, onDismiss }: ProviderC
         >
           {message}
         </Text>
-        <Pressable
+        <PressableBox
           testID={PROVIDER_CONSENT_ENABLE_TEST_ID}
           onPress={() => setReviewing(true)}
           hitSlop={8}
@@ -86,8 +87,8 @@ export function ProviderConsentBanner({ state, onEnabled, onDismiss }: ProviderC
           <Text style={{ fontSize: typeScale.caption, color: colors.teal, fontWeight: '600' }}>
             {ENABLE_LABEL}
           </Text>
-        </Pressable>
-        <Pressable
+        </PressableBox>
+        <PressableBox
           testID={PROVIDER_CONSENT_DISMISS_TEST_ID}
           onPress={onDismiss}
           hitSlop={8}
@@ -95,7 +96,7 @@ export function ProviderConsentBanner({ state, onEnabled, onDismiss }: ProviderC
           accessibilityLabel={`Leave ${state.displayName} turned off`}
         >
           <X size={14} color={colors.textMuted} />
-        </Pressable>
+        </PressableBox>
       </View>
       <NamedProviderConsentModal
         providerId={reviewing ? state.providerId : null}

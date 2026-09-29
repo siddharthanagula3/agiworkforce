@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Pressable, Modal, TextInput, StyleSheet, KeyboardAvoidingView } from 'react-native';
+import { View, Modal, TextInput, StyleSheet, KeyboardAvoidingView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 import { Paperclip } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -75,14 +76,14 @@ export function MessageEditModal({
         behavior={keyboard.behavior}
         keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
-        <Pressable
+        <PressableBox
           style={[styles.backdrop, { backgroundColor: colors.scrim }]}
           onPress={closeEdit}
           accessibilityLabel="Dismiss edit dialog"
           accessibilityRole="button"
           accessible={false}
         >
-          <Pressable
+          <PressableBox
             style={[
               styles.dialog,
               {
@@ -132,12 +133,12 @@ export function MessageEditModal({
             ) : null}
 
             <View style={styles.buttonRow}>
-              <Pressable {...cancelControl} style={[styles.cancelBtn, cancelControl.style]}>
+              <PressableBox {...cancelControl} style={[styles.cancelBtn, cancelControl.style]}>
                 <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>
                   Cancel
                 </Text>
-              </Pressable>
-              <Pressable
+              </PressableBox>
+              <PressableBox
                 style={styles.submitBtn}
                 onPress={onSubmit}
                 accessibilityRole="button"
@@ -146,10 +147,10 @@ export function MessageEditModal({
                 <Text style={{ color: colors.teal, fontSize: typeScale.body, fontWeight: '600' }}>
                   Send
                 </Text>
-              </Pressable>
+              </PressableBox>
             </View>
-          </Pressable>
-        </Pressable>
+          </PressableBox>
+        </PressableBox>
       </KeyboardAvoidingView>
     </Modal>
   );

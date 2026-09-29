@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Pressable, Platform, Linking, Alert } from 'react-native';
+import { View, Platform, Linking, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Calendar, Bell, CheckCircle, XCircle, HelpCircle, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -87,7 +88,7 @@ interface IntegrationRowProps {
 
 function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowProps) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       disabled={!onPress}
       className="flex-row items-center gap-3 py-3 active:opacity-70"
@@ -131,7 +132,7 @@ function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowPr
 
       {/* Badge */}
       <Badge label={statusLabel(integration.status)} color={statusBadgeColor(integration.status)} />
-    </Pressable>
+    </PressableBox>
   );
 }
 

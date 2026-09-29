@@ -1,4 +1,5 @@
-import { View, Pressable, ScrollView } from 'react-native';
+import { View, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Image } from 'expo-image';
 import {
   Lock,
@@ -192,7 +193,7 @@ function AttachmentThumbnail({
           <AttachmentImage attachment={attachment} />
         </View>
       ) : isPastedText ? (
-        <Pressable
+        <PressableBox
           className="rounded-xl items-center justify-center p-2"
           style={{
             width: 72,
@@ -216,7 +217,7 @@ function AttachmentThumbnail({
               {formatFileSize(attachment.fileSize)}
             </Text>
           ) : null}
-        </Pressable>
+        </PressableBox>
       ) : (
         <View
           className="rounded-xl items-center justify-center p-2"
@@ -245,7 +246,7 @@ function AttachmentThumbnail({
       )}
 
       {/* Remove button, hitSlop 12 lifts the 20pt circle to a 44pt target */}
-      <Pressable
+      <PressableBox
         onPress={handleRemove}
         className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full items-center justify-center"
         style={{
@@ -261,7 +262,7 @@ function AttachmentThumbnail({
         hitSlop={12}
       >
         <X size={10} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
 
       {uploading ? (
         <View
@@ -291,7 +292,7 @@ function AttachmentThumbnail({
       ) : null}
 
       {canRetryUpload ? (
-        <Pressable
+        <PressableBox
           onPress={() => onRetryUpload?.(attachment.id)}
           accessibilityRole="button"
           accessibilityLabel={`${uploadLabel}. Retry uploading ${attachment.fileName}`}
@@ -318,7 +319,7 @@ function AttachmentThumbnail({
           >
             Retry
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
 
       {sendFailed ? (

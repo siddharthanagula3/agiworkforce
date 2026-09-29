@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Pressable } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Copy, Check, TriangleAlert } from 'lucide-react-native';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useThemeColors } from '@/src/ui/theme';
@@ -25,7 +25,7 @@ export function CodeBlockCopyButton({ code }: CodeBlockCopyButtonProps) {
         : colors.textMuted;
 
   return (
-    <Pressable
+    <PressableBox
       onPress={handleCopy}
       hitSlop={8}
       style={{
@@ -37,6 +37,6 @@ export function CodeBlockCopyButton({ code }: CodeBlockCopyButtonProps) {
       accessibilityRole="button"
     >
       <Icon size={14} color={iconColor} />
-    </Pressable>
+    </PressableBox>
   );
 }

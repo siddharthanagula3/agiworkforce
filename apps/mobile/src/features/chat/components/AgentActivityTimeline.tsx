@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
   AlertCircle,
@@ -198,7 +199,7 @@ function ToolRow({
 
   return (
     <View style={{ paddingVertical: 6 }}>
-      <Pressable
+      <PressableBox
         onPress={hasDetails ? onToggle : undefined}
         disabled={!hasDetails}
         accessibilityRole={hasDetails ? 'button' : undefined}
@@ -242,7 +243,7 @@ function ToolRow({
             ) : null}
           </View>
         )}
-      </Pressable>
+      </PressableBox>
 
       {entry.status === 'awaiting-approval' ? (
         <View style={{ marginLeft: 25, marginTop: 7, gap: 7 }}>
@@ -252,7 +253,7 @@ function ToolRow({
                 Approval expired
               </Text>
               {onResendApproval ? (
-                <Pressable
+                <PressableBox
                   onPress={onResendApproval}
                   accessibilityRole="button"
                   accessibilityLabel={`Resend ${entry.summary}`}
@@ -277,7 +278,7 @@ function ToolRow({
                       Resend
                     </Text>
                   </View>
-                </Pressable>
+                </PressableBox>
               ) : null}
             </View>
           ) : (
@@ -544,7 +545,7 @@ export function AgentActivityTimeline({
 
   return (
     <View accessibilityLabel="Agent activity" style={{ width: '100%', marginBottom: 7 }}>
-      <Pressable
+      <PressableBox
         onPress={() =>
           setExpanded((value) => {
             userExpansionRef.current = value ? 'collapsed' : 'expanded';
@@ -587,7 +588,7 @@ export function AgentActivityTimeline({
             )}
           </View>
         )}
-      </Pressable>
+      </PressableBox>
 
       {expanded ? (
         <View
@@ -599,7 +600,7 @@ export function AgentActivityTimeline({
           }}
         >
           {hiddenCount > 0 ? (
-            <Pressable
+            <PressableBox
               onPress={() => setVisibleCount((count) => count + ACTIVITY_PAGE_SIZE)}
               accessibilityRole="button"
               accessibilityLabel={`Show ${Math.min(ACTIVITY_PAGE_SIZE, hiddenCount)} earlier steps`}
@@ -609,7 +610,7 @@ export function AgentActivityTimeline({
                   Show {Math.min(ACTIVITY_PAGE_SIZE, hiddenCount)} earlier steps
                 </Text>
               </View>
-            </Pressable>
+            </PressableBox>
           ) : null}
 
           {visibleEntries.map((entry) => {
