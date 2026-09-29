@@ -9,7 +9,6 @@ export interface BrowserCommandPlan {
   capability: DesktopCapability;
   summary: string;
   detail: string;
-  confirm: boolean;
 }
 
 function requireString(args: Record<string, unknown>, key: string): string {
@@ -71,18 +70,12 @@ export function planBrowserCommand(
     ? 'browser.cdp'
     : 'browser.site';
 
-  const plan = (
-    args: Record<string, unknown>,
-    summary: string,
-    detail: string,
-    confirm = true,
-  ) => ({
+  const plan = (args: Record<string, unknown>, summary: string, detail: string) => ({
     command,
     args,
     capability,
     summary,
     detail,
-    confirm,
   });
 
   switch (command) {
@@ -90,8 +83,7 @@ export function planBrowserCommand(
       return plan(
         {},
         'List the tabs open in the paired browser?',
-        'The titles and addresses of the open web tabs are shown so you can choose one.',
-        false,
+        'The titles and addresses of every open web tab are shown in AGI Cloud so you can choose one. Nothing is added to the conversation until you read a tab.',
       );
     case 'browser_read_page': {
       const tabId = optionalNumber(rawArgs, 'tabId');
