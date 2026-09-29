@@ -1951,20 +1951,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         // Live streamed output. During a turn this is redrawn each tick, so show
         // a generous tail (not just 5 lines) for a real streaming feel.
         if !ctx.stream_buffer.is_empty() {
-            for line in ctx
-                .stream_buffer
-                .lines()
-                .rev()
-                .take(40)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-            {
-                lines.push(Line::from(Span::styled(
-                    format!("    {line}"),
-                    Style::default(),
-                )));
-            }
+            lines.extend(streaming_markdown_tail(&ctx.stream_buffer));
         }
     }
 
@@ -3948,6 +3935,28 @@ const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
   Paste            Long pastes collapse to [Pasted text #N]; the full text is sent
   /mcp             Run a connected server's prompt as /mcp:<server>:<prompt>
   /attach list     Show what is staged · /attach remove [n|all]";
+
+const STREAM_SOURCE_TAIL_LINES: usize = 200;
+const STREAM_RENDERED_TAIL_LINES: usize = 40;
+
+fn streaming_markdown_tail(buffer: &str) -> Vec<Line<'static>> {
+    let source: Vec<&str> = buffer.lines().collect();
+    let start = source.len().saturating_sub(STREAM_SOURCE_TAIL_LINES);
+    let open_fence = source[..start]
+        .iter()
+        .filter(|line| line.trim_start().starts_with("```"))
+        .count()
+        % 2
+        == 1;
+    let mut tail = String::new();
+    if open_fence {
+        tail.push_str("```\n");
+    }
+    tail.push_str(&source[start..].join("\n"));
+    let rendered = super::markdown_renderer::render_markdown(&tail);
+    let skip = rendered.len().saturating_sub(STREAM_RENDERED_TAIL_LINES);
+    rendered.into_iter().skip(skip).collect()
+}
 
 fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) -> String {
     let normalized = input_command.to_lowercase();
