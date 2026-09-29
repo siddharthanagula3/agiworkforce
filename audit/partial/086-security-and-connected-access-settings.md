@@ -10,15 +10,12 @@ nothing is left.
 
 - Done when: The user can see every way they can sign in (password, passkeys, social/SSO identities) and add or remove methods.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | apply the patch after Codex commits account-security/index.tsx | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/account-security/service.ts:261-261`
 
 ## S86.03: Passkeys.
 
@@ -38,7 +35,7 @@ Code: `apps/mobile/src/features/settings/account-security/service.ts:261-261`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | ui, handler |
+| mobile | partial | Mobile only reads authenticator status ("Mobile does not enroll or disable account factors"); turning the second factor on or off is not in the app. | ui, handler |
 
 Code: `apps/mobile/src/features/settings/account-security/index.tsx:313-350`
 
@@ -50,7 +47,7 @@ Code: `apps/mobile/src/features/settings/account-security/index.tsx:313-350`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | ui |
+| mobile | partial | Mobile shows only whether backup codes are Ready; it cannot view, download or regenerate recovery codes. | ui |
 
 Code: `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
 

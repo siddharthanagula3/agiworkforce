@@ -106,12 +106,11 @@ Code: `apps/cli/src/lib.rs:1104-1104`, `apps/cli/src/schedules.rs:238-238`
 
 - Done when: Past briefings and proactive outputs are kept as a browsable history.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Codex copy of the schedules store and service diverges from integration; waits for the Codex merge (lead ruling). | ui |
 | cli | partial | Only a per-schedule run list (agi schedules runs). | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:124-124`, `apps/cli/src/lib.rs:1140-1140`
+Code: `apps/cli/src/lib.rs:1140-1140`

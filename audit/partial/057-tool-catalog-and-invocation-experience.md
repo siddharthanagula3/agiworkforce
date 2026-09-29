@@ -27,7 +27,7 @@ Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
 | --- | --- | --- | --- |
 | web | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval quality signal (packages/ai/model-registry/catalog/routing-policies.json:161) | handler |
 | desktop | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval quality signal (packages/ai/model-registry/catalog/routing-policies.json:161) | handler |
-| mobile | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
+| mobile | partial | Served url_fetch description is still v1 (tool.url_fetch_description@2 needs a canary advance) and uploaded files and connector sources are not opened by reference. | handler |
 | cli | partial | No PDF/Office text extraction in the CLI; adding a PDF crate changes Cargo.lock (lead-owned). | handler |
 | vscode | partial | Runs the CLI tools: read_file and web_fetch read plain text only; no PDF or Office source reader. | handler |
 | chrome | partial | Same as web: url_fetch reads PDF and Office files by URL (d67ced36f), but the served tool description is still v1 until tool.url_fetch_description@2 advances to stable; uploaded files and connector sources are still not opened by reference. | handler |
@@ -44,7 +44,7 @@ Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-regist
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
-| mobile | partial | The chat sandbox read_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
+| mobile | partial | Chat sandbox read_file runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price. | flag-off |
 | chrome | partial | The chat sandbox read_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | code_execution and its sandbox file tools are now documented; read_file still runs only when AGI_E2B_EXECUTION=1 (switched on by the lead at run end). | flag-off |
 
@@ -59,7 +59,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/stores/chat/chatExecutionSt
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
-| mobile | partial | The chat sandbox write_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
+| mobile | partial | Chat sandbox write_file runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price. | flag-off |
 | chrome | partial | The chat sandbox write_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | Documented; write_file still runs only when AGI_E2B_EXECUTION=1. | flag-off |
 
@@ -121,7 +121,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
-| mobile | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
+| mobile | partial | Chat sandbox edit_file runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price. | flag-off |
 | chrome | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | Documented; edit_file still runs only when AGI_E2B_EXECUTION=1. | flag-off |
 
@@ -165,32 +165,26 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/execution-tools.ts:18-
 
 - Done when: The assistant can call an image-generation tool during a turn and the generated image appears in the transcript.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 3261f2780 renders image.v1 cards on mobile (GeneratedImage with full screen and share), so images made in a web turn show on the phone. New mobile turns still need image.v1 declared in chatExecutionStore.ts, held by Codex: post-codex/p-mcp-web-S57.16-mobile-image-v1.patch. It touches the same line as no-yearly-s108-33-mobile-itinerary.patch; combined, the line is supported: ['image.v1', 'itinerary.v1', 'map-search.v1']. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586`
 
 ## S57.17: Image-editing tool.
 
 - Done when: The assistant can call a tool that edits a supplied image (edit, inpaint, variation) and shows the result.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same as S57.16 mobile: edited images render once image.v1 is declared by the post-codex patch. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586`
 
 ## S57.18: Video-generation tool.
 
@@ -210,7 +204,7 @@ Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586
 | --- | --- | --- | --- |
 | web | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json; Outlook calendar needs the Microsoft OAuth app credentials (microsoft-graph.ts:360 is wired) |  |
 | desktop | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json; Outlook calendar needs the Microsoft OAuth app credentials (microsoft-graph.ts:360 is wired) |  |
-| mobile | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
+| mobile | partial | Calendar connectors have no MCP endpoint until the operator supplies one in CONNECTOR_OAUTH_PROVIDERS_JSON; the phone's own calendar tool works, but the connected-calendar path is flag-gated. |  |
 | chrome | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | api | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' API turns load the same catalog. |  |
 
@@ -220,11 +214,10 @@ Code: `apps/web/lib/connectors/mcp-endpoints.ts:183-183`
 
 - Done when: The assistant can call a tool that asks the user a clarifying question (with choices) and waits for the answer.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | codex: apply post-codex/w-connect-S57.26-S60.13-clarify-plan-held.patch (free part committed 9b36ba0b67) | handler |
 | vscode | partial | The runtime's ask_user reads the runtime process's stdin, which VS Code uses for JSON-RPC; the AskUser approval kind the webview labels is never raised outside tests. | handler |
 
-Code: `docs/decisions/2026-09-27-founder-decisions.md:412-412`, `apps/cli/src/features/exec/tools/task_registry/mod.rs:489-492`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:15-15`
+Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:489-492`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:15-15`
