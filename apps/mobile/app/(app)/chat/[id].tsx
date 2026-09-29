@@ -167,6 +167,7 @@ import {
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
 import { toUserMessage } from '@/services/userMessage';
+import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
 const EMPTY_CHAT_MESSAGES: ChatMessage[] = [];
@@ -1416,6 +1417,51 @@ export default function ChatScreen() {
     [deleteConversation, handleBack, id, isConversationActionCurrent],
   );
 
+  const canEditImages =
+    conversationExecutionMode === 'cloud' &&
+    isClerkSignedIn &&
+    FEATURES.imageGen &&
+    imageGenerationEnabled;
+
+  const handleEditImageArea = useCallback(
+    (message: ChatMessage, edit: ImageAreaEdit) => {
+      if (!id || !clerkUserId || !message.model) return;
+      void runImageGenerationTurn({
+        conversationId: id,
+        displayText: edit.prompt,
+        prompt: edit.prompt,
+        model: message.model,
+        operation: 'inpaint',
+        sourceImageBase64: edit.sourceBase64,
+        maskImageBase64: edit.maskBase64,
+        ownerId: clerkUserId,
+        begin: beginImageGeneration,
+        complete: completeImageGeneration,
+        fail: failImageGeneration,
+        remove: deleteMessage,
+        onPaywall: (error) => setPaywallError(paywallErrorStateFromApiError(error)),
+        onUnexpectedError: () => setSendError(mediaGenerationFailureMessage('image')),
+      });
+    },
+    [
+      beginImageGeneration,
+      clerkUserId,
+      completeImageGeneration,
+      deleteMessage,
+      failImageGeneration,
+      id,
+      setPaywallError,
+      setSendError,
+    ],
+  );
+
+  const handleDeleteImageConversation = useCallback(() => {
+    const actionScope = captureConversationAction();
+    if (!id || !actionScope || !isConversationActionCurrent(actionScope)) return;
+    deleteConversation(id);
+    handleBack();
+  }, [captureConversationAction, deleteConversation, handleBack, id, isConversationActionCurrent]);
+
   const shareConversationLink = useCallback(
     (actionScope: ConversationUiActionScope) => {
       if (!id || !isConversationActionCurrent(actionScope)) return;
@@ -1756,6 +1802,8 @@ export default function ChatScreen() {
             onReaction={handleReaction}
             onRetryMessage={handleRetryMessage}
             onRetryWithModel={handleRetryWithModel}
+            onEditImageArea={canEditImages ? handleEditImageArea : undefined}
+            onDeleteImageConversation={handleDeleteImageConversation}
             variantInfoByMessageId={variantInfo}
             onSelectVariant={handleSelectVariant}
             onSwitchModel={handleOpenModelPicker}

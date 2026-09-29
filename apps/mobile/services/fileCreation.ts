@@ -452,6 +452,14 @@ export async function shareGeneratedImage(
   });
 }
 
+export async function readGeneratedImageBase64(
+  imagePath: string,
+): Promise<{ base64: string; contentType: string | null }> {
+  const url = resolveGeneratedImageUri(imagePath);
+  if (!url) throw new Error('Only saved AGI Cloud images can be edited.');
+  return fetchGeneratedFileBytes(url);
+}
+
 export async function copyGeneratedImage(imagePath: string): Promise<void> {
   const url = resolveGeneratedImageUri(imagePath);
   if (!url) {
