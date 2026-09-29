@@ -370,7 +370,10 @@ export interface LocalVideoPlayer {
   directoryUri: string;
 }
 
-export async function prepareLocalVideoPlayer(url: string): Promise<LocalVideoPlayer> {
+export async function prepareLocalVideoPlayer(
+  url: string,
+  background: string,
+): Promise<LocalVideoPlayer> {
   const key = videoFileKey(url);
   const cachedVideo = `${EXPORTS_DIR}video-${key}.mp4`;
   const videoUri = (await getInfoAsync(cachedVideo)).exists
@@ -383,7 +386,7 @@ export async function prepareLocalVideoPlayer(url: string): Promise<LocalVideoPl
     [
       '<!DOCTYPE html><html><head><meta charset="utf-8">',
       '<meta name="viewport" content="width=device-width, initial-scale=1">',
-      '<style>html,body{margin:0;height:100%;background:#000}',
+      `<style>html,body{margin:0;height:100%;background:${background}}`,
       'video{width:100%;height:100%;object-fit:contain}</style></head><body>',
       `<video src="${videoName}" controls playsinline autoplay></video>`,
       '</body></html>',
