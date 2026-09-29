@@ -9,6 +9,9 @@
 --          plaid-access-token purpose, the institution's name, and the account
 --          ids the person chose to leave out of chats and the finance view.
 --          The connector grant stays the "Bank accounts is connected" marker.
+--          plaid_item_id is null only for an earlier single link whose token
+--          Plaid did not accept when it was carried over, kept so it can be
+--          removed.
 --
 -- Erasure: the profile foreign key cascades; account erasure removes each item
 --          at Plaid first and names the table.
@@ -19,7 +22,7 @@ begin;
 create table if not exists public.bank_account_items (
   id uuid primary key default gen_random_uuid(),
   user_id text not null references public.profiles(id) on delete cascade,
-  plaid_item_id text not null check (char_length(plaid_item_id) between 1 and 128),
+  plaid_item_id text check (plaid_item_id is null or char_length(plaid_item_id) between 1 and 128),
   access_token_enc text not null,
   institution_name text check (institution_name is null or char_length(institution_name) <= 200),
   excluded_account_ids text[] not null default '{}',
