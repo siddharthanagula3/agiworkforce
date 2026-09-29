@@ -3,27 +3,27 @@
   "entries": [
     {
       "file": "apps/web/lib/connectors/google-user-data.ts",
-      "migration": 343,
-      "reason": "Google Limited Use routing reads web_conversations.google_user_data_at; the deploy applies 0343 before this code ships, and until then every turn fails closed to no-training providers."
+      "migration": 344,
+      "reason": "Google Limited Use routing reads web_conversations.google_user_data_at; the deploy applies 0344 before this code ships, and until then every turn fails closed to no-training providers."
     },
     {
       "file": "apps/web/lib/server/support-access-service.ts",
-      "migration": 344,
-      "reason": "Break-glass grants read and write support_access_grants.purpose; the deploy applies 0344 before this code ships."
+      "migration": 345,
+      "reason": "Break-glass grants read and write support_access_grants.purpose; the deploy applies 0345 before this code ships."
     },
     {
       "file": "apps/web/lib/connectors/google-user-data-runs.ts",
-      "migration": 343,
+      "migration": 344,
       "reason": "Google Limited Use enforcement reads web_conversations.google_user_data_at; the deploy applies this migration before the code ships."
     },
     {
       "file": "apps/web/lib/services/conversation-branch-service.ts",
-      "migration": 343,
+      "migration": 344,
       "reason": "Google Limited Use enforcement reads web_conversations.google_user_data_at; the deploy applies this migration before the code ships."
     },
     {
       "file": "apps/web/lib/services/past-chat-context-service.ts",
-      "migration": 343,
+      "migration": 344,
       "reason": "Google Limited Use enforcement reads web_conversations.google_user_data_at; the deploy applies this migration before the code ships."
     }
   ]

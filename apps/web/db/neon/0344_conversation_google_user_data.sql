@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0343: remember that a conversation holds Google user data
+-- Migration 0344: remember that a conversation holds Google user data
 --
 -- Why    : Google API Limited Use forbids sending Google user data to a model
 --          provider that may train on it. The result of a Gmail, Google

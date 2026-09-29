@@ -1,4 +1,4 @@
--- Reversal of 0344 : break-glass grants no longer name a purpose.
+-- Reversal of 0345 : break-glass grants no longer name a purpose.
 --
 -- WHAT THIS COSTS: the application can no longer tell a security, abuse, legal
 -- or customer consent grant from an ordinary support grant, so a release that
@@ -12,6 +12,6 @@ alter table public.support_access_grants
 alter table public.support_access_grants drop column if exists purpose;
 
 delete from public.schema_migrations
- where filename = '0344_support_access_grant_purpose.sql';
+ where filename = '0345_support_access_grant_purpose.sql';
 
 commit;

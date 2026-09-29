@@ -1,4 +1,4 @@
--- Reversal of 0343 : conversations no longer remember that they hold Google
+-- Reversal of 0344 : conversations no longer remember that they hold Google
 -- user data.
 --
 -- WHAT THIS COSTS: a conversation where a Google connector ran is routed by the
@@ -10,6 +10,6 @@ begin;
 alter table public.web_conversations drop column if exists google_user_data_at;
 
 delete from public.schema_migrations
- where filename = '0343_conversation_google_user_data.sql';
+ where filename = '0344_conversation_google_user_data.sql';
 
 commit;
