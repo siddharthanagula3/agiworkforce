@@ -4441,6 +4441,16 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(crate::claude_parity::table_command(reply, arg))
         }
 
+        "/background" | "/bg" => match crate::background::hand_off(&mut app.session, arg) {
+            Ok(message) => {
+                app.chat_messages.clear();
+                app.scroll_offset = 0;
+                app.sync_stats();
+                SlashResult::SystemMessage(message)
+            }
+            Err(message) => SlashResult::SystemMessage(message),
+        },
+
         "/links" => {
             let reply = app
                 .chat_messages

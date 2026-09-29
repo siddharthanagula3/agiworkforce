@@ -12,6 +12,7 @@ pub mod agent;
 pub mod agent_events;
 pub mod agents;
 pub mod auth;
+pub mod background;
 pub mod broken_pipe;
 pub mod browser_bridge;
 pub mod claude_parity;
@@ -855,6 +856,12 @@ enum Command {
         #[arg(long)]
         no_memory: bool,
     },
+    /// Run a prompt in the background so it keeps working after this terminal closes (alias: bg).
+    #[command(alias = "bg")]
+    Background {
+        #[command(subcommand)]
+        action: BackgroundSubcommand,
+    },
     /// Continue previous session, from this device or from your account.
     Resume {
         session_id: Option<String>,
@@ -1525,6 +1532,116 @@ enum SchedulesSubcommand {
     },
 }
 
+fn run_background_command(action: &BackgroundSubcommand) -> Result<()> {
+    match action {
+        BackgroundSubcommand::Start {
+            prompt,
+            model,
+            permission_mode,
+        } => {
+            let mode = permission_mode.and_then(|mode| {
+                clap::ValueEnum::to_possible_value(&mode).map(|value| value.get_name().to_string())
+            });
+            let run = background::start(background::StartRequest {
+                prompt: &prompt.join(" "),
+                resume_session: None,
+                model: model.as_deref(),
+                permission_mode: mode.as_deref(),
+            })?;
+            println!(
+                "Started background run {id}. It keeps going after this terminal closes.\n  agi background logs {id}    see its output\n  agi background attach {id}  continue the conversation when it is done\n  agi background stop {id}    stop it",
+                id = run.id
+            );
+            Ok(())
+        }
+        BackgroundSubcommand::List { json } => {
+            let runs = background::list()?;
+            if *json {
+                let rows: Vec<serde_json::Value> = runs
+                    .iter()
+                    .map(|run| {
+                        serde_json::json!({
+                            "id": run.id,
+                            "state": background::state(run).label(),
+                            "prompt": run.prompt,
+                            "cwd": run.cwd,
+                            "sessionId": run.session_id,
+                            "startedAt": run.started_at,
+                            "finishedAt": run.finished_at,
+                            "exitCode": run.exit_code,
+                        })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else if runs.is_empty() {
+                println!("No background runs. Start one with `agi background start <prompt>`.");
+            } else {
+                for run in &runs {
+                    println!("{}", background::describe(run));
+                }
+            }
+            Ok(())
+        }
+        BackgroundSubcommand::Logs { id } => {
+            let run = background::find(id)?;
+            let log = background::read_log(&run)?;
+            if log.is_empty() {
+                println!("Background run {} has written nothing yet.", run.id);
+            } else {
+                print!("{}", terminal_text::sanitize_terminal_text(&log));
+            }
+            Ok(())
+        }
+        BackgroundSubcommand::Stop { id } => {
+            let run = background::stop(id)?;
+            println!("Stopping background run {}.", run.id);
+            Ok(())
+        }
+        BackgroundSubcommand::Rm { id } => {
+            let run = background::remove(id)?;
+            println!("Removed background run {}.", run.id);
+            Ok(())
+        }
+        BackgroundSubcommand::Attach { id } => {
+            let run = background::find(id)?;
+            if background::state(&run) == background::RunState::Running {
+                println!(
+                    "Background run {} is still running. Its output so far:\n",
+                    run.id
+                );
+                print!(
+                    "{}",
+                    terminal_text::sanitize_terminal_text(&background::read_log(&run)?)
+                );
+                println!(
+                    "\nAttach again when it is done, or stop it with `agi background stop {}`.",
+                    run.id
+                );
+                return Ok(());
+            }
+            if runtime::session_control::load_managed_session(&run.session_id).is_err() {
+                anyhow::bail!(
+                    "Background run {} {} before it saved a conversation. `agi background logs {}` shows why.",
+                    run.id,
+                    background::state(&run).label(),
+                    run.id
+                );
+            }
+            let exe = std::env::current_exe().context("find the agi executable")?;
+            let status = std::process::Command::new(exe)
+                .args(["resume", &run.session_id])
+                .current_dir(&run.cwd)
+                .status()
+                .context("open the background run's conversation")?;
+            if !status.success() {
+                anyhow::bail!("agi resume exited with {status}");
+            }
+            Ok(())
+        }
+        BackgroundSubcommand::Supervise { id } => background::supervise(id),
+    }
+}
+
 fn invocation_requires_project_trust(cli: &Cli) -> bool {
     if cli.dump_system_prompt {
         return false;
@@ -1539,6 +1656,9 @@ fn invocation_requires_project_trust(cli: &Cli) -> bool {
                 | Command::AppServer { .. }
                 | Command::Resume { .. }
                 | Command::Fork { .. }
+                | Command::Background {
+                    action: BackgroundSubcommand::Start { .. }
+                }
                 | Command::Onboarding
         )
     )
@@ -1721,6 +1841,38 @@ enum PluginSubcommand {
         #[arg(long)]
         key_file: std::path::PathBuf,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum BackgroundSubcommand {
+    /// Start a prompt in the background in this directory.
+    Start {
+        #[arg(required = true, trailing_var_arg = true)]
+        prompt: Vec<String>,
+        /// Model for the run. Defaults to your configured model.
+        #[arg(short, long)]
+        model: Option<String>,
+        /// Permission mode for the run's tool use. Nobody is at the terminal to approve
+        /// a tool, so a tool that needs approval is refused unless this mode allows it.
+        #[arg(long, value_name = "MODE", value_enum)]
+        permission_mode: Option<cli_options::PermissionMode>,
+    },
+    /// List background runs, newest first.
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print what a background run has written so far.
+    Logs { id: String },
+    /// Stop a running background run.
+    Stop { id: String },
+    /// Delete a finished background run's record and log.
+    #[command(alias = "remove")]
+    Rm { id: String },
+    /// Continue a finished background run's conversation here.
+    Attach { id: String },
+    #[command(hide = true)]
+    Supervise { id: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -5210,6 +5362,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }
                 }
             }
+            Command::Background { action } => run_background_command(action),
             Command::Resume {
                 session_id,
                 cloud,
@@ -6807,6 +6960,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
             });
 
     if let Some(ref prompt) = effective_prompt {
+        let oneshot_resume = match cli.session.as_ref().or(cli.resume.as_ref()) {
+            Some(reference) => resolve_resume_payload(reference, cli.fork_session)?.1,
+            None => None,
+        };
         return run_oneshot(
             &app_config,
             &model,
@@ -6827,6 +6984,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             file_context_result.images,
             cli.max_budget_usd,
             cli.session_id_override.clone(),
+            oneshot_resume,
             cli.json_events,
             cli.agent.clone(),
             model_fallback_chain.clone(),
@@ -7319,6 +7477,7 @@ pub async fn run_oneshot(
     image_attachments: Vec<ImageAttachment>,
     max_budget_usd: Option<f64>,
     session_id_override: Option<String>,
+    resume_session: Option<ManagedResumeSession>,
     json_events: bool,
     agent_name: Option<String>,
     fallback_chain: routing::fallback::FallbackChain,
@@ -7375,11 +7534,15 @@ pub async fn run_oneshot(
             }
         }
     }
+    let resuming = resume_session.is_some();
+    if let Some((managed, path)) = resume_session {
+        session.load_managed_conversation(managed, path)?;
+    }
     session.enable_managed_session()?;
     // Wire --session-id: override the auto-generated session UUID with the
     // caller-supplied one.  Must be called after enable_managed_session so
     // the managed session object exists.
-    if let Some(ref sid) = session_id_override {
+    if let Some(ref sid) = session_id_override.as_ref().filter(|_| !resuming) {
         session.override_session_id(sid)?;
     }
     if let Some(seed) = auto_route_seed {

@@ -40,6 +40,8 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "copy",
         "links",
         "table",
+        "background",
+        "bg",
         "new",
         "mcp",
         "output-style",
@@ -131,6 +133,11 @@ pub fn handle_shared_command(
     match command.as_str() {
         "/review" => ParityCommandResult::Prompt(review_prompt(arg)),
         "/copy" => ParityCommandResult::SystemMessage(render_copy()),
+        "/background" | "/bg" => ParityCommandResult::SystemMessage(
+            match crate::background::hand_off(session, arg) {
+                Ok(message) | Err(message) => message,
+            },
+        ),
         "/table" => {
             let reply = session
                 .messages
