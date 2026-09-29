@@ -1551,6 +1551,22 @@ async fn execute_browser_command(
                     output: format!("The active tab is on a blocked site, so its content was not read. {reason}"),
                 });
             }
+            // The page a command ends on, after any redirect or navigation the
+            // click or load caused, is held to the workspace's website rules too.
+            for landed in ["url", "origin"]
+                .into_iter()
+                .filter_map(|key| value.get(key).and_then(Value::as_str))
+            {
+                if let Some(reason) = web::workspace_site_refusal(landed).await {
+                    return Ok(ToolResult {
+                        tool_name: command.to_string(),
+                        success: false,
+                        output: format!(
+                            "The active tab is on a site your workspace does not allow, so its content was not read. {reason}"
+                        ),
+                    });
+                }
+            }
             let mut output = match &value {
                 Value::String(text) => text.clone(),
                 other => serde_json::to_string_pretty(other).unwrap_or_else(|_| other.to_string()),

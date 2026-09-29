@@ -5663,6 +5663,7 @@ async fn run_event_loop(
                                 let result =
                                     crate::auth::interactive_login_for_provider(None).await;
                                 *terminal = setup_terminal()?;
+                                crate::claude_parity::connectors::forget_local_tool_policy();
                                 match result {
                                     Ok(()) => {
                                         app.chat_messages.push(ChatMessage {
@@ -5886,6 +5887,7 @@ async fn run_event_loop(
                                 let mut store = crate::auth::load_auth().unwrap_or_default();
                                 store.entries.clear();
                                 let _ = crate::auth::save_auth(&store);
+                                crate::claude_parity::connectors::forget_local_tool_policy();
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text: if revoked {
