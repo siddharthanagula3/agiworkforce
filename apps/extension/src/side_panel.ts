@@ -310,7 +310,9 @@ import {
 import {
   getManagedCloudAuthContext,
   getManagedModelAccess,
+  AccountUnavailableError,
   clearAuthToken,
+  signOutOfAccount,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
@@ -345,8 +347,6 @@ import {
   isClerkExtensionAuthConfigured,
   observeClerkAuth,
   openClerkSignIn,
-  revokeSyncedWebSession,
-  signOutClerk,
 } from './features/cloud-bridge/clerkAuth';
 import {
   agiWorkUnlockPlanLabel,
@@ -7658,6 +7658,7 @@ function handleStreamError(
     (errorCode !== undefined &&
       ![
         'auth_required',
+        'account_suspended',
         'plan_required',
         'quota_exceeded',
         'cancelled',
@@ -12833,6 +12834,23 @@ function buildUI(): void {
       cloudLinkRow.style.display = 'none';
       quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
 
+      if (error instanceof AccountUnavailableError) {
+        signinPrompt.style.display = 'none';
+        signedInView.style.display = '';
+        userTierEl.textContent = t('spCloudAccountUnavailable');
+        setManagedCloudChatState('unavailable', {
+          message: error.message,
+          ...(error.recoveryPath
+            ? {
+                action: 'recovery' as const,
+                actionLabel: t('spAccountUnavailableAction'),
+                href: error.recoveryPath,
+              }
+            : {}),
+        });
+        return;
+      }
+
       if (error instanceof Error && error.message.includes('Authentication')) {
         await transitionManagedCloudOwner(null);
         await clearAuthToken();
@@ -12970,19 +12988,9 @@ function buildUI(): void {
 
   signoutBtn.addEventListener('click', async () => {
     signoutStatusEl.textContent = '';
-    try {
-      await revokeSyncedWebSession();
-    } catch (error) {
-      console.warn('[SidePanel] Revoking the synced web session failed:', error);
-      signoutStatusEl.textContent = t('spCloudSignOutSyncFailed');
-    }
-    try {
-      await signOutClerk();
-    } catch (error) {
-      console.warn('[SidePanel] Clerk sign-out failed:', error);
-    }
+    const { webSessionEnded } = await signOutOfAccount();
+    if (!webSessionEnded) signoutStatusEl.textContent = t('spCloudSignOutSyncFailed');
     await transitionManagedCloudOwner(null);
-    await clearAuthToken();
     await refreshCloudAccountUI();
   });
 
@@ -16155,7 +16163,9 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
   if (chunk.error) {
     quotaWarnedStreamIds.delete(chunk.id);
-    if (chunk.errorCode === 'quota_exceeded') void refreshCloudAccountUI();
+    if (chunk.errorCode === 'quota_exceeded' || chunk.errorCode === 'account_suspended') {
+      void refreshCloudAccountUI();
+    }
     if (chunk.error === '__AUTH_REQUIRED__') {
       void refreshCloudAccountUI();
       handleStreamError(chunk.id, 'Sign in to AGI Cloud to send messages.');
