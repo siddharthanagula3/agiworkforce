@@ -13,7 +13,7 @@ import { Pencil, Trash2, Pin, PinOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import type { MemoryEntry } from '@/src/features/memory/store';
 import { memoryFactOrigin } from '@/src/features/memory/services/consolidation';
 
@@ -113,7 +113,7 @@ export function MemoryItem({
   );
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(200)}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(motion.quick)}>
       <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
         <Card variant="default" className="mb-2">
           {/* Top row: fact text + actions */}

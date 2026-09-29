@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { AgentDashboard } from '@/src/features/companion/components/AgentDashboard';
 import { CodeSessionsCard } from './CodeSessionsCard';
 import { DispatchTaskComposer } from '@/src/features/companion/components/DispatchTaskComposer';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { RemoteWorkspaceBoundaryNotice } from './RemoteWorkspaceBoundaryNotice';
 import { SingleDesktopSessionNotice } from './SingleDesktopSessionNotice';
 
@@ -25,7 +25,7 @@ export function DesktopInfoCard({
 }: DesktopInfoCardProps) {
   const colors = useThemeColors();
   return (
-    <Animated.View entering={SlideInDown.duration(300).springify()} className="flex-1">
+    <Animated.View entering={SlideInDown.duration(motion.moved).springify()} className="flex-1">
       <View className="px-4 mb-3">
         <Card variant="elevated">
           <View className="flex-row items-center gap-3 mb-3">

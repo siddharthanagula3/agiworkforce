@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 
 interface ImageGenProgressProps {
   prompt: string;
@@ -70,7 +70,7 @@ export function ImageGenProgress({
     : undefined;
 
   return (
-    <Animated.View entering={FadeInDown.duration(250).springify()}>
+    <Animated.View entering={FadeInDown.duration(motion.moved).springify()}>
       <View
         style={{
           backgroundColor: colors.surfaceElevated,
