@@ -708,15 +708,60 @@ fn remember_step_up(error: &anyhow::Error) -> Option<String> {
     Some(scope.to_string())
 }
 
-/// Forget the stored OAuth token for a remote MCP server. Returns whether a
-/// token was actually held.
-pub fn logout_from_remote_server(server_url: &str) -> Result<bool> {
-    let had_token = KeyringTokenStore.get(server_url).is_some();
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum McpRevocation {
+    Revoked,
+    NotOffered,
+    Failed(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpLogout {
+    pub had_token: bool,
+    pub revocation: Option<McpRevocation>,
+}
+
+/// Hand the stored OAuth token back to the server's authorization server when
+/// it offers revocation, then forget it locally whatever the provider said.
+pub async fn logout_from_remote_server(
+    server_url: &str,
+    config: &McpServerConfig,
+) -> Result<McpLogout> {
+    let token = KeyringTokenStore.get(server_url);
+    let revocation = match &token {
+        Some(token) => Some(revoke_at_provider(server_url, config, token).await),
+        None => None,
+    };
     McpServerOAuthStore::new()?.delete(server_url)?;
     let mut legacy = McpOAuthStore::load()?;
     legacy.remove(server_url);
     legacy.save()?;
-    Ok(had_token)
+    Ok(McpLogout {
+        had_token: token.is_some(),
+        revocation,
+    })
+}
+
+async fn revoke_at_provider(
+    server_url: &str,
+    config: &McpServerConfig,
+    token: &OAuthToken,
+) -> McpRevocation {
+    let oauth = match to_transport_config(config) {
+        TransportConfig::Http {
+            oauth: Some(oauth), ..
+        } => oauth,
+        _ => OAuthConfig::default(),
+    };
+    let attempt = agiworkforce_mcp::oauth::revoke_token(token, &oauth, server_url);
+    match tokio::time::timeout(std::time::Duration::from_secs(30), attempt).await {
+        Ok(Ok(true)) => McpRevocation::Revoked,
+        Ok(Ok(false)) => McpRevocation::NotOffered,
+        Ok(Err(error)) => McpRevocation::Failed(format!("{error:#}")),
+        Err(_) => McpRevocation::Failed(
+            "the authorization server did not answer in 30 seconds".to_string(),
+        ),
+    }
 }
 
 /// Build the host capability bundle handed to `McpClient::connect`.
