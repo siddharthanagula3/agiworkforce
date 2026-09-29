@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@drawable/agi_widget_background"
+  android:gravity="center"
+  android:orientation="horizontal"
+  android:padding="8dp">
+
+  <TextView
+    android:id="@+id/agi_widget_new_chat"
+    style="@style/AGIWidgetAction"
+    android:contentDescription="@string/agi_widget_new_chat"
+    android:drawableTop="@android:drawable/ic_menu_edit"
+    android:text="@string/agi_widget_new_chat" />
+
+  <TextView
+    android:id="@+id/agi_widget_camera"
+    style="@style/AGIWidgetAction"
+    android:contentDescription="@string/agi_widget_camera"
+    android:drawableTop="@android:drawable/ic_menu_camera"
+    android:text="@string/agi_widget_camera" />
+
+  <TextView
+    android:id="@+id/agi_widget_voice"
+    style="@style/AGIWidgetAction"
+    android:contentDescription="@string/agi_widget_voice"
+    android:drawableTop="@android:drawable/ic_btn_speak_now"
+    android:text="@string/agi_widget_voice" />
+</LinearLayout>

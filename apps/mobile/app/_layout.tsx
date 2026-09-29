@@ -573,6 +573,12 @@ export default function RootLayout() {
       case 'chat':
         router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
         break;
+      case 'camera':
+        router.push('/(app)/camera' as Parameters<typeof router.push>[0]);
+        break;
+      case 'voice':
+        router.push('/(app)/voice' as Parameters<typeof router.push>[0]);
+        break;
       case 'ask': {
         const prompt = getParam('prompt');
         if (prompt) {
