@@ -692,6 +692,13 @@ const NO_TRAINING_MODEL_MESSAGE =
 const GOOGLE_USER_DATA_ROUTE_MESSAGE =
   'This task reads data from your Google account, and no model on your plan that keeps it out of training is available right now, so this scheduled run did not start.';
 
+export class NoTrainingRouteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NoTrainingRouteError';
+  }
+}
+
 async function scheduledRunReachesGoogleUserData(
   db: Parameters<typeof connectedGoogleUserDataConnectorIds>[0],
   userId: string,
@@ -715,7 +722,7 @@ async function scheduledRunReachesGoogleUserData(
 }
 
 async function selectScheduledRoute(
-  scope: { db: Parameters<typeof sideCallRoutingRequest>[0]; userId: string },
+  scope: { db: NonNullable<Parameters<typeof sideCallRoutingRequest>[0]>; userId: string },
   task: ScheduleTask,
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
@@ -731,7 +738,7 @@ async function selectScheduledRoute(
 }
 
 export async function selectUnattendedRoute(
-  scope: { db: Parameters<typeof sideCallRoutingRequest>[0]; userId: string },
+  scope: { db: NonNullable<Parameters<typeof sideCallRoutingRequest>[0]>; userId: string },
   selection: string,
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
@@ -745,23 +752,23 @@ export async function selectUnattendedRoute(
     runtimeProfileId: 'web/cloud-chat',
     retiredModelKeys: modelsPastDeprecationDate(),
   };
+  const noTraining = googleUserData || (await sideCallTrainingOptOut(scope.db, scope.userId));
   const routing = await sideCallRoutingRequest(scope.db, scope.userId, baseRouting, {
-    forceNoTraining: googleUserData,
+    forceNoTraining: noTraining,
   });
   const noTrainingMessage = googleUserData
     ? GOOGLE_USER_DATA_ROUTE_MESSAGE
     : NO_TRAINING_MODEL_MESSAGE;
-  if (!routing) throw new Error(noTrainingMessage);
+  if (!routing) throw new NoTrainingRouteError(noTrainingMessage);
   const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {
-    throw new Error(
-      routing === baseRouting
-        ? 'The selected model is not available for scheduled managed execution'
-        : noTrainingMessage,
-    );
+    if (routing === baseRouting) {
+      throw new Error('The selected model is not available for scheduled managed execution');
+    }
+    throw new NoTrainingRouteError(noTrainingMessage);
   }
-  if (googleUserData && !modelKeepsInputsOutOfTraining(route.modelKey)) {
-    throw new Error(GOOGLE_USER_DATA_ROUTE_MESSAGE);
+  if (noTraining && !modelKeepsInputsOutOfTraining(route.modelKey)) {
+    throw new NoTrainingRouteError(noTrainingMessage);
   }
   if (route.harnessId.endsWith('/media')) {
     throw new Error('Scheduled media generation is unavailable');

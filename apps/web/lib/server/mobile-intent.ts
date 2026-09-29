@@ -26,10 +26,13 @@ import {
 import {
   MAX_OUTPUT_TOKENS,
   runScheduledCompletion,
+  NoTrainingRouteError,
   selectUnattendedRoute,
 } from '@/lib/services/scheduled-agent-executor';
 
 const TITLE_MAX_CHARS = 60;
+const NO_TRAINING_ANSWER =
+  'No model on your plan keeps your chats out of training right now, so AGI Workforce could not answer. Try again later in the app.';
 const ASK_DIRECTIVE =
   'The person asked this through Siri and will hear the answer spoken. Answer in plain sentences without markdown, lists, tables, links or code, in at most a few short paragraphs.';
 
@@ -130,9 +133,17 @@ export async function answerMobileIntentAsk(input: {
   const routeScope = { db, userId: owner.userId };
   const routeTo = (selection: string) =>
     selectUnattendedRoute(routeScope, selection, taskType, entitlement.plan, false);
-  const route = owner.defaultModelId
-    ? await routeTo(owner.defaultModelId).catch(() => routeTo('auto'))
-    : await routeTo('auto');
+  let route: Awaited<ReturnType<typeof routeTo>>;
+  try {
+    route = owner.defaultModelId
+      ? await routeTo(owner.defaultModelId).catch(() => routeTo('auto'))
+      : await routeTo('auto');
+  } catch (error) {
+    if (error instanceof NoTrainingRouteError) {
+      throw new MobileIntentRefusal(503, 'no_training_model_available', NO_TRAINING_ANSWER);
+    }
+    throw error;
+  }
   const messages = [
     { role: 'system' as const, content: ASK_DIRECTIVE },
     { role: 'user' as const, content: prompt },
