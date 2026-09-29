@@ -49,10 +49,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Archive runs immediately from the menu with no confirmation or undo; only a failure alert. | states |
+| mobile | partial | Archiving shows 'Chat archived. Find it in Settings, Archived chats.' with Undo, which restores it on the server and puts the row back where it was, in the S8.45 post-codex patch. | codex |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/conversation-actions/useConversationActions.ts:129-129`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:100-100`
+Code: `apps/mobile/src/features/archived-chats/service.ts:69-69`
 
 ## S10.08: Share conversation.
 
@@ -348,22 +348,19 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Fix the pairing instructions: the phone says to open Desktop "Settings and select Connections" and /pair says "Mobile companion", but the code is generated in Desktop Settings > Capabilities (Connections opens Connectors). | ui |
+| mobile | partial | The pairing steps now point to Desktop Settings > Capabilities > Pair a phone, where RemoteControlSection lives, in post-codex/w-chat-s10.40-mobile-pairing-steps.patch. ConnectionStateViews is held. | codex |
 
-Code: `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:98-112`, `apps/mobile/services/manualPairing.ts:152-170`
+Code: `apps/web/features/settings/sections/CapabilitiesSection.tsx:90-90`
 
 ## S10.41: Unsaved-changes warning.
 
 - Done when: Leaving an editor with unsaved edits warns the user and lets them keep editing or discard.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the Personalization screen asks before discarding edits; other edit screens do not. | states |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:260-260`, `apps/mobile/src/features/settings/personalization/index.tsx:259-259`
 
 ## S10.42: Edit-conflict resolution.
 
