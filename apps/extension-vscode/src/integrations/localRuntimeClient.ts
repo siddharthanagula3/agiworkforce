@@ -56,6 +56,7 @@ import {
   MINIMUM_SUPPORTED_RUNTIME_VERSION as MINIMUM_SUPPORTED_CLI_VERSION_LABEL,
   PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
   isSupportedRuntimeVersion as isSupportedCliVersion,
+  messageKindForAgentEvent,
 } from '@agiworkforce/types';
 import { redactSecrets } from '../core/telemetry';
 import { trackRuntimeChild } from './runtimeProcessRegistry';
@@ -941,7 +942,8 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
     const parsed = agentEventEnvelopeSchema.safeParse(notification.params);
     if (!parsed.success) return undefined;
     const { sessionId: threadId, turnId, sequence, emittedAtMs, event } = parsed.data;
-    if (event.type === 'tool-execution-start') {
+    const kind = messageKindForAgentEvent(event.type);
+    if (kind === 'tool_call' && event.type === 'tool-execution-start') {
       return {
         type: 'tool_execution_start',
         threadId,
@@ -955,7 +957,7 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
         input: event.input,
       };
     }
-    if (event.type === 'source-list') {
+    if (kind === 'citation' && event.type === 'source-list') {
       return {
         type: 'source_list',
         threadId,
@@ -965,7 +967,7 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
         ...(event.toolCallId === undefined ? {} : { toolCallId: event.toolCallId }),
       };
     }
-    if (event.type === 'tool-execution-end') {
+    if (kind === 'tool_result' && event.type === 'tool-execution-end') {
       return {
         type: 'tool_execution_end',
         threadId,
@@ -979,6 +981,7 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
         elapsedMs: event.elapsedMs,
       };
     }
+    if (event.type !== 'progress-update') return undefined;
     return {
       type: 'progress_update',
       threadId,
