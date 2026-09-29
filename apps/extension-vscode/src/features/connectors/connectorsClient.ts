@@ -6,11 +6,13 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
 import { platformRequestHeaders } from '../../platform/platformHeaders';
+import { readAccountRefusal } from '../../utils/accountRefusal';
 
 export class ConnectorsHttpError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
   ) {
     super(message);
     this.name = 'ConnectorsHttpError';
@@ -36,7 +38,12 @@ export function createExtensionConnectorsClient(token: string): ConnectorsClient
         },
       });
       if (!response.ok) {
-        throw new ConnectorsHttpError(`HTTP ${response.status}`, response.status);
+        const refusal = await readAccountRefusal(response);
+        throw new ConnectorsHttpError(
+          refusal?.message ?? `HTTP ${response.status}`,
+          response.status,
+          refusal?.code,
+        );
       }
       const parsed = ListConnectorsResponseSchema.safeParse(
         await response.json().catch(() => undefined),
