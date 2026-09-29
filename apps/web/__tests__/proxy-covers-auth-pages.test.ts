@@ -38,6 +38,8 @@ const PUBLIC_BY_DESIGN: Record<string, string> = {
     'The sign-up page itself. It reads the identity only to send an already-verified session on to its completion URL and treats a missing session as signed out; isIdentitySessionRoute matches it so the proxy never gates it.',
   '/login/complete':
     'The sign-in landing itself. It is matched by isIdentitySessionRoute rather than isProtectedAppRoute, since gating it would make signing in impossible.',
+  '/login/verify':
+    'The Advanced Account Security step every refused session lands on. isIdentitySessionRoute matches it through /login, the page sends a missing session to /login itself, and its handoff branch is the browser half of the desktop sign-in, which runs before that browser holds a session, so gating it would break both.',
 };
 
 function pagesCallingAuth(dir: string, base = '', out: string[] = []): string[] {

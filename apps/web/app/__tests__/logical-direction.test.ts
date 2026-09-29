@@ -18,17 +18,9 @@ const PHYSICAL_DIRECTION = [
 ];
 
 const FROZEN: Readonly<Record<string, { count: number; reason: string }>> = {
-  [path.join('pricing', 'error.tsx')]: {
-    count: 2,
-    reason: 'pricing is read only by founder order; two icon margins wait for that to lift',
-  },
   [path.join('pricing', 'page.tsx')]: {
     count: 3,
     reason: 'pricing is read only by founder order; three table header alignments wait for that',
-  },
-  [path.join('upgrade', '[plan]', 'UpgradeOrderScreen.tsx')]: {
-    count: 1,
-    reason: 'the upgrade order screen states a plan price, which is read only by founder order',
   },
 };
 
