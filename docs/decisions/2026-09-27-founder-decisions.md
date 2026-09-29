@@ -338,3 +338,12 @@ at claude.ai/code, and offers no share link for a session running on the
 person's own machine (code.claude.com/docs/en/claude-code-on-the-web, section
 Share sessions). The desktop app shares cloud sessions through the hosted Code
 page, and local sessions stay unshareable (S66.40 desktop). Checked 2026-09-28.
+
+## D-2026-09-28-24 A reconnected connector does not resume the interrupted turn
+
+When a connected app's sign-in expires mid-answer, ChatGPT and Claude show a
+reconnect prompt and the person sends the request again once the app is
+connected; neither resumes the interrupted turn on its own. The web and
+desktop apps do the same: the chat card offers Reconnect and Retry, and
+Settings offers Connect on an expired connection, with no automatic resume
+(S110.27 web and desktop).
