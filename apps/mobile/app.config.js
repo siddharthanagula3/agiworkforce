@@ -340,6 +340,7 @@ const config = {
     './native/ios/withClerkModularHeaders.cjs',
     './native/android/withAGIAICore.cjs',
     './native/android/withAGIShareIntent.cjs',
+    './native/android/withAGITabletOrientation.cjs',
     './native/android/withAGIWidget.cjs',
     // Emits the iOS NSPinnedDomains and Android network_security_config pin-sets
     // derived from lib/pinning.ts. It emits nothing until that file provisions
