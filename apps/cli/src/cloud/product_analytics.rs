@@ -20,14 +20,12 @@ fn env_opts_out(value: Option<&str>) -> bool {
     })
 }
 
-fn enabled(config: &CliConfig) -> bool {
-    config.telemetry.product_analytics
-        && ![
-            std::env::var("DISABLE_TELEMETRY").ok(),
-            std::env::var("DO_NOT_TRACK").ok(),
-        ]
-        .iter()
-        .any(|value| env_opts_out(value.as_deref()))
+fn allowed(config: &CliConfig, privacy: PrivacyMode, env: impl Fn(&str) -> Option<String>) -> bool {
+    privacy == PrivacyMode::Managed
+        && config.telemetry.product_analytics
+        && !["DISABLE_TELEMETRY", "DO_NOT_TRACK"]
+            .iter()
+            .any(|name| env_opts_out(env(name).as_deref()))
 }
 
 fn contract_string(name: &str) -> Option<&'static str> {
@@ -64,7 +62,7 @@ fn consent_granted(body: &Value) -> bool {
                         .get("noticeVersion")
                         .and_then(Value::as_str)
                         .zip(contract_string("PRODUCT_ANALYTICS_NOTICE_VERSION"))
-                        .is_some_and(|(recorded, required)| recorded >= required)
+                        .is_some_and(|(recorded, required)| recorded == required)
             })
         })
 }
@@ -99,10 +97,87 @@ async fn send(privacy: PrivacyMode, name: &'static str) {
 }
 
 pub fn record(config: &CliConfig, privacy: PrivacyMode, name: &'static str) {
-    if privacy != PrivacyMode::Managed || !enabled(config) {
+    if !allowed(config, privacy, |name| std::env::var(name).ok()) {
         return;
     }
     tokio::spawn(async move {
         let _ = tokio::time::timeout(SEND_TIMEOUT, send(privacy, name)).await;
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn no_env(_: &str) -> Option<String> {
+        None
+    }
+
+    fn env_with(key: &'static str, value: &'static str) -> impl Fn(&str) -> Option<String> {
+        move |name| (name == key).then(|| value.to_string())
+    }
+
+    fn consent(notice: &str) -> Value {
+        json!({
+            "consents": [{
+                "purpose": "product_analytics",
+                "granted": true,
+                "noticeVersion": notice,
+            }],
+        })
+    }
+
+    #[test]
+    fn a_managed_session_with_nothing_opted_out_may_send() {
+        assert!(allowed(&CliConfig::default(), PrivacyMode::Managed, no_env));
+    }
+
+    #[test]
+    fn local_and_byok_sessions_never_send() {
+        assert!(!allowed(&CliConfig::default(), PrivacyMode::Local, no_env));
+        assert!(!allowed(&CliConfig::default(), PrivacyMode::Byok, no_env));
+    }
+
+    #[test]
+    fn disable_telemetry_blocks_sending() {
+        let env = env_with("DISABLE_TELEMETRY", "1");
+        assert!(!allowed(&CliConfig::default(), PrivacyMode::Managed, env));
+    }
+
+    #[test]
+    fn do_not_track_blocks_sending() {
+        let env = env_with("DO_NOT_TRACK", "true");
+        assert!(!allowed(&CliConfig::default(), PrivacyMode::Managed, env));
+    }
+
+    #[test]
+    fn a_falsy_opt_out_variable_does_not_block() {
+        let env = env_with("DO_NOT_TRACK", "0");
+        assert!(allowed(&CliConfig::default(), PrivacyMode::Managed, env));
+    }
+
+    #[test]
+    fn the_config_key_blocks_sending() {
+        let mut config = CliConfig::default();
+        config.telemetry.product_analytics = false;
+        assert!(!allowed(&config, PrivacyMode::Managed, no_env));
+    }
+
+    #[test]
+    fn a_blocked_record_returns_before_spawning_any_request() {
+        let mut config = CliConfig::default();
+        config.telemetry.product_analytics = false;
+        record(&config, PrivacyMode::Managed, "first_chat");
+        record(&CliConfig::default(), PrivacyMode::Byok, "first_chat");
+    }
+
+    #[test]
+    fn only_consent_under_the_analytics_notice_counts() {
+        let current =
+            contract_string("PRODUCT_ANALYTICS_NOTICE_VERSION").expect("contract names it");
+        assert!(consent_granted(&consent(current)));
+        assert!(!consent_granted(&consent("2026-09-29")));
+        assert!(!consent_granted(&consent("2026-09-01")));
+        assert!(!consent_granted(&consent("zzzz")));
+    }
 }
