@@ -56,6 +56,8 @@ pub struct MemoryDelta {
     pub source_conversation_id: Option<String>,
     #[serde(default)]
     pub source_conversation_title: Option<String>,
+    #[serde(default)]
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -127,6 +129,8 @@ pub struct CachedMemory {
     pub source_conversation_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_conversation_title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
 }
 
 impl MemoryCache {
@@ -145,6 +149,7 @@ impl MemoryCache {
                 updated_at: delta.updated_at.clone(),
                 source_conversation_id: delta.source_conversation_id.clone(),
                 source_conversation_title: delta.source_conversation_title.clone(),
+                project_id: delta.project_id.clone(),
             });
         }
         self.entries.sort_by(|a, b| {
@@ -164,11 +169,24 @@ impl MemoryCache {
     /// The account memory as the block the CLI already injects into the system
     /// prompt beside the on-disk file.
     pub fn context_prompt(&self) -> String {
-        if self.entries.is_empty() {
+        self.render_context(self.entries.iter())
+    }
+
+    pub fn context_prompt_for(&self, project: Option<&str>) -> String {
+        self.render_context(self.entries.iter().filter(|entry| {
+            entry
+                .project_id
+                .as_deref()
+                .is_none_or(|owner| Some(owner) == project)
+        }))
+    }
+
+    fn render_context<'a>(&self, entries: impl Iterator<Item = &'a CachedMemory>) -> String {
+        let entries: Vec<&CachedMemory> = entries.collect();
+        if entries.is_empty() {
             return String::new();
         }
-        let lines = self
-            .entries
+        let lines = entries
             .iter()
             .map(|entry| format!("- {}", entry.content.replace(['\n', '\r'], " ").trim()))
             .collect::<Vec<_>>()
@@ -349,6 +367,7 @@ mod tests {
             server_version: version.to_string(),
             source_conversation_id: None,
             source_conversation_title: None,
+            project_id: None,
         }
     }
 
@@ -374,6 +393,7 @@ mod tests {
             updated_at: "2026-09-13T00:00:00Z".to_string(),
             source_conversation_id: None,
             source_conversation_title: None,
+            project_id: None,
         };
         let push = delete_memory(&entry, &state, "cli");
         assert!(push.is_deleted);

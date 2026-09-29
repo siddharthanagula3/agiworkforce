@@ -636,7 +636,13 @@ impl AgentSession {
         let account_memory = crate::config::CliConfig::config_dir()
             .ok()
             .filter(|_| memory_enabled)
-            .map(|home| crate::cloud::account_memory_context(privacy_mode, &home))
+            .map(|home| {
+                crate::cloud::account_memory_context_for(
+                    privacy_mode,
+                    &home,
+                    linked_cloud_project().as_deref(),
+                )
+            })
             .unwrap_or_default();
 
         let project_instructions = crate::config::CliConfig::config_dir()
@@ -2464,7 +2470,7 @@ fn escape_attr(path: &Path) -> String {
 /// The account project this working directory has been linked to with
 /// `agi projects link`. Visiting a directory never creates an account project,
 /// so this is `None` until the user asks for the link.
-fn linked_cloud_project() -> Option<String> {
+pub(crate) fn linked_cloud_project() -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
     let home = crate::config::CliConfig::config_dir().ok()?;
     let registry = crate::project_registry::ProjectRegistry::load(&home).ok()?;
