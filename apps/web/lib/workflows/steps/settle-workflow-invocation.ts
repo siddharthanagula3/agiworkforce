@@ -8,6 +8,14 @@ import {
   canPersistAssistantTurn,
   persistAssistantTurn,
 } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
+import {
+  buildPersistedTurnResearch,
+  type PersistedTurnResearch,
+} from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-research';
+import {
+  readRunResearchReport,
+  recordResearchRunSettledCost,
+} from '@/lib/services/research-report-settlement';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import {
   getCloudAgentExecutionUsage,
@@ -73,6 +81,7 @@ async function persistWorkflowAssistantTurn(
   outcome: WorkflowTerminalOutcome,
   usage: { inputTokens: number; outputTokens: number },
   settlement: { state: AgentTaskState | null; note: string },
+  research: PersistedTurnResearch | null,
 ): Promise<void> {
   const processed = input.processed as ProcessedRequest;
   if (!canPersistAssistantTurn(processed)) return;
@@ -92,6 +101,7 @@ async function persistWorkflowAssistantTurn(
       outputTokens: usage.outputTokens,
       truncated: outcome === 'cancelled',
       interactiveCards: journal.interactiveCards,
+      ...(research ? { research } : {}),
       runReference: {
         runId: input.runId,
         runPath: managedCloudAgentRunPath(input.runId),
@@ -143,7 +153,7 @@ async function settleBilling(
   outcome: WorkflowTerminalOutcome,
   usage: Awaited<ReturnType<typeof getCloudAgentExecutionUsage>>,
   errorClass: string | undefined,
-): Promise<number | null> {
+): Promise<{ costCents: number | null; costMicrousd: number | null }> {
   const provider = serving.provider;
   const model = serving.chatRequest.model;
 
@@ -166,7 +176,10 @@ async function settleBilling(
       cancelled: outcome === 'cancelled',
       attempt,
     });
-    return finalization.actualCostCents;
+    return {
+      costCents: finalization.actualCostCents,
+      costMicrousd: finalization.actualCostMicrousd ?? null,
+    };
   }
 
   await settleFreeTrialRequest({
@@ -188,7 +201,35 @@ async function settleBilling(
       cacheCreation1hInputTokens: usage.cacheWrite1hTokens,
     },
   });
-  return null;
+  return { costCents: null, costMicrousd: null };
+}
+
+async function settledResearch(
+  db: ReturnType<typeof getNeonDb>,
+  input: CloudAgentWorkflowInput,
+  costMicrousd: number | null,
+): Promise<PersistedTurnResearch | null> {
+  if (!input.research) return null;
+  const scopedDb = createClaimedUserScopedDb(db, {
+    userId: input.userId,
+    organizationId: input.processed.organizationId ?? null,
+  });
+  const report = await readRunResearchReport(scopedDb, {
+    userId: input.userId,
+    requestId: input.processed.requestId,
+  });
+  if (!report) return null;
+  const recorded =
+    costMicrousd !== null &&
+    (await recordResearchRunSettledCost(scopedDb, {
+      userId: input.userId,
+      requestId: input.processed.requestId,
+      settledCostMicrousd: costMicrousd,
+    }));
+  return buildPersistedTurnResearch(
+    report,
+    recorded && costMicrousd !== null ? { settledCostMicrousd: costMicrousd } : {},
+  );
 }
 
 /** Exported for tests; not a Workflow step. `serving` is the route that answered, the opening one until failover rotates. */
@@ -206,7 +247,7 @@ export async function settleWorkflowInvocation(
     runId: input.runId,
     billingIdempotencyKey: billingLedgerKey,
   });
-  const costCents = await settleBilling(
+  const { costCents, costMicrousd } = await settleBilling(
     db,
     input.billing,
     input,
@@ -231,7 +272,17 @@ export async function settleWorkflowInvocation(
 
   const settlement = await resolveSettlement(db, input, outcome);
 
-  await persistWorkflowAssistantTurn(db, input, servingRequest, outcome, usage, settlement);
+  const research = await settledResearch(db, input, costMicrousd);
+
+  await persistWorkflowAssistantTurn(
+    db,
+    input,
+    servingRequest,
+    outcome,
+    usage,
+    settlement,
+    research,
+  );
 
   await recordManagedAutoMemoryTurn({
     db,

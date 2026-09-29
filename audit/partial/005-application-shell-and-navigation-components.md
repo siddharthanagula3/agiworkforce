@@ -62,7 +62,7 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 
 - Done when: Rows in mixed lists carry an icon (or equivalent marker) that tells the resource type apart (chat, project, task, file) visually and for assistive tech.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -108,23 +108,11 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The cited lines are RenameConversationModal: a "Rename chat" modal with a TextInput, opened from the long-press action sheet (useConversationActions.ts:117-124). Nothing edits the title in the row, so the criterion's in-place field (Enter to save, Escape to cancel) is not what ships. partial, miss ui; remaining: rename is a modal, not an inline field on the row. |  |
+| mobile | partial | apply after w-auth-S5.19-S5.20-mobile-chat-rows once Codex commits |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx:170-180`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`
-
-## S5.26: Global command palette.
-
-- Done when: A global command palette (keyboard-invoked) searches and runs app commands and destinations.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only a composer slash palette (/image, /voice, /compare, /export); no global palette for destinations or settings. | ui |
-
-Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`
 
 ## S5.28: Notification center.
 
@@ -153,18 +141,6 @@ Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`
 | chrome | partial | Quota upgrade button opens web pricing/billing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 
 Code: `apps/web/shared/components/layout/AccountMenuItems.tsx:104-109`, `apps/web/shared/components/layout/WebAppShell.tsx:489-489`, `apps/web/shared/components/layout/WebAppShell.tsx:510-510`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:113-126`
-
-## S5.32: Connection-status indicator.
-
-- Done when: A status indicator shows whether the app is connected to its backend/runtime and offers reconnect when not.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only a network-offline banner; no connected/reconnecting status for the cloud session. | ui |
-
-Code: `apps/mobile/app/_layout.tsx:724-725`
 
 ## S5.33: Offline indicator.
 

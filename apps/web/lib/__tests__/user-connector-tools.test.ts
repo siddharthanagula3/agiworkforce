@@ -23,6 +23,9 @@ const mockPostPrReview = vi.fn();
 const mockIsGitHubAppConfigured = vi.fn();
 const mockIsGitHubInstallationLinkingAvailable = vi.fn();
 vi.mock('@/lib/github-app', () => ({
+  GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
+  issueCommentPostedSince: vi.fn(() => false),
+  pullRequestReviewPostedSince: vi.fn(() => false),
   getInstallationAccessToken: (...a: unknown[]) => mockGetInstallationAccessToken(...a),
   getPrDiff: (...a: unknown[]) => mockGetPrDiff(...a),
   isGitHubAppConfigured: () => mockIsGitHubAppConfigured(),

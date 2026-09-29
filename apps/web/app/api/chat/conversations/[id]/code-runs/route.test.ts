@@ -21,41 +21,107 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
   getUserScopedDb: async () => ({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
     userId: 'user-1',
     organizationId: null,
   }),
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getOrCreateAnonSession: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: vi.fn(),
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: vi.fn(async () => null),
+}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/cors', () => ({
+  appendVary: vi.fn(),
+  getCorsHeaders: vi.fn(),
+  getSecurityHeaders: vi.fn(),
+  isOriginAllowed: vi.fn(),
+  jsonResponseWithCors: vi.fn(),
+  requireValidOrigin: vi.fn(),
+  withCorsAndSecurityHeaders: vi.fn(),
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
-vi.mock('@/lib/e2b/gate', () => ({ e2bCutoverEnabled: () => mocks.e2bEnabled() }));
+vi.mock('@/lib/e2b/gate', () => ({
+  E2B_API_KEY_ENV: vi.fn(),
+  E2B_EXECUTION_ENV: vi.fn(),
+  e2bProvisioningReady: vi.fn(),
+  managedComputeBetaEnabled: vi.fn(),
+  e2bExecutionEnabled: vi.fn(() => false),
+  e2bCutoverEnabled: () => mocks.e2bEnabled(),
+}));
 vi.mock('@/lib/e2b/runtime', () => ({
+  closeBillableInterval: vi.fn(),
+  killE2BSession: vi.fn(),
+  pauseE2BSession: vi.fn(),
+  revokeE2BSessionCredentials: vi.fn(),
+  terminateE2BSessionProcesses: vi.fn(),
   getE2BExecutor: (...args: unknown[]) => mocks.getExecutor(...args),
 }));
 vi.mock('@/lib/feature-flags/capability-gate', () => ({
+  readKillSwitchGate: vi.fn(),
   assertCapabilityAvailable: (...args: unknown[]) => mocks.assertCapability(...args),
 }));
 vi.mock('@/lib/feature-flags/flag-evaluation-service', () => ({
+  normalizeClientVersion: vi.fn(),
+  evaluateFlagsForSubject: vi.fn(async () => ({})),
   buildFlagSubject: (_request: unknown, facts: unknown) => facts,
 }));
-vi.mock('@/lib/free-chat-surface-policy', () => ({ resolveCloudChatSurface: () => 'web' }));
+vi.mock('@/lib/free-chat-surface-policy', () => ({
+  bindSurfaceFromClaims: vi.fn(),
+  canUseManagedCloudChatSurface: vi.fn(),
+  getCloudChatSurfaceCapability: vi.fn(),
+  readSurfaceHint: vi.fn(),
+  resolveCloudChatSurface: () => 'web',
+}));
 vi.mock('@/lib/server/code-execution-policy', () => ({
+  CODE_EXECUTION_SETTINGS_NAMESPACE: vi.fn(),
+  CODE_EXECUTION_SETTING_KEY: vi.fn(),
   resolveCloudCodeExecutionPolicy: () => mocks.codePolicy(),
 }));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
+  ensureSeatMemberCreditAccount: vi.fn(),
+  isSeatBearingBillingPlan: vi.fn(),
+  resolveEffectiveSubscription: vi.fn(),
+  resolveEntitledPlanTier: vi.fn(),
   resolveEntitlementBundle: async () => ({ plan: 'pro', subscription: null }),
 }));
 vi.mock('@/lib/services/managed-compute-access', async () => {
   const { NextResponse } = await import('next/server');
   return {
+    evaluateManagedComputeSubscriptionAccess: vi.fn(),
+    evaluateManagedComputeWorkspaceAccess: vi.fn(),
     evaluateManagedComputeAccess: () => mocks.computeAccess(),
     buildManagedComputeAccessGateResponse: (decision: { allowed: boolean; code: string }) =>
       decision.allowed

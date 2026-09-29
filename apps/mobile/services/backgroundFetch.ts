@@ -99,6 +99,7 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
               type: 'agent_approval_needed',
               priority: APPROVAL_PRIORITY,
               approvalId: approval.id,
+              ...(result.pendingApprovals.length === 1 ? { runId: approval.runId } : {}),
               route: '/(app)/companion',
             },
             categoryIdentifier: AGENT_APPROVAL_CATEGORY_IDENTIFIER,

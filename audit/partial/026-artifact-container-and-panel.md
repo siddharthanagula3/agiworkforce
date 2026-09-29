@@ -59,7 +59,7 @@ Code: `apps/mobile/src/features/chat/components/InlineArtifactCard.tsx:236-239`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Each card opens its own full-screen viewer with no switcher inside it; to change artifact the reader closes the viewer and taps another card or opens the Artifacts gallery. | ui |
+| mobile | partial | post-codex/w-work-s26.12-mobile-artifact-switcher.patch (apply after w-work-s26-mobile-artifact-versions-edit-publish-state): the artifact viewer shows a tab strip of the conversation artifacts when there is more than one; tapping switches in place, as web ArtifactsPanel tabs. Waits on the Codex hold. | ui |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1022-1032`, `apps/mobile/src/features/artifacts/index.tsx:206-217`
 
@@ -105,7 +105,7 @@ Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The 'vN/M' chip appears only when there are two or more versions and steps one at a time; no list of versions to jump to. | ui |
+| mobile | partial | post-codex/w-work-s26-mobile-artifact-versions-edit-publish-state.patch (apply order: p-slack-s26.29, no-yearly-s32-34, w-work-s28, w-work-s26-publish-conversation, then this): tapping vN/M opens a Versions sheet, newest first, each with its line-change summary, and jumps to the chosen version, as web's version history. Waits on the Codex hold. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -119,7 +119,7 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:519-556`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The chip and its controls appear only when one artifact has two versions, and the phone app never makes a second one: artifacts are re-derived per message and a retry becomes a new message, so in practice there is nothing to step through. | handler |
+| mobile | partial | post-codex/w-work-s26-mobile-artifact-versions-edit-publish-state.patch (apply order: p-slack-s26.29, no-yearly-s32-34, w-work-s28, w-work-s26-publish-conversation, then this): Edit source on the latest version saves the edited text into the artifact store, which keeps the old text as the previous version, so the chip, previous/next and Restore now have versions to act on, as web's source edit. Waits on the Codex hold. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -133,7 +133,7 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:536-568`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Restore works in the store (appends), but the chip and its controls appear only when one artifact has two versions, and the phone app never makes a second one: artifacts are re-derived per message and a retry becomes a new message, so in practice there is nothing to step through. | handler |
+| mobile | partial | post-codex/w-work-s26-mobile-artifact-versions-edit-publish-state.patch (apply order: p-slack-s26.29, no-yearly-s32-34, w-work-s28, w-work-s26-publish-conversation, then this): same: Restore acts on versions created by Edit source. Waits on the Codex hold. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -210,7 +210,7 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The public link appears only right after publishing in the open viewer (component state); reopening shows no published state and the audience is never shown. | states |
+| mobile | partial | post-codex/w-work-s26-mobile-artifact-versions-edit-publish-state.patch (apply order: p-slack-s26.29, no-yearly-s32-34, w-work-s28, w-work-s26-publish-conversation, then this): opening the viewer reads GET /api/artifacts/publish for this artifact and shows its link with the audience (Anyone with the link / Everyone in this workspace), as web. Waits on the Codex hold. | ui |
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:139-143`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:265-271`
 
@@ -255,6 +255,6 @@ Code: `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:69-69`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Artifacts are derived only when the turn finishes, so the card and viewer appear after completion; while streaming the code only shows as message text. | states |
+| mobile | partial | post-codex/w-work-s26.39-mobile-streaming-artifact.patch: while a reply streams, an unclosed code fence of 4+ lines shows a "Generating artifact · TYPE" card with "Writing…"; the opened viewer updates live and hands off to the saved artifact under the same derived id (or "Stopped artifact"), as web StreamingArtifactView. Waits on the Codex hold. | states |
 
 Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1951-1973`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:336-341`

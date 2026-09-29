@@ -150,18 +150,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531
 
 Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
 
-## S12.16: Coding entry.
-
-- Done when: From the new-chat surface the user can start a coding session (a repository/workspace-aware coding agent).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Add a way to start coding work from the phone; today mobile can only follow a paired desktop's code sessions from "Remote" in the drawer. | ui |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:129-136`
-
 ## S12.17: Temporary-chat control.
 
 - Done when: Before or during a new chat the user can switch it to a temporary chat that is not kept in history.

@@ -44,6 +44,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   resolveManagedQuotaRecovery: vi.fn(() => null),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
+  FREE_BUDGET_REACHED_ERROR_CLASS: 'free_trial_token_budget_reached',
   settleFreeTrialRequest: vi.fn(),
   FREE_TRIAL_MODEL: 'fixture-free-trial-model',
   applyFreeTrialProviderBudget: vi.fn(),
@@ -58,6 +59,11 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   scopeFreeTrialToolSpend: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  readCloudAgentRunAssistantText: vi.fn(async () => ({
+    text: '',
+    interactiveCards: [],
+    lastSequence: 0,
+  })),
   APPROVAL_CHECKPOINT_TTL_HOURS: 24,
   appendCloudAgentEvents: vi.fn(),
   transitionCloudAgentRun: vi.fn(),

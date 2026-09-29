@@ -1,3 +1,5 @@
+import { isPhoneStepTool, phoneStepStakes } from './phone-steps';
+
 export interface ToolApprovalStake {
   kind: 'recipient' | 'amount' | 'item';
   label: string;
@@ -122,6 +124,7 @@ export function toolApprovalStakes(
   args: Record<string, unknown> | undefined,
 ): ToolApprovalStake[] {
   if (!args) return [];
+  if (isPhoneStepTool(toolName)) return phoneStepStakes(toolName, args);
   const stakes: ToolApprovalStake[] = [];
   if (SEND_TOOL_NAME.test(toolName)) stakes.push(...collect(args, RECIPIENT_KEYS, 'recipient'));
   if (PAYMENT_TOOL_NAME.test(toolName)) {

@@ -17,6 +17,7 @@ vi.mock('@/lib/rate-limit', () => ({
 
 const mockClerkAuth = vi.fn((..._args: unknown[]) => Promise.resolve({ userId: 'user-auth-id' }));
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockClerkAuth(...args),
 }));
 

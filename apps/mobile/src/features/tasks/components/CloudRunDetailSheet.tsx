@@ -19,6 +19,7 @@ import {
 } from '../runPresentation';
 import { CloudRunSteerSection } from './CloudRunSteerSection';
 import { CloudRunInputForm } from './CloudRunInputForm';
+import { CloudRunFilesSection } from './CloudRunFilesSection';
 import { useCloudTaskStore, type CloudRunDetail } from '../store';
 
 const DEVICE_STEP_NOTE =
@@ -349,6 +350,10 @@ export function CloudRunDetailSheet({
                   {detail.transcript}
                 </Text>
               </View>
+            ) : null}
+
+            {detail && detail.files.length > 0 ? (
+              <CloudRunFilesSection files={detail.files} />
             ) : null}
 
             {detail && detail.activity.length > 0 ? (

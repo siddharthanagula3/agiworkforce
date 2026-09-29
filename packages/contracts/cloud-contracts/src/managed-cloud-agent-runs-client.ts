@@ -545,12 +545,15 @@ export function createManagedCloudAgentRunClient(
         }
         await options.onSnapshot?.(snapshot);
         lastSequence = snapshot.nextAfterSequence;
+        const serverHasMoreEvents = lastSequence < snapshot.run.lastEventSequence;
 
-        if (isCloudAgentRunFollowBoundary(snapshot.run.state)) {
+        if (
+          isCloudAgentRunFollowBoundary(snapshot.run.state) &&
+          (!serverHasMoreEvents || snapshot.events.length === 0)
+        ) {
           return { run: snapshot.run, lastSequence };
         }
 
-        const serverHasMoreEvents = lastSequence < snapshot.run.lastEventSequence;
         const pageMayBeFull = snapshot.events.length >= pageSize;
         if (!serverHasMoreEvents && !pageMayBeFull) {
           await wait(pollIntervalMs, options.signal);

@@ -24,6 +24,7 @@ vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'attacker-user' })),
 }));
 vi.mock('@/lib/server/neon-db', () => ({

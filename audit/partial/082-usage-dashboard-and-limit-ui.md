@@ -192,10 +192,9 @@ Code: `packages/contracts/types/src/account-usage-client.ts:91-91`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows no estimate; the server-side reservation estimate is not exposed to clients. | ui, api |
 | cli | partial | The cited 'estimate' is a retrospective session cost (estimated because it is priced locally), not an estimate of what a task will cost; during a turn the status line reuses the pre-turn total. |  |
 
-Code: `apps/web/lib/services/managed-usage-request-service.ts:106-111`, `apps/cli/src/usage_summary.rs:382-396`, `apps/cli/src/tui/tui_app.rs:3897-3911`
+Code: `apps/cli/src/usage_summary.rs:382-396`, `apps/cli/src/tui/tui_app.rs:3897-3911`
 
 ## S82.24: Budget warning.
 
@@ -232,15 +231,3 @@ Code: `packages/contracts/types/src/billing-catalog.ts:650-650`
 | mobile | partial | post-codex/no-yearly-s82-mobile-chat-usage.patch shows 'Resets in ...' in the paywall sheet from the window the refusal waits on (managedQuotaResetAt, shared with the web in 66bce5d64); apply after Codex lands and merges with integration | ui |
 
 Code: `packages/contracts/types/src/billing-catalog.ts:650-650`
-
-## S82.33: Billing discrepancy report.
-
-- Done when: Users can report a billing or usage discrepancy and have it tracked.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | 'Help with a purchase - Charged twice, missing credits, refunds' opens the web help page; nothing is filed from the app. | surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:542-547`

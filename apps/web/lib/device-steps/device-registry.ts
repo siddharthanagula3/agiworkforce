@@ -11,9 +11,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   deviceStepCapability,
+  deviceStepScope,
   offeredDeviceStepTools,
-  type DesktopCapability,
   type DesktopHostDeclaration,
+  type DeviceStepCapability,
 } from '@agiworkforce/local-runtime-contract';
 import type { PlatformCapability } from '@agiworkforce/types';
 import { isRegistryMissing } from '@/app/api/settings/devices/schema-state';
@@ -231,7 +232,7 @@ export const DEVICE_PRESENCE_RETRY_MS = DEVICE_HEARTBEAT_INTERVAL_MS;
 
 /** Which advertised capability answers for a step's local-runtime permission. */
 export const STEP_CAPABILITY_ADVERTISEMENTS: Readonly<
-  Partial<Record<DesktopCapability, PlatformCapability>>
+  Partial<Record<DeviceStepCapability, PlatformCapability>>
 > = Object.freeze({
   'filesystem.read': 'canUseFileSystem',
   'filesystem.write': 'canUseFileSystem',
@@ -245,21 +246,22 @@ export const STEP_CAPABILITY_ADVERTISEMENTS: Readonly<
   'browser.cdp': 'canUseBrowserAutomation',
 });
 
-const STEP_CAPABILITY_LABELS: Readonly<Partial<Record<DesktopCapability, string>>> = Object.freeze({
-  'filesystem.read': 'access to its files',
-  'filesystem.write': 'permission to write its files',
-  'shell.execute': 'a terminal',
-  'computer.use': 'screen control',
-  'screen.capture': 'screen capture',
-  'clipboard.read': 'access to its clipboard',
-  'mcp.local': 'its local tool servers',
-  'local.inference': 'its local models',
-  'browser.site': 'browser control',
-  'browser.cdp': "its browser's console and network activity",
-});
+const STEP_CAPABILITY_LABELS: Readonly<Partial<Record<DeviceStepCapability, string>>> =
+  Object.freeze({
+    'filesystem.read': 'access to its files',
+    'filesystem.write': 'permission to write its files',
+    'shell.execute': 'a terminal',
+    'computer.use': 'screen control',
+    'screen.capture': 'screen capture',
+    'clipboard.read': 'access to its clipboard',
+    'mcp.local': 'its local tool servers',
+    'local.inference': 'its local models',
+    'browser.site': 'browser control',
+    'browser.cdp': "its browser's console and network activity",
+  });
 
 interface RefusedDeviceCapability {
-  capability: DesktopCapability;
+  capability: DeviceStepCapability;
   label: string;
 }
 
@@ -300,6 +302,11 @@ function capabilitySourceFor(
     : 'inferred';
 }
 
+function stepsStayOnThePhone(declaration: DesktopHostDeclaration): boolean {
+  const offered = offeredDeviceStepTools(declaration);
+  return offered.length > 0 && offered.every((tool) => deviceStepScope(tool) === 'phone');
+}
+
 /**
  * Whether a durable run may hand work to this device right now.
  *
@@ -323,7 +330,7 @@ export function clearDeviceForRemoteSteps(
       reason: `The credential "${declaration.deviceName}" registered with has been revoked, so no step was sent to it.`,
     };
   }
-  if (!device.remoteEnabled) {
+  if (!device.remoteEnabled && !stepsStayOnThePhone(declaration)) {
     return {
       decision: 'withdrawn',
       reason: `"${declaration.deviceName}" has remote work switched off, so no step was sent to it.`,

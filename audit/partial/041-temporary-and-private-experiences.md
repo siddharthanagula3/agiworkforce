@@ -151,18 +151,15 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1424-1424`
 ## S41.15: Local-only file collection.
 
 - Done when: The user can keep a collection of files on the device that chats can use without uploading them.
-- Wave: 2
+- Wave: 3
 - Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Wire the on-device document index into the app; indexDocument/retrieve exist but nothing calls them (barrel export only). | mount, ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/memory/services/ragIndex.ts:118-125`
 
 ## S41.16: Local-only Memory.
 

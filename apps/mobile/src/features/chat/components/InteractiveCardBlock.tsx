@@ -7,6 +7,7 @@ import {
   isResolvedPlace,
   type ImageCardBody,
   type InteractiveCard,
+  type InteractiveCardResponsePayload,
   type ItineraryCardBody,
   type ItineraryTravelMode,
   type MapSearchCardBody,
@@ -19,6 +20,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { GeneratedImage } from './GeneratedImage';
 import { ImageFullScreen } from './ImageFullScreen';
 import { translatePlural } from '@/src/i18n/plural';
+import { ClarifyCard } from './ClarifyCard';
 
 const TILE_SIZE = 256;
 const FRAME_HEIGHT = 200;
@@ -559,10 +561,14 @@ export function InteractiveCardBlock({
   cards,
   tileBaseUrl,
   canLoadManagedCloudTiles,
+  canRespond = false,
+  onRespond,
 }: {
   cards: InteractiveCard[];
   tileBaseUrl: string;
   canLoadManagedCloudTiles: boolean;
+  canRespond?: boolean;
+  onRespond?: (cardId: string, payload: InteractiveCardResponsePayload) => Promise<boolean>;
 }) {
   const colors = useThemeColors();
   const wantsMapTiles = useMemo(
@@ -584,6 +590,17 @@ export function InteractiveCardBlock({
       }}
     >
       {cards.map((card) => {
+        if (card.recognized && card.kind === 'clarify.v1') {
+          return (
+            <ClarifyCard
+              key={card.cardId}
+              card={card}
+              body={card.body}
+              canRespond={canRespond}
+              {...(onRespond ? { onRespond } : {})}
+            />
+          );
+        }
         if (card.recognized && card.kind === 'itinerary.v1') {
           return <ItineraryCard key={card.cardId} body={card.body} />;
         }

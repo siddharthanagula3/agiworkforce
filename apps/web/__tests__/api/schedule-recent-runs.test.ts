@@ -1,9 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => null) }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
-vi.mock('@/lib/services/schedule-service', () => ({ listRecentScheduleRuns: vi.fn() }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: vi.fn(),
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: vi.fn(() => null),
+}));
+vi.mock('@/lib/server/rls-db', () => ({
+  ACTIVE_ORG_HEADER: vi.fn(),
+  getCurrentUserRlsDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
+  getUserScopedDb: vi.fn(),
+}));
+vi.mock('@/lib/services/schedule-service', () => ({
+  ScheduleConflictError: vi.fn(),
+  ScheduleLimitError: vi.fn(),
+  ScheduleNotFoundError: vi.fn(),
+  ScheduleValidationError: vi.fn(),
+  UNATTENDED_RUN_DENIED_STATUSES: vi.fn(),
+  assertProjectOwnership: vi.fn(),
+  assertScheduleQuota: vi.fn(),
+  claimDueScheduleRuns: vi.fn(),
+  claimScheduleRunApproval: vi.fn(),
+  countSchedules: vi.fn(),
+  createEventTriggeredScheduleRun: vi.fn(),
+  createManualScheduleRun: vi.fn(),
+  createSchedule: vi.fn(),
+  deleteSchedule: vi.fn(),
+  detectMissedExecution: vi.fn(),
+  finalizeScheduleRun: vi.fn(),
+  getSchedule: vi.fn(),
+  listScheduleRuns: vi.fn(),
+  listSchedules: vi.fn(),
+  mapScheduleRun: vi.fn(),
+  mapScheduleTask: vi.fn(),
+  processClaimedScheduleRun: vi.fn(),
+  processDueScheduleRuns: vi.fn(),
+  retryDelaySeconds: vi.fn(),
+  setScheduleEnabled: vi.fn(),
+  updateSchedule: vi.fn(),
+  listRecentScheduleRuns: vi.fn(),
+}));
 
 import { encodeKeysetCursor } from '@/lib/identity/pagination';
 import { getUserScopedDb } from '@/lib/server/rls-db';

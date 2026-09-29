@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S102.06: Research worker runtime.
-
-- Done when: Deep research runs in a background worker that outlives the chat request.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Deep research runs inside the chat streaming request (research-loop.ts). The durable workflow accepts researchMode but never reads it, so no research worker survives a disconnect. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:351-353`, `apps/web/lib/workflows/cloud-agent-workflow-input.ts:128-128`, `apps/web/lib/jobs/job-handlers.ts:170-170`
-
 ## S102.08: Cloud code sandbox.
 
 - Done when: Cloud code runs in an isolated remote sandbox.
@@ -27,14 +16,3 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:351-353`, `
 | platform | partial | E2B sandboxes are built but off unless AGI_E2B_EXECUTION=1 (.env.example ships 0); otherwise code runs on the provider-native interpreter. Turn it on in production. | flag-off |
 
 Code: `apps/web/lib/e2b/gate.ts:16-18`, `apps/web/lib/e2b/runtime.ts:889-893`
-
-## S102.32: Generated-application hosting runtime.
-
-- Done when: Generated applications are hosted at a public URL with the runtime they need.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | billing/no-yearly 234af98ee3: chat.system@3 (unpinned, internal channel) tells models about window.agi.complete and window.agi.storage. Left: connected apps inside published artifacts, which Claude documents (support.claude.com/en/articles/9487310, fetched 2026-09-28: artifacts read and write the viewer's own connected apps after the viewer approves the apps and tools, and Team and Enterprise owners can turn it off); being built next | handler |
-
-Code: `apps/web/lib/prompts/chat-system-prompt.ts:130-130`, `apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts:218-218`

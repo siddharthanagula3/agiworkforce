@@ -24,6 +24,77 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<stri
   return shareUrl;
 }
 
+export type PublishedArtifactAudience = 'public' | 'organization';
+
+export interface ArtifactPublication {
+  shareUrl: string;
+  visibility: PublishedArtifactAudience;
+}
+
+export interface ArtifactPublicationState {
+  publication: ArtifactPublication | null;
+  workspaceMemberCount: number | null;
+}
+
+function readAudience(value: unknown): PublishedArtifactAudience {
+  return value === 'organization' ? 'organization' : 'public';
+}
+
+function readWorkspaceMemberCount(value: unknown): number | null {
+  if (!value || typeof value !== 'object') return null;
+  const count = (value as { memberCount?: unknown }).memberCount;
+  return typeof count === 'number' && Number.isFinite(count) ? count : null;
+}
+
+export function readPublishedTokenFromUrl(shareUrl: string): string | null {
+  const match = /\/shared-artifact\/([A-Za-z0-9_-]{24})\/?$/.exec(shareUrl.trim());
+  return match?.[1] ?? null;
+}
+
+function requirePublishedToken(shareUrl: string): string {
+  const token = readPublishedTokenFromUrl(shareUrl);
+  if (!token) throw new Error('That share link does not name a published artifact.');
+  return token;
+}
+
+export async function fetchArtifactPublication(
+  artifactId: string,
+): Promise<ArtifactPublicationState> {
+  const response = await api.get<{
+    artifacts?: Array<{ artifactId?: unknown; shareUrl?: unknown; visibility?: unknown }>;
+    workspace?: unknown;
+  }>('/api/artifacts/publish');
+  const match = (response.artifacts ?? []).find(
+    (entry) => entry.artifactId === artifactId && typeof entry.shareUrl === 'string',
+  );
+  return {
+    publication: match
+      ? { shareUrl: String(match.shareUrl), visibility: readAudience(match.visibility) }
+      : null,
+    workspaceMemberCount: readWorkspaceMemberCount(response.workspace),
+  };
+}
+
+export async function setPublishedArtifactAudience(
+  shareUrl: string,
+  visibility: PublishedArtifactAudience,
+): Promise<ArtifactPublication> {
+  const token = requirePublishedToken(shareUrl);
+  const response = await api.patch<{ shareUrl?: unknown; visibility?: unknown }>(
+    `/api/artifacts/publish/${token}`,
+    { visibility },
+  );
+  return {
+    shareUrl: typeof response.shareUrl === 'string' ? response.shareUrl : shareUrl,
+    visibility: readAudience(response.visibility),
+  };
+}
+
+export async function unpublishArtifact(shareUrl: string): Promise<void> {
+  const token = requirePublishedToken(shareUrl);
+  await api.delete(`/api/artifacts/publish/${token}`);
+}
+
 export const PUBLISH_FAILED_MESSAGE =
   'This artifact could not be published right now. Nothing was shared. Try again in a moment.';
 

@@ -21,6 +21,8 @@ import type {
   LiveSessionClosed,
   LiveTranscriptTurn,
   LiveVoiceSession,
+  LiveVoiceToolActivity,
+  LiveVoiceToolOutcome,
 } from '@/src/features/voice/services/liveVoiceSession';
 import {
   loadLiveVoiceModule,
@@ -43,6 +45,7 @@ export type LiveVoiceStatus = 'idle' | 'connecting' | 'live' | 'error';
 
 const RECONNECT_MAX_ATTEMPTS = 3;
 const RECONNECT_BASE_MS = 1_000;
+const TOOL_OUTCOME_LIMIT = 3;
 
 export interface LiveVoiceController {
   status: LiveVoiceStatus;
@@ -54,6 +57,8 @@ export interface LiveVoiceController {
   turns: LiveTranscriptTurn[];
   error: string | null;
   approvals: readonly LiveVoicePendingApproval[];
+  toolActivity: readonly LiveVoiceToolActivity[];
+  toolOutcomes: readonly LiveVoiceToolOutcome[];
   decideToolApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   toggleMute: () => void;
   cancelBackendWork: () => void;
@@ -84,6 +89,8 @@ export function useLiveVoiceSession({
   const [turns, setTurns] = useState<LiveTranscriptTurn[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<readonly LiveVoicePendingApproval[]>([]);
+  const [toolActivity, setToolActivity] = useState<readonly LiveVoiceToolActivity[]>([]);
+  const [toolOutcomes, setToolOutcomes] = useState<readonly LiveVoiceToolOutcome[]>([]);
   const [attempt, setAttempt] = useState(0);
   const [reconnecting, setReconnecting] = useState(false);
   const reconnectsRef = useRef(0);
@@ -126,10 +133,14 @@ export function useLiveVoiceSession({
     let cancelled = false;
     setStatus('connecting');
     setError(null);
-    if (reconnectsRef.current === 0) setTurns([]);
+    if (reconnectsRef.current === 0) {
+      setTurns([]);
+      setToolOutcomes([]);
+    }
     setMuted(false);
     setInterrupted(false);
     setApprovals([]);
+    setToolActivity([]);
 
     const finish = (session: LiveVoiceSession, closed: LiveSessionClosed) => {
       void liveVoice?.settleLiveVoiceSession(session.sessionId, session.settlement, closed);
@@ -167,8 +178,19 @@ export function useLiveVoiceSession({
           onBackendBusy: (busy) => {
             if (!cancelled) setBackendBusy(busy);
           },
+          onToolActivity: (activities) => {
+            if (!cancelled) setToolActivity(activities);
+          },
           onToolApprovals: (pending) => {
             if (!cancelled) setApprovals(pending);
+          },
+          onToolResult: (outcome) => {
+            if (cancelled) return;
+            setToolOutcomes((previous) =>
+              [...previous.filter((entry) => entry.callId !== outcome.callId), outcome].slice(
+                -TOOL_OUTCOME_LIMIT,
+              ),
+            );
           },
           onTranscript: recordTurn,
           onInterrupted: () => {
@@ -183,6 +205,7 @@ export function useLiveVoiceSession({
             setStatus('idle');
             setBackendBusy(false);
             setApprovals([]);
+            setToolActivity([]);
             endedRef.current(
               closed.reason === 'close_requested' ? null : LIVE_VOICE_MESSAGE.sessionEnded,
             );
@@ -194,6 +217,7 @@ export function useLiveVoiceSession({
             setReconnecting(false);
             setBackendBusy(false);
             setApprovals([]);
+            setToolActivity([]);
             setError(message);
           },
           onConnectionLost: (message) => {
@@ -205,6 +229,7 @@ export function useLiveVoiceSession({
             if (cancelled) return;
             setBackendBusy(false);
             setApprovals([]);
+            setToolActivity([]);
             if (reconnectsRef.current >= RECONNECT_MAX_ATTEMPTS) {
               setReconnecting(false);
               setStatus('error');
@@ -248,6 +273,7 @@ export function useLiveVoiceSession({
       setAssistantSpeaking(false);
       setBackendBusy(false);
       setApprovals([]);
+      setToolActivity([]);
       endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
     });
 
@@ -262,6 +288,7 @@ export function useLiveVoiceSession({
       setAssistantSpeaking(false);
       setBackendBusy(false);
       setApprovals([]);
+      setToolActivity([]);
       if (session) void session.close().then((closed) => finish(session, closed));
     };
   }, [active, attempt, recordTurn]);
@@ -294,6 +321,8 @@ export function useLiveVoiceSession({
     turns,
     error,
     approvals,
+    toolActivity,
+    toolOutcomes,
     decideToolApproval,
     toggleMute,
     cancelBackendWork,

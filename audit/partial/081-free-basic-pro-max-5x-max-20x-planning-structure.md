@@ -64,30 +64,6 @@ Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/sr
 | --- | --- | --- | --- |
 | mobile | partial | Not plan marketing: generation settings live in the mobile model picker, which shows plan-locked models (routes to billing) and an effort control. Gated models are shown, gated efforts are not, and the server clamps. |  |
 
-## S81.18: Trial entitlements.
-
-- Done when: A plan can be granted as a time-limited trial that is shown as a trial and ends (reverts or bills) when its period is over.
-- Wave: 2
-- Already works on: web, desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile has an invite-code modal but it is never mounted and its redeem is a local stub that accepts only a built-in alpha code, so no trial can be claimed. | mount, handler |
-
-Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
-
-## S81.19: Promotional entitlements.
-
-- Done when: Promotional entitlements (promo codes, bonus credits, invite grants) exist, are applied to the account and are visible to the user.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile cannot apply any promotion: its invite-code modal is unmounted and stubbed, and store purchases (where store offers would apply) are gated off. | mount, handler |
-
-Code: `apps/mobile/src/features/waitlist/service.ts:85-95`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
-
 ## S81.23: Upgrade effective time.
 
 - Done when: An upgrade takes effect at a stated time (immediately), with the charge and the new renewal date shown before confirming.

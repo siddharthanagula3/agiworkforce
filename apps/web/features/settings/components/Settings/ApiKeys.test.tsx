@@ -16,6 +16,7 @@ vi.mock('@features/settings/hooks/use-settings-queries', () => ({
 }));
 
 vi.mock('@/features/developers/hooks/use-developer-projects', () => ({
+  readDeveloperApiError: vi.fn(async (_response: Response, fallback: string) => fallback),
   useDeveloperProjects: () => ({ data: [], isLoading: false, isError: false }),
 }));
 
