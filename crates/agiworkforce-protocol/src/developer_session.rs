@@ -2542,6 +2542,8 @@ pub struct GitPullRequestParams {
     pub base: Option<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub draft: bool,
+    pub confirmed_remote: String,
+    pub confirmed_branch: String,
     pub confirmed_head: String,
     pub confirmed_commits: u32,
 }

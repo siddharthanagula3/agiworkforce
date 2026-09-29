@@ -1358,6 +1358,8 @@ export class LocalRuntimeClient {
     title: string;
     body?: string;
     base: string;
+    confirmedRemote: string;
+    confirmedBranch: string;
     confirmedHead: string;
     confirmedCommits: number;
   }): Promise<PullRequestResult> {
