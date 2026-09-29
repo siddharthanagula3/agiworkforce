@@ -1,6 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  CONVERSATION_SHARES_PATH,
+  ConversationShareAudienceResponseSchema,
+  ConversationShareCreatedSchema,
+  conversationSharePath,
+  type ConversationShareVisibility,
+} from '@agiworkforce/cloud-contracts';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
@@ -16,7 +23,7 @@ export type ShareExpiryDays = 1 | 7 | 30;
  * `organization` closes the link and leaves it readable only to the members of
  * the owner's workspace. Expiry applies to both.
  */
-export type ShareAudience = 'public' | 'organization';
+export type ShareAudience = ConversationShareVisibility;
 
 export interface ActiveConversationShare {
   url: string;
@@ -35,34 +42,16 @@ interface InFlightShareRequest {
   timedOut: boolean;
 }
 
-function readAudience(value: unknown): ShareAudience {
-  return value === 'organization' ? 'organization' : 'public';
-}
-
-function readWorkspace(value: unknown): ActiveConversationShare['workspace'] {
-  if (!value || typeof value !== 'object') return null;
-  const count = Number((value as { memberCount?: unknown }).memberCount ?? 0);
-  return { memberCount: Number.isFinite(count) && count > 0 ? Math.floor(count) : 0 };
-}
-
 function readCreatedShare(value: unknown): ActiveConversationShare {
-  if (!value || typeof value !== 'object') throw new Error('Invalid share response');
-  const row = value as Record<string, unknown>;
-  if (
-    typeof row['shareUrl'] !== 'string' ||
-    typeof row['token'] !== 'string' ||
-    typeof row['expiresAt'] !== 'string' ||
-    typeof row['messageCount'] !== 'number'
-  ) {
-    throw new Error('Invalid share response');
-  }
+  const parsed = ConversationShareCreatedSchema.safeParse(value);
+  if (!parsed.success) throw new Error('Invalid share response');
   return {
-    url: row['shareUrl'],
-    token: row['token'],
-    expiresAt: row['expiresAt'],
-    messageCount: row['messageCount'],
-    audience: readAudience(row['visibility']),
-    workspace: readWorkspace(row['workspace']),
+    url: parsed.data.shareUrl,
+    token: parsed.data.token,
+    expiresAt: parsed.data.expiresAt,
+    messageCount: parsed.data.messageCount,
+    audience: parsed.data.visibility,
+    workspace: parsed.data.workspace,
   };
 }
 
@@ -191,7 +180,7 @@ export function useShareConversation(
             };
           }),
         };
-        const res = await fetch('/api/share', {
+        const res = await fetch(CONVERSATION_SHARES_PATH, {
           method: 'POST',
           headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
           credentials: 'include',
@@ -230,7 +219,7 @@ export function useShareConversation(
     const request = beginRequest();
     if (!request) return false;
     try {
-      const res = await fetch(`/api/share/${activeShare.token}`, {
+      const res = await fetch(conversationSharePath(activeShare.token), {
         method: 'DELETE',
         headers: await addCsrfHeaders(),
         credentials: 'include',
@@ -259,7 +248,7 @@ export function useShareConversation(
       const request = beginRequest();
       if (!request) return false;
       try {
-        const res = await fetch(`/api/share/${activeShare.token}`, {
+        const res = await fetch(conversationSharePath(activeShare.token), {
           method: 'PATCH',
           headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
           credentials: 'include',
@@ -273,10 +262,10 @@ export function useShareConversation(
             'Could not change who can open this.';
           throw new Error(msg);
         }
-        const body = (await res.json()) as { visibility?: unknown };
+        const body = ConversationShareAudienceResponseSchema.parse(await res.json());
         setActiveShare((current) =>
           current?.token === activeShare.token
-            ? { ...current, audience: readAudience(body.visibility) }
+            ? { ...current, audience: body.visibility }
             : current,
         );
         return true;

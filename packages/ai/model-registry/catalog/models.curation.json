@@ -1375,6 +1375,7 @@
         "cached_write": 6.25,
         "cached_write_1h": 10
       },
+      "fastTier": { "priceMultiplier": 2 },
       "contextOverride": 1000000,
       "capabilitiesOverride": {
         "streaming": true,
@@ -1401,6 +1402,154 @@
         "stage": "promoted",
         "stagedOn": "2026-09-05",
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.flagship_coding"
+      }
+    },
+    "claude-opus-5-5": {
+      "id": "claude-opus-5-5",
+      "apiModelId": "claude-opus-5-5",
+      "openRouterSlug": "anthropic/claude-opus-5-5",
+      "name": "Claude Opus 5.5",
+      "provider": "anthropic",
+      "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
+      "variantPartner": "claude-sonnet-5",
+      "maxInputTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-05",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
+      "inputModalities": ["text", "image", "pdf"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "high",
+        "canDisableThinking": true,
+        "thinkingDefault": "adaptive",
+        "supportsManualThinking": false,
+        "maxEffortWhenThinkingDisabled": "high",
+        "rejectsSamplingParameters": true,
+        "request": {
+          "api": "messages",
+          "effortPath": "output_config.effort",
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "max"
+      },
+      "costOverride": {
+        "inputCost": 4,
+        "outputCost": 20,
+        "cached_input": 0.2,
+        "cached_write": 5,
+        "cached_write_1h": 8
+      },
+      "fastTier": { "priceMultiplier": 2 },
+      "contextOverride": 1000000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true,
+        "caching": true
+      },
+      "promptCacheMinimumTokens": 512,
+      "providerCompatibility": {
+        "nativeWebFetch": false
+      },
+      "speedOverride": "slow",
+      "releasedOverride": "September 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-29",
+        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+      }
+    },
+    "claude-opus-4-8": {
+      "id": "claude-opus-4-8",
+      "apiModelId": "claude-opus-4-8",
+      "openRouterSlug": "anthropic/claude-opus-4-8",
+      "name": "Claude Opus 4.8",
+      "provider": "anthropic",
+      "modelType": "reasoning",
+      "openWeight": false,
+      "license": "proprietary",
+      "variantPartner": "claude-sonnet-5",
+      "maxInputTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-01",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
+      "inputModalities": ["text", "image", "pdf"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "high",
+        "canDisableThinking": true,
+        "thinkingDefault": "adaptive",
+        "supportsManualThinking": false,
+        "maxEffortWhenThinkingDisabled": "high",
+        "rejectsSamplingParameters": true,
+        "request": {
+          "api": "messages",
+          "effortPath": "output_config.effort",
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "max"
+      },
+      "costOverride": {
+        "inputCost": 5,
+        "outputCost": 25,
+        "cached_input": 0.5,
+        "cached_write": 6.25,
+        "cached_write_1h": 10
+      },
+      "fastTier": { "priceMultiplier": 2 },
+      "contextOverride": 1000000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true,
+        "caching": true
+      },
+      "promptCacheMinimumTokens": 512,
+      "providerCompatibility": {
+        "nativeWebFetch": false
+      },
+      "speedOverride": "slow",
+      "releasedOverride": "June 2026",
+      "lifecycle": {
+        "stage": "registered",
+        "stagedOn": "2026-09-29",
+        "source": "https://platform.claude.com/docs/en/about-claude/pricing"
       }
     },
     "claude-sonnet-5": {

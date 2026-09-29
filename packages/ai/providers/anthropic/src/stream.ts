@@ -32,6 +32,11 @@ interface BlockState {
   toolUseId?: string;
 }
 
+function servedSpeed(usage: object | null | undefined): 'standard' | 'fast' | undefined {
+  const speed = (usage as { speed?: unknown } | null | undefined)?.speed;
+  return speed === 'fast' || speed === 'standard' ? speed : undefined;
+}
+
 function codeExecutionRequestCount(serverToolUse: object | null | undefined): number {
   if (!serverToolUse || !('code_execution_requests' in serverToolUse)) return 0;
   const counted = serverToolUse.code_execution_requests;
@@ -56,6 +61,7 @@ export async function* translateAnthropicStream(
   let cacheReadTokens: number | undefined;
   let cacheWriteTokens: number | undefined;
   let cacheWrite1hTokens: number | undefined;
+  let speed: 'standard' | 'fast' | undefined;
   let answeredWebSearches = 0;
   const containerIds = new Set<string>();
   let stopEmitted = false;
@@ -72,6 +78,7 @@ export async function* translateAnthropicStream(
           cacheReadTokens = usage.cache_read_input_tokens ?? undefined;
           cacheWriteTokens = usage.cache_creation_input_tokens ?? undefined;
           cacheWrite1hTokens = usage.cache_creation?.ephemeral_1h_input_tokens ?? undefined;
+          speed = servedSpeed(usage) ?? speed;
         }
         break;
       }
@@ -150,6 +157,7 @@ export async function* translateAnthropicStream(
         if (event.delta.container?.id) containerIds.add(event.delta.container.id);
         const usage = event.usage;
         const outputTokens = usage?.output_tokens;
+        speed = servedSpeed(usage) ?? speed;
         const serverToolUse = usage?.server_tool_use;
         const webSearchRequests = Math.min(
           serverToolUse?.web_search_requests ?? 0,
@@ -168,6 +176,7 @@ export async function* translateAnthropicStream(
           ...(webFetchRequests > 0 ? { webFetchRequests } : {}),
           ...(codeExecutionRequests > 0 ? { codeExecutionRequests } : {}),
           ...(containerIds.size > 0 ? { codeExecutionContainerIds: [...containerIds] } : {}),
+          ...(speed ? { speed } : {}),
         };
         yield usageChunk;
         yield { type: 'stop', reason: mapStopReason(event.delta.stop_reason) };

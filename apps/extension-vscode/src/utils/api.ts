@@ -209,6 +209,7 @@ export async function setAccountToken(
   expiresAt?: number,
   refreshToken?: string,
 ): Promise<void> {
+  heldAccountUnavailable = undefined;
   await secrets.store(ACCOUNT_TOKEN_KEY, token);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
   if (expiresAt !== undefined) {
@@ -233,6 +234,7 @@ export async function getAccountRefreshToken(
 }
 
 export async function clearAccountToken(secrets: vscode.SecretStorage): Promise<void> {
+  heldAccountUnavailable = undefined;
   await secrets.delete(ACCOUNT_TOKEN_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
@@ -258,6 +260,13 @@ export type AccountSessionRenewal =
   'renewed' | 'unavailable' | 'revoked' | 'terms-required' | 'account-unavailable';
 
 /**
+ * An account the server refused stays refused until the person signs in or out
+ * again: retrying the rotation on every request would only repeat the refusal
+ * and the warning.
+ */
+let heldAccountUnavailable: string | undefined;
+
+/**
  * Rotates the device session in place so an expired editor never has to repeat
  * the device-code flow. deviceAuth is loaded here rather than imported at the
  * top because it owns the device endpoints and already imports this module.
@@ -265,6 +274,7 @@ export type AccountSessionRenewal =
 export async function renewAccountSession(
   secrets: vscode.SecretStorage,
 ): Promise<AccountSessionRenewal> {
+  if (heldAccountUnavailable !== undefined) return 'account-unavailable';
   const refreshToken = await getAccountRefreshToken(secrets);
   if (refreshToken === undefined) return 'unavailable';
 
@@ -282,7 +292,12 @@ export async function renewAccountSession(
     return 'revoked';
   }
   if (result.kind === 'account-unavailable') {
-    void vscode.window.showWarningMessage(result.message);
+    heldAccountUnavailable = result.message;
+    void vscode.window.showWarningMessage(result.message, 'Sign in again').then((action) => {
+      if (action === 'Sign in again') {
+        void vscode.commands.executeCommand('agi-workforce.signIn');
+      }
+    });
     return 'account-unavailable';
   }
   return result.kind === 'terms-required' ? 'terms-required' : 'unavailable';

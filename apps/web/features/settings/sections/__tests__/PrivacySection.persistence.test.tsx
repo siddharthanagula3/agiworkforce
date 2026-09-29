@@ -7,6 +7,9 @@ vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
 }));
 
+vi.mock('../../components/ProductAnalyticsConsentRow', () => ({
+  ProductAnalyticsConsentRow: () => null,
+}));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
@@ -73,7 +76,7 @@ beforeEach(() => {
   vi.mocked(savePreferenceNamespace).mockResolvedValue({ version: null });
 });
 
-const toggle = () => screen.getByRole('switch', { name: /Share crash and usage telemetry/i });
+const toggle = () => screen.getByRole('switch', { name: /Share crash and error reports/i });
 
 describe('privacy preference persistence', () => {
   it('prevents changes before account preferences finish loading', async () => {

@@ -1,4 +1,5 @@
-import { View, Pressable, Platform } from 'react-native';
+import { View, Platform } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   Code2,
   Mail,
@@ -152,7 +153,7 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
       : 'Open to view details');
 
   return (
-    <Pressable
+    <PressableBox
       onPress={() => onExpand(artifact)}
       style={{
         backgroundColor: artifactSurface(config.badgeColor, colors),
@@ -258,6 +259,6 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
           </View>
         ) : null}
       </View>
-    </Pressable>
+    </PressableBox>
   );
 }

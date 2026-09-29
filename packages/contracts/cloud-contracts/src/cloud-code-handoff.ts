@@ -13,14 +13,21 @@ export const CLOUD_CODE_HANDOFF_MAX_AGE_SECONDS = 15 * 60;
 
 export const CLOUD_CODE_HANDOFF_REFUSED_CODE = 'HANDOFF_REFUSED';
 
+export const CLOUD_CODE_HANDOFF_BODY_LIMIT_BYTES = 512 * 1024;
+
 const HANDOFF_TEXT_LIMIT = 4_000;
 const HANDOFF_LIST_LIMIT = 200;
+const HANDOFF_ID_LIMIT = 200;
+const HANDOFF_PATH_LIMIT = 4_096;
+const HANDOFF_TIMESTAMP_LIMIT = 64;
+
+const HandoffTimestampSchema = z.string().max(HANDOFF_TIMESTAMP_LIMIT);
 
 const HandoffEnvironmentSchema = z.enum(['local', 'cloud']);
 
 const HandoffWorkspaceSchema = z.object({
-  cwd: z.string(),
-  worktreeRoot: z.string().optional(),
+  cwd: z.string().max(HANDOFF_PATH_LIMIT),
+  worktreeRoot: z.string().max(HANDOFF_PATH_LIMIT).optional(),
   repository: z.string().max(500).optional(),
   branch: z.string().max(255).optional(),
   headCommit: z.string().max(64).optional(),
@@ -30,13 +37,13 @@ const HandoffWorkspaceSchema = z.object({
 const HandoffPostureSchema = z.object({
   agentMode: z.enum(['ask', 'auto', 'plan', 'bypass']),
   trustMode: z.enum(['local', 'byok', 'managed', 'unknown']),
-  permissionProfileId: z.string(),
+  permissionProfileId: z.string().max(HANDOFF_ID_LIMIT),
 });
 
 const HandoffDecisionSchema = z.object({
   summary: z.string().max(HANDOFF_TEXT_LIMIT),
   rationale: z.string().max(HANDOFF_TEXT_LIMIT).optional(),
-  decidedAt: z.string(),
+  decidedAt: HandoffTimestampSchema,
 });
 
 const HandoffPlanStepSchema = z.object({
@@ -45,30 +52,30 @@ const HandoffPlanStepSchema = z.object({
 });
 
 const HandoffFileChangeSchema = z.object({
-  path: z.string().max(1_024),
+  path: z.string().max(HANDOFF_PATH_LIMIT),
   kind: z.enum(['created', 'modified', 'deleted']),
 });
 
 const HandoffValidationSchema = z.object({
   command: z.string().max(HANDOFF_TEXT_LIMIT),
   outcome: z.enum(['passed', 'failed', 'interrupted']),
-  ranAt: z.string(),
-  commit: z.string().optional(),
+  ranAt: HandoffTimestampSchema,
+  commit: z.string().max(64).optional(),
 });
 
 const HandoffLastTurnSchema = z.object({
-  turnId: z.string(),
+  turnId: z.string().max(HANDOFF_ID_LIMIT),
   state: z.enum(['completed', 'interrupted']),
-  model: z.string().optional(),
-  endedAt: z.string(),
+  model: z.string().max(HANDOFF_ID_LIMIT).optional(),
+  endedAt: HandoffTimestampSchema,
 });
 
 export const CloudCodeHandoffRecordSchema = z.object({
   protocolVersion: z.number().int().nonnegative(),
-  threadId: z.string().min(1).max(200),
+  threadId: z.string().min(1).max(HANDOFF_ID_LIMIT),
   origin: z.enum(['chat', 'work', 'developer_session']),
   issuedBy: z.enum(['cli', 'vscode', 'desktop', 'unknown']),
-  issuedAt: z.string(),
+  issuedAt: HandoffTimestampSchema,
   fromEnvironment: HandoffEnvironmentSchema,
   toEnvironment: HandoffEnvironmentSchema,
   workspace: HandoffWorkspaceSchema,
@@ -91,9 +98,10 @@ export const CloudCodeHandoffRecordSchema = z.object({
         'terminal',
       ]),
     )
+    .max(HANDOFF_LIST_LIMIT)
     .optional()
     .default([]),
-  issuedForAccount: z.string().optional(),
+  issuedForAccount: z.string().max(HANDOFF_ID_LIMIT).optional(),
 });
 
 export type CloudCodeHandoffRecord = z.infer<typeof CloudCodeHandoffRecordSchema>;
@@ -101,11 +109,12 @@ export type CloudCodeHandoffRecord = z.infer<typeof CloudCodeHandoffRecordSchema
 export const CloudCodeHandoffRequestSchema = z.object({
   handoff: CloudCodeHandoffRecordSchema,
   networkAccess: z.enum(CLOUD_CODE_NETWORK_ACCESS).default('trusted'),
-  runtimeId: z.string().min(1).nullable().optional(),
+  fullNetworkAcknowledged: z.boolean().optional(),
+  runtimeId: z.string().min(1).max(200).nullable().optional(),
   repository: z
     .object({
       installationId: z.number().int().positive(),
-      fullName: z.string().min(1),
+      fullName: z.string().min(1).max(200),
     })
     .nullable()
     .optional(),
@@ -135,8 +144,14 @@ export interface CloudCodeHandoffAdmissionContext {
   supportedProtocolVersions: readonly number[];
 }
 
+/**
+ * Managed Code answers a retried record with the session it already opened,
+ * so it never refuses one as replayed the way a local host does.
+ */
+export type CloudCodeHandoffRefusal = Exclude<HandoffRefusal, { reason: 'replayed' }>;
+
 export type CloudCodeHandoffAdmissionResult =
-  { ok: true; admission: HandoffAdmission } | { ok: false; refusal: HandoffRefusal };
+  { ok: true; admission: HandoffAdmission } | { ok: false; refusal: CloudCodeHandoffRefusal };
 
 export function cloudCodeHandoffReceipt(
   handoff: Pick<DeveloperSessionHandoff, 'threadId' | 'issuedAt'>,
@@ -201,7 +216,7 @@ export function admitCloudCodeHandoff(
   };
 }
 
-export function describeCloudCodeHandoffRefusal(refusal: HandoffRefusal): string {
+export function describeCloudCodeHandoffRefusal(refusal: CloudCodeHandoffRefusal): string {
   switch (refusal.reason) {
     case 'protocolVersionUnsupported':
       return `This handoff uses protocol version ${refusal.requestedProtocolVersion}, which managed Code does not accept. Update the CLI and hand off again.`;
@@ -211,8 +226,6 @@ export function describeCloudCodeHandoffRefusal(refusal: HandoffRefusal): string
       return 'The session has no known trust boundary. Choose one before handing it off.';
     case 'expired':
       return `This handoff was issued at ${refusal.issuedAt} and is good for ${Math.round(refusal.maxAgeSeconds / 60)} minutes. Hand off again from the origin.`;
-    case 'replayed':
-      return 'This handoff was already taken.';
     case 'wrongAccount':
       return 'This handoff belongs to a different account than the one signed in.';
   }

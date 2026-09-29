@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import {
   AccountMemoryStore,
   ACCOUNT_MEMORY_CACHE_KEY,
+  ACCOUNT_MEMORY_CURSOR_KEY,
   ACCOUNT_MEMORY_VERSIONS_KEY,
   WORKSPACE_MEMORY_ADOPTED_KEY,
   describeRefusals,
@@ -152,6 +153,77 @@ describe('AccountMemoryStore', () => {
     };
     await store.refresh();
     expect(store.cachedFacts()).toEqual([]);
+  });
+
+  it('still pulls a delete another device made between its pull and its own push', async () => {
+    const storage = makeMemento();
+    const pullAll = vi.fn(async (cursor: string) =>
+      cursor === INITIAL_CURSOR
+        ? {
+            memories: [delta(), delta({ id: 'm2', content: 'Use pnpm', server_version: '8' })],
+            cursor: '8',
+            hasMore: false,
+          }
+        : {
+            memories: [
+              delta({ id: 'm2', is_deleted: true, server_version: '9' }),
+              delta({ id: 'm3', content: 'Prefer tabs', server_version: '10' }),
+            ],
+            cursor: '10',
+            hasMore: false,
+          },
+    );
+    const push = vi.fn(async (items: MemoryPushItem[]): Promise<MemoryPushResponse> => ({
+      protocolVersion: 2,
+      applied: items.map((item) => ({ id: item.id, server_version: '10' })),
+      conflicts: [],
+      rejected: [],
+      cursor: '10',
+    }));
+    const store = new AccountMemoryStore(
+      storage,
+      makeSecrets(SIGNED_IN_TOKEN),
+      makeMemento({ [WORKSPACE_MEMORY_ADOPTED_KEY]: true }),
+      makeClient({ pullAll, push }),
+    );
+
+    await store.refresh();
+    await store.add('Prefer tabs');
+    expect(storage.get(ACCOUNT_MEMORY_CURSOR_KEY)).toBe('8');
+    await store.refresh();
+
+    expect(pullAll).toHaveBeenLastCalledWith('8');
+    expect(store.cachedFacts().map((fact) => fact.id)).not.toContain('m2');
+  });
+
+  it('shows an unscoped cache but keeps it out of turns until a full pull replaces it', async () => {
+    const storage = makeMemento({
+      [ACCOUNT_MEMORY_CACHE_KEY]: [
+        { id: 'old', text: 'Another workspace fact', createdAt: '2026-09-01T00:00:00.000Z' },
+      ],
+      [ACCOUNT_MEMORY_CURSOR_KEY]: '40',
+    });
+    const pullAll = vi.fn(async () => {
+      throw new Error('offline');
+    });
+    const store = new AccountMemoryStore(
+      storage,
+      makeSecrets(SIGNED_IN_TOKEN),
+      makeMemento({ [WORKSPACE_MEMORY_ADOPTED_KEY]: true }),
+      makeClient({ pullAll }),
+    );
+
+    const offline = await store.refresh();
+    expect(offline.facts.map((fact) => fact.id)).toEqual(['old']);
+    expect(store.turnFacts()).toEqual([]);
+    expect(pullAll).toHaveBeenLastCalledWith(INITIAL_CURSOR);
+
+    pullAll.mockImplementation(async () => ({ memories: [delta()], cursor: '7', hasMore: false }));
+    await store.refresh();
+
+    expect(pullAll).toHaveBeenLastCalledWith(INITIAL_CURSOR);
+    expect(store.cachedFacts().map((fact) => fact.id)).toEqual(['m1']);
+    expect(store.turnFacts().map((fact) => fact.id)).toEqual(['m1']);
   });
 
   it('sends an update at the version the account last reported', async () => {
@@ -329,7 +401,7 @@ describe('AccountMemoryStore', () => {
     expect(storage.get('agiWorkforce.accountMemoryOwner')).toBe('user_abc');
   });
 
-  it('adopts a cache written before the account was recorded rather than blanking it', async () => {
+  it('adopts a cache written before the account was recorded, then takes the account copy', async () => {
     const storage = makeMemento({
       [ACCOUNT_MEMORY_CACHE_KEY]: [
         { id: 'm1', text: 'Prefer Rust', createdAt: '2026-09-13T00:00:00.000Z' },
@@ -339,7 +411,13 @@ describe('AccountMemoryStore', () => {
       storage,
       makeSecrets(SIGNED_IN_TOKEN),
       makeMemento({ [WORKSPACE_MEMORY_ADOPTED_KEY]: true }),
-      makeClient(),
+      makeClient({
+        pullAll: vi.fn(async () => ({
+          memories: [delta({ content: 'Prefer Rust' })],
+          cursor: '7',
+          hasMore: false,
+        })),
+      }),
     );
 
     await store.refresh();

@@ -139,8 +139,13 @@ vi.mock('../StyleSelector', () => ({
 }));
 
 vi.mock('@shared/stores/thinking-store', () => ({
-  useThinkingStore: (selector: (s: { enabled: boolean; effort: string }) => unknown) =>
-    selector({ enabled: false, effort: 'medium' }),
+  useThinkingStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      enabled: false,
+      effort: 'medium',
+      fast: false,
+      setFast: () => undefined,
+    }),
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({

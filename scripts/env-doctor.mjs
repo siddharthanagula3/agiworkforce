@@ -194,17 +194,22 @@ const platformProvidedKeys = new Set([
   'COLUMNS',
   'COMPUTERNAME',
   'COMSPEC',
+  'DEV',
+  'DISABLE_TELEMETRY',
+  'DO_NOT_TRACK',
   'EDITOR',
   'GITHUB_SHA',
   'HOME',
   'HOSTNAME',
   'KUBERNETES_SERVICE_HOST',
+  'MODE',
   'NEXT_PHASE',
   'NEXT_RUNTIME',
   'NODE_ENV',
   'NO_COLOR',
   'PATH',
   'PATHEXT',
+  'PROD',
   'SHELL',
   'TERM',
   'VERCEL',
@@ -213,6 +218,7 @@ const platformProvidedKeys = new Set([
   'VERCEL_GIT_COMMIT_SHA',
   'VERCEL_REGION',
   'VISUAL',
+  'VITEST',
 ]);
 
 const sourceScans = [
@@ -228,6 +234,38 @@ const sourceScans = [
     include: /^apps\/cli\/src\/.*\.rs$/,
     exclude: /(?:^|\/)tests\//,
     pattern: /env::var(?:_os)?\(\s*"([A-Z][A-Z0-9_]*)"\s*\)/g,
+    productSource: (contents) => {
+      const testModule = [...contents.matchAll(/#\[cfg\(test\)\]\s*mod\s+\w+\s*\{/g)].at(-1);
+      return testModule ? contents.slice(0, testModule.index) : contents;
+    },
+  },
+  {
+    scope: 'mobile',
+    include:
+      /^apps\/mobile\/(?:app|src|lib|services|stores|hooks|storage|components|types)\/.*\.[cm]?[jt]sx?$|^apps\/mobile\/app\.config\.js$/,
+    exclude: /__tests__\/|__mocks__\/|\.test\.|\.spec\./,
+    pattern: /process\.env(?:\[\s*['"`]([A-Z][A-Z0-9_]*)['"`]\s*\]|\.([A-Z][A-Z0-9_]*))/g,
+  },
+  {
+    scope: 'extension',
+    include: /^apps\/extension\/(?:src\/.*\.[cm]?[jt]sx?|vite\.config\.ts)$/,
+    exclude: /__tests__\/|__mocks__\/|\.test\.|\.spec\./,
+    pattern:
+      /(?:process\.env|import\.meta\.env)(?:\[\s*['"`]([A-Z][A-Z0-9_]*)['"`]\s*\]|\.([A-Z][A-Z0-9_]*))/g,
+  },
+  {
+    scope: 'desktop',
+    include:
+      /^apps\/desktop\/(?:electron|src)\/.*\.[cm]?[jt]sx?$|^apps\/desktop\/vite\.config\.ts$/,
+    exclude: /__tests__\/|__mocks__\/|\.test\.|\.spec\.|\/e2e\//,
+    pattern:
+      /(?:process\.env|import\.meta\.env)(?:\[\s*['"`]([A-Z][A-Z0-9_]*)['"`]\s*\]|\.([A-Z][A-Z0-9_]*))/g,
+  },
+  {
+    scope: 'cli',
+    include: /^apps\/extension-vscode\/src\/.*\.ts$/,
+    exclude: /__tests__\/|\/test\/|\.test\./,
+    pattern: /process\.env(?:\[\s*['"`]([A-Z][A-Z0-9_]*)['"`]\s*\]|\.([A-Z][A-Z0-9_]*))/g,
   },
 ];
 
@@ -289,7 +327,8 @@ function scanSourceEnvKeys(scan, paths) {
     if (!scan.include.test(path) || scan.exclude.test(path)) continue;
     const absolutePath = join(REPO_ROOT, path);
     if (!existsSync(absolutePath)) continue;
-    const contents = readFileSync(absolutePath, 'utf8');
+    const source = readFileSync(absolutePath, 'utf8');
+    const contents = scan.productSource ? scan.productSource(source) : source;
     for (const match of contents.matchAll(scan.pattern)) {
       const name = match[1] ?? match[2];
       if (!readers.has(name)) readers.set(name, path);

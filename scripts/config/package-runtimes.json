@@ -204,6 +204,7 @@
       "./reasoning": "universal",
       "./remote-control": "server",
       "./retry-policy": "universal",
+      "./secret-redaction": "universal",
       "./signaling": "universal",
       "./source-url": "universal",
       "./uuidv7": "universal",
@@ -233,7 +234,8 @@
       "./en": "universal",
       "./languages": "universal",
       "./lazy": "universal",
-      "./resources": "universal"
+      "./resources": "universal",
+      "./vscode": "universal"
     },
     "packages/ui/icons": {
       ".": "universal"
@@ -244,6 +246,7 @@
       "./button": "universal",
       "./cn": "universal",
       "./dialog": "universal",
+      "./dom": "browser",
       "./i18n": "universal",
       "./label": "universal",
       "./sheet": "universal",

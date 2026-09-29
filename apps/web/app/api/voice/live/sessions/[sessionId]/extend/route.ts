@@ -2,6 +2,12 @@ import 'server-only';
 
 export const runtime = 'nodejs';
 
+import { getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  GOOGLE_USER_DATA_VOICE_MESSAGE,
+  storedConversationCarriesGoogleUserData,
+} from '@/lib/connectors/google-user-data';
+import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -96,6 +102,20 @@ async function handleExtendLiveSession(
   }
   if (!record || record.status !== 'active') {
     return voiceJsonError(request, 409, 'voice_session_closed', 'This voice session has ended.');
+  }
+  if (
+    !(
+      modelKeepsInputsOutOfTraining(record.modelId) &&
+      modelKeepsInputsOutOfTraining(getRoutingSlotModel('voice_live_backend'))
+    ) &&
+    (await storedConversationCarriesGoogleUserData(
+      scoped.db,
+      userId,
+      scoped.organizationId,
+      record.conversationId,
+    ))
+  ) {
+    return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
   }
 
   const { settlement } = body;

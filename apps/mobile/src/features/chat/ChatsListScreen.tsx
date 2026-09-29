@@ -24,6 +24,7 @@ import {
   MoreHorizontal,
   Search,
   SlidersHorizontal,
+  Star,
   SquarePen,
   X,
   type LucideIcon,
@@ -88,6 +89,7 @@ const SEARCH_KIND_ICONS: Record<SearchKind, LucideIcon> = {
 interface ChatsListItem extends MobileGlobalSearchResult {
   kind: SearchKind;
   pinned?: boolean;
+  starred?: boolean;
   unread?: boolean;
 }
 
@@ -121,6 +123,7 @@ function groupHistory(conversations: ReadonlyArray<ConversationSummary>): ChatsL
       title: conversation.title || 'Untitled chat',
       subtitle: formatAgeLabel(conversation.updatedAt),
       pinned: conversation.pinned,
+      starred: conversation.starred === true,
       unread: conversation.unread,
     };
     if (conversation.pinned) {
@@ -409,6 +412,14 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           />
         ) : null}
         {item.pinned ? <Pin size={15} color={colors.textMuted} fill={colors.textMuted} /> : null}
+        {item.starred ? (
+          <Star
+            size={15}
+            color={colors.textMuted}
+            fill={colors.textMuted}
+            accessibilityLabel="Starred"
+          />
+        ) : null}
         {isSearching ? <SearchKindIcon kind={item.kind} color={colors.textMuted} /> : null}
         {item.kind === 'chat' && rename.conversationId === item.id ? (
           <InlineRenameField rename={rename} />

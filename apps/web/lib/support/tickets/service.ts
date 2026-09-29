@@ -2,7 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { redactSecrets } from '@/lib/support/handoff/transcript';
+import { redactTranscriptText } from '@/lib/support/handoff/transcript';
 import { resolveSupportPriority } from '@/lib/support/handoff/priority';
 import {
   type SupportDiagnostics,
@@ -91,7 +91,7 @@ export class InvalidTicketTransitionError extends Error {
 }
 
 function clamp(value: string, limit: number): string {
-  const redacted = redactSecrets(value.trim());
+  const redacted = redactTranscriptText(value.trim());
   return redacted.length <= limit ? redacted : `${redacted.slice(0, limit)}… [truncated]`;
 }
 

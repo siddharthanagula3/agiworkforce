@@ -25,16 +25,7 @@ export const SHARED_HELPERS = Object.freeze({
 
 export const CRYPTO_ROOT = 'apps/web/lib/crypto/';
 
-export const RECORDED_COPIES = Object.freeze({
-  'apps/extension-vscode/src/core/telemetry.ts#redactSecrets':
-    'p-sessions: telemetry keeps its own secret patterns; import redactSecrets from @agiworkforce/utils so one pattern list covers every surface',
-  'apps/web/lib/support/handoff/transcript.ts#redactSecrets':
-    'support handoff labels each redaction by kind; build the labels from redactSecretsWithReport findings in @agiworkforce/utils instead of a second pattern list',
-  'apps/web/lib/security/secrets-audit.ts#redactSecrets':
-    'the workspace secrets audit scans with an allow list of names; take the patterns from @agiworkforce/utils and rename the allow-list variant so there is one redactSecrets',
-  'packages/guardian/core/src/adapters/types.ts#redactSecrets':
-    'the Guardian adapters add an opaque-token heuristic; move that rule into the @agiworkforce/utils patterns and import redactSecrets from there',
-});
+export const RECORDED_COPIES = Object.freeze({});
 
 export const CIPHER_EXEMPTIONS = Object.freeze({
   'apps/web/lib/services/web-push-service.ts':

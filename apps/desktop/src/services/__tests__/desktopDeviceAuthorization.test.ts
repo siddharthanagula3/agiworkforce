@@ -48,6 +48,43 @@ describe('authorizeDesktopDevice', () => {
     expect(result.refreshToken).toBe('approved-refresh-token');
   });
 
+  it('waits five seconds longer after each slow_down', async () => {
+    const post = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 200,
+        body: JSON.stringify({
+          device_code: '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
+          user_code: 'ABCD-2345',
+          verification_uri: 'https://agiworkforce.com/auth/device',
+          verification_uri_complete: 'https://agiworkforce.com/auth/device?user_code=ABCD-2345',
+          interval: 3,
+          expires_in: 900,
+        }),
+      })
+      .mockResolvedValueOnce({ status: 400, body: JSON.stringify({ error: 'slow_down' }) })
+      .mockResolvedValueOnce({ status: 400, body: JSON.stringify({ error: 'slow_down' }) })
+      .mockResolvedValueOnce({
+        status: 200,
+        body: JSON.stringify({
+          access_token: 'approved-token',
+          token_type: 'Bearer',
+          expires_in: 600,
+        }),
+      });
+    const wait = vi.fn().mockResolvedValue(undefined);
+
+    const result = await authorizeDesktopDevice({
+      origin: 'https://agiworkforce.com',
+      post,
+      openAuthorization: vi.fn().mockResolvedValue(undefined),
+      wait,
+    });
+
+    expect(wait.mock.calls.map(([milliseconds]) => milliseconds)).toEqual([3_000, 8_000, 13_000]);
+    expect(result.accessToken).toBe('approved-token');
+  });
+
   it.each([
     [400, 'access_denied', /denied/i],
     [400, 'expired_token', /expired/i],

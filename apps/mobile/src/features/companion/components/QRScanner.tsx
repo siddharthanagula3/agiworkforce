@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Pressable, StyleSheet, Linking, TextInput, Dimensions } from 'react-native';
+import { View, StyleSheet, Linking, TextInput, Dimensions } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
 import Animated, {
@@ -140,7 +141,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
         {/* Header */}
         <View className="flex-row items-center justify-between">
           <Text variant="subheading">Enter Pairing Code</Text>
-          <Pressable
+          <PressableBox
             onPress={() => {
               setShowManualEntry(false);
               setManualError(null);
@@ -151,7 +152,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
             accessibilityRole="button"
           >
             <X size={22} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         </View>
 
         <Text className="text-sm" style={{ color: colors.textSecondary }}>
@@ -202,7 +203,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           className="mt-2"
         />
 
-        <Pressable
+        <PressableBox
           onPress={() => {
             setShowManualEntry(false);
             setManualError(null);
@@ -215,7 +216,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           <Text className="text-sm" style={{ color: colors.teal }}>
             {permission?.granted ? 'Back to QR Scanner' : 'Back to camera options'}
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
     );
   }
@@ -291,16 +292,16 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
 
       {/* Top bar: close + flash */}
       <View className="absolute top-16 left-4 right-4 flex-row items-center justify-between">
-        <Pressable
+        <PressableBox
           onPress={onClose}
           className="w-10 h-10 rounded-full bg-black/50 items-center justify-center"
           accessibilityLabel="Close scanner"
           accessibilityRole="button"
         >
           <X size={22} color={colors.white} />
-        </Pressable>
+        </PressableBox>
 
-        <Pressable
+        <PressableBox
           onPress={() => setFlashEnabled((prev) => !prev)}
           className="w-10 h-10 rounded-full bg-black/50 items-center justify-center"
           accessibilityLabel={flashEnabled ? 'Turn off flashlight' : 'Turn on flashlight'}
@@ -311,12 +312,12 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           ) : (
             <Zap size={20} color={colors.white} />
           )}
-        </Pressable>
+        </PressableBox>
       </View>
 
       {/* Bottom: manual entry link */}
       <View className="absolute bottom-12 left-0 right-0 items-center gap-3">
-        <Pressable
+        <PressableBox
           onPress={() => setShowManualEntry(true)}
           className="flex-row items-center gap-2 px-5 py-3 rounded-full bg-black/60"
           accessibilityLabel="Enter code manually"
@@ -327,7 +328,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           <Text className="text-sm font-medium" style={{ color: colors.cameraOverlayText }}>
             Enter code manually
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
     </View>
   );

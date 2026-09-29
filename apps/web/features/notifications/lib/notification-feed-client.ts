@@ -1,7 +1,12 @@
 import { getCsrfToken } from '@/lib/client/csrf';
+import {
+  NOTIFICATIONS_PATH,
+  NotificationFeedResponseSchema,
+  type NotificationMarkReadRequest,
+} from '@agiworkforce/cloud-contracts';
 import type { NotificationFeedResponse } from './notification-target';
 
-export const NOTIFICATION_FEED_ENDPOINT = '/api/notifications';
+export const NOTIFICATION_FEED_ENDPOINT = NOTIFICATIONS_PATH;
 export const NOTIFICATION_FEED_PAGE_SIZE = 20;
 
 export async function fetchNotificationFeed(
@@ -12,11 +17,11 @@ export async function fetchNotificationFeed(
     { credentials: 'same-origin', cache: 'no-store', ...(signal ? { signal } : {}) },
   );
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return (await response.json()) as NotificationFeedResponse;
+  return NotificationFeedResponseSchema.parse(await response.json());
 }
 
 export async function markNotificationFeedRead(
-  selection: { ids: readonly string[] } | { all: true },
+  selection: NotificationMarkReadRequest,
 ): Promise<void> {
   const csrf = await getCsrfToken();
   const response = await fetch(NOTIFICATION_FEED_ENDPOINT, {

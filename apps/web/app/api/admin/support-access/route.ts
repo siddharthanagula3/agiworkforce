@@ -14,6 +14,7 @@ import {
   DEFAULT_SUPPORT_ACCESS_TTL_MS,
   MAX_SUPPORT_ACCESS_TTL_MS,
   MIN_SUPPORT_ACCESS_REASON_LENGTH,
+  SUPPORT_ACCESS_PURPOSES,
   SUPPORT_ACCESS_SCOPES,
   SupportAccessRequestError,
   approveSupportAccess,
@@ -36,6 +37,7 @@ const requestSchema = z.object({
   organizationId: z.string().uuid(),
   reason: z.string().min(MIN_SUPPORT_ACCESS_REASON_LENGTH).max(2_000),
   ticketRef: z.string().min(3).max(128),
+  purpose: z.enum(SUPPORT_ACCESS_PURPOSES),
   scopes: z.array(z.enum(SUPPORT_ACCESS_SCOPES)).min(1),
 });
 
@@ -69,6 +71,7 @@ function present(grant: SupportAccessGrant) {
     revoked_by: grant.revokedByUserId,
     reason: grant.reason,
     ticket_ref: grant.ticketRef,
+    purpose: grant.purpose,
     scopes: grant.scopes,
     status: grant.status,
     requested_at: grant.requestedAt,
@@ -153,6 +156,7 @@ export async function POST(request: NextRequest) {
         requestedByUserId: userId,
         reason: body.reason,
         ticketRef: body.ticketRef,
+        purpose: body.purpose,
         scopes: body.scopes,
       });
       await recordAuditEvent({
@@ -165,6 +169,7 @@ export async function POST(request: NextRequest) {
           resourceType: 'support_access_grant',
           resourceId: grant.id,
           status: grant.status,
+          purpose: grant.purpose,
           scopes: grant.scopes,
           reason: grant.reason,
         },
@@ -194,6 +199,7 @@ export async function POST(request: NextRequest) {
         resourceType: 'support_access_grant',
         resourceId: grant.id,
         status: grant.status,
+        purpose: grant.purpose,
         scopes: grant.scopes,
       },
     });

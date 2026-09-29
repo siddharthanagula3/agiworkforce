@@ -1,4 +1,5 @@
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Bot, ChevronRight, Clock3 } from 'lucide-react-native';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
@@ -56,7 +57,7 @@ export function CloudRunCard({
   const preview = cloudRunPreview(run, title);
 
   return (
-    <Pressable
+    <PressableBox
       onPress={() => onPress(run.id)}
       accessibilityRole="button"
       accessibilityLabel={`Open ${title}. ${stateLabel}. Started on ${originLabel}`}
@@ -132,6 +133,6 @@ export function CloudRunCard({
 
         <ChevronRight size={18} color={colors.textMuted} />
       </View>
-    </Pressable>
+    </PressableBox>
   );
 }

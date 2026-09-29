@@ -122,6 +122,7 @@ export interface AdminPolicy {
   requireMfa: boolean;
   monthlySpendCapCents: number | null;
   zeroDataRetentionOnly: boolean;
+  allowProductAnalytics: boolean;
   ipAllowList: readonly string[];
   controls: WorkspaceControls;
   metadata?: Record<string, unknown>;
@@ -431,6 +432,7 @@ export const DEFAULT_ENTERPRISE_ADMIN_POLICY: Omit<AdminPolicy, 'organizationId'
   requireMfa: false,
   monthlySpendCapCents: null,
   zeroDataRetentionOnly: false,
+  allowProductAnalytics: true,
   ipAllowList: [],
   controls: DEFAULT_WORKSPACE_CONTROLS,
 };

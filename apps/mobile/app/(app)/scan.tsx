@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
-  Pressable,
   StyleSheet,
   Linking,
   TextInput,
@@ -10,6 +9,7 @@ import {
   Alert,
   useWindowDimensions,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
@@ -251,7 +251,7 @@ export default function ScanScreen() {
             Allow camera access to scan and extract text from documents, signs, and screens.
           </Text>
           <View style={styles.permissionButtons}>
-            <Pressable
+            <PressableBox
               onPress={requestPermission}
               style={styles.primaryButton}
               accessibilityRole="button"
@@ -260,8 +260,8 @@ export default function ScanScreen() {
               <Text className="font-semibold text-sm" style={{ color: c.accentText }}>
                 Allow Access
               </Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               onPress={() => Linking.openSettings()}
               style={styles.outlineButton}
               accessibilityRole="button"
@@ -270,12 +270,16 @@ export default function ScanScreen() {
               <Text className="text-sm" style={{ color: c.cameraOverlayTextMuted }}>
                 Open Settings
               </Text>
-            </Pressable>
-            <Pressable {...chrome.close} className="items-center py-3" style={chrome.close.style}>
+            </PressableBox>
+            <PressableBox
+              {...chrome.close}
+              className="items-center py-3"
+              style={chrome.close.style}
+            >
               <Text className="text-sm" style={{ color: c.cameraOverlayTextMuted }}>
                 Cancel
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </SafeAreaView>
@@ -329,9 +333,9 @@ export default function ScanScreen() {
           {/* Top bar */}
           <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
             <View style={styles.topBar}>
-              <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
+              <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
                 <X size={22} color={c.cameraOverlayText} />
-              </Pressable>
+              </PressableBox>
 
               <View style={styles.topBadge}>
                 <ScanText size={14} color={c.teal} />
@@ -348,9 +352,9 @@ export default function ScanScreen() {
               </View>
 
               {chrome.cancel ? (
-                <Pressable {...chrome.cancel} style={[styles.iconButton, chrome.cancel.style]}>
+                <PressableBox {...chrome.cancel} style={[styles.iconButton, chrome.cancel.style]}>
                   <RotateCcw size={20} color={c.cameraOverlayText} />
-                </Pressable>
+                </PressableBox>
               ) : null}
             </View>
           </SafeAreaView>
@@ -360,7 +364,7 @@ export default function ScanScreen() {
             <View style={styles.bottomStack}>
               {/* Copy-text pill, only if OCR found text */}
               {extractedText.trim().length > 0 && (
-                <Pressable
+                <PressableBox
                   onPress={handleCopy}
                   style={styles.copyPill}
                   accessibilityRole="button"
@@ -370,7 +374,7 @@ export default function ScanScreen() {
                   <Text style={[styles.copyPillText, copied && { color: c.teal }]}>
                     {copied ? 'Copied' : 'Copy text'}
                   </Text>
-                </Pressable>
+                </PressableBox>
               )}
 
               {/* Composer */}
@@ -385,7 +389,7 @@ export default function ScanScreen() {
                   style={styles.promptInput}
                   accessibilityLabel="Prompt for AI"
                 />
-                <Pressable
+                <PressableBox
                   onPress={handleSend}
                   disabled={isSending}
                   style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
@@ -397,7 +401,7 @@ export default function ScanScreen() {
                   ) : (
                     <Send size={20} color={c.accentText} />
                   )}
-                </Pressable>
+                </PressableBox>
               </View>
             </View>
           </SafeAreaView>
@@ -428,14 +432,14 @@ export default function ScanScreen() {
       {/* Top bar */}
       <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
         <View style={styles.topBar}>
-          <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
+          <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
             <X size={22} color={c.cameraOverlayText} />
-          </Pressable>
+          </PressableBox>
 
           <Text style={styles.screenTitle}>Scan Text</Text>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Pressable
+            <PressableBox
               testID="scan-facing-toggle"
               onPress={toggleFacing}
               style={styles.iconButton}
@@ -445,9 +449,9 @@ export default function ScanScreen() {
               }
             >
               <SwitchCamera size={20} color={c.cameraOverlayText} />
-            </Pressable>
+            </PressableBox>
 
-            <Pressable
+            <PressableBox
               onPress={toggleFlash}
               style={styles.iconButton}
               accessibilityRole="button"
@@ -458,7 +462,7 @@ export default function ScanScreen() {
               ) : (
                 <ZapOff size={20} color={c.cameraOverlayText} />
               )}
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </SafeAreaView>
@@ -477,7 +481,7 @@ export default function ScanScreen() {
       {/* Bottom: shutter */}
       <SafeAreaView style={styles.bottomBarSafeArea} edges={['bottom']}>
         <View style={styles.bottomBar}>
-          <Pressable
+          <PressableBox
             onPress={handleCapture}
             disabled={isCapturing || !cameraReady}
             style={[
@@ -494,7 +498,7 @@ export default function ScanScreen() {
             ) : (
               <ScanText size={26} color={c.accentText} />
             )}
-          </Pressable>
+          </PressableBox>
         </View>
       </SafeAreaView>
     </View>

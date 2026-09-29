@@ -9,13 +9,14 @@ import {
 import {
   getModelMetadataById,
   getProviderOffering,
+  messageKindForAgentEvent,
   type CloudWorkMode,
   type Effort,
   type Provider,
   type ResearchStep,
   type RoutingProfileChoice,
 } from '@agiworkforce/types';
-import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import type { AgentEventEnvelope, AgentEventSource } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import { ApiPaywallError, recoverStreamSession, streamAuthRefusal } from './api';
@@ -271,7 +272,7 @@ interface InitialStreamRequest {
   web_fetch?: boolean;
   research?: boolean;
   research_resume?: {
-    sources?: Array<{ url: string; title?: string; snippet?: string }>;
+    sources?: Array<Omit<AgentEventSource, 'title'> & { title?: string }>;
     steps?: ResearchStep[];
     approved_steps?: ResearchStep[];
   };
@@ -616,7 +617,10 @@ export async function streamChat(
         const finishReason = finishReasonFromStop(envelope);
         timedCallbacks.onDelta({
           x_agent_event: envelope,
-          ...(envelope.event.type === 'text-delta' ? { content: envelope.event.delta } : {}),
+          ...(messageKindForAgentEvent(envelope.event.type) === 'text' &&
+          envelope.event.type === 'text-delta'
+            ? { content: envelope.event.delta }
+            : {}),
           ...(finishReason ? { finish_reason: finishReason } : {}),
           durableReplay: true,
         });

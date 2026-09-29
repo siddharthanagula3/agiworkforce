@@ -1,5 +1,10 @@
 import 'server-only';
 
+import {
+  PRODUCT_ANALYTICS_CONSENT_PURPOSE,
+  PRODUCT_ANALYTICS_NOTICE_VERSION,
+} from '@agiworkforce/types';
+
 import { getNeonDb } from '@/lib/server/neon-db';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
@@ -25,6 +30,12 @@ import { pseudonymizeEmail } from '@/lib/server/email-pseudonym';
 export type { ConsentDecision, ConsentPurpose, ConsentSurface } from '@/lib/consent-purposes';
 
 export const CURRENT_NOTICE_VERSION: string = POLICY_LAST_UPDATED.privacy;
+
+export function noticeVersionForPurpose(purpose: string): string {
+  return purpose === PRODUCT_ANALYTICS_CONSENT_PURPOSE
+    ? PRODUCT_ANALYTICS_NOTICE_VERSION
+    : CURRENT_NOTICE_VERSION;
+}
 
 export const MAX_CONSENT_DECISIONS_PER_REQUEST = CONSENT_PURPOSES.length;
 
@@ -89,7 +100,14 @@ export async function recordConsent(input: RecordConsentInput): Promise<ConsentR
        (user_id, subject_email_sha256, purpose, granted, notice_version, surface)
      values ($1, $2, $3, $4, $5, $6)
      returning purpose, granted, notice_version, surface, recorded_at`,
-    [userId, emailHash, input.purpose, input.granted, CURRENT_NOTICE_VERSION, input.surface],
+    [
+      userId,
+      emailHash,
+      input.purpose,
+      input.granted,
+      noticeVersionForPurpose(input.purpose),
+      input.surface,
+    ],
   );
 
   const written = rows[0];
@@ -153,4 +171,20 @@ export async function hasConsent(userId: string, purpose: string): Promise<boole
     [userId, purpose],
   );
   return rows[0]?.granted === true;
+}
+
+export async function readLatestConsent(
+  userId: string,
+  purpose: string,
+): Promise<ConsentRecord | null> {
+  if (!isConsentPurpose(purpose)) return null;
+  const rows = await getNeonDb().query<ConsentRow>(
+    `select purpose, granted, notice_version, surface, recorded_at
+       from public.consent_records
+      where user_id = $1 and purpose = $2
+      order by recorded_at desc
+      limit 1`,
+    [userId, purpose],
+  );
+  return rows[0] ? toRecord(rows[0]) : null;
 }

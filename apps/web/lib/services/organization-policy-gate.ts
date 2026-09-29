@@ -476,6 +476,20 @@ export async function resolveMfaPolicy(
   return firstGoverned ?? { policy: null, organizationId: null };
 }
 
+export async function workspacesPermitProductAnalytics(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<boolean> {
+  const organizationIds = await withAccountControlRetry(() =>
+    resolveGoverningOrganizationIds(db, userId),
+  );
+  for (const organizationId of organizationIds) {
+    const policy = await withAccountControlRetry(() => readOrganizationPolicy(db, organizationId));
+    if (policy && !policy.allowProductAnalytics) return false;
+  }
+  return true;
+}
+
 export interface ZeroDataRetentionPolicyResult {
   required: boolean;
   organizationId: string | null;

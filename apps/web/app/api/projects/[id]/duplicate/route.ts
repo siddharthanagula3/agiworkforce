@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ManagedCloudProjectDuplicateResponse } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -178,7 +179,11 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
     }
   }
 
-  return NextResponse.json({ project: mapProjectRow(created), copiedKnowledgeFiles: copiedFiles });
+  const duplicated: ManagedCloudProjectDuplicateResponse = {
+    project: mapProjectRow(created),
+    copiedKnowledgeFiles: copiedFiles,
+  };
+  return NextResponse.json(duplicated);
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleDuplicateProject));

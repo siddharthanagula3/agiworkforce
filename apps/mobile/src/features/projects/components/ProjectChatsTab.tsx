@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
-import { View, ScrollView, Pressable } from 'react-native';
+import { View, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import { Clock, MessageSquare, SquarePen } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -36,7 +37,7 @@ function EmptyState({ onNewChat }: { onNewChat: () => void }) {
       >
         Start a conversation in this project.
       </Text>
-      <Pressable
+      <PressableBox
         onPress={onNewChat}
         className="flex-row items-center gap-2 px-5 py-2.5 rounded-xl"
         style={{
@@ -51,7 +52,7 @@ function EmptyState({ onNewChat }: { onNewChat: () => void }) {
         <Text className="text-[13px] font-semibold" style={{ color: colors.teal }}>
           New chat
         </Text>
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }
@@ -91,7 +92,7 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
     <View className="flex-1">
       {/* New chat button */}
       <View className="px-4 pt-4 pb-2">
-        <Pressable
+        <PressableBox
           onPress={handleNewChat}
           className="flex-row items-center justify-center gap-2 py-3 rounded-xl"
           style={{
@@ -106,7 +107,7 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
           <Text className="text-[14px] font-semibold" style={{ color: colors.teal }}>
             New chat
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
 
       {conversations.length === 0 ? (
@@ -118,7 +119,7 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
           showsVerticalScrollIndicator={false}
         >
           {conversations.map((convo) => (
-            <Pressable
+            <PressableBox
               key={convo.id}
               onPress={() => handleOpenChat(convo.id)}
               className="flex-row items-start gap-3 px-4 py-3 rounded-xl mb-2 active:opacity-75"
@@ -163,7 +164,7 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
                   </Text>
                 </View>
               </View>
-            </Pressable>
+            </PressableBox>
           ))}
         </ScrollView>
       )}

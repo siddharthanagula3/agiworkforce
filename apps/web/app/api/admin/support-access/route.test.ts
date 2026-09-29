@@ -15,22 +15,30 @@ const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn<() => Promise<Response | null>>(async () => null),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   requireCsrfToken: (...args: unknown[]) => mocks.requireCsrfToken(...(args as [])),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(async () => undefined),
   recordAuditEvent: (...args: unknown[]) => mocks.recordAuditEvent(...(args as [])),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getNeonDb: () => ({ query: vi.fn(), execute: vi.fn() }),
 }));
-vi.mock('@/lib/auth-guards', () => ({
+vi.mock('@/lib/auth-guards', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   requirePlatformAdmin: (...args: unknown[]) => mocks.requirePlatformAdmin(...(args as [])),
 }));
 vi.mock('@/lib/server/support-access-service', async () => {
@@ -65,6 +73,7 @@ const grant = {
   revokedByUserId: null,
   reason: REASON,
   ticketRef: 'SUP-1',
+  purpose: 'support',
   scopes: ['conversations'],
   status: 'pending',
   requestedAt: '2026-09-17T09:00:00.000Z',
@@ -111,6 +120,7 @@ describe('the break-glass control plane is operator-only', () => {
         organizationId: ORG,
         reason: REASON,
         ticketRef: 'SUP-1',
+        purpose: 'support',
         scopes: ['conversations'],
       }),
     );
@@ -126,6 +136,7 @@ describe('requesting', () => {
         organizationId: ORG,
         reason: REASON,
         ticketRef: 'SUP-1',
+        purpose: 'support',
         scopes: ['conversations'],
       }),
     );
@@ -146,6 +157,7 @@ describe('requesting', () => {
         organizationId: ORG,
         reason: 'debug',
         ticketRef: 'SUP-1',
+        purpose: 'support',
         scopes: ['conversations'],
       }),
     );
@@ -160,10 +172,65 @@ describe('requesting', () => {
         organizationId: ORG,
         reason: REASON,
         ticketRef: 'SUP-1',
+        purpose: 'support',
         scopes: ['everything'],
       }),
     );
     expect(response.status).toBe(400);
+  });
+});
+
+describe('the purpose of a request', () => {
+  it('refuses a request that names no purpose', async () => {
+    const response = await POST(
+      post({
+        action: 'request',
+        organizationId: ORG,
+        reason: REASON,
+        ticketRef: 'SUP-1',
+        scopes: ['conversations'],
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.requestSupportAccess).not.toHaveBeenCalled();
+  });
+
+  it('refuses a purpose this build does not define', async () => {
+    const response = await POST(
+      post({
+        action: 'request',
+        organizationId: ORG,
+        reason: REASON,
+        ticketRef: 'SUP-1',
+        purpose: 'curiosity',
+        scopes: ['conversations'],
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.requestSupportAccess).not.toHaveBeenCalled();
+  });
+
+  it('passes the purpose to the grant and records it in the audit detail', async () => {
+    mocks.requestSupportAccess.mockResolvedValue({ ...grant, purpose: 'security' });
+    const response = await POST(
+      post({
+        action: 'request',
+        organizationId: ORG,
+        reason: REASON,
+        ticketRef: 'SUP-1',
+        purpose: 'security',
+        scopes: ['conversations'],
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.requestSupportAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: 'security' }),
+    );
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: expect.objectContaining({ purpose: 'security' }) }),
+    );
+    await expect(response.json()).resolves.toMatchObject({ grant: { purpose: 'security' } });
   });
 });
 

@@ -337,6 +337,7 @@ async function handleGet(request: NextRequest) {
     semantic: true,
     residency,
     includeHealthSpaces: true,
+    googleUserData: 'include',
   }).search({
     text: q,
     kinds: requestedKinds.length > 0 ? requestedKinds : SEARCH_SOURCE_KINDS,

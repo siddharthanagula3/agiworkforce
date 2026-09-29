@@ -1,5 +1,6 @@
 import Animated, { SlideInDown } from 'react-native-reanimated';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Monitor, Cpu, HardDrive, Unlink } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -80,13 +81,13 @@ export function DesktopInfoCard({
       </View>
 
       <View className="px-4 pb-4 pt-2">
-        <Pressable
+        <PressableBox
           onPress={onDisconnect}
           className="flex-row items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 active:bg-red-500/20"
         >
           <Unlink size={16} color={colors.agentError} />
           <Text className="text-sm text-red-400 font-medium">Disconnect</Text>
-        </Pressable>
+        </PressableBox>
       </View>
     </Animated.View>
   );

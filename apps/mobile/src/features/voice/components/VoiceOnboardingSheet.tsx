@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { X, AudioLines, Info } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -137,7 +138,7 @@ export function VoiceOnboardingSheet({
           ]}
         >
           <View style={{ alignItems: 'flex-end', paddingTop: 16 }}>
-            <Pressable
+            <PressableBox
               onPress={onDismiss}
               accessibilityRole="button"
               accessibilityLabel={`Close ${purpose} introduction`}
@@ -152,7 +153,7 @@ export function VoiceOnboardingSheet({
               }}
             >
               <X size={20} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           <View style={{ flex: 1, minHeight: 120, alignItems: 'center', justifyContent: 'center' }}>
@@ -181,7 +182,7 @@ export function VoiceOnboardingSheet({
             </FeatureRow>
           </View>
 
-          <Pressable
+          <PressableBox
             onPress={handleContinue}
             accessibilityRole="button"
             accessibilityLabel={`Continue to ${purpose}`}
@@ -190,7 +191,7 @@ export function VoiceOnboardingSheet({
             <View style={PILL}>
               <Text style={PILL_LABEL}>Continue</Text>
             </View>
-          </Pressable>
+          </PressableBox>
         </Animated.View>
       </Animated.View>
     </Modal>

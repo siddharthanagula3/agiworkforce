@@ -1,11 +1,9 @@
+import type { ManagedCloudProject } from '@agiworkforce/cloud-contracts';
 import {
   SYNCED_APP_SURFACES,
-  type PrivacyMode,
-  type ProviderMode,
   type ProjectAccentColor,
   type ProjectImportSource,
   type ProjectKnowledgeFile,
-  type SourceSurface,
 } from '@agiworkforce/types';
 import { HEALTH_SPACE_KIND } from '@/lib/health-space';
 
@@ -18,6 +16,10 @@ const ACCENT_COLORS: readonly ProjectAccentColor[] = [
   'zinc',
 ];
 const IMPORT_SOURCES: readonly ProjectImportSource[] = ['claude', 'openai', 'manual'];
+type PrivacyMode = ManagedCloudProject['defaultPrivacyMode'];
+type ProviderMode = ManagedCloudProject['defaultProviderMode'];
+type SourceSurface = ManagedCloudProject['allowedSurfaces'][number];
+
 const SURFACES: readonly SourceSurface[] = [...SYNCED_APP_SURFACES];
 
 const DEFAULT_ALLOWED_SURFACES: SourceSurface[] = [...SYNCED_APP_SURFACES];
@@ -59,6 +61,7 @@ function asBool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+/** user_projects_managed_privacy_check holds every cloud project to managed. */
 function asPrivacyMode(_value: unknown): PrivacyMode {
   return 'managed';
 }

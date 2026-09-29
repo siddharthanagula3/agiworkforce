@@ -27,7 +27,8 @@ folder you start `agi` in and only applies once you trust that workspace.
 - `/config set` accepts `model`, `provider`, `max-tokens`, `temperature`,
   `stream`, `fallback-model`, `fallback-chain`, `fast-model`, `history`,
   `output-style`, `privacy-mode`, `edit-mode`, `theme`, `reduced-motion`,
-  `bell` and `crash-reports`. Other settings are edited in the file itself.
+  `bell`, `crash-reports` and `product-analytics`. Other settings are edited in
+  the file itself.
 - The VS Code extension runs the same CLI, so it reads the same file.
 
 ## Useful settings
@@ -42,6 +43,13 @@ folder you start `agi` in and only applies once you trust that workspace.
   between 0 and 1.
 - `[providers.<name>]` takes `api_key_env`, the name of the environment
   variable that holds that provider's key, and an optional `base_url`.
+- `[telemetry] product_analytics = false` stops the CLI from sending product
+  usage events, such as a stopped response, even when your account allows
+  product analytics. Setting `DISABLE_TELEMETRY` or `DO_NOT_TRACK` to any value
+  other than `0`, `false`, `off` or `no` does the same for one shell. Events are sent only in
+  Managed mode and only when your account's product analytics choice, in
+  Settings, Privacy on the web, allows them. Like `crash_reports`, this is read
+  from your own `config.toml` only.
 
 ## Which setting wins
 

@@ -115,6 +115,34 @@ describe('POST /api/code/sessions/handoff', () => {
     expect(body.error.refusal.reason).toBe('wrongDestination');
   });
 
+  it('carries the full-network acknowledgement to the session gate', async () => {
+    await POST(
+      postRequest({ handoff: handoff(), networkAccess: 'full', fullNetworkAcknowledged: true }),
+    );
+    expect(mockOpen.mock.calls[0]![3]).toMatchObject({
+      networkAccess: 'full',
+      fullNetworkAcknowledged: true,
+    });
+  });
+
+  it('refuses a record over the body cap before opening anything', async () => {
+    const response = await POST(
+      postRequest({
+        handoff: handoff({ pendingApprovals: [{ note: 'x'.repeat(600 * 1024) }] }),
+      }),
+    );
+    expect(response.status).toBe(413);
+    expect(mockOpen).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unbounded field instead of storing it', async () => {
+    const response = await POST(
+      postRequest({ handoff: handoff({ issuedForAccount: 'f'.repeat(10_000) }) }),
+    );
+    expect(response.status).toBe(400);
+    expect(mockOpen).not.toHaveBeenCalled();
+  });
+
   it('refuses a repository that is not on GitHub', async () => {
     const response = await POST(
       postRequest({

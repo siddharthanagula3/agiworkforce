@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import { markConversationGoogleUserData } from '@/lib/connectors/google-user-data';
 import { logger } from '@/lib/logger';
 import { createPostgresSearchProvider } from '@/lib/services/retrieval-search-service';
 import {
@@ -27,18 +28,25 @@ const MAX_PER_SOURCE = 2;
  */
 export async function searchResearchFileSources(
   db: DatabaseAdapter,
-  input: { userId: string; organizationId: string | null; query: string },
+  input: {
+    userId: string;
+    organizationId: string | null;
+    query: string;
+    conversationId: string | null;
+    googleUserDataRouted: boolean;
+  },
 ): Promise<ResearchFileSource[]> {
   const text = input.query.trim();
   if (!text) return [];
+  let response;
   try {
-    const response = await createPostgresSearchProvider({
+    response = await createPostgresSearchProvider({
       db,
       userId: input.userId,
       organizationId: input.organizationId,
       semantic: true,
+      googleUserData: input.googleUserDataRouted ? 'include' : 'exclude',
     }).search({ text, limit: CANDIDATE_LIMIT, maxPerSource: MAX_PER_SOURCE });
-    return researchFileSourcesFromHits(response.hits);
   } catch (error) {
     logger.warn(
       { error, userId: input.userId },
@@ -46,4 +54,11 @@ export async function searchResearchFileSources(
     );
     return [];
   }
+  if (
+    input.conversationId &&
+    response.hits.some((hit) => hit.metadata['googleUserData'] === true)
+  ) {
+    await markConversationGoogleUserData(db, input.userId, input.conversationId);
+  }
+  return researchFileSourcesFromHits(response.hits);
 }

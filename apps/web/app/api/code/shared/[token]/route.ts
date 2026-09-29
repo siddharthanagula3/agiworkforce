@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { CloudCodeSharedSessionReply } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -27,7 +28,8 @@ async function handleGet(request: NextRequest, context: RouteContext) {
         'This shared session is not available. Its owner may have stopped sharing it.',
       );
     }
-    return NextResponse.json(shared);
+    const reply: CloudCodeSharedSessionReply = shared;
+    return NextResponse.json(reply);
   } catch (error) {
     if (error instanceof CloudCodeSharedRepositoryError) throw createError.forbidden(error.message);
     if (isCloudCodeSchemaUnavailable(error)) {

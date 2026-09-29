@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { MapTileConfig } from '@agiworkforce/cloud-contracts';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getSecurityHeaders, handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -31,18 +32,18 @@ async function handleGetMapConfig(request: NextRequest): Promise<NextResponse> {
 
   const provider = mapTileProvider();
 
-  return NextResponse.json(
-    {
-      tileUrlTemplate: MAP_TILE_PROXY_URL_TEMPLATE,
-      attribution: provider.attribution,
-      darkTileUrlTemplate: MAP_TILE_PROXY_DARK_URL_TEMPLATE,
-      darkAttribution: provider.darkAttribution,
-      dimLightTiles: provider.dimLightTiles,
-      minZoom: MAP_TILE_MIN_ZOOM,
-      maxZoom: provider.maxZoom,
-    },
-    { headers: { ...getSecurityHeaders(), 'Cache-Control': CONFIG_CACHE_CONTROL } },
-  );
+  const config: MapTileConfig = {
+    tileUrlTemplate: MAP_TILE_PROXY_URL_TEMPLATE,
+    attribution: provider.attribution,
+    darkTileUrlTemplate: MAP_TILE_PROXY_DARK_URL_TEMPLATE,
+    darkAttribution: provider.darkAttribution,
+    dimLightTiles: provider.dimLightTiles,
+    minZoom: MAP_TILE_MIN_ZOOM,
+    maxZoom: provider.maxZoom,
+  };
+  return NextResponse.json(config, {
+    headers: { ...getSecurityHeaders(), 'Cache-Control': CONFIG_CACHE_CONTROL },
+  });
 }
 
 const getWithErrors = withErrorHandler(handleGetMapConfig);

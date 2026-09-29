@@ -1,16 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  MAP_CONFIG_PATH,
+  parseMapTileConfig,
+  type MapTileConfig,
+} from '@agiworkforce/cloud-contracts';
 
-export interface MapTileConfig {
-  tileUrlTemplate: string;
-  attribution: string;
-  darkTileUrlTemplate: string;
-  darkAttribution: string;
-  dimLightTiles: boolean;
-  minZoom: number;
-  maxZoom: number;
-}
+export type { MapTileConfig };
 
 export interface MapTileStyleChoice {
   urlTemplate: string;
@@ -28,23 +25,7 @@ export function mapTileStyle(config: MapTileConfig, dark: boolean): MapTileStyle
     : { urlTemplate: config.tileUrlTemplate, attribution: config.attribution, dim: false };
 }
 
-const MAP_CONFIG_ENDPOINT = '/api/maps/config';
-
 let pending: Promise<MapTileConfig | null> | null = null;
-
-function isMapTileConfig(value: unknown): value is MapTileConfig {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<MapTileConfig>;
-  return (
-    typeof candidate.tileUrlTemplate === 'string' &&
-    typeof candidate.attribution === 'string' &&
-    typeof candidate.darkTileUrlTemplate === 'string' &&
-    typeof candidate.darkAttribution === 'string' &&
-    typeof candidate.dimLightTiles === 'boolean' &&
-    typeof candidate.minZoom === 'number' &&
-    typeof candidate.maxZoom === 'number'
-  );
-}
 
 /**
  * One request per session, shared by every card on the page: the tile endpoint
@@ -52,9 +33,9 @@ function isMapTileConfig(value: unknown): value is MapTileConfig {
  * map cards must not ask six times.
  */
 export function loadMapTileConfig(): Promise<MapTileConfig | null> {
-  pending ??= fetch(MAP_CONFIG_ENDPOINT, { credentials: 'same-origin' })
+  pending ??= fetch(MAP_CONFIG_PATH, { credentials: 'same-origin' })
     .then((response) => (response.ok ? response.json() : null))
-    .then((value: unknown) => (isMapTileConfig(value) ? value : null))
+    .then((value: unknown) => parseMapTileConfig(value))
     .catch(() => null);
   return pending;
 }
@@ -64,9 +45,7 @@ export function resetMapTileConfigCache(): void {
 }
 
 export type MapTileConfigState =
-  | { status: 'loading' }
-  | { status: 'ready'; config: MapTileConfig }
-  | { status: 'unavailable' };
+  { status: 'loading' } | { status: 'ready'; config: MapTileConfig } | { status: 'unavailable' };
 
 export function useMapTileConfig(): MapTileConfigState {
   const [state, setState] = useState<MapTileConfigState>({ status: 'loading' });

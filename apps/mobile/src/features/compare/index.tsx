@@ -6,14 +6,8 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react';
-import {
-  View,
-  ScrollView,
-  Pressable,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Trophy, Zap, Hash, Clock } from 'lucide-react-native';
@@ -383,14 +377,14 @@ export default function CompareScreen() {
             gap: 8,
           }}
         >
-          <Pressable
+          <PressableBox
             onPress={handleBack}
             className="p-2 rounded-lg active:bg-white/5"
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
             <ArrowLeft size={20} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
           <Text className="flex-1 text-[15px] font-semibold text-white">Compare Models</Text>
         </View>
 
@@ -417,7 +411,7 @@ export default function CompareScreen() {
               Your current plan has fewer than two models available for comparison. You can use your
               available model in Chat.
             </Text>
-            <Pressable
+            <PressableBox
               onPress={handleBack}
               accessibilityRole="button"
               accessibilityLabel="Go to Chat"
@@ -425,7 +419,7 @@ export default function CompareScreen() {
               style={{ backgroundColor: colors.surfaceElevated }}
             >
               <Text className="text-white font-medium">Go to Chat</Text>
-            </Pressable>
+            </PressableBox>
           </View>
         ) : (
           <>
@@ -523,7 +517,7 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
   const slotColor = slot === 'A' ? colors.teal : colors.terraCotta;
 
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       className="flex-1 rounded-xl border active:opacity-80"
       style={{
@@ -568,7 +562,7 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
           </View>
         )}
       </View>
-    </Pressable>
+    </PressableBox>
   );
 }
 
