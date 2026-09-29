@@ -47,6 +47,7 @@ export const ToolInputResumeRequestSchema = z.object({
   run_id: z.string().uuid(),
   tool_inputs: z.array(ToolInputResponseSchema).min(1).max(32),
   guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
+  detached: z.boolean().optional(),
 });
 export type ToolInputResumeRequest = z.infer<typeof ToolInputResumeRequestSchema>;
 
