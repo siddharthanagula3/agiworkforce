@@ -4,6 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { z } from 'zod';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
+import { BANK_ACCOUNTS_HOSTED_LINK_RETURN_URL } from '@agiworkforce/cloud-contracts';
 
 import {
   ConnectorGrantDecryptionError,
@@ -169,7 +170,7 @@ export async function createBankAccountsLinkToken(
   return { linkToken: created.link_token, expiration: created.expiration };
 }
 
-export const BANK_ACCOUNTS_HOSTED_LINK_COMPLETION_URI = 'agiworkforce://connectors/bank-complete';
+export const BANK_ACCOUNTS_HOSTED_LINK_COMPLETION_URI = BANK_ACCOUNTS_HOSTED_LINK_RETURN_URL;
 const HOSTED_LINK_LIFETIME_SECONDS = 1_800;
 
 export async function createBankAccountsHostedLink(

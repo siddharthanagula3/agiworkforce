@@ -3,7 +3,7 @@ import 'server-only';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { z } from 'zod';
+import { BankAccountsLinkRequestSchema } from '@agiworkforce/cloud-contracts';
 import {
   bankAccountsUnavailableReason,
   createBankAccountsHostedLink,
@@ -23,8 +23,6 @@ import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-
 export const runtime = 'nodejs';
 
 const RATE_LIMIT_BUCKET = 'chat-conversation';
-
-const BodySchema = z.object({ hostedLink: z.literal(true).optional() }).strict();
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request);
@@ -49,7 +47,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   if (!policy.allowed) throw createError.forbidden(policy.reason).asUserSafe();
 
   const body = await request.json().catch(() => ({}));
-  const parsed = BodySchema.safeParse(body ?? {});
+  const parsed = BankAccountsLinkRequestSchema.safeParse(body ?? {});
   if (!parsed.success) throw createError.validation('Unknown bank link option');
   const link = parsed.data.hostedLink
     ? await createBankAccountsHostedLink(userId)
