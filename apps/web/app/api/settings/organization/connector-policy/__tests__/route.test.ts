@@ -200,6 +200,7 @@ describe('connector policy', () => {
       ['*.corp.example'],
       [],
       [],
+      '[]',
       'user-1',
     ]);
     expect(mockRecordAuditEvent).toHaveBeenCalledWith(
