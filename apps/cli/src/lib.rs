@@ -1992,6 +1992,42 @@ enum KeysSubcommand {
 enum TriggersSubcommand {
     /// Show every trigger and its filter.
     List,
+    /// Add a trigger that runs a prompt on a schedule, a webhook event (GitHub, GitLab or
+    /// any sender) or a file change. `agi --daemon` runs it.
+    Add {
+        /// Trigger id: letters, digits, '-' and '_'.
+        id: String,
+        /// Instruction the agent runs when the trigger fires.
+        #[arg(long)]
+        prompt: String,
+        /// Five-field cron schedule, e.g. "0 9 * * 1-5".
+        #[arg(long, group = "trigger_kind")]
+        cron: Option<String>,
+        /// Webhook path the daemon listens on, e.g. github-prs.
+        #[arg(long, group = "trigger_kind")]
+        webhook: Option<String>,
+        /// Directory whose file changes fire the trigger.
+        #[arg(long, group = "trigger_kind")]
+        watch: Option<String>,
+        /// Glob that limits which watched files count, e.g. "*.rs".
+        #[arg(long, requires = "watch")]
+        glob: Option<String>,
+        /// Model for the run.
+        #[arg(long)]
+        model: Option<String>,
+        /// Event that may start it, as for `agi triggers filter`. Repeatable.
+        #[arg(long = "event")]
+        events: Vec<String>,
+        /// Webhook payload condition as /json/pointer=value. Repeatable; all must hold.
+        #[arg(long = "when")]
+        conditions: Vec<String>,
+    },
+    /// Remove a trigger.
+    Remove { id: String },
+    /// Turn a trigger back on.
+    Enable { id: String },
+    /// Turn a trigger off without removing it.
+    Disable { id: String },
     /// Narrow which events start a trigger.
     Filter {
         /// Trigger id from `agi triggers list`.
@@ -5555,6 +5591,39 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Triggers { action } => {
                 let text = match action {
                     None | Some(TriggersSubcommand::List) => daemon::list_triggers()?,
+                    Some(TriggersSubcommand::Add {
+                        id,
+                        prompt,
+                        cron,
+                        webhook,
+                        watch,
+                        glob,
+                        model,
+                        events,
+                        conditions,
+                    }) => {
+                        let mut text = daemon::add_trigger(daemon::NewTrigger {
+                            id: id.clone(),
+                            prompt: prompt.clone(),
+                            model: model.clone(),
+                            cron: cron.clone(),
+                            webhook: webhook.clone(),
+                            watch: watch.clone(),
+                            glob: glob.clone(),
+                        })?;
+                        if !events.is_empty() || !conditions.is_empty() {
+                            daemon::set_trigger_filter(id, events, conditions, None, false)?;
+                            text.push_str("\nApplied the --event and --when filter.");
+                        }
+                        text
+                    }
+                    Some(TriggersSubcommand::Remove { id }) => daemon::remove_trigger(id)?,
+                    Some(TriggersSubcommand::Enable { id }) => {
+                        daemon::set_trigger_enabled(id, true)?
+                    }
+                    Some(TriggersSubcommand::Disable { id }) => {
+                        daemon::set_trigger_enabled(id, false)?
+                    }
                     Some(TriggersSubcommand::Filter {
                         id,
                         events,
