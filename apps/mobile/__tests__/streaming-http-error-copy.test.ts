@@ -32,6 +32,10 @@ async function loadStreamingService() {
   jest.doMock('@/src/features/waitlist/store', () => ({
     useWaitlistStore: { getState: () => ({ cloudUnlocked: true }) },
   }));
+  jest.doMock('../services/api', () => ({
+    ...jest.requireActual('../services/api'),
+    recoverStreamSession: jest.fn().mockResolvedValue(false),
+  }));
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('../services/streaming') as typeof import('../services/streaming');
@@ -72,6 +76,7 @@ describe('a refused stream reaches the banner as a sentence', () => {
     jest.dontMock('../services/llmGate');
     jest.dontMock('../services/remoteChatGate');
     jest.dontMock('@/src/features/waitlist/store');
+    jest.dontMock('../services/api');
   });
 
   it("carries the gateway's own sentence and code for a provider outage", async () => {

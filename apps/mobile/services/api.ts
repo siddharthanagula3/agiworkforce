@@ -144,14 +144,21 @@ interface AccountUnavailableRefusal {
 async function readAccountUnavailable(
   response: Response,
 ): Promise<AccountUnavailableRefusal | null> {
-  const body = (await response
-    .clone()
-    .json()
-    .catch(() => null)) as {
+  return accountUnavailableFrom(
+    await response
+      .clone()
+      .json()
+      .catch(() => null),
+  );
+}
+
+function accountUnavailableFrom(parsed: unknown): AccountUnavailableRefusal | null {
+  const body = parsed as {
     error?: { code?: unknown; message?: unknown; details?: unknown };
   } | null;
   const error = body?.error;
-  if (error?.code !== 'ACCOUNT_UNAVAILABLE' || typeof error.message !== 'string') return null;
+  const code = typeof error?.code === 'string' ? error.code.toUpperCase() : null;
+  if (code !== 'ACCOUNT_UNAVAILABLE' || typeof error?.message !== 'string') return null;
   const recoveryPath = (error.details as { recoveryPath?: unknown } | undefined)?.recoveryPath;
   return {
     message: error.message,
@@ -183,6 +190,34 @@ function handleAccountUnavailable(refusal: AccountUnavailableRefusal): void {
         ]
       : []),
   ]);
+}
+
+/**
+ * The chat stream reaches the gateway with its own fetch, so it cannot go
+ * through sendRequest. It hands a refused response here for the same account,
+ * passkey and session handling every other request gets.
+ */
+export function streamAuthRefusal(status: number, text: string): Error | null {
+  if (status !== 403) return null;
+  const body = parseJsonBody(text);
+  if (readPasskeyRequired(body)) {
+    announcePasskeyRequired();
+    return new ApiHttpError(PASSKEY_REQUIRED_MESSAGE, 403, PASSKEY_REQUIRED_CODE);
+  }
+  const refusal = accountUnavailableFrom(body);
+  if (refusal) {
+    handleAccountUnavailable(refusal);
+    return new Error(`HTTP 403: ${refusal.message}`);
+  }
+  return null;
+}
+
+export async function recoverStreamSession(): Promise<boolean> {
+  const accountGeneration = _accountGeneration;
+  const refreshed = await tryRefreshToken();
+  assertApiAccountGeneration(accountGeneration);
+  if (!refreshed) handleUnrecoverableAuth();
+  return refreshed;
 }
 
 function handleUnrecoverableAuth(): void {
