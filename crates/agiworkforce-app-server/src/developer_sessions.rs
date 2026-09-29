@@ -9,8 +9,8 @@ use agiworkforce_protocol::developer_session::{
     LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse,
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
-    PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
+    PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
     ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
     SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
     SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
@@ -424,6 +424,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: PermissionsRemoveParams,
     ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
         Err(unsupported(method::PERMISSIONS_REMOVE))
+    }
+
+    async fn decide_plan(
+        &self,
+        _params: PlanDecideParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::PLAN_DECIDE))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1132,6 +1139,16 @@ impl DeveloperSessionProcessor {
                     .remove_permission(params)
                     .await
                     .map(serde_json::to_value)
+            }
+            method::PLAN_DECIDE => {
+                let params = match parse_params::<PlanDecideParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .decide_plan(params)
+                    .await
+                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
             }
             method::MEMORY_ADD => {
                 let params = match parse_params::<MemoryAddParams>(&request) {

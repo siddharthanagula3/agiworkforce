@@ -44,6 +44,15 @@ export function isPhoneWriteStep(name: string): boolean {
   return (PHONE_WRITE_STEP_TOOLS as readonly string[]).includes(name);
 }
 
+export function phoneStepNeedsConfirmation(name: string, input: unknown): boolean {
+  if (isPhoneWriteStep(name)) return true;
+  const review =
+    input && typeof input === 'object' && !Array.isArray(input)
+      ? (input as Record<string, unknown>)['review']
+      : undefined;
+  return typeof review === 'string' && review.trim().length > 0;
+}
+
 export interface PhoneStepRequest {
   tool: PhoneStepTool;
   start?: string;

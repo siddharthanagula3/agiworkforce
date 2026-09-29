@@ -1827,6 +1827,8 @@ export function getWebviewContent(
     .plan-card__step--completed .plan-card__step-text { text-decoration: line-through; }
     .plan-card__status { color: var(--text-secondary); flex: 0 0 13px; text-align: center; }
     .plan-card__step--in-progress .plan-card__status { color: var(--accent-teal); }
+    .plan-card__decision { padding: 0 10px 10px; }
+    .plan-card__decision .approval-card__actions { margin-top: 0; }
     .plan-card__step--completed .plan-card__status { color: var(--success); }
 
     /* ── Empty state (design-spec §8) ── */
@@ -4218,6 +4220,7 @@ export function getWebviewContent(
 
     function setStreaming(value) {
       streaming = value;
+      renderPlanDecision();
       if (!value && stopBtn && stopBtn.getAttribute('aria-busy') === 'true') {
         stopBtn.removeAttribute('aria-busy');
         stopBtn.setAttribute('aria-label', 'Stop response');
@@ -6514,6 +6517,7 @@ export function getWebviewContent(
       else if (msg.type === 'modeChanged') {
         activeMode = msg.payload.mode;
         renderControlsSummary();
+        renderPlanDecision();
       }
 
       else if (msg.type === 'effortChanged') {
@@ -6758,14 +6762,30 @@ export function getWebviewContent(
         explanation.className = 'plan-card__explanation';
         var list = document.createElement('ol');
         list.className = 'plan-card__list';
+        var decision = document.createElement('div');
+        decision.className = 'plan-card__decision';
+        decision.hidden = true;
         card.appendChild(header);
         card.appendChild(explanation);
         card.appendChild(list);
+        card.appendChild(decision);
         messagesEl.appendChild(card);
-        activePlanCard = { card: card, count: count, explanation: explanation, list: list };
+        activePlanCard = {
+          card: card,
+          count: count,
+          explanation: explanation,
+          list: list,
+          decision: decision,
+          steps: 0,
+          decided: false,
+          revising: false
+        };
       }
 
       var steps = Array.isArray(plan.plan) ? plan.plan : [];
+      activePlanCard.steps = steps.length;
+      activePlanCard.decided = false;
+      activePlanCard.revising = false;
       var completed = steps.filter(function(item) { return item.status === 'completed'; }).length;
       activePlanCard.count.textContent = completed + '/' + steps.length + ' complete';
       activePlanCard.explanation.textContent = plan.explanation || '';
@@ -6798,7 +6818,66 @@ export function getWebviewContent(
           activePlanCard.list.appendChild(row);
         });
       }
+      renderPlanDecision();
       messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function planDecisionButton(label, primary, onClick) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'approval-card__action' + (primary ? ' approval-card__action--primary' : '');
+      button.textContent = label;
+      button.addEventListener('click', onClick);
+      return button;
+    }
+
+    function renderPlanDecision() {
+      if (!activePlanCard) return;
+      var panel = activePlanCard.decision;
+      var offered = !streaming && activeMode === 'plan' && activePlanCard.steps > 0 && !activePlanCard.decided;
+      panel.hidden = !offered;
+      panel.textContent = '';
+      if (!offered) return;
+      var planCard = activePlanCard;
+      if (planCard.revising) {
+        var feedback = document.createElement('textarea');
+        feedback.className = 'approval-card__guidance';
+        feedback.rows = 3;
+        feedback.maxLength = 4000;
+        feedback.placeholder = L10N.revisePlanPlaceholder;
+        feedback.setAttribute('aria-label', L10N.revisePlanPlaceholder);
+        var revisionActions = document.createElement('div');
+        revisionActions.className = 'approval-card__actions';
+        var send = planDecisionButton(L10N.sendRevision, true, function() {
+          var text = feedback.value.trim();
+          if (!text) { feedback.focus(); return; }
+          planCard.decided = true;
+          renderPlanDecision();
+          vscode.postMessage({ type: 'planDecision', payload: { decision: 'reject', feedback: text } });
+        });
+        var cancel = planDecisionButton(L10N.cancelRevision, false, function() {
+          planCard.revising = false;
+          renderPlanDecision();
+        });
+        revisionActions.appendChild(send);
+        revisionActions.appendChild(cancel);
+        panel.appendChild(feedback);
+        panel.appendChild(revisionActions);
+        feedback.focus();
+        return;
+      }
+      var actions = document.createElement('div');
+      actions.className = 'approval-card__actions';
+      actions.appendChild(planDecisionButton(L10N.approvePlan, true, function() {
+        planCard.decided = true;
+        renderPlanDecision();
+        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve' } });
+      }));
+      actions.appendChild(planDecisionButton(L10N.revisePlan, false, function() {
+        planCard.revising = true;
+        renderPlanDecision();
+      }));
+      panel.appendChild(actions);
     }
 
     var TOOL_ICONS = {
