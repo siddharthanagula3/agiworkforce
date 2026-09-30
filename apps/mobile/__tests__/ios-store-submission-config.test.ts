@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { getAgeThreshold } from '../src/features/auth/services/ageGate';
+
+jest.mock('@/lib/mmkv', () => ({ storage: {} }));
 
 const appConfig = require('../app.config.js') as {
   expo: { ios?: { infoPlist?: Record<string, unknown> } };
@@ -11,11 +14,12 @@ const listingIos = require('../store-listing/LISTING-METADATA-IOS.json') as {
   pricing: { in_app_purchase_note: string; guideline_3_1_1_residual_risk?: string };
   export_compliance?: { uses_non_exempt_encryption?: boolean };
   privacy_nutrition_labels: unknown;
+  age_rating: { rating: string };
 };
 
 const listingAndroid = require('../store-listing/LISTING-METADATA-ANDROID.json') as {
   play_console_review_notes_file: string;
-  target_audience: { age_group: string };
+  target_audience: { age_group: string; play_age_bands: string[] };
   data_safety: { data_shared: boolean; data_collected_types: Array<{ type: string }> };
   in_app_products: { has_in_app_products: boolean; note: string };
 };
@@ -325,11 +329,24 @@ describe('Play data safety declarations', () => {
     }
   });
 
-  it('targets the lowest age the shipped age gate admits', () => {
+  it('rates both stores at the lowest age the shipped age gate admits', () => {
     const ageGate = readFileSync(join(mobileRoot, 'src/features/auth/services/ageGate.ts'), 'utf8');
     const fallback = /DEFAULT_RULE:\s*RegionAgeRule\s*=\s*\{[^}]*threshold:\s*(\d+)/.exec(ageGate);
+    const regionalAges = [...ageGate.matchAll(/threshold:\s*(\d+)/g)].map(([, age]) => Number(age));
     expect(fallback).not.toBeNull();
-    expect(listingAndroid.target_audience.age_group).toBe(`${fallback![1]}+`);
+    expect(Number(fallback![1])).toBe(Math.min(...regionalAges));
+
+    const resolvedOptions = jest
+      .spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+      .mockReturnValue({ timeZone: 'Etc/UTC' } as Intl.ResolvedDateTimeFormatOptions);
+    const lowestAdmittedAge = getAgeThreshold();
+    resolvedOptions.mockRestore();
+
+    expect(listingIos.age_rating.rating).toBe(`${lowestAdmittedAge}+`);
+    expect(listingAndroid.target_audience.age_group).toBe(`${lowestAdmittedAge}+`);
+    expect(Number.parseInt(listingAndroid.target_audience.play_age_bands[0] ?? '', 10)).toBe(
+      lowestAdmittedAge,
+    );
   });
 
   it('carries no HealthKit claims in the privacy manifest', () => {

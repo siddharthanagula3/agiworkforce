@@ -403,11 +403,12 @@ const messagePort: MessageStorePort = {
     );
     const chatMessages = records.map((record) => {
       const existing = existingById.get(record.id);
+      const { model: _model, provider: _provider, ...kept }: Partial<ChatMessage> = existing ?? {};
       const toolCalls = hydrateApprovalToolCalls(existing, record.metadata);
       const generatedImage = hydrateGeneratedImageFields(record.metadata);
       const pendingToolInput = pendingToolInputFromMetadata(record.metadata);
       return {
-        ...(existing ?? {}),
+        ...kept,
         id: record.id,
         role: record.role,
         content: record.content,

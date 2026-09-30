@@ -87,7 +87,7 @@
       }
     },
     {
-      "name": "missing_optional_fields_null_out",
+      "name": "unknown_model_and_provider_are_omitted",
       "conversationId": "018f6f2a-0000-7000-8000-000000000001",
       "record": {
         "id": "018f6f2a-0000-7000-8000-000000000011",
@@ -99,11 +99,10 @@
         "conversationId": "018f6f2a-0000-7000-8000-000000000001",
         "role": "user",
         "content": "hi there",
-        "model": null,
-        "provider": null,
         "metadata": null,
         "baseVersion": "0"
-      }
+      },
+      "note": "An absent key keeps the stored value on the server, so a device that never learned a message's model cannot erase it for every other device."
     }
   ]
 }
