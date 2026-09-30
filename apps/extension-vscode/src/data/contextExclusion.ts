@@ -4,17 +4,16 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { isSensitiveFile } from '@agiworkforce/utils';
 import { Config } from '../platform/config';
+import { safeResolveWorkspacePath, type SafeResolveResult } from '../utils/pathSafety';
 
-export type ContextWithholdReason = 'credential' | 'excluded' | 'gitignored';
+export type ContextWithholdReason = 'credential' | 'excluded' | 'gitignored' | 'unavailable';
+export type ContextFileResolution =
+  Extract<SafeResolveResult, { ok: true }> | { ok: false; reason: ContextWithholdReason };
 
 const EXCLUDE_SECTIONS = ['files', 'search'] as const;
 const GIT_CHECK_TIMEOUT_MS = 3000;
 const GIT_PATHS_PER_CHECK = 200;
-const CACHED_CHECK_TTL_MS = 10_000;
-const CACHED_CHECK_LIMIT = 200;
 const IGNORE_CASE = process.platform !== 'linux';
-
-const cachedChecks = new Map<string, { at: number; ignored: Promise<boolean> }>();
 
 function charClass(body: string): string {
   const negated = body.startsWith('!') || body.startsWith('^');
@@ -119,6 +118,36 @@ export function settingsWithholdReason(filePath: string): ContextWithholdReason 
   return matchesExcludeSetting(uri, folder) ? 'excluded' : undefined;
 }
 
+export async function resolvedContextWithholdReason(
+  filePath: string,
+): Promise<ContextWithholdReason | undefined> {
+  const document = vscode.window.activeTextEditor?.document;
+  if (document?.isUntitled && document.uri.fsPath === filePath) {
+    return settingsWithholdReason(filePath);
+  }
+  const resolved = await resolveContextFile(filePath);
+  return resolved.ok ? undefined : resolved.reason;
+}
+
+export async function resolveContextFile(filePath: string): Promise<ContextFileResolution> {
+  if (typeof filePath !== 'string' || filePath === '') return { ok: false, reason: 'unavailable' };
+  const lexical = settingsWithholdReason(filePath);
+  if (lexical !== undefined) return { ok: false, reason: lexical };
+  const resolved = await safeResolveWorkspacePath(filePath, { allowAbsolute: true });
+  if (!resolved.ok)
+    return { ok: false, reason: resolved.reason === 'sensitive' ? 'credential' : 'unavailable' };
+  if (matchesExcludeSetting(resolved.uri, resolved.folder))
+    return { ok: false, reason: 'excluded' };
+  if (honoursGitIgnore(resolved.folder)) {
+    if (!vscode.workspace.isTrusted) return { ok: false, reason: 'gitignored' };
+    if (await isGitIgnored(filePath)) return { ok: false, reason: 'gitignored' };
+    const relative = toPosix(path.relative(resolved.folder.uri.fsPath, resolved.resolvedPath));
+    const ignored = await checkIgnore(resolved.folder.uri.fsPath, [relative]);
+    if (ignored === undefined || ignored.has(relative)) return { ok: false, reason: 'gitignored' };
+  }
+  return resolved;
+}
+
 function honoursGitIgnore(folder: vscode.WorkspaceFolder): boolean {
   return (
     Config.respectGitIgnore() &&
@@ -128,9 +157,9 @@ function honoursGitIgnore(folder: vscode.WorkspaceFolder): boolean {
 
 function checkIgnore(cwd: string, paths: readonly string[]): Promise<Set<string> | undefined> {
   return new Promise((resolve) => {
-    execFile(
+    const child = execFile(
       'git',
-      ['check-ignore', '--no-index', '-z', '--', ...paths],
+      ['check-ignore', '--no-index', '-z', '--stdin'],
       { cwd, timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
       (error, stdout) => {
         if (error === null) {
@@ -144,20 +173,29 @@ function checkIgnore(cwd: string, paths: readonly string[]): Promise<Set<string>
           return;
         }
         const code = (error as { code?: unknown }).code;
-        resolve(code === 1 || code === 128 || code === 'ENOENT' ? new Set() : undefined);
+        resolve(code === 1 ? new Set() : undefined);
       },
     );
+    if (child.stdin === null) {
+      resolve(undefined);
+      return;
+    }
+    child.stdin.on('error', () => resolve(undefined));
+    child.stdin.end(`${paths.join('\0')}\0`);
   });
 }
 
 export async function gitIgnoredPaths(uris: readonly vscode.Uri[]): Promise<Set<string>> {
   const ignored = new Set<string>();
-  if (!vscode.workspace.isTrusted) return ignored;
   const byFolder = new Map<string, { root: string; files: Map<string, string> }>();
   for (const uri of uris) {
     if (uri.scheme !== 'file') continue;
     const folder = vscode.workspace.getWorkspaceFolder(uri);
     if (folder === undefined || !honoursGitIgnore(folder)) continue;
+    if (!vscode.workspace.isTrusted) {
+      ignored.add(uri.fsPath);
+      continue;
+    }
     const relativePath = toPosix(path.relative(folder.uri.fsPath, uri.fsPath));
     if (relativePath === '' || relativePath.startsWith('../')) continue;
     const group = byFolder.get(folder.uri.fsPath) ?? {
@@ -185,18 +223,4 @@ export async function gitIgnoredPaths(uris: readonly vscode.Uri[]): Promise<Set<
 export async function isGitIgnored(filePath: string): Promise<boolean> {
   const uri = vscode.Uri.file(filePath);
   return (await gitIgnoredPaths([uri])).has(uri.fsPath);
-}
-
-export function isGitIgnoredCached(filePath: string): Promise<boolean> {
-  const now = Date.now();
-  const cached = cachedChecks.get(filePath);
-  if (cached !== undefined && now - cached.at < CACHED_CHECK_TTL_MS) return cached.ignored;
-  const ignored = isGitIgnored(filePath);
-  if (cachedChecks.size >= CACHED_CHECK_LIMIT) cachedChecks.clear();
-  cachedChecks.set(filePath, { at: now, ignored });
-  return ignored;
-}
-
-export function clearGitIgnoreCache(): void {
-  cachedChecks.clear();
 }

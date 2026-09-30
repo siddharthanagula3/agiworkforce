@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import * as vscode from 'vscode';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { type ThreadReadResponse, type ThreadSummary } from '@agiworkforce/types';
 import {
   ChatStateManager,
@@ -25,6 +29,7 @@ import type { LocalRuntimePool } from '../integrations/localRuntimePool';
 import type { ConversationTreeProvider } from '../features/trees/conversationTreeProvider';
 import {
   setContextPanelInstance,
+  validateWorkspaceContextFile,
   type ContextPanelProvider,
 } from '../features/trees/contextPanelProvider';
 import { setAccountMemoryStore, type AccountMemoryStore } from '../memory/accountMemoryStore';
@@ -122,6 +127,7 @@ function makeHarness(
       return { dispose: () => listeners.delete(listener) };
     }),
     onNotification: vi.fn(() => ({ dispose: () => undefined })),
+    offers: vi.fn().mockResolvedValue(false),
   };
   const pool = {
     forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
@@ -159,8 +165,43 @@ function makeHarness(
   };
 }
 
-afterEach(() => {
+let fixtureCleanup: (() => Promise<void>) | undefined;
+
+async function realContextWorkspace(harness?: ReturnType<typeof makeHarness>): Promise<string> {
+  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agi-chat-context-')));
+  await fs.mkdir(path.join(root, 'src'));
+  for (const file of ['app.ts', 'context.ts', 'mentioned.ts'])
+    await fs.writeFile(path.join(root, 'src', file), 'controlled ordinary code');
+  execFileSync('git', ['-c', 'init.templateDir=', 'init', '-q'], { cwd: root });
+  const originalFolder = vi.mocked(vscode.workspace.getWorkspaceFolder).getMockImplementation();
+  vscode.workspace.workspaceFolders = [{ name: 'workspace', index: 0, uri: vscode.Uri.file(root) }];
+  vi.mocked(vscode.workspace.getWorkspaceFolder).mockReturnValue(
+    vscode.workspace.workspaceFolders[0],
+  );
+  vi.mocked(vscode.workspace.fs.stat).mockResolvedValue({
+    type: vscode.FileType.File,
+    ctime: 0,
+    mtime: 0,
+    size: 24,
+  });
+  setContextPanelInstance({
+    getContextFiles: () => [path.join(root, 'src/context.ts')],
+  } as ContextPanelProvider);
+  if (harness !== undefined)
+    harness.runtime.startThread.mockResolvedValue(threadSummary({ cwd: root }));
+  fixtureCleanup = async () => {
+    if (originalFolder !== undefined)
+      vi.mocked(vscode.workspace.getWorkspaceFolder).mockImplementation(originalFolder);
+    else vi.mocked(vscode.workspace.getWorkspaceFolder).mockReset();
+    await fs.rm(root, { recursive: true, force: true });
+  };
+  return root;
+}
+
+afterEach(async () => {
   setAccountMemoryStore(undefined);
+  await fixtureCleanup?.();
+  fixtureCleanup = undefined;
 });
 
 describe('ChatStateManager local turn lifecycle', () => {
@@ -174,6 +215,118 @@ describe('ChatStateManager local turn lifecycle', () => {
     setContextPanelInstance({
       getContextFiles: () => ['/workspace/src/context.ts'],
     } as ContextPanelProvider);
+  });
+
+  it.each(['turn', 'steer'] as const)(
+    'rechecks an attached selection before %s dispatch',
+    async (dispatch) => {
+      const harness = makeHarness();
+      const root = await realContextWorkspace(harness);
+      let initial: Promise<void> | undefined;
+      let send: Promise<void> | undefined;
+      try {
+        if (dispatch === 'steer') {
+          initial = harness.manager.handleMessage({
+            type: 'sendMessage',
+            payload: { text: 'Start' },
+          });
+          await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+        }
+        vscode.window.activeTextEditor = {
+          document: {
+            uri: vscode.Uri.file(path.join(root, 'src/app.ts')),
+            languageId: 'typescript',
+            lineCount: 1,
+            getText: () => 'CONTROLLED_SELECTION_CONTENT',
+          },
+          selection: new vscode.Selection(0, 0, 0, 27),
+        } as unknown as vscode.TextEditor;
+        await harness.manager.handleMessage({
+          type: 'attachContext',
+          payload: { kind: 'selection' },
+        });
+        expect(harness.posted.some((message) => message.type === 'contextAttached')).toBe(true);
+        vscode.window.activeTextEditor = undefined;
+        await fs.writeFile(path.join(root, '.gitignore'), 'src/app.ts\n');
+        send = harness.manager.handleMessage({
+          type: 'sendMessage',
+          payload: {
+            text: 'Use context',
+            ...(dispatch === 'steer' ? { followUpBehavior: 'steer' as const } : {}),
+          },
+        });
+        const target = dispatch === 'steer' ? harness.runtime.steerTurn : harness.runtime.startTurn;
+        await vi.waitFor(() => expect(target).toHaveBeenCalledOnce());
+        expect(JSON.stringify(target.mock.calls[0]?.[0])).not.toContain(
+          'CONTROLLED_SELECTION_CONTENT',
+        );
+      } finally {
+        harness.emit({
+          type: 'turn_completed',
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          status: 'completed',
+          response: 'done',
+          inputTokens: 1,
+          outputTokens: 1,
+        });
+        if (send !== undefined) await send;
+        if (initial !== undefined) await initial;
+      }
+    },
+  );
+
+  it('rechecks retained pinned context files against current gitignore before dispatch', async () => {
+    const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agi-pinned-context-')));
+    const file = path.join(root, 'ordinary.txt');
+    await fs.writeFile(file, 'controlled ordinary content');
+    execFileSync('git', ['-c', 'init.templateDir=', 'init', '-q'], { cwd: root });
+    const originalFolder = vi.mocked(vscode.workspace.getWorkspaceFolder).getMockImplementation();
+    const originalStat = vi.mocked(vscode.workspace.fs.stat).getMockImplementation();
+    vscode.workspace.workspaceFolders = [
+      { name: 'controlled', index: 0, uri: vscode.Uri.file(root) },
+    ];
+    vi.mocked(vscode.workspace.getWorkspaceFolder).mockReturnValue(
+      vscode.workspace.workspaceFolders[0],
+    );
+    vi.mocked(vscode.workspace.fs.stat).mockResolvedValue({
+      type: vscode.FileType.File,
+      ctime: 0,
+      mtime: 0,
+      size: 27,
+    });
+    const harness = makeHarness();
+    harness.runtime.startThread.mockResolvedValue(threadSummary({ cwd: root }));
+    let send: Promise<void> | undefined;
+    try {
+      expect((await validateWorkspaceContextFile(vscode.Uri.file(file))).ok).toBe(true);
+      setContextPanelInstance({ getContextFiles: () => [file] } as ContextPanelProvider);
+      await fs.writeFile(path.join(root, '.gitignore'), 'ordinary.txt\n');
+      send = harness.manager.handleMessage({
+        type: 'sendMessage',
+        payload: { text: 'Check the workspace' },
+      });
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+      const params = harness.runtime.startTurn.mock.calls[0]?.[0] as { contextFiles?: string[] };
+      expect(params.contextFiles ?? []).not.toContain(file);
+    } finally {
+      harness.emit({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+      if (send !== undefined) await send;
+      if (originalFolder !== undefined)
+        vi.mocked(vscode.workspace.getWorkspaceFolder).mockImplementation(originalFolder);
+      if (originalStat !== undefined)
+        vi.mocked(vscode.workspace.fs.stat).mockImplementation(originalStat);
+      else vi.mocked(vscode.workspace.fs.stat).mockReset();
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 
   it('acknowledges an Apply failure when no editor is open', async () => {
@@ -298,7 +451,8 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('returns exact active-selection metadata in sidebar file search results', async () => {
     const harness = makeHarness();
-    const uri = vscode.Uri.file('/workspace/src/app.ts');
+    const root = await realContextWorkspace(harness);
+    const uri = vscode.Uri.file(path.join(root, 'src/app.ts'));
     vi.mocked(vscode.workspace.findFiles).mockResolvedValueOnce([uri]);
     vi.spyOn(vscode.workspace, 'asRelativePath').mockReturnValue('src/app.ts');
     vscode.window.activeTextEditor = {
@@ -1857,6 +2011,7 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('forwards the effective agent controls and selected workspace context', async () => {
     const harness = makeHarness();
+    const root = await realContextWorkspace(harness);
     await harness.manager.handleMessage({ type: 'setMode', payload: { mode: 'plan' } });
     await harness.manager.handleMessage({ type: 'setEffort', payload: { effort: 'high' } });
     const send = harness.manager.handleMessage({
@@ -1869,7 +2024,7 @@ describe('ChatStateManager local turn lifecycle', () => {
       expect.objectContaining({
         agentMode: 'plan',
         reasoningEffort: 'high',
-        contextFiles: ['/workspace/src/context.ts'],
+        contextFiles: [path.join(root, 'src/context.ts')],
       }),
     );
     harness.emit({
@@ -1885,6 +2040,7 @@ describe('ChatStateManager local turn lifecycle', () => {
   });
 
   it('sends the active editor file, its selection and its problems with the turn', async () => {
+    const root = await realContextWorkspace();
     Object.defineProperty(vscode.window, 'activeTextEditor', {
       configurable: true,
       writable: true,
@@ -1896,7 +2052,7 @@ describe('ChatStateManager local turn lifecycle', () => {
           active: { line: 2, character: 1 },
         },
         document: {
-          uri: vscode.Uri.file('/workspace/src/app.ts'),
+          uri: vscode.Uri.file(path.join(root, 'src/app.ts')),
           languageId: 'typescript',
           lineCount: 3,
           getText: () => 'export const add = (a, b) => a + b;',
@@ -1907,10 +2063,12 @@ describe('ChatStateManager local turn lifecycle', () => {
       { severity: 0, message: 'b is not defined', range: { start: { line: 1, character: 9 } } },
     ] as never);
     vi.mocked(vscode.workspace.asRelativePath).mockImplementation((value: unknown) =>
-      String((value as { fsPath?: string }).fsPath ?? value).replace('/workspace/', ''),
+      String((value as { fsPath?: string }).fsPath ?? value).replace(`${root}${path.sep}`, ''),
     );
 
     const harness = makeHarness();
+    harness.runtime.startThread.mockResolvedValue(threadSummary({ cwd: root }));
+
     const send = harness.manager.handleMessage({
       type: 'sendMessage',
       payload: { text: 'What is this?' },
@@ -1921,7 +2079,7 @@ describe('ChatStateManager local turn lifecycle', () => {
       contextFiles: string[];
       input: Array<{ type: string; text?: string }>;
     };
-    expect(params.contextFiles).toContain('/workspace/src/app.ts');
+    expect(params.contextFiles).toContain(path.join(root, 'src/app.ts'));
     const texts = params.input
       .filter((part) => part.type === 'text')
       .map((part) => part.text ?? '');
@@ -1942,6 +2100,7 @@ describe('ChatStateManager local turn lifecycle', () => {
   });
 
   it('stops sending an editor chip the user removed, until the next turn', async () => {
+    const root = await realContextWorkspace();
     Object.defineProperty(vscode.window, 'activeTextEditor', {
       configurable: true,
       writable: true,
@@ -1953,16 +2112,21 @@ describe('ChatStateManager local turn lifecycle', () => {
           active: { line: 0, character: 0 },
         },
         document: {
-          uri: vscode.Uri.file('/workspace/src/app.ts'),
+          uri: vscode.Uri.file(path.join(root, 'src/app.ts')),
           languageId: 'typescript',
           lineCount: 3,
           getText: () => '',
         },
       },
     });
+    vi.mocked(vscode.workspace.asRelativePath).mockImplementation((value: unknown) =>
+      String((value as { fsPath?: string }).fsPath ?? value).replace(`${root}${path.sep}`, ''),
+    );
     vi.mocked(vscode.languages.getDiagnostics).mockReturnValue([] as never);
 
     const harness = makeHarness();
+    harness.runtime.startThread.mockResolvedValue(threadSummary({ cwd: root }));
+
     await harness.manager.handleMessage({
       type: 'dismissEditorContext',
       payload: { id: 'active-file:src/app.ts' },
@@ -1972,13 +2136,18 @@ describe('ChatStateManager local turn lifecycle', () => {
     const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Hello' } });
     await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
     expect(
-      (harness.runtime.startTurn.mock.calls[0]?.[0] as { contextFiles?: string[] }).contextFiles,
-    ).not.toContain('/workspace/src/app.ts');
+      (harness.runtime.startTurn.mock.calls[0]?.[0] as { contextFiles?: string[] }).contextFiles ??
+        [],
+    ).not.toContain(path.join(root, 'src/app.ts'));
 
-    expect(harness.posted).toContainEqual({
-      type: 'editorContext',
-      payload: { chips: [{ id: 'active-file:src/app.ts', kind: 'active-file', label: 'app.ts' }] },
-    });
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual({
+        type: 'editorContext',
+        payload: {
+          chips: [{ id: 'active-file:src/app.ts', kind: 'active-file', label: 'app.ts' }],
+        },
+      }),
+    );
     harness.emit({
       type: 'turn_completed',
       threadId: 'thread-1',
@@ -2668,6 +2837,7 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('forwards sidebar file mentions with their exact selected range', async () => {
     const harness = makeHarness();
+    const root = await realContextWorkspace(harness);
     vi.mocked(vscode.workspace.fs.stat).mockResolvedValueOnce({
       type: vscode.FileType.File,
       ctime: 0,
