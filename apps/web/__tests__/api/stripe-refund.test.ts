@@ -26,6 +26,7 @@ vi.mock('@/lib/security-audit', () => ({
 
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
+const mockInvoicePaymentsList = vi.fn();
 const mockDb = {
   query: mockQuery,
   execute: mockExecute,
@@ -119,6 +120,7 @@ const mockStripeWebhooks = {
 
 class MockStripe {
   webhooks = mockStripeWebhooks;
+  invoicePayments = { list: mockInvoicePaymentsList };
   checkout = {
     sessions: {
       retrieve: vi.fn().mockResolvedValue({
@@ -161,6 +163,7 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
+    mockInvoicePaymentsList.mockResolvedValue({ data: [], has_more: false });
 
     const neonModule = await import('@/lib/server/neon-db');
     (neonModule.getNeonDb as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
@@ -253,81 +256,149 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
       expect(response.status).toBe(200);
     });
 
-    it('revokes the refunded share of the current period plan allowance, never purchased credits', async () => {
-      const { POST } = await import('@/app/api/stripe-webhook/route');
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const planAllowanceMicrousd = 10_000_000;
-      const purchasedMicrousd = 2_000_000;
+    it.each([
+      'verified',
+      'missing-subscription',
+      'missing-payment-intent',
+      'partial-invoice-settlement',
+    ] as const)(
+      'verifies plan refund attribution before allowance changes (%s)',
+      async (attribution) => {
+        const { POST } = await import('@/app/api/stripe-webhook/route');
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const planAllowanceMicrousd = 10_000_000;
+        const purchasedMicrousd = 2_000_000;
 
-      mockQuery.mockImplementation((sql: string) => {
-        if (sql.includes('process_stripe_event_idempotent')) {
-          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
-        }
-        if (sql.includes('profiles')) return Promise.resolve([{ id: 'user_123' }]);
-        if (sql.includes('from subscriptions')) {
-          return Promise.resolve([
+        mockInvoicePaymentsList.mockResolvedValue({
+          has_more: false,
+          data: [
             {
-              subscription_id: 'sub_db_1',
-              plan_tier: 'pro',
-              current_period_start: new Date((nowSeconds - 10 * 86_400) * 1000).toISOString(),
-              current_period_end: new Date((nowSeconds + 20 * 86_400) * 1000).toISOString(),
+              id: 'inpay_refundrpc',
+              status: 'paid',
+              amount_paid: 1200,
+              payment: { type: 'payment_intent', payment_intent: 'pi_refundrpc' },
+              invoice: {
+                id: 'in_refundrpc',
+                customer: 'cus_test_123',
+                status: 'paid',
+                amount_paid: attribution === 'partial-invoice-settlement' ? 2000 : 1200,
+                amount_remaining: 0,
+                parent: { subscription_details: { subscription: 'sub_refundrpc' } },
+                lines: {
+                  has_more: false,
+                  data: [
+                    { period: { start: nowSeconds - 10 * 86_400, end: nowSeconds + 20 * 86_400 } },
+                  ],
+                },
+              },
             },
-          ]);
-        }
-        if (sql.includes('from token_credits')) {
-          return Promise.resolve([
-            {
-              id: 'credit_account_1',
-              credits_allocated_microusd: planAllowanceMicrousd + purchasedMicrousd,
-              top_up_allocated_microusd: purchasedMicrousd,
-            },
-          ]);
-        }
-        if (sql.includes('from credit_transactions')) return Promise.resolve([{ revoked: 0 }]);
-        return Promise.resolve([]);
-      });
+          ],
+        });
 
-      const eventPayload = JSON.stringify({
-        id: 'evt_refund_rpc',
-        type: 'charge.refunded',
-        data: {
-          object: {
-            id: 'ch_test_rpc',
-            customer: 'cus_test_123',
-            amount: 1200,
-            amount_refunded: 500,
-            created: nowSeconds - 86_400,
+        mockQuery.mockImplementation((sql: string) => {
+          if (sql.includes('process_stripe_event_idempotent')) {
+            return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+          }
+          if (/from\s+(?:public\.)?profiles\b/i.test(sql)) {
+            return Promise.resolve([{ id: 'user_123' }]);
+          }
+          if (sql.includes('from subscriptions')) {
+            return Promise.resolve([
+              {
+                subscription_id: 'sub_db_1',
+                stripe_subscription_id:
+                  attribution === 'missing-subscription' ? null : 'sub_refundrpc',
+                plan_tier: 'pro',
+                current_period_start: new Date((nowSeconds - 10 * 86_400) * 1000).toISOString(),
+                current_period_end: new Date((nowSeconds + 20 * 86_400) * 1000).toISOString(),
+              },
+            ]);
+          }
+          if (sql.includes('from token_credits')) {
+            return Promise.resolve([
+              {
+                id: 'credit_account_1',
+                credits_allocated_microusd: planAllowanceMicrousd + purchasedMicrousd,
+                top_up_allocated_microusd: purchasedMicrousd,
+              },
+            ]);
+          }
+          if (sql.includes('from credit_transactions')) return Promise.resolve([{ revoked: 0 }]);
+          return Promise.resolve([]);
+        });
+
+        const eventPayload = JSON.stringify({
+          id: 'evt_refund_rpc',
+          type: 'charge.refunded',
+          data: {
+            object: {
+              id: 'ch_test_rpc',
+              customer: 'cus_test_123',
+              payment_intent: attribution === 'missing-payment-intent' ? null : 'pi_refundrpc',
+              amount: 1200,
+              amount_refunded: 500,
+              created: nowSeconds - 86_400,
+            },
           },
-        },
-      });
+        });
 
-      const { signature } = generateStripeSignature(eventPayload, mockEnv.STRIPE_WEBHOOK_SECRET);
+        const { signature } = generateStripeSignature(eventPayload, mockEnv.STRIPE_WEBHOOK_SECRET);
 
-      const request = new NextRequest('http://localhost/api/stripe-webhook', {
-        method: 'POST',
-        body: eventPayload,
-        headers: {
-          'content-type': 'application/json',
-          'stripe-signature': signature,
-        },
-      });
+        const request = new NextRequest('http://localhost/api/stripe-webhook', {
+          method: 'POST',
+          body: eventPayload,
+          headers: {
+            'content-type': 'application/json',
+            'stripe-signature': signature,
+          },
+        });
 
-      await POST(request);
+        const response = await POST(request);
 
-      expect(mockExecute).toHaveBeenCalledWith(
-        'select revoke_plan_allowance_microusd($1, $2, $3, $4)',
-        [
-          'user_123',
-          'credit_account_1',
-          Math.floor((planAllowanceMicrousd * 500) / 1200),
-          'Refund for charge ch_test_rpc',
-        ],
-      );
-      expect(mockExecute).not.toHaveBeenCalledWith(
-        expect.stringContaining('handle_refund('),
-        expect.anything(),
-      );
-    });
+        if (attribution !== 'verified') {
+          expect(response.status).toBe(500);
+          expect(mockExecute).toHaveBeenCalledTimes(1);
+          expect(mockExecute).toHaveBeenCalledWith(
+            expect.stringContaining('mark_stripe_event_failed'),
+            ['evt_refund_rpc', expect.stringMatching(/allocation|mapping|attribution/)],
+          );
+          expect(mockExecute).not.toHaveBeenCalledWith(
+            expect.stringMatching(/revoke_plan_allowance|handle_.*refund|update subscriptions/),
+            expect.anything(),
+          );
+          expect(
+            mockQuery.mock.calls.some(([sql]) => String(sql).includes('from token_credits')),
+          ).toBe(false);
+          expect(mockInvoicePaymentsList).toHaveBeenCalledTimes(
+            attribution === 'partial-invoice-settlement' ? 1 : 0,
+          );
+          return;
+        }
+
+        expect(response.status).toBe(200);
+        expect(mockInvoicePaymentsList).toHaveBeenCalledWith(
+          expect.objectContaining({
+            payment: { type: 'payment_intent', payment_intent: 'pi_refundrpc' },
+            status: 'paid',
+            expand: ['data.invoice'],
+          }),
+        );
+
+        expect(mockExecute).toHaveBeenCalledWith(
+          'select revoke_plan_allowance_microusd($1, $2, $3, $4)',
+          [
+            'user_123',
+            'credit_account_1',
+            Math.floor((planAllowanceMicrousd * 500) / 1200),
+            'Refund for charge ch_test_rpc',
+          ],
+        );
+        expect(mockExecute).not.toHaveBeenCalledWith(
+          expect.stringMatching(/handle_(?:top_up_)?refund/),
+          expect.anything(),
+        );
+      },
+    );
   });
 
   describe('Customer Resolution', () => {

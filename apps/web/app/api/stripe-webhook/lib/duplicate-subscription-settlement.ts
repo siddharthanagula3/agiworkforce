@@ -1,10 +1,10 @@
 import 'server-only';
 
 import { createHash } from 'node:crypto';
-import type Stripe from 'stripe';
 import { z } from 'zod';
 
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import type { Stripe } from '@/lib/stripe-types';
 
 export const STRIPE_PAGE_SIZE = 100;
 const STRIPE_METADATA_VALUE_LIMIT = 500;
