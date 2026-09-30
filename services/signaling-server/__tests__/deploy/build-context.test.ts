@@ -60,12 +60,20 @@ else fs.writeFileSync(process.env.RELAY_CAPTURE, JSON.stringify({cwd:process.cwd
         const capture = path.join(temporary, 'capture.json');
         execFileSync('/bin/bash', ['-eu', '-c', script], {
           cwd: temporary,
-          env: { ...process.env, PATH: `${bin}:${process.env['PATH']}`, RELAY_CAPTURE: capture },
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env['PATH']}`,
+            RELAY_CAPTURE: capture,
+            CANDIDATE_SHA: 'a'.repeat(40),
+          },
         });
         const call = JSON.parse(readFileSync(capture, 'utf8'));
         expect(call.cwd).toBe(temporary);
         if (cli === 'flyctl') {
           expect(call.args.slice(0, 2)).toEqual(['deploy', '.']);
+          expect(call.args[call.args.indexOf('--build-arg') + 1]).toBe(
+            `AGI_RELEASE_SHA=${'a'.repeat(40)}`,
+          );
           for (const [option, expected] of [
             ['--config', 'services/signaling-server/fly.toml'],
             ['--dockerfile', 'services/signaling-server/Dockerfile'],

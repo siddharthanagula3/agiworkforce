@@ -225,9 +225,39 @@ jobs:
             sleep 30
           done
 
+  release-gate:
+    name: Require the candidate release gates
+    needs: scope
+    if: needs.scope.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    permissions:
+      contents: read
+      actions: read
+      security-events: read
+    steps:
+      - name: Checkout the CI-verified commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Require green scanning and the verified relay for this commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+          SIGNALING_DEPLOY_URL: ${{ vars.FLY_PUBLIC_URL }}
+        run: node scripts/production-deploy-scope.mjs --release-ready --require-relay
+
   deploy-web:
+    concurrency:
+      group: signaling-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+      security-events: read
     name: Deploy verified web artifact
-    needs: [scope, staging-gate]
+    needs: [scope, staging-gate, release-gate]
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -277,6 +307,13 @@ jobs:
       # Pre-flight, before anything is built. The 6-hourly reconcile catches a
       # deleted variable up to six hours late; this catches it before the build
       # that would boot without it reaches production.
+      - name: Require release readiness before production env writes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+          SIGNALING_DEPLOY_URL: ${{ vars.FLY_PUBLIC_URL }}
+        run: node scripts/production-deploy-scope.mjs --release-ready --require-relay --no-wait
+
       - name: Reconcile production env against the declared contract
         run: node scripts/check-env-drift.mjs --scope web --target production
 
@@ -349,6 +386,13 @@ jobs:
       - name: Build the production artifact
         run: vercel build --prod --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
+      - name: Require release readiness before artifact deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+          SIGNALING_DEPLOY_URL: ${{ vars.FLY_PUBLIC_URL }}
+        run: node scripts/production-deploy-scope.mjs --release-ready --require-relay --no-wait
+
       - name: Deploy the prebuilt artifact
         id: deploy
         shell: bash
@@ -401,6 +445,13 @@ jobs:
       # 23 August build until 2026-09-06 that way); with it on, the deploy
       # aliases the domains itself and promote answers 409. Both end with the
       # new build serving the apex, so the 409 is success here.
+      - name: Require release readiness before domain promotion
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+          SIGNALING_DEPLOY_URL: ${{ vars.FLY_PUBLIC_URL }}
+        run: node scripts/production-deploy-scope.mjs --release-ready --require-relay --no-wait
+
       - name: Promote the deployment to the production domains
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
@@ -442,6 +493,13 @@ jobs:
         run: >-
           node scripts/verify-deployment.mjs --await-promotion
           "$PRODUCTION_WEB_URL" "$HEAD_SHA"
+
+      - name: Require release readiness before migration state recording
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+          SIGNALING_DEPLOY_URL: ${{ vars.FLY_PUBLIC_URL }}
+        run: node scripts/production-deploy-scope.mjs --release-ready --require-relay --no-wait
 
       - name: Record the migration state this deployment serves
         env:
@@ -538,6 +596,10 @@ jobs:
   # push-triggered CI run on main from this repository, and whose checkout is
   # that exact commit.
   deploy-sandbox:
+    permissions:
+      contents: read
+      actions: read
+      security-events: read
     name: Deploy artifact sandbox origin
     needs: scope
     if: needs.scope.outputs.sandbox == 'true'
@@ -640,6 +702,12 @@ jobs:
       - name: Build the production artifact
         working-directory: ${{ runner.temp }}/sandbox-origin
         run: vercel build --prod --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+
+      - name: Require release readiness before sandbox deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/production-deploy-scope.mjs --release-ready --no-wait
 
       - name: Deploy the prebuilt artifact
         id: deploy
