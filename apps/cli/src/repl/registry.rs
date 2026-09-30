@@ -718,7 +718,7 @@ fn permissions_tab(tab: &str, session: &AgentSession) -> CommandOutcome {
     let directories: Vec<std::path::PathBuf> = session
         .workspace_root()
         .into_iter()
-        .chain(session.additional_context_dirs.iter().cloned())
+        .chain(session.additional_context_dirs())
         .collect();
     CommandOutcome::Block(
         sanitize_terminal_text(&store.display_tab(tab, &recent_denials, &directories)).into_owned(),

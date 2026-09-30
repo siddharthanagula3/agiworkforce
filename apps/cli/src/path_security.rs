@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 
+mod file_authority;
+pub(crate) use file_authority::{DirectoryAuthority, WorkspaceFileAuthority};
+
 #[derive(Clone)]
 struct WorkspacePathAuthority {
     root: PathBuf,
@@ -357,6 +360,9 @@ pub fn is_protected_path_with_cwd(path: &Path, cwd: &Path) -> bool {
     } else {
         cwd.join(path)
     };
+    if is_checkpoint_internal_path(&absolute) {
+        return true;
+    }
     [absolute.clone(), resolve_for_denylist(&absolute)]
         .iter()
         .any(|candidate| {
@@ -366,6 +372,83 @@ pub fn is_protected_path_with_cwd(path: &Path, cwd: &Path) -> bool {
                 .unwrap_or(candidate);
             names_protected_location(relative)
         })
+}
+
+pub(crate) fn is_checkpoint_internal_path(path: &Path) -> bool {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        validation_workspace().join(path)
+    };
+    [absolute.clone(), resolve_for_denylist(&absolute)]
+        .iter()
+        .any(|candidate| {
+            candidate.components().any(|component| {
+                let std::path::Component::Normal(name) = component else {
+                    return false;
+                };
+                checkpoint_internal_name(name)
+            })
+        })
+}
+
+fn checkpoint_internal_name(name: &std::ffi::OsStr) -> bool {
+    let Some(name) = name.to_str() else {
+        return false;
+    };
+    let suffix = format!(
+        ".{}",
+        crate::runtime::session_control::CHECKPOINT_DIR_EXTENSION
+    );
+    if name.to_ascii_lowercase().ends_with(&suffix) {
+        return true;
+    }
+    let lowercase = name.to_ascii_lowercase();
+    let Some(identifier) = lowercase.strip_prefix(file_authority::STAGING_PREFIX) else {
+        return false;
+    };
+    uuid::Uuid::parse_str(identifier).is_ok_and(|identifier_uuid| {
+        identifier_uuid
+            .hyphenated()
+            .to_string()
+            .eq_ignore_ascii_case(identifier)
+    })
+}
+
+pub(crate) fn checkpoint_internal_globs() -> [String; 2] {
+    let insensitive = |value: &str| {
+        value
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphabetic() {
+                    format!(
+                        "[{}{}]",
+                        character.to_ascii_lowercase(),
+                        character.to_ascii_uppercase()
+                    )
+                } else {
+                    character.to_string()
+                }
+            })
+            .collect::<String>()
+    };
+    let identifier = uuid::Uuid::nil()
+        .hyphenated()
+        .to_string()
+        .chars()
+        .map(|character| if character == '-' { "-" } else { "[0-9a-fA-F]" })
+        .collect::<String>();
+    [
+        format!(
+            "{}{}",
+            insensitive(file_authority::STAGING_PREFIX),
+            identifier
+        ),
+        format!(
+            "*.{}",
+            insensitive(crate::runtime::session_control::CHECKPOINT_DIR_EXTENSION)
+        ),
+    ]
 }
 
 fn names_protected_location(path: &Path) -> bool {
@@ -514,6 +597,10 @@ pub fn validate_workspace_path_with_cwd(
     } else {
         cwd.join(path)
     };
+
+    if is_checkpoint_internal_path(&absolute) {
+        return Err("Refusing access to private checkpoint storage or staging".to_string());
+    }
 
     let allowed_roots = allowed_workspace_roots(cwd);
 

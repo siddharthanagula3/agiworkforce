@@ -5592,7 +5592,9 @@ pub async fn run(
         custom_system_prompt,
         effective_provider_override,
     )?;
-    session.additional_context_dirs = crate::path_security::registered_additional_workspace_roots();
+    session.set_additional_context_dirs(
+        crate::path_security::registered_additional_workspace_roots(),
+    )?;
     session.apply_ui_config(config);
     crate::update_check::spawn_startup_check(config, session.privacy_mode);
     crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);

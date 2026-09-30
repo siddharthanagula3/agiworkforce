@@ -5,9 +5,18 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
+
+use crate::path_security::WorkspaceFileAuthority;
+
+mod storage;
 use sha2::{Digest, Sha256};
+use storage::CheckpointStorage;
 
 use crate::models::Message;
+
+#[cfg(test)]
+mod boundary_tests;
 
 pub(crate) const MAX_CHECKPOINTS: usize = 100;
 const MAX_SNAPSHOT_BYTES: u64 = 8 * 1024 * 1024;
@@ -108,7 +117,7 @@ impl CheckpointSummary {
 }
 
 pub(crate) struct CheckpointLog {
-    dir: Option<PathBuf>,
+    disk: Option<DiskStorage>,
     memory_blobs: HashMap<String, Vec<u8>>,
     checkpoints: Vec<Checkpoint>,
     unsaved: Option<String>,
@@ -119,7 +128,7 @@ impl std::fmt::Debug for CheckpointLog {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("CheckpointLog")
-            .field("dir", &self.dir)
+            .field("disk", &self.disk)
             .field("checkpoints", &self.checkpoints.len())
             .field("held_copies", &self.memory_blobs.len())
             .finish()
@@ -135,7 +144,7 @@ impl Default for CheckpointLog {
 impl CheckpointLog {
     pub(crate) fn in_memory() -> Self {
         Self {
-            dir: None,
+            disk: None,
             memory_blobs: HashMap::new(),
             checkpoints: Vec::new(),
             unsaved: None,
@@ -144,41 +153,56 @@ impl CheckpointLog {
     }
 
     pub(crate) fn beside(session_path: &Path) -> Self {
-        let dir = crate::runtime::session_control::checkpoint_dir(session_path);
         let mut log = Self {
-            dir: Some(dir.clone()),
+            disk: Some(DiskStorage {
+                session_path: session_path.to_path_buf(),
+                owner: CheckpointStorage::open(session_path)
+                    .map(Arc::new)
+                    .map_err(|error| format!("{error:#}")),
+            }),
             ..Self::in_memory()
         };
-        match read_index(&dir) {
-            Ok(checkpoints) => log.checkpoints = checkpoints,
-            Err(error) => {
-                log.unsaved = Some(format!(
-                    "the saved checkpoints could not be read ({error:#}), so earlier prompts cannot be rewound"
-                ))
-            }
-        }
+        log.load_index();
         log
     }
 
-    pub(crate) fn moved_beside(self, session_path: &Path) -> Self {
-        if self.dir.is_some() {
-            return Self::beside(session_path);
+    pub(crate) fn reload_beside(self, session_path: &Path) -> Self {
+        if self
+            .disk
+            .as_ref()
+            .is_some_and(|disk| disk.session_path == session_path)
+        {
+            let mut log = Self {
+                disk: self.disk,
+                ..Self::in_memory()
+            };
+            log.load_index();
+            log
+        } else {
+            Self::beside(session_path)
         }
-        let Self {
-            memory_blobs,
-            checkpoints,
-            ..
-        } = self;
-        let dir = crate::runtime::session_control::checkpoint_dir(session_path);
-        let mut moved = Self {
-            dir: Some(dir.clone()),
-            checkpoints,
-            ..Self::in_memory()
-        };
-        for (digest, bytes) in memory_blobs {
-            if let Err(error) = write_private(&dir.join(BLOB_DIR).join(&digest), &bytes) {
+    }
+
+    fn load_index(&mut self) {
+        let result = self.storage().and_then(read_index);
+        match result {
+            Ok(checkpoints) => self.checkpoints = checkpoints,
+            Err(error) => self.unsaved = Some(format!(
+                "the saved checkpoints could not be read ({error:#}), so earlier prompts cannot be rewound"
+            )),
+        }
+    }
+
+    pub(crate) fn moved_into(self, mut destination: Self) -> Self {
+        if self.disk.is_some() {
+            return destination;
+        }
+        destination.checkpoints = self.checkpoints;
+        for (digest, bytes) in self.memory_blobs {
+            let saved = destination.store_blob(bytes);
+            if let Err(error) = saved {
                 let lost = FileState::Contents(digest);
-                for snapshot in moved
+                for snapshot in destination
                     .checkpoints
                     .iter_mut()
                     .flat_map(|checkpoint| checkpoint.files.iter_mut())
@@ -189,8 +213,17 @@ impl CheckpointLog {
                 }
             }
         }
-        moved.persist(false);
-        moved
+        destination.persist(false);
+        destination
+    }
+
+    fn storage(&self) -> Result<&CheckpointStorage> {
+        self.disk
+            .as_ref()
+            .context("no disk checkpoint backing was selected")?
+            .owner
+            .as_deref()
+            .map_err(|error| anyhow::anyhow!(error.clone()))
     }
 
     pub(crate) fn checkpoints(&self) -> &[Checkpoint] {
@@ -237,7 +270,11 @@ impl CheckpointLog {
         }
     }
 
-    pub(crate) fn capture(&mut self, path: &Path) -> bool {
+    pub(crate) fn capture(
+        &mut self,
+        path: &Path,
+        authority: Option<&WorkspaceFileAuthority>,
+    ) -> bool {
         let Some(checkpoint) = self.checkpoints.last() else {
             return false;
         };
@@ -248,7 +285,7 @@ impl CheckpointLog {
         {
             return false;
         }
-        let before = match observe(path) {
+        let before = match observe(path, authority) {
             Observed::Absent => FileState::Absent,
             Observed::Untracked(reason) => FileState::Untracked(reason),
             Observed::Contents(bytes) => match self.store_blob(bytes) {
@@ -268,13 +305,18 @@ impl CheckpointLog {
         true
     }
 
-    pub(crate) fn forget_unchanged(&mut self, paths: &[PathBuf]) {
+    pub(crate) fn forget_unchanged(
+        &mut self,
+        paths: &[PathBuf],
+        authority: Option<&WorkspaceFileAuthority>,
+    ) {
         let Some(checkpoint) = self.checkpoints.last_mut() else {
             return;
         };
         let before = checkpoint.files.len();
         checkpoint.files.retain(|snapshot| {
-            !paths.contains(&snapshot.path) || !still_matches(&snapshot.path, &snapshot.before)
+            !paths.contains(&snapshot.path)
+                || !still_matches(&snapshot.path, &snapshot.before, authority)
         });
         if checkpoint.files.len() != before {
             self.persist(true);
@@ -307,7 +349,11 @@ impl CheckpointLog {
             .len()
     }
 
-    pub(crate) fn restore_files(&self, from: usize) -> RestoreReport {
+    pub(crate) fn restore_files(
+        &self,
+        from: usize,
+        authority: Option<&WorkspaceFileAuthority>,
+    ) -> RestoreReport {
         let mut seen = HashSet::new();
         let mut report = RestoreReport::default();
         for snapshot in self
@@ -320,40 +366,40 @@ impl CheckpointLog {
                 continue;
             }
             let path = &snapshot.path;
+            if let FileState::Untracked(reason) = &snapshot.before {
+                report.skipped.push((path.clone(), reason.clone()));
+                continue;
+            }
+            let resolved = authority
+                .context("the session workspace file authority is unavailable")
+                .and_then(|authority| authority.resolve(path));
+            let (root, relative) = match resolved {
+                Ok(resolved) => resolved,
+                Err(error) => {
+                    report.skipped.push((path.clone(), format!("{error:#}")));
+                    continue;
+                }
+            };
             match &snapshot.before {
-                FileState::Absent => match std::fs::remove_file(path) {
-                    Ok(()) => report.removed.push(path.clone()),
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(error) => report.skipped.push((path.clone(), error.to_string())),
+                FileState::Absent => match root.remove_file(&relative) {
+                    Ok(true) => report.removed.push(path.clone()),
+                    Ok(false) => {}
+                    Err(error) => report.skipped.push((path.clone(), format!("{error:#}"))),
                 },
                 FileState::Contents(digest) => {
-                    if let Some(reason) = unsafe_to_overwrite(path) {
-                        report.skipped.push((path.clone(), reason));
-                        continue;
-                    }
-                    let bytes = match self.read_blob(digest) {
-                        Ok(bytes) => bytes,
-                        Err(error) => {
-                            report.skipped.push((
-                                path.clone(),
-                                format!("its saved copy could not be read: {error:#}"),
-                            ));
-                            continue;
-                        }
-                    };
-                    if std::fs::read(path).is_ok_and(|current| current == bytes) {
-                        continue;
-                    }
-                    let written = path
-                        .parent()
-                        .map_or(Ok(()), std::fs::create_dir_all)
-                        .and_then(|()| std::fs::write(path, &bytes));
+                    let written = self.read_blob(digest).and_then(|bytes| {
+                        root.replace_file(&relative, &bytes, false, MAX_SNAPSHOT_BYTES)
+                    });
                     match written {
-                        Ok(()) => report.restored.push(path.clone()),
-                        Err(error) => report.skipped.push((path.clone(), error.to_string())),
+                        Ok(true) => report.restored.push(path.clone()),
+                        Ok(false) => {}
+                        Err(error) => report.skipped.push((
+                            path.clone(),
+                            format!("its saved copy could not be restored: {error:#}"),
+                        )),
                     }
                 }
-                FileState::Untracked(reason) => report.skipped.push((path.clone(), reason.clone())),
+                FileState::Untracked(_) => unreachable!(),
             }
         }
         report
@@ -361,31 +407,29 @@ impl CheckpointLog {
 
     fn store_blob(&mut self, bytes: Vec<u8>) -> Result<String> {
         let digest = crate::hex::encode(&Sha256::digest(&bytes));
-        match &self.dir {
-            Some(dir) => {
-                let target = dir.join(BLOB_DIR).join(&digest);
-                if !target.exists() {
-                    write_private(&target, &bytes)?;
-                }
+        validate_blob(&digest, &bytes)?;
+        if self.disk.is_some() {
+            self.storage()?.store_blob(&digest, &bytes)?;
+        } else {
+            if let Some(existing) = self.memory_blobs.get(&digest) {
+                validate_blob(&digest, existing)?;
             }
-            None => {
-                self.memory_blobs.entry(digest.clone()).or_insert(bytes);
-            }
+            self.memory_blobs.entry(digest.clone()).or_insert(bytes);
         }
         Ok(digest)
     }
 
     fn read_blob(&self, digest: &str) -> Result<Vec<u8>> {
-        match &self.dir {
-            Some(dir) => {
-                let path = dir.join(BLOB_DIR).join(digest);
-                std::fs::read(&path).with_context(|| format!("reading {}", path.display()))
-            }
-            None => self
+        validate_digest(digest)?;
+        if self.disk.is_some() {
+            self.storage()?.read_blob(digest)
+        } else {
+            let bytes = self
                 .memory_blobs
                 .get(digest)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("no copy is held for it")),
+                .context("no copy is held for it")?;
+            validate_blob(digest, bytes)?;
+            Ok(bytes.clone())
         }
     }
 
@@ -401,28 +445,32 @@ impl CheckpointLog {
     }
 
     fn persist(&mut self, dropped_snapshots: bool) {
-        if dropped_snapshots {
-            self.collect_garbage();
-        }
-        let Some(dir) = &self.dir else {
-            return;
-        };
-        if self.checkpoints.is_empty() && !dir.join(INDEX_FILE).exists() {
-            return;
-        }
-        let index = CheckpointIndex {
-            version: INDEX_VERSION,
-            checkpoints: self.checkpoints.clone(),
-        };
-        let written = serde_json::to_vec(&index)
-            .context("serializing the checkpoint index")
-            .and_then(|bytes| write_private(&dir.join(INDEX_FILE), &bytes));
-        if let Err(error) = written {
-            if !self.reported {
-                self.unsaved = Some(format!(
-                    "checkpoints could not be saved to disk ({error:#}), so they last only until this session ends"
-                ));
+        if self.disk.is_none() {
+            if dropped_snapshots {
+                self.collect_garbage();
             }
+            return;
+        }
+        let written = (|| -> Result<()> {
+            let storage = self.storage()?;
+            let Some(directory) = storage.directory(!self.checkpoints.is_empty())? else {
+                return Ok(());
+            };
+            let index = CheckpointIndex {
+                version: INDEX_VERSION,
+                checkpoints: self.checkpoints.clone(),
+            };
+            let bytes = serde_json::to_vec(&index).context("serializing the checkpoint index")?;
+            directory.replace_file(Path::new(INDEX_FILE), &bytes, true, MAX_SNAPSHOT_BYTES)?;
+            Ok(())
+        })();
+        match written {
+            Ok(()) if dropped_snapshots => self.collect_garbage(),
+            Ok(()) => {}
+            Err(error) if !self.reported => self.unsaved = Some(format!(
+                "checkpoints could not be saved to disk ({error:#}), so they last only until this session ends"
+            )),
+            Err(_) => {}
         }
     }
 
@@ -432,108 +480,112 @@ impl CheckpointLog {
             .into_iter()
             .map(str::to_string)
             .collect();
-        match &self.dir {
-            Some(dir) => {
-                let Ok(entries) = std::fs::read_dir(dir.join(BLOB_DIR)) else {
-                    return;
-                };
-                for entry in entries.flatten() {
-                    let name = entry.file_name();
-                    if name
-                        .to_str()
-                        .is_some_and(|digest| !referenced.contains(digest))
-                    {
-                        let _ = std::fs::remove_file(entry.path());
-                    }
+        if self.disk.is_some() {
+            let result = self
+                .storage()
+                .and_then(|storage| storage.collect_garbage(&referenced));
+            if let Err(error) = result {
+                if !self.reported {
+                    self.unsaved = Some(format!(
+                        "unused checkpoint copies could not be removed: {error:#}"
+                    ));
                 }
             }
-            None => self
-                .memory_blobs
-                .retain(|digest, _| referenced.contains(digest)),
+        } else {
+            self.memory_blobs
+                .retain(|digest, _| referenced.contains(digest));
         }
     }
 }
 
-fn read_index(dir: &Path) -> Result<Vec<Checkpoint>> {
-    let path = dir.join(INDEX_FILE);
-    let bytes = match std::fs::read(&path) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error).with_context(|| format!("reading {}", path.display())),
+#[derive(Debug)]
+struct DiskStorage {
+    session_path: PathBuf,
+    owner: Result<Arc<CheckpointStorage>, String>,
+}
+
+fn read_index(storage: &CheckpointStorage) -> Result<Vec<Checkpoint>> {
+    let Some(directory) = storage.directory(false)? else {
+        return Ok(Vec::new());
     };
-    let index: CheckpointIndex =
-        serde_json::from_slice(&bytes).with_context(|| format!("parsing {}", path.display()))?;
+    let Some(file) = directory.read_file(Path::new(INDEX_FILE), MAX_SNAPSHOT_BYTES)? else {
+        return Ok(Vec::new());
+    };
+    let mut index: CheckpointIndex =
+        serde_json::from_slice(&file.bytes).context("parsing the checkpoint index")?;
     anyhow::ensure!(
         index.version == INDEX_VERSION,
-        "{} has version {}, this CLI reads version {INDEX_VERSION}",
-        path.display(),
+        "the checkpoint index has version {}, this CLI reads version {INDEX_VERSION}",
         index.version
     );
+    anyhow::ensure!(
+        index.checkpoints.len() <= MAX_CHECKPOINTS,
+        "the checkpoint index exceeds the allowed checkpoint count"
+    );
+    for snapshot in index
+        .checkpoints
+        .iter_mut()
+        .flat_map(|checkpoint| checkpoint.files.iter_mut())
+    {
+        if let FileState::Contents(digest) = &snapshot.before {
+            if let Err(error) = validate_digest(digest) {
+                snapshot.before = FileState::Untracked(format!(
+                    "its saved copy identifier is invalid: {error:#}"
+                ));
+            }
+        }
+    }
     Ok(index.checkpoints)
 }
 
-fn write_private(target: &Path, bytes: &[u8]) -> Result<()> {
-    let dir = target
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("{} has no parent directory", target.display()))?;
-    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
-    let staged = tempfile::NamedTempFile::new_in(dir)
-        .with_context(|| format!("creating a file in {}", dir.display()))?;
-    std::fs::write(staged.path(), bytes)
-        .with_context(|| format!("writing {}", staged.path().display()))?;
-    staged
-        .persist(target)
-        .map_err(|error| anyhow::anyhow!("saving {}: {}", target.display(), error))?;
+fn validate_digest(digest: &str) -> Result<()> {
+    anyhow::ensure!(
+        digest.len() == 64
+            && digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+        "the saved copy identifier must be a lowercase SHA-256 digest"
+    );
     Ok(())
 }
 
-fn observe(path: &Path) -> Observed {
-    match std::fs::symlink_metadata(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Observed::Absent,
-        Err(error) => Observed::Untracked(error.to_string()),
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            Observed::Untracked("it is a symbolic link".to_string())
-        }
-        Ok(metadata) if !metadata.is_file() => {
-            Observed::Untracked("it is not a regular file".to_string())
-        }
-        Ok(metadata) if metadata.len() > MAX_SNAPSHOT_BYTES => Observed::Untracked(format!(
-            "it is larger than {} MB",
-            MAX_SNAPSHOT_BYTES / (1024 * 1024)
-        )),
-        Ok(_) => match std::fs::read(path) {
-            Ok(bytes) => Observed::Contents(bytes),
-            Err(error) => Observed::Untracked(error.to_string()),
-        },
+fn validate_blob(digest: &str, bytes: &[u8]) -> Result<()> {
+    validate_digest(digest)?;
+    anyhow::ensure!(
+        bytes.len() as u64 <= MAX_SNAPSHOT_BYTES,
+        "the saved copy exceeds the allowed size"
+    );
+    anyhow::ensure!(
+        crate::hex::encode(&Sha256::digest(bytes)) == digest,
+        "the saved copy does not match its digest"
+    );
+    Ok(())
+}
+
+fn observe(path: &Path, authority: Option<&WorkspaceFileAuthority>) -> Observed {
+    let read = authority
+        .context("the session workspace file authority is unavailable")
+        .and_then(|authority| authority.resolve(path))
+        .and_then(|(root, relative)| root.read_file(&relative, MAX_SNAPSHOT_BYTES));
+    match read {
+        Ok(None) => Observed::Absent,
+        Ok(Some(file)) => Observed::Contents(file.bytes),
+        Err(error) => Observed::Untracked(format!("{error:#}")),
     }
 }
 
-fn still_matches(path: &Path, before: &FileState) -> bool {
-    match (observe(path), before) {
+fn still_matches(
+    path: &Path,
+    before: &FileState,
+    authority: Option<&WorkspaceFileAuthority>,
+) -> bool {
+    match (observe(path, authority), before) {
         (Observed::Absent, FileState::Absent) => true,
         (Observed::Contents(bytes), FileState::Contents(digest)) => {
-            crate::hex::encode(&Sha256::digest(&bytes)) == *digest
+            validate_blob(digest, &bytes).is_ok()
         }
         _ => false,
     }
-}
-
-fn unsafe_to_overwrite(path: &Path) -> Option<String> {
-    let metadata = std::fs::symlink_metadata(path).ok()?;
-    if metadata.file_type().is_symlink() {
-        return Some("it is a symbolic link".to_string());
-    }
-    if !metadata.is_file() {
-        return Some("it is not a regular file".to_string());
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        if metadata.nlink() > 1 {
-            return Some("it is hard-linked to another file".to_string());
-        }
-    }
-    None
 }
 
 pub(crate) fn prompt_position_matches(messages: &[Message], checkpoint: &Checkpoint) -> bool {
