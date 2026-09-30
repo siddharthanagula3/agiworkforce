@@ -90,6 +90,7 @@ function describeBuild({
   allFeatures,
   debug,
   profile,
+  configs,
   cargoConfigs,
 }) {
   return [
@@ -98,6 +99,7 @@ function describeBuild({
     allFeatures ? 'all features' : null,
     debug ? '--debug' : null,
     `profile ${profile}`,
+    configs.length > 0 ? `Tauri config [${configs.join(', ')}]` : null,
     cargoConfigs.length > 0 ? `cargo config [${[...cargoConfigs].sort().join(', ')}]` : null,
   ]
     .filter(Boolean)
@@ -115,9 +117,13 @@ export function checkTauriInspectorGate(workflow, sources) {
       const argsText = withEnv(String(step.with?.args ?? ''), env, false);
       const args = splitArgs(argsText);
       const built = parseCargoFeatureArgs(args);
+      const runtimeConfigs = built.configs.filter((config) => {
+        const output = /^\$\{\{\s*steps\.([\w-]+)\.outputs\.([\w-]+)\s*\}\}$/u.exec(config);
+        return output && steps.slice(0, index).some((candidate) => candidate.id === output[1]);
+      });
 
       const dynamic = (argsText.match(/\$\{\{[^}]*\}\}/gu) ?? []).filter(
-        (expression) => !built.configs.includes(expression),
+        (expression) => !runtimeConfigs.includes(expression),
       );
       if (dynamic.length > 0) {
         failures.push(
@@ -129,7 +135,11 @@ export function checkTauriInspectorGate(workflow, sources) {
           `${label} runs after a failed step, so a failed devtools check cannot stop it`,
         );
       }
-      const routes = [...findInspectorRoutes({ ...sources, args }), ...environmentRoutes(env)];
+      const staticArgs = args.map((arg) => (runtimeConfigs.includes(arg) ? '{}' : arg));
+      const routes = [
+        ...findInspectorRoutes({ ...sources, args: staticArgs }),
+        ...environmentRoutes(env),
+      ];
       if (routes.length > 0) {
         failures.push(`${label} bundles the webview inspector via ${routes.join(', ')}`);
       }
@@ -148,7 +158,15 @@ export function checkTauriInspectorGate(workflow, sources) {
         failures.push(`${label} follows a devtools check with its own if:, which can skip it`);
       }
       const checkArgs = checkArguments(workflow, job, check);
-      const unresolved = checkArgs.filter((arg) => arg.includes('$'));
+      const checkedBuild = parseCargoFeatureArgs(checkArgs);
+      const unresolved = checkArgs.filter((arg) => {
+        if (!arg.includes('$')) return false;
+        if (!checkedBuild.configs.includes(arg) || !runtimeConfigs.includes(arg)) return true;
+        const output = /^\$\{\{\s*steps\.([\w-]+)\.outputs\.([\w-]+)\s*\}\}$/u.exec(arg);
+        return !steps
+          .slice(0, steps.indexOf(check))
+          .some((candidate) => candidate.id === output[1]);
+      });
       if (unresolved.length > 0) {
         failures.push(
           `${label} follows a devtools check whose ${unresolved.join(' ')} does not resolve from the workflow env in its shell`,
@@ -156,11 +174,50 @@ export function checkTauriInspectorGate(workflow, sources) {
         return;
       }
       const bundled = describeBuild(built);
-      const checked = describeBuild(parseCargoFeatureArgs(checkArgs));
+      const checked = describeBuild(checkedBuild);
       if (checked !== bundled) {
         failures.push(`${label} builds ${bundled}, but its devtools check reads ${checked}`);
       }
     });
+  }
+  return failures;
+}
+
+export function checkRustLockfileGate(workflow) {
+  const failures = [];
+  for (const [jobId, job] of Object.entries(workflow?.jobs ?? {})) {
+    for (const step of job.steps ?? []) {
+      if (isTauriBundler(step)) {
+        const env = { ...workflow.env, ...job.env, ...step.env };
+        const args = splitArgs(withEnv(String(step.with?.args ?? ''), env, false));
+        const separator = args.indexOf('--');
+        const tail = separator < 0 ? [] : args.slice(separator + 1);
+        const cargoSeparator = tail.indexOf('--');
+        const cargoArgs = cargoSeparator < 0 ? tail : tail.slice(0, cargoSeparator);
+        if (!cargoArgs.includes('--locked')) {
+          failures.push(
+            `${jobId}: "${step.name ?? step.uses}" must pass --locked in the Tauri Cargo tail before any Cargo -- separator`,
+          );
+        }
+        continue;
+      }
+      const command = joinedCommand(step)
+        .split(/\r?\n/u)
+        .map((line) => line.replace(/^((?:[^"'#]|"(?:\\.|[^"\\])*"|'[^']*')*)#.*$/u, '$1'))
+        .join('\n');
+      for (const match of command.matchAll(
+        /\b(cargo|cross)\s+(build|test|check|clippy|bench|rustc)\b([^\n;&|)]*)/gu,
+      )) {
+        const args = splitArgs(match[3]);
+        const separator = args.indexOf('--');
+        const cargoArgs = separator < 0 ? args : args.slice(0, separator);
+        if (!cargoArgs.includes('--locked')) {
+          failures.push(
+            `${jobId}: "${step.name ?? 'Rust command'}" must run ${match[1]} ${match[2]} with --locked before any -- separator`,
+          );
+        }
+      }
+    }
   }
   return failures;
 }
@@ -316,7 +373,10 @@ function main() {
     if (!/\.ya?ml$/u.test(name)) continue;
     const relativePath = `${WORKFLOW_DIR}/${name}`;
     const workflow = parse(fs.readFileSync(path.join(root, relativePath), 'utf8'));
-    for (const failure of checkTauriInspectorGate(workflow, sources)) {
+    for (const failure of [
+      ...checkTauriInspectorGate(workflow, sources),
+      ...checkRustLockfileGate(workflow),
+    ]) {
       failures.push(`${relativePath}: ${failure}`);
     }
   }

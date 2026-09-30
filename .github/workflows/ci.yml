@@ -543,7 +543,7 @@ jobs:
       # The registry crate depends only on serde, serde_json and thiserror, so
       # it needs no system libraries and costs a fraction of the native lane.
       - name: Replay the shared auto-route fixture against the Rust resolver
-        run: cargo test -p agiworkforce-model-registry --test auto_route_conformance
+        run: cargo test --locked -p agiworkforce-model-registry --test auto_route_conformance
 
   rust-desktop-cli:
     name: Rust desktop and CLI (default features)
@@ -687,10 +687,10 @@ jobs:
           RUSTFLAGS: ''
           CARGO_INCREMENTAL: '0'
         run: |
-          xvfb-run --auto-servernum cargo test -p agiworkforce-desktop --lib
-          xvfb-run --auto-servernum cargo test -p agiworkforce-cli
-          cargo test --workspace --lib --exclude agiworkforce-desktop --exclude agiworkforce-cli
-          cargo test -p agiworkforce-app-server -p agiworkforce-protocol
+          xvfb-run --auto-servernum cargo test --locked -p agiworkforce-desktop --lib
+          xvfb-run --auto-servernum cargo test --locked -p agiworkforce-cli
+          cargo test --locked --workspace --lib --exclude agiworkforce-desktop --exclude agiworkforce-cli
+          cargo test --locked -p agiworkforce-app-server -p agiworkforce-protocol
 
       - name: Trust boundaries (blocking)
         # The only other place this runs is the Guardian lane, which is
@@ -721,12 +721,12 @@ jobs:
           pnpm --filter @agiworkforce/sync test
           # A cargo name filter that matches nothing still exits 0, which would
           # make this half of the gate silently vacuous if the module is renamed.
-          matched=$(cargo test -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests -- --list | grep -c ': test$' || true)
+          matched=$(cargo test --locked -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests -- --list | grep -c ': test$' || true)
           if [ "$matched" -eq 0 ]; then
             echo "data::cloud_sync::fixture_tests matched no tests, the Rust half of the parity pair is gone" >&2
             exit 1
           fi
-          cargo test -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests
+          cargo test --locked -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests
 
       - name: Free Rust test artifacts before clippy
         # The native-host build plus full Rust lib tests can leave enough
@@ -747,7 +747,7 @@ jobs:
         # local linting consistent for the surface that actually runs.
         env:
           CARGO_INCREMENTAL: '0'
-        run: cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code
+        run: cargo clippy --locked -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code
 
   desktop-e2e:
     name: Desktop E2E (deterministic mocks)
@@ -1279,7 +1279,7 @@ jobs:
         # `--features` as a command and exited 127. Guarded by
         # `pnpm check:workflow-cargo-features`.
         run: |
-          cargo clippy --workspace --lib \
+          cargo clippy --locked --workspace --lib \
             --features "agiworkforce-desktop/ocr,agiworkforce-desktop/local-llm,agiworkforce-desktop/webrtc-support,agiworkforce-desktop/local-whisper,agiworkforce-desktop/devtools" \
             -- -D warnings
 
@@ -1322,11 +1322,11 @@ jobs:
 
       - name: cargo check (default features, macOS)
         working-directory: apps/desktop/src-tauri
-        run: cargo check --workspace
+        run: cargo check --locked --workspace
 
       - name: Clippy (default features, macOS)
         working-directory: apps/desktop/src-tauri
-        run: cargo clippy --workspace --lib -- -D warnings -D unsafe-code
+        run: cargo clippy --locked --workspace --lib -- -D warnings -D unsafe-code
 
   # FIX-009 (Sprint 4): Windows-only bugs (path separators, native APIs,
   # cfg(target_os = "windows") branches) used to surface only at release
@@ -1369,7 +1369,7 @@ jobs:
 
       - name: cargo check (default features, Windows)
         working-directory: apps/desktop/src-tauri
-        run: cargo check --workspace
+        run: cargo check --locked --workspace
 
       - name: Verify Windows application and test manifests
         shell: pwsh
@@ -1378,11 +1378,11 @@ jobs:
 
       - name: cargo test --workspace --lib (default features, Windows)
         working-directory: apps/desktop/src-tauri
-        run: cargo test --workspace --lib -- --skip landlock --skip seccomp --skip linux_sandbox
+        run: cargo test --locked --workspace --lib -- --skip landlock --skip seccomp --skip linux_sandbox
 
       - name: Clippy (default features, Windows)
         working-directory: apps/desktop/src-tauri
-        run: cargo clippy --workspace --lib -- -D warnings -D unsafe-code
+        run: cargo clippy --locked --workspace --lib -- -D warnings -D unsafe-code
 
   ci-complete:
     name: CI complete

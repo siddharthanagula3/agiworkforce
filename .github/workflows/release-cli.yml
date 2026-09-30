@@ -123,10 +123,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Lint CLI library
-        run: cargo clippy -p agiworkforce-cli --lib -- -D warnings
+        run: cargo clippy --locked -p agiworkforce-cli --lib -- -D warnings
 
       - name: Test CLI
-        run: cargo test -p agiworkforce-cli
+        run: cargo test --locked -p agiworkforce-cli
 
   build:
     name: Build ${{ matrix.target }}
@@ -218,7 +218,7 @@ jobs:
         if: matrix.cross
         env:
           AGI_CLI_SENTRY_DSN: ${{ secrets.SENTRY_DSN_CLI }}
-        run: cross build --release --target ${{ matrix.target }} -p agiworkforce-cli
+        run: cross build --locked --release --target ${{ matrix.target }} -p agiworkforce-cli
 
       - name: Build (cargo)
         if: '!matrix.cross'
@@ -226,7 +226,7 @@ jobs:
           AGI_CLI_SENTRY_DSN: ${{ secrets.SENTRY_DSN_CLI }}
         # Voice ships on macOS and Windows only: cpal links libasound on Linux,
         # which would stop the binary from starting on hosts without ALSA.
-        run: cargo build --release --target ${{ matrix.target }} -p agiworkforce-cli ${{ runner.os != 'Linux' && '--features voice' || '' }}
+        run: cargo build --locked --release --target ${{ matrix.target }} -p agiworkforce-cli ${{ runner.os != 'Linux' && '--features voice' || '' }}
 
       - name: Stage binary
         shell: bash

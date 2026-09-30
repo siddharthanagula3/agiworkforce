@@ -451,14 +451,14 @@ jobs:
       # release rather than only on the branch that last touched them.
       - name: Re-prove the automation guardrails for this release
         run: >
-          cargo test -p agiworkforce-desktop
+          cargo test --locked -p agiworkforce-desktop
           --test automation_integration --test automation_db_tests --test single_instance
 
       - name: Build native messaging host sidecar
         run: pnpm --filter @agiworkforce/desktop run build:native-host
 
       - name: Refuse a feature set that bundles the webview inspector
-        run: node apps/desktop/scripts/check-no-devtools.mjs
+        run: node apps/desktop/scripts/check-no-devtools.mjs --bundles appimage,deb -- --locked
 
       - name: Build Tauri app
         # C1: Signing keys are masked above; passed via env: (tauri-action reads TAURI_SIGNING_* from env)
@@ -475,7 +475,7 @@ jobs:
           # releaseId-only latest.json would point at cross-product
           # /releases/latest; AGI's target-scoped updater API is canonical.
           uploadUpdaterJson: false
-          args: --bundles appimage,deb
+          args: --bundles appimage,deb -- --locked
 
       - name: Verify Linux release artifacts
         shell: bash
@@ -645,7 +645,7 @@ jobs:
           echo "APPLE_API_KEY_PATH=${key_path}" >> "$GITHUB_ENV"
 
       - name: Refuse a feature set that bundles the webview inspector
-        run: node apps/desktop/scripts/check-no-devtools.mjs
+        run: node apps/desktop/scripts/check-no-devtools.mjs --target universal-apple-darwin --bundles app,dmg -- --locked
 
       - name: Build, sign, notarize, and staple macOS bundles
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
@@ -662,7 +662,7 @@ jobs:
           projectPath: apps/desktop
           releaseId: ${{ needs.prepare-release.outputs.release_id }}
           uploadUpdaterJson: false
-          args: --target universal-apple-darwin --bundles app,dmg
+          args: --target universal-apple-darwin --bundles app,dmg -- --locked
 
       - name: Verify notarized universal app, DMG, and updater archive
         id: verify-macos

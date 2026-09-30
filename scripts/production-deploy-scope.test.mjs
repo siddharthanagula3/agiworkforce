@@ -418,7 +418,10 @@ test('CI runs the TS suite and the Rust fixture replay in the same job', () => {
   assert.match(job, /if: needs\.scope\.outputs\.native_changed == 'true'/);
   assert.match(job, /run: pnpm install --frozen-lockfile/);
   assert.match(job, /pnpm --filter @agiworkforce\/sync test/);
-  assert.match(job, /cargo test -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests/);
+  assert.match(
+    job,
+    /cargo test --locked -p agiworkforce-desktop --lib data::cloud_sync::fixture_tests/,
+  );
   assert.match(job, /grep -c ': test\$'/);
   assert.match(job, /if \[ "\$matched" -eq 0 \]; then/);
 
