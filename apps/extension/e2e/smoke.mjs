@@ -553,6 +553,14 @@ try {
       () =>
         document.getElementById('sp-onboarding-overlay')?.classList.contains('visible') === true,
     );
+    const onboardingTitles = [
+      'This is a beta feature',
+      'Your account',
+      'Choose a default model',
+      'Memory',
+      'AGI has tab group access',
+      'Pin AGI for quick access',
+    ];
     const initialOnboarding = await page.evaluate(() => {
       const overlay = document.getElementById('sp-onboarding-overlay');
       const progress = overlay?.querySelector('[role="progressbar"]');
@@ -563,7 +571,21 @@ try {
         inert: overlay?.hasAttribute('inert'),
         fakeTabs: overlay?.querySelectorAll('[role="tab"], [role="tablist"]').length ?? -1,
         progressNow: progress?.getAttribute('aria-valuenow'),
+        progressMax: progress?.getAttribute('aria-valuemax'),
         progressText: progress?.getAttribute('aria-valuetext'),
+        groups: [...(overlay?.querySelectorAll('.sp-ob-step') ?? [])].map((group) => ({
+          step: group.getAttribute('data-step'),
+          title: group.querySelector('.sp-ob-title')?.textContent,
+          role: group.getAttribute('role'),
+          label: group.getAttribute('aria-label'),
+          hidden: group.getAttribute('aria-hidden'),
+        })),
+        accountName: Boolean(overlay?.querySelector('[data-step="1"] #sp-ob-name')),
+        modelChoices: Boolean(overlay?.querySelector('[data-step="2"] [role="radiogroup"]')),
+        memoryChoices: [
+          overlay?.querySelector('[data-step="3"] #sp-ob-memory-remember'),
+          overlay?.querySelector('[data-step="3"] #sp-ob-memory-search'),
+        ].every((input) => input?.getAttribute('type') === 'checkbox'),
       };
     });
     if (
@@ -573,7 +595,20 @@ try {
       initialOnboarding.inert ||
       initialOnboarding.fakeTabs !== 0 ||
       initialOnboarding.progressNow !== '1' ||
-      initialOnboarding.progressText !== 'Step 1 of 5'
+      initialOnboarding.progressMax !== String(onboardingTitles.length) ||
+      initialOnboarding.progressText !== `Step 1 of ${onboardingTitles.length}` ||
+      initialOnboarding.groups.length !== onboardingTitles.length ||
+      initialOnboarding.groups.some(
+        (group, index) =>
+          group.step !== String(index) ||
+          group.title !== onboardingTitles[index] ||
+          group.role !== 'group' ||
+          group.label !== `Step ${index + 1} of ${onboardingTitles.length}` ||
+          group.hidden !== String(index !== 0),
+      ) ||
+      !initialOnboarding.accountName ||
+      !initialOnboarding.modelChoices ||
+      !initialOnboarding.memoryChoices
     ) {
       fail(`onboarding: invalid initial semantics ${JSON.stringify(initialOnboarding)}`);
     }
@@ -592,6 +627,34 @@ try {
       fail(
         `onboarding: focus/progress contract failed ${JSON.stringify({ wrappedBackward, wrappedForward, progressed })}`,
       );
+    }
+    for (let index = 1; index < onboardingTitles.length; index++) {
+      if (index > 1) await page.click('.sp-ob-btn-next');
+      const stepState = await page.evaluate(() => {
+        const active = document.querySelector('.sp-ob-step.active');
+        const progress = document.querySelector('.sp-ob-dots');
+        return {
+          title: active?.querySelector('.sp-ob-title')?.textContent,
+          step: active?.getAttribute('data-step'),
+          exposed: document.querySelectorAll('.sp-ob-step[aria-hidden="false"]').length,
+          progressNow: progress?.getAttribute('aria-valuenow'),
+          progressText: progress?.getAttribute('aria-valuetext'),
+          memoryChoices: [
+            active?.querySelector('#sp-ob-memory-remember'),
+            active?.querySelector('#sp-ob-memory-search'),
+          ].every((input) => input?.disabled === true && input.checked === false),
+        };
+      });
+      if (
+        stepState.title !== onboardingTitles[index] ||
+        stepState.step !== String(index) ||
+        stepState.exposed !== 1 ||
+        stepState.progressNow !== String(index + 1) ||
+        stepState.progressText !== `Step ${index + 1} of ${onboardingTitles.length}` ||
+        (index === 3 && !stepState.memoryChoices)
+      ) {
+        fail(`onboarding: step navigation contract failed ${JSON.stringify(stepState)}`);
+      }
     }
     await page.keyboard.press('Escape');
     const dismissed = await page.evaluate(() => {
@@ -868,11 +931,68 @@ try {
     if (
       drawerMenuRows.title !== 'Menu' ||
       drawerMenuRows.rows.join('|') !==
-        'Chat|Automate|Projects|Artifacts|Tools|Desktop pairing|Settings'
+        'Chat|Automate|Projects|Artifacts|Tools|Desktop pairing|Settings|Help'
     ) {
       fail(`drawer menu: unexpected rows ${JSON.stringify(drawerMenuRows)}`);
     }
-    await page.evaluate(() => document.getElementById('sp-drawer-overlay')?.click());
+    await openDrawerGroup(page, 'Help');
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('.sp-drawer-group:not([hidden])')
+          ?.querySelectorAll('.sp-help-shortcuts dd').length >= 6,
+    );
+    const helpState = await page.evaluate(() => {
+      const group = document.querySelector('.sp-drawer-group:not([hidden])');
+      return {
+        title: document.getElementById('sp-drawer-title')?.textContent,
+        menuHidden: document.getElementById('sp-drawer-menu')?.hidden,
+        pageHidden: document.getElementById('sp-drawer-page')?.hidden,
+        labels: [
+          ...(group?.querySelectorAll('.sp-drawer-launcher-label > div:first-child') ?? []),
+        ].map((label) => label.textContent),
+        shortcutKeys: group?.querySelectorAll('.sp-help-shortcuts dt').length ?? 0,
+        shortcutActions: group?.querySelectorAll('.sp-help-shortcuts dd').length ?? 0,
+      };
+    });
+    if (
+      helpState.title !== 'Help' ||
+      !helpState.menuHidden ||
+      helpState.pageHidden ||
+      helpState.labels.join('|') !==
+        'Help center|Documentation|Contact support|Report a bug|System status|Release notes' ||
+      helpState.shortcutKeys < 6 ||
+      helpState.shortcutActions !== helpState.shortcutKeys
+    ) {
+      fail(
+        `help: drawer group did not expose its links and shortcuts ${JSON.stringify(helpState)}`,
+      );
+    }
+    await page.click('#sp-drawer-back');
+    const helpBack = await page.evaluate(() => ({
+      title: document.getElementById('sp-drawer-title')?.textContent,
+      menuHidden: document.getElementById('sp-drawer-menu')?.hidden,
+      pageHidden: document.getElementById('sp-drawer-page')?.hidden,
+      backHidden: document.getElementById('sp-drawer-back')?.hidden,
+    }));
+    if (
+      helpBack.title !== 'Menu' ||
+      helpBack.menuHidden ||
+      !helpBack.pageHidden ||
+      !helpBack.backHidden
+    ) {
+      fail(`help: back button did not restore the menu ${JSON.stringify(helpBack)}`);
+    }
+    await page.locator('#sp-drawer-close').focus();
+    await page.keyboard.press('Escape');
+    const helpDismissed = await page.evaluate(() => ({
+      open: document.getElementById('sp-drawer')?.classList.contains('open'),
+      inert: document.getElementById('sp-drawer')?.hasAttribute('inert'),
+      focusReturned: document.activeElement?.id === 'sp-menu-btn',
+    }));
+    if (helpDismissed.open || !helpDismissed.inert || !helpDismissed.focusReturned) {
+      fail(`help: escape did not dismiss and restore focus ${JSON.stringify(helpDismissed)}`);
+    }
     await page.waitForTimeout(200);
 
     await page.click('#sp-menu-btn');
@@ -916,7 +1036,32 @@ try {
 
     await page.click('#sp-menu-btn');
     await openDrawerGroup(page, 'Automate');
+    const workflowLauncher = await page.evaluate(() => {
+      const launcher = document.getElementById('sp-drawer-wf-btn');
+      return {
+        title: launcher?.getAttribute('title'),
+        description: launcher?.querySelector('.sp-drawer-launcher-desc')?.textContent,
+      };
+    });
+    if (
+      workflowLauncher.title !== 'Open Workflows' ||
+      workflowLauncher.description !== 'Shortcuts and scheduled tasks'
+    ) {
+      fail(`workflows: misleading launcher ${JSON.stringify(workflowLauncher)}`);
+    }
     await page.click('#sp-drawer-wf-btn');
+    const workflowLaunchState = await page.evaluate(() => ({
+      selected: document.getElementById('sp-tab-workflows')?.getAttribute('aria-selected'),
+      panelHidden: document.getElementById('sp-workflows')?.getAttribute('aria-hidden'),
+      drawerOpen: document.getElementById('sp-drawer')?.classList.contains('open'),
+    }));
+    if (
+      workflowLaunchState.selected !== 'true' ||
+      workflowLaunchState.panelHidden !== 'false' ||
+      workflowLaunchState.drawerOpen
+    ) {
+      fail(`workflows: launcher did not activate its panel ${JSON.stringify(workflowLaunchState)}`);
+    }
     await page.locator('#sp-tab-workflows').focus();
     await page.keyboard.press('ArrowRight');
     const computerUseTabState = await page.evaluate(() => ({
@@ -940,7 +1085,6 @@ try {
     if (workflowsSelected !== 'true') fail('view tabs: ArrowLeft did not return to Workflows');
     await page.click('#sp-wf-create-shortcut-btn');
     const shortcutSurface = await page.evaluate(() => {
-      const onboardingStep = document.querySelector('.sp-ob-step[data-step="3"]');
       return {
         modalOpen:
           document.getElementById('sp-create-shortcut-overlay')?.classList.contains('open') ===
@@ -949,7 +1093,9 @@ try {
         promptPresent: Boolean(document.getElementById('sp-sc-prompt')),
         deadStartFromPresent: Boolean(document.getElementById('sp-sc-starturl')),
         deadSchedulePresent: Boolean(document.getElementById('sp-sc-schedule')),
-        onboardingCopy: onboardingStep?.textContent ?? '',
+        hidden: document.getElementById('sp-create-shortcut-overlay')?.getAttribute('aria-hidden'),
+        role: document.querySelector('.sp-create-shortcut-modal')?.getAttribute('role'),
+        modal: document.querySelector('.sp-create-shortcut-modal')?.getAttribute('aria-modal'),
       };
     });
     if (
@@ -958,21 +1104,56 @@ try {
       !shortcutSurface.promptPresent ||
       shortcutSurface.deadStartFromPresent ||
       shortcutSurface.deadSchedulePresent ||
-      !shortcutSurface.onboardingCopy.includes('Open Workflows') ||
-      shortcutSurface.onboardingCopy.includes('search shortcuts')
+      shortcutSurface.hidden !== 'false' ||
+      shortcutSurface.role !== 'dialog' ||
+      shortcutSurface.modal !== 'true'
     ) {
       fail(
         `workflows: misleading or unfinished shortcut controls ${JSON.stringify(shortcutSurface)}`,
       );
     }
-
-    await page.evaluate(() => {
-      document.getElementById('sp-create-shortcut-overlay')?.classList.remove('open');
-      document.getElementById('sp-drawer')?.classList.remove('open');
-      document.querySelectorAll('.sp-overlay.open, .sp-modal.open').forEach((element) => {
-        element.classList.remove('open');
-      });
-    });
+    await page.fill('#sp-sc-name', 'Smoke shortcut');
+    await page.fill('#sp-sc-prompt', 'Summarize this synthetic smoke input');
+    const shortcutInputState = await page.evaluate(() => ({
+      name: document.getElementById('sp-sc-name')?.value,
+      prompt: document.getElementById('sp-sc-prompt')?.value,
+      command: document.getElementById('sp-sc-command')?.textContent,
+    }));
+    if (
+      shortcutInputState.name !== 'Smoke shortcut' ||
+      shortcutInputState.prompt !== 'Summarize this synthetic smoke input' ||
+      !shortcutInputState.command?.includes('/smoke-shortcut')
+    ) {
+      fail(
+        `workflows: shortcut inputs did not update the command ${JSON.stringify(shortcutInputState)}`,
+      );
+    }
+    await page.locator('.sp-create-shortcut-close').focus();
+    await page.keyboard.press('Shift+Tab');
+    const shortcutFocusWrapped = await page.evaluate(
+      () => document.activeElement?.classList.contains('sp-create-shortcut-save') === true,
+    );
+    await page.keyboard.press('Tab');
+    const shortcutFocusReturned = await page.evaluate(
+      () => document.activeElement?.classList.contains('sp-create-shortcut-close') === true,
+    );
+    await page.keyboard.press('Escape');
+    const shortcutDismissed = await page.evaluate(() => ({
+      open: document.getElementById('sp-create-shortcut-overlay')?.classList.contains('open'),
+      hidden: document.getElementById('sp-create-shortcut-overlay')?.getAttribute('aria-hidden'),
+      focusReturned: document.activeElement?.id === 'sp-wf-create-shortcut-btn',
+    }));
+    if (
+      !shortcutFocusWrapped ||
+      !shortcutFocusReturned ||
+      shortcutDismissed.open ||
+      shortcutDismissed.hidden !== 'true' ||
+      !shortcutDismissed.focusReturned
+    ) {
+      fail(
+        `workflows: shortcut keyboard contract failed ${JSON.stringify({ shortcutFocusWrapped, shortcutFocusReturned, ...shortcutDismissed })}`,
+      );
+    }
 
     const slashOpened = await page.evaluate(() => {
       const input = document.getElementById('sp-input');
