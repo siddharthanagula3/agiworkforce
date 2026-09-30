@@ -52,11 +52,10 @@ struct MePlan {
     tier: Option<String>,
 }
 
-fn account_cache_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".agiworkforce")
-        .join(ACCOUNT_CACHE_FILE)
+fn account_cache_path() -> Option<PathBuf> {
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|dir| dir.join(ACCOUNT_CACHE_FILE))
 }
 
 fn now_secs() -> u64 {
@@ -67,14 +66,16 @@ fn now_secs() -> u64 {
 }
 
 fn read_account_cache() -> Option<AccountCacheEnvelope> {
-    let content = std::fs::read_to_string(account_cache_path()).ok()?;
+    let content = std::fs::read_to_string(account_cache_path()?).ok()?;
     let envelope: AccountCacheEnvelope = toml::from_str(&content).ok()?;
     let age = now_secs().saturating_sub(envelope.cached_at);
     (age <= ACCOUNT_CACHE_TTL.as_secs()).then_some(envelope)
 }
 
 fn write_account_cache(envelope: &AccountCacheEnvelope) {
-    let path = account_cache_path();
+    let Some(path) = account_cache_path() else {
+        return;
+    };
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -88,7 +89,15 @@ fn write_account_cache(envelope: &AccountCacheEnvelope) {
 }
 
 fn clear_account_cache() {
-    let _ = std::fs::remove_file(account_cache_path());
+    if let Some(path) = account_cache_path() {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+fn forget_account_caches() {
+    tier_cache::invalidate_tier_cache();
+    clear_account_cache();
+    crate::claude_parity::connectors::forget_local_tool_policy();
 }
 
 /// The managed credential this machine holds, with its expiry in epoch
@@ -442,9 +451,53 @@ pub fn logout() -> Result<()> {
     store
         .save()
         .context("Failed to update the credential store")?;
-    tier_cache::invalidate_tier_cache();
-    clear_account_cache();
+    forget_account_caches();
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CliSignOut {
+    pub providers: usize,
+    pub revoked: bool,
+}
+
+impl CliSignOut {
+    pub fn message(&self) -> String {
+        let mut message = match self.providers {
+            0 => "No active sessions to log out from.".to_string(),
+            1 => "Logged out from 1 provider.".to_string(),
+            count => format!("Logged out from {count} providers."),
+        };
+        if !self.revoked {
+            message.push_str(
+                " AGI Cloud did not confirm the sign-out. The device session ends when it expires, or unlink it in Settings, Account, Linked devices.",
+            );
+        }
+        message
+    }
+}
+
+fn forget_every_provider(store: &mut AuthStore) -> usize {
+    let providers = store.entries.len();
+    store.entries.clear();
+    providers
+}
+
+/// `agi logout`, and /logout in the TUI and the REPL: the AGI Cloud sessions
+/// are revoked, then every stored credential, the caches that answered for the
+/// account and, as Claude Code's /logout does, the first-run setup are dropped.
+pub async fn sign_out_of_every_provider() -> Result<CliSignOut> {
+    let revoked = revoke_managed_sessions().await;
+    let mut store = AuthStore::load().context("Failed to read the credential store")?;
+    let providers = forget_every_provider(&mut store);
+    if providers > 0 {
+        store
+            .save()
+            .context("Failed to update the credential store")?;
+        crate::onboarding::forget_setup();
+    }
+    forget_account_caches();
+    Ok(CliSignOut { providers, revoked })
 }
 
 #[cfg(test)]
@@ -500,6 +553,43 @@ mod tests {
             vec!["anthropic"],
             "sign-out left a managed credential behind, or took a key the user set themselves"
         );
+    }
+
+    #[test]
+    fn signing_out_of_the_cli_drops_every_provider_and_says_so() {
+        let mut store = AuthStore::default();
+        for key in ["agiworkforce", "anthropic", "copilot"] {
+            store.entries.insert(
+                key.to_string(),
+                AuthEntry::ApiKey {
+                    key: "held".to_string(),
+                },
+            );
+        }
+        assert_eq!(forget_every_provider(&mut store), 3);
+        assert!(store.entries.is_empty());
+        assert_eq!(forget_every_provider(&mut store), 0);
+
+        let report = |providers, revoked| CliSignOut { providers, revoked }.message();
+        assert_eq!(report(0, true), "No active sessions to log out from.");
+        assert_eq!(report(1, true), "Logged out from 1 provider.");
+        assert_eq!(report(3, true), "Logged out from 3 providers.");
+        assert!(report(1, false).contains("did not confirm the sign-out"));
+    }
+
+    #[test]
+    fn account_state_follows_the_config_root_agiworkforce_home_selects() {
+        let home_dir = concat!("dirs::", "home_dir()");
+        for (file, source) in [
+            ("app_server/account.rs", include_str!("account.rs")),
+            ("tier_cache.rs", include_str!("../tier_cache.rs")),
+            ("mcp/oauth_store.rs", include_str!("../mcp/oauth_store.rs")),
+        ] {
+            assert!(
+                !source.contains(home_dir),
+                "{file} keeps account state under the home directory, where a second AGIWORKFORCE_HOME reads the first account's"
+            );
+        }
     }
 
     /// The key a device grant is saved under is the key sign-out removes.

@@ -128,31 +128,3 @@ pub(super) fn handle_setup(config: &mut CliConfig) {
         }
     }
 }
-
-pub(super) fn handle_logout() {
-    match crate::auth::load_auth() {
-        Ok(mut store) => {
-            if store.entries.is_empty() {
-                output::print_info("No subscription auth to clear.");
-                return;
-            }
-            let count = store.entries.len();
-            store.entries.clear();
-            match crate::auth::save_auth(&store) {
-                Ok(()) => {
-                    output::print_info(&format!(
-                        "Cleared {} subscription auth {}.",
-                        count,
-                        if count == 1 { "entry" } else { "entries" },
-                    ));
-                }
-                Err(e) => {
-                    output::print_error(&format!("Failed to save auth store: {:#}", e));
-                }
-            }
-        }
-        Err(_) => {
-            output::print_info("No subscription auth to clear.");
-        }
-    }
-}

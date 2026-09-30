@@ -108,9 +108,15 @@ done
 # 7. Required GitHub secrets (can't actually check, but warn)
 echo ""
 echo "[7/9] GitHub secrets (requires manual check)"
+if pinned_key=$(node scripts/release/check-pinned-release-key.mjs 2>&1); then
+  pass "$pinned_key"
+else
+  fail "no usable release signing key is pinned in apps/web/public/install.sh"
+  echo "$pinned_key" | head -4 | sed 's/^/      /'
+fi
 warn "verify these secrets are set in github repo settings:"
 info "https://github.com/siddharthanagula3/agiworkforce/settings/secrets/actions"
-info "  - NPM_TOKEN (npm automation token)"
+info "  - AGI_CLI_RELEASE_SIGNING_KEY (EC P-256 private key whose public half install.sh pins)"
 info "  - macos-release environment: APPLE_CERTIFICATE + APPLE_CERTIFICATE_PASSWORD"
 info "  - macos-release environment: APPLE_API_KEY + APPLE_API_ISSUER + APPLE_API_PRIVATE_KEY"
 info "  - macos-release environment: TAURI_SIGNING_PRIVATE_KEY + TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
@@ -120,8 +126,8 @@ info "  - see apps/desktop/docs/macos-release-runbook.md for encoding and rotati
 echo ""
 echo "[8/9] External resources (requires manual check)"
 warn "verify these external accounts/repos exist:"
-info "  - npm @agiworkforce scope: https://www.npmjs.com/settings/agiworkforce/packages"
-info "    (your npm account must have publish access)"
+info "  - https://github.com/siddharthanagula3/agiworkforce/releases must be public,"
+info "    because install.sh and agi update download release assets anonymously"
 info "  - Homebrew tap repo: https://github.com/siddharthanagula3/homebrew-tap"
 info "    (must exist with at least a README)"
 info "  - clone tap locally: ~/code/homebrew-tap (for update-homebrew-tap.sh)"
