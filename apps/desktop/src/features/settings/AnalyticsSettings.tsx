@@ -75,7 +75,9 @@ export const AnalyticsSettings = () => {
     <div className="w-full max-w-4xl mx-auto p-6 space-y-8">
       {}
       <div>
-        <h2 className="text-h1 text-gray-900 dark:text-white mb-2">Analytics & Privacy Settings</h2>
+        <h2 className="text-h1 text-gray-900 dark:text-white mb-2">
+          Analytics &amp; Privacy Settings
+        </h2>
         <p className="text-sm text-gray-600 dark:text-gray-400">
           Control how we collect and use your data. We're committed to protecting your privacy.
         </p>

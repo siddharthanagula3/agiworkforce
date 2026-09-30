@@ -1004,7 +1004,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             {!isManagedCloud && (
               <TabsContent value="files" className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label className="text-foreground">Project Files & Knowledge</Label>
+                  <Label className="text-foreground">Project Files &amp; Knowledge</Label>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1218,7 +1218,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                     onClick={handleAddKbFiles}
                   >
                     <Database className="w-8 h-8 opacity-40" />
-                    <p className="text-sm">Drag & drop files here, or click to browse</p>
+                    <p className="text-sm">Drag &amp; drop files here, or click to browse</p>
                     <p className="text-xs opacity-60">
                       Files are read and stored as project context
                     </p>

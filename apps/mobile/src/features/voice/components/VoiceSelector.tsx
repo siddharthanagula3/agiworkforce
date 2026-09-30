@@ -220,7 +220,7 @@ export const VoiceSelector = forwardRef<
             marginBottom: 16,
           }}
         >
-          Voice & Language
+          Voice &amp; Language
         </Text>
 
         {/* Language picker */}
