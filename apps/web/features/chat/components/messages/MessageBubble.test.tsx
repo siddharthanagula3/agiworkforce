@@ -865,9 +865,14 @@ describe('MessageBubble', () => {
   describe('pin indicator', () => {
     it('shows pin icon when message is pinned', () => {
       const msg = makeMessage({ metadata: { isPinned: true } });
-      const { container } = render(<MessageBubble message={msg} />);
-      // lucide icons render as <svg>; the pinned badge carries the amber accent.
-      expect(container.querySelector('.text-amber-700')).toBeInTheDocument();
+      const { container, rerender } = render(<MessageBubble message={msg} />);
+      const indicator = container.querySelector('svg.text-accent-text');
+      expect(indicator).toBeInTheDocument();
+      expect(indicator).toHaveClass('text-accent-text');
+      expect(indicator).toHaveAttribute('aria-hidden', 'true');
+
+      rerender(<MessageBubble message={makeMessage({ metadata: { isPinned: false } })} />);
+      expect(container.querySelector('svg.text-accent-text')).not.toBeInTheDocument();
     });
   });
 

@@ -263,7 +263,16 @@ describe('ShareConversationDialog audience', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(createdShare({ workspace: { memberCount: 4 } }))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ visibility: 'organization' }), { status: 200 }),
+        new Response(
+          JSON.stringify({
+            token: 'fixture-token',
+            shareUrl: 'https://agiworkforce.com/share/fixture-token',
+            visibility: 'organization',
+            organizationId: '11111111-1111-4111-8111-111111111111',
+            expiresAt: '2026-08-18T00:00:00.000Z',
+          }),
+          { status: 200 },
+        ),
       );
 
     render(
@@ -283,7 +292,7 @@ describe('ShareConversationDialog audience', () => {
     fireEvent.change(select, { target: { value: 'organization' } });
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('alertdialog').querySelector('button:last-of-type')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Share with workspace' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenLastCalledWith(
@@ -293,7 +302,46 @@ describe('ShareConversationDialog audience', () => {
         body: JSON.stringify({ visibility: 'organization' }),
       }),
     );
-    expect(await screen.findByText(/Shared with your workspace/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Shared with your workspace' }),
+    ).toBeInTheDocument();
+    expect(select).toHaveValue('organization');
+    expect(screen.getByRole('textbox', { name: 'Conversation link' })).toHaveValue(
+      'https://agiworkforce.com/share/fixture-token',
+    );
+  });
+
+  it('keeps the public audience when the update response violates the shared contract', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(createdShare({ workspace: { memberCount: 4 } }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ visibility: 'organization' }), { status: 200 }),
+      );
+
+    render(
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId="conv-1"
+        conversationTitle="Plan"
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Create public link/ }));
+    });
+    const select = await screen.findByLabelText('Who can open this');
+    fireEvent.change(select, { target: { value: 'organization' } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Share with workspace' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Public link ready' })).toBeInTheDocument();
+    expect(select).toHaveValue('public');
+    expect(
+      screen.queryByRole('heading', { name: 'Shared with your workspace' }),
+    ).not.toBeInTheDocument();
   });
 
   it('warns that reopening the link cannot recall a copy somebody already took', async () => {

@@ -21,13 +21,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
-vi.mock('@agiworkforce/ui', () => ({
+vi.mock('@agiworkforce/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
   Switch: ({ checked }: { checked?: boolean }) =>
     React.createElement('button', { role: 'switch', 'aria-checked': Boolean(checked) }),
-  // shell-nav-ia-gap-01 remainder: PrivacySection's bulk-delete/archive
-  // actions now confirm through the shared AlertDialog wrapper instead of
-  // window.confirm, stub it the same way as ConversationDataSections.test.tsx
-  // and WebAppShell.test.tsx so this fully-replaced module mock still renders.
   useConfirm: () => ({ confirm: vi.fn(async () => true), dialog: null }),
 }));
 
