@@ -431,6 +431,9 @@ impl PermissionStore {
     }
 
     pub fn check_command(&self, command: &str) -> Option<bool> {
+        if self.denies_command(command) {
+            return Some(false);
+        }
         let command_program = command.split_whitespace().next().unwrap_or(command);
         let base_cmd = std::path::Path::new(command_program)
             .file_name()
@@ -666,22 +669,79 @@ impl PermissionStore {
         self.ask_list.len() != before
     }
 
+    pub fn denies_command(&self, command: &str) -> bool {
+        self.command_matches_rules(command, self.always_deny.iter().map(String::as_str), false)
+    }
+
     pub fn asks_before(&self, command: &str) -> bool {
-        command
-            .split(['\n', '\r', ';', '&', '|', '(', ')', '`'])
-            .any(|segment| {
-                let mut tokens: Vec<&str> = segment.split_whitespace().collect();
+        self.command_matches_rules(
+            command,
+            self.ask_list.iter().map(|rule| rule.pattern.as_str()),
+            false,
+        )
+    }
+
+    pub fn denies_powershell_command(&self, command: &str) -> bool {
+        self.command_matches_rules(command, self.always_deny.iter().map(String::as_str), true)
+    }
+
+    pub fn asks_before_powershell(&self, command: &str) -> bool {
+        self.command_matches_rules(
+            command,
+            self.ask_list.iter().map(|rule| rule.pattern.as_str()),
+            true,
+        )
+    }
+
+    fn command_matches_rules<'a>(
+        &self,
+        command: &str,
+        rules: impl Iterator<Item = &'a str>,
+        case_insensitive_program: bool,
+    ) -> bool {
+        let mut parsed_rules = Vec::new();
+        for rule in rules {
+            if rule.starts_with("file:") || rule.starts_with(DOMAIN_RULE_PREFIX) {
+                continue;
+            }
+            let Some(tokens) = shlex::split(rule) else {
+                return true;
+            };
+            if tokens.is_empty() {
+                return true;
+            }
+            parsed_rules.push(tokens);
+        }
+        let mut rules = parsed_rules;
+        if case_insensitive_program {
+            for rule in &mut rules {
+                rule[0].make_ascii_lowercase();
+            }
+        }
+        if rules.is_empty() {
+            return false;
+        }
+        let Some(commands) = crate::features::exec::exec_policy::command_argvs(command) else {
+            return true;
+        };
+        commands.into_iter().any(|mut tokens| {
+            if case_insensitive_program {
                 if let Some(program) = tokens.first_mut() {
-                    *program = Path::new(*program)
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or(program);
+                    program.make_ascii_lowercase();
                 }
-                self.ask_list.iter().any(|rule| {
-                    let rule_tokens: Vec<&str> = rule.pattern.split_whitespace().collect();
-                    !rule_tokens.is_empty() && tokens.starts_with(&rule_tokens)
-                })
-            })
+            }
+            if rules.iter().any(|rule| tokens.starts_with(rule)) {
+                return true;
+            }
+            if let Some(program) = tokens.first_mut() {
+                *program = Path::new(program)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or(program)
+                    .to_string();
+            }
+            rules.iter().any(|rule| tokens.starts_with(rule))
+        })
     }
 
     /// Add a rule scoped to the current workspace.
@@ -845,6 +905,60 @@ mod tests {
         store.allow_always("npm");
         assert_eq!(store.check("npm install express"), Some(true));
         assert_eq!(store.check("cargo build"), None);
+    }
+
+    #[test]
+    fn malformed_command_rules_fail_closed_without_interpreting_file_or_domain_rules() {
+        let mut store = PermissionStore::default();
+        store.deny_always("git 'push");
+        assert!(store.denies_command("git status"));
+        store.always_deny.clear();
+        store.deny_always("file:write:/workspace/it's-private");
+        store.deny_always("domain:it's-private.example");
+        assert!(!store.denies_command("git status"));
+    }
+
+    #[test]
+    fn nested_wrappers_preserve_saved_denials_and_asks() {
+        let mut denied = PermissionStore::default();
+        denied.deny_always("git push");
+        let mut asked = PermissionStore::default();
+        asked.ask_always("git push");
+        let mut missed = Vec::new();
+        for command in [
+            "FOO=1 sh -c 'git push'",
+            "env sh -c 'git push'",
+            "env -S 'git push'",
+            "env --split-string='git push'",
+        ] {
+            if !denied.denies_command(command) {
+                missed.push(format!("deny: {command}"));
+            }
+            if !asked.asks_before(command) {
+                missed.push(format!("ask: {command}"));
+            }
+        }
+        assert!(missed.is_empty(), "{}", missed.join("; "));
+    }
+
+    #[test]
+    fn command_denials_cover_compound_quoted_and_wrapped_executables() {
+        let mut store = PermissionStore::default();
+        store.deny_always("git push");
+        for command in [
+            "FOO=1 git push",
+            "git status && git push",
+            "git status\ngit push",
+            "/usr/bin/git push",
+            "'/usr/bin/git' push",
+            "env FOO=1 /usr/bin/git push",
+            "sh -c 'git status; git push'",
+            "FOO=1 sh -c 'git push'",
+            "env sh -c 'git push'",
+        ] {
+            assert_eq!(store.check_command(command), Some(false), "{command}");
+        }
+        assert_ne!(store.check_command("git status"), Some(false));
     }
 
     #[test]

@@ -289,7 +289,9 @@ async fn start_in_background(
 
 pub(super) async fn execute_command_output(
     args: &HashMap<String, String>,
+    pending_input: Option<crate::terminals::InputTransaction>,
     require_confirmation: bool,
+    approved_this_call: bool,
     approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let result = |success: bool, output: String| ToolResult {
@@ -314,7 +316,7 @@ pub(super) async fn execute_command_output(
         ));
     };
     print_tool_status("command_output", &background.id);
-    if let Some(input) = args.get("input").filter(|input| !input.is_empty()) {
+    if args.get("input").is_some_and(|input| !input.is_empty()) {
         if background.state() != crate::terminals::CommandState::Running {
             let output = crate::terminals::read_new(&background, std::time::Duration::ZERO).await;
             return Ok(result(
@@ -325,29 +327,53 @@ pub(super) async fn execute_command_output(
                 ),
             ));
         }
-        let typed: String = input
-            .chars()
-            .filter(|character| !character.is_control() || matches!(character, '\n' | '\r'))
-            .collect();
-        if !typed.trim().is_empty() {
-            match approve_command(
-                "command_output",
-                typed.trim(),
-                vec![format!(
-                    "typed into {}, which runs: {}",
-                    background.id,
-                    redact_tool_output(&background.command)
-                )],
-                require_confirmation,
-                approval_callback,
+        let Some(input) = pending_input else {
+            return Ok(result(
+                false,
+                "Input could not be validated for this running command".into(),
+            ));
+        };
+        let evaluation = crate::features::exec::exec_policy::evaluate_command(
+            &crate::features::exec::exec_policy::load_policy()?,
+            input.cumulative_input(),
+        );
+        if evaluation.decision == agiworkforce_execpolicy::Decision::Forbidden {
+            return Ok(result(
+                false,
+                "Input was blocked by the execution policy and was not sent".into(),
+            ));
+        }
+        if !approved_this_call
+            && (require_confirmation
+                || (evaluation.decision == agiworkforce_execpolicy::Decision::Prompt
+                    && evaluation.matched_rule))
+        {
+            let request = ApprovalRequest::new(
+                ApprovalRequestKind::Exec {
+                    command: format!("Input to {}", background.id),
+                },
+                "Allow sending input to this running command?",
+                vec![background.id.clone()],
             )
-            .await?
-            {
-                Ok(_) => {}
-                Err(refusal) => return Ok(refusal),
+            .with_tool_subject("command_output", serde_json::json!({"id": background.id}))
+            .requiring_explicit_decision();
+            let allowed = match request_approval(approval_callback, request).await {
+                Some(decision) => approval_allows(decision),
+                None if !std::io::IsTerminal::is_terminal(&std::io::stdin()) => false,
+                None => Confirm::new()
+                    .with_prompt("Allow sending input to this running command?")
+                    .default(false)
+                    .interact()
+                    .unwrap_or(false),
+            };
+            if !allowed {
+                return Ok(result(
+                    false,
+                    "Input was not approved and was not sent".into(),
+                ));
             }
         }
-        if let Err(error) = crate::terminals::send_input(&background, input).await {
+        if let Err(error) = input.send().await {
             return Ok(result(false, format!("{error:#}")));
         }
     }
