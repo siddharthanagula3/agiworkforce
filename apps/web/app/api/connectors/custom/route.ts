@@ -75,7 +75,7 @@ async function handleGet(request: NextRequest) {
 }
 
 async function handlePost(request: NextRequest) {
-  const { db, userId, organizationId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -94,7 +94,6 @@ async function handlePost(request: NextRequest) {
   const policyDecision = await evaluateConnectorPolicyForUser({
     db,
     userId,
-    organizationId,
     connectorId: null,
     isCustom: true,
     request,

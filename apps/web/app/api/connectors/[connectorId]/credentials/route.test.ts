@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   seal: vi.fn(),
   audit: vi.fn(),
   evictCustomCaches: vi.fn(),
+  activeOrganization: vi.fn(async (..._args: unknown[]): Promise<string | null> => null),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -30,6 +31,10 @@ vi.mock('@/lib/server/rls-db', () => ({
     userId: 'user-1',
     organizationId: null,
   })),
+}));
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  resolveActiveOrganizationId: (...args: unknown[]) => mocks.activeOrganization(...args),
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (...args: unknown[]) => mocks.audit(...args),
@@ -281,5 +286,15 @@ describe('POST /api/connectors/[connectorId]/credentials', () => {
 
     expect(response.status).toBe(400);
     expect(mocks.probe).not.toHaveBeenCalled();
+  });
+
+  it('resolves the caller workspace for the connector policy instead of assuming personal', async () => {
+    await POST(postRequest({ apiKey: '   ' }), context());
+
+    expect(mocks.activeOrganization).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      expect.anything(),
+    );
   });
 });

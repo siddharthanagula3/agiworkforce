@@ -7,6 +7,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getCurrentUserRlsDb, getUserScopedDb } from '@/lib/server/rls-db';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import {
   requireOrganizationPermission,
   SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
@@ -17,6 +18,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 
 import { shareRef } from '@/lib/share-ref';
@@ -31,6 +33,7 @@ import {
 } from '@/lib/services/org-shared-session-service';
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
+const SHARE_AUDIT_ENDPOINT = '/api/share/[token]';
 
 function sharingUnavailableResponse(): NextResponse {
   return NextResponse.json(
@@ -128,24 +131,40 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
 
   const db = getNeonDb();
 
-  let deleted: number;
+  let deleted: Array<{ id: string }>;
   try {
-    deleted = await db.execute('delete from shared_sessions where token = $1 and owner_id = $2', [
-      token,
-      userId,
-    ]);
+    deleted = await db.query<{ id: string }>(
+      'delete from shared_sessions where token = $1 and owner_id = $2 returning id',
+      [token, userId],
+    );
   } catch (err) {
     logger.error({ err, share: shareRef(token), userId }, 'Failed to revoke shared session');
     throw createError.internal('Failed to revoke share');
   }
 
   // A caller who merely holds the link must not be told the revocation worked.
-  if (deleted === 0) {
+  const revoked = deleted[0];
+  if (!revoked) {
     throw createError.notFound('Shared session not found');
   }
 
-  const revoked: ConversationShareRevoked = { success: true };
-  return NextResponse.json(revoked);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request).catch(() => null);
+
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'share_link_revoked',
+    request,
+    endpoint: SHARE_AUDIT_ENDPOINT,
+    outcome: 'success',
+    severity: 'info',
+    detail: { resourceType: 'share_link', resourceId: revoked.id },
+  }).catch((error) => {
+    logger.error({ error, userId }, 'Failed to record share-link audit event');
+  });
+
+  const answer: ConversationShareRevoked = { success: true };
+  return NextResponse.json(answer);
 }
 
 /**
@@ -188,6 +207,7 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
   try {
     const target = await resolveSessionShareTarget(db, { userId, token });
 
+    let revoked = false;
     if (visibility === 'organization') {
       await requireOrganizationPermission(
         userId,
@@ -201,12 +221,30 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
         actorUserId: userId,
       });
     } else {
-      await unshareSessionFromOrganization(db, target.organizationId, target.sharedSessionId);
+      revoked = await unshareSessionFromOrganization(
+        db,
+        target.organizationId,
+        target.sharedSessionId,
+      );
     }
 
     const updated = await setSharedSessionVisibility(db, { userId, token, visibility });
     if (!updated) {
       throw createError.notFound('Shared session not found');
+    }
+
+    if (visibility === 'organization' || revoked) {
+      await recordAuditEvent({
+        userId,
+        organizationId: target.organizationId,
+        eventType:
+          visibility === 'organization'
+            ? 'organization_share_granted'
+            : 'organization_share_revoked',
+        request,
+        endpoint: SHARE_AUDIT_ENDPOINT,
+        detail: { resourceType: 'conversation', resourceId: target.sharedSessionId },
+      });
     }
 
     const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';

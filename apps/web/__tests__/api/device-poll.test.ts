@@ -34,14 +34,24 @@ vi.mock('@shared/utils/env', () => ({
 const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn().mockResolvedValue(1);
 
+const txDb = {
+  query: (...args: unknown[]) => mockNeonQuery(...args),
+  execute: (...args: unknown[]) => mockNeonExecute(...args),
+};
+
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockNeonQuery(...args),
     execute: (...args: unknown[]) => mockNeonExecute(...args),
-    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn(txDb)),
     withUser: vi.fn(() => ({})),
     dispose: vi.fn(),
   })),
+}));
+
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  resolveActiveOrganizationId: vi.fn(async () => null),
 }));
 
 vi.mock('@/lib/server/developer-token', () => ({

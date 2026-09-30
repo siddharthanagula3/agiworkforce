@@ -41,6 +41,12 @@ const NON_COOKIE_PRINCIPAL: Record<string, { call: RegExp; reason: string }> = {
     call: /hashDeviceRefreshToken\s*\(/,
     reason: 'The principal is the device refresh token in the body, matched by its hash.',
   },
+  'auth/desktop/redeem/route.ts': {
+    call: /redeemDesktopSignInGrant\s*\(/,
+    reason:
+      'The principal is the one-time sign-in code with its PKCE verifier in the body, consumed ' +
+      'only when both match an unexpired grant; no session is read.',
+  },
   'auth/device/token/route.ts': {
     call: /\bdevice_code\b/,
     reason: 'RFC 8628 polling: the principal is the unguessable device code in the body.',

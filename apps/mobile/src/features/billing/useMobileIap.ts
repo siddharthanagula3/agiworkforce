@@ -103,11 +103,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
   }, []);
 
   const finishRestore = useCallback((account: CloudAccountEpoch) => {
-    if (
-      restoringAccount.current?.ownerId !== account.ownerId ||
-      restoringAccount.current.epoch !== account.epoch
-    )
-      return;
+    if (restoringAccount.current !== account) return;
     restoringAccount.current = null;
     setRestoreFetchCompleted(false);
     setRestoring(false);
@@ -207,10 +203,9 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       } finally {
         processingTokens.current.delete(token);
         releasePurchase(purchase.productId, account);
-        finishRestore(account);
       }
     },
-    [acknowledgeOnce, finishRestore, refreshTier, releasePurchase],
+    [acknowledgeOnce, refreshTier, releasePurchase],
   );
 
   const iap = useIAP({
@@ -306,17 +301,22 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
 
   useEffect(() => {
     if (!enabled || !storeConnected) return;
+    const restoreAccount = restoring && restoreFetchCompleted ? restoringAccount.current : null;
+    const restoreScan = isCloudAccountEpochCurrent(restoreAccount);
+    const dispatched: Promise<void>[] = [];
     for (const purchase of iap.availablePurchases) {
       const token = purchase.purchaseToken?.trim();
       if (!token || acknowledgedTokens.current.has(token)) continue;
       const stranded =
         awaitingStoreAcknowledgement(purchase) || unacknowledgedTokens.current.has(token);
-      if ((!restoring || !restoreFetchCompleted) && !stranded) continue;
-      void processPurchase(purchase, iap.finishTransaction);
+      if (!restoreScan && !stranded) continue;
+      dispatched.push(processPurchase(purchase, iap.finishTransaction));
     }
-    if (restoring && restoreFetchCompleted && iap.availablePurchases.length === 0) {
-      const account = captureCloudAccountEpoch();
-      if (account) finishRestore(account);
+    if (!restoreAccount) return;
+    if (restoreScan && dispatched.length > 0) {
+      void Promise.allSettled(dispatched).then(() => finishRestore(restoreAccount));
+    } else {
+      finishRestore(restoreAccount);
     }
   }, [
     enabled,
