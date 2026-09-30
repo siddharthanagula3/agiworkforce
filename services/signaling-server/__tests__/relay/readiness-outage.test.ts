@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { DB_CHECK_TTL_MS } from '../../src/constants.js';
 import {
   FakeStore,
+  INTERNAL_SECRET,
   RelayClient,
   createPairing,
   startInProcessRelay,
@@ -27,12 +28,19 @@ describe('readiness while existing sockets are connected', () => {
     });
     expect(created.status).toBe(200);
     const code = String(created.json['code']);
-    const tokens = created.json['pairTokens'] as { desktop: string; mobile: string };
+    const tokens = created.json['pairTokens'] as { desktop: string };
+    const claim = await fetch(`${relay.http}/pairings/${code}/claim`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${INTERNAL_SECRET}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ role: 'mobile', accountId: '5b0c1a7e-0000-4000-8000-0000000000aa' }),
+    });
+    expect(claim.status).toBe(200);
+    const mobileToken = (await claim.json()).pairToken;
     const desktop = await RelayClient.connect(relay.ws);
     const mobile = await RelayClient.connect(relay.ws);
     try {
       desktop.send({ type: 'register', code, role: 'desktop', pairToken: tokens.desktop });
-      mobile.send({ type: 'register', code, role: 'mobile', pairToken: tokens.mobile });
+      mobile.send({ type: 'register', code, role: 'mobile', pairToken: mobileToken });
       await desktop.frame('registered');
       await mobile.frame('registered');
       const clock = Date.now();

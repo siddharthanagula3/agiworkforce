@@ -56,7 +56,6 @@ interface PairingResponse {
   };
   pairTokens: {
     desktop: string;
-    mobile: string;
   };
 }
 
@@ -156,7 +155,6 @@ function parsePairingResponse(value: unknown): PairingResponse | null {
   const httpUrl = value['signaling']['httpUrl'];
   const wsUrl = value['signaling']['wsUrl'];
   const desktopToken = value['pairTokens']['desktop'];
-  const mobileToken = value['pairTokens']['mobile'];
   if (
     typeof code !== 'string' ||
     code.length < 8 ||
@@ -169,10 +167,7 @@ function parsePairingResponse(value: unknown): PairingResponse | null {
     !hasAllowedUrlProtocol(wsUrl, ['ws:', 'wss:']) ||
     typeof desktopToken !== 'string' ||
     desktopToken.length === 0 ||
-    desktopToken.length > 16_384 ||
-    typeof mobileToken !== 'string' ||
-    mobileToken.length === 0 ||
-    mobileToken.length > 16_384
+    desktopToken.length > 16_384
   ) {
     return null;
   }
@@ -182,7 +177,7 @@ function parsePairingResponse(value: unknown): PairingResponse | null {
     expiresAt,
     expiresIn,
     signaling: { httpUrl, wsUrl },
-    pairTokens: { desktop: desktopToken, mobile: mobileToken },
+    pairTokens: { desktop: desktopToken },
   };
 }
 
