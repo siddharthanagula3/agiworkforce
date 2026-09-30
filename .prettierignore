@@ -16,6 +16,9 @@ audit/missing
 audit/partial
 audit/live-check/[0-9]*.md
 audit/plan/waves.md
+audit/flows/competitive-ecosystem-review-2026-09-29.md
+audit/ledger/competitive-review-2026-09-29.meta.json
+audit/live-check/2026-09-29-ecosystem-review
 apps/mobile/ios/Pods
 apps/web/next-env.d.ts
 

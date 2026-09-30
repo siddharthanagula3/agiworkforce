@@ -1,0 +1,105 @@
+{
+  "verified_at": "2026-09-29",
+  "scope": "Common ecosystem capabilities; personal finance, Health and ChatGPT custom GPT product excluded.",
+  "sources": [
+    {
+      "id": "release",
+      "vendor": "OpenAI",
+      "url": "https://help.openai.com/en/articles/6825453-chatgpt-release-notes",
+      "event_date": "2026-09-29",
+      "claim": "September29 notes announce dots, Codex Cloud, Pages/Space, scheduled Sites, code review/security cloud work, profile and third-party plan features.",
+      "availability": "Documented rollouts; exact feature-specific plan, region and platform limits require their individual guides.",
+      "verified_at": "2026-09-29",
+      "evidence_type": "documented",
+      "observation_method": "official page read with web tool in this audit session"
+    },
+    {
+      "id": "dot",
+      "vendor": "OpenAI",
+      "url": "https://help.openai.com/en/articles/20001530-getting-started-with-your-dot",
+      "claim": "A persistent assistant has its own cloud computer, ongoing/scheduled/completed work, behavior rules and pause/resume/reset. Local-computer access is opt-in.",
+      "availability": "Gradual eligible Pro rollout excluding EEA/Switzerland/UK; supported Business Premium markets; Enterprise beta disabled by default. Desktop/web creation; mobile conversation after availability. Limited US Pro SMS beta.",
+      "verified_at": "2026-09-29",
+      "evidence_type": "documented",
+      "observation_method": "official page read with web tool in this audit session"
+    },
+    {
+      "id": "cloud",
+      "vendor": "OpenAI",
+      "url": "https://learn.chatgpt.com/docs/environments/cloud-environments",
+      "claim": "Reusable prepared repository environments support isolated cloud coding tasks, controlled networking, vault/proxy secrets and continuation while the local computer sleeps.",
+      "availability": "Cloud coding documentation separates legacy integrations. This cloud code environment does not currently support browser/computer use; do not inherit that from dots.",
+      "verified_at": "2026-09-29",
+      "evidence_type": "documented",
+      "observation_method": "official page read with web tool in this audit session"
+    },
+    {
+      "id": "apps",
+      "vendor": "OpenAI",
+      "url": "https://help.openai.com/en/articles/11487775-connected-apps-in-chatgpt",
+      "claim": "Connected apps have separate authorization, supported multi-account selection and authorized event updates. Installation does not authorize the account; disconnect and deleting retained context are separate.",
+      "availability": "Plan, region, workspace role and individual app constraints apply.",
+      "verified_at": "2026-09-29",
+      "evidence_type": "documented",
+      "observation_method": "official page read with web tool in this audit session"
+    },
+    {
+      "id": "plugins",
+      "vendor": "OpenAI",
+      "url": "https://help.openai.com/en/articles/20001256-plugins-in-chatgpt",
+      "claim": "Plugins can package skills, connected apps and interactive extensions including panels/forms/editors. Account connection and install are separate.",
+      "availability": "Local tools do not become cloud/mobile tools merely by packaging them.",
+      "verified_at": "2026-09-29",
+      "evidence_type": "documented",
+      "observation_method": "official page read with web tool in this audit session"
+    },
+    {
+      "id": "sites",
+      "vendor": "OpenAI",
+      "url": "https://help.openai.com/en/articles/20001339-creating-and-using-chatgpt-sites",
+      "claim": "A scheduled Site owns its schedule and cloud run context; it does not use a visitor's connected accounts. Instructions can be reviewed and schedules edited or paused.",
+      "availability": "Publication and schedule journeys have separate permissions; only relevant schedule sections were read.",
+      "verified_at": "2026-09-29",
+      "evidence_type": "documented",
+      "observation_method": "official page read with web tool in this audit session"
+    },
+    {
+      "id": "claude_docs",
+      "vendor": "Anthropic",
+      "url": "https://support.claude.com/en/articles/16923645-get-started-with-claude-docs",
+      "claim": "Living collaborative documents support human/assistant edits, comments and sharing. Mobile is view-only; version history and edit/comment compliance export have limitations.",
+      "availability": "Beta Pro/Max/Team/Enterprise; Enterprise off by default; not available for CMEK/ZDR/HIPAA configurations. Individual guide limits take precedence over broader release-note wording.",
+      "verified_at": "2026-09-29",
+      "evidence_type": "documented",
+      "observation_method": "official page read with web tool in this audit session"
+    },
+    {
+      "id": "grok",
+      "vendor": "xAI",
+      "url": "https://docs.x.ai/grok-bot/overview",
+      "event_date": "2026-09-21",
+      "claim": "Persistent named bots have separate context/memory and can work together on a shared account cloud computer with browser/files/login state. Background work continues while the laptop is closed; authentication can need human takeover.",
+      "availability": "Documented desktop/mobile product; shared account computer state is distinct from per-bot context. One computer-use actor at a time is documented.",
+      "verified_at": "2026-09-29",
+      "evidence_type": "documented",
+      "observation_method": "official page read with web tool in this audit session"
+    },
+    {
+      "id": "muse",
+      "vendor": "Meta",
+      "url": "https://introducing.muse.ai/",
+      "event_date": "2026-09",
+      "claim": "Main/side conversations support parallel interruptible tasks on a cloud computer. Scheduled/event follow-up, editable memory, approval cards and selective notifications form an ongoing-assistant workflow.",
+      "availability": "Official product description; no personal UI observation or independent runtime verification.",
+      "verified_at": "2026-09-29",
+      "evidence_type": "documented",
+      "observation_method": "official page read with web tool in this audit session"
+    }
+  ],
+  "limits": [
+    "No competitor UI was observed.",
+    "Checklist acceptance wording is a proposed AGI requirement, not a claim every competitor ships it everywhere.",
+    "Current documentation can change; dated availability is not model-native capability.",
+    "Public information about competitors does not prove their internal implementation."
+  ]
+}
