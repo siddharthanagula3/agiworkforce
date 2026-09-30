@@ -10,6 +10,7 @@ import {
   getManagedCloudProviderIds as getCatalogManagedCloudProviderIds,
   getManualOverrideModels as getCatalogManualOverrideModels,
   getModelMetadataById,
+  getModels as getCatalogModels,
   getModelVariantPartner as getCatalogModelVariantPartner,
   getPickerModels as getCatalogPickerModels,
   getProviderDefaultModel as getCatalogProviderDefaultModel,
@@ -86,11 +87,6 @@ export function normalizeModelId(modelId: string | null | undefined): string | n
 }
 
 export const MODEL_METADATA: Record<string, ModelMetadata> = modelsById as Record<
-  string,
-  ModelMetadata
->;
-
-const CANONICAL_MODEL_METADATA: Record<string, ModelMetadata> = config.models as Record<
   string,
   ModelMetadata
 >;
@@ -173,7 +169,7 @@ export function getModelMetadata(modelId: string): ModelMetadata | null {
 }
 
 export function getAllModels(): ModelMetadata[] {
-  return Object.values(CANONICAL_MODEL_METADATA);
+  return getCatalogModels() as ModelMetadata[];
 }
 
 export function getProviderModels(provider: Provider): ModelMetadata[] {
