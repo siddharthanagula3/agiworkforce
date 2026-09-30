@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use super::{DirectoryAuthority, WorkspaceFileAuthority};
 
 #[cfg(unix)]
