@@ -133,7 +133,9 @@ describe('POST /api/share, link lifetime', () => {
   });
 
   function post(body: Record<string, unknown>) {
-    mocks.query.mockResolvedValue([{ token: 'tok-new', expires_at: FUTURE, total_messages: 0 }]);
+    mocks.query.mockResolvedValue([
+      { id: 'share-new', token: 'tok-new', expires_at: FUTURE, total_messages: 0 },
+    ]);
     return POST(
       new NextRequest('https://agiworkforce.com/api/share', {
         method: 'POST',
@@ -190,7 +192,9 @@ describe('POST /api/share, secret redaction', () => {
     vi.clearAllMocks();
     mocks.authUser.mockResolvedValue({ userId: 'user-1' });
     mocks.rateLimit.mockResolvedValue(null);
-    mocks.query.mockResolvedValue([{ token: 'tok-new', expires_at: FUTURE, total_messages: 0 }]);
+    mocks.query.mockResolvedValue([
+      { id: 'share-new', token: 'tok-new', expires_at: FUTURE, total_messages: 0 },
+    ]);
   });
 
   function insertedMessages(): Array<Record<string, unknown>> {
@@ -231,13 +235,14 @@ describe('POST /api/share, secret redaction', () => {
       }),
     );
 
-    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
-    const event = mocks.recordAuditEvent.mock.calls[0]![0] as {
-      eventType: string;
-      detail: Record<string, unknown>;
-    };
-    expect(event.eventType).toBe('secret_detected');
+    const secretEvents = mocks.recordAuditEvent.mock.calls
+      .map((call) => call[0] as { eventType: string; detail: Record<string, unknown> })
+      .filter((candidate) => candidate.eventType === 'secret_detected');
+    expect(secretEvents).toHaveLength(1);
+    const event = secretEvents[0]!;
     expect(event.detail['status']).toBe('redacted');
+    expect(event.detail['resourceId']).toBe('share-new');
+    expect(JSON.stringify(event)).not.toContain('tok-new');
     expect(JSON.stringify(event)).not.toContain(STRIPE_KEY);
   });
 
@@ -264,7 +269,7 @@ describe('POST /api/share, secret redaction', () => {
     );
   });
 
-  it('does not record an audit event when nothing is redacted', async () => {
+  it('records only the new link, by id, when nothing is redacted', async () => {
     await POST(
       new NextRequest('https://agiworkforce.com/api/share', {
         method: 'POST',
@@ -276,7 +281,18 @@ describe('POST /api/share, secret redaction', () => {
       }),
     );
 
-    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    const event = mocks.recordAuditEvent.mock.calls[0]![0] as {
+      eventType: string;
+      detail: Record<string, unknown>;
+    };
+    expect(event.eventType).toBe('share_link_created');
+    expect(event.detail).toEqual({
+      resourceType: 'share_link',
+      resourceId: 'share-new',
+      conversationId: CONVERSATION_ID,
+    });
+    expect(JSON.stringify(event)).not.toContain('tok-new');
   });
 });
 
@@ -285,7 +301,9 @@ describe('POST /api/share, local path redaction', () => {
     vi.clearAllMocks();
     mocks.authUser.mockResolvedValue({ userId: 'user-1' });
     mocks.rateLimit.mockResolvedValue(null);
-    mocks.query.mockResolvedValue([{ token: 'tok-new', expires_at: FUTURE, total_messages: 0 }]);
+    mocks.query.mockResolvedValue([
+      { id: 'share-new', token: 'tok-new', expires_at: FUTURE, total_messages: 0 },
+    ]);
   });
 
   function insertedMessages(): Array<Record<string, unknown>> {
@@ -353,7 +371,7 @@ describe('POST /api/share, temporary chat policy', () => {
   function conversationLookup(rows: unknown[]) {
     mocks.query.mockImplementation(async (sql: unknown) => {
       if (/from web_conversations/i.test(String(sql))) return rows;
-      return [{ token: 'tok-new', expires_at: FUTURE, total_messages: 1 }];
+      return [{ id: 'share-new', token: 'tok-new', expires_at: FUTURE, total_messages: 1 }];
     });
   }
 

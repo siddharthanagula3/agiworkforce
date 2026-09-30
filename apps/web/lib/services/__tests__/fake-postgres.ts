@@ -47,6 +47,7 @@ const KEYWORDS = new Set([
   'update',
   'set',
   'coalesce',
+  'array',
   'filter',
   'group',
   'distinct',
@@ -332,6 +333,30 @@ export class SqlSubsetParser {
     }
     if (this.accept('true')) return () => true;
     if (this.accept('false')) return () => false;
+    if (this.accept('array')) {
+      this.expect('[');
+      const items: Operand[] = [];
+      if (!this.accept(']')) {
+        do items.push(this.operandTerm());
+        while (this.accept(','));
+        this.expect(']');
+      }
+      return (env) => items.map((item) => item(env));
+    }
+    if (this.accept('coalesce')) {
+      this.expect('(');
+      const choices: Operand[] = [];
+      do choices.push(this.operand());
+      while (this.accept(','));
+      this.expect(')');
+      return (env) => {
+        for (const choice of choices) {
+          const value = choice(env);
+          if (value !== null && value !== undefined) return value;
+        }
+        return null;
+      };
+    }
     if (this.accept('interval')) {
       const literal = this.take().value;
       return () => intervalMs(literal);
@@ -498,6 +523,36 @@ export class SqlSubsetParser {
   }
 }
 
+/** `with a as (...), b as (...) <tail>` split at its top-level commas, or null. */
+function splitCteChain(sql: string): { ctes: Array<[string, string]>; tail: string } | null {
+  const head = /^\s*with\s+/i.exec(sql);
+  if (!head) return null;
+  const ctes: Array<[string, string]> = [];
+  let index = head[0].length;
+  for (;;) {
+    const named = /^([a-z_]+)\s+as\s*\(/i.exec(sql.slice(index));
+    if (!named) return null;
+    let depth = 1;
+    let cursor = index + named[0].length;
+    const start = cursor;
+    while (cursor < sql.length && depth > 0) {
+      const char = sql[cursor];
+      if (char === "'") {
+        cursor = sql.indexOf("'", cursor + 1) + 1;
+        if (cursor === 0) return null;
+        continue;
+      }
+      if (char === '(') depth += 1;
+      else if (char === ')') depth -= 1;
+      cursor += 1;
+    }
+    ctes.push([(named[1] ?? '').toLowerCase(), sql.slice(start, cursor - 1)]);
+    const rest = /^\s*,\s*/.exec(sql.slice(cursor));
+    if (!rest) return { ctes, tail: sql.slice(cursor) };
+    index = cursor + rest[0].length;
+  }
+}
+
 export class FakePostgres {
   readonly tables = new Map<string, Row[]>();
   readonly statements: string[] = [];
@@ -524,6 +579,23 @@ export class FakePostgres {
           where ${purge[4]}.${purge[5]} in (${purge[2]})`,
         params,
       ) as T[];
+    }
+    const chain = splitCteChain(sql);
+    if (chain && chain.ctes.length > 1) {
+      const produced = new Map<string, Row[]>();
+      try {
+        for (const [name, body] of chain.ctes) {
+          const rows = await this.query<Row>(body, params);
+          produced.set(name, rows);
+          this.tables.set(name, rows);
+        }
+        const counted = [...chain.tail.matchAll(/count\s*\(\s*\*\s*\)\s+from\s+([a-z_]+)/gi)]
+          .map((match) => produced.get((match[1] ?? '').toLowerCase())?.length ?? 0)
+          .reduce((sum, count) => sum + count, 0);
+        return [{ count: counted } as unknown as T];
+      } finally {
+        for (const name of produced.keys()) this.tables.delete(name);
+      }
     }
     const cte = /^\s*with\s+[a-z_]+\s+as\s*\(([\s\S]*)\)\s*select([\s\S]*)$/i.exec(sql);
     if (cte) {

@@ -107,7 +107,9 @@ describe('POST /api/chat/conversations deleted conflict', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'conversation_unavailable' },
     });
-    const [sql] = mocks.query.mock.calls[0]!;
+    const sql = mocks.query.mock.calls
+      .map(([statement]) => String(statement))
+      .find((statement) => statement.includes('insert into web_conversations'));
     expect(sql).toContain('web_conversations.deleted_at is null');
     expect(sql).not.toContain('deleted_at = null');
   });
