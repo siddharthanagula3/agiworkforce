@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Pressable, RefreshControl, Alert, ScrollView } from 'react-native';
+import { View, RefreshControl, Alert, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { FlashList } from '@shopify/flash-list';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -39,7 +40,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useAgentStore, type Agent, type RunArtifact } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import {
@@ -178,14 +179,14 @@ function RunArtifactsList({ artifacts, maxVisible = 3 }: RunArtifactsProps) {
 
   return (
     <View className="mt-2.5">
-      <Text className="text-[10px] text-white/40 uppercase tracking-wider mb-1.5">Artifacts</Text>
+      <Text className="text-xs text-white/40 uppercase tracking-wider mb-1.5">Artifacts</Text>
       {visible.map((artifact) => (
         <View key={artifact.id} className="flex-row items-start gap-1.5 mb-1">
           <View style={{ marginTop: 1 }}>
             <ArtifactIcon type={artifact.type} />
           </View>
           <Text
-            className="text-[11px] flex-1"
+            className="text-xs flex-1"
             style={{ color: getArtifactTextColor(artifact.type, colors) }}
             numberOfLines={1}
           >
@@ -194,13 +195,13 @@ function RunArtifactsList({ artifacts, maxVisible = 3 }: RunArtifactsProps) {
         </View>
       ))}
       {hasMore && (
-        <Pressable
+        <PressableBox
           onPress={() => setExpanded(!expanded)}
           className="flex-row items-center gap-1 mt-0.5"
           accessibilityLabel={expanded ? 'Show fewer artifacts' : 'Show more artifacts'}
           accessibilityRole="button"
         >
-          <Text className="text-[10px]" style={{ color: colors.teal }}>
+          <Text className="text-xs" style={{ color: colors.teal }}>
             {expanded ? 'Show less' : `+${artifacts.length - maxVisible} more`}
           </Text>
           {expanded ? (
@@ -208,7 +209,7 @@ function RunArtifactsList({ artifacts, maxVisible = 3 }: RunArtifactsProps) {
           ) : (
             <ChevronDown size={10} color={colors.teal} />
           )}
-        </Pressable>
+        </PressableBox>
       )}
     </View>
   );
@@ -230,13 +231,13 @@ function ToolCallLog({ toolCalls, maxVisible = 10 }: ToolCallLogProps) {
 
   return (
     <View className="mt-2.5">
-      <Pressable
+      <PressableBox
         onPress={() => setExpanded(!expanded)}
         className="flex-row items-center gap-1 mb-1.5"
         accessibilityLabel={expanded ? 'Collapse tool call log' : 'Expand tool call log'}
         accessibilityRole="button"
       >
-        <Text className="text-[10px] text-white/40 uppercase tracking-wider flex-1">
+        <Text className="text-xs text-white/40 uppercase tracking-wider flex-1">
           Tool Calls ({toolCalls.length})
         </Text>
         {expanded ? (
@@ -244,7 +245,7 @@ function ToolCallLog({ toolCalls, maxVisible = 10 }: ToolCallLogProps) {
         ) : (
           <ChevronDown size={10} color={colors.textMuted} />
         )}
-      </Pressable>
+      </PressableBox>
 
       {visible.map((call) => (
         <View key={call.id} className="flex-row items-start gap-1.5 mb-1.5">
@@ -255,12 +256,12 @@ function ToolCallLog({ toolCalls, maxVisible = 10 }: ToolCallLogProps) {
             }}
           />
           <View className="flex-1">
-            <Text className="text-[11px] text-white/70" numberOfLines={1}>
+            <Text className="text-xs text-white/70" numberOfLines={1}>
               {call.name}
               {call.command ? `: ${call.command}` : ''}
             </Text>
             {call.duration != null && (
-              <Text className="text-[10px] text-white/30">{call.duration}ms</Text>
+              <Text className="text-xs text-white/30">{call.duration}ms</Text>
             )}
           </View>
         </View>
@@ -358,8 +359,8 @@ function ApprovalCard({ request }: ApprovalCardProps) {
   const RiskShieldIcon = request.riskLevel === 'high' ? ShieldAlert : ShieldCheck;
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       layout={LinearTransition.springify()}
     >
       <View
@@ -382,7 +383,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
           </Text>
           <View className="flex-row items-center gap-1">
             <RiskShieldIcon size={11} color={riskColor} />
-            <Text className="text-[10px] font-medium" style={{ color: riskColor }}>
+            <Text className="text-xs font-medium" style={{ color: riskColor }}>
               {RISK_LABELS[request.riskLevel]}
             </Text>
           </View>
@@ -392,7 +393,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
 
         {/* Description, what the tool will do */}
         <View className="px-3 py-2.5">
-          <Text className="text-[11px] text-white/70 leading-[16px]" numberOfLines={4}>
+          <Text className="text-xs text-white/70 leading-[16px]" numberOfLines={4}>
             {request.description}
           </Text>
         </View>
@@ -401,7 +402,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
         {secondsLeft !== null && (
           <View className="px-3 pb-2 flex-row items-center gap-1.5">
             <Clock size={10} color={colors.textMuted} />
-            <Text className="text-[10px] text-white/40">
+            <Text className="text-xs text-white/40">
               {secondsLeft > 0
                 ? `Desktop decision window: ${secondsLeft}s`
                 : 'Desktop decision window reached'}
@@ -411,7 +412,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
 
         {/* Approve / Reject buttons, prominently color coded */}
         <View className="flex-row gap-2 px-3 pb-3">
-          <Pressable
+          <PressableBox
             onPress={handleApprove}
             className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl active:opacity-80"
             style={{ backgroundColor: colors.agentSuccess }}
@@ -422,8 +423,8 @@ function ApprovalCard({ request }: ApprovalCardProps) {
             <Text className="text-xs font-semibold" style={{ color: colors.accentText }}>
               Approve
             </Text>
-          </Pressable>
-          <Pressable
+          </PressableBox>
+          <PressableBox
             onPress={handleReject}
             className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl active:opacity-80"
             style={{ backgroundColor: colors.agentError }}
@@ -434,7 +435,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
             <Text className="text-xs font-semibold" style={{ color: colors.accentText }}>
               Deny
             </Text>
-          </Pressable>
+          </PressableBox>
         </View>
       </View>
     </Animated.View>
@@ -485,8 +486,8 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
       : null;
 
   return (
-    <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.springify()}>
-      <Pressable
+    <Animated.View entering={FadeIn.duration(motion.quick)} layout={LinearTransition.springify()}>
+      <PressableBox
         onPress={onPress}
         accessibilityLabel={`Agent: ${agent.name}, status: ${agent.status}`}
         accessibilityRole="button"
@@ -506,14 +507,14 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </View>
             <View className="flex-row items-center gap-2">
               <Badge label={agent.status} color={getStatusBadgeColor(agent.status)} />
-              <Pressable
+              <PressableBox
                 onPress={onViewDetail}
                 className="p-1 rounded-md active:bg-white/5"
                 accessibilityLabel={`View details for ${agent.name}`}
                 accessibilityRole="button"
               >
                 <ChevronRight size={14} color={colors.textMuted} />
-              </Pressable>
+              </PressableBox>
             </View>
           </View>
 
@@ -533,7 +534,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
           {agent.currentAction ? (
             <View className="flex-row items-center gap-1.5 mb-2 px-2 py-1.5 rounded-lg bg-blue-500/8">
               <Zap size={10} color={colors.agentActive} />
-              <Text className="text-[11px] text-blue-400 flex-1" numberOfLines={1}>
+              <Text className="text-xs text-blue-400 flex-1" numberOfLines={1}>
                 {agent.currentAction}
               </Text>
             </View>
@@ -549,13 +550,13 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
               <ProgressBar progress={agent.progress} />
               <View className="flex-row items-center justify-between mt-1">
                 {agent.totalSteps != null && agent.stepsCompleted != null ? (
-                  <Text className="text-[10px] text-white/40">
+                  <Text className="text-xs text-white/40">
                     {agent.stepsCompleted}/{agent.totalSteps} steps
                   </Text>
                 ) : (
                   <View />
                 )}
-                <Text className="text-[10px] text-white/40">{agent.progress}%</Text>
+                <Text className="text-xs text-white/40">{agent.progress}%</Text>
               </View>
             </View>
           )}
@@ -564,7 +565,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
           {(agent.status === 'running' || agent.status === 'waiting') && isSelected && (
             <View className="flex-row gap-2 mt-1 flex-wrap">
               {agent.status === 'running' ? (
-                <Pressable
+                <PressableBox
                   onPress={() => handleCommand('pause')}
                   className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-500/10 active:bg-amber-500/20"
                   accessibilityLabel="Pause agent"
@@ -572,9 +573,9 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                 >
                   <Pause size={12} color={colors.agentWarning} />
                   <Text className="text-xs text-amber-400 font-medium">Pause</Text>
-                </Pressable>
+                </PressableBox>
               ) : (
-                <Pressable
+                <PressableBox
                   onPress={() => handleCommand('resume')}
                   className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md"
                   style={({ pressed }) => ({
@@ -587,9 +588,9 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                   <Text className="text-xs font-medium" style={{ color: colors.teal }}>
                     Resume
                   </Text>
-                </Pressable>
+                </PressableBox>
               )}
-              <Pressable
+              <PressableBox
                 onPress={() => handleCancelWithConfirm()}
                 className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-500/10 active:bg-red-500/20"
                 accessibilityLabel="Cancel agent"
@@ -597,7 +598,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
               >
                 <Square size={12} color={colors.agentError} />
                 <Text className="text-xs text-red-400 font-medium">Cancel</Text>
-              </Pressable>
+              </PressableBox>
             </View>
           )}
 
@@ -632,7 +633,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                       {step.message}
                     </Text>
                     {step.detail && (
-                      <Text className="text-[10px] text-white/40" numberOfLines={1}>
+                      <Text className="text-xs text-white/40" numberOfLines={1}>
                         {step.detail}
                       </Text>
                     )}
@@ -654,7 +655,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
           {isSelected && agent.status === 'running' && agent.toolCalls.length > 0 && (
             <View className="mt-3">
               <Separator className="mb-3" />
-              <Text className="text-[10px] text-white/40 uppercase tracking-wider mb-2">
+              <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
                 Live Execution
               </Text>
               <ExecutionStream taskId={agent.id} />
@@ -665,12 +666,12 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
           {isSelected && (
             <View className="mt-3">
               <Separator className="mb-3" />
-              <Text className="text-[10px] text-white/40 uppercase tracking-wider mb-2">
+              <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
                 Quick Actions
               </Text>
               <View className="flex-row flex-wrap gap-2">
                 {/* View Thread */}
-                <Pressable
+                <PressableBox
                   onPress={onViewDetail}
                   className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/5 active:bg-white/10"
                   accessibilityLabel={`View thread for ${agent.name}`}
@@ -678,11 +679,11 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                 >
                   <ExternalLink size={12} color={colors.textMuted} />
                   <Text className="text-xs text-white/60 font-medium">View Thread</Text>
-                </Pressable>
+                </PressableBox>
 
                 {/* Stop Agent, shown for running agents */}
                 {agent.status === 'running' && (
-                  <Pressable
+                  <PressableBox
                     onPress={() => {
                       Alert.alert('Stop Agent', `Stop "${agent.name}" immediately?`, [
                         { text: 'Keep Running', style: 'cancel' },
@@ -699,13 +700,13 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                   >
                     <Square size={12} color={colors.agentError} />
                     <Text className="text-xs text-red-400 font-medium">Stop Agent</Text>
-                  </Pressable>
+                  </PressableBox>
                 )}
               </View>
             </View>
           )}
         </Card>
-      </Pressable>
+      </PressableBox>
     </Animated.View>
   );
 }
@@ -728,7 +729,7 @@ function FileResultsSection({ agents }: FileResultsSectionProps) {
 
   return (
     <View className="mt-4 mb-2">
-      <Pressable
+      <PressableBox
         onPress={() => setExpanded(!expanded)}
         className="flex-row items-center justify-between py-2 mb-1"
         accessibilityRole="button"
@@ -745,7 +746,7 @@ function FileResultsSection({ agents }: FileResultsSectionProps) {
         ) : (
           <ChevronDown size={12} color={colors.textMuted} />
         )}
-      </Pressable>
+      </PressableBox>
 
       {expanded && (
         <Card variant="outline">
@@ -766,13 +767,13 @@ function FileResultsSection({ agents }: FileResultsSectionProps) {
                 </View>
                 <View className="flex-1">
                   <Text
-                    className="text-[11px]"
+                    className="text-xs"
                     style={{ color: getArtifactTextColor(art.type, colors) }}
                     numberOfLines={1}
                   >
                     {art.label}
                   </Text>
-                  <Text className="text-[10px] text-white/30" numberOfLines={1}>
+                  <Text className="text-xs text-white/30" numberOfLines={1}>
                     {art.agentName}
                     {art.detail ? `, ${art.detail}` : ''}
                   </Text>
@@ -816,11 +817,11 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
         return (
           <Animated.View
             key={agent.id}
-            entering={FadeIn.duration(200)}
+            entering={FadeIn.duration(motion.quick)}
             layout={LinearTransition.springify()}
             className="mb-2"
           >
-            <Pressable
+            <PressableBox
               onPress={() => setExpandedId(isExpanded ? null : agent.id)}
               accessibilityRole="button"
               accessibilityLabel={`${agent.name} task result, ${agent.status}. Tap to ${isExpanded ? 'collapse' : 'expand'}`}
@@ -835,7 +836,7 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
                   <Text className="text-sm font-medium text-white flex-1" numberOfLines={1}>
                     {agent.name}
                   </Text>
-                  <Text className="text-[10px]" style={{ color: statusColor }}>
+                  <Text className="text-xs" style={{ color: statusColor }}>
                     {isSuccess ? 'Done' : 'Failed'}
                   </Text>
                   {isExpanded ? (
@@ -852,7 +853,7 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
                     <View className="flex-row gap-4 mb-2">
                       {agent.totalSteps != null && (
                         <View>
-                          <Text className="text-[10px] text-white/30">Steps</Text>
+                          <Text className="text-xs text-white/30">Steps</Text>
                           <Text className="text-xs text-white/70">
                             {agent.stepsCompleted ?? agent.totalSteps}/{agent.totalSteps}
                           </Text>
@@ -860,13 +861,13 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
                       )}
                       {agent.toolCalls.length > 0 && (
                         <View>
-                          <Text className="text-[10px] text-white/30">Tool Calls</Text>
+                          <Text className="text-xs text-white/30">Tool Calls</Text>
                           <Text className="text-xs text-white/70">{agent.toolCalls.length}</Text>
                         </View>
                       )}
                       {(agent.artifacts ?? []).length > 0 && (
                         <View>
-                          <Text className="text-[10px] text-white/30">Artifacts</Text>
+                          <Text className="text-xs text-white/30">Artifacts</Text>
                           <Text className="text-xs text-white/70">
                             {(agent.artifacts ?? []).length}
                           </Text>
@@ -877,7 +878,7 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
                     {/* Last step message as summary */}
                     {agent.steps && agent.steps.length > 0 && (
                       <View className="px-2 py-1.5 rounded-lg bg-white/4">
-                        <Text className="text-[11px] text-white/50" numberOfLines={3}>
+                        <Text className="text-xs text-white/50" numberOfLines={3}>
                           {agent.steps[agent.steps.length - 1]?.message ?? ''}
                         </Text>
                       </View>
@@ -892,7 +893,7 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
                   </View>
                 )}
               </Card>
-            </Pressable>
+            </PressableBox>
           </Animated.View>
         );
       })}
@@ -1025,8 +1026,8 @@ export function AgentDashboard() {
       {/* Emergency stop, only shown when there are active agents */}
       {hasRunningAgents && (
         <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(150)}
+          entering={FadeIn.duration(motion.quick)}
+          exiting={FadeOut.duration(motion.quick)}
           style={{
             position: 'absolute',
             bottom: 16,
@@ -1034,7 +1035,7 @@ export function AgentDashboard() {
             right: 16,
           }}
         >
-          <Pressable
+          <PressableBox
             onPress={handleEmergencyStop}
             className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl active:opacity-80"
             style={{ backgroundColor: colors.agentError }}
@@ -1045,7 +1046,7 @@ export function AgentDashboard() {
             <Text className="text-[15px] font-bold" style={{ color: colors.accentText }}>
               Emergency Stop
             </Text>
-          </Pressable>
+          </PressableBox>
         </Animated.View>
       )}
     </View>

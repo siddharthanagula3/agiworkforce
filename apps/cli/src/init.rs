@@ -67,7 +67,7 @@ fn write_default_config(home: &Path) -> Result<()> {
 # temperature = 0.7
 	# fallback_chain = ["<primary-model-from-agi-models-list>", "<backup-model-from-agi-models-list>"]
 	# fast_model = "<fast-model-from-agi-models-list>"
-	# sandbox_mode = "read-only"
+	# sandbox_mode = "contained" # or "read-only", "unrestricted"
 	# review_model = "<review-model-from-agi-models-list>"
 	# cloud_model = "<cloud-model-from-agi-models-list>"
 

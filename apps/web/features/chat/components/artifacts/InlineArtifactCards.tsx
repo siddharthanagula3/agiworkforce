@@ -174,7 +174,7 @@ function MermaidFullCard({ artifact, onClick }: { artifact: ArtifactData; onClic
       onClick={onClick}
       className={cn(
         'group w-full flex flex-col overflow-hidden rounded-xl border border-border/40',
-        'bg-muted/30 hover:bg-muted/50 transition-colors text-left',
+        'bg-muted/30 hover:bg-muted/50 transition-colors text-start',
       )}
       aria-label={`Open artifact: ${artifact.title || 'Untitled'}`}
     >
@@ -242,12 +242,12 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
         onClick={onClick}
         className={cn(
           'group w-full flex items-stretch overflow-hidden rounded-xl border border-border/40',
-          'bg-muted/30 hover:bg-muted/50 transition-colors text-left',
+          'bg-muted/30 hover:bg-muted/50 transition-colors text-start',
         )}
         aria-label={`Open artifact: ${artifact.title || 'Untitled'}`}
       >
         {/* Preview area · 80px wide on the left */}
-        <div className="relative w-20 shrink-0 overflow-hidden bg-muted/60 border-r border-border/30">
+        <div className="relative w-20 shrink-0 overflow-hidden bg-muted/60 border-e border-border/30">
           {canRender ? (
             <iframe
               title={artifact.title || 'Artifact preview'}
@@ -290,7 +290,7 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
         <div
           className={cn(
             'flex flex-1 min-w-0 flex-col justify-center gap-1 px-3 py-2.5',
-            downloadUri && 'pr-28',
+            downloadUri && 'pe-28',
           )}
         >
           <div className="flex items-center gap-2 min-w-0">
@@ -327,7 +327,7 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
           onClick={(event) => event.stopPropagation()}
           aria-label={`${ARTIFACT_DOWNLOAD_ACTION} ${artifact.title || 'Untitled'}`}
           className={cn(
-            'absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-lg border border-border/60 bg-background px-2 py-1',
+            'absolute bottom-2 end-2 inline-flex items-center gap-1 rounded-lg border border-border/60 bg-background px-2 py-1',
             'text-caption font-medium text-foreground no-underline transition-colors hover:bg-muted/60',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
           )}

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   loadManagedMemoryContext,
   loadManagedMemoryPolicy,
+  loadProjectMemoryScope,
   loadSuppressedMemorySources,
   type ManagedMemoryContextDb,
 } from '@/lib/services/managed-memory-context-service';
@@ -102,6 +103,7 @@ export interface MemoryToolContext {
   organizationId: string | null;
   source: string;
   temporaryChat: boolean;
+  projectId?: string | null;
 }
 
 const TEMPORARY_CHAT_MEMORY_MESSAGE =
@@ -137,6 +139,7 @@ async function saveMemory(
   const ports = createMemoryCommandPorts(context.db, {
     userId: context.userId,
     organizationId: context.organizationId,
+    projectId: context.projectId ?? null,
     source: context.source,
   });
   const eligibility = await ports.checkEligibility(parsed.data.fact);
@@ -168,12 +171,16 @@ async function searchMemory(
       isError: false,
     };
   }
-  const [policy, suppressedSources] = await Promise.all([
+  const [policy, suppressedSources, scope] = await Promise.all([
     loadManagedMemoryPolicy(context.db, {
       userId: context.userId,
       organizationId: context.organizationId,
     }),
     loadSuppressedMemorySources(context.db, { userId: context.userId }),
+    loadProjectMemoryScope(context.db, {
+      userId: context.userId,
+      projectId: context.projectId ?? null,
+    }),
   ]);
   if (!policy.enabled) {
     return {
@@ -185,6 +192,7 @@ async function searchMemory(
     userId: context.userId,
     organizationId: context.organizationId,
     suppressedSources,
+    scope,
     policy,
     query: parsed.data.query,
   });
@@ -205,6 +213,7 @@ async function forgetMemory(
   const ports = createMemoryCommandPorts(context.db, {
     userId: context.userId,
     organizationId: context.organizationId,
+    projectId: context.projectId ?? null,
     source: context.source,
   });
   const matches = await ports.find(parsed.data.subject);

@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { View, Alert } from 'react-native';
+import { useCallback, useMemo } from 'react';
+import { ActivityIndicator, View, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
@@ -24,13 +24,60 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { formatNotificationTime } from '@/src/features/notifications/time';
 import {
+  cloudRunNotificationRoute,
   useNotificationCenter,
   getPriorityLabel,
   type NotificationCenterItem,
   type NotificationPriority,
 } from '@/services/notifications';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { translatePlural } from '@/src/i18n/plural';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import {
+  accountNotificationDestination,
+  useAccountNotifications,
+} from '@/src/features/notifications/accountFeed';
+import type { NotificationFeedItem, NotificationSeverity } from '@agiworkforce/types';
+
+const ACCOUNT_RECORDED_EVENT_TYPES = new Set([
+  'agent_approval_needed',
+  'task_completed',
+  'agent_failed',
+  'schedule_run',
+  'chat_message',
+]);
+
+const SEVERITY_PRIORITY: Record<NotificationSeverity, NotificationPriority> = {
+  error: 'critical',
+  warning: 'high',
+  success: 'normal',
+  info: 'low',
+};
+
+type InboxRow =
+  | { source: 'account'; key: string; item: NotificationFeedItem }
+  | { source: 'device'; key: string; item: NotificationCenterItem };
+
+interface RowView {
+  title: string;
+  body: string;
+  priority: NotificationPriority;
+  receivedAt: string;
+  read: boolean;
+}
+
+function rowView(row: InboxRow): RowView {
+  if (row.source === 'device') return row.item;
+  return {
+    title: row.item.title,
+    body: row.item.message,
+    priority: SEVERITY_PRIORITY[row.item.severity],
+    receivedAt: row.item.createdAt,
+    read: row.item.read,
+  };
+}
 
 function getPriorityTone(
   priority: NotificationPriority,
@@ -75,22 +122,23 @@ function getPriorityBadgeColor(priority: NotificationPriority): 'red' | 'yellow'
 }
 
 interface NotificationItemProps {
-  item: NotificationCenterItem;
-  onPress: (item: NotificationCenterItem) => void;
-  onMarkRead: (id: string) => void;
+  row: InboxRow;
+  onPress: (row: InboxRow) => void;
+  onMarkRead: (row: InboxRow) => void;
 }
 
-function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) {
+function NotificationItem({ row, onPress, onMarkRead }: NotificationItemProps) {
   const colors = useThemeColors();
+  const item = rowView(row);
   const priorityTone = getPriorityTone(item.priority, colors);
   const timeLabel = formatNotificationTime(item.receivedAt);
 
   return (
-    <Animated.View entering={FadeIn.duration(200)} layout={LinearTransition.springify()}>
+    <Animated.View entering={FadeIn.duration(motion.quick)} layout={LinearTransition.springify()}>
       <Pressable
-        onPress={() => onPress(item)}
-        className={`rounded-xl overflow-hidden active:opacity-80 ${item.read ? '' : ''}`}
-        accessibilityLabel={`Notification: ${item.title}`}
+        onPress={() => onPress(row)}
+        className="rounded-xl overflow-hidden active:opacity-80"
+        accessibilityLabel={`${item.read ? '' : 'Unread, '}${item.title}, ${timeLabel}`}
         accessibilityRole="button"
       >
         <View
@@ -123,7 +171,7 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
                 )}
               </View>
               <Text
-                className="text-[11px] leading-4"
+                className="text-xs leading-4"
                 style={{ color: item.read ? colors.textMuted : colors.textSecondary }}
                 numberOfLines={2}
               >
@@ -139,12 +187,12 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
               label={getPriorityLabel(item.priority)}
               color={getPriorityBadgeColor(item.priority)}
             />
-            <Text className="text-[10px] flex-1" style={{ color: colors.textMuted }}>
+            <Text className="text-xs flex-1" style={{ color: colors.textMuted }}>
               {timeLabel}
             </Text>
             {!item.read && (
               <Pressable
-                onPress={() => onMarkRead(item.id)}
+                onPress={() => onMarkRead(row)}
                 className="px-2 py-0.5 rounded-md"
                 style={({ pressed }) => ({
                   backgroundColor: pressed ? colors.surfaceHover : colors.neutralSurface,
@@ -152,7 +200,7 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
                 accessibilityLabel="Mark as read"
                 accessibilityRole="button"
               >
-                <Text className="text-[10px]" style={{ color: colors.textSecondary }}>
+                <Text className="text-xs" style={{ color: colors.textSecondary }}>
                   Mark read
                 </Text>
               </Pressable>
@@ -167,17 +215,81 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
 export default function NotificationCenterScreen() {
   const colors = useThemeColors();
   const router = useRouter();
-  const { items, unreadCount, markRead, markAllRead, clear } = useNotificationCenter();
+  const device = useNotificationCenter();
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const account = useAccountNotifications(cloudUnlocked);
+  const accountLoaded = cloudUnlocked && !account.loading && account.error === null;
+
+  const deviceItems = useMemo(
+    () =>
+      accountLoaded
+        ? device.items.filter((item) => !ACCOUNT_RECORDED_EVENT_TYPES.has(item.data.type))
+        : device.items,
+    [accountLoaded, device.items],
+  );
+
+  const rows = useMemo<InboxRow[]>(
+    () =>
+      [
+        ...account.items.map((item): InboxRow => ({
+          source: 'account',
+          key: `account:${item.id}`,
+          item,
+        })),
+        ...deviceItems.map((item): InboxRow => ({
+          source: 'device',
+          key: `device:${item.id}`,
+          item,
+        })),
+      ].sort((a, b) => rowView(b).receivedAt.localeCompare(rowView(a).receivedAt)),
+    [account.items, deviceItems],
+  );
+
+  const unreadCount = account.unreadCount + deviceItems.filter((item) => !item.read).length;
+  const { markRead: markDeviceRead, markAllRead: markAllDeviceRead, clear } = device;
+  const { markRead: markAccountRead, markAllRead: markAllAccountRead } = account;
+
+  const markRowRead = useCallback(
+    (row: InboxRow) => {
+      if (row.source === 'account') markAccountRead(row.item.id);
+      else markDeviceRead(row.item.id);
+    },
+    [markAccountRead, markDeviceRead],
+  );
+
+  const markAllRead = useCallback(() => {
+    markAllDeviceRead();
+    if (cloudUnlocked) markAllAccountRead();
+  }, [cloudUnlocked, markAllAccountRead, markAllDeviceRead]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
     else router.replace({ pathname: '/(app)' as const });
   }, [router]);
 
-  const handleItemPress = useCallback(
+  const handleAccountPress = useCallback(
+    (item: NotificationFeedItem) => {
+      markAccountRead(item.id);
+      const destination = accountNotificationDestination(item.href);
+      if (!destination) return;
+      if (destination.kind === 'native') {
+        router.push(destination.route as Parameters<typeof router.push>[0]);
+      } else {
+        void openUntrustedUrlInAppBrowser(destination.url);
+      }
+    },
+    [markAccountRead, router],
+  );
+
+  const handleDevicePress = useCallback(
     (item: NotificationCenterItem) => {
-      markRead(item.id);
+      markDeviceRead(item.id);
       const route = item.data.route;
+      const runRoute = cloudRunNotificationRoute(item.data);
+      if (runRoute) {
+        router.push(runRoute);
+        return;
+      }
 
       switch (item.data.type) {
         case 'agent_failed':
@@ -206,11 +318,19 @@ export default function NotificationCenterScreen() {
           break;
       }
     },
-    [markRead, router],
+    [markDeviceRead, router],
+  );
+
+  const handleItemPress = useCallback(
+    (row: InboxRow) => {
+      if (row.source === 'account') handleAccountPress(row.item);
+      else handleDevicePress(row.item);
+    },
+    [handleAccountPress, handleDevicePress],
   );
 
   const handleClearAll = useCallback(() => {
-    Alert.alert('Clear All', 'Remove all notifications from this list?', [
+    Alert.alert('Clear All', 'Remove the notifications stored on this device?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Clear All',
@@ -243,12 +363,12 @@ export default function NotificationCenterScreen() {
             className="rounded-full px-2 py-0.5 mr-2"
             style={{ backgroundColor: colors.successSurface }}
           >
-            <Text className="text-[10px] font-bold" style={{ color: colors.teal }}>
+            <Text className="text-xs font-bold" style={{ color: colors.teal }}>
               {unreadCount}
             </Text>
           </View>
         )}
-        {items.length > 0 && (
+        {rows.length > 0 && (
           <View className="flex-row gap-1">
             {unreadCount > 0 && (
               <Pressable
@@ -261,21 +381,30 @@ export default function NotificationCenterScreen() {
                 <CheckCheck size={18} color={colors.textSecondary} />
               </Pressable>
             )}
-            <Pressable
-              onPress={handleClearAll}
-              className="p-2 rounded-lg"
-              style={({ pressed }) => pressed && { backgroundColor: colors.surfaceHover }}
-              accessibilityLabel="Clear all notifications"
-              accessibilityRole="button"
-            >
-              <Trash2 size={18} color={colors.textSecondary} />
-            </Pressable>
+            {deviceItems.length > 0 && (
+              <Pressable
+                onPress={handleClearAll}
+                className="p-2 rounded-lg"
+                style={({ pressed }) => pressed && { backgroundColor: colors.surfaceHover }}
+                accessibilityLabel="Clear notifications on this device"
+                accessibilityRole="button"
+              >
+                <Trash2 size={18} color={colors.textSecondary} />
+              </Pressable>
+            )}
           </View>
         )}
       </View>
 
       {/* Content */}
-      {items.length === 0 ? (
+      {rows.length === 0 && account.loading ? (
+        <View
+          className="flex-1 items-center justify-center"
+          accessibilityLabel="Loading notifications"
+        >
+          <ActivityIndicator color={colors.textSecondary} />
+        </View>
+      ) : rows.length === 0 ? (
         <View className="flex-1 items-center justify-center px-8">
           <View
             className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
@@ -289,24 +418,57 @@ export default function NotificationCenterScreen() {
           <Text className="text-center text-xs mt-1" style={{ color: colors.textMuted }}>
             Agent alerts, approvals, and task updates will appear here.
           </Text>
+          {account.error ? (
+            <Button
+              title="Retry"
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onPress={() => void account.refresh()}
+            />
+          ) : null}
         </View>
       ) : (
         <FlashList
-          data={items}
-          keyExtractor={(item) => item.id}
+          data={rows}
+          keyExtractor={(row) => row.key}
+          onEndReached={() => void account.loadMore()}
+          onEndReachedThreshold={0.4}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           renderItem={({ item }) => (
-            <NotificationItem item={item} onPress={handleItemPress} onMarkRead={markRead} />
+            <NotificationItem row={item} onPress={handleItemPress} onMarkRead={markRowRead} />
           )}
+          ListFooterComponent={
+            account.loadingMore ? (
+              <View className="py-4" accessibilityLabel="Loading older notifications">
+                <ActivityIndicator color={colors.textSecondary} />
+              </View>
+            ) : null
+          }
           ListHeaderComponent={
-            items.length > 0 ? (
+            rows.length > 0 ? (
               <View className="py-3">
                 <Text className="text-xs" style={{ color: colors.textMuted }}>
                   {unreadCount > 0
-                    ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`
+                    ? translatePlural('common', 'counts.unreadNotifications', unreadCount, {
+                        one: '{{count}} unread notification',
+                        other: '{{count}} unread notifications',
+                      })
                     : 'All caught up'}
                 </Text>
+                {account.error ? (
+                  <Pressable
+                    onPress={() => void account.refresh()}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${account.error} Retry`}
+                    style={{ minHeight: 44, justifyContent: 'center' }}
+                  >
+                    <Text className="text-xs" style={{ color: colors.textSecondary }}>
+                      {account.error} Tap to retry.
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             ) : null
           }

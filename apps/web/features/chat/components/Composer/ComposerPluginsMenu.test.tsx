@@ -47,7 +47,7 @@ function renderMenu(overrides: Partial<ComposerPluginsMenuProps> = {}) {
 }
 
 /** The class fragment both composer surfaces get from ConnectorToggleRow. */
-const SHARED_CONNECTOR_ROW_CLASS = 'items-center gap-3 rounded-lg py-2 pr-3';
+const SHARED_CONNECTOR_ROW_CLASS = 'items-center gap-3 rounded-lg py-2 pe-3';
 
 describe('ComposerPluginsMenu populated', () => {
   /**

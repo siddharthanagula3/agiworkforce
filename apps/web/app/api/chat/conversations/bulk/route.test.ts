@@ -172,6 +172,7 @@ describe('POST /api/chat/conversations/bulk', () => {
     mocks.query.mockReset();
     mocks.query.mockResolvedValueOnce([]);
     mocks.query.mockResolvedValueOnce([{ id: 'conversation-1' }]);
+    mocks.query.mockResolvedValueOnce([]);
     mocks.unpublishForConversations.mockResolvedValue(['token-1']);
 
     const retried = await post('delete_all');
@@ -183,5 +184,20 @@ describe('POST /api/chat/conversations/bulk', () => {
       userId: 'user-1',
       conversationIds: ['conversation-1'],
     });
+  });
+
+  it('revokes the shared links of every chat it deletes', async () => {
+    mocks.query.mockReset();
+    mocks.query.mockResolvedValueOnce([{ id: 'conversation-1' }]);
+    mocks.query.mockResolvedValueOnce([]);
+    mocks.query.mockResolvedValueOnce([{ token: 'share-token-1' }]);
+
+    const response = await post('delete_all');
+
+    expect(response.status).toBe(200);
+    const revocation = mocks.query.mock.calls.find(([sql]) =>
+      String(sql).includes('delete from public.shared_sessions'),
+    );
+    expect(revocation?.[1]).toEqual(['user-1', null, null]);
   });
 });

@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 
@@ -12,6 +16,10 @@ const RETIRED_CHAT_STYLES: Readonly<Record<string, ChatStyle>> = {
   detailed: 'explanatory',
   creative: 'normal',
 };
+
+export const DEFAULT_CHAT_STYLE: ChatStyle = 'normal';
+
+export const NEW_CHAT_STYLE_KEY = 'new-chat';
 
 export interface ChatFeatures {
   webSearch: boolean;
@@ -52,6 +60,8 @@ interface ViewState {
   chatMode: ChatMode;
   workMode: CloudWorkMode;
   chatStyle: ChatStyle;
+  styleConversationId: string | null;
+  chatStyleByConversation: Record<string, ChatStyle>;
   features: ChatFeatures;
   /** Output kind the composer is aimed at. See {@link MediaMode}. */
   mediaMode: MediaMode;
@@ -59,21 +69,28 @@ interface ViewState {
   videoAspectRatio: string;
   videoResolution: string;
   imageAspectRatio: string;
+  imageTransparentBackground: boolean;
+  videoDurationSecs: number | null;
 
   searchConversations: (query: string) => void;
   setChatMode: (mode: ChatMode) => void;
   setWorkMode: (mode: CloudWorkMode) => void;
   setChatStyle: (style: ChatStyle) => void;
+  bindStyleConversation: (conversationId: string) => void;
+  adoptStyleSelection: (fromKey: string, toKey: string) => void;
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
   setMediaMode: (mode: MediaMode) => void;
   setMediaModel: (kind: 'image' | 'video', modelId: string) => void;
   setVideoAspectRatio: (aspectRatio: string) => void;
   setVideoResolution: (resolution: string) => void;
   setImageAspectRatio: (aspectRatio: string) => void;
+  setImageTransparentBackground: (enabled: boolean) => void;
+  setVideoDurationSecs: (durationSecs: number) => void;
   clearCloudSearchState: () => void;
 }
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+let searchGeneration = 0;
 
 function buildSnippet(
   text: string,
@@ -138,23 +155,38 @@ function remoteProjectMatches(rows: ServerProjectRow[]): RemoteSearchMatch[] {
 
 async function runSearch(
   trimmed: string,
+  generation: number,
   set: (partial: Partial<ViewState>) => void,
-  _get: () => ViewState,
+  get: () => ViewState,
 ): Promise<void> {
   /* eslint-disable @typescript-eslint/no-require-imports */
   const { useChatAppModeStore } =
     require('@/src/features/chat/store/appModeStore') as typeof import('@/src/features/chat/store/appModeStore');
+  const { useAuthStore } =
+    require('@/src/features/auth/store') as typeof import('@/src/features/auth/store');
   const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+  const account = isCloud ? captureCloudAccountEpoch() : null;
+  const isCurrent = () =>
+    generation === searchGeneration &&
+    get().searchQuery === trimmed &&
+    (useChatAppModeStore.getState().appMode === 'cloud') === isCloud &&
+    (!isCloud || (isCloudAccountEpochCurrent(account) && useAuthStore.getState().isClerkSignedIn));
+
+  if (isCloud && (!account || !useAuthStore.getState().isClerkSignedIn)) {
+    if (generation === searchGeneration && get().searchQuery === trimmed) {
+      set({ searchResults: [], ...EMPTY_REMOTE_MATCHES, isSearching: false });
+    }
+    return;
+  }
 
   if (isCloud) {
     try {
-      const { useAuthStore } =
-        require('@/src/features/auth/store') as typeof import('@/src/features/auth/store');
       if (useAuthStore.getState().isClerkSignedIn) {
         const { api } = require('@/services/api') as typeof import('@/services/api');
         const data = await api.get<{ results: ServerSearchRow[]; projects?: ServerProjectRow[] }>(
           `/api/search?q=${encodeURIComponent(trimmed)}&limit=50`,
         );
+        if (!isCurrent() || !useAuthStore.getState().isClerkSignedIn) return;
         const rows = data.results ?? [];
         const results: ConversationSearchResult[] = rows.map((r) => {
           const text = (r.contextBefore ?? '') + (r.matchedText ?? '') + (r.contextAfter ?? '');
@@ -176,16 +208,19 @@ async function runSearch(
         return;
       }
     } catch {
-      // Network/auth failure → fall through to local in-memory search.
+      if (!isCurrent()) return;
     }
   }
 
+  if (!isCurrent()) return;
   const { useChatMessageStore } =
     require('@/stores/chat/chatMessageStore') as typeof import('@/stores/chat/chatMessageStore');
+  const { useChatCloudMessageStore } =
+    require('@/stores/chat/chatCloudMessageStore') as typeof import('@/stores/chat/chatCloudMessageStore');
   const { isHistoryVisibleConversation } =
     require('@/src/features/chat/utils/conversationMode') as typeof import('@/src/features/chat/utils/conversationMode');
   /* eslint-enable @typescript-eslint/no-require-imports */
-  const msgState = useChatMessageStore.getState();
+  const msgState = isCloud ? useChatCloudMessageStore.getState() : useChatMessageStore.getState();
   const lower = trimmed.toLowerCase();
   const results: ConversationSearchResult[] = [];
   const hidden = new Set(
@@ -225,7 +260,15 @@ async function runSearch(
     }
   }
 
-  set({ searchResults: results, ...EMPTY_REMOTE_MATCHES, isSearching: false });
+  if (isCurrent()) set({ searchResults: results, ...EMPTY_REMOTE_MATCHES, isSearching: false });
+}
+
+export function styleForConversation(
+  state: Pick<ViewState, 'chatStyle' | 'styleConversationId' | 'chatStyleByConversation'>,
+  conversationId: string,
+): ChatStyle {
+  if (state.styleConversationId === conversationId) return state.chatStyle;
+  return state.chatStyleByConversation[conversationId] ?? DEFAULT_CHAT_STYLE;
 }
 
 export function migratePersistedChatView(
@@ -252,7 +295,9 @@ export const useChatViewStore = create<ViewState>()(
       isSearching: false,
       chatMode: 'chat',
       workMode: 'chat',
-      chatStyle: 'normal',
+      chatStyle: DEFAULT_CHAT_STYLE,
+      styleConversationId: null,
+      chatStyleByConversation: {},
       features: {
         webSearch: true,
         imageGen: true,
@@ -265,8 +310,12 @@ export const useChatViewStore = create<ViewState>()(
       videoAspectRatio: '16:9',
       videoResolution: '720p',
       imageAspectRatio: '1:1',
+      imageTransparentBackground: false,
+      videoDurationSecs: null,
 
       searchConversations: (query: string) => {
+        searchGeneration += 1;
+        const generation = searchGeneration;
         const trimmed = query.trim();
         if (!trimmed) {
           if (searchDebounceTimer !== undefined) {
@@ -282,7 +331,12 @@ export const useChatViewStore = create<ViewState>()(
           return;
         }
 
-        set({ searchQuery: trimmed, isSearching: true });
+        set({
+          searchQuery: trimmed,
+          searchResults: [],
+          ...EMPTY_REMOTE_MATCHES,
+          isSearching: true,
+        });
 
         if (searchDebounceTimer !== undefined) {
           clearTimeout(searchDebounceTimer);
@@ -290,13 +344,42 @@ export const useChatViewStore = create<ViewState>()(
 
         searchDebounceTimer = setTimeout(() => {
           searchDebounceTimer = undefined;
-          void runSearch(trimmed, set, get);
+          void runSearch(trimmed, generation, set, get);
         }, SEARCH_INPUT_DEBOUNCE_MS);
       },
 
       setChatMode: (mode) => set({ chatMode: mode }),
       setWorkMode: (mode) => set({ workMode: mode }),
-      setChatStyle: (style) => set({ chatStyle: style }),
+      setChatStyle: (style) =>
+        set((state) => {
+          const key = state.styleConversationId;
+          if (!key) return { chatStyle: style };
+          const { [key]: _previous, ...rest } = state.chatStyleByConversation;
+          return {
+            chatStyle: style,
+            chatStyleByConversation:
+              style === DEFAULT_CHAT_STYLE ? rest : { ...rest, [key]: style },
+          };
+        }),
+      bindStyleConversation: (conversationId) =>
+        set((state) =>
+          state.styleConversationId === conversationId
+            ? state
+            : {
+                styleConversationId: conversationId,
+                chatStyle: state.chatStyleByConversation[conversationId] ?? DEFAULT_CHAT_STYLE,
+              },
+        ),
+      adoptStyleSelection: (fromKey, toKey) =>
+        set((state) => {
+          const pending = state.chatStyleByConversation[fromKey];
+          if (!pending || fromKey === toKey) return state;
+          const { [fromKey]: _pending, ...rest } = state.chatStyleByConversation;
+          return {
+            chatStyleByConversation: { ...rest, [toKey]: rest[toKey] ?? pending },
+            ...(state.styleConversationId === fromKey ? { styleConversationId: toKey } : {}),
+          };
+        }),
       setFeature: (feature, enabled) =>
         set((state) => ({ features: { ...state.features, [feature]: enabled } })),
       setMediaMode: (mode) => set({ mediaMode: mode }),
@@ -305,7 +388,10 @@ export const useChatViewStore = create<ViewState>()(
       setVideoAspectRatio: (aspectRatio) => set({ videoAspectRatio: aspectRatio }),
       setVideoResolution: (resolution) => set({ videoResolution: resolution }),
       setImageAspectRatio: (aspectRatio) => set({ imageAspectRatio: aspectRatio }),
+      setImageTransparentBackground: (enabled) => set({ imageTransparentBackground: enabled }),
+      setVideoDurationSecs: (durationSecs) => set({ videoDurationSecs: durationSecs }),
       clearCloudSearchState: () => {
+        searchGeneration += 1;
         if (searchDebounceTimer !== undefined) {
           clearTimeout(searchDebounceTimer);
           searchDebounceTimer = undefined;
@@ -323,11 +409,14 @@ export const useChatViewStore = create<ViewState>()(
         chatMode: state.chatMode,
         workMode: state.workMode,
         chatStyle: state.chatStyle,
+        chatStyleByConversation: state.chatStyleByConversation,
         features: state.features,
         selectedMediaModel: state.selectedMediaModel,
         videoAspectRatio: state.videoAspectRatio,
         videoResolution: state.videoResolution,
         imageAspectRatio: state.imageAspectRatio,
+        imageTransparentBackground: state.imageTransparentBackground,
+        videoDurationSecs: state.videoDurationSecs,
       }),
     },
   ),

@@ -1,6 +1,6 @@
-
 export type ManagedChatSurface = 'web' | 'desktop' | 'mobile';
-export type ManagedChatPurpose = 'send' | 'continue' | 'tool-resume' | 'compare';
+export type ManagedChatPurpose =
+  'send' | 'continue' | 'tool-resume' | 'compare' | 'read-aloud' | 'artifact';
 
 export interface ManagedChatIdempotencyIdentity {
   surface: ManagedChatSurface;
@@ -9,7 +9,7 @@ export interface ManagedChatIdempotencyIdentity {
 }
 
 const KEY_PATTERN =
-  /^agi\.chat\.(web|desktop|mobile)\.(send|continue|tool-resume|compare)\.[A-Za-z0-9_-]{8,72}$/;
+  /^agi\.chat\.(web|desktop|mobile)\.(send|continue|tool-resume|compare|read-aloud|artifact)\.[A-Za-z0-9_-]{8,72}$/;
 const OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{8,72}$/;
 
 export function createManagedChatIdempotencyKey(identity: ManagedChatIdempotencyIdentity): string {

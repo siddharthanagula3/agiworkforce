@@ -6,105 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S71.11: Audio-route controls.
-
-- Done when: During voice the user can choose the audio output route (speaker, Bluetooth, headset) and the session switches.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Works on iOS only (audioRouteSwitchingSupported returns false on Android and the picker hides); add Android audio routing. | surface-only |
-
-Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:23-38`, `apps/mobile/src/features/voice/services/audioRoute.ts:59-71`
-
-## S71.14: Quick reply to agent questions.
-
-- Done when: When an agent asks the user a question, the user can answer it from the phone (notification reply or quick answer field).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The phone shows that a task is waiting for input but cannot answer it ("answered where the task was started"); add an answer field and a reply action on the notification. | ui, handler |
-
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:240-268`, `apps/mobile/services/notificationCategories.ts:6-23`
-
-## S71.18: Background upload recovery.
-
-- Done when: An attachment upload interrupted by backgrounding continues or resumes automatically when the app returns.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Uploads run only in the foreground: backgrounding marks them interrupted and the user must tap Retry, which restarts from zero; add a background upload session or automatic resume. | handler |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:358-362`, `apps/mobile/src/features/chat/upload/uploadLifecycle.ts:28-46`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:209-214`
-
-## S71.19: Conversation restoration after process death.
-
-- Done when: After the OS kills the app, relaunching returns the user to their conversation with messages, draft and any in-flight reply.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Messages and drafts persist, but a relaunch opens a new chat instead of the last conversation and an interrupted reply is marked failed rather than resumed. | states |
-
-Code: `apps/mobile/stores/chat/chatCloudMessageStore.ts:183-190`, `apps/mobile/app/(app)/index.tsx:1-5`, `apps/mobile/stores/chat/chatCloudMessageStore.ts:41-50`
-
-## S71.23: System shortcuts/App Intents.
-
-- Done when: OS-level shortcuts (Siri/App Intents, Spotlight, launcher shortcuts) can start AGI actions such as ask or summarize.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | iOS App Intents (Ask, Summarize, Scan, Translate, and more) work; Android has no launcher shortcuts or App Actions, only the text-selection action. | surface-only |
-
-Code: `apps/mobile/app.config.js:294-303`, `apps/mobile/app/_layout.tsx:512-543`, `apps/mobile/app.config.js:183-186`
-
-## S71.25: Tablet layout.
-
-- Done when: On tablets the app uses a wider layout (persistent drawer, multi-column grids) and adapts to split view.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The drawer turns persistent (from 1000pt wide) and Library/Artifacts grids widen, but the chat transcript and composer stretch edge to edge with no tablet reading width; the computed split-view and size-class values are unused. | ui |
-
-Code: `apps/mobile/app/(app)/_layout.tsx:13-37`, `apps/mobile/src/shared/hooks/useResponsiveLayout.ts:20-48`, `apps/mobile/app.config.js:64-66`
-
-## S71.26: Foldable adaptation.
-
-- Done when: On foldables the layout adapts when the device folds or unfolds (and ideally around the hinge).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Layout follows window width on every resize, so unfolding switches to the wider layout, but there is no hinge or table-top posture handling. | ui |
-
-Code: `apps/mobile/src/shared/hooks/useTabletLayout.ts:27-69`, `apps/mobile/app/(app)/_layout.tsx:13-37`
-
-## S71.27: Landscape adaptation.
-
-- Done when: Rotating the phone to landscape re-lays out the chat usefully.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The app is locked to portrait in app.config (orientation: portrait), so phones never rotate; layouts are width-driven and would adapt if the lock were lifted. | ui |
-
-Code: `apps/mobile/app.config.js:56-66`, `apps/mobile/src/shared/hooks/useTabletLayout.ts:29-52`
-
-## S71.29: Cellular-data preferences.
-
-- Done when: The user can choose whether large transfers use cellular data, and the app obeys it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The cellular switch only governs on-device model downloads; attachment uploads, voice and media downloads ignore it. | ui |
-
-Code: `apps/mobile/app/(app)/settings/storage.tsx:304-323`, `apps/mobile/src/features/model-picker/installStore.ts:344-358`
-
 ## S71.31: App-store purchase and restoration.
 
 - Done when: The user can buy a plan or credits through the App Store / Google Play and restore purchases.
@@ -112,6 +13,6 @@ Code: `apps/mobile/app/(app)/settings/storage.tsx:304-323`, `apps/mobile/src/fea
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Native purchase code and receipt verification exist, but the server enables the catalogue only when MOBILE_IAP_ENABLED is set and the user is paid or on the billing waitlist; FEATURES.billing is false. | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:142-148`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:485-494`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:428-436`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`

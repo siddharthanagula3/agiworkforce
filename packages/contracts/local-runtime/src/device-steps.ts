@@ -1,5 +1,17 @@
-import type { BrowserCommand } from '@agiworkforce/types';
-import { DESKTOP_CAPABILITIES, type DesktopCapability } from './capabilities';
+import {
+  DEVICE_HOST_HEADER,
+  PHONE_CAPABILITIES,
+  PHONE_STEP_CAPABILITY,
+  PHONE_STEP_TOOLS,
+  PhoneStepRefused,
+  describePhoneStep,
+  isPhoneCapability,
+  planPhoneStep,
+  type BrowserCommand,
+  type PhoneCapability,
+  type PhoneStepTool,
+} from '@agiworkforce/types';
+import { DESKTOP_CAPABILITIES, isDesktopCapability, type DesktopCapability } from './capabilities';
 
 /**
  * The steps a cloud turn may hand back to the machine the user is sitting at.
@@ -42,6 +54,9 @@ export const DEVICE_STEP_TOOLS = [
   'device_browser_type',
   'device_browser_screenshot',
   'device_browser_download',
+  'device_browser_console',
+  'device_browser_network',
+  ...PHONE_STEP_TOOLS,
 ] as const;
 
 export type DeviceStepTool = (typeof DEVICE_STEP_TOOLS)[number];
@@ -68,11 +83,13 @@ export function isScreenDeviceStep(name: string): boolean {
  * it is scoped to the session instead: it needs no folder and must not be
  * withheld from a shell that has granted none.
  */
-export type DeviceStepScope = 'workspace' | 'screen' | 'browser';
+export type DeviceStepScope = 'workspace' | 'screen' | 'browser' | 'phone';
+
+export type DeviceStepCapability = DesktopCapability | PhoneCapability;
 
 export interface DeviceStepDefinition {
   command: string;
-  capability: DesktopCapability;
+  capability: DeviceStepCapability;
   scope: DeviceStepScope;
   description: string;
   browserCommand?: BrowserCommand;
@@ -80,13 +97,28 @@ export interface DeviceStepDefinition {
 
 export const BROWSER_STEP_COMMAND = 'browser_step';
 
-function browserStep(browserCommand: BrowserCommand, description: string): DeviceStepDefinition {
+function browserStep(
+  browserCommand: BrowserCommand,
+  description: string,
+  capability: DesktopCapability = 'browser.site',
+): DeviceStepDefinition {
   return {
     command: BROWSER_STEP_COMMAND,
-    capability: 'browser.site',
+    capability,
     scope: 'browser',
     description,
     browserCommand,
+  };
+}
+
+export const PHONE_STEP_COMMAND = 'phone_step';
+
+function phoneStep(tool: PhoneStepTool, description: string): DeviceStepDefinition {
+  return {
+    command: PHONE_STEP_COMMAND,
+    capability: PHONE_STEP_CAPABILITY[tool],
+    scope: 'phone',
+    description,
   };
 }
 
@@ -99,7 +131,7 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
     capability: 'filesystem.read',
     scope: 'workspace',
     description:
-      "Read a text file from a folder the user granted on their desktop. Call list_device_folders first, or use a rootId the user's message already named. Returns the file text, truncated when large.",
+      "Read a text file from a folder the user granted on their desktop. Find the file first with device_list_folder or device_find_files unless the user's message already named its path. Returns the file text, truncated when large.",
   },
   device_list_folder: {
     command: 'file_list',
@@ -246,9 +278,35 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
     'browser_download',
     "Download a file through the user's paired Chrome browser into their downloads folder. The user is asked before it starts.",
   ),
+  device_browser_console: browserStep(
+    'browser_console',
+    "Read the console messages the active tab of the user's paired Chrome browser has logged, to find errors in a page or app under test. Set level to error to see only errors. The user is asked before it runs.",
+    'browser.cdp',
+  ),
+  device_browser_network: browserStep(
+    'browser_network',
+    "Read the requests the active tab of the user's paired Chrome browser has made, with their addresses and status, to find failed calls in a page or app under test. Set failedOnly to see only failures. The user is asked before it runs.",
+    'browser.cdp',
+  ),
+  device_calendar_events: phoneStep(
+    'device_calendar_events',
+    "Read the events in the calendars on the user's phone between two times, with their titles, times, places and notes. Use it for questions about the user's schedule. Times are wall-clock times on the phone, like 2026-10-02T15:00.",
+  ),
+  device_calendar_availability: phoneStep(
+    'device_calendar_availability',
+    'Find when the user is busy and when they are free in the calendars on their phone between two times, to suggest a time for something. Times are wall-clock times on the phone, like 2026-10-02T15:00.',
+  ),
+  device_calendar_create_event: phoneStep(
+    'device_calendar_create_event',
+    "Add an event to the default calendar on the user's phone. It invites nobody. The user sees the details on the phone and confirms before it is added. Give start and end as wall-clock times on the phone, like 2026-10-02T15:00, or set allDay with a date.",
+  ),
+  device_reminder_create: phoneStep(
+    'device_reminder_create',
+    "Add a reminder to the Reminders app on the user's iPhone, with an optional due time. The user sees it on the phone and confirms before it is added.",
+  ),
 };
 
-export function deviceStepCapability(tool: DeviceStepTool): DesktopCapability {
+export function deviceStepCapability(tool: DeviceStepTool): DeviceStepCapability {
   return DEVICE_STEP_DEFINITIONS[tool].capability;
 }
 
@@ -268,6 +326,9 @@ export const DEVICE_MOUSE_BUTTONS = ['left', 'right'] as const;
 export type DeviceMouseButton = (typeof DEVICE_MOUSE_BUTTONS)[number];
 
 export const DEVICE_KEY_MODIFIERS = ['command', 'control', 'option', 'shift'] as const;
+
+export const DEVICE_BROWSER_CONSOLE_LEVELS = ['error', 'warning', 'info', 'log', 'debug'] as const;
+export type DeviceBrowserConsoleLevel = (typeof DEVICE_BROWSER_CONSOLE_LEVELS)[number];
 export type DeviceKeyModifier = (typeof DEVICE_KEY_MODIFIERS)[number];
 
 /**
@@ -337,11 +398,11 @@ export interface DesktopHostDeclaration {
   deviceName: string;
   platform: string;
   appVersion: string;
-  capabilities: DesktopCapability[];
+  capabilities: DeviceStepCapability[];
   roots: DeviceStepRoot[];
 }
 
-export const DEVICE_HOST_HEADER = 'x-agi-device-host';
+export { DEVICE_HOST_HEADER };
 
 export const MAX_DEVICE_HOST_HEADER_LENGTH = 4_000;
 export const MAX_DEVICE_STEP_ROOTS = 12;
@@ -394,14 +455,17 @@ export function parseDesktopHostDeclaration(raw: string | null): DesktopHostDecl
   if (!deviceId || !deviceName || !platform || !appVersion) return null;
 
   const rawCapabilities = record['capabilities'];
-  if (!Array.isArray(rawCapabilities) || rawCapabilities.length > DESKTOP_CAPABILITIES.length) {
+  if (
+    !Array.isArray(rawCapabilities) ||
+    rawCapabilities.length > DESKTOP_CAPABILITIES.length + PHONE_CAPABILITIES.length
+  ) {
     return null;
   }
   const capabilities = [
     ...new Set(
       rawCapabilities.filter(
-        (entry): entry is DesktopCapability =>
-          typeof entry === 'string' && (DESKTOP_CAPABILITIES as readonly string[]).includes(entry),
+        (entry): entry is DeviceStepCapability =>
+          typeof entry === 'string' && (isDesktopCapability(entry) || isPhoneCapability(entry)),
       ),
     ),
   ];
@@ -417,15 +481,56 @@ export function parseDesktopHostDeclaration(raw: string | null): DesktopHostDecl
   return { deviceId, deviceName, platform, appVersion, capabilities, roots };
 }
 
+export type DeviceHostKind = 'desktop' | 'phone';
+
+export function declarationForHost(
+  declaration: DesktopHostDeclaration,
+  kind: DeviceHostKind,
+): DesktopHostDeclaration {
+  return {
+    ...declaration,
+    capabilities: declaration.capabilities.filter((capability) =>
+      kind === 'phone' ? isPhoneCapability(capability) : isDesktopCapability(capability),
+    ),
+    roots: kind === 'phone' ? [] : declaration.roots,
+  };
+}
+
+/**
+ * JSON with every character outside printable ASCII written as a \u escape.
+ * A header value is a byte string, so a granted folder named ~/文档 or a device
+ * named in another script made the browser refuse the whole chat request.
+ * JSON.parse reads the escapes back unchanged.
+ */
+function headerSafeJson(value: unknown): string {
+  return JSON.stringify(value).replace(
+    /[\u007f-\uffff]/g,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
+/**
+ * The header a desktop-hosted page sends. It fits the length the server reads:
+ * granted folders are dropped from the end, never the whole declaration, so a
+ * long folder list costs the last folders rather than every device tool.
+ */
 export function encodeDesktopHostDeclaration(declaration: DesktopHostDeclaration): string {
-  return JSON.stringify({
-    deviceId: declaration.deviceId,
-    deviceName: declaration.deviceName,
-    platform: declaration.platform,
-    appVersion: declaration.appVersion,
-    capabilities: declaration.capabilities,
-    roots: declaration.roots.slice(0, MAX_DEVICE_STEP_ROOTS),
-  });
+  const encode = (roots: readonly DeviceStepRoot[]) =>
+    headerSafeJson({
+      deviceId: declaration.deviceId,
+      deviceName: declaration.deviceName,
+      platform: declaration.platform,
+      appVersion: declaration.appVersion,
+      capabilities: declaration.capabilities,
+      roots,
+    });
+  const roots = declaration.roots.slice(0, MAX_DEVICE_STEP_ROOTS);
+  let encoded = encode(roots);
+  while (encoded.length > MAX_DEVICE_HOST_HEADER_LENGTH && roots.length > 0) {
+    roots.pop();
+    encoded = encode(roots);
+  }
+  return encoded;
 }
 
 /**
@@ -504,6 +609,8 @@ export interface DeviceStepRequest {
   url?: string;
   selector?: string;
   clear?: boolean;
+  level?: DeviceBrowserConsoleLevel;
+  failedOnly?: boolean;
   pattern?: string;
   query?: string;
   ignoreCase?: boolean;
@@ -512,6 +619,13 @@ export interface DeviceStepRequest {
   replaceAll?: boolean;
   runId?: string;
   input?: string;
+  start?: string;
+  end?: string;
+  due?: string;
+  title?: string;
+  location?: string;
+  notes?: string;
+  allDay?: boolean;
 }
 
 export class DeviceStepRefused extends Error {
@@ -733,6 +847,28 @@ function planBrowserStep(tool: DeviceStepTool, args: Record<string, unknown>): D
       return { tool, url: readHttpUrl(args['url']) };
     case 'device_browser_click':
       return withReview({ tool, selector: readSelector(args['selector']) }, args);
+    case 'device_browser_console':
+    case 'device_browser_network': {
+      const pattern = readBoundedString(args['pattern'], MAX_BROWSER_SELECTOR_LENGTH);
+      const level = args['level'];
+      if (
+        tool === 'device_browser_console' &&
+        level !== undefined &&
+        !(DEVICE_BROWSER_CONSOLE_LEVELS as readonly unknown[]).includes(level)
+      ) {
+        refuse(`"level" must be one of ${DEVICE_BROWSER_CONSOLE_LEVELS.join(', ')}.`);
+      }
+      return {
+        tool,
+        ...(pattern ? { pattern } : {}),
+        ...(tool === 'device_browser_console' && level !== undefined
+          ? { level: level as DeviceBrowserConsoleLevel }
+          : {}),
+        ...(tool === 'device_browser_network' && args['failedOnly'] === true
+          ? { failedOnly: true }
+          : {}),
+      };
+    }
     case 'device_browser_type': {
       const text = args['text'];
       if (typeof text !== 'string' || text.length === 0) {
@@ -769,6 +905,16 @@ export function planDeviceStep(
   }
   if (deviceStepScope(tool) === 'browser') {
     return planBrowserStep(tool, args);
+  }
+  if (deviceStepScope(tool) === 'phone') {
+    try {
+      return { ...planPhoneStep(tool, args), tool };
+    } catch (error) {
+      if (error instanceof PhoneStepRefused) {
+        throw new DeviceStepRefused('invalid-arguments', error.message);
+      }
+      throw error;
+    }
   }
 
   const rootId = readBoundedString(args['rootId']);
@@ -936,5 +1082,18 @@ export function describeDeviceStep(
       return 'Take a screenshot of the Chrome tab';
     case 'device_browser_download':
       return `Download ${request.url} through Chrome`;
+    case 'device_browser_console':
+      return request.level === 'error'
+        ? "Read the errors in the Chrome tab's console"
+        : "Read the Chrome tab's console";
+    case 'device_browser_network':
+      return request.failedOnly
+        ? 'Read the failed requests of the Chrome tab'
+        : 'Read the network requests of the Chrome tab';
+    case 'device_calendar_events':
+    case 'device_calendar_availability':
+    case 'device_calendar_create_event':
+    case 'device_reminder_create':
+      return describePhoneStep({ ...request, tool: request.tool });
   }
 }

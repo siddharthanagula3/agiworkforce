@@ -1,24 +1,28 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Pressable,
   RefreshControl,
   ScrollView,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, ExternalLink, X } from 'lucide-react-native';
+import { ArrowLeft, ExternalLink, GitBranch, X } from 'lucide-react-native';
 import {
+  CLOUD_CODE_DEFAULT_TURN_MODE,
+  CLOUD_CODE_DEFAULT_TURN_STEPS,
   CLOUD_CODE_SESSION_COPY,
   CLOUD_CODE_SESSION_STATE_LABELS,
   CLOUD_CODE_SESSION_STATUS_FILTER_LABELS,
   cloudCodePullRequestLabel,
   resolveCloudCodeAgentModel,
   type CloudCodeSession,
+  type CloudCodeTurnMode,
+  type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,28 +33,46 @@ import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafe
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { CloudCodeApprovalCard } from './components/CloudCodeApprovalCard';
+import { CloudCodeChangesSheet } from './components/CloudCodeChangesSheet';
 import { CloudCodeComposer } from './components/CloudCodeComposer';
 import { CloudCodeGate } from './components/CloudCodeGate';
+import {
+  CloudCodeTaskOptionsSheet,
+  cloudCodeContextPercent,
+} from './components/CloudCodeTaskOptionsSheet';
 import {
   CloudCodeTaskBubble,
   CloudCodeTranscript,
   CloudCodeWorkingRow,
 } from './components/CloudCodeTranscript';
 import {
+  CLOUD_CODE_CHANGES_COPY,
+  CLOUD_CODE_OPTIONS_COPY,
   CLOUD_CODE_SCREEN_TITLE,
   CLOUD_CODE_STATE_BADGE_COLORS,
+  CLOUD_CODE_TURN_MODE_OPTIONS,
   cloudCodeWorkspaceLabel,
 } from './presentation';
 import { useCloudCodeAccess } from './useCloudCodeAccess';
-import { useCloudCodeSession } from './useCloudCodeSession';
+import { useCloudCodeChanges } from './useCloudCodeChanges';
+import { useCloudCodeSession, type CloudCodeTurnOptions } from './useCloudCodeSession';
 
 const STICK_TO_BOTTOM_DISTANCE = 80;
 const CLOSED_NOTE =
   'This session is closed, so it cannot run tasks. Its transcript stays readable.';
 const MISSING_NOTE = 'That session is not available. It may have been deleted.';
 
-function Header({ session, onBack }: { session: CloudCodeSession | null; onBack: () => void }) {
+function Header({
+  session,
+  onBack,
+  onOpenChanges,
+}: {
+  session: CloudCodeSession | null;
+  onBack: () => void;
+  onOpenChanges?: () => void;
+}) {
   const colors = useThemeColors();
   const archived = session?.archivedAt != null;
   const workspace = session ? cloudCodeWorkspaceLabel(session) : null;
@@ -65,7 +87,7 @@ function Header({ session, onBack }: { session: CloudCodeSession | null; onBack:
         gap: 8,
       }}
     >
-      <Pressable
+      <PressableBox
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Go back"
@@ -73,17 +95,17 @@ function Header({ session, onBack }: { session: CloudCodeSession | null; onBack:
         style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
       >
         <ArrowLeft size={20} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
       <View style={{ flex: 1 }}>
         <Text
           numberOfLines={1}
           accessibilityRole="header"
-          style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '600' }}
+          style={{ color: colors.textPrimary, fontSize: typeScale.callout, fontWeight: '600' }}
         >
           {session?.title ?? CLOUD_CODE_SCREEN_TITLE}
         </Text>
         {workspace ? (
-          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
+          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
             {workspace}
           </Text>
         ) : null}
@@ -97,6 +119,18 @@ function Header({ session, onBack }: { session: CloudCodeSession | null; onBack:
           }
           color={archived ? 'gray' : CLOUD_CODE_STATE_BADGE_COLORS[session.state]}
         />
+      ) : null}
+      {onOpenChanges ? (
+        <PressableBox
+          onPress={onOpenChanges}
+          accessibilityRole="button"
+          accessibilityLabel={CLOUD_CODE_CHANGES_COPY.open}
+          hitSlop={8}
+          testID="cloud-code-open-changes"
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <GitBranch size={20} color={colors.textSecondary} />
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -137,21 +171,21 @@ function Notice({
         style={{
           flex: 1,
           color: error ? colors.agentError : colors.textSecondary,
-          fontSize: 13,
+          fontSize: typeScale.footnote,
           lineHeight: 19,
         }}
       >
         {message}
       </Text>
       {onDismiss ? (
-        <Pressable
+        <PressableBox
           onPress={onDismiss}
           accessibilityRole="button"
           accessibilityLabel="Dismiss"
           style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
         >
           <X size={16} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -173,7 +207,15 @@ function CenteredState({ children }: { children: ReactNode }) {
   );
 }
 
-function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
+function SessionView({
+  sessionId,
+  initialGoal,
+  onBack,
+}: {
+  sessionId: string;
+  initialGoal?: string;
+  onBack: () => void;
+}) {
   const colors = useThemeColors();
   const keyboard = useKeyboardSafeComposer('screen');
   const tier = useTierStore((state) => state.tier);
@@ -184,9 +226,32 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
   );
   const view = useCloudCodeSession(sessionId, agentModel);
   const { send } = view;
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [turnMode, setTurnMode] = useState<CloudCodeTurnMode>(CLOUD_CODE_DEFAULT_TURN_MODE);
+  const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
+  const changes = useCloudCodeChanges(sessionId, changesOpen, view.reload);
+  const turnControls = view.session?.runtimeId === null;
+  const turnOptions = useMemo<CloudCodeTurnOptions>(
+    () => (turnControls ? { maxSteps: turnSteps, mode: turnMode } : {}),
+    [turnControls, turnMode, turnSteps],
+  );
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<ScrollView>(null);
   const nearBottom = useRef(true);
+  const initialGoalSent = useRef(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const goal = initialGoal?.trim();
+    if (!goal || initialGoalSent.current) return;
+    if (view.status !== 'ready' || view.session?.state !== 'ready') return;
+    initialGoalSent.current = true;
+    router.setParams({ goal: undefined });
+    void send(goal, turnOptions).then((sent) => {
+      if (!sent) setDraft((current) => (current.trim() ? current : goal));
+    });
+  }, [initialGoal, router, send, turnOptions, view.session?.state, view.status]);
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -203,9 +268,9 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
     if (!goal) return;
     setDraft('');
     nearBottom.current = true;
-    const sent = await send(goal);
+    const sent = await send(goal, turnOptions);
     if (!sent) setDraft((current) => (current.trim() ? current : goal));
-  }, [draft, send]);
+  }, [draft, send, turnOptions]);
 
   const session = view.session;
   const pullRequestLabel = session ? cloudCodePullRequestLabel(session) : null;
@@ -214,6 +279,16 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
   const closed = session?.state === 'closed';
   const failedMessage = session?.state === 'failed' ? session.lastError : null;
   const noticeMessage = view.actionError ?? view.loadError;
+  const contextPercent = session ? cloudCodeContextPercent(session, agentModel) : null;
+  const composerDetail = [
+    getManagedDisplayName(agentModel),
+    turnControls && turnMode !== CLOUD_CODE_DEFAULT_TURN_MODE
+      ? CLOUD_CODE_TURN_MODE_OPTIONS.find((option) => option.id === turnMode)?.label
+      : null,
+    contextPercent !== null ? `${contextPercent}% context` : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(' · ');
 
   if (view.status === 'loading') {
     return (
@@ -237,7 +312,7 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
             selectable
             style={{
               color: colors.textSecondary,
-              fontSize: 15,
+              fontSize: typeScale.body,
               lineHeight: 22,
               textAlign: 'center',
             }}
@@ -265,7 +340,25 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
         behavior={keyboard.behavior}
         keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
-        <Header session={session} onBack={onBack} />
+        <Header session={session} onBack={onBack} onOpenChanges={() => setChangesOpen(true)} />
+        <CloudCodeChangesSheet
+          visible={changesOpen}
+          session={session}
+          entries={view.terminalEntries}
+          view={changes}
+          onClose={() => setChangesOpen(false)}
+        />
+        <CloudCodeTaskOptionsSheet
+          visible={optionsOpen}
+          session={session}
+          model={agentModel}
+          turnControls={turnControls}
+          mode={turnMode}
+          steps={turnSteps}
+          onModeChange={setTurnMode}
+          onStepsChange={setTurnSteps}
+          onClose={() => setOptionsOpen(false)}
+        />
 
         <ScrollView
           ref={scrollRef}
@@ -290,7 +383,7 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
           }
         >
           {pullRequestLabel && pullRequestUrl ? (
-            <Pressable
+            <PressableBox
               onPress={() => void openUntrustedUrlInAppBrowser(pullRequestUrl)}
               accessibilityRole="link"
               accessibilityLabel={pullRequestLabel}
@@ -308,14 +401,23 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
               }}
             >
               <ExternalLink size={14} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                }}
+              >
                 {pullRequestLabel}
               </Text>
-            </Pressable>
+            </PressableBox>
           ) : null}
 
           {failedMessage ? (
-            <Text selectable style={{ color: colors.agentError, fontSize: 13, lineHeight: 19 }}>
+            <Text
+              selectable
+              style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
+            >
               {failedMessage}
             </Text>
           ) : null}
@@ -374,10 +476,12 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
             value={draft}
             working={view.working}
             stopping={view.stopping}
-            modelName={getManagedDisplayName(agentModel)}
+            detail={composerDetail}
+            optionsLabel={CLOUD_CODE_OPTIONS_COPY.open}
             onChangeText={setDraft}
             onSend={() => void handleSend()}
             onStop={view.stop}
+            onOpenOptions={() => setOptionsOpen(true)}
           />
         )}
       </KeyboardAvoidingView>
@@ -385,7 +489,13 @@ function SessionView({ sessionId, onBack }: { sessionId: string; onBack: () => v
   );
 }
 
-export function CloudCodeSessionScreen({ sessionId }: { sessionId: string }) {
+export function CloudCodeSessionScreen({
+  sessionId,
+  initialGoal,
+}: {
+  sessionId: string;
+  initialGoal?: string;
+}) {
   const router = useRouter();
   const access = useCloudCodeAccess();
 
@@ -404,6 +514,7 @@ export function CloudCodeSessionScreen({ sessionId }: { sessionId: string }) {
     <SessionView
       key={`${access.accountKey}:${sessionId}`}
       sessionId={sessionId}
+      initialGoal={initialGoal}
       onBack={handleBack}
     />
   );

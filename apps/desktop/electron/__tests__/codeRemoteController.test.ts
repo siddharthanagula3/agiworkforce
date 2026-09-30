@@ -147,8 +147,34 @@ describe('remote control of a developer session', () => {
             status: 'running',
           },
         ],
-        unavailable: [{ folder: 'web', message: 'The AGI CLI is not on this app PATH.' }],
+        unavailable: [
+          {
+            folder: 'web',
+            message: 'AGI Code could not open this folder on the computer. Check it there.',
+          },
+        ],
       },
+    });
+  });
+
+  it('marks a cloud session as cloud in the phone list', async () => {
+    deps.listSessions = vi.fn(async (): Promise<DeveloperSessionList> => ({
+      groups: [
+        {
+          rootId: 'root-1',
+          name: 'api',
+          path: '/work/api',
+          branch: 'main',
+          sessions: [session({ id: 'cloud:5f1c', cwd: '', location: 'cloud' })],
+        },
+      ],
+    }));
+    const controller = createCodeRemoteController(deps);
+    expect(await controller.handleControl('code.sessions.list', request('list'))).toBe(true);
+
+    expect(sent[0]).toMatchObject({
+      action: 'code.sessions',
+      payload: { sessions: [{ threadId: 'cloud:5f1c', location: 'cloud' }] },
     });
   });
 

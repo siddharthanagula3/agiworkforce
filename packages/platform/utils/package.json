@@ -15,6 +15,7 @@
     "./display-name": "./src/displayName.ts",
     "./fence": "./src/fence.ts",
     "./format": "./src/format.ts",
+    "./greeting": "./src/greeting.ts",
     "./interaction-timings": "./src/interactionTimings.ts",
     "./logger": "./src/logger.ts",
     "./managed-chat-idempotency": "./src/managedChatIdempotency.ts",
@@ -25,8 +26,9 @@
     "./reasoning": "./src/reasoning.ts",
     "./remote-control": "./src/remoteControl/index.ts",
     "./retry-policy": "./src/retryPolicy.ts",
-    "./source-url": "./src/sourceUrl.ts",
+    "./secret-redaction": "./src/secretRedaction.ts",
     "./signaling": "./src/signaling.ts",
+    "./source-url": "./src/sourceUrl.ts",
     "./uuidv7": "./src/uuidv7.ts",
     "./voice": "./src/voice.ts"
   },
@@ -58,6 +60,9 @@
       ],
       "format": [
         "./src/format.ts"
+      ],
+      "greeting": [
+        "./src/greeting.ts"
       ],
       "interaction-timings": [
         "./src/interactionTimings.ts"
@@ -100,6 +105,9 @@
       ],
       "voice": [
         "./src/voice.ts"
+      ],
+      "secret-redaction": [
+        "./src/secretRedaction.ts"
       ]
     }
   },

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { memoryFreeOfGoogleUserDataSql } from '@/lib/connectors/google-user-data';
 import {
   MemorySyncPushRequestSchema,
   SYNC_PROTOCOL_VERSION,
   ServerVersionSchema,
   resolveSyncProtocolVersion,
   syncProtocolRefusalMessage,
+  type MemorySyncRejection,
   type MemoryWireDelta,
 } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -14,7 +16,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { partitionMemoryWrites } from '@/lib/services/memory-write-service';
+import { excludedMemoryMessage, partitionMemoryWrites } from '@/lib/services/memory-write-service';
 import {
   loadMemoryWritePolicies,
   memoryWriteAdmission,
@@ -55,15 +57,21 @@ async function handlePull(request: NextRequest, url: URL) {
         select m.id, m.content, m.category, m.source, m.pinned,
                not (${activeMemoryPredicate('m.')}) as is_deleted,
                m.created_at, m.updated_at, m.server_version,
+               m.project_id::text as project_id,
                origin.id::text as source_conversation_id,
-               origin.title as source_conversation_title
+               origin.title as source_conversation_title,
+               project.name as project_name
         from user_memories m
+        left join user_projects project
+          on project.id::text = m.project_id::text
+         and project.deleted_at is null
         left join web_conversations origin
           on origin.id::text = to_jsonb(m)->>'source_conversation_id'
          and origin.user_id = m.user_id
          and origin.deleted_at is null
          and coalesce(origin.is_temporary, false) = false
         where m.user_id = $1 and m.server_version > $2 and ${workspaceMemoryPredicate(3, 'm.')}
+          and ${memoryFreeOfGoogleUserDataSql("to_jsonb(m)->>'source_conversation_id'", 'm.user_id')}
         order by m.server_version asc
         limit ${MAX_MEMORIES_PULL}
       `,
@@ -72,7 +80,18 @@ async function handlePull(request: NextRequest, url: URL) {
 
     const saturated = memories.length >= MAX_MEMORIES_PULL;
     const cursor = computeMemoryPullCursor(since, memories);
-    return NextResponse.json({ memories, cursor, hasMore: saturated });
+    const memoryEnabled = await loadMemoryWritePolicies(db, { userId, organizationId })
+      .then((policies) => policies.organization.allowMemory && policies.user.enabled)
+      .catch((error: unknown) => {
+        logger.warn({ error, userId }, 'Memory sync pull could not read the memory switch');
+        return false;
+      });
+    return NextResponse.json({
+      memories,
+      cursor,
+      hasMore: saturated,
+      memoryEnabled,
+    });
   } catch (error) {
     logger.error({ error, userId }, 'Memory sync pull failed');
     throw createError.internal('Failed to pull memory changes');
@@ -150,13 +169,16 @@ async function handlePost(request: NextRequest) {
     candidates: memories,
     contentOf: (memory) => (memory.isDeleted === true ? '' : memory.content),
   });
-  const refused = rejected.map(({ candidate, term }) => ({ id: candidate.id, term }));
+  const refused: MemorySyncRejection[] = rejected.map(({ candidate, term }) => ({
+    id: candidate.id,
+    term,
+    message: excludedMemoryMessage(term),
+  }));
 
   // A push carrying new text is a memory write and passes the same gate the web
   // surface does. A push that only deletes is how a client obeys a switch that
   // was turned off, so it is never blocked here.
   const policies = await loadMemoryWritePolicies(db, { userId, organizationId });
-  const blocked: Array<{ id: string; reason: string }> = [];
   const admitted = [];
   for (const memory of allowed) {
     if (memory.isDeleted === true) {
@@ -175,7 +197,7 @@ async function handlePost(request: NextRequest) {
       { policies },
     );
     if (decision.eligible) admitted.push(memory);
-    else blocked.push({ id: memory.id, reason: decision.reason });
+    else refused.push({ id: memory.id, reason: decision.reason, message: decision.message });
   }
 
   const applied: Array<{ id: string; server_version: string }> = [];
@@ -233,7 +255,8 @@ async function handlePost(request: NextRequest) {
                      'category', current.category, 'source', current.source,
                      'pinned', current.pinned, 'is_deleted', not (${activeMemoryPredicate('current.')}),
                      'created_at', current.created_at, 'updated_at', current.updated_at,
-                     'server_version', current.server_version::text
+                     'server_version', current.server_version::text,
+                     'project_id', current.project_id::text
                    ) end as current
               from input as incoming
               left join user_memories as current

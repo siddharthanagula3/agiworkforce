@@ -7,7 +7,13 @@ export type SafeResolveResult =
   | { ok: true; uri: vscode.Uri; folder: vscode.WorkspaceFolder; resolvedPath: string }
   | {
       ok: false;
-      reason: 'no-workspace' | 'traversal' | 'not-in-workspace' | 'sensitive' | 'symlink-escape';
+      reason:
+        | 'no-workspace'
+        | 'traversal'
+        | 'not-in-workspace'
+        | 'sensitive'
+        | 'symlink-escape'
+        | 'unavailable';
     };
 
 export interface SafeResolveOptions {
@@ -45,28 +51,35 @@ export async function safeResolveWorkspacePath(
   for (const folder of folders) {
     const result = resolveContained(folder.uri.fsPath, input, { allowAbsolute });
     if (result.ok) {
+      let resolvedPath = result.resolved;
+      let resolvedFolder = folder;
       if (checkSensitive && isSensitiveFile(result.resolved)) {
         return { ok: false, reason: 'sensitive' };
       }
       if (!allowSymlinkEscape) {
         try {
-          const real = await fs.realpath(result.resolved);
-          const realCheck = resolveContained(folder.uri.fsPath, real, { allowAbsolute: true });
+          const [real, root] = await Promise.all([
+            fs.realpath(result.resolved),
+            fs.realpath(folder.uri.fsPath),
+          ]);
+          const realCheck = resolveContained(root, real, { allowAbsolute: true });
           if (!realCheck.ok) {
             return { ok: false, reason: 'symlink-escape' };
           }
           if (checkSensitive && isSensitiveFile(real)) {
             return { ok: false, reason: 'sensitive' };
           }
+          resolvedPath = real;
+          resolvedFolder = { ...folder, uri: vscode.Uri.file(root) };
         } catch {
-          // noop
+          return { ok: false, reason: 'unavailable' };
         }
       }
       return {
         ok: true,
-        uri: vscode.Uri.file(result.resolved),
-        folder,
-        resolvedPath: result.resolved,
+        uri: vscode.Uri.file(resolvedPath),
+        folder: resolvedFolder,
+        resolvedPath,
       };
     }
     lastResult = result;
@@ -93,6 +106,8 @@ export function describeRejection(
       return 'Path matches the sensitive-file denylist (.env, .pem, .ssh/, credentials, etc.). Refused.';
     case 'symlink-escape':
       return 'Symlink target escapes the workspace. Refused.';
+    case 'unavailable':
+      return 'The workspace file could not be safely resolved. Refused.';
     default: {
       const exhaustive: never = reason;
       return `Unknown rejection: ${String(exhaustive)}`;

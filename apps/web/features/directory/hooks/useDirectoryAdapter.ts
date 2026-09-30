@@ -211,6 +211,7 @@ import {
   toSkillSection,
   uninstallSkill,
 } from '../services/skills-directory';
+import { openConnectorAuthorization } from '@/features/connectors/lib/open-connector-authorization';
 
 function initialSkillSection(): DirectorySection {
   return { entries: [], manage: { rows: [], loading: true } };
@@ -1172,7 +1173,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         ? withConnectorReturnPath(body.oauthStartPath, currentConnectorReturnPath())
         : body?.installStartPath;
       if (start && typeof window !== 'undefined') {
-        window.location.href = start;
+        openConnectorAuthorization(start, () => void loadConnectors());
         return;
       }
       const failure = ConnectorErrorResponseSchema.safeParse(raw);

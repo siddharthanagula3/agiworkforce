@@ -3,6 +3,7 @@ import type {
   ConnectorHealthState,
   ConnectorSource,
 } from '@agiworkforce/cloud-contracts';
+import { accountRefusalMessage } from '../../utils/accountRefusal';
 
 const CONNECTOR_FAILURE_REASON_MAX_LENGTH = 240;
 
@@ -85,6 +86,8 @@ export function pendingConnectorDescription(): string {
 }
 
 export function describeConnectorFailure(error: unknown): string {
+  const refusal = accountRefusalMessage(error);
+  if (refusal) return refusal;
   const status = (error as { status?: unknown } | null)?.status;
   if (status === 401) return 'your AGI Cloud session expired, sign in again';
   if (status === 403) return 'this account cannot manage connectors on its current plan';

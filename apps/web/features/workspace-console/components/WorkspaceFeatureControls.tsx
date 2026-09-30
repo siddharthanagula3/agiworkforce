@@ -43,6 +43,7 @@ export const GOVERNED_FEATURES: readonly WorkspaceFeature[] = [
   'schedules',
   'event_triggers',
   'artifact_connectors',
+  'fast_mode',
 ];
 
 const FEATURE_HINTS: Readonly<Partial<Record<WorkspaceFeature, string>>> = {
@@ -60,6 +61,8 @@ const FEATURE_HINTS: Readonly<Partial<Record<WorkspaceFeature, string>>> = {
   event_triggers: 'Triggers that start a task when a connected account fires an event.',
   artifact_connectors:
     "Published artifacts reading and changing data in a member's connected apps.",
+  fast_mode:
+    'Faster answers from Claude Opus at twice the usage, billed to usage credits. Off until you turn it on.',
 };
 
 const cardStyle = {

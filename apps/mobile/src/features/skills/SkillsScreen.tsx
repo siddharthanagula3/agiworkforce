@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  RefreshControl,
-  TextInput,
-  View,
-  type ListRenderItemInfo,
-} from 'react-native';
-import { useRouter } from 'expo-router';
+import { FlatList, RefreshControl, TextInput, View, type ListRenderItemInfo } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, BookOpen, Cloud, RefreshCw, Search, Sparkles, X } from 'lucide-react-native';
 
@@ -20,11 +14,26 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useThemeColors } from '@/src/ui/theme';
-import { fetchManagedSkills, type ManagedSkillSource, type ManagedSkillSummary } from './service';
+import { typeScale } from '@/src/ui/theme/tokens';
+import {
+  fetchInstalledSkillNames,
+  fetchSkillCatalog,
+  fetchCanAuthorSkills,
+  installSkill,
+  isAuthoredSkill,
+  isPluginOwnedSkill,
+  isSkillInstalled,
+  skillActionFailureMessage,
+  uninstallSkill,
+  type ManagedSkillSource,
+  type ManagedSkillSummary,
+} from './service';
 import { useMobileSkillSelectionStore } from './selectionStore';
+import { NewSkillSheet } from './NewSkillSheet';
 
 const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   bundled: 'Built in',
@@ -35,8 +44,15 @@ const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   extra: 'Added',
 };
 
+const PLUGIN_OWNED_NOTE = 'Controlled by its plugin installation.';
+
 export function skillRequirementNote(tools: readonly string[] | undefined): string {
   return tools?.length ? `Needs ${tools.join(', ')}` : '';
+}
+
+function skillStatusLabel(skill: ManagedSkillSummary, installed: boolean): string {
+  if (skill.lifecycle !== 'included') return 'Coming later';
+  return installed ? 'Installed' : 'Not installed';
 }
 
 function SkillsHeader({ onBack }: { onBack: () => void }) {
@@ -52,7 +68,7 @@ function SkillsHeader({ onBack }: { onBack: () => void }) {
         gap: 10,
       }}
     >
-      <Pressable
+      <PressableBox
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Go back"
@@ -60,8 +76,15 @@ function SkillsHeader({ onBack }: { onBack: () => void }) {
         style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
       >
         <ArrowLeft size={21} color={colors.textSecondary} />
-      </Pressable>
-      <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 18, fontWeight: '700' }}>
+      </PressableBox>
+      <Text
+        style={{
+          flex: 1,
+          color: colors.textPrimary,
+          fontSize: typeScale.headline,
+          fontWeight: '700',
+        }}
+      >
         Skills
       </Text>
       <View
@@ -79,7 +102,11 @@ function SkillsHeader({ onBack }: { onBack: () => void }) {
         }}
       >
         <Cloud size={13} color={colors.textSecondary} />
-        <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600' }}>Cloud</Text>
+        <Text
+          style={{ color: colors.textSecondary, fontSize: typeScale.caption, fontWeight: '600' }}
+        >
+          Cloud
+        </Text>
       </View>
     </View>
   );
@@ -123,7 +150,7 @@ function SkillsGate({
           style={{
             marginTop: 20,
             color: colors.textPrimary,
-            fontSize: 21,
+            fontSize: typeScale.title3,
             fontWeight: '700',
             textAlign: 'center',
           }}
@@ -134,13 +161,13 @@ function SkillsGate({
           style={{
             marginTop: 9,
             color: colors.textSecondary,
-            fontSize: 14,
+            fontSize: typeScale.subhead,
             lineHeight: 21,
             textAlign: 'center',
           }}
         >
-          Browse the Skills installed on your Managed Cloud deployment. Switching here does not send
-          Local chats or files to the cloud.
+          Browse and install Skills for AGI Cloud. Switching here does not send Local chats or files
+          to the cloud.
         </Text>
         <Button
           title={signedIn ? 'Switch to AGI Cloud' : 'Sign in to AGI Cloud'}
@@ -181,10 +208,10 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"
-        style={{ flex: 1, color: colors.textPrimary, fontSize: 15, paddingVertical: 0 }}
+        style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body, paddingVertical: 0 }}
       />
       {value.length > 0 ? (
-        <Pressable
+        <PressableBox
           onPress={() => onChange('')}
           accessibilityRole="button"
           accessibilityLabel="Clear skill search"
@@ -192,7 +219,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
           style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
         >
           <X size={16} color={colors.textMuted} />
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -200,14 +227,25 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
 
 function SkillRow({
   skill,
+  installed,
+  pending,
+  actionError,
   onUse,
+  onToggleInstall,
 }: {
   skill: ManagedSkillSummary;
+  installed: boolean;
+  pending: boolean;
+  actionError: string | null;
   onUse: (skill: ManagedSkillSummary) => void;
+  onToggleInstall: (skill: ManagedSkillSummary, install: boolean) => void;
 }) {
   const colors = useThemeColors();
   const included = skill.lifecycle === 'included';
+  const pluginOwned = isPluginOwnedSkill(skill);
+  const canToggle = included && !isAuthoredSkill(skill) && !pluginOwned;
   const requirementNote = skillRequirementNote(skill.requiredTools);
+  const statusLabel = skillStatusLabel(skill, installed);
 
   return (
     <View
@@ -240,7 +278,12 @@ function SkillRow({
             <Text
               selectable
               numberOfLines={1}
-              style={{ flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+              style={{
+                flex: 1,
+                color: colors.textPrimary,
+                fontSize: typeScale.body,
+                fontWeight: '600',
+              }}
             >
               {skill.name}
             </Text>
@@ -254,20 +297,30 @@ function SkillRow({
                 borderColor: colors.neutralBorder,
               }}
             >
-              <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600' }}>
+              <Text
+                style={{ color: colors.textMuted, fontSize: typeScale.caption, fontWeight: '600' }}
+              >
                 {SOURCE_LABELS[skill.source]}
               </Text>
             </View>
           </View>
-          <Text selectable style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+          <Text
+            selectable
+            style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}
+          >
             {skill.description || 'No description provided.'}
           </Text>
           {requirementNote ? (
             <Text
               accessibilityLabel={`${skill.name} ${requirementNote}`}
-              style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}
+              style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 17 }}
             >
               {requirementNote}
+            </Text>
+          ) : null}
+          {included && pluginOwned ? (
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 17 }}>
+              {PLUGIN_OWNED_NOTE}
             </Text>
           ) : null}
           <View
@@ -280,24 +333,45 @@ function SkillRow({
             }}
           >
             <Text
-              accessibilityLabel={`${skill.name} status: ${included ? 'Included' : 'Coming later'}`}
+              accessibilityLabel={`${skill.name} status: ${statusLabel}`}
               style={{
-                color: included ? colors.textSecondary : colors.textMuted,
-                fontSize: 11,
+                flex: 1,
+                color: installed ? colors.textSecondary : colors.textMuted,
+                fontSize: typeScale.caption,
                 fontWeight: '600',
               }}
             >
-              {included ? 'Included' : 'Coming later'}
+              {statusLabel}
             </Text>
-            {included ? (
+            {canToggle ? (
+              <Button
+                title={installed ? 'Uninstall' : 'Install'}
+                accessibilityLabel={`${installed ? 'Uninstall' : 'Install'} ${skill.name}`}
+                variant={installed ? 'outline' : 'primary'}
+                size="sm"
+                loading={pending}
+                onPress={() => onToggleInstall(skill, !installed)}
+              />
+            ) : null}
+            {installed ? (
               <Button
                 title="Use in chat"
                 accessibilityLabel={`Use ${skill.name} in chat`}
                 size="sm"
+                disabled={pending}
                 onPress={() => onUse(skill)}
               />
             ) : null}
           </View>
+          {actionError ? (
+            <Text
+              selectable
+              accessibilityRole="alert"
+              style={{ color: colors.agentError, fontSize: typeScale.caption, lineHeight: 17 }}
+            >
+              {actionError}
+            </Text>
+          ) : null}
         </View>
       </View>
     </View>
@@ -320,19 +394,19 @@ function CatalogIntro({ count }: { count: number }) {
           borderColor: colors.accentBorder,
         }}
       >
-        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '600' }}>
           Managed Cloud catalog
         </Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
-          Choose an included Skill for your next AGI Cloud message. Draft entries are marked Coming
-          later; installing or changing Skills remains a host or admin action.
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
+          Install a Skill to use it in your AGI Cloud messages, and uninstall it when you no longer
+          need it. Draft entries are marked Coming later.
         </Text>
       </View>
       <Text
-        accessibilityLabel={count === 1 ? '1 skill available' : `${count} skills available`}
-        style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}
+        accessibilityLabel={count === 1 ? '1 skill installed' : `${count} skills installed`}
+        style={{ color: colors.textSecondary, fontSize: typeScale.caption, fontWeight: '600' }}
       >
-        {count === 1 ? '1 SKILL AVAILABLE' : `${count} SKILLS AVAILABLE`}
+        {count === 1 ? '1 SKILL INSTALLED' : `${count} SKILLS INSTALLED`}
       </Text>
     </View>
   );
@@ -356,18 +430,23 @@ function CatalogRefreshError({ message, onRetry }: { message: string; onRetry: (
         borderColor: colors.dangerBorder,
       }}
     >
-      <Text selectable style={{ flex: 1, color: colors.agentError, fontSize: 12, lineHeight: 18 }}>
+      <Text
+        selectable
+        style={{ flex: 1, color: colors.agentError, fontSize: typeScale.caption, lineHeight: 18 }}
+      >
         Refresh failed: {message}
       </Text>
-      <Pressable
+      <PressableBox
         onPress={onRetry}
         accessibilityRole="button"
         accessibilityLabel="Retry refreshing Skills"
         hitSlop={8}
         style={{ minHeight: 32, justifyContent: 'center', paddingHorizontal: 6 }}
       >
-        <Text style={{ color: colors.agentError, fontSize: 12, fontWeight: '700' }}>Retry</Text>
-      </Pressable>
+        <Text style={{ color: colors.agentError, fontSize: typeScale.caption, fontWeight: '700' }}>
+          Retry
+        </Text>
+      </PressableBox>
     </View>
   );
 }
@@ -406,7 +485,7 @@ function CatalogEmptyState({ query, onClear }: { query: string; onClear: () => v
         style={{
           marginTop: 18,
           color: colors.textPrimary,
-          fontSize: 18,
+          fontSize: typeScale.headline,
           fontWeight: '700',
           textAlign: 'center',
         }}
@@ -417,7 +496,7 @@ function CatalogEmptyState({ query, onClear }: { query: string; onClear: () => v
         style={{
           marginTop: 8,
           color: colors.textSecondary,
-          fontSize: 14,
+          fontSize: typeScale.subhead,
           lineHeight: 21,
           textAlign: 'center',
         }}
@@ -478,7 +557,7 @@ function CatalogError({ message, onRetry }: { message: string; onRetry: () => vo
         style={{
           marginTop: 18,
           color: colors.textPrimary,
-          fontSize: 18,
+          fontSize: typeScale.headline,
           fontWeight: '700',
           textAlign: 'center',
         }}
@@ -490,7 +569,7 @@ function CatalogError({ message, onRetry }: { message: string; onRetry: () => vo
         style={{
           marginTop: 8,
           color: colors.textSecondary,
-          fontSize: 14,
+          fontSize: typeScale.subhead,
           lineHeight: 21,
           textAlign: 'center',
         }}
@@ -504,6 +583,7 @@ function CatalogError({ message, onRetry }: { message: string; onRetry: () => vo
 
 export function SkillsScreen() {
   const router = useRouter();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const colors = useThemeColors();
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
@@ -511,13 +591,20 @@ export function SkillsScreen() {
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const selectSkill = useMobileSkillSelectionStore((state) => state.selectSkill);
+  const selectedSkill = useMobileSkillSelectionStore((state) => state.selection);
+  const clearSkill = useMobileSkillSelectionStore((state) => state.clearSkill);
 
   const [skills, setSkills] = useState<ManagedSkillSummary[]>([]);
+  const [installed, setInstalled] = useState<ReadonlySet<string>>(() => new Set());
+  const [pendingSkill, setPendingSkill] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ name: string; message: string } | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [canAuthor, setCanAuthor] = useState(false);
+  const [newSkillOpen, setNewSkillOpen] = useState(false);
 
   const cloudActive = appMode === 'cloud';
   const canLoad = FEATURES.skills && isClerkLoaded && isClerkSignedIn && cloudActive;
@@ -529,7 +616,7 @@ export function SkillsScreen() {
 
   const handleContinue = useCallback(() => {
     if (!isClerkSignedIn) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent('cloud-skills'));
       return;
     }
     setAppMode('cloud');
@@ -537,11 +624,41 @@ export function SkillsScreen() {
 
   const handleUseSkill = useCallback(
     (skill: ManagedSkillSummary) => {
-      if (!clerkUserId || skill.lifecycle !== 'included') return;
+      if (!clerkUserId || !isSkillInstalled(skill, installed)) return;
       selectSkill({ ownerId: clerkUserId, name: skill.name });
+      if (returnTo === 'composer' && router.canGoBack()) {
+        router.back();
+        return;
+      }
       router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
     },
-    [clerkUserId, router, selectSkill],
+    [clerkUserId, installed, returnTo, router, selectSkill],
+  );
+
+  const handleToggleInstall = useCallback(
+    async (skill: ManagedSkillSummary, install: boolean) => {
+      const account = captureCloudAccountEpoch();
+      if (!account || account.ownerId !== clerkUserId || pendingSkill) return;
+      setPendingSkill(skill.name);
+      setActionError(null);
+      try {
+        const nextInstalled = install
+          ? await installSkill(skill.name)
+          : await uninstallSkill(skill.name);
+        if (!isCloudAccountEpochCurrent(account)) return;
+        setInstalled(nextInstalled);
+        if (!install && selectedSkill?.name === skill.name) clearSkill();
+      } catch (toggleError) {
+        if (!isCloudAccountEpochCurrent(account)) return;
+        setActionError({
+          name: skill.name,
+          message: skillActionFailureMessage(toggleError, install),
+        });
+      } finally {
+        if (isCloudAccountEpochCurrent(account)) setPendingSkill(null);
+      }
+    },
+    [clearSkill, clerkUserId, pendingSkill, selectedSkill],
   );
 
   const load = useCallback(
@@ -549,6 +666,7 @@ export function SkillsScreen() {
       const account = captureCloudAccountEpoch();
       if (!account || account.ownerId !== clerkUserId) {
         setSkills([]);
+        setInstalled(new Set());
         setError(null);
         return;
       }
@@ -558,12 +676,18 @@ export function SkillsScreen() {
       setError(null);
 
       try {
-        const nextSkills = await fetchManagedSkills(signal);
+        const [nextSkills, nextInstalled, authoring] = await Promise.all([
+          fetchSkillCatalog(signal),
+          fetchInstalledSkillNames(signal),
+          fetchCanAuthorSkills(signal).catch(() => false),
+        ]);
         if (!isCloudAccountEpochCurrent(account)) return;
         setSkills(nextSkills);
+        setInstalled(nextInstalled);
+        setCanAuthor(authoring);
       } catch (loadError) {
         if (signal?.aborted || !isCloudAccountEpochCurrent(account)) return;
-        setError(loadError instanceof Error ? loadError.message : 'Failed to load Skills.');
+        setError('Could not load Skills. Check your connection and try again.');
       } finally {
         if (isCloudAccountEpochCurrent(account)) {
           setLoading(false);
@@ -577,6 +701,8 @@ export function SkillsScreen() {
   useEffect(() => {
     if (!canLoad) {
       setSkills([]);
+      setInstalled(new Set());
+      setActionError(null);
       setError(null);
       setLoading(false);
       setRefreshing(false);
@@ -599,16 +725,23 @@ export function SkillsScreen() {
     );
   }, [query, skills]);
 
-  const availableSkillCount = useMemo(
-    () => skills.filter((skill) => skill.lifecycle === 'included').length,
-    [skills],
+  const installedSkillCount = useMemo(
+    () => skills.filter((skill) => isSkillInstalled(skill, installed)).length,
+    [installed, skills],
   );
 
   const renderSkill = useCallback(
     ({ item }: ListRenderItemInfo<ManagedSkillSummary>) => (
-      <SkillRow skill={item} onUse={handleUseSkill} />
+      <SkillRow
+        skill={item}
+        installed={isSkillInstalled(item, installed)}
+        pending={pendingSkill === item.name}
+        actionError={actionError?.name === item.name ? actionError.message : null}
+        onUse={handleUseSkill}
+        onToggleInstall={(skill, install) => void handleToggleInstall(skill, install)}
+      />
     ),
-    [handleUseSkill],
+    [actionError, handleToggleInstall, handleUseSkill, installed, pendingSkill],
   );
 
   if (!FEATURES.skills) return <FeatureUnavailable feature="Skills" />;
@@ -645,7 +778,10 @@ export function SkillsScreen() {
           }}
           ListHeaderComponent={
             <View style={{ gap: 10 }}>
-              <CatalogIntro count={availableSkillCount} />
+              <CatalogIntro count={installedSkillCount} />
+              {canAuthor ? (
+                <Button title="New skill" variant="outline" onPress={() => setNewSkillOpen(true)} />
+              ) : null}
               {error ? (
                 <CatalogRefreshError message={error} onRetry={() => void load('refresh')} />
               ) : null}
@@ -663,6 +799,11 @@ export function SkillsScreen() {
           }
         />
       )}
+      <NewSkillSheet
+        visible={newSkillOpen}
+        onClose={() => setNewSkillOpen(false)}
+        onCreated={() => void load('refresh')}
+      />
     </SafeAreaView>
   );
 }

@@ -1,5 +1,7 @@
-import { useCallback, useMemo } from 'react';
-import { View, Pressable, ScrollView } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { View, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import { type DrawerContentComponentProps } from 'expo-router/drawer';
@@ -8,9 +10,14 @@ import {
   BookOpen,
   Bot,
   Bell,
+  Building2,
   CalendarClock,
+  ChevronDown,
+  ChevronRight,
+  Code2,
   FolderOpen,
   HelpCircle,
+  BarChart3,
   MessageSquare,
   MonitorSmartphone,
   Pin,
@@ -21,13 +28,15 @@ import {
   UserCircle,
   type LucideIcon,
 } from 'lucide-react-native';
-import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
+import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useNotificationCenter } from '@/services/notifications';
 import { useProjectStore } from '@/src/features/projects/store';
+import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   executionModeForConversation,
@@ -35,11 +44,17 @@ import {
 } from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import {
+  ActionMenuSheet,
+  InlineRenameField,
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
+import { useWorkspaceSwitcher } from '@/src/features/team/useWorkspaceSwitcher';
+import type { ConversationSummary } from '@/types/chat';
 import {
   isDrawerOpen,
   ShellCapabilityShortcuts,
@@ -51,6 +66,7 @@ import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 
 type RoutePath =
   | '/(app)/chats'
+  | '/(app)/search'
   | '/(app)/(tabs)/projects'
   | '/(app)/(tabs)/chat'
   | '/(app)/artifacts'
@@ -59,9 +75,11 @@ type RoutePath =
   | '/(app)/reports'
   | '/(app)/schedules'
   | '/(app)/companion'
+  | '/(app)/cloud-code'
   | '/(app)/tasks'
   | '/(app)/notifications'
   | '/(app)/(tabs)/settings'
+  | '/(app)/settings/cloud-usage'
   | '/(app)/about'
   | '/(app)/profile'
   | '/(app)/projects/[id]'
@@ -69,7 +87,16 @@ type RoutePath =
   | ShellShortcutRoute;
 
 interface PrimaryItem {
-  key: 'chats' | 'projects' | 'library' | 'reports' | 'skills' | 'schedules' | 'remote' | 'tasks';
+  key:
+    | 'chats'
+    | 'projects'
+    | 'library'
+    | 'reports'
+    | 'skills'
+    | 'schedules'
+    | 'code'
+    | 'remote'
+    | 'tasks';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -127,6 +154,13 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     cloud: true,
   },
   {
+    key: 'code',
+    label: CLOUD_CODE_SCREEN_TITLE,
+    icon: Code2,
+    route: '/(app)/cloud-code',
+    cloud: true,
+  },
+  {
     key: 'remote',
     // Desktop's pairing card tells people to open this screen by name, so the
     // label is shared rather than typed twice.
@@ -151,6 +185,7 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
 ];
 
 const DRAWER_RECENT_LIMIT = 8;
+const DRAWER_PROJECT_CHAT_LIMIT = 5;
 
 function Tag({ label }: { label: string }) {
   const colors = useThemeColors();
@@ -165,7 +200,9 @@ function Tag({ label }: { label: string }) {
         paddingVertical: 2,
       }}
     >
-      <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600' }}>{label}</Text>
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, fontWeight: '600' }}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -181,7 +218,7 @@ function HeaderIconButton({
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityLabel={label}
       accessibilityRole="button"
@@ -198,7 +235,7 @@ function HeaderIconButton({
       }}
     >
       <Icon size={18} color={colors.textPrimary} strokeWidth={1.8} />
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -217,7 +254,7 @@ function NavRow({
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityLabel={tag ? `${label}. ${tag}` : label}
       accessibilityRole="button"
@@ -242,14 +279,14 @@ function NavRow({
         style={{
           flex: 1,
           color: active ? colors.textPrimary : colors.textSecondary,
-          fontSize: 15,
+          fontSize: typeScale.body,
           fontWeight: active ? '600' : '400',
         }}
       >
         {label}
       </Text>
       {tag ? <Tag label={tag} /> : null}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -268,13 +305,57 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const tier = useTierStore((s) => s.tier);
-  // Same gate the [+] sheet applied before this moved: Cloud-only, and only for
-  // a plan that includes AGI Work. The server is still authoritative.
-  const showAgiWork = appMode === 'cloud' && canUseBillingPlanCapability(tier, 'agi_work');
+  const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const clerkUserId = useAuthStore((s) => s.clerkUserId);
+  const usageOwnerId = useCloudUsageStore((s) => s.ownerId);
+  const usageSnapshot = useCloudUsageStore((s) => s.snapshot);
+  const usageLoading = useCloudUsageStore((s) => s.loading);
+  const usageError = useCloudUsageStore((s) => s.error);
+  const refreshUsage = useCloudUsageStore((s) => s.refresh);
+  // Same gate the [+] sheet applied before this moved: Cloud-only, and only
+  // where the capability document grants AGI Work. The server is still authoritative.
+  const showAgiWork = appMode === 'cloud' && grantedCapabilities.includes('canUseAgiWork');
 
   const { usesPersistentDrawer } = useTabletLayout();
   const drawerOpen = isDrawerOpen(props.state);
+  const { t } = useTranslation();
+  const workspace = useWorkspaceSwitcher(
+    (drawerOpen || usesPersistentDrawer) && appMode === 'cloud' && isClerkSignedIn,
+    t('navPersonalWorkspace'),
+  );
+  const [expandedProjectIds, setExpandedProjectIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleProject = useCallback((projectId: string) => {
+    setExpandedProjectIds((current) => {
+      const next = new Set(current);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (
+      (drawerOpen || usesPersistentDrawer) &&
+      appMode === 'cloud' &&
+      isClerkSignedIn &&
+      clerkUserId
+    ) {
+      void refreshUsage();
+    }
+  }, [drawerOpen, usesPersistentDrawer, appMode, isClerkSignedIn, clerkUserId, refreshUsage]);
+
+  const visibleUsage = usageOwnerId === clerkUserId ? usageSnapshot : null;
+  const remainingUsage =
+    visibleUsage && !usageError
+      ? visibleUsage.weeklyResetAt !== null
+        ? `Week ${Math.round(100 - Math.min(100, Math.max(0, visibleUsage.weeklyUsagePercentage)))}%`
+        : visibleUsage.usageResetAt !== null
+          ? `Period ${Math.round(100 - Math.min(100, Math.max(0, visibleUsage.usagePercentage)))}%`
+          : null
+      : null;
 
   const closeDrawer = useCallback(() => {
     props.navigation.closeDrawer();
@@ -298,30 +379,20 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     router.push({ pathname: '/(app)/(tabs)/chat' as const });
   }, [closeDrawer, router]);
 
-  // Chats owns search for chats, projects, files, library and artifacts, so
-  // this hands off to it with its field already focused rather than keeping a
-  // second search implementation in the drawer.
   const handleOpenSearch = useCallback(() => {
-    navigate('/(app)/chats', { focusSearch: '1' });
+    navigate('/(app)/search');
   }, [navigate]);
 
-  const displayedConversations = useMemo(() => {
+  const historyConversations = useMemo(() => {
     // Each mode's history comes from the store that owns it. Cloud rows live in
     // useChatCloudMessageStore (where loadConversations writes the server list);
     // filtering the local store for `executionMode: 'cloud'` returned a stale
     // MMKV mirror that server responses never touched.
     const source = appMode === 'cloud' ? cloudConversations : conversations;
-    return (
-      source
-        .filter(
-          (conversation) =>
-            executionModeForConversation(conversation) === appMode &&
-            isHistoryVisibleConversation(conversation),
-        )
-        // Pinned chats first; preserve the existing recency order within each group.
-        .slice()
-        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
-        .slice(0, DRAWER_RECENT_LIMIT)
+    return source.filter(
+      (conversation) =>
+        executionModeForConversation(conversation) === appMode &&
+        isHistoryVisibleConversation(conversation),
     );
   }, [appMode, cloudConversations, conversations]);
 
@@ -331,10 +402,97 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     // Only show non-tombstoned projects. Local mode: read from local store as before.
     if (appMode === 'cloud') {
       const source = cloudProjects.filter((p) => p.deletedAt === null && !p.isArchived);
-      return source.slice(0, 6);
+      return source
+        .slice()
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+        .slice(0, 6);
     }
     return localProjects.slice(0, 6);
   }, [appMode, cloudProjects, localProjects]);
+
+  const displayedProjectIds = useMemo(
+    () => new Set(displayedProjects.map((project) => project.id)),
+    [displayedProjects],
+  );
+
+  const displayedConversations = useMemo(
+    () =>
+      historyConversations
+        .filter(
+          (conversation) =>
+            !conversation.projectId || !displayedProjectIds.has(conversation.projectId),
+        )
+        .slice()
+        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+        .slice(0, DRAWER_RECENT_LIMIT),
+    [displayedProjectIds, historyConversations],
+  );
+
+  const projectConversations = useCallback(
+    (projectId: string) =>
+      historyConversations.filter((conversation) => conversation.projectId === projectId),
+    [historyConversations],
+  );
+
+  const renderConversationRow = (conversation: ConversationSummary, inset = 0) => {
+    const active = pathname.includes(conversation.id);
+    return (
+      <PressableBox
+        key={conversation.id}
+        onPress={() => navigate('/(app)/chat/[id]', { id: conversation.id })}
+        onLongPress={() =>
+          openActions(
+            conversation.id,
+            conversation.title || 'Untitled chat',
+            Boolean(conversation.pinned),
+          )
+        }
+        accessibilityRole="button"
+        accessibilityLabel={`Open conversation: ${conversation.title}${conversation.unread ? ', unread' : ''}`}
+        accessibilityHint="Long press for more actions"
+        accessibilityState={{ selected: active }}
+        style={{
+          minHeight: 44,
+          borderRadius: 8,
+          paddingLeft: 10 + inset,
+          paddingRight: 10,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          backgroundColor: active ? colors.surfaceHover : colors.transparent,
+        }}
+      >
+        {conversation.pinned ? (
+          <Pin size={12} color={colors.textMuted} fill={colors.textMuted} />
+        ) : null}
+        {rename.conversationId === conversation.id ? (
+          <InlineRenameField rename={rename} />
+        ) : (
+          <Text
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              color: active ? colors.textPrimary : colors.textSecondary,
+              fontSize: typeScale.subhead,
+              fontWeight: active ? '600' : '400',
+            }}
+          >
+            {conversation.title || 'Untitled chat'}
+          </Text>
+        )}
+        {conversation.unread ? (
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: colors.textPrimary,
+            }}
+          />
+        ) : null}
+      </PressableBox>
+    );
+  };
 
   const visiblePrimaryItems = useMemo(
     () =>
@@ -361,6 +519,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'skills') return p.includes('/skills');
       if (key === 'reports') return p.includes('/reports');
       if (key === 'schedules') return p.includes('/schedules');
+      if (key === 'code') return p.includes('/cloud-code');
       if (key === 'remote') return p.includes('/companion');
       if (key === 'tasks') return p.includes('/tasks');
       return false;
@@ -387,7 +546,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           <Text
             style={{
               color: colors.textPrimary,
-              fontSize: 20,
+              fontSize: typeScale.title3,
               fontFamily: 'Newsreader_600SemiBold',
               letterSpacing: 0.4,
               flex: 1,
@@ -441,7 +600,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               <Text
                 style={{
                   color: colors.textMuted,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   fontWeight: '600',
                   marginBottom: 8,
                   paddingHorizontal: 2,
@@ -450,24 +609,81 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 Projects
               </Text>
               <View style={{ gap: 1 }}>
-                {displayedProjects.map((project) => (
-                  <Pressable
-                    key={project.id}
-                    onPress={() => navigate('/(app)/projects/[id]', { id: project.id })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open project: ${project.name}`}
-                    style={{
-                      minHeight: 34,
-                      borderRadius: 8,
-                      paddingHorizontal: 10,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 14 }}>
-                      {project.name}
-                    </Text>
-                  </Pressable>
-                ))}
+                {displayedProjects.map((project) => {
+                  const chats = projectConversations(project.id);
+                  const expanded = expandedProjectIds.has(project.id);
+                  return (
+                    <View key={project.id}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <PressableBox
+                          onPress={() => navigate('/(app)/projects/[id]', { id: project.id })}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open project: ${project.name}`}
+                          style={{
+                            flex: 1,
+                            minHeight: 44,
+                            borderRadius: 8,
+                            paddingHorizontal: 10,
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}
+                          >
+                            {project.name}
+                          </Text>
+                        </PressableBox>
+                        {chats.length > 0 ? (
+                          <PressableBox
+                            onPress={() => toggleProject(project.id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${expanded ? 'Hide' : 'Show'} chats in ${project.name}`}
+                            accessibilityState={{ expanded }}
+                            style={{
+                              width: 44,
+                              height: 44,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {expanded ? (
+                              <ChevronDown size={16} color={colors.textMuted} />
+                            ) : (
+                              <ChevronRight size={16} color={colors.textMuted} />
+                            )}
+                          </PressableBox>
+                        ) : null}
+                      </View>
+                      {expanded ? (
+                        <View style={{ gap: 1 }}>
+                          {chats
+                            .slice(0, DRAWER_PROJECT_CHAT_LIMIT)
+                            .map((conversation) => renderConversationRow(conversation, 14))}
+                          {chats.length > DRAWER_PROJECT_CHAT_LIMIT ? (
+                            <PressableBox
+                              onPress={() => navigate('/(app)/projects/[id]', { id: project.id })}
+                              accessibilityRole="button"
+                              accessibilityLabel={`See all chats in ${project.name}`}
+                              style={{
+                                minHeight: 44,
+                                paddingLeft: 24,
+                                paddingRight: 10,
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Text
+                                style={{ color: colors.textMuted, fontSize: typeScale.subhead }}
+                              >
+                                See all
+                              </Text>
+                            </PressableBox>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
               </View>
             </View>
           ) : null}
@@ -476,7 +692,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             <Text
               style={{
                 color: colors.textMuted,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: '600',
                 marginBottom: 8,
                 paddingHorizontal: 2,
@@ -487,56 +703,37 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
             {displayedConversations.length > 0 ? (
               <View style={{ gap: 1 }}>
-                {displayedConversations.map((conversation) => {
-                  const active = pathname.includes(conversation.id);
-                  return (
-                    <Pressable
-                      key={conversation.id}
-                      onPress={() => navigate('/(app)/chat/[id]', { id: conversation.id })}
-                      onLongPress={() =>
-                        openActions(
-                          conversation.id,
-                          conversation.title || 'Untitled chat',
-                          Boolean(conversation.pinned),
-                        )
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open conversation: ${conversation.title}`}
-                      accessibilityHint="Long press to pin or delete"
-                      accessibilityState={{ selected: active }}
-                      style={{
-                        minHeight: 34,
-                        borderRadius: 8,
-                        paddingHorizontal: 10,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 6,
-                        backgroundColor: active ? colors.surfaceHover : colors.transparent,
-                      }}
-                    >
-                      {conversation.pinned ? (
-                        <Pin size={12} color={colors.textMuted} fill={colors.textMuted} />
-                      ) : null}
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          flex: 1,
-                          color: active ? colors.textPrimary : colors.textSecondary,
-                          fontSize: 14,
-                          fontWeight: active ? '600' : '400',
-                        }}
-                      >
-                        {conversation.title || 'Untitled chat'}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                {displayedConversations.map((conversation) => renderConversationRow(conversation))}
               </View>
             ) : (
-              <Text style={{ color: colors.textMuted, fontSize: 14, paddingHorizontal: 10 }}>
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: typeScale.subhead,
+                  paddingHorizontal: 10,
+                }}
+              >
                 No recent chats
               </Text>
             )}
+            <PressableBox
+              onPress={() => navigate('/(app)/chats')}
+              accessibilityRole="button"
+              accessibilityLabel="See all chats"
+              style={{
+                minHeight: 44,
+                marginTop: 4,
+                paddingHorizontal: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+                See all chats
+              </Text>
+              <ChevronRight size={16} color={colors.textMuted} />
+            </PressableBox>
           </View>
         </ScrollView>
       </View>
@@ -551,6 +748,20 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           gap: 2,
         }}
       >
+        {workspace.activeName ? (
+          <NavRow
+            label={`Workspace: ${workspace.activeName}`}
+            icon={Building2}
+            onPress={workspace.open}
+          />
+        ) : null}
+        {appMode === 'cloud' && isClerkSignedIn && clerkUserId ? (
+          <NavRow
+            label={`Usage remaining${remainingUsage ? ` · ${remainingUsage}` : usageLoading ? ' · Checking…' : usageError ? ' · Unavailable' : ''}`}
+            icon={BarChart3}
+            onPress={() => navigate('/(app)/settings/cloud-usage')}
+          />
+        ) : null}
         <NavRow
           label="Settings"
           icon={Settings}
@@ -568,7 +779,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         />
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
       </View>
-      <RenameConversationModal rename={rename} />
+      <RenameConversationModal rename={rename} inline />
+      <ActionMenuSheet menu={workspace.menu} />
     </SafeAreaView>
   );
 }

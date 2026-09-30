@@ -35,7 +35,7 @@ export function CodeBlock({ content }: { content: string }) {
         <tbody>
           {lines.map((line, index) => (
             <tr key={`${index}-${line.slice(0, 8)}`}>
-              <td className="select-none pr-3 text-right align-top text-muted-foreground">
+              <td className="select-none pe-3 text-end align-top text-muted-foreground">
                 {index + 1}
               </td>
               <td className="whitespace-pre align-top">
@@ -125,7 +125,7 @@ export function SkillFileTree({
                 onClick={() => toggle(node.path)}
                 style={indent}
                 className={cn(
-                  'inline-flex min-h-7 items-center gap-1 rounded-md px-2 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground',
+                  'inline-flex min-h-7 items-center gap-1 rounded-md px-2 text-start text-xs text-muted-foreground hover:bg-muted hover:text-foreground',
                   DIRECTORY_FOCUS_RING,
                 )}
               >
@@ -144,7 +144,7 @@ export function SkillFileTree({
               onClick={() => onSelect(node.path)}
               style={indent}
               className={cn(
-                'inline-flex min-h-7 items-center gap-1.5 rounded-md px-2 text-left text-xs',
+                'inline-flex min-h-7 items-center gap-1.5 rounded-md px-2 text-start text-xs',
                 active
                   ? 'bg-muted font-medium text-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',

@@ -4,9 +4,13 @@ import {
   DEVICE_STEP_TOOLS,
   DeviceStepRefused,
   MAX_DEVICE_COORDINATE,
+  declarationForHost,
   describeDeviceDisplays,
   describeDeviceStep,
+  encodeDesktopHostDeclaration,
+  MAX_DEVICE_HOST_HEADER_LENGTH,
   offeredDeviceStepTools,
+  parseDesktopHostDeclaration,
   planDeviceStep,
   type DesktopHostDeclaration,
 } from '../device-steps';
@@ -158,5 +162,128 @@ describe('screenshots across displays', () => {
     const text = describeDeviceDisplays([main, side], 4);
     expect(text).toContain('display 4 "Studio" 2560x1440 at 1x, captured');
     expect(text).toContain('primary');
+  });
+});
+
+describe('phone steps', () => {
+  const PHONE_TOOLS = DEVICE_STEP_TOOLS.filter(
+    (tool) => DEVICE_STEP_DEFINITIONS[tool].scope === 'phone',
+  );
+
+  it('offers only the phone steps a phone declares, with no folder', () => {
+    const offered = offeredDeviceStepTools(
+      declaration({ platform: 'ios', capabilities: ['calendar.read', 'calendar.write'] }),
+    );
+    expect([...offered].sort()).toEqual([
+      'device_calendar_availability',
+      'device_calendar_create_event',
+      'device_calendar_events',
+    ]);
+    expect(PHONE_TOOLS).toContain('device_reminder_create');
+  });
+
+  it('keeps each host to its own capabilities', () => {
+    const mixed = declaration({
+      capabilities: ['shell.execute', 'calendar.read', 'reminders.write'],
+      roots: [{ id: 'root-1', name: 'Notes', path: '/Users/sid/Notes' }],
+    });
+    expect(declarationForHost(mixed, 'phone')).toMatchObject({
+      capabilities: ['calendar.read', 'reminders.write'],
+      roots: [],
+    });
+    expect(declarationForHost(mixed, 'desktop').capabilities).toEqual(['shell.execute']);
+  });
+
+  it('plans an event and refuses one with no end or an end before its start', () => {
+    expect(
+      planDeviceStep(
+        'device_calendar_create_event',
+        { title: ' Dentist ', start: '2026-10-02T15:00', end: '2026-10-02T16:00' },
+        [],
+      ),
+    ).toEqual({
+      tool: 'device_calendar_create_event',
+      title: 'Dentist',
+      start: '2026-10-02T15:00',
+      end: '2026-10-02T16:00',
+    });
+    expect(() =>
+      planDeviceStep(
+        'device_calendar_create_event',
+        { title: 'Dentist', start: '2026-10-02T15:00' },
+        [],
+      ),
+    ).toThrow(DeviceStepRefused);
+    expect(() =>
+      planDeviceStep(
+        'device_calendar_create_event',
+        { title: 'Dentist', start: '2026-10-02T15:00', end: '2026-10-02T14:00' },
+        [],
+      ),
+    ).toThrow('"end" must be after "start".');
+  });
+
+  it('refuses a calendar read over too long a range or with a time it cannot read', () => {
+    expect(() =>
+      planDeviceStep('device_calendar_events', { start: '2026-01-01', end: '2026-12-31' }, []),
+    ).toThrow(DeviceStepRefused);
+    expect(() =>
+      planDeviceStep('device_calendar_events', { start: 'tomorrow', end: '2026-10-03' }, []),
+    ).toThrow(DeviceStepRefused);
+  });
+
+  it('describes a reminder with its due time', () => {
+    const step = planDeviceStep(
+      'device_reminder_create',
+      { title: 'Call the bank', due: '2026-10-02T09:30' },
+      [],
+    );
+    expect(describeDeviceStep(step, [])).toBe(
+      'Add the reminder "Call the bank" due 2026-10-02 09:30',
+    );
+  });
+});
+
+describe('the device host header', () => {
+  it('stays a valid header value for names outside Latin-1 and reads back unchanged', () => {
+    const declared: DesktopHostDeclaration = {
+      deviceId: 'device-1',
+      deviceName: 'Mei 的 MacBook ✨',
+      platform: 'darwin',
+      appVersion: '1.0.0',
+      capabilities: ['filesystem.read'],
+      roots: [{ id: 'root-1', name: '文档', path: '/Users/mei/文档' }],
+    };
+
+    const encoded = encodeDesktopHostDeclaration(declared);
+
+    expect(/^[\x20-\x7e]*$/.test(encoded)).toBe(true);
+    expect(() => new Headers({ 'x-test': encoded })).not.toThrow();
+    expect(parseDesktopHostDeclaration(encoded)).toEqual(declared);
+  });
+
+  it('drops the last granted folders, not the whole declaration, to fit the length', () => {
+    const roots = Array.from({ length: 12 }, (_, index) => ({
+      id: `root-${index}`,
+      name: `Folder ${index}`,
+      path: `/Users/qa/${'deep/'.repeat(90)}${index}`,
+    }));
+    const declared: DesktopHostDeclaration = {
+      deviceId: 'device-1',
+      deviceName: 'QA Mac',
+      platform: 'darwin',
+      appVersion: '1.0.0',
+      capabilities: ['filesystem.read'],
+      roots,
+    };
+
+    const encoded = encodeDesktopHostDeclaration(declared);
+    const parsed = parseDesktopHostDeclaration(encoded);
+
+    expect(encoded.length).toBeLessThanOrEqual(MAX_DEVICE_HOST_HEADER_LENGTH);
+    expect(parsed?.deviceId).toBe('device-1');
+    expect(parsed?.roots.length).toBeGreaterThan(0);
+    expect(parsed?.roots.length).toBeLessThan(roots.length);
+    expect(parsed?.roots[0]?.id).toBe('root-0');
   });
 });

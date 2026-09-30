@@ -173,7 +173,7 @@ export function SettingsShell({
         {/* Left nav */}
         <nav
           aria-label="Settings sections"
-          className="flex h-full w-[200px] shrink-0 flex-col gap-0.5 border-r p-3 text-sm"
+          className="flex h-full w-[200px] shrink-0 flex-col gap-0.5 border-e p-3 text-sm"
           style={{ borderColor: 'var(--chat-border)' }}
         >
           <div className="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-[var(--chat-text-muted)]">
@@ -186,7 +186,7 @@ export function SettingsShell({
               onClick={() => onSelectSection(section.id)}
               aria-current={section.id === navId ? 'page' : undefined}
               className={cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+                'flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
                 section.id === navId
                   ? 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)]'
@@ -209,7 +209,7 @@ export function SettingsShell({
             type="button"
             aria-label="Close settings"
             onClick={closeSettings}
-            className="absolute right-3 top-3 z-[var(--z-control)] flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+            className="absolute end-3 top-3 z-[var(--z-control)] flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
           >
             <X size={16} strokeWidth={1.75} />
           </button>

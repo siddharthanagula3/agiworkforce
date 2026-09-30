@@ -56,7 +56,7 @@ function StepResult({ result }: StepResultProps) {
   const [collapsed, setCollapsed] = useState(true);
 
   return (
-    <div className="mt-1 ml-4">
+    <div className="mt-1 ms-4">
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
@@ -88,15 +88,15 @@ function Timeline({ steps, isRunning }: TimelineProps) {
   return (
     <div className="relative px-3 py-2 bg-[var(--chat-surface-base)]">
       {/* Left border line */}
-      <div className="absolute left-5 top-2 bottom-2 w-0.5 bg-[var(--chat-thinking-line)]" />
+      <div className="absolute start-5 top-2 bottom-2 w-0.5 bg-[var(--chat-thinking-line)]" />
 
       <div className="flex flex-col gap-2">
         {steps.map((step) => (
-          <div key={step.id} className="relative pl-5">
+          <div key={step.id} className="relative ps-5">
             {/* Step row */}
             <div className="flex items-start gap-2">
               {/* Icon sits on the timeline */}
-              <div className="absolute -left-0 flex items-center justify-center w-4 h-4 rounded-full bg-[var(--chat-surface-elevated)] border border-[var(--chat-border)]">
+              <div className="absolute -start-0 flex items-center justify-center w-4 h-4 rounded-full bg-[var(--chat-surface-elevated)] border border-[var(--chat-border)]">
                 <StepIcon type={step.type} />
               </div>
 
@@ -136,8 +136,8 @@ function Timeline({ steps, isRunning }: TimelineProps) {
 
         {/* Running pulse indicator when block is not finished */}
         {isRunning && (
-          <div className="relative pl-5">
-            <div className="absolute -left-0 flex items-center justify-center w-4 h-4">
+          <div className="relative ps-5">
+            <div className="absolute -start-0 flex items-center justify-center w-4 h-4">
               <span
                 aria-hidden
                 className="inline-block h-2 w-2 rounded-full bg-[var(--chat-accent-secondary)] animate-pulse"
@@ -223,7 +223,7 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
         }}
         className={cn(
           'inline-flex max-w-full items-center gap-2 rounded-sm px-1 py-1',
-          'text-left text-[13px] font-medium text-[var(--chat-thinking-text)]',
+          'text-start text-[13px] font-medium text-[var(--chat-thinking-text)]',
           'hover:text-[var(--chat-text-primary)] transition-colors',
         )}
         aria-expanded={useCompact ? compactExpanded : expanded}
@@ -254,7 +254,7 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
       {/* Timeline, shown if: (a) normal expand is open, OR (b) user expanded from compact pill */}
       {(useCompact ? compactExpanded : expanded) &&
         (isReasoningOnly && reasoningStep ? (
-          <div className="ml-2 mt-2 border-l border-[var(--chat-thinking-line)] py-1 pl-5 text-[var(--chat-thinking-text)]">
+          <div className="ms-2 mt-2 border-s border-[var(--chat-thinking-line)] py-1 ps-5 text-[var(--chat-thinking-text)]">
             <MarkdownContent content={reasoningStep.content} isStreaming={isRunning} />
           </div>
         ) : (

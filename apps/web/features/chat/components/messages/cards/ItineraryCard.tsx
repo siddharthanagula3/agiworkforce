@@ -194,7 +194,7 @@ export function ItineraryCard({ body }: ItineraryCardProps) {
                     type="button"
                     onClick={() => setSelectedPlace(stop.placeIndex)}
                     aria-pressed={selected}
-                    className="rounded text-left text-sm font-medium text-[color:var(--chat-text-primary)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
+                    className="rounded text-start text-sm font-medium text-[color:var(--chat-text-primary)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
                   >
                     {place.displayName}
                   </button>

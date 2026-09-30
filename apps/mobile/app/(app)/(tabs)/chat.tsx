@@ -12,11 +12,16 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { Building2, UserRound } from 'lucide-react-native';
+import { AgiWorkExamples } from '@/src/features/chat/components/AgiWorkExamples';
+import { useNewChatWorkspace } from '@/src/features/team/useNewChatWorkspace';
 import { Download } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import {
+  canUseBillingPlanCapability,
   summarizeSendPreview,
   type ProviderMode,
   type SendPreviewInput,
@@ -27,6 +32,7 @@ import { TemporaryChatToggle } from '@/src/features/chat/components/TemporaryCha
 import { AgiMark } from '@/components/ui/AgiMark';
 import {
   TaskChips,
+  TASK_CHIP_DRAFT_STARTERS,
   TASK_CHIP_SEND_CONTEXT,
   type TaskChipType,
   type TaskSuggestionType,
@@ -51,6 +57,7 @@ import {
 } from '@/src/features/voice/hooks/useVoiceConversation';
 import * as TTS from '@/src/features/voice/services/tts';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
 import { findNewAssistantResponse } from '@/src/features/voice/utils/assistantResponse';
 import { Text } from '@/components/ui/text';
 import { paywallErrorStateFromApiError, useChatStore } from '@/stores/chatStore';
@@ -61,22 +68,29 @@ import {
   getDefaultCloudModelIdForTier,
   getSelectableModelById,
   getShortDisplayName,
+  isSelectableModelIdForAccess,
 } from '@/src/features/model-picker/service';
+import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import { refreshCloudProjectDetails } from '@/src/features/projects/service';
 import { executionModeForSelection } from '@/src/features/chat/utils/conversationMode';
+import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
 import {
   captureImageAssetsFromCamera,
   imageAssetsToChatAttachments,
   pickImageAssetsFromLibrary,
 } from '@/src/features/media/photo-picker';
-import { PictureMetadataError } from '@/src/features/media/image-metadata';
+import {
+  PictureMetadataError,
+  PICTURE_METADATA_RECOVERY_MESSAGE,
+} from '@/src/features/media/image-metadata';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   readyLocalModelIdOr,
   useModelInstallStore,
-  pickReadyLocalModelId,
 } from '@/src/features/model-picker/installStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
@@ -86,11 +100,11 @@ import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
-import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
+import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
 import { WorkModeSourceNotice } from '@/src/features/chat/components/WorkModeSourceNotice';
-import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
+import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 
@@ -147,10 +161,12 @@ export default function ChatTabScreen() {
   const setSendError = useChatStore((s) => s.setSendError);
   const imageGenerationEnabled = useChatStore((s) => s.features.imageGen);
   const workMode = useChatStore((s) => s.workMode);
+  const setWorkMode = useChatStore((s) => s.setWorkMode);
 
   useFocusEffect(
     useCallback(() => {
       clearError();
+      useChatViewStore.getState().bindStyleConversation(NEW_CHAT_STYLE_KEY);
     }, [clearError]),
   );
   useComposerAttachmentHandoff('new-chat', chatInputAttachRef);
@@ -165,8 +181,6 @@ export default function ChatTabScreen() {
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const skillSelection = useMobileSkillSelectionStore((s) => s.selection);
   const clearSelectedSkill = useMobileSkillSelectionStore((s) => s.clearSkill);
-  const waitlistJoined = useWaitlistStore((s) => s.joined);
-  const waitlistRank = useWaitlistStore((s) => s.rank);
   const subscriptionTier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
@@ -175,6 +189,39 @@ export default function ChatTabScreen() {
     (s) => s.jobs[DEFAULT_LOCAL_MODEL_ID]?.status === 'downloading',
   );
   const activeMode = appMode;
+  const activeCloudProjectId = useCloudProjectStore((s) => s.activeProjectId);
+  const projectDefaultModelId = useCloudProjectStore((s) =>
+    s.activeProjectId ? (s.details[s.activeProjectId]?.defaultModelId ?? null) : null,
+  );
+  const hasActiveProjectDetails = useCloudProjectStore((s) =>
+    s.activeProjectId ? s.details[s.activeProjectId] !== undefined : true,
+  );
+  const appliedProjectDefaultRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (activeMode !== 'cloud' || !isClerkSignedIn || hasActiveProjectDetails) return;
+    const controller = new AbortController();
+    void refreshCloudProjectDetails(controller.signal).catch(() => undefined);
+    return () => controller.abort();
+  }, [activeMode, hasActiveProjectDetails, isClerkSignedIn]);
+
+  useEffect(() => {
+    if (activeMode !== 'cloud' || !activeCloudProjectId || !projectDefaultModelId) return;
+    const key = `${activeCloudProjectId}:${projectDefaultModelId}`;
+    if (appliedProjectDefaultRef.current === key) return;
+    if (!isSelectableModelIdForAccess(projectDefaultModelId, cloudUnlocked, subscriptionTier)) {
+      return;
+    }
+    appliedProjectDefaultRef.current = key;
+    setModel(projectDefaultModelId);
+  }, [
+    activeCloudProjectId,
+    activeMode,
+    cloudUnlocked,
+    projectDefaultModelId,
+    setModel,
+    subscriptionTier,
+  ]);
   const selectedSkillName =
     activeMode === 'cloud' && clerkUserId && skillSelection?.ownerId === clerkUserId
       ? skillSelection.name
@@ -196,26 +243,38 @@ export default function ChatTabScreen() {
       ),
     [installedModelIds, readySystemModelIds],
   );
+  const { t } = useTranslation();
+  const newChatWorkspace = useNewChatWorkspace(
+    activeMode === 'cloud' && isClerkSignedIn,
+    t('navPersonalWorkspace'),
+  );
   const cloudChatAvailable = FEATURES.cloudChat && Boolean(DEFAULT_CLOUD_MODEL_ID);
   const modeDescription =
     activeMode === 'cloud'
       ? 'Continue with AGI Cloud. Use Chats for full history and global search.'
       : 'Start privately on this device. Use Chats for full history and global search.';
 
-  const modelForSend = useMemo(() => {
-    if (activeMode === 'cloud') {
-      return executionModeForSelection(selectedModel, activeMode) === 'cloud'
-        ? selectedModel
-        : (getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
+  useEffect(() => {
+    if (
+      workMode === 'agiwork' &&
+      (activeMode !== 'cloud' ||
+        !cloudUnlocked ||
+        !isClerkSignedIn ||
+        !canUseBillingPlanCapability(subscriptionTier, 'agi_work'))
+    ) {
+      setWorkMode('chat');
     }
-    return executionModeForSelection(selectedModel, activeMode) === 'local'
-      ? selectedModel
-      : (pickReadyLocalModelId(
-          DEFAULT_LOCAL_MODEL_ID,
-          installedModelIds,
-          readySystemModelIds,
-          defaultLocalModelDownloading,
-        ) ?? DEFAULT_LOCAL_MODEL_ID);
+  }, [activeMode, cloudUnlocked, isClerkSignedIn, setWorkMode, subscriptionTier, workMode]);
+
+  const modelForSend = useMemo(() => {
+    return resolveNewConversationModel({
+      selectedModel,
+      mode: activeMode,
+      subscriptionTier,
+      installedModelIds,
+      readySystemModelIds,
+      defaultLocalModelDownloading,
+    });
   }, [
     activeMode,
     defaultLocalModelDownloading,
@@ -239,8 +298,9 @@ export default function ChatTabScreen() {
   );
 
   useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
+    if (appMode === 'cloud' && (!isClerkSignedIn || !clerkUserId)) return;
+    void loadConversations({ firstPageOnly: appMode === 'cloud' });
+  }, [appMode, clerkUserId, isClerkSignedIn, loadConversations]);
 
   useEffect(() => {
     if (appMode === 'cloud') {
@@ -372,7 +432,7 @@ export default function ChatTabScreen() {
             });
 
         if (imageRequest.status === 'blocked') {
-          Alert.alert(imageRequest.alert.title, imageRequest.alert.message);
+          alertBlockedImageRequest(imageRequest);
           return false;
         }
         if (imageRequest.status === 'ready') {
@@ -491,6 +551,7 @@ export default function ChatTabScreen() {
         setMediaMode('text');
         setActiveTaskChip((current) => (current === suggestion ? null : suggestion));
       }
+      chatInputAttachRef.current?.prefillText?.(TASK_CHIP_DRAFT_STARTERS[suggestion]);
       chatInputAttachRef.current?.focus?.();
     },
     [setMediaMode],
@@ -546,9 +607,10 @@ export default function ChatTabScreen() {
   }, [router]);
 
   const handleTapLocalMode = useCallback(() => {
+    setWorkMode('chat');
     setAppMode('local');
     setModel(readyLocalModelIdOr(DEFAULT_LOCAL_MODEL_ID));
-  }, [setAppMode, setModel]);
+  }, [setAppMode, setModel, setWorkMode]);
 
   const handleTapCloudMode = useCallback(() => {
     if (!cloudChatAvailable || !DEFAULT_CLOUD_MODEL_ID) {
@@ -570,6 +632,38 @@ export default function ChatTabScreen() {
     router,
     setAppMode,
     setModel,
+    subscriptionTier,
+  ]);
+
+  const handleTapWorkMode = useCallback(() => {
+    if (!canUseBillingPlanCapability(subscriptionTier, 'agi_work')) {
+      router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+      return;
+    }
+    if (!cloudUnlocked || !isClerkSignedIn) {
+      router.push(beginCloudPostAuthIntent());
+      return;
+    }
+    if (activeMode !== 'cloud') {
+      const switchToCloud = () => {
+        handleTapCloudMode();
+        if (cloudChatAvailable && cloudUnlocked && isClerkSignedIn) setWorkMode('agiwork');
+      };
+      Alert.alert('Work uses AGI Cloud', 'Switch to Cloud to start work with AGI.', [
+        { text: 'Stay in Local Mode', style: 'cancel' },
+        { text: 'Switch to Cloud', onPress: switchToCloud },
+      ]);
+      return;
+    }
+    setWorkMode('agiwork');
+  }, [
+    activeMode,
+    cloudChatAvailable,
+    cloudUnlocked,
+    handleTapCloudMode,
+    isClerkSignedIn,
+    router,
+    setWorkMode,
     subscriptionTier,
   ]);
 
@@ -603,7 +697,7 @@ export default function ChatTabScreen() {
       Alert.alert(
         'Camera',
         error instanceof PictureMetadataError
-          ? error.message
+          ? PICTURE_METADATA_RECOVERY_MESSAGE
           : 'Could not open the camera. Please try again.',
       );
     }
@@ -624,7 +718,7 @@ export default function ChatTabScreen() {
       Alert.alert(
         'Photos',
         error instanceof PictureMetadataError
-          ? error.message
+          ? PICTURE_METADATA_RECOVERY_MESSAGE
           : 'Could not open Photos. Please try again.',
       );
     }
@@ -633,8 +727,9 @@ export default function ChatTabScreen() {
   const handleSheetFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [...PICKABLE_DOCUMENT_MIME_TYPES],
+        type: pickableDocumentMimeTypes(appMode),
         copyToCacheDirectory: true,
+        multiple: true,
       });
       if (!result.canceled && result.assets.length > 0) {
         const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
@@ -650,7 +745,11 @@ export default function ChatTabScreen() {
     } catch {
       Alert.alert('Error', 'Failed to pick document. Please try again.');
     }
-  }, []);
+  }, [appMode]);
+
+  const handleOpenSkills = useCallback(() => {
+    router.push('/(app)/skills?returnTo=composer' as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const handleAttachFromLibrary = useCallback(
     (attachment: import('@/src/features/chat/components/AttachmentPreview').Attachment) => {
@@ -781,28 +880,61 @@ export default function ChatTabScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
-      {/* Header */}
       <View className="flex-row items-center justify-between px-4 h-12">
-        <View className="flex-row items-center gap-2">
-          <DrawerButton onPress={handleOpenDrawer} />
-          {/* The header owns ONLY the execution-mode toggle (Local | Cloud).
-              Model selection lives on the composer's control row, in the model
-              chip beside the attach and voice controls (ChatInput), the old
-              model pill here duplicated it and confusingly read "AGI Cloud"
-              like the toggle's Cloud segment. */}
-          <ModeToggle
-            mode={activeMode}
-            cloudJoined={waitlistJoined}
-            cloudUnlocked={cloudUnlocked}
-            waitlistRank={waitlistRank}
-            onTapLocal={handleTapLocalMode}
-            onTapCloud={handleTapCloudMode}
-            compact
-          />
+        <DrawerButton onPress={handleOpenDrawer} />
+        <View
+          accessibilityRole="tablist"
+          accessibilityLabel="Chat or Work"
+          style={{
+            flexDirection: 'row',
+            borderRadius: 999,
+            backgroundColor: c.surfaceElevated,
+            padding: 3,
+          }}
+        >
+          {(['chat', 'agiwork'] as const).map((mode) => {
+            const eligibleWorkMode =
+              activeMode === 'cloud' &&
+              cloudUnlocked &&
+              isClerkSignedIn &&
+              canUseBillingPlanCapability(subscriptionTier, 'agi_work')
+                ? workMode
+                : 'chat';
+            const selected = mode === eligibleWorkMode;
+            return (
+              <Pressable
+                key={mode}
+                testID={`chat.work-mode.${mode}`}
+                accessibilityRole="tab"
+                accessibilityLabel={mode === 'chat' ? 'Chat' : 'Work'}
+                accessibilityState={{ selected }}
+                onPress={mode === 'chat' ? () => setWorkMode('chat') : handleTapWorkMode}
+                style={{
+                  minWidth: 72,
+                  minHeight: 36,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 999,
+                  backgroundColor: selected ? c.charcoal700 : c.transparent,
+                }}
+              >
+                <Text style={{ color: selected ? c.textPrimary : c.textMuted, fontWeight: '600' }}>
+                  {mode === 'chat' ? 'Chat' : 'Work'}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-        {/* Already in the empty new-chat state -- a "new chat" action here would
-            be a no-op, so this slot is the temporary-chat toggle instead. */}
         <TemporaryChatToggle />
+      </View>
+      <View style={{ alignItems: 'center', paddingBottom: 4 }}>
+        <ModeToggle
+          mode={activeMode}
+          cloudUnlocked={cloudUnlocked}
+          onTapLocal={handleTapLocalMode}
+          onTapCloud={handleTapCloudMode}
+          compact
+        />
       </View>
 
       {/* Android: adjustResize already resizes the window; stacking
@@ -837,7 +969,7 @@ export default function ChatTabScreen() {
             <AgiMark size={30} />
             <Text
               style={{
-                fontSize: 26,
+                fontSize: typeScale.title1,
                 lineHeight: 30,
                 fontFamily: 'Newsreader_600SemiBold',
                 letterSpacing: 0.5,
@@ -849,7 +981,7 @@ export default function ChatTabScreen() {
           </View>
           <Text
             style={{
-              fontSize: 28,
+              fontSize: typeScale.title1,
               lineHeight: 34,
               fontWeight: '500',
               color: c.textPrimary,
@@ -863,7 +995,7 @@ export default function ChatTabScreen() {
             <>
               <Text
                 style={{
-                  fontSize: 14,
+                  fontSize: typeScale.subhead,
                   lineHeight: 20,
                   color: c.textMuted,
                   textAlign: 'center',
@@ -872,8 +1004,36 @@ export default function ChatTabScreen() {
               >
                 {modeDescription}
               </Text>
+              {newChatWorkspace ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 8,
+                    maxWidth: 300,
+                  }}
+                >
+                  {newChatWorkspace.organization ? (
+                    <Building2 size={14} color={c.textMuted} />
+                  ) : (
+                    <UserRound size={14} color={c.textMuted} />
+                  )}
+                  <Text
+                    numberOfLines={1}
+                    style={{ fontSize: typeScale.footnote, color: c.textMuted }}
+                  >
+                    {t('newChat.workspace', { name: newChatWorkspace.name })}
+                  </Text>
+                </View>
+              ) : null}
               {workMode === 'agiwork' ? (
-                <WorkModeSourceNotice onOpenConnectors={handleOpenConnectors} />
+                <>
+                  <WorkModeSourceNotice onOpenConnectors={handleOpenConnectors} />
+                  <AgiWorkExamples
+                    onChoose={(prompt) => chatInputAttachRef.current?.prefillText?.(prompt)}
+                  />
+                </>
               ) : null}
             </>
           ) : (
@@ -892,6 +1052,7 @@ export default function ChatTabScreen() {
             activeChip={activeTaskChip}
             onChipPress={handleTaskSuggestion}
             showCloudSuggestions={activeMode === 'cloud'}
+            modelId={modelForSend}
           />
         </View>
 
@@ -934,6 +1095,8 @@ export default function ChatTabScreen() {
         onOpenModelPicker={handleSheetModelPicker}
         onOpenProjectPicker={handleSheetProjectPicker}
         onAttachFromLibrary={handleAttachFromLibrary}
+        onOpenSkills={handleOpenSkills}
+        offersOutputFormat
       />
 
       <StyleSelector openSignal={styleSelectorOpenSignal} />
@@ -945,6 +1108,7 @@ export default function ChatTabScreen() {
         modelScope={modelPickerScope}
         onSelect={setModel}
         onOpenCloudAccess={handleOpenCloudAccess}
+        offerRoutingProfiles
       />
 
       {/* First-run voice intro + recording disclosure, gating the overlay below */}
@@ -1019,10 +1183,10 @@ function DownloadModelBanner({ onPress }: DownloadModelBannerProps) {
         <Download size={16} color={c.teal} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: c.textPrimary }}>
+        <Text style={{ fontSize: typeScale.footnote, fontWeight: '600', color: c.textPrimary }}>
           Download a model to chat
         </Text>
-        <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}>
+        <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginTop: 2 }}>
           Run AI privately on this device, no account needed.
         </Text>
       </View>

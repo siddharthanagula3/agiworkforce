@@ -14,12 +14,28 @@
       "reason": "RFC 8628 device flow, the pending row is resolved and expired by user_code before any account is attached, user_id is null until approval"
     },
     {
+      "path": "apps/web/app/api/auth/logout/route.ts",
+      "reason": "token revocation by refresh token: the credential is the subject, so the family is found by its hash before any caller is known, and only that family is revoked"
+    },
+    {
       "path": "apps/web/app/api/auth/device/refresh/route.ts",
       "reason": "refresh-token reuse detection revokes the whole family_id, the credential is the subject and constraining by user would defeat the revocation"
     },
     {
       "path": "apps/web/app/api/auth/device/token/route.ts",
       "reason": "RFC 8628 device flow, the row is resolved by device_id and user_code, not the caller, until the poll succeeds and a developer token is minted"
+    },
+    {
+      "path": "apps/web/lib/connectors/bank-accounts.ts",
+      "reason": "bank tools and account erasure run with no request scope, so the Plaid items are read and changed on the owner connection, and every statement is constrained by the caller's user_id"
+    },
+    {
+      "path": "apps/web/lib/server/mobile-intent-tokens.ts",
+      "reason": "the Ask from Siri token is the subject: it is resolved by its hash before any caller is known, and every revoke is constrained by the owner's user_id"
+    },
+    {
+      "path": "apps/web/lib/server/mobile-intent.ts",
+      "reason": "the claimed-user connection bound to the Ask token's owner is built on the owner pool; every statement runs as that owner"
     },
     {
       "path": "apps/web/app/api/billing/top-up/route.ts",
@@ -66,8 +82,8 @@
       "reason": "feedback is reachable from Local mode with no cloud account, so user_id is nullable by design and a null owner cannot satisfy any WITH CHECK; the insert carries the server-derived user id and reads nothing back"
     },
     {
-      "path": "apps/web/app/api/github/oauth/callback/route.ts",
-      "reason": "the installation_id conflict target may hold an unverified row belonging to another account, and claiming it once ownership is proven is the point of the flow, so the upsert cannot be constrained to rows the caller can already see"
+      "path": "apps/web/lib/github-install-app-return.ts",
+      "reason": "the installation_id conflict target may hold an unverified row belonging to another account, and claiming it once ownership is proven is the point of the flow, so the upsert cannot be constrained to rows the caller can already see; the upsert moved here from the oauth callback so the phone completion shares it"
     },
     {
       "path": "apps/web/app/api/github/webhook/route.ts",
@@ -172,6 +188,10 @@
     {
       "path": "apps/web/lib/server/account-erasure.ts",
       "reason": "account erasure engine deletes across every user-owned table by the target userId the caller already resolved, not a session token RLS can bind"
+    },
+    {
+      "path": "apps/web/lib/server/account-security/service.ts",
+      "reason": "turning on Advanced Account Security denies the account's approved but unredeemed device codes on the owner connection, because device_authorization_codes carries no app_rls grant; the statement is constrained by the enrolling account's user_id, and eligibility reads the organization directory and domain tables only a service connection can see"
     },
     {
       "path": "apps/web/lib/server/anonymous-erasure.ts",

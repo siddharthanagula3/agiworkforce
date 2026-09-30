@@ -1,8 +1,19 @@
-import type { DeviceAuthorizationStartResponse, TokenResponse } from '@agiworkforce/types';
+import {
+  DEVICE_AUTHORIZATION_CODE_PATH,
+  DEVICE_AUTHORIZATION_REFRESH_PATH,
+  DEVICE_AUTHORIZATION_TOKEN_PATH,
+  DeviceAuthorizationStartResponseSchema,
+  DeviceTokenErrorSchema,
+  DeviceTokenResponseSchema,
+  type DeviceRefreshRequest,
+  type DeviceTokenError,
+} from '@agiworkforce/cloud-contracts';
 
 const MIN_POLL_INTERVAL_MS = 3_000;
 const MAX_POLL_INTERVAL_MS = 10_000;
 const MAX_AUTH_WINDOW_MS = 15 * 60 * 1000;
+const SLOW_DOWN_STEP_MS = 5_000;
+const MAX_SLOWED_POLL_INTERVAL_MS = 60_000;
 
 export type DeviceAuthorizationPost = (
   url: string,
@@ -23,35 +34,29 @@ export interface DeviceAuthorizationRequest {
 export type DeviceAuthorizationPollResult =
   | { kind: 'approved'; token: string; refreshToken?: string; expiresAt: number }
   | { kind: 'pending' }
+  | { kind: 'slow_down'; intervalMs: number | null }
   | { kind: 'denied' }
   | { kind: 'expired' }
   | { kind: 'rejected'; message: string };
 
-function parseRecord(body: string): Record<string, unknown> {
+export type DeviceSessionRefreshResult =
+  | { kind: 'renewed'; token: string; expiresAt: number; refreshToken: string }
+  | { kind: 'unavailable' }
+  | { kind: 'revoked' }
+  | { kind: 'terms-required'; acceptanceUrl: string | null }
+  | { kind: 'account-unavailable'; message: string };
+
+function parseJson(body: string): unknown {
   try {
-    const parsed = JSON.parse(body) as unknown;
-    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
+    return JSON.parse(body) as unknown;
   } catch {
-    return {};
+    return null;
   }
 }
 
-function requiredString(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error(`AGI Cloud returned an invalid ${key}.`);
-  }
-  return value;
-}
-
-function requiredPositiveNumber(record: Record<string, unknown>, key: string): number {
-  const value = record[key];
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    throw new Error(`AGI Cloud returned an invalid ${key}.`);
-  }
-  return value;
+function deviceError(body: unknown): DeviceTokenError | null {
+  const parsed = DeviceTokenErrorSchema.safeParse(body);
+  return parsed.success ? parsed.data : null;
 }
 
 export async function requestDeviceAuthorization(
@@ -60,20 +65,16 @@ export async function requestDeviceAuthorization(
   surface: DeviceAuthorizationSurface = 'cli',
 ): Promise<DeviceAuthorizationRequest> {
   const trustedOrigin = new URL(origin).origin;
-  const response = await post(`${trustedOrigin}/api/auth/device/code`, { surface });
+  const response = await post(`${trustedOrigin}${DEVICE_AUTHORIZATION_CODE_PATH}`, { surface });
   if (response.status < 200 || response.status >= 300) {
     throw new Error('Could not start AGI Cloud sign-in. Try again.');
   }
 
-  const raw = parseRecord(response.body);
-  const contract: DeviceAuthorizationStartResponse = {
-    device_code: requiredString(raw, 'device_code'),
-    user_code: requiredString(raw, 'user_code'),
-    verification_uri: requiredString(raw, 'verification_uri'),
-    verification_uri_complete: requiredString(raw, 'verification_uri_complete'),
-    interval: requiredPositiveNumber(raw, 'interval'),
-    expires_in: requiredPositiveNumber(raw, 'expires_in'),
-  };
+  const parsed = DeviceAuthorizationStartResponseSchema.safeParse(parseJson(response.body));
+  if (!parsed.success) {
+    throw new Error('AGI Cloud returned an invalid device authorization.');
+  }
+  const contract = parsed.data;
 
   const verificationUrl = new URL(contract.verification_uri_complete);
   if (verificationUrl.origin !== trustedOrigin) {
@@ -99,23 +100,37 @@ export async function pollDeviceAuthorization(
 ): Promise<DeviceAuthorizationPollResult> {
   let response: { status: number; body: string };
   try {
-    response = await post(`${new URL(origin).origin}/api/auth/device/token`, {
+    response = await post(`${new URL(origin).origin}${DEVICE_AUTHORIZATION_TOKEN_PATH}`, {
       device_code: deviceCode,
     });
   } catch {
     return { kind: 'pending' };
   }
 
-  const body = parseRecord(response.body);
-  const error = typeof body['error'] === 'string' ? body['error'] : undefined;
-  if (response.status === 403 && error === 'authorization_pending') {
-    return { kind: 'pending' };
-  }
-  if (response.status === 400 && error === 'access_denied') {
-    return { kind: 'denied' };
-  }
-  if (response.status === 400 && (error === 'expired_token' || error === 'invalid_grant')) {
-    return { kind: 'expired' };
+  const body = parseJson(response.body);
+  const refusal = deviceError(body);
+  switch (refusal?.error) {
+    case 'authorization_pending':
+      return { kind: 'pending' };
+    case 'slow_down':
+      return {
+        kind: 'slow_down',
+        intervalMs: refusal.interval === undefined ? null : refusal.interval * 1000,
+      };
+    case 'terms_acceptance_required':
+      return {
+        kind: 'rejected',
+        message: `Accept the updated Terms of Service at ${refusal.acceptance_url}, then sign in again.`,
+      };
+    case 'account_unavailable':
+      return { kind: 'rejected', message: refusal.error_description };
+    case 'access_denied':
+      return { kind: 'denied' };
+    case 'expired_token':
+    case 'invalid_grant':
+      return { kind: 'expired' };
+    case undefined:
+      break;
   }
   if (response.status < 200 || response.status >= 300) {
     if (response.status >= 500) {
@@ -132,14 +147,11 @@ export async function pollDeviceAuthorization(
     };
   }
 
-  const tokenResponse: TokenResponse = {
-    access_token: requiredString(body, 'access_token'),
-    ...(typeof body['refresh_token'] === 'string'
-      ? { refresh_token: requiredString(body, 'refresh_token') }
-      : {}),
-    token_type: requiredString(body, 'token_type'),
-    expires_in: requiredPositiveNumber(body, 'expires_in'),
-  };
+  const parsed = DeviceTokenResponseSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new Error('AGI Cloud returned an invalid device credential.');
+  }
+  const tokenResponse = parsed.data;
   if (tokenResponse.token_type.toLowerCase() !== 'bearer') {
     return { kind: 'rejected', message: 'AGI Cloud returned an unsupported token type.' };
   }
@@ -149,5 +161,70 @@ export async function pollDeviceAuthorization(
     token: tokenResponse.access_token,
     ...(tokenResponse.refresh_token ? { refreshToken: tokenResponse.refresh_token } : {}),
     expiresAt: Date.now() + tokenResponse.expires_in * 1000,
+  };
+}
+
+/**
+ * RFC 8628 3.5: every slow_down adds five seconds to the polling interval for
+ * the rest of the grant, or takes the server's interval when that is longer.
+ */
+export function slowedDevicePollIntervalMs(
+  currentMs: number,
+  result: Extract<DeviceAuthorizationPollResult, { kind: 'slow_down' }>,
+): number {
+  return Math.min(
+    MAX_SLOWED_POLL_INTERVAL_MS,
+    Math.max(currentMs + SLOW_DOWN_STEP_MS, result.intervalMs ?? 0),
+  );
+}
+
+/**
+ * Rotates a device session against the same endpoint every other surface uses.
+ * A transport failure is 'unavailable', not 'revoked': losing the credential
+ * because the network blinked would send the editor back through device code.
+ */
+export async function refreshDeviceSession(
+  origin: string,
+  refreshToken: string,
+  post: DeviceAuthorizationPost,
+): Promise<DeviceSessionRefreshResult> {
+  let response: { status: number; body: string };
+  try {
+    const request: DeviceRefreshRequest = { refresh_token: refreshToken };
+    response = await post(`${new URL(origin).origin}${DEVICE_AUTHORIZATION_REFRESH_PATH}`, request);
+  } catch {
+    return { kind: 'unavailable' };
+  }
+
+  const body = parseJson(response.body);
+  const refusal = deviceError(body);
+  if (refusal?.error === 'terms_acceptance_required') {
+    return { kind: 'terms-required', acceptanceUrl: refusal.acceptance_url };
+  }
+  if (refusal?.error === 'invalid_grant') return { kind: 'revoked' };
+  if (refusal?.error === 'account_unavailable') {
+    return {
+      kind: 'account-unavailable',
+      message:
+        refusal.error_description.trim() !== ''
+          ? refusal.error_description
+          : 'This AGI Cloud account cannot be used right now. Sign in on the web to see why.',
+    };
+  }
+  if (response.status < 200 || response.status >= 300) return { kind: 'unavailable' };
+
+  const parsed = DeviceTokenResponseSchema.safeParse(body);
+  if (
+    !parsed.success ||
+    parsed.data.token_type.toLowerCase() !== 'bearer' ||
+    parsed.data.refresh_token === undefined
+  ) {
+    return { kind: 'unavailable' };
+  }
+  return {
+    kind: 'renewed',
+    token: parsed.data.access_token,
+    expiresAt: Date.now() + parsed.data.expires_in * 1000,
+    refreshToken: parsed.data.refresh_token,
   };
 }

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { MAX_AGIWORK_GOAL_CHARS } from './cloud-agent-runs';
+
 export const LIVE_VOICE_TOOL_DECISIONS = ['approved', 'rejected'] as const;
 export const LIVE_VOICE_TOOL_ARGUMENTS_MAX_CHARS = 65_536;
 export const LIVE_VOICE_TOOL_INPUT_PREVIEW_MAX_CHARS = 4_000;
@@ -43,6 +45,24 @@ export type LiveVoiceToolCallResponse = z.infer<typeof LiveVoiceToolCallResponse
 
 export interface LiveVoicePendingApproval extends LiveVoiceToolApproval {
   deciding: boolean;
+}
+
+export const LIVE_VOICE_WORK_TASK_TOOL = 'agi_work';
+
+export const LIVE_VOICE_CLIENT_HANDOFFS = [LIVE_VOICE_WORK_TASK_TOOL] as const;
+export type LiveVoiceClientHandoff = (typeof LIVE_VOICE_CLIENT_HANDOFFS)[number];
+
+const LiveVoiceWorkTaskArgumentsSchema = z.object({
+  goal: z.string().trim().min(1).max(MAX_AGIWORK_GOAL_CHARS),
+});
+
+export function liveVoiceWorkTaskGoal(args: string): string | null {
+  try {
+    const parsed = LiveVoiceWorkTaskArgumentsSchema.safeParse(JSON.parse(args));
+    return parsed.success ? parsed.data.goal : null;
+  } catch {
+    return null;
+  }
 }
 
 export function liveVoiceToolCallPath(sessionId: string): string {

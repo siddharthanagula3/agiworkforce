@@ -199,7 +199,7 @@ function EnhancedExportDialogImpl({
                   key={format.id}
                   onClick={() => setSelectedFormat(format.id)}
                   className={cn(
-                    'flex items-start gap-3 rounded-lg border-2 p-4 text-left transition-all hover:bg-accent',
+                    'flex items-start gap-3 rounded-lg border-2 p-4 text-start transition-all hover:bg-accent',
                     selectedFormat === format.id
                       ? 'border-primary bg-primary/5'
                       : 'border-transparent',
@@ -291,12 +291,12 @@ function EnhancedExportDialogImpl({
           <Button onClick={handleExport} disabled={isExporting || !session}>
             {isExporting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 Exporting...
               </>
             ) : (
               <>
-                <Download className="mr-2 h-4 w-4" />
+                <Download className="me-2 h-4 w-4" />
                 Export {selectedFormatData?.name}
               </>
             )}

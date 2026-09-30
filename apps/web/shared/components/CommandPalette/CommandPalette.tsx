@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-space-available';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import {
@@ -123,6 +124,7 @@ function useCommands(
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const disabledFeatures = useDisabledWorkspaceFeatures();
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_HIDDEN_NAV_IDS;
+  const healthSpaceAvailable = useHealthSpaceAvailable();
 
   const themeLabel = theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System';
   const nextTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
@@ -179,6 +181,7 @@ function useCommands(
     isAdmin: isWorkspaceAdmin,
     hiddenIds: hiddenNavIds,
     disabledFeatures,
+    healthSpaceAvailable,
     translate: (key, fallback) => t(key, { defaultValue: fallback }),
   }).map((item) => ({
     id: `nav-${item.id}`,
@@ -523,7 +526,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                         {...optionProps}
                         onClick={() => execute(cmd)}
                         className={cn(
-                          'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                          'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-start focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                           isSelected
                             ? 'bg-accent text-accent-foreground'
                             : 'text-foreground hover:bg-accent/60',
@@ -540,7 +543,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                             <span className="sr-only">, {cmd.typeLabel}</span>
                           ) : null}
                           {cmd.subtitle && (
-                            <span className="ml-2 text-xs text-muted-foreground truncate">
+                            <span className="ms-2 text-xs text-muted-foreground truncate">
                               {cmd.subtitle}
                             </span>
                           )}

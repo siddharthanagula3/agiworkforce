@@ -2,12 +2,12 @@ import { useEffect, useRef } from 'react';
 import { View, Animated } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { spacing, useThemeColors, zIndex } from '@/src/ui/theme';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { EDGE_COPY } from './copy';
-import { spacing } from '@/src/ui/theme';
 
 export function OfflineBanner() {
   const colors = useThemeColors();
@@ -29,12 +29,12 @@ export function OfflineBanner() {
         Animated.parallel([
           Animated.timing(translateY, {
             toValue: 0,
-            duration: 220,
+            duration: motion.quick,
             useNativeDriver: true,
           }),
           Animated.timing(opacity, {
             toValue: 1,
-            duration: 200,
+            duration: motion.quick,
             useNativeDriver: true,
           }),
         ]).start();
@@ -47,12 +47,12 @@ export function OfflineBanner() {
         Animated.parallel([
           Animated.timing(translateY, {
             toValue: hiddenOffset,
-            duration: 180,
+            duration: motion.quick,
             useNativeDriver: true,
           }),
           Animated.timing(opacity, {
             toValue: 0,
-            duration: 160,
+            duration: motion.quick,
             useNativeDriver: true,
           }),
         ]).start();
@@ -69,7 +69,7 @@ export function OfflineBanner() {
         top: 0,
         left: 0,
         right: 0,
-        zIndex: 9999,
+        zIndex: zIndex.notification,
         backgroundColor: colors.teal,
         flexDirection: 'row',
         alignItems: 'center',
@@ -89,7 +89,7 @@ export function OfflineBanner() {
       <Text
         style={{
           color: colors.accentText,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           fontWeight: '600',
           flexShrink: 1,
           textAlign: 'center',

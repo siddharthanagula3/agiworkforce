@@ -73,9 +73,9 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
-import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
-import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { requireFreeMobileCloudModel } from '../test-utils/modelFixtures';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { ApiHttpError } from '../services/apiErrors';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -89,7 +89,7 @@ const mockStreamResume = streamToolApprovalResume as jest.MockedFunction<
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000004';
 const RUN_ID = '0190a000-0000-7000-8000-000000000014';
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const CLOUD_MODEL = requireFreeMobileCloudModel().id;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -341,5 +341,69 @@ describe('resolveToolApproval, durable server-owned checkpoint', () => {
         expect.objectContaining({ toolCallId: 'call_2', status: 'completed' }),
       ],
     });
+  });
+
+  async function pauseOnApproval(toolCallId: string): Promise<string> {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onRunReference?.({
+        runId: RUN_ID,
+        runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
+        lastSequence: -1,
+      });
+      callbacks.onDelta({
+        x_tool_approval_request: {
+          tool_call_id: toolCallId,
+          name: 'mcp__github__create_comment',
+          args: { body: 'ship it' },
+        },
+      });
+      callbacks.onDone();
+    });
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'comment on the PR', CLOUD_MODEL);
+    return lastAssistantMessage()!.id;
+  }
+
+  it.each([404, 409, 410])(
+    'closes the approval card instead of offering it again when resume answers %i',
+    async (status) => {
+      const assistantId = await pauseOnApproval('call_answered');
+      const reason = 'This approval was already answered or has expired.';
+      mockStreamResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+        callbacks.onError(new ApiHttpError(reason, status));
+      });
+
+      await useChatExecutionStore
+        .getState()
+        .resolveToolApproval(CONV_ID, assistantId, 'call_answered', 'approved');
+
+      expect(lastAssistantMessage()?.toolCalls?.[0]).toMatchObject({
+        toolCallId: 'call_answered',
+        requiresApproval: false,
+      });
+      expect(useChatExecutionStore.getState().error).toContain(reason);
+
+      await useChatExecutionStore
+        .getState()
+        .resolveToolApproval(CONV_ID, assistantId, 'call_answered', 'approved');
+      expect(mockStreamResume).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('offers the approval again when resume fails for a transient reason', async () => {
+    const assistantId = await pauseOnApproval('call_transient');
+    mockStreamResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onError(new ApiHttpError('Service unavailable', 503));
+    });
+
+    await useChatExecutionStore
+      .getState()
+      .resolveToolApproval(CONV_ID, assistantId, 'call_transient', 'approved');
+
+    expect(lastAssistantMessage()?.toolCalls?.[0]).toMatchObject({
+      toolCallId: 'call_transient',
+      status: 'awaiting-approval',
+      requiresApproval: true,
+    });
+    expect(useChatExecutionStore.getState().error).toContain('Service unavailable');
   });
 });

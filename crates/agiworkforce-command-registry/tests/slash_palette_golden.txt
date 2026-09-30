@@ -6,6 +6,13 @@
 /review
 /diff
 /copy
+/continue-elsewhere
+/thread
+/threads
+/gather
+/background [bg]
+/table
+/links
 /init
 /new
 /resume [sessions]
@@ -51,6 +58,9 @@
 /voice [v]
 /image [imagine]
 /search
+/save-skill
+/save-routine
+/schedule [routines]
 /theme
 /login
 /logout
@@ -76,6 +86,7 @@
 /mobile [ios, android]
 /passes
 /pr-comments
+/autofix-pr
 /privacy-settings
 /privacy-mode [trust-boundary]
 /continue-with-byok [fork-byok, byok]

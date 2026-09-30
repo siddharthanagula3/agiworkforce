@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { DIAGNOSTIC_SURFACES } from '../types';
-import { supportDiagnosticsSchema } from '../schema';
+import {
+  DIAGNOSTIC_SURFACES,
+  supportDiagnosticsSchema,
+} from '@agiworkforce/cloud-contracts/support';
 
 /**
  * Each surface asserts this same field list against its own collector. Adding a

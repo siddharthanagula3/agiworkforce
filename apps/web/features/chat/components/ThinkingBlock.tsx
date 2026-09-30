@@ -128,7 +128,7 @@ export function ThinkingBlock({
         onClick={handleToggle}
         aria-expanded={expanded}
         aria-label={`${expanded ? 'Collapse' : 'Expand'} reasoning`}
-        className="w-full flex items-center gap-2 py-0.5 text-sm text-left text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-sm"
+        className="w-full flex items-center gap-2 py-0.5 text-sm text-start text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-sm"
       >
         <span
           className={cn('flex-1 min-w-0 truncate', isStreaming && 'text-primary')}
@@ -172,7 +172,7 @@ export function ThinkingBlock({
       >
         <div
           ref={bodyRef}
-          className="mt-1 mb-1 ml-1 max-h-96 overflow-y-auto border-l border-border/40 pl-3 [scrollbar-width:thin] [scrollbar-color:var(--chat-border-strong)_transparent]"
+          className="mt-1 mb-1 ms-1 max-h-96 overflow-y-auto border-s border-border/40 ps-3 [scrollbar-width:thin] [scrollbar-color:var(--chat-border-strong)_transparent]"
         >
           <div className={REASONING_BODY_CLASS}>
             {isStreaming ? (

@@ -133,7 +133,7 @@ function ConnectorConnectCardImpl({ request, onRetryTurn, className }: Connector
                 data-testid="connector-connect-retry"
                 className="inline-flex h-7 items-center justify-center whitespace-nowrap rounded-md border border-border px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <RotateCw className="mr-1 h-3 w-3" aria-hidden="true" />
+                <RotateCw className="me-1 h-3 w-3" aria-hidden="true" />
                 Retry this turn
               </button>
             ) : null}

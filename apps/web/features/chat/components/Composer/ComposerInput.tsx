@@ -57,7 +57,7 @@ const INPUT_SHARED_CLASS =
   'relative z-[var(--z-control)] block w-full resize-none overflow-y-auto border-0 bg-transparent px-2 text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50';
 const INPUT_RESTING_HEIGHT_CLASS = 'max-h-[240px]';
 const INPUT_EXPANDED_HEIGHT_CLASS = 'h-[min(60dvh,40rem)] max-h-[min(60dvh,40rem)]';
-const INPUT_END_INSET_CLASS = 'pr-9';
+const INPUT_END_INSET_CLASS = 'pe-9';
 /** 16px/24px everywhere: home and chat, desktop and phone (parity target). */
 const INPUT_TEXT_SIZE_CLASS = 'text-base leading-6';
 const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-base leading-6';
@@ -72,7 +72,7 @@ const EDITOR_SHARED_CLASS =
 const EDITOR_RESTING_HEIGHT_CLASS = '[&_.ProseMirror]:max-h-[240px]';
 const EDITOR_EXPANDED_HEIGHT_CLASS =
   '[&_.ProseMirror]:h-[min(60dvh,40rem)]! [&_.ProseMirror]:max-h-[min(60dvh,40rem)]!';
-const EDITOR_END_INSET_CLASS = '[&_.ProseMirror]:pr-9';
+const EDITOR_END_INSET_CLASS = '[&_.ProseMirror]:pe-9';
 const EDITOR_ROW_CLASS =
   '[&_.ProseMirror]:min-h-[36px] [&_.ProseMirror]:py-1 sm:[&_.ProseMirror]:min-h-[36px] sm:[&_.ProseMirror]:py-1.5';
 const EDITOR_EMPTY_ROW_CLASS =

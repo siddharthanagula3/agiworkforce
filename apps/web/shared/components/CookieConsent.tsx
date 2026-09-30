@@ -129,7 +129,7 @@ export const CookieConsent = () => {
             aria-label="Cookie consent"
           >
             <div className="pointer-events-auto relative w-full max-w-md rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-e3">
-              <div className="flex items-start gap-3 pr-8">
+              <div className="flex items-start gap-3 pe-8">
                 <Cookie
                   size={COOKIE_ICON_SIZE}
                   className="mt-0.5 shrink-0 text-muted-foreground"
@@ -183,7 +183,7 @@ export const CookieConsent = () => {
               <button
                 type="button"
                 onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
-                className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="absolute end-2 top-2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label="Close and reject non-essential cookies"
               >
                 <X size={CLOSE_ICON_SIZE} aria-hidden="true" />
@@ -230,8 +230,9 @@ export const CookieConsent = () => {
                   Analytics
                 </Label>
                 <p className="text-sm text-muted-foreground" id="cookie-analytics-description">
-                  Aggregated page views (Google Analytics 4), with no personally identifying
-                  information. Off by default.
+                  Aggregated page views (Google Analytics 4) and, when you are signed in, product
+                  usage events from the AGI apps recorded against your account, such as a stopped
+                  response. Never your messages or files. Off by default.
                   {optedOutBySignal
                     ? ' Your browser is sending Global Privacy Control, so this stays off here and the switch cannot be turned on.'
                     : ''}

@@ -49,6 +49,15 @@ export const STEP_UP_ACTIONS = {
     freshnessSeconds: 120,
     consequence: 'The secret is shown in full and can be copied.',
   },
+  'account_security.enroll': {
+    freshnessSeconds: 300,
+    consequence:
+      'Every sign-in to your account will need one of your passkeys or security keys, and your other devices are signed out.',
+  },
+  'account_security.change': {
+    freshnessSeconds: 300,
+    consequence: 'The passkeys, security keys or recovery keys that can reach your account change.',
+  },
   'session.revoke_all': {
     freshnessSeconds: 300,
     consequence: 'Every other signed-in device is signed out.',

@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { recordAuditEvent, type AuditEventDetail } from '@/lib/security-audit';
 import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
 import {
+  finishIntentRevocation,
   revokeEveryOtherSession,
   type IdentitySessionOperations,
 } from '@/lib/server/session-revocation';
@@ -30,6 +31,7 @@ export interface IdentitySecurityEventInput {
   userId: string;
   event: IdentitySecurityEventKey;
   subjectRef?: string | null;
+  noticeRef?: string | null;
   context?: string | null;
   request?: Request;
   organizationId?: string | null;
@@ -63,7 +65,7 @@ export async function emitIdentitySecurityEvent(
     await notifyIdentitySecurityEvent(db, {
       userId: input.userId,
       event: input.event,
-      subjectRef: input.subjectRef ?? null,
+      subjectRef: input.noticeRef ?? input.subjectRef ?? null,
       context: input.context ?? null,
     });
   } catch (error) {
@@ -153,6 +155,7 @@ export async function respondToAccountCompromise(
   }
 
   const sweep = await revokeEveryOtherSession(identity, input.userId, null);
+  const intentRevoked = await finishIntentRevocation(sweep, input.userId);
   const sessionsRevoked = sweep.ended.length;
   const sessionsFailed = sweep.failed.length;
   // A provider sweep leaves device credentials alive, and a live refresh row
@@ -184,7 +187,7 @@ export async function respondToAccountCompromise(
     request: input.request,
     organizationId: input.organizationId ?? null,
     severity: 'critical',
-    outcome: sessionsFailed > 0 || sweep.incomplete ? 'failure' : 'success',
+    outcome: sessionsFailed > 0 || sweep.incomplete || !intentRevoked ? 'failure' : 'success',
     detail: {
       resourceType: 'account',
       resourceId: responseId || input.trigger,

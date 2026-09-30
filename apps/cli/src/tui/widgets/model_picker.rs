@@ -160,6 +160,21 @@ impl ModelPickerState {
                 if matching.is_empty() {
                     continue;
                 }
+                let mut families: Vec<(String, Vec<Model>)> = Vec::new();
+                for model in matching {
+                    let family = agiworkforce_model_registry::model_family(&model.id)
+                        .ok()
+                        .flatten()
+                        .unwrap_or_else(|| model.id.clone());
+                    match families.iter_mut().find(|(name, _)| *name == family) {
+                        Some((_, members)) => members.push(model),
+                        None => families.push((family, vec![model])),
+                    }
+                }
+                let matching: Vec<Model> = families
+                    .into_iter()
+                    .flat_map(|(_, members)| members)
+                    .collect();
 
                 mode_rows.push(PickerRow::ProviderHeader { provider_id: pid });
                 for m in matching {

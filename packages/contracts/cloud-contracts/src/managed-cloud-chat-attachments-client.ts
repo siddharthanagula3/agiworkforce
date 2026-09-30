@@ -2,12 +2,13 @@ import { stripTrailingSlashes } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
-  MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   ManagedCloudChatAttachmentCompleteRequestSchema,
   ManagedCloudChatAttachmentCompleteResponseSchema,
   ManagedCloudChatAttachmentPresignRequestSchema,
   ManagedCloudChatAttachmentPresignResponseSchema,
+  chatAttachmentSizeLabel,
   isSupportedChatAttachment,
   resolveChatAttachmentMimeType,
   type ManagedCloudChatAttachment,
@@ -177,8 +178,10 @@ export function createManagedCloudChatAttachmentsClient(
         throw new Error(`Attach at most ${MAX_CHAT_ATTACHMENT_COUNT} files per message.`);
       }
       const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
-      if (totalBytes > MAX_CHAT_ATTACHMENT_BYTES) {
-        throw new Error('Chat attachments are limited to 12 MiB total per message.');
+      if (totalBytes > MAX_CHAT_ATTACHMENT_MESSAGE_BYTES) {
+        throw new Error(
+          `Chat attachments are limited to ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES)} total per message.`,
+        );
       }
 
       const uploaded: ManagedCloudChatAttachment[] = [];

@@ -296,7 +296,7 @@ export function GeneratedFileCard({
             <button
               type="button"
               onClick={onOpenSourceSession}
-              className="ml-auto text-caption font-medium text-[var(--chat-text-muted)] underline-offset-2 hover:text-[var(--chat-text-secondary)] hover:underline"
+              className="ms-auto text-caption font-medium text-[var(--chat-text-muted)] underline-offset-2 hover:text-[var(--chat-text-secondary)] hover:underline"
             >
               {presentation.sourceSessionLabel}
             </button>

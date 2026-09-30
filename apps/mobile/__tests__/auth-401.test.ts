@@ -11,14 +11,30 @@ jest.mock('react-native', () => ({
 
 jest.mock('../lib/constants', () => ({
   API_URL: 'https://api.test.local',
-  TIMEOUTS: { DEFAULT: 10_000 },
+  TIMEOUTS: { DEFAULT: 8_000 },
 }));
 
 jest.mock('../lib/abortSignal', () => ({
   combineAbortSignals: (signals: AbortSignal[]) => signals[0],
 }));
 
-import { api } from '../services/api';
+jest.mock('../lib/egressGuard', () => ({
+  guardedFetch: (input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init),
+}));
+
+jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
+  invalidateCloudAccount: jest.fn(),
+}));
+
+jest.mock('../src/features/auth/services/cloudAccountTeardown', () => ({
+  clearLocalCloudAccountState: jest.fn(),
+}));
+
+jest.mock('../lib/platformHeaders', () => ({
+  platformRequestHeaders: () => ({}),
+}));
+
+import { api, resetApiAccountState } from '../services/api';
 import {
   clearAuthSession,
   getAuthHeaders,
@@ -26,6 +42,8 @@ import {
   refreshAuthSession,
 } from '../services/authSession';
 import { Alert } from 'react-native';
+import { TERMS_ACCEPTANCE_PATH } from '@agiworkforce/cloud-contracts';
+import { CloudCredentialUnavailableError } from '../services/apiErrors';
 
 const mockGetAuthToken = getAuthToken as jest.Mock;
 const mockGetAuthHeaders = getAuthHeaders as jest.Mock;
@@ -48,11 +66,16 @@ function makeResponse(status: number, body: unknown): Response {
     status,
     text: jest.fn(async () => JSON.stringify(body)),
     json: jest.fn(async () => body),
+    clone() {
+      return this;
+    },
   } as unknown as Response;
 }
 
 beforeEach(() => {
+  jest.restoreAllMocks();
   jest.clearAllMocks();
+  resetApiAccountState();
   mockToken('access-token-valid');
   mockRefreshAuthSession.mockResolvedValue(false);
   mockClearAuthSession.mockResolvedValue(undefined);
@@ -91,6 +114,17 @@ describe('2xx responses', () => {
   });
 });
 
+it('does not send a signed-in Terms request without a bound mobile credential', async () => {
+  mockNoToken();
+  const fetchSpy = jest.spyOn(globalThis, 'fetch');
+
+  await expect(api.get(TERMS_ACCEPTANCE_PATH)).rejects.toBeInstanceOf(
+    CloudCredentialUnavailableError,
+  );
+  expect(fetchSpy).not.toHaveBeenCalled();
+  expect(mockClearAuthSession).not.toHaveBeenCalled();
+});
+
 describe('401 handling, refresh and retry', () => {
   it('retries the request with a new token after successful refresh', async () => {
     const fetchSpy = jest.spyOn(globalThis, 'fetch');
@@ -111,6 +145,24 @@ describe('401 handling, refresh and retry', () => {
     expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
   });
 
+  it('clears the token-refresh deadline after a successful refresh', async () => {
+    const setTimeoutSpy = jest.spyOn(globalThis, 'setTimeout');
+    const clearTimeoutSpy = jest.spyOn(globalThis, 'clearTimeout');
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(401, {}))
+      .mockResolvedValueOnce(makeResponse(200, { ok: true }));
+    mockRefreshAuthSession.mockResolvedValueOnce(true);
+
+    await api.get('/api/retry');
+
+    const refreshTimerIndex = setTimeoutSpy.mock.calls.findIndex(([, delay]) => delay === 10_000);
+    expect(refreshTimerIndex).toBeGreaterThanOrEqual(0);
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(
+      setTimeoutSpy.mock.results[refreshTimerIndex]?.value,
+    );
+  });
+
   it('does not retry a second time when _skipAuthRetry is set (avoids infinite loop)', async () => {
     const fetchSpy = jest.spyOn(globalThis, 'fetch');
 
@@ -120,6 +172,25 @@ describe('401 handling, refresh and retry', () => {
 
     await expect(api.get('/api/expired')).rejects.toThrow('401');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears Cloud session when the request remains unauthorized after refresh', async () => {
+    const fetchSpy = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(401, { error: 'Unauthorized' }))
+      .mockResolvedValueOnce(makeResponse(401, { error: 'Unauthorized' }));
+    mockRefreshAuthSession.mockResolvedValueOnce(true);
+
+    await expect(api.get('/api/still-expired')).rejects.toThrow('Session expired');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
+    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Session Expired',
+      expect.stringContaining('sign in'),
+      expect.any(Array),
+    );
   });
 });
 
@@ -196,7 +267,7 @@ describe('non-401 errors pass through', () => {
   it('throws for 500 Internal Server Error without attempting refresh', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(500, 'Server error'));
 
-    await expect(api.get('/api/server-error')).rejects.toThrow('500');
+    await expect(api.get('/api/server-error')).rejects.toMatchObject({ status: 500 });
     expect(mockRefreshAuthSession).not.toHaveBeenCalled();
   });
 

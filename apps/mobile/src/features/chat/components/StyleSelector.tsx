@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, View, Pressable } from 'react-native';
+import { Modal, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
@@ -7,6 +8,7 @@ import { useChatStore, type ChatStyle } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 
 const STYLE_OPTIONS: Array<{
   id: ChatStyle;
@@ -72,7 +74,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
           backgroundColor: themeColors.scrim,
         }}
       >
-        <Pressable
+        <PressableBox
           style={{ flex: 1 }}
           onPress={closeSheet}
           accessibilityLabel="Close style selector"
@@ -106,21 +108,21 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              paddingHorizontal: 20,
+              paddingHorizontal: dialogPadding,
               paddingBottom: 16,
             }}
           >
-            <Pressable
+            <PressableBox
               onPress={closeSheet}
               style={{ padding: 4 }}
               accessibilityLabel="Close style selector"
               accessibilityRole="button"
             >
               <X size={20} color={themeColors.textMuted} />
-            </Pressable>
+            </PressableBox>
             <Text
               style={{
-                fontSize: 16,
+                fontSize: typeScale.callout,
                 fontWeight: '600',
                 color: themeColors.textPrimary,
               }}
@@ -132,14 +134,14 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
 
           {/* Options */}
           <View
-            style={{ paddingHorizontal: 20, gap: 4 }}
+            style={{ paddingHorizontal: dialogPadding, gap: 4 }}
             accessibilityRole="radiogroup"
             accessibilityLabel="Chat style"
           >
             {STYLE_OPTIONS.map((option) => {
               const isSelected = chatStyle === option.id;
               return (
-                <Pressable
+                <PressableBox
                   key={option.id}
                   onPress={() => handleSelect(option.id)}
                   style={{
@@ -184,7 +186,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
                   <View style={{ flex: 1 }}>
                     <Text
                       style={{
-                        fontSize: 15,
+                        fontSize: typeScale.body,
                         fontWeight: '500',
                         color: themeColors.textPrimary,
                       }}
@@ -193,7 +195,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
                     </Text>
                     <Text
                       style={{
-                        fontSize: 13,
+                        fontSize: typeScale.footnote,
                         color: themeColors.textMuted,
                         marginTop: 2,
                       }}
@@ -201,7 +203,7 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
                       {option.description}
                     </Text>
                   </View>
-                </Pressable>
+                </PressableBox>
               );
             })}
           </View>

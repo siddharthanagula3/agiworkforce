@@ -46,6 +46,7 @@ import {
   assertSupportAccess,
   type SupportAccessScope,
 } from './support-access-service';
+import { isKeyRewrapState, type KeyRewrapState } from '@agiworkforce/types/encryption-key';
 
 /**
  * The platform root every workspace without its own key is derived from. It is
@@ -557,8 +558,6 @@ export async function validateOrganizationKeySetup(
   });
 }
 
-export type KeyRewrapState = 'pending' | 'running' | 'complete' | 'failed';
-
 export interface KeyRewrapRun {
   organizationId: string;
   fromVersion: string;
@@ -590,12 +589,8 @@ interface RewrapRunRow {
   completed_at: string | Date | null;
 }
 
-function isRewrapState(value: string): value is KeyRewrapState {
-  return value === 'pending' || value === 'running' || value === 'complete' || value === 'failed';
-}
-
 function toRewrapRun(row: RewrapRunRow): KeyRewrapRun {
-  if (!isRewrapState(row.state)) {
+  if (!isKeyRewrapState(row.state)) {
     throw new Error(
       `organization_key_rewrap_runs row for ${row.organization_id} names state "${row.state}", ` +
         'which this build cannot resolve.',

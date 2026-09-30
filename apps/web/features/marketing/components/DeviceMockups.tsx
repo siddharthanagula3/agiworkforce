@@ -209,7 +209,7 @@ export function DesktopWindow({
             ⌁ Dispatch <span className="agi-desk-beta">Beta</span>
           </p>
           <p className="agi-desk-group">Recents</p>
-          <p className="agi-desk-recent agi-desk-recent--on">Release note for 1.2.0</p>
+          <p className="agi-desk-recent agi-desk-recent--on">Release note for 0.0.1</p>
           <p className="agi-desk-recent">Quarterly notes</p>
           <p className="agi-desk-recent">Rust build fix</p>
           <p className="agi-desk-recent">Audit export</p>

@@ -1,3 +1,10 @@
+import {
+  ServerSentEventDecoder,
+  ServerSentEventFrameLimitError,
+  splitJoinedServerSentEventData,
+  SSE_DONE_DATA,
+  type ServerSentEvent,
+} from '@agiworkforce/client-runtime';
 import * as vscode from 'vscode';
 import * as http from 'http';
 import { randomUUID } from 'crypto';
@@ -202,6 +209,7 @@ export async function setAccountToken(
   expiresAt?: number,
   refreshToken?: string,
 ): Promise<void> {
+  heldAccountUnavailable = undefined;
   await secrets.store(ACCOUNT_TOKEN_KEY, token);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
   if (expiresAt !== undefined) {
@@ -226,6 +234,7 @@ export async function getAccountRefreshToken(
 }
 
 export async function clearAccountToken(secrets: vscode.SecretStorage): Promise<void> {
+  heldAccountUnavailable = undefined;
   await secrets.delete(ACCOUNT_TOKEN_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
@@ -247,7 +256,15 @@ async function invalidateAccountToken(
   await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
 }
 
-export type AccountSessionRenewal = 'renewed' | 'unavailable' | 'revoked' | 'terms-required';
+export type AccountSessionRenewal =
+  'renewed' | 'unavailable' | 'revoked' | 'terms-required' | 'account-unavailable';
+
+/**
+ * An account the server refused stays refused until the person signs in or out
+ * again: retrying the rotation on every request would only repeat the refusal
+ * and the warning.
+ */
+let heldAccountUnavailable: string | undefined;
 
 /**
  * Rotates the device session in place so an expired editor never has to repeat
@@ -257,6 +274,7 @@ export type AccountSessionRenewal = 'renewed' | 'unavailable' | 'revoked' | 'ter
 export async function renewAccountSession(
   secrets: vscode.SecretStorage,
 ): Promise<AccountSessionRenewal> {
+  if (heldAccountUnavailable !== undefined) return 'account-unavailable';
   const refreshToken = await getAccountRefreshToken(secrets);
   if (refreshToken === undefined) return 'unavailable';
 
@@ -272,6 +290,15 @@ export async function renewAccountSession(
     await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
     notifyAccountTierMayHaveChanged();
     return 'revoked';
+  }
+  if (result.kind === 'account-unavailable') {
+    heldAccountUnavailable = result.message;
+    void vscode.window.showWarningMessage(result.message, 'Sign in again').then((action) => {
+      if (action === 'Sign in again') {
+        void vscode.commands.executeCommand('agi-workforce.signIn');
+      }
+    });
+    return 'account-unavailable';
   }
   return result.kind === 'terms-required' ? 'terms-required' : 'unavailable';
 }
@@ -541,44 +568,38 @@ function httpsPostStream(
         return;
       }
 
-      let buffer = '';
-      const MAX_SSE_BUFFER = 1_000_000;
+      const text = new TextDecoder();
+      const frames = new ServerSentEventDecoder();
+      const deliver = (events: readonly ServerSentEvent[]) => {
+        for (const event of events) {
+          for (const data of splitJoinedServerSentEventData(event.data)) {
+            if (data === SSE_DONE_DATA) continue;
+            try {
+              onChunk(JSON.parse(data) as ChatCompletionChunk);
+            } catch {
+              continue;
+            }
+          }
+        }
+      };
 
       res.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString('utf8');
-
-        if (buffer.length > MAX_SSE_BUFFER) {
+        try {
+          deliver(frames.push(text.decode(chunk, { stream: true })));
+        } catch (error) {
+          if (!(error instanceof ServerSentEventFrameLimitError)) throw error;
           cancelListener.dispose();
           req.destroy();
           reject(
             new AgiWorkforceApiError('SSE buffer overflow (malformed stream)', 400, 'HTTP_ERROR'),
           );
-          return;
-        }
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) {
-            continue;
-          }
-          const data = trimmed.slice('data:'.length).trim();
-          if (data === '[DONE]') {
-            continue;
-          }
-          try {
-            const parsed = JSON.parse(data) as ChatCompletionChunk;
-            onChunk(parsed);
-          } catch {
-            continue;
-          }
         }
       });
 
       res.on('end', () => {
         cancelListener.dispose();
+        deliver(frames.push(text.decode()));
+        deliver(frames.finish({ acceptUnterminatedFrame: true }).events);
         resolve();
       });
       res.on('error', (err) => {

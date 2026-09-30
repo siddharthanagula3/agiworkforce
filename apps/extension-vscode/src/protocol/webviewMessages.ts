@@ -67,10 +67,17 @@ const openArchivedSessions = z.object({ type: z.literal('openArchivedSessions') 
 const messageAction = z.object({
   type: z.literal('messageAction'),
   payload: z.object({
-    action: z.enum(['resend', 'branch']),
+    action: z.enum(['resend', 'branch', 'branchAnswer']),
     text: z.string().min(1).max(1_000_000),
     occurrence: z.number().int().nonnegative().max(10_000),
   }),
+});
+const planDecision = z.object({
+  type: z.literal('planDecision'),
+  payload: z.discriminatedUnion('decision', [
+    z.object({ decision: z.literal('approve') }),
+    z.object({ decision: z.literal('reject'), feedback: z.string().trim().min(1).max(4_000) }),
+  ]),
 });
 const searchSessions = z.object({
   type: z.literal('searchSessions'),
@@ -233,6 +240,7 @@ const respondToApproval = z.object({
     requestId: z.string().min(1).max(200),
     decision: ApprovalDecisionSchema,
     guidance: z.string().trim().min(1).max(REMOTE_CODE_LIMITS.guidanceLength).optional(),
+    answer: z.string().trim().min(1).max(REMOTE_CODE_LIMITS.guidanceLength).optional(),
   }),
 });
 
@@ -306,6 +314,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openArchivedSessions,
   searchSessions,
   messageAction,
+  planDecision,
   openAccount,
   completeOnboarding,
   openPermissionDocs,

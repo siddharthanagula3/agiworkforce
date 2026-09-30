@@ -1,0 +1,271 @@
+{
+  "why": "Where each workspace package entry point may run. universal: web, the desktop renderer, mobile and Node; browser: a browser only; server: Node only; native: React Native only; asset: a stylesheet or data file. check:package-runtimes holds each entry's static import graph to its declaration, across packages.",
+  "packages": {
+    "packages/ai/agent-core": {
+      ".": "universal"
+    },
+    "packages/ai/model-registry": {
+      ".": "universal",
+      "./registry.json": "asset",
+      "./routing-policies.json": "asset"
+    },
+    "packages/ai/provider-protocol": {
+      ".": "universal"
+    },
+    "packages/ai/provider-runtime": {
+      ".": "universal",
+      "./decisions": "universal"
+    },
+    "packages/ai/providers/anthropic": {
+      ".": "universal"
+    },
+    "packages/ai/providers/deepseek": {
+      ".": "server"
+    },
+    "packages/ai/providers/factory": {
+      ".": "server"
+    },
+    "packages/ai/providers/google": {
+      ".": "universal"
+    },
+    "packages/ai/providers/groq": {
+      ".": "server"
+    },
+    "packages/ai/providers/lmstudio": {
+      ".": "server"
+    },
+    "packages/ai/providers/minimax": {
+      ".": "server"
+    },
+    "packages/ai/providers/moonshot": {
+      ".": "server"
+    },
+    "packages/ai/providers/nvidia": {
+      ".": "server"
+    },
+    "packages/ai/providers/ollama": {
+      ".": "universal"
+    },
+    "packages/ai/providers/openai": {
+      ".": "server"
+    },
+    "packages/ai/providers/openrouter": {
+      ".": "server"
+    },
+    "packages/ai/providers/perplexity": {
+      ".": "server"
+    },
+    "packages/ai/providers/qwen": {
+      ".": "server"
+    },
+    "packages/ai/providers/vercel-gateway": {
+      ".": "server"
+    },
+    "packages/ai/providers/workers-ai": {
+      ".": "server"
+    },
+    "packages/ai/providers/xai": {
+      ".": "server"
+    },
+    "packages/ai/providers/zhipu": {
+      ".": "server"
+    },
+    "packages/ai/routing": {
+      ".": "universal",
+      "./model-picker": "universal"
+    },
+    "packages/ai/search": {
+      ".": "universal"
+    },
+    "packages/client/client-runtime": {
+      ".": "universal",
+      "./node": "server",
+      "./state": "universal",
+      "./queue": "universal",
+      "./offline-queue": "universal",
+      "./offline-sync": "universal",
+      "./plugins": "universal"
+    },
+    "packages/client/desktop-command-client": {
+      ".": "universal"
+    },
+    "packages/client/ide-runtime": {
+      ".": "server",
+      "./workspace": "universal",
+      "./git": "universal",
+      "./doctor": "universal"
+    },
+    "packages/client/sync": {
+      ".": "universal"
+    },
+    "packages/contracts/cloud-contracts": {
+      ".": "universal",
+      "./account-security": "universal",
+      "./client-request": "universal",
+      "./me": "universal",
+      "./support": "universal"
+    },
+    "packages/contracts/compliance": {
+      ".": "universal"
+    },
+    "packages/contracts/context": {
+      ".": "universal"
+    },
+    "packages/contracts/licensing": {
+      ".": "universal",
+      "./org-policy": "universal",
+      "./test-support": "universal"
+    },
+    "packages/contracts/local-runtime": {
+      ".": "universal"
+    },
+    "packages/contracts/trust-boundaries": {
+      ".": "universal"
+    },
+    "packages/contracts/types": {
+      ".": "universal",
+      "./capabilities": "universal",
+      "./encryption-key": "universal",
+      "./live-voices": "universal",
+      "./models.json": "asset",
+      "./product-routes": "universal",
+      "./protocol": "universal"
+    },
+    "packages/guardian/core": {
+      ".": "universal",
+      "./schema": "universal",
+      "./fingerprint": "server",
+      "./config": "universal",
+      "./verify": "universal",
+      "./dedupe": "universal",
+      "./rank": "universal",
+      "./policy": "universal",
+      "./adapters": "universal"
+    },
+    "packages/guardian/github": {
+      ".": "universal",
+      "./webhook": "server",
+      "./events": "universal",
+      "./commands": "universal",
+      "./checks": "universal",
+      "./summary": "universal"
+    },
+    "packages/platform/artifacts": {
+      ".": "universal"
+    },
+    "packages/platform/context-engine": {
+      ".": "server"
+    },
+    "packages/platform/data-layer": {
+      ".": "universal",
+      "./search": "universal"
+    },
+    "packages/platform/files": {
+      ".": "universal"
+    },
+    "packages/platform/identity": {
+      ".": "universal",
+      "./browser": "browser",
+      "./testing": "universal"
+    },
+    "packages/platform/key-value": {
+      ".": "universal"
+    },
+    "packages/platform/local-llm": {
+      ".": "native"
+    },
+    "packages/platform/object-storage": {
+      ".": "server",
+      "./config": "universal",
+      "./presign": "universal"
+    },
+    "packages/platform/observability": {
+      ".": "universal"
+    },
+    "packages/platform/utils": {
+      ".": "universal",
+      "./async": "universal",
+      "./circuit-breaker": "universal",
+      "./composer-paste": "universal",
+      "./control-receipts": "universal",
+      "./cron": "universal",
+      "./crypto": "universal",
+      "./display-name": "universal",
+      "./fence": "universal",
+      "./format": "universal",
+      "./greeting": "universal",
+      "./interaction-timings": "universal",
+      "./logger": "universal",
+      "./managed-chat-idempotency": "universal",
+      "./managed-media-idempotency": "universal",
+      "./markdown-source": "universal",
+      "./path-containment": "server",
+      "./privacy-handoff": "universal",
+      "./reasoning": "universal",
+      "./remote-control": "server",
+      "./retry-policy": "universal",
+      "./secret-redaction": "universal",
+      "./signaling": "universal",
+      "./source-url": "universal",
+      "./uuidv7": "universal",
+      "./voice": "universal"
+    },
+    "packages/tools/apply-patch": {
+      ".": "server"
+    },
+    "packages/tools/browser-tool": {
+      ".": "server"
+    },
+    "packages/tools/mcp": {
+      ".": "server"
+    },
+    "packages/tools/skills": {
+      ".": "server",
+      "./validation": "universal"
+    },
+    "packages/ui/design-tokens": {
+      ".": "universal",
+      "./chat.css": "asset",
+      "./foundation.css": "asset",
+      "./tailwind.css": "asset"
+    },
+    "packages/ui/i18n": {
+      ".": "universal",
+      "./en": "universal",
+      "./languages": "universal",
+      "./lazy": "universal",
+      "./resources": "universal",
+      "./vscode": "universal"
+    },
+    "packages/ui/icons": {
+      ".": "universal"
+    },
+    "packages/ui/ui": {
+      ".": "universal",
+      "./agi-mark": "universal",
+      "./button": "universal",
+      "./cn": "universal",
+      "./dialog": "universal",
+      "./dom": "browser",
+      "./i18n": "universal",
+      "./label": "universal",
+      "./sheet": "universal",
+      "./sonner": "universal",
+      "./switch": "universal",
+      "./network-error": "universal",
+      "./translate": "universal"
+    },
+    "packages/ui/unified-chat": {
+      ".": "universal",
+      "./capabilities": "universal",
+      "./model-picker": "universal",
+      "./network-error": "universal",
+      "./tabular": "universal",
+      "./markdown-document": "universal",
+      "./agi-work-progress": "universal",
+      "./task-display": "universal",
+      "./composer-editor": "universal",
+      "./composer-editor.css": "asset"
+    }
+  }
+}

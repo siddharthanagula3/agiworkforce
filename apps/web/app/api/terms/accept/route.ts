@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { TermsAcceptanceRequestSchema } from '@agiworkforce/cloud-contracts';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { CURRENT_TERMS_VERSION, recordTermsAcceptance } from '@/lib/server/terms';
+import {
+  CURRENT_TERMS_VERSION,
+  readTermsStanding,
+  recordTermsAcceptance,
+} from '@/lib/server/terms';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 import { attributeReferralFromRequest } from '@/lib/services/referral-attribution';
-
-const AcceptTermsSchema = z.object({
-  surface: z.enum(['web-signup', 'web-login']),
-  version: z.string().min(1).max(32),
-});
 
 async function handleAcceptTerms(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
@@ -21,7 +20,7 @@ async function handleAcceptTerms(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
 
-  const parsed = AcceptTermsSchema.safeParse(await request.json().catch(() => null));
+  const parsed = TermsAcceptanceRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     throw createError.badRequest('Invalid terms acceptance payload', parsed.error.flatten());
   }
@@ -55,3 +54,14 @@ async function handleAcceptTerms(request: NextRequest) {
 }
 
 export const POST = withErrorHandler(handleAcceptTerms);
+
+async function handleGetTerms(request: NextRequest) {
+  const { userId } = await getClerkAuthUser(request);
+  const standing = await readTermsStanding(userId);
+  return NextResponse.json(
+    { currentVersion: CURRENT_TERMS_VERSION, accepted: standing.kind !== 'required' },
+    { headers: { 'Cache-Control': 'private, no-store' } },
+  );
+}
+
+export const GET = withErrorHandler(handleGetTerms);

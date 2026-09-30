@@ -346,6 +346,13 @@ fn refusal(
 ///, therefore never reach the interpreter with an arbitrary payload, no
 /// matter what the caller decided about confirmation.
 pub async fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
+    execute_for_workspace(req, &std::env::current_dir()?).await
+}
+
+pub async fn execute_for_workspace(
+    req: &PowerShellRequest,
+    workspace: &std::path::Path,
+) -> Result<PowerShellResult> {
     let warnings = safety_check(&req.command);
     let shape = command_shape(&req.command);
     if let Some(message) = refusal(
@@ -362,28 +369,7 @@ pub async fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
             "no PowerShell interpreter found on PATH (tried: pwsh, powershell.exe, powershell)"
         )
     })?;
-    let mut cmd = tokio::process::Command::new(&interpreter);
-    cmd.arg("-NoProfile")
-        .arg("-NonInteractive")
-        .arg("-Command")
-        .arg(&req.command);
-    if let Some(wd) = &req.working_dir {
-        cmd.current_dir(wd);
-    }
-
-    let timeout = std::time::Duration::from_secs(req.timeout_sec.max(1));
-    let output = crate::process_tree::output(cmd, None, Some(timeout))
-        .await
-        .map_err(|error| {
-            if error.kind() == std::io::ErrorKind::TimedOut {
-                anyhow::anyhow!(
-                    "PowerShell command timed out after {}s (timeout_sec)",
-                    req.timeout_sec
-                )
-            } else {
-                anyhow::anyhow!("invoke {interpreter}: {error}")
-            }
-        })?;
+    let output = invoke(req, &interpreter, workspace).await?;
 
     Ok(PowerShellResult {
         exit_code: output.status.code().unwrap_or(-1),
@@ -394,9 +380,144 @@ pub async fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
     })
 }
 
+pub(crate) fn working_directory(
+    requested: Option<&str>,
+    workspace: &std::path::Path,
+) -> Result<std::path::PathBuf> {
+    let workspace = workspace.canonicalize()?;
+    let directory = crate::path_security::validate_workspace_path_with_cwd(
+        requested
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("."),
+        &workspace,
+    )
+    .map_err(anyhow::Error::msg)?;
+    if !directory.starts_with(&workspace) {
+        anyhow::bail!("Working directory is outside the PowerShell workspace");
+    }
+    if !directory.is_dir() {
+        anyhow::bail!("PowerShell working directory is not a directory");
+    }
+    Ok(directory)
+}
+
+async fn invoke(
+    req: &PowerShellRequest,
+    interpreter: &str,
+    workspace: &std::path::Path,
+) -> Result<std::process::Output> {
+    let workspace = workspace.canonicalize()?;
+    let working_dir = working_directory(req.working_dir.as_deref(), &workspace)?;
+    let manager = if crate::sandbox::sandbox_disabled_for_workspace(&workspace) {
+        crate::sandbox::SandboxManager::new(
+            crate::sandbox::SandboxPolicy::DangerFullAccess,
+            workspace.to_path_buf(),
+        )
+        .with_network(crate::sandbox::NetworkPolicy::Allow)
+    } else {
+        crate::sandbox::SandboxManager::for_agent_command(
+            workspace.to_path_buf(),
+            crate::sandbox::NetworkPolicy::Deny,
+        )?
+    };
+    let args = vec![
+        "-NoProfile".into(),
+        "-NonInteractive".into(),
+        "-Command".into(),
+        req.command.clone(),
+    ];
+    crate::sandbox::execute_sandboxed_program_with_timeout(
+        &manager,
+        interpreter,
+        &args,
+        Some(&working_dir),
+        Some(std::time::Duration::from_secs(req.timeout_sec.max(1))),
+    )
+    .await
+    .map_err(|error| {
+        if error
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|error| error.kind() == std::io::ErrorKind::TimedOut)
+        {
+            anyhow::anyhow!(
+                "PowerShell command timed out after {}s (timeout_sec)",
+                req.timeout_sec
+            )
+        } else {
+            anyhow::anyhow!("invoke {interpreter}: {error}")
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn powershell_interpreter_cannot_read_outside_its_workspace() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::Builder::new()
+            .prefix("powershell-sandbox-")
+            .tempdir_in(std::env::current_dir().unwrap())
+            .unwrap();
+        let workspace = directory.path().join("workspace");
+        std::fs::create_dir(&workspace).unwrap();
+        let outside = directory.path().join("outside.txt");
+        std::fs::write(&outside, "outside-content-must-remain-private").unwrap();
+        let interpreter = workspace.join("pwsh-probe");
+        std::fs::write(
+            &interpreter,
+            format!(
+                "#!/bin/sh\nprintf 'interpreter-ran\\n'\n/bin/cat '{}'\n",
+                outside.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let req = PowerShellRequest {
+            command: "Get-Content ../outside.txt".into(),
+            working_dir: Some(workspace.display().to_string()),
+            timeout_sec: 5,
+            safe_mode: true,
+        };
+        assert!(!crate::sandbox::sandbox_disabled());
+        let output = invoke(&req, interpreter.to_str().unwrap(), &workspace)
+            .await
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("interpreter-ran"),
+            "interpreter did not run"
+        );
+        assert!(!output.status.success(), "PowerShell escaped its workspace");
+        assert!(!String::from_utf8_lossy(&output.stdout)
+            .contains("outside-content-must-remain-private"));
+    }
+
+    #[tokio::test]
+    async fn powershell_refuses_a_different_registered_workspace_as_its_working_directory() {
+        let workspace = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let registered =
+            crate::path_security::register_additional_workspace_root_path(outside.path()).unwrap();
+        let req = PowerShellRequest {
+            command: "Get-Date".into(),
+            working_dir: Some(outside.path().display().to_string()),
+            timeout_sec: 5,
+            safe_mode: true,
+        };
+        let result = crate::path_security::scope_workspace_paths(
+            Some(workspace.path().to_path_buf()),
+            vec![registered.clone()],
+            invoke(&req, "interpreter-that-must-never-launch", workspace.path()),
+        )
+        .await;
+        crate::path_security::unregister_additional_workspace_roots(&[registered]);
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("outside the PowerShell workspace"));
+    }
 
     #[test]
     fn safety_check_clean_returns_empty() {

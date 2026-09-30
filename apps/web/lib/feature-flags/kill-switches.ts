@@ -16,7 +16,6 @@ export const TENANT_LOCKDOWN_FLAG_KEY = 'tenant.lockdown';
 
 // Surfaces a release can break that no platform capability names.
 export const EXTRA_KILL_SWITCH_CAPABILITIES = [
-  'work',
   'dictation',
   'screen_share',
   'in_app_purchase',
@@ -28,13 +27,22 @@ export type KillSwitchCapability = PlatformCapability | ExtraKillSwitchCapabilit
 
 export const COMPUTER_USE_CAPABILITY: KillSwitchCapability = 'canUseDesktopAutomation';
 export const BROWSER_CAPABILITY: KillSwitchCapability = 'canUseBrowserAutomation';
-export const WORK_CAPABILITY: KillSwitchCapability = 'work';
+export const WORK_CAPABILITY: KillSwitchCapability = 'canUseAgiWork';
 export const DICTATION_CAPABILITY: KillSwitchCapability = 'dictation';
 export const SCREEN_SHARE_CAPABILITY: KillSwitchCapability = 'screen_share';
 export const DESKTOP_UPDATE_CAPABILITY: KillSwitchCapability = 'desktop_update';
 
+const SWITCH_SUBJECTS_KEPT_FROM_BEFORE_THEIR_CAPABILITY: Readonly<
+  Partial<Record<KillSwitchCapability, string>>
+> = {
+  canUseAgiWork: 'work',
+};
+
 export function capabilityFlagSuffix(capability: KillSwitchCapability): string {
-  return capability.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  return (
+    SWITCH_SUBJECTS_KEPT_FROM_BEFORE_THEIR_CAPABILITY[capability] ??
+    capability.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+  );
 }
 
 export function capabilityKillSwitchKey(capability: KillSwitchCapability): string {
@@ -79,9 +87,9 @@ export function isPlatformCapability(value: KillSwitchCapability): value is Plat
 }
 
 /**
- * The subset the capability handshake can express. `work` and the other extra
- * switches are real surfaces with no PlatformCapability id, so they are gated
- * at their own admission point instead of by the document.
+ * The subset the capability handshake can express. The extra switches are real
+ * surfaces with no PlatformCapability id, so they are gated at their own
+ * admission point instead of by the document.
  */
 export function platformCapabilitiesOf(
   capabilities: readonly KillSwitchCapability[],

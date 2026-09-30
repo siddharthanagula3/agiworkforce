@@ -5,9 +5,9 @@ import { cn } from '@shared/lib/utils';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 
 const ROW_CLASS =
-  'flex w-full items-center gap-3 rounded-lg py-2 pr-3 text-sm transition-colors hover:bg-muted/60';
-const INDENTED_CLASS = 'pl-8';
-const FLUSH_CLASS = 'pl-3';
+  'flex w-full items-center gap-3 rounded-lg py-2 pe-3 text-sm transition-colors hover:bg-muted/60';
+const INDENTED_CLASS = 'ps-8';
+const FLUSH_CLASS = 'ps-3';
 const LOGO_CLASS = 'h-5 w-5 shrink-0 rounded-md border-border shadow-none';
 const BOX_CLASS = 'flex h-4 w-4 shrink-0 items-center justify-center rounded-compact border';
 const BOX_CHECKED_CLASS = 'border-primary bg-primary text-primary-foreground';
@@ -43,7 +43,7 @@ export function ConnectorToggleRow({
       className={cn(ROW_CLASS, indented ? INDENTED_CLASS : FLUSH_CLASS)}
     >
       <OfficialConnectorLogo connector={connector} className={LOGO_CLASS} />
-      <span className="flex-1 truncate text-left">{label}</span>
+      <span className="flex-1 truncate text-start">{label}</span>
       <span
         aria-hidden="true"
         className={cn(BOX_CLASS, checked ? BOX_CHECKED_CLASS : BOX_UNCHECKED_CLASS)}

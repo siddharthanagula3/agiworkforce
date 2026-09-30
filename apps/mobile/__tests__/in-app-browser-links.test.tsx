@@ -178,7 +178,7 @@ describe('inline search and citation links route through the in-app browser', ()
       />,
     );
 
-    fireEvent.press(screen.getByLabelText('Search result, example.com'));
+    fireEvent.press(screen.getByLabelText('Search result, web page on example.com'));
 
     expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
       'https://example.com/search-result',

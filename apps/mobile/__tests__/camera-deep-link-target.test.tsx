@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockBack = jest.fn();
@@ -94,7 +95,7 @@ describe('deep-link camera target conversation', () => {
     capturedOnReady = undefined;
     mockCanGoBack.mockReturnValue(true);
     mockCreateConversation.mockResolvedValue('created-conversation');
-    mockSendMessage.mockResolvedValue(undefined);
+    mockSendMessage.mockResolvedValue(true);
     chatState.currentConversationId = null;
     chatState.createConversation = mockCreateConversation;
     chatState.sendMessage = mockSendMessage;
@@ -128,5 +129,24 @@ describe('deep-link camera target conversation', () => {
     );
     expect(mockReplace).toHaveBeenCalledWith('/(app)/chat/created-conversation');
     expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it('keeps the captured photo when the chat store refuses the send', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockSendMessage.mockResolvedValue(false);
+    try {
+      const screen = render(<CameraScreen />);
+      await captureAndSend(screen);
+
+      expect(alert).toHaveBeenCalledWith(
+        'Send failed',
+        'The image could not be sent. Check your model and try again.',
+      );
+      expect(mockReplace).not.toHaveBeenCalled();
+      expect(mockBack).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Send to AI')).toBeTruthy();
+    } finally {
+      alert.mockRestore();
+    }
   });
 });

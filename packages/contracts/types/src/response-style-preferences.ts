@@ -1,3 +1,5 @@
+export const MAX_CUSTOM_INSTRUCTIONS_CHARS = 2_000;
+
 export const RESPONSE_STYLES = ['default', 'concise', 'explanatory', 'formal'] as const;
 export type ResponseStyle = (typeof RESPONSE_STYLES)[number];
 

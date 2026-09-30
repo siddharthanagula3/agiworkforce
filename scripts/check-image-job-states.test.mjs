@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  CONTRACT_PATH,
   EXECUTOR_PATH,
   MIGRATIONS_DIR,
   REPO_ROOT,
@@ -57,6 +58,12 @@ export type PublicImageJobStatus = ${statuses.map((status) => `'${status}'`).joi
 `;
 }
 
+function contract(statuses) {
+  return `
+export const IMAGE_JOB_STATUSES = [${statuses.map((status) => `'${status}'`).join(', ')}] as const;
+`;
+}
+
 const STATUSES = ['queued', 'processing', 'completed', 'failed', 'canceled'];
 const CLASSIFIED = STATUSES.map((status) => ({
   status,
@@ -68,6 +75,7 @@ function makeRoot({
   classified = CLASSIFIED,
   storeStatuses = STATUSES,
   publicStatuses = STATUSES,
+  contractStatuses = publicStatuses,
 } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'image-job-states-'));
   roots.push(root);
@@ -78,6 +86,7 @@ function makeRoot({
   );
   write(root, STORE_PATH, store(storeStatuses));
   write(root, EXECUTOR_PATH, executor(publicStatuses));
+  write(root, CONTRACT_PATH, contract(contractStatuses));
   return root;
 }
 
@@ -95,6 +104,16 @@ test('a status the snapshot type never learned is reported', () => {
   );
   assert.ok(
     failures.some((failure) => failure === 'the public snapshot type is missing canceled'),
+    failures.join('; '),
+  );
+});
+
+test('a status the shared client contract never learned is reported', () => {
+  const failures = checkImageJobStates(
+    makeRoot({ contractStatuses: STATUSES.filter((status) => status !== 'canceled') }),
+  );
+  assert.ok(
+    failures.some((failure) => failure === 'the shared client contract is missing canceled'),
     failures.join('; '),
   );
 });

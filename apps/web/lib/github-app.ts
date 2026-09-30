@@ -128,7 +128,11 @@ export function getGitHubAppInstallUrl(): string | null {
     : null;
 }
 
-export function getGitHubUserAuthorizationUrl(state: string, redirectUri: string): string {
+export function getGitHubUserAuthorizationUrl(
+  state: string,
+  redirectUri: string,
+  codeChallenge?: string,
+): string {
   if (!isGitHubInstallationLinkingAvailable() || !GITHUB_APP_CLIENT_ID) {
     throw new Error('GitHub App user authorization is not configured');
   }
@@ -148,10 +152,18 @@ export function getGitHubUserAuthorizationUrl(state: string, redirectUri: string
   authorizeUrl.searchParams.set('client_id', GITHUB_APP_CLIENT_ID);
   authorizeUrl.searchParams.set('redirect_uri', callbackUrl.toString());
   authorizeUrl.searchParams.set('state', state);
+  if (codeChallenge) {
+    authorizeUrl.searchParams.set('code_challenge', codeChallenge);
+    authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+  }
   return authorizeUrl.toString();
 }
 
-export async function exchangeGitHubOAuthCode(code: string, redirectUri: string): Promise<string> {
+export async function exchangeGitHubOAuthCode(
+  code: string,
+  redirectUri: string,
+  codeVerifier?: string,
+): Promise<string> {
   if (
     !isGitHubInstallationLinkingAvailable() ||
     !GITHUB_APP_CLIENT_ID ||
@@ -174,6 +186,7 @@ export async function exchangeGitHubOAuthCode(code: string, redirectUri: string)
       client_secret: GITHUB_APP_CLIENT_SECRET,
       code,
       redirect_uri: redirectUri,
+      ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
     }),
     signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
   });
@@ -340,6 +353,46 @@ export async function getGitHubAppJwt(): Promise<string> {
   const signature = signer.sign(privateKey, 'base64url');
 
   return `${signingInput}.${signature}`;
+}
+
+const gitHubAppInstallationSchema = z.object({
+  id: z.number().int().positive(),
+  account: z.object({
+    login: z.string().min(1).max(256),
+    type: z.enum(['User', 'Organization']),
+  }),
+});
+
+export interface GitHubInstallationAccount {
+  accountLogin: string;
+  accountType: 'User' | 'Organization';
+}
+
+export async function getGitHubInstallationAccount(
+  installationId: number,
+): Promise<GitHubInstallationAccount | null> {
+  if (!Number.isSafeInteger(installationId) || installationId <= 0) return null;
+  const jwt = await getGitHubAppJwt();
+  const response = await fetch(
+    buildGitHubApiUrl(`/app/installations/${encodeURIComponent(String(installationId))}`),
+    {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': GITHUB_API_VERSION,
+      },
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+    },
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`GitHub installation lookup failed: ${response.status}`);
+  }
+  const parsed = gitHubAppInstallationSchema.safeParse(await response.json());
+  if (!parsed.success || parsed.data.id !== installationId) {
+    throw new Error('GitHub installation response was invalid');
+  }
+  return { accountLogin: parsed.data.account.login, accountType: parsed.data.account.type };
 }
 
 export type GitHubInstallationDeletion =
@@ -910,10 +963,10 @@ export class GitHubWriteOutcomeUnknownError extends Error {
   }
 }
 
-async function sendGitHubWrite(url: string, init: RequestInit): Promise<Response> {
+async function sendGitHubWrite(url: string, init: Omit<RequestInit, 'signal'>): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(url, init);
+    res = await fetch(url, { ...init, signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS) });
   } catch (error) {
     throw new GitHubWriteOutcomeUnknownError(error);
   }
@@ -1677,7 +1730,6 @@ export async function postPrReview(
             }
           : {}),
       }),
-      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
     },
   );
   if (!res.ok) {
@@ -1780,7 +1832,6 @@ export async function postIssueComment(
         'X-GitHub-Api-Version': '2022-11-28',
       },
       body: JSON.stringify({ body }),
-      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
     },
   );
   if (!res.ok) {

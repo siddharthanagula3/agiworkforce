@@ -6,6 +6,12 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S24.01: All-files view.
+
+- Done when: One Library view lists every file the user owns across chats, generation, uploads and projects.
+- Wave: 4
+- Build on: cli, vscode, chrome
+
 ## S24.07: Audio collection.
 
 - Done when: An Audio view collects the user's audio files.
@@ -17,6 +23,18 @@ nothing is left.
 - Done when: Users can favorite files and view favorites.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
+
+## S24.10: Shared-with-me view.
+
+- Done when: A Shared-with-me view lists files and items others shared with the user.
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome
+
+## S24.11: Folder hierarchy.
+
+- Done when: Files can be organised in a folder hierarchy that can be browsed in the Library.
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome
 
 ## S24.16: Owner filters.
 
@@ -89,6 +107,18 @@ nothing is left.
 - Done when: A details panel shows a file's metadata (size, type, dates, source, where used).
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
+
+## S24.32: Version history.
+
+- Done when: Users can see and restore earlier versions of a file.
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome
+
+## S24.36: Processing-status display.
+
+- Done when: The Library shows a file's processing status (uploading, processing, ready, failed).
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome
 
 ## S24.37: Connected-file browsing.
 

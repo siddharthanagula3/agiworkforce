@@ -9,107 +9,93 @@ nothing is left.
 ## S66.01: Repository picker.
 
 - Done when: The user chooses which repository or folder a coding session works on before it starts.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/features/code/hooks/use-code-repositories.ts:32-42`, `apps/web/lib/e2b/gate.ts:22-27`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.02: Branch picker.
 
 - Done when: The user chooses the git branch a coding session starts from or works on.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/lib/github-app.ts:764-764`, `apps/web/features/code/hooks/use-code-branches.ts:15-15`, `apps/web/features/code/components/CodeComposer.tsx:706-706`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.03: Worktree picker.
 
 - Done when: The user picks or creates a git worktree for a coding session so parallel work stays isolated.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | TUI /worktree now lists, creates and removes worktrees, but the session does not move into a new worktree. | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3877-3877`
 
 ## S66.04: Local/cloud execution selector.
 
 - Done when: Before starting, the user chooses whether the coding session runs locally or in a cloud sandbox.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | In a browser only the cloud options appear (local needs the desktop host), and cloud Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
-| desktop | partial | The Local branch works (starts the local agi runtime); the Cloud branch is disabled until Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/code/components/CodeComposer.tsx:291-311`, `apps/web/features/code/CloudCodePage.tsx:572-577`, `apps/web/lib/e2b/gate.ts:22-27`, `apps/web/features/code/components/CodeComposer.tsx:328-340`
-
-## S66.05: Coding-session list.
-
-- Done when: The user sees a list of their coding sessions and can open one.
-- Wave: 2
-- Already works on: desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The list and filters work, but no cloud session can exist until Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-
-Code: `apps/web/features/code/components/CodeRail.tsx:276-296`, `apps/web/app/api/code/sessions/route.ts:103-104`, `apps/web/lib/e2b/gate.ts:22-27`
-
-## S66.06: Coding-session title.
-
-- Done when: Each coding session shows a readable title, and the user can rename it where the surface offers renaming.
-- Wave: 2
-- Already works on: desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Title from the first task and inline rename work, but sessions exist only when Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-
-Code: `apps/web/features/code/CloudCodePage.tsx:1034-1048`, `apps/web/features/code/CloudCodePage.tsx:723-730`, `apps/web/lib/e2b/gate.ts:22-27`
-
-## S66.07: Session status.
-
-- Done when: Each coding session shows whether it is running, waiting for approval, idle, failed or closed.
-- Wave: 2
-- Already works on: desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Running dot, failed label and closed/archived banners exist, but sessions exist only when Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-
-Code: `apps/web/features/code/components/CodeRail.tsx:295-307`, `apps/web/features/code/CloudCodePage.tsx:883-884`, `apps/web/lib/e2b/gate.ts:22-27`
-
-## S66.08: File tree.
-
-- Done when: The coding workspace shows a browsable tree of the repository's files.
 - Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+
+Code: `apps/web/lib/e2b/gate.ts:16-16`
+
+## S66.05: Coding-session list.
+
+- Done when: The user sees a list of their coding sessions and can open one.
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+
+Code: `apps/web/lib/e2b/gate.ts:16-16`
+
+## S66.06: Coding-session title.
+
+- Done when: Each coding session shows a readable title, and the user can rename it where the surface offers renaming.
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+
+Code: `apps/web/lib/e2b/gate.ts:16-16`
+
+## S66.07: Session status.
+
+- Done when: Each coding session shows whether it is running, waiting for approval, idle, failed or closed.
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.09: File search.
 
@@ -134,9 +120,6 @@ Code: `apps/web/features/code/components/CodeRail.tsx:295-307`, `apps/web/featur
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Only the agent can look symbols up (lsp_document_symbols tool); the user has no symbol search in the TUI. | ui |
-
-Code: `apps/cli/src/features/exec/tools/mod.rs:644-644`
 
 ## S66.11: Code editor.
 
@@ -147,18 +130,6 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:644-644`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-
-## S66.12: Editor tabs.
-
-- Done when: Several files can be open at once in editor tabs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
@@ -185,87 +156,67 @@ Code: `apps/cli/src/features/exec/tools/mod.rs:644-644`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can read diagnostics (lsp_diagnostics tool), but the TUI has no diagnostics view for the user. | ui |
-
-Code: `apps/cli/src/agent/mod.rs:430-430`
 
 ## S66.15: Integrated terminal.
 
 - Done when: The user runs shell commands in a terminal attached to the coding session and sees their output.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off. An interactive PTY is declined at parity: Codex cloud offers task logs only (learn.chatgpt.com/docs/cloud) and Claude Code on the web has no browser terminal, its Open in > Terminal copies a teleport command (code.claude.com/docs/en/claude-code-on-the-web), both checked 2026-09-28 | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:546-546`, `apps/web/app/api/code/sessions/[sessionId]/commands/route.ts:104-104`
-
-## S66.16: Terminal tabs.
-
-- Done when: The user keeps several terminals open side by side or in tabs within the coding surface.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.17: Command-history view.
 
 - Done when: The user can review the commands run in the session with their output and exit status.
-- Wave: 2
-- Already works on: desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Command groups in the transcript and the terminal journal show output and exit codes; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only in-flight tool lines while a turn runs; finished commands and their output are not kept in view. | ui |
-
-Code: `apps/web/features/code/components/CodeTranscript.tsx:150-170`, `apps/web/features/code/CloudCodePage.tsx:328-330`, `apps/web/lib/e2b/gate.ts:22-27`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:261-265`
-
-## S66.18: Diff viewer.
-
-- Done when: The user views a line-level diff of the changes the agent made.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Changes panel expands each changed file into a coloured unified diff; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:48-78`, `apps/web/features/code/CloudCodePage.tsx:235-240`, `apps/web/lib/e2b/gate.ts:22-27`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
+
+## S66.18: Diff viewer.
+
+- Done when: The user views a line-level diff of the changes the agent made.
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.19: File-change summary.
 
 - Done when: The user sees a summary of which files the session created, modified or deleted.
-- Wave: 2
-- Already works on: desktop, mobile, cli
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Changes panel lists each file with its change state; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| vscode | partial | Only the host Source Control view lists changed files; the extension shows no per-session summary of what the agent changed. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:265-273`, `apps/web/features/code/CloudCodePage.tsx:235-240`, `apps/web/lib/e2b/gate.ts:22-27`, `apps/extension-vscode/src/core/commandSetup.ts:1383-1396`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.21: Hunk acceptance/rejection.
 
 - Done when: The user accepts or rejects individual hunks of an agent change.
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /diff-review decides per file, not per hunk; approve stages the file with git add and reject leaves it as is (nothing is reverted). | handler |
-
-Code: `apps/cli/src/tui/tui_app.rs:748-762`, `apps/cli/src/tui/tui_app.rs:3974-3977`
 
 ## S66.22: Checkpoint list.
 
@@ -305,53 +256,41 @@ Code: `apps/cli/src/tui/tui_app.rs:748-762`, `apps/cli/src/tui/tui_app.rs:3974-3
 ## S66.25: Edit/agent mode.
 
 - Done when: The user chooses a mode in which the agent may edit files and run tools on its own (edit/agent mode) versus asking first.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/db/neon/0335_cloud_code_plan_turns.sql:20-20`, `packages/contracts/types/src/cloud-code.ts:283-283`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:156-156`, `apps/web/lib/services/cloud-code-agent-service.ts:671-671`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.26: Permission-mode control.
 
 - Done when: The user sets how much the agent must ask before acting (ask every time / auto-approve safe / autonomous), and the running session honours it.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/cloud-code-agent-tools.ts:339-339`, `apps/web/lib/services/cloud-code-agent-tools.ts:346-346`, `apps/web/lib/services/cloud-code-agent-tools.ts:353-353`, `apps/web/lib/services/cloud-code-agent-service.ts:670-670`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.27: Context-usage indicator.
 
 - Done when: The workspace shows how much of the model's context window the session has used.
-- Wave: 2
+- Wave: 3
 - Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The usage popover draws a context bar from the session's token counts; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:985-997`, `apps/web/features/code/CloudCodePage.tsx:1213-1217`, `apps/web/lib/e2b/gate.ts:22-27`
-
-## S66.28: Usage/cost indicator.
-
-- Done when: The coding surface shows how much plan usage or money the user has spent.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Usage lives on the Settings > Cloud usage screen; the AGI Code session view shows no usage or cost. | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:179-179`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.29: Background task list.
 
@@ -381,17 +320,17 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:179-179`
 ## S66.36: Pull-request panel.
 
 - Done when: The workspace shows the session's pull request (open one, see its number/link and state).
-- Wave: 2
+- Wave: 3
 - Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Create pull request button and PR #n link work against GitHub, but the route refuses unless Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:307-332`, `apps/web/app/api/code/sessions/[sessionId]/pull-request/route.ts:57-60`, `apps/web/app/api/code/sessions/[sessionId]/pull-request/route.ts:45-49`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S66.38: Test-results panel.
 
@@ -420,17 +359,13 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:307-332`, `apps/we
 ## S66.40: Share session.
 
 - Done when: The user shares a coding session with someone else, who can open it.
-- Wave: 2
-- Already works on: web
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Same owner-only copy link via hosted web; local sessions cannot be shared. | handler, flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /export writes the transcript (markdown/json) for the user to pass on; there is no share link another person can open. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/code/components/CodeSessionMenu.tsx:75-83`, `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/repl/registry.rs:368-378`
 
 ## S66.41: Continue in another client.
 

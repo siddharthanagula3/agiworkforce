@@ -11,3 +11,9 @@ nothing is left.
 - Done when: In a conversation with several human participants, each user message shows which person wrote it.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
+
+## S16.22: Message-level deep link.
+
+- Done when: A user can obtain and open a link that lands on one specific message in a conversation.
+- Wave: 4
+- Build on: mobile, cli, vscode, chrome

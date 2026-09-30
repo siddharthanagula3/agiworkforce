@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
@@ -71,10 +71,30 @@ function enrolled(authenticator: boolean) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
   vi.mocked(sealTotpSecret).mockReturnValue('encrypted-secret');
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe('POST /api/settings/2fa/setup', () => {
+  it('refuses with 503 and stores nothing while authenticator enrollment is unavailable', async () => {
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '');
+    enrolled(false);
+
+    const response = await POST(request());
+    const body = (await response.json()) as { error: { message: string } };
+
+    expect(response.status).toBe(503);
+    expect(body.error.message).toBe(
+      'Authenticator apps and backup codes are temporarily unavailable.',
+    );
+    expect(sealTotpSecret).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
   it('refuses to re-enroll an account whose sign-in already asks for an authenticator', async () => {
     enrolled(true);
 

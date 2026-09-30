@@ -1,5 +1,5 @@
-
-import { Image, Pressable, View } from 'react-native';
+import { Image, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import type { ReactElement } from 'react';
 import {
   AlertTriangle,
@@ -18,6 +18,7 @@ import {
 import type { GeneratedFilePresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export interface GeneratedFileCardProps {
   presentation: GeneratedFilePresentation;
@@ -94,7 +95,7 @@ function StatusBadge({
       <Icon size={10} color={fg} />
       <Text
         style={{
-          fontSize: 10,
+          fontSize: typeScale.caption,
           fontWeight: '600',
           color: fg,
           textTransform: 'uppercase',
@@ -131,7 +132,9 @@ function Chip({
       }}
     >
       {icon}
-      <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textSecondary }}>{label}</Text>
+      <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textSecondary }}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -180,7 +183,7 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
             <Text
               style={{
                 flex: 1,
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 fontWeight: '600',
                 color: colors.textPrimary,
               }}
@@ -191,24 +194,24 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
             <StatusBadge presentation={presentation} colors={colors} />
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+            <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
               {presentation.kindLabel}
             </Text>
             {presentation.byteCountLabel ? (
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+              <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
                 · {presentation.byteCountLabel}
               </Text>
             ) : null}
             {presentation.checksumShort ? (
               <Text
-                style={{ fontSize: 11, color: colors.textMuted }}
+                style={{ fontSize: typeScale.caption, color: colors.textMuted }}
                 accessibilityLabel={`SHA-256 ${presentation.checksumShort}`}
               >
                 · {presentation.checksumShort}
               </Text>
             ) : null}
             {presentation.retentionLabel ? (
-              <Text style={{ fontSize: 11, color: colors.textMuted }}>
+              <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
                 · {presentation.retentionLabel}
               </Text>
             ) : null}
@@ -233,12 +236,12 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
         </View>
       </View>
       {presentation.localOnly ? (
-        <Text style={{ fontSize: 11, color: colors.textMuted }}>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
           Local file. Sharing uses the native sheet and does not upload it to AGI cloud.
         </Text>
       ) : null}
       {onOpenSourceSession && presentation.sourceSessionLabel ? (
-        <Pressable
+        <PressableBox
           onPress={onOpenSourceSession}
           accessibilityRole="button"
           accessibilityLabel={`Open ${presentation.sourceSessionLabel}`}
@@ -246,7 +249,7 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
         >
           <Text
             style={{
-              fontSize: 11,
+              fontSize: typeScale.caption,
               fontWeight: '600',
               color: colors.textSecondary,
               textDecorationLine: 'underline',
@@ -254,7 +257,7 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
           >
             {presentation.sourceSessionLabel}
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );

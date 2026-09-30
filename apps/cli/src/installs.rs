@@ -86,13 +86,22 @@ pub(crate) fn install_plugin(
     name: Option<&str>,
     integrity: plugins::PluginIntegrity,
     signature: plugins::PluginSignaturePolicy,
+    git_ref: Option<&str>,
 ) -> Result<plugins::PluginInstallOutcome, String> {
     let name = plugins::derive_plugin_install_name(source, name)?;
     let source = if crate::is_git_plugin_source(source) {
         plugins::PluginSource::Git {
             url: source.to_string(),
-            branch: None,
+            branch: git_ref
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string),
         }
+    } else if git_ref.is_some() {
+        return Err(
+            "--ref pins a version of a plugin installed from git; this source is a local folder."
+                .to_string(),
+        );
     } else {
         plugins::PluginSource::Local(PathBuf::from(source))
     };

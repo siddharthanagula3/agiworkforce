@@ -12,10 +12,16 @@ export const CAPABILITY_DOCUMENT_PATH = `${ACCOUNT_ME_PATH}?surface=web`;
 
 export type CapabilityDocument = CapabilityDocumentWireView;
 
-export async function fetchCapabilityDocument(
+export interface AccountSummary {
+  capabilityDocument: CapabilityDocument | null;
+  displayName: string | null;
+  email: string | null;
+}
+
+export async function fetchAccountSummary(
   token: string,
   signal?: AbortSignal,
-): Promise<CapabilityDocument | null> {
+): Promise<AccountSummary | null> {
   const response = await fetch(`${FREE_TRIAL_GATEWAY}${CAPABILITY_DOCUMENT_PATH}`, {
     method: 'GET',
     headers: {
@@ -26,14 +32,19 @@ export async function fetchCapabilityDocument(
     ...(signal ? { signal } : {}),
   });
   if (!response.ok) return null;
-  return parseMeResponse(await response.json()).capability_handshake ?? null;
+  const me = parseMeResponse(await response.json());
+  return {
+    capabilityDocument: me.capability_handshake ?? null,
+    displayName: me.profile?.display_name?.trim() || null,
+    email: me.email,
+  };
 }
 
 export function capabilityAllowed(
   document: CapabilityDocument | null,
   capability: PlatformCapability,
 ): boolean {
-  return resolveCapabilityDocumentDecision(document, capability)?.allowed ?? true;
+  return resolveCapabilityDocumentDecision(document, capability)?.allowed ?? false;
 }
 
 async function readAccountError(response: Response): Promise<string> {

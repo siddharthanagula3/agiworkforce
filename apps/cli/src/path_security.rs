@@ -1,6 +1,43 @@
 use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 
+#[derive(Clone)]
+struct WorkspacePathAuthority {
+    root: PathBuf,
+    additional: Vec<PathBuf>,
+}
+
+tokio::task_local! {
+    static WORKSPACE_PATH_AUTHORITY: WorkspacePathAuthority;
+}
+
+pub(crate) async fn scope_workspace_paths<F: std::future::Future>(
+    root: Option<PathBuf>,
+    additional: Vec<PathBuf>,
+    future: F,
+) -> F::Output {
+    let root = root
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."));
+    WORKSPACE_PATH_AUTHORITY
+        .scope(WorkspacePathAuthority { root, additional }, future)
+        .await
+}
+
+pub(crate) fn scope_workspace_paths_sync<T>(
+    root: PathBuf,
+    additional: Vec<PathBuf>,
+    action: impl FnOnce() -> T,
+) -> T {
+    WORKSPACE_PATH_AUTHORITY.sync_scope(WorkspacePathAuthority { root, additional }, action)
+}
+
+pub(crate) fn validation_workspace() -> PathBuf {
+    WORKSPACE_PATH_AUTHORITY
+        .try_with(|authority| authority.root.clone())
+        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+}
+
 static ADDITIONAL_WORKSPACE_ROOTS: OnceLock<RwLock<Vec<PathBuf>>> = OnceLock::new();
 
 fn additional_roots() -> &'static RwLock<Vec<PathBuf>> {
@@ -10,6 +47,10 @@ fn additional_roots() -> &'static RwLock<Vec<PathBuf>> {
 pub fn register_additional_workspace_root(path_str: &str) -> std::result::Result<PathBuf, String> {
     let expanded = expand_home(path_str);
     let path = PathBuf::from(expanded);
+    let launch_dir = std::env::current_dir().ok();
+    if let Some(refusal) = network_root_refusal(&path, launch_dir.as_deref()) {
+        return Err(refusal);
+    }
     let absolute = if path.is_absolute() {
         path
     } else {
@@ -20,9 +61,13 @@ pub fn register_additional_workspace_root(path_str: &str) -> std::result::Result
     register_additional_workspace_root_path(&absolute)
 }
 
-pub fn register_additional_workspace_root_path(
+pub(crate) fn validate_additional_workspace_root_path(
     path: &Path,
 ) -> std::result::Result<PathBuf, String> {
+    let launch_dir = std::env::current_dir().ok();
+    if let Some(refusal) = network_root_refusal(path, launch_dir.as_deref()) {
+        return Err(refusal);
+    }
     if !path.exists() {
         return Err(format!(
             "Additional directory does not exist: {}",
@@ -39,6 +84,16 @@ pub fn register_additional_workspace_root_path(
     let canonical = path
         .canonicalize()
         .map_err(|e| format!("Cannot resolve additional directory: {e}"))?;
+    if let Some(refusal) = network_root_refusal(&canonical, launch_dir.as_deref()) {
+        return Err(refusal);
+    }
+    Ok(canonical)
+}
+
+pub fn register_additional_workspace_root_path(
+    path: &Path,
+) -> std::result::Result<PathBuf, String> {
+    let canonical = validate_additional_workspace_root_path(path)?;
     {
         let mut roots = additional_roots()
             .write()
@@ -50,6 +105,79 @@ pub fn register_additional_workspace_root_path(
     #[cfg(test)]
     record_test_root_owner(&canonical);
     Ok(canonical)
+}
+
+fn network_root_refusal(path: &Path, launch_dir: Option<&Path>) -> Option<String> {
+    let host = match reached_network_host(path, MAX_DENYLIST_LINK_HOPS) {
+        Ok(Some(host)) => host,
+        Ok(None) => return None,
+        Err(reason) => return Some(reason),
+    };
+    let launched_there = launch_dir.is_some_and(|dir| {
+        network_host(dir)
+            .or_else(|| {
+                dir.canonicalize()
+                    .ok()
+                    .and_then(|canonical| network_host(&canonical))
+            })
+            .is_some_and(|launch_host| launch_host == host)
+    });
+    (!launched_there).then(|| {
+        format!(
+            "{} is a network path on {host}, which cannot be added as a working directory. \
+             Map the share to a drive letter on Windows, or mount it at a local path on macOS \
+             and Linux, and add that path instead.",
+            path.display()
+        )
+    })
+}
+
+fn network_host(path: &Path) -> Option<String> {
+    let text = path.to_string_lossy();
+    let unc = text
+        .strip_prefix(r"\\?\UNC\")
+        .or_else(|| text.strip_prefix(r"\\"))
+        .or_else(|| cfg!(windows).then(|| text.strip_prefix("//")).flatten());
+    let host = match unc {
+        Some(rest) => rest.split(['\\', '/']).next()?,
+        None => text.strip_prefix("/net/")?.split('/').next()?,
+    }
+    .to_ascii_lowercase();
+    let local = matches!(host.as_str(), "" | "?" | "." | "wsl$" | "wsl.localhost");
+    (!local).then_some(host)
+}
+
+fn reached_network_host(path: &Path, hops: usize) -> Result<Option<String>, String> {
+    if let Some(host) = network_host(path) {
+        return Ok(Some(host));
+    }
+    if hops == 0 {
+        return Err(
+            "Cannot safely resolve additional directory within the symlink limit".to_string(),
+        );
+    }
+    let mut prefix = PathBuf::new();
+    for component in path.components() {
+        prefix.push(component);
+        let is_link =
+            std::fs::symlink_metadata(&prefix).is_ok_and(|meta| meta.file_type().is_symlink());
+        let Some(target) = is_link.then(|| std::fs::read_link(&prefix).ok()).flatten() else {
+            continue;
+        };
+        let target = if target.is_absolute() {
+            target
+        } else {
+            prefix
+                .parent()
+                .unwrap_or_else(|| Path::new(""))
+                .join(target)
+        };
+        let suffix = path
+            .strip_prefix(&prefix)
+            .map_err(|_| "Cannot resolve additional directory suffix".to_string())?;
+        return reached_network_host(&target.join(suffix), hops - 1);
+    }
+    Ok(None)
 }
 
 pub fn registered_additional_workspace_roots() -> Vec<PathBuf> {
@@ -151,8 +279,120 @@ fn is_agent_instruction_path(path: &Path) -> bool {
     // case-insensitive filesystems: `.AGIWORKFORCE/RULES/x.md` is the very same
     // directory `memory.rs` globs, so it has to be the very same denial.
     let normalized = path.to_string_lossy().replace('\\', "/").to_lowercase();
+    let components: Vec<&str> = normalized
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect();
     AGENT_INSTRUCTION_DIRS.iter().any(|dir| {
-        normalized.contains(&format!("/{dir}/")) || normalized.starts_with(&format!("{dir}/"))
+        let protected: Vec<&str> = dir.split('/').collect();
+        components.iter().enumerate().any(|(index, component)| {
+            *component == protected[0]
+                && components[index..]
+                    .iter()
+                    .zip(&protected)
+                    .all(|(actual, expected)| actual == expected)
+        })
+    })
+}
+
+const PROTECTED_DIRECTORIES: &[&str] = &[
+    ".vscode",
+    ".idea",
+    ".husky",
+    ".cargo",
+    ".devcontainer",
+    ".yarn",
+    ".mvn",
+];
+
+const PROTECTED_FILES: &[&str] = &[
+    ".gitconfig",
+    ".gitmodules",
+    ".bashrc",
+    ".bash_profile",
+    ".bash_login",
+    ".bash_aliases",
+    ".bash_logout",
+    ".zshrc",
+    ".zprofile",
+    ".zshenv",
+    ".zlogin",
+    ".zlogout",
+    ".profile",
+    ".envrc",
+    ".npmrc",
+    ".yarnrc",
+    ".yarnrc.yml",
+    ".pnp.cjs",
+    ".pnp.loader.mjs",
+    ".pnpmfile.cjs",
+    "bunfig.toml",
+    ".bunfig.toml",
+    ".bazelrc",
+    ".bazelversion",
+    ".bazeliskrc",
+    ".pre-commit-config.yaml",
+    "lefthook.yml",
+    "lefthook.yaml",
+    ".lefthook.yml",
+    ".lefthook.yaml",
+    "gradle-wrapper.properties",
+    "maven-wrapper.properties",
+    ".devcontainer.json",
+    ".ripgreprc",
+    "pyrightconfig.json",
+    ".mcp.json",
+    ".claude.json",
+];
+
+pub fn is_protected_path(path: &Path) -> bool {
+    let cwd = validation_workspace();
+    is_protected_path_with_cwd(path, &cwd)
+}
+
+pub fn is_protected_path_with_cwd(path: &Path, cwd: &Path) -> bool {
+    let roots = allowed_workspace_roots(cwd);
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+    [absolute.clone(), resolve_for_denylist(&absolute)]
+        .iter()
+        .any(|candidate| {
+            let relative = roots
+                .iter()
+                .find_map(|root| candidate.strip_prefix(root).ok())
+                .unwrap_or(candidate);
+            names_protected_location(relative)
+        })
+}
+
+fn names_protected_location(path: &Path) -> bool {
+    let names: Vec<String> = path
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(name) => Some(name.to_string_lossy().to_lowercase()),
+            _ => None,
+        })
+        .collect();
+    if names
+        .last()
+        .is_some_and(|name| PROTECTED_FILES.contains(&name.as_str()))
+    {
+        return true;
+    }
+    names.iter().enumerate().any(|(index, name)| {
+        let next = names.get(index + 1).map(String::as_str);
+        match name.as_str() {
+            ".claude" | ".agiworkforce" => next != Some("worktrees"),
+            ".config" => next == Some("git"),
+            other => {
+                PROTECTED_DIRECTORIES.contains(&other)
+                    || agiworkforce_protocol::permissions::PROTECTED_METADATA_PATH_NAMES
+                        .contains(&other)
+            }
+        }
     })
 }
 
@@ -235,7 +475,7 @@ fn resolve_for_denylist(path: &Path) -> PathBuf {
 /// Use this for every tool that WRITES. `validate_workspace_path` stays as-is
 /// for reads.
 pub fn validate_workspace_write_path(path_str: &str) -> std::result::Result<PathBuf, String> {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = validation_workspace();
     validate_workspace_write_path_with_cwd(path_str, &cwd)
 }
 
@@ -255,7 +495,7 @@ pub fn validate_workspace_write_path_with_cwd(
 }
 
 pub fn validate_workspace_path(path_str: &str) -> std::result::Result<PathBuf, String> {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = validation_workspace();
     validate_workspace_path_with_cwd(path_str, &cwd)
 }
 
@@ -339,7 +579,11 @@ fn lexically_normalized(path: &Path) -> PathBuf {
 
 fn allowed_workspace_roots(cwd: &Path) -> Vec<PathBuf> {
     let mut roots = vec![cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf())];
-    roots.extend(registered_additional_workspace_roots());
+    if let Ok(additional) =
+        WORKSPACE_PATH_AUTHORITY.try_with(|authority| authority.additional.clone())
+    {
+        roots.extend(additional);
+    }
     roots
 }
 
@@ -534,11 +778,138 @@ mod tests {
 
         register_additional_workspace_root_path(outside.path()).expect("register extra root");
 
-        let result = validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path())
-            .expect("registered additional root should be allowed");
+        let result = scope_workspace_paths_sync(
+            workspace.path().to_path_buf(),
+            vec![outside.path().canonicalize().expect("extra root")],
+            || validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path()),
+        )
+        .expect("session additional root should be allowed");
 
         assert_eq!(result, file.canonicalize().expect("canonical extra file"));
         clear_additional_workspace_roots_for_tests();
+    }
+
+    #[test]
+    fn another_sessions_directory_grant_does_not_authorize_this_workspace() {
+        let _guard = lock_roots();
+        clear_additional_workspace_roots_for_tests();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let other_session_root = tempfile::tempdir().expect("other session root");
+        let file = other_session_root.path().join("private.txt");
+        std::fs::write(&file, "controlled private content").expect("private fixture");
+        register_additional_workspace_root_path(other_session_root.path())
+            .expect("other session grant");
+        assert!(
+            validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path()).is_err()
+        );
+        clear_additional_workspace_roots_for_tests();
+    }
+
+    #[tokio::test]
+    async fn concurrent_same_workspace_sessions_keep_independent_directory_grants() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let first = tempfile::tempdir().expect("first grant");
+        let second = tempfile::tempdir().expect("second grant");
+        let first_file = first.path().join("first.txt");
+        let second_file = second.path().join("second.txt");
+        std::fs::write(&first_file, "first").expect("first fixture");
+        std::fs::write(&second_file, "second").expect("second fixture");
+        let check = |own: PathBuf, other: PathBuf| async move {
+            for _ in 0..3 {
+                tokio::task::yield_now().await;
+                assert!(validate_workspace_path(&own.to_string_lossy()).is_ok());
+                assert!(validate_workspace_path(&other.to_string_lossy()).is_err());
+            }
+        };
+        tokio::join!(
+            scope_workspace_paths(
+                Some(workspace.path().to_path_buf()),
+                vec![first.path().canonicalize().expect("first root")],
+                check(first_file.clone(), second_file.clone())
+            ),
+            scope_workspace_paths(
+                Some(workspace.path().to_path_buf()),
+                vec![second.path().canonicalize().expect("second root")],
+                check(second_file, first_file)
+            ),
+        );
+    }
+
+    #[test]
+    fn scoped_primary_workspace_resolves_relative_paths_without_process_cwd() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let file = workspace.path().join("ordinary.txt");
+        std::fs::write(&file, "ordinary").expect("fixture");
+        let resolved =
+            scope_workspace_paths_sync(workspace.path().to_path_buf(), Vec::new(), || {
+                validate_workspace_path("ordinary.txt")
+            })
+            .expect("scoped file");
+        assert_eq!(resolved, file.canonicalize().expect("canonical fixture"));
+    }
+
+    #[test]
+    fn network_paths_are_named_by_their_host() {
+        for (path, host) in [
+            (r"\\server\share", Some("server")),
+            (r"\\FileServer\share\project", Some("fileserver")),
+            (r"\\?\UNC\server\share\project", Some("server")),
+            ("/net/nas/projects", Some("nas")),
+            (r"\\wsl$\Ubuntu\home\me", None),
+            (r"\\wsl.localhost\Ubuntu\home\me", None),
+            (r"\\?\C:\work", None),
+            (r"\\.\pipe\agent", None),
+            ("/home/me/net/projects", None),
+            ("/net", None),
+            ("/network/share", None),
+        ] {
+            assert_eq!(network_host(Path::new(path)).as_deref(), host, "{path}");
+        }
+    }
+
+    #[test]
+    fn a_unc_share_is_refused_before_anything_looks_it_up() {
+        let error = register_additional_workspace_root(r"\\server\share").unwrap_err();
+
+        assert!(error.contains("network path on server"), "{error}");
+    }
+
+    #[test]
+    fn an_automount_path_is_refused_unless_the_session_started_on_that_host() {
+        let local = tempfile::tempdir().expect("launch dir");
+        let share = Path::new("/net/nas/projects");
+
+        assert!(register_additional_workspace_root_path(share)
+            .unwrap_err()
+            .contains("network path on nas"));
+        assert!(network_root_refusal(share, Some(local.path())).is_some());
+        assert!(network_root_refusal(share, Some(Path::new("/net/other/home"))).is_some());
+        assert!(network_root_refusal(share, Some(Path::new("/net/NAS/home"))).is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_local_link_to_a_network_location_is_refused() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let link = workspace.path().join("share");
+        std::os::unix::fs::symlink("/net/nas/projects", &link).expect("create link");
+
+        let error = register_additional_workspace_root_path(&link).unwrap_err();
+
+        assert!(error.contains("network path on nas"), "{error}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn network_directory_inspection_refuses_exhausted_symlink_budget() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let mut target = PathBuf::from("/net/nas/projects");
+        for index in 0..=MAX_DENYLIST_LINK_HOPS {
+            let link = workspace.path().join(format!("link-{index}"));
+            std::os::unix::fs::symlink(&target, &link).expect("create link chain");
+            target = link;
+        }
+        assert!(network_root_refusal(&target, Some(workspace.path())).is_some());
     }
 
     /// `ROOTS_GUARD` only serializes this module. `claude_parity` and `agent`
@@ -565,9 +936,16 @@ mod tests {
             })
         };
 
-        let outcome = (0..500).try_for_each(|_| {
-            validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path()).map(|_| ())
-        });
+        let outcome = scope_workspace_paths_sync(
+            workspace.path().to_path_buf(),
+            vec![outside.path().canonicalize().expect("extra root")],
+            || {
+                (0..500).try_for_each(|_| {
+                    validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path())
+                        .map(|_| ())
+                })
+            },
+        );
 
         stop.store(true, Ordering::Relaxed);
         sibling.join().expect("sibling test thread");
@@ -662,6 +1040,26 @@ mod repo_relative_tests {
 mod agent_instruction_denylist_tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn instruction_directories_and_their_ancestors_are_not_writable() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        for target in [
+            ".agiworkforce",
+            ".agiworkforce/rules",
+            ".agiworkforce/commands",
+            ".agiworkforce/prompts",
+            ".agiworkforce/prompts/claude",
+            ".claude",
+            ".claude/commands",
+        ] {
+            assert!(
+                validate_workspace_write_path_with_cwd(target, tmp.path()).is_err(),
+                "trusted instruction ancestor was writable: {target}"
+            );
+        }
+        assert!(validate_workspace_write_path_with_cwd("docs/rules.md", tmp.path()).is_ok());
+    }
 
     /// The attack this closes: one approved `write_file`, with content from a
     /// poisoned web page or MCP tool result, lands in a directory the CLI loads
@@ -864,7 +1262,7 @@ pub fn filesystem_is_case_insensitive(dir: &Path) -> bool {
 /// The one internal spelling of a path: canonical, then relative to the
 /// workspace root, so routes to the same file give one key.
 pub fn repo_relative(path: &Path) -> PathBuf {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = validation_workspace();
     repo_relative_to(path, &cwd)
 }
 

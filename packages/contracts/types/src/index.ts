@@ -45,6 +45,7 @@ export * from './routing-profile-choice';
 export * from './auto-route-explanation';
 export * from './tool-request-diff';
 export * from './tool-approval-stakes';
+export * from './phone-steps';
 export * from './surface-binding';
 
 export * from './content-safety';
@@ -110,6 +111,7 @@ export * from './paywall-vocabulary';
 export * from './interactive-cards';
 export * from './places-search';
 export * from './project-file-citations';
+export * from './project-templates';
 export * from './web-search-citations';
 export * from './search-provider';
 
@@ -398,6 +400,7 @@ export {
 } from './site-policy';
 
 export {
+  MAX_CUSTOM_INSTRUCTIONS_CHARS,
   PREFERRED_FORMATTINGS,
   PREFERRED_LENGTHS,
   PREFERRED_LENGTH_GUIDANCE,
@@ -415,3 +418,7 @@ export {
   type ResponseStylePreference,
   type TechnicalLevel,
 } from './response-style-preferences';
+export * from './chart-spec';
+export * from './connector-connect-required';
+export * from './image-jobs';
+export * from './media-jobs';

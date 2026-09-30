@@ -166,7 +166,7 @@ export function ProjectShareDialog({
             {body}
             <div>
               <Button size="sm" variant="ghost" onClick={() => void copyProjectLink(projectId)}>
-                <Link2 className="mr-1.5 h-4 w-4" aria-hidden />
+                <Link2 className="me-1.5 h-4 w-4" aria-hidden />
                 Copy link
               </Button>
             </div>

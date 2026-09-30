@@ -215,8 +215,8 @@
       "description": "Produce a document, sheet or deck as a downloadable file.",
       "selector": {
         "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
-        "marker": "onToggleOfficeCreation",
-        "label": "Create Office files"
+        "marker": "onSelectOfficeOutput",
+        "label": "Output"
       },
       "request": {
         "kind": "chat-completions",

@@ -2,7 +2,7 @@ import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOri
 import { platformRequestHeaders } from '../../platformHeaders';
 
 /**
- * Shape of apps/web/lib/support/diagnostics/types.ts. The server validates and
+ * Shape of supportDiagnosticsSchema in packages/contracts/cloud-contracts/src/support.ts. The server validates and
  * redacts it, so the popup never hands the user a file the server has not
  * cleaned.
  */

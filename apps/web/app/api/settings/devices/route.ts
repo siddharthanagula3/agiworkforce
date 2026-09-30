@@ -110,7 +110,7 @@ function fromRegistration(row: RegistrationRow, now: number): ListedDevice {
     architecture: row.architecture,
     shell: row.shell,
     workspaceId: row.organization_id,
-    presence: devicePresence(row.last_seen_at, now),
+    presence: devicePresence(row.last_seen_at, now, row.surface),
     capabilities: {
       browser: row.browser_available,
       computerUse: row.computer_use_available,
@@ -194,7 +194,7 @@ async function handleList(request: NextRequest) {
       architecture: null,
       shell: null,
       workspaceId: null,
-      presence: row.last_seen_at ? devicePresence(row.last_seen_at, now) : null,
+      presence: row.last_seen_at ? devicePresence(row.last_seen_at, now, row.kind) : null,
       capabilities: null,
     })),
   ].slice(0, MAX_DEVICES);

@@ -16,6 +16,7 @@ import {
 
 import { pseudonymizeEmail as hashEmail } from '@/lib/server/email-pseudonym';
 import { BillingIntervalSchema, unsoldBillingIntervalMessage } from '@/lib/validations/checkout';
+import { isBillingUpgradeWaitlistEnabled } from '@/lib/server/billing-waitlist-access';
 
 type WaitlistPlan = SelfServePaidPlanTier;
 
@@ -39,7 +40,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   const joinedPlans = rows.map((row) => row.plan).filter(isWaitlistPlan);
 
-  return NextResponse.json({ joinedPlans });
+  return NextResponse.json({ joinedPlans, upgradeGateEnabled: isBillingUpgradeWaitlistEnabled() });
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {

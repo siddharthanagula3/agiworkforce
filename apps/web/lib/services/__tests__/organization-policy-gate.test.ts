@@ -10,6 +10,7 @@ import {
   resolveMfaPolicy,
   resolveSecretHandlingPolicy,
   resolveZeroDataRetentionPolicy,
+  workspacesPermitProductAnalytics,
 } from '../organization-policy-gate';
 import { ErrorCode } from '@/lib/errors';
 import { clearIpAllowListCacheForTests } from '../organization-ip-allow-list-cache';
@@ -708,6 +709,37 @@ describe('resolveMfaPolicy', () => {
 
     expect(result.organizationId).toBe(ORGANIZATION_ID);
     expect(result.policy?.requireMfa).toBe(true);
+  });
+});
+
+describe('workspacesPermitProductAnalytics', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('permits a caller whose workspace leaves product analytics on', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([policyRow({ metadata: { allowProductAnalytics: true } })]);
+
+    await expect(workspacesPermitProductAnalytics(h.db, 'user-1')).resolves.toBe(true);
+  });
+
+  it('blocks when any governing workspace switched product analytics off', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([
+        { organization_id: ORGANIZATION_ID },
+        { organization_id: SECOND_ORGANIZATION_ID },
+      ])
+      .mockResolvedValueOnce([policyRow({ metadata: { allowProductAnalytics: true } })])
+      .mockResolvedValueOnce([
+        policyRow({
+          organization_id: SECOND_ORGANIZATION_ID,
+          metadata: { allowProductAnalytics: false },
+        }),
+      ]);
+
+    await expect(workspacesPermitProductAnalytics(h.db, 'user-1')).resolves.toBe(false);
   });
 });
 

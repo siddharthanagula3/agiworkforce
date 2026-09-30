@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { MANAGED_MEDIA_KEEP_PATH } from '@agiworkforce/cloud-contracts';
 import {
   X,
   Download,
@@ -43,7 +44,7 @@ function mediaAssetIdFromUrl(url: string | undefined): string | null {
 }
 
 async function keepTemporaryChatMedia(assetId: string): Promise<void> {
-  const response = await fetch('/api/media/keep', {
+  const response = await fetch(MANAGED_MEDIA_KEEP_PATH, {
     method: 'POST',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ id: assetId }),
@@ -620,9 +621,9 @@ function EditPanel({
         aria-modal="true"
         aria-label="Revise this image"
         className={cn(
-          'flex flex-col border-l border-border/30',
+          'flex flex-col border-s border-border/30',
           'bg-card/95 backdrop-blur-xl',
-          'fixed inset-y-0 right-0 z-[var(--z-overlay-panel)] w-full',
+          'fixed inset-y-0 end-0 z-[var(--z-overlay-panel)] w-full',
           'sm:relative sm:inset-auto sm:z-auto sm:w-full md:w-1/2 lg:w-[480px] sm:shrink-0',
           'animate-in slide-in-from-right duration-moved',
         )}
@@ -667,7 +668,7 @@ function EditPanel({
                   ref={aspectMenuRef}
                   role="menu"
                   aria-label="Aspect ratio"
-                  className="absolute right-0 top-full z-[var(--z-dropdown)] mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-e4 backdrop-blur-xl"
+                  className="absolute end-0 top-full z-[var(--z-dropdown)] mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-e4 backdrop-blur-xl"
                 >
                   {aspectOptions.map((opt) => (
                     <button
@@ -685,7 +686,7 @@ function EditPanel({
                           : 'hover:bg-muted/60',
                       )}
                     >
-                      <span className="flex-1 text-left">{opt.label}</span>
+                      <span className="flex-1 text-start">{opt.label}</span>
                       {currentAspect === opt.id && (
                         <Check className="h-3 w-3 shrink-0 text-primary" />
                       )}
@@ -1001,7 +1002,7 @@ function ResultCard({
         {!imgError && (
           <div className="absolute inset-0 flex flex-col justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-quick">
             {/* Gradient scrim */}
-            <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
+            <div className="absolute bottom-0 start-0 end-0 h-20 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
 
             {/* Overlay button row */}
             <div className="relative flex items-center justify-between px-3 pb-3">
@@ -1022,7 +1023,7 @@ function ResultCard({
               <button
                 type="button"
                 onClick={onShare}
-                className="ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+                className="ms-auto flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-sm transition-colors hover:bg-white/25"
                 aria-label="Share image"
               >
                 <Share2 className="h-4 w-4" />
@@ -1070,7 +1071,7 @@ function ResultCard({
               ref={morePanelRef}
               role="menu"
               aria-label="More actions"
-              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-1 w-40 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-e4 backdrop-blur-xl"
+              className="absolute bottom-full start-0 z-[var(--z-dropdown)] mb-1 w-40 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-e4 backdrop-blur-xl"
             >
               <button
                 type="button"
@@ -1141,7 +1142,7 @@ function ResultCard({
         )}
 
         {modelLabel && (
-          <span className="ml-auto truncate pr-1 text-caption text-muted-foreground">
+          <span className="ms-auto truncate pe-1 text-caption text-muted-foreground">
             {`Generated with ${modelLabel}${aspectRatio && aspectRatio !== 'auto' ? ` · ${aspectRatio}` : ''}`}
           </span>
         )}

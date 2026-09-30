@@ -17,18 +17,6 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S33.02: Application name and description.
-
-- Done when: The user can set a name and description for a published app.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The page title is the artifact title sent at publish time; there is no field to name or describe the published app. | ui |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
-
 ## S33.04: Prompt-based creation.
 
 - Done when: The user creates a site by prompting the assistant, then hosts the result.
@@ -37,21 +25,7 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI publishes an artifact already produced in an account conversation (`agi artifacts publish <id>`); no single command turns a prompt into a hosted site. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
-
-## S33.05: Source-code workspace.
-
-- Done when: The site's source code can be browsed and edited in a workspace.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `agi artifacts show` prints or saves the source; an edited file cannot be pushed back to the artifact. | ui |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1942-1948`
 
 ## S33.07: Preview deployment.
 
@@ -62,29 +36,6 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1942-1948`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-
-## S33.08: Production deployment.
-
-- Done when: The site can be deployed to a separate production URL/stage.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Publishing makes one share link; there is no separate production stage or stable domain distinct from the preview. | ui |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
-
-## S33.09: Deployment history.
-
-- Done when: The user can see the history of deployments.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S33.12: Workspace-only access.
 
@@ -97,27 +48,19 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S33.13: Password or authentication options where offered.
+## S33.20: Model-call allowance for generated apps.
 
-- Done when: The owner can require a password or sign-in to view the site.
+- Done when: Generated apps get an allowance of model calls through the product.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
+| desktop | missing | Not built on this surface. |  |
+| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S33.19: Usage and hosting limits.
-
-- Done when: Usage and hosting limits are enforced and shown to the owner.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Limits are enforced (200 live pages per user, 1,000,000 characters, share-create rate limit) and returned as errors, but no screen shows usage against them. | ui |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
+| chrome | missing | Not built on this surface. |  |
 
 ## S33.23: Rollback.
 
@@ -153,18 +96,6 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S33.26: Download source.
-
-- Done when: The owner can download the app's source.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/p-slack-s26.29-mobile-artifact-download-formats.patch: a code artifact downloads as its raw source file with the right extension and no added header. The export options, the raw source export and the sheet are new free files in the patch; the viewer that opens them, ArtifactFullScreen.tsx, is held by Codex. The viewer hunk passes git apply --check on the Codex working copy, the free files on integration, and it composes in either order with no-yearly-s32-34-mobile-show-changes.patch; the edit was typechecked against this branch. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:236-241`
 
 ## S33.30: Deletion of app and associated data.
 

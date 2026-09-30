@@ -2,6 +2,7 @@ import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:ch
 import { accessSync, constants as fsConstants, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { messageKindForAgentEvent } from '@agiworkforce/types';
 import type {
   DeveloperApprovalAnswer,
   DeveloperFileChange,
@@ -349,6 +350,8 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
   const turnId = readString(params, 'turnId');
   const event = params['event'];
   if (!threadId || !turnId || !isRecord(event)) return;
+  const kind = messageKindForAgentEvent(readString(event, 'type') ?? '');
+  if (kind !== 'tool_call' && kind !== 'tool_result') return;
 
   if (event['type'] === 'turn-diff') {
     emit(server.root.id, {
@@ -461,6 +464,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
       requestId,
       summary: readString(params, 'summary') ?? 'The agent needs approval to continue.',
       detail: readString(params, 'detail') ?? '',
+      ...readQuestion(params['question']),
     });
     return;
   }
@@ -644,6 +648,7 @@ function queueAccountSync(server: RunningServer): Promise<void> {
       const outcome = await reconcileDeveloperAccount(
         (method, params, timeoutMs) => request(server, method, params, timeoutMs),
         bridge,
+        shellSignedCliIn(),
       );
       accountSyncError = null;
       recordDesktopEvent({ domain: 'sync', outcome: 'ok' });
@@ -805,6 +810,7 @@ function toSession(rootId: string, raw: unknown): LocalDeveloperSession | null {
     createdAt: readString(raw, 'createdAt') ?? '',
     updatedAt: readString(raw, 'updatedAt') ?? '',
     origin: (readString(raw, 'createdBy') ?? 'cli') as DeveloperSessionSource,
+    ...(readString(raw, 'location') === 'cloud' ? { location: 'cloud' as const } : {}),
   };
 }
 
@@ -814,7 +820,10 @@ function requireSession(rootId: string, raw: unknown): LocalDeveloperSession {
   return session;
 }
 
-async function listForRoot(root: WorkspaceRoot): Promise<DeveloperSessionGroup> {
+async function listForRoot(
+  root: WorkspaceRoot,
+  includeCloud: boolean,
+): Promise<DeveloperSessionGroup> {
   const git = await readWorkspaceGit(root);
   const group: DeveloperSessionGroup = {
     rootId: root.id,
@@ -826,7 +835,10 @@ async function listForRoot(root: WorkspaceRoot): Promise<DeveloperSessionGroup> 
 
   try {
     const server = await readyServer(root);
-    const result = await request(server, 'thread/list', { cwd: root.path });
+    const result = await request(server, 'thread/list', {
+      cwd: root.path,
+      ...(includeCloud ? { includeCloud } : {}),
+    });
     const threads = isRecord(result) ? result['threads'] : null;
     if (Array.isArray(threads)) {
       group.sessions = threads
@@ -926,8 +938,12 @@ export async function readDeveloperModels(
   };
 }
 
-export async function listDeveloperSessions(): Promise<DeveloperSessionList> {
-  const groups = await Promise.all(listRoots().map(listForRoot));
+export async function listDeveloperSessions(
+  options: { includeCloud?: boolean } = {},
+): Promise<DeveloperSessionList> {
+  const groups = await Promise.all(
+    listRoots().map((root) => listForRoot(root, options.includeCloud === true)),
+  );
   return { groups };
 }
 
@@ -1145,6 +1161,17 @@ export async function interruptDeveloperTurn(
   return true;
 }
 
+/** A multiple-choice question the agent asked, carried to the page intact. */
+function readQuestion(value: unknown): { question?: { question: string; options: string[] } } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const question = typeof record['question'] === 'string' ? record['question'] : null;
+  const options = Array.isArray(record['options'])
+    ? record['options'].filter((option): option is string => typeof option === 'string')
+    : [];
+  return question ? { question: { question, options } } : {};
+}
+
 export async function answerDeveloperApproval(answer: DeveloperApprovalAnswer): Promise<boolean> {
   const root = requireRoot(answer.rootId);
   const server = await readyServer(root);
@@ -1153,6 +1180,7 @@ export async function answerDeveloperApproval(answer: DeveloperApprovalAnswer): 
     turnId: answer.turnId,
     requestId: answer.requestId,
     decision: answer.approved ? 'approved' : 'denied',
+    ...(answer.note ? { note: answer.note } : {}),
   });
   emit(answer.rootId, {
     type: 'approval-answered',

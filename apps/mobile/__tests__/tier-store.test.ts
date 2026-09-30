@@ -158,9 +158,10 @@ describe('refreshTier, success cases', () => {
   it('hydrates tier from /api/me plan field', async () => {
     mockApiGet.mockResolvedValueOnce(mePayload('basic'));
 
-    await getState().refreshTier();
+    const refreshed = await getState().refreshTier();
 
     expect(getState().tier).toBe('basic');
+    expect(refreshed).toBe(true);
   });
 
   it('normalises "PRO" to "pro"', async () => {
@@ -273,9 +274,10 @@ describe('refreshTier, failure cases', () => {
     useTierStore.setState({ tier: 'pro', isRefreshing: false, lastRefreshedAt: null });
     mockApiGet.mockRejectedValueOnce(new Error('Network error'));
 
-    await getState().refreshTier();
+    const refreshed = await getState().refreshTier();
 
     expect(getState().tier).toBe('pro');
+    expect(refreshed).toBe(false);
   });
 
   it('sets isRefreshing back to false after failure', async () => {

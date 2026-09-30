@@ -15,27 +15,34 @@ const mocks = vi.hoisted(() => ({
   findInstallation: vi.fn(),
   linkingAvailable: vi.fn(),
   query: vi.fn(),
+  appInstallOwner: vi.fn(async (..._args: unknown[]): Promise<string | null> => null),
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('next/headers', () => ({
+vi.mock('next/headers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/headers')>()),
   cookies: vi.fn(async () => ({
     get: (name: string) => mocks.cookieGet(name),
     set: (options: CookieOptions) => mocks.cookieSet(options),
   })),
 }));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
   withRateLimit: vi.fn(async () => null),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mocks.query(...args),
   })),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -43,13 +50,20 @@ vi.mock('@/lib/logger', () => ({
     warn: vi.fn(),
   },
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-app')>()),
   exchangeGitHubOAuthCode: (...args: unknown[]) => mocks.exchangeCode(...args),
   findGitHubInstallationForUser: (...args: unknown[]) => mocks.findInstallation(...args),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
 }));
 
+vi.mock('@/lib/github-install-app-return', async (importActual) => ({
+  ...(await importActual<typeof import('@/lib/github-install-app-return')>()),
+  appInstallOwner: (...args: unknown[]) => mocks.appInstallOwner(...args),
+}));
+
 import { GET } from './route';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 const OAUTH_STATE = 'b'.repeat(64);
 
@@ -80,6 +94,7 @@ describe('GitHub OAuth callback ownership proof', () => {
       verifiedRepositories: ['verified-org/app'],
     });
     mocks.query.mockResolvedValue([{ id: 'row-1' }]);
+    mocks.appInstallOwner.mockResolvedValue(null);
   });
 
   it('rejects a state mismatch before exchanging the code', async () => {
@@ -203,5 +218,31 @@ describe('GitHub OAuth callback ownership proof', () => {
     expect(sql).toMatch(
       /ownership_verified_at is null[\s\S]*github_installations\.user_id = excluded\.user_id/i,
     );
+  });
+
+  it('hands an app install back to the app without a web session or finishing it', async () => {
+    mocks.appInstallOwner.mockResolvedValue('user-1');
+    mocks.cookieValues.clear();
+
+    const response = await GET(callbackRequest());
+
+    expect(response.status).toBe(307);
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(location.origin + location.pathname).toBe('https://agiworkforce.com/github/installed');
+    expect(location.searchParams.get('code')).toBe('one-time-code');
+    expect(location.searchParams.get('state')).toBe(OAUTH_STATE);
+    expect(getClerkAuthUser).not.toHaveBeenCalled();
+    expect(mocks.exchangeCode).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('passes a denied app authorization back as denied without the code', async () => {
+    mocks.appInstallOwner.mockResolvedValue('user-1');
+
+    const response = await GET(callbackRequest(`error=access_denied&state=${OAUTH_STATE}`));
+
+    const location = new URL(response.headers.get('location') ?? '');
+    expect(location.searchParams.get('error')).toBe('denied');
+    expect(location.searchParams.get('code')).toBeNull();
   });
 });

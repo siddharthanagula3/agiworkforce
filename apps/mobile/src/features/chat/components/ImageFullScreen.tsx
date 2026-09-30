@@ -1,22 +1,37 @@
-import { useCallback, useMemo } from 'react';
-import { View, Pressable, Modal, Alert, useWindowDimensions } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { View, Modal, Alert, useWindowDimensions } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Image } from 'expo-image';
-import { X, Share2 } from 'lucide-react-native';
+import { Check, Copy, Download, Paintbrush, Share2, Trash2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { copyGeneratedImage } from '@/services/fileCreation';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, zIndex } from '@/src/ui/theme';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
-import { shareGeneratedImage } from '@/services/fileCreation';
+import { saveGeneratedImageToPhotos, shareGeneratedImage } from '@/services/fileCreation';
+import { toUserMessage } from '@/services/userMessage';
+
+import { imageSettingsCaption } from '@/src/features/image/imageSettingsCaption';
+import {
+  ImageAreaEditor,
+  type ImageAreaEdit,
+} from '@/src/features/image/components/ImageAreaEditor';
 
 interface ImageFullScreenProps {
   imageUrl: string | null;
   prompt?: string;
+  model?: string;
+  aspectRatio?: string;
   visible: boolean;
   onClose: () => void;
   allowEphemeral?: boolean;
+  onEditArea?: (edit: ImageAreaEdit) => void;
+  onDelete?: () => void;
+  deleteMessage?: string;
 }
 
 const DIRECTLY_DISPLAYABLE_URI = /^(file|ph|content|assets-library|data|https?):/i;
@@ -29,10 +44,17 @@ function isDirectlyDisplayableUri(imageUrl: string | null): imageUrl is string {
 export function ImageFullScreen({
   imageUrl,
   prompt,
+  model,
+  aspectRatio,
   visible,
   onClose,
   allowEphemeral = false,
+  onEditArea,
+  onDelete,
+  deleteMessage,
 }: ImageFullScreenProps) {
+  const [editing, setEditing] = useState(false);
+  const settingsCaption = imageSettingsCaption(model, aspectRatio);
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { width: screenWidth } = useWindowDimensions();
@@ -63,9 +85,9 @@ export function ImageFullScreen({
       'worklet';
       savedScale.value = scale.value;
       if (scale.value < 1.1) {
-        scale.value = withTiming(1, { duration: 250 });
-        translateX.value = withTiming(0, { duration: 250 });
-        translateY.value = withTiming(0, { duration: 250 });
+        scale.value = withTiming(1, { duration: motion.moved });
+        translateX.value = withTiming(0, { duration: motion.moved });
+        translateY.value = withTiming(0, { duration: motion.moved });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
@@ -92,14 +114,14 @@ export function ImageFullScreen({
     .onEnd(() => {
       'worklet';
       if (scale.value > 1.1) {
-        scale.value = withTiming(1, { duration: 250 });
-        translateX.value = withTiming(0, { duration: 250 });
-        translateY.value = withTiming(0, { duration: 250 });
+        scale.value = withTiming(1, { duration: motion.moved });
+        translateX.value = withTiming(0, { duration: motion.moved });
+        translateY.value = withTiming(0, { duration: motion.moved });
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
       } else {
-        scale.value = withTiming(2.5, { duration: 300 });
+        scale.value = withTiming(2.5, { duration: motion.moved });
         savedScale.value = 2.5;
       }
     });
@@ -119,13 +141,52 @@ export function ImageFullScreen({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await shareGeneratedImage(imageUrl);
-    } catch (error) {
-      Alert.alert(
-        'Could not share image',
-        error instanceof Error ? error.message : 'Save the image and try again.',
-      );
+    } catch {
+      Alert.alert('Could not share image', 'Save the image and try again.');
     }
   }, [imageUrl]);
+
+  const [saved, setSaved] = useState(false);
+  const handleSave = useCallback(async () => {
+    if (!imageUrl) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await saveGeneratedImageToPhotos(imageUrl);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      Alert.alert('Could not save image', toUserMessage(error, 'Try again in a moment.'));
+    }
+  }, [imageUrl]);
+
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(async () => {
+    if (!imageUrl) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await copyGeneratedImage(imageUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      Alert.alert('Could not copy image', 'Try again in a moment.');
+    }
+  }, [imageUrl]);
+
+  const handleDelete = useCallback(() => {
+    if (!onDelete) return;
+    Alert.alert('Delete this image?', deleteMessage, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: onDelete },
+    ]);
+  }, [deleteMessage, onDelete]);
+
+  const handleSubmitEdit = useCallback(
+    (edit: ImageAreaEdit) => {
+      setEditing(false);
+      onEditArea?.(edit);
+    },
+    [onEditArea],
+  );
 
   const handleClose = useCallback(() => {
     scale.value = 1;
@@ -167,11 +228,60 @@ export function ImageFullScreen({
               paddingHorizontal: 16,
               paddingBottom: 12,
               gap: 8,
-              zIndex: 10,
+              zIndex: zIndex.control,
             }}
           >
+            {onEditArea && !directUri ? (
+              <PressableBox
+                onPress={() => setEditing(true)}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  backgroundColor: colors.voiceControlSurface,
+                }}
+                accessibilityLabel="Edit an area of this image"
+                accessibilityRole="button"
+              >
+                <Paintbrush size={18} color={colors.cameraOverlayText} />
+              </PressableBox>
+            ) : null}
+
+            {onDelete ? (
+              <PressableBox
+                onPress={handleDelete}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  backgroundColor: colors.voiceControlSurface,
+                }}
+                accessibilityLabel="Delete image"
+                accessibilityRole="button"
+              >
+                <Trash2 size={18} color={colors.cameraOverlayText} />
+              </PressableBox>
+            ) : null}
+
+            {!directUri ? (
+              <PressableBox
+                onPress={handleSave}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  backgroundColor: colors.voiceControlSurface,
+                }}
+                accessibilityLabel={saved ? 'Image saved to Photos' : 'Save image to Photos'}
+                accessibilityRole="button"
+              >
+                {saved ? (
+                  <Check size={18} color={colors.cameraOverlayText} />
+                ) : (
+                  <Download size={18} color={colors.cameraOverlayText} />
+                )}
+              </PressableBox>
+            ) : null}
+
             {/* Share button */}
-            <Pressable
+            <PressableBox
               onPress={handleShare}
               style={{
                 padding: 10,
@@ -182,10 +292,27 @@ export function ImageFullScreen({
               accessibilityRole="button"
             >
               <Share2 size={18} color={colors.cameraOverlayText} />
-            </Pressable>
+            </PressableBox>
+
+            <PressableBox
+              onPress={handleCopy}
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                backgroundColor: colors.voiceControlSurface,
+              }}
+              accessibilityLabel={copied ? 'Image copied' : 'Copy image'}
+              accessibilityRole="button"
+            >
+              {copied ? (
+                <Check size={18} color={colors.cameraOverlayText} />
+              ) : (
+                <Copy size={18} color={colors.cameraOverlayText} />
+              )}
+            </PressableBox>
 
             {/* Close button */}
-            <Pressable
+            <PressableBox
               onPress={handleClose}
               style={{
                 padding: 10,
@@ -196,7 +323,7 @@ export function ImageFullScreen({
               accessibilityRole="button"
             >
               <X size={18} color={colors.cameraOverlayText} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           {/* Zoomable image area */}
@@ -244,7 +371,7 @@ export function ImageFullScreen({
           </View>
 
           {/* Prompt footer */}
-          {prompt ? (
+          {prompt || settingsCaption ? (
             <View
               style={{
                 paddingHorizontal: 24,
@@ -252,24 +379,48 @@ export function ImageFullScreen({
                 paddingBottom: insets.bottom + 16,
               }}
             >
-              <Text
-                style={{
-                  fontSize: 13,
-                  lineHeight: 19,
-                  color: colors.cameraOverlayTextMuted,
-                  textAlign: 'center',
-                }}
-                numberOfLines={4}
-                selectable
-              >
-                {prompt}
-              </Text>
+              {prompt ? (
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    lineHeight: 19,
+                    color: colors.cameraOverlayTextMuted,
+                    textAlign: 'center',
+                  }}
+                  numberOfLines={4}
+                  selectable
+                >
+                  {prompt}
+                </Text>
+              ) : null}
+              {settingsCaption ? (
+                <Text
+                  style={{
+                    fontSize: typeScale.caption,
+                    lineHeight: 17,
+                    marginTop: prompt ? 6 : 0,
+                    color: colors.cameraOverlayTextMuted,
+                    textAlign: 'center',
+                  }}
+                  selectable
+                >
+                  {settingsCaption}
+                </Text>
+              ) : null}
             </View>
           ) : (
             <View style={{ height: insets.bottom + 16 }} />
           )}
         </View>
       </GestureHandlerRootView>
+      {onEditArea ? (
+        <ImageAreaEditor
+          imagePath={imageUrl}
+          visible={editing}
+          onCancel={() => setEditing(false)}
+          onSubmit={handleSubmitEdit}
+        />
+      ) : null}
     </Modal>
   );
 }

@@ -1,12 +1,11 @@
+import type { ManagedCloudProject } from '@agiworkforce/cloud-contracts';
 import {
   SYNCED_APP_SURFACES,
-  type PrivacyMode,
-  type ProviderMode,
   type ProjectAccentColor,
   type ProjectImportSource,
   type ProjectKnowledgeFile,
-  type SourceSurface,
 } from '@agiworkforce/types';
+import { HEALTH_SPACE_KIND } from '@/lib/health-space';
 
 const ACCENT_COLORS: readonly ProjectAccentColor[] = [
   'emerald',
@@ -17,6 +16,10 @@ const ACCENT_COLORS: readonly ProjectAccentColor[] = [
   'zinc',
 ];
 const IMPORT_SOURCES: readonly ProjectImportSource[] = ['claude', 'openai', 'manual'];
+type PrivacyMode = ManagedCloudProject['defaultPrivacyMode'];
+type ProviderMode = ManagedCloudProject['defaultProviderMode'];
+type SourceSurface = ManagedCloudProject['allowedSurfaces'][number];
+
 const SURFACES: readonly SourceSurface[] = [...SYNCED_APP_SURFACES];
 
 const DEFAULT_ALLOWED_SURFACES: SourceSurface[] = [...SYNCED_APP_SURFACES];
@@ -47,6 +50,7 @@ export interface MappedProject {
   updatedAt: string;
   isOrgShared: boolean;
   sharedAccess: 'read' | 'write' | null;
+  space: 'health' | null;
 }
 
 function asString(value: unknown): string | null {
@@ -57,6 +61,7 @@ function asBool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+/** user_projects_managed_privacy_check holds every cloud project to managed. */
 function asPrivacyMode(_value: unknown): PrivacyMode {
   return 'managed';
 }
@@ -144,5 +149,6 @@ export function mapProjectRow(row: Record<string, unknown>): MappedProject {
     isOrgShared: asBool(row['is_org_shared'], false),
     sharedAccess:
       row['shared_access'] === 'write' ? 'write' : row['shared_access'] === 'read' ? 'read' : null,
+    space: row['space_kind'] === HEALTH_SPACE_KIND ? 'health' : null,
   };
 }

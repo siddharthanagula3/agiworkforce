@@ -13,7 +13,10 @@ import {
   type SerializedFreeTrialReservation,
   type SerializedManagedUsageReservation,
 } from './cloud-agent-workflow-input';
-import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import {
+  connectorToolPermissionsFromEntries,
+  withWorkspaceToolRules,
+} from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 
@@ -191,6 +194,44 @@ describe('cloud agent workflow input', () => {
     expect(restored.levelForConnectorTool('github', 'get_pull_request')).toBe('allow');
   });
 
+  it('carries workspace tool rules across the durable boundary, the stricter verdict winning', () => {
+    const effective = withWorkspaceToolRules(
+      connectorToolPermissionsFromEntries([
+        { connectorId: 'gmail', toolName: 'send_message', level: 'allow' },
+        { connectorId: 'gmail', toolName: 'search_messages', level: 'allow' },
+      ]),
+      [
+        { connectorId: 'gmail', toolName: '*write', level: 'ask' },
+        { connectorId: 'slack', toolName: '*write', level: 'deny' },
+      ],
+    );
+    const input = buildCloudAgentWorkflowInput({
+      runId: RUN_ID,
+      userId: 'user-1',
+      processed: makeProcessed(),
+      mcpTools: tools,
+      approvalMode: 'manual',
+      connectorPermissions: effective,
+    });
+
+    const restored = connectorToolPermissionsFromEntries(
+      parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input))).connectorPermissions ?? [],
+    );
+    for (const [connectorId, toolName] of [
+      ['gmail', 'send_message'],
+      ['gmail', 'search_messages'],
+      ['gmail', 'create_draft'],
+      ['slack', 'post_message'],
+    ] as const) {
+      expect(restored.levelForConnectorTool(connectorId, toolName)).toBe(
+        effective.levelForConnectorTool(connectorId, toolName),
+      );
+    }
+    expect(restored.levelForConnectorTool('gmail', 'send_message')).toBe('ask');
+    expect(restored.isConnectorToolDenied('slack', 'post_message')).toBe(true);
+    expect(restored.entries.some((entry) => entry.level === 'deny')).toBe(true);
+  });
+
   // AGI-126: a free-trial turn used to be refused here, which is what kept the
   // DEFAULT tier off the durable transport entirely.
   it('carries a free-trial reservation across the invocation boundary', () => {
@@ -353,6 +394,7 @@ describe('cloud agent workflow input', () => {
       origin: 'connector',
       serverLabel: 'GitHub',
       inputSchema: { type: 'object', properties: { number: { type: 'number' } } },
+      googleUserData: true,
     };
     const fullResume: Required<ResumeApproval> = {
       approvals: [{ toolCallId: 'call-1', decision: 'approved' }],

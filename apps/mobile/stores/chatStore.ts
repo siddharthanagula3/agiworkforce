@@ -24,13 +24,16 @@ import type { PaywallErrorState } from '@/src/features/chat/utils/paywallRecover
 import type { ProviderConsentErrorState } from '@/src/features/chat/utils/providerConsentRecovery';
 import type { FreeCapacityErrorState } from '@/src/features/chat/utils/freeCapacityRecovery';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
-import type { CloudWorkMode } from '@agiworkforce/types';
+import type { CloudWorkMode, ResearchStep } from '@agiworkforce/types';
 
 export interface CombinedChatState {
   conversations: ConversationSummary[];
   currentConversationId: string | null;
   messages: Record<string, ChatMessage[]>;
   isLoadingConversations: boolean;
+  isLoadingMoreConversations: boolean;
+  hasMoreCloudConversations: boolean;
+  conversationLoadError: string | null;
   isLoadingMessages: boolean;
   isStreaming: boolean;
   streamingConversationIds: string[];
@@ -57,7 +60,8 @@ export interface CombinedChatState {
   chatStyle: ChatStyle;
   features: ChatFeatures;
   setCurrentConversationId: (id: string | null) => void;
-  loadConversations: () => Promise<void>;
+  loadConversations: (options?: { firstPageOnly?: boolean }) => Promise<void>;
+  loadMoreConversations: () => Promise<void>;
   createConversation: (title?: string, projectId?: string) => Promise<string>;
   forkConversation: (
     sourceConversationId: string,
@@ -67,15 +71,19 @@ export interface CombinedChatState {
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   setConversationModel: (id: string, model: string) => Promise<boolean>;
+  setConversationProject: (id: string, projectId: string | null) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
+  moveConversationToProject: (id: string, projectId: string | null) => Promise<boolean>;
   makeConversationPermanent: (id: string) => void;
+  keepTemporaryConversation: (id: string) => Promise<void>;
   markConversationRead: (id: string) => void;
+  markConversationUnread: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   setMessageReaction: (
     conversationId: string,
     messageId: string,
     reaction: 'thumbsUp' | 'thumbsDown' | null,
-  ) => void;
+  ) => Promise<void>;
   enqueueOfflineMessage: (
     conversationId: string,
     content: string,
@@ -142,11 +150,12 @@ export interface CombinedChatState {
     options?: SendMessageOptions,
   ) => Promise<boolean>;
   stopStreaming: () => void;
-  retryMessage: (conversationId: string, messageId: string) => void;
+  retryMessage: (conversationId: string, messageId: string, modelOverride?: string) => void;
   resumeResearch: (
     conversationId: string,
     assistantMessageId: string,
     decision: 'start' | 'cancel' | 'retry',
+    steps?: ResearchStep[],
   ) => Promise<void>;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   resolveToolApproval: (
@@ -154,6 +163,7 @@ export interface CombinedChatState {
     assistantMessageId: string,
     toolCallId: string,
     decision: 'approved' | 'rejected',
+    guidance?: string,
   ) => Promise<void>;
   clearError: () => void;
   setSendError: (message: string) => void;
@@ -180,18 +190,26 @@ function buildCombinedState(
     currentConversationId: msg.currentConversationId,
     messages: mergedMessages,
     isLoadingConversations: msg.isLoadingConversations,
+    isLoadingMoreConversations: msg.isLoadingMoreConversations,
+    hasMoreCloudConversations: msg.hasMoreCloudConversations,
+    conversationLoadError: msg.conversationLoadError,
     isLoadingMessages: msg.isLoadingMessages,
     setCurrentConversationId: msg.setCurrentConversationId,
     loadConversations: msg.loadConversations,
+    loadMoreConversations: msg.loadMoreConversations,
     createConversation: msg.createConversation,
     forkConversation: msg.forkConversation,
     deleteConversation: msg.deleteConversation,
     loadMessages: msg.loadMessages,
     renameConversation: msg.renameConversation,
     setConversationModel: msg.setConversationModel,
+    setConversationProject: msg.setConversationProject,
     pinConversation: msg.pinConversation,
+    moveConversationToProject: msg.moveConversationToProject,
     makeConversationPermanent: msg.makeConversationPermanent,
+    keepTemporaryConversation: msg.keepTemporaryConversation,
     markConversationRead: msg.markConversationRead,
+    markConversationUnread: msg.markConversationUnread,
     deleteMessage: msg.deleteMessage,
     setMessageReaction: msg.setMessageReaction,
     enqueueOfflineMessage: msg.enqueueOfflineMessage,

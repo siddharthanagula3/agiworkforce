@@ -99,6 +99,7 @@
   "navImages": "Images",
   "navModels": "Models",
   "navSchedules": "Schedules",
+  "navHealth": "Health",
   "navAdmin": "Admin",
   "navWorkspaceSection": "Workspace",
   "navLoadingWorkspaces": "Loading workspaces…",
@@ -169,7 +170,13 @@
     "filesUploading_one": "A file is still uploading.",
     "filesUploading_other": "{{count}} files are still uploading.",
     "toolsAwaitingApproval_one": "A tool is waiting for your approval.",
-    "toolsAwaitingApproval_other": "{{count}} tools are waiting for your approval."
+    "toolsAwaitingApproval_other": "{{count}} tools are waiting for your approval.",
+    "packages_one": "{{count}} package",
+    "packages_other": "{{count}} packages",
+    "unreadNotifications_one": "{{count}} unread notification",
+    "unreadNotifications_other": "{{count}} unread notifications",
+    "textBlocks_one": "{{count}} text block",
+    "textBlocks_other": "{{count}} text blocks"
   },
   "relative": {
     "minutesAgo_one": "{{count}} minute ago",

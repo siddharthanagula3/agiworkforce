@@ -64,6 +64,25 @@ function relayReturns(status: number, body: unknown) {
 }
 
 describe('POST /api/pair/claim', () => {
+  it.each([
+    'ws://signal.example.test/ws',
+    'ws://localhost:4000/ws',
+    'wss://token@signal.example.test/ws',
+    'wss://signal.example.test/ws#token',
+  ])('refuses unsafe returned relay %s without recording a successful claim', async (wsUrl) => {
+    vi.stubEnv('NODE_ENV', 'production');
+    relayReturns(200, { ...relayClaim(), wsUrl });
+    expect((await POST(claimRequest({ code: CODE }))).status).toBe(502);
+    expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a nonlocal HTTP relay before sending its internal credential', async () => {
+    vi.stubEnv('SIGNALING_HTTP_URL', 'http://signal.example.test');
+    const fetchMock = relayReturns(200, relayClaim());
+    expect((await POST(claimRequest({ code: CODE }))).status).toBe(503);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.featureGate.mockResolvedValue(null);
@@ -96,6 +115,7 @@ describe('POST /api/pair/claim', () => {
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(`https://signal.example.test/pairings/${CODE}/claim`);
+    expect(init.redirect).toBe('error');
     expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer signal-secret');
     expect(JSON.parse(String(init.body))).toEqual({ role: 'mobile', accountId: USER_ID });
   });

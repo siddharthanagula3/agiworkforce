@@ -1,4 +1,10 @@
 import {
+  ServerSentEventDecoder,
+  ServerSentEventFrameLimitError,
+  splitJoinedServerSentEventData,
+  type ServerSentEvent,
+} from '@agiworkforce/client-runtime';
+import {
   createManagedCloudAgentRunClient,
   MAX_CHAT_ATTACHMENT_BYTES,
   parseAgentEventDelta,
@@ -34,8 +40,12 @@ import {
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
-import { BoundedSseDecoder, SseFrameLimitError } from './boundedSseDecoder';
-import { getFreshClerkAuthContext, getFreshClerkToken, signOutClerk } from './clerkAuth';
+import {
+  getFreshClerkAuthContext,
+  getFreshClerkToken,
+  revokeSyncedWebSession,
+  signOutClerk,
+} from './clerkAuth';
 import { clearAutofillProfile } from '../content/autofill/profile-storage';
 import type { ManagedCloudOwner } from './managedCloudAuthority';
 import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOrigin';
@@ -148,6 +158,32 @@ function normalizeAccessString(value: unknown, maxLength: number): string | unde
     : undefined;
 }
 
+const ACCOUNT_UNAVAILABLE_CODE = 'ACCOUNT_UNAVAILABLE';
+const TERMS_ACCEPTANCE_REQUIRED_CODE = 'TERMS_ACCEPTANCE_REQUIRED';
+const TERMS_ACCEPTANCE_REQUIRED_MESSAGE =
+  'Accept the updated AGI Workforce Terms of Service on agiworkforce.com to keep using AGI Cloud chat.';
+
+/**
+ * The account routes send upper-case codes and the chat gateway sends lower
+ * case, so a refusal matched with === only on one casing fell through to the
+ * generic "not available for this account" answer.
+ */
+function isGatewayCode(code: string | undefined, expected: string): boolean {
+  return code?.toUpperCase() === expected;
+}
+const ACCOUNT_UNAVAILABLE_MESSAGE =
+  'This AGI account cannot be used right now. Open your account on the web to see why.';
+
+export class AccountUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly recoveryPath: string | null,
+  ) {
+    super(message);
+    this.name = 'AccountUnavailableError';
+  }
+}
+
 export async function getManagedModelAccess(
   token: string,
   signal?: AbortSignal,
@@ -167,7 +203,17 @@ export async function getManagedModelAccess(
     fetch(MANAGED_USAGE_ENDPOINT, requestOptions),
   ]);
   if (!response.ok || !usageResponse.ok) {
-    const status = !response.ok ? response.status : usageResponse.status;
+    const failed = !response.ok ? response : usageResponse;
+    const status = failed.status;
+    if (status === 403) {
+      const refusal = readGatewayErrorBody(await readBoundedErrorBody(failed));
+      if (isGatewayCode(refusal.code, ACCOUNT_UNAVAILABLE_CODE)) {
+        throw new AccountUnavailableError(
+          refusal.message ?? ACCOUNT_UNAVAILABLE_MESSAGE,
+          refusal.recoveryPath ?? null,
+        );
+      }
+    }
     throw new Error(
       status === 401 ? 'Authentication is required' : `Account access is unavailable (${status})`,
     );
@@ -405,6 +451,21 @@ export async function clearAuthToken(): Promise<void> {
   await clearAutofillProfile();
 }
 
+const LEGACY_ACCOUNT_STORAGE_KEYS = ['agi_api_key', 'agi_user_id', 'agi_user_tier', 'agi_session'];
+
+export async function signOutOfAccount(): Promise<{ webSessionEnded: boolean }> {
+  let webSessionEnded = true;
+  try {
+    await revokeSyncedWebSession();
+  } catch (error) {
+    console.warn('[AGI] Ending the web session failed:', error);
+    webSessionEnded = false;
+  }
+  await clearAuthToken();
+  await chrome.storage.local.remove(LEGACY_ACCOUNT_STORAGE_KEYS);
+  return { webSessionEnded };
+}
+
 export type FreeTrialContentPart =
   | { type: 'text'; text: string }
   | {
@@ -597,6 +658,8 @@ export type FreeTrialChunk =
       code:
         | 'quota_exceeded'
         | 'auth_required'
+        | 'account_suspended'
+        | 'terms_required'
         | 'plan_required'
         | 'rate_limited'
         | 'server_error'
@@ -825,7 +888,17 @@ function quotaBlock(code: string, recovery: unknown): ManagedQuotaBlock {
 interface GatewayErrorBody {
   code?: string;
   message?: string;
+  recoveryPath?: string;
   recovery?: unknown;
+}
+
+function isGatewayPath(path: string): boolean {
+  if (!path.startsWith('/')) return false;
+  try {
+    return new URL(path, FREE_TRIAL_GATEWAY).origin === new URL(FREE_TRIAL_GATEWAY).origin;
+  } catch {
+    return false;
+  }
 }
 
 function readGatewayErrorBody(body: string): GatewayErrorBody {
@@ -842,24 +915,17 @@ function readGatewayErrorBody(body: string): GatewayErrorBody {
   const record = error as Record<string, unknown>;
   const code = normalizeAccessString(record['code'], 100);
   const message = normalizeAccessString(record['message'], 500);
+  const details = record['details'];
+  const recoveryPath =
+    details && typeof details === 'object' && !Array.isArray(details)
+      ? normalizeAccessString((details as Record<string, unknown>)['recoveryPath'], 200)
+      : undefined;
   return {
     ...(code ? { code } : {}),
     ...(message ? { message } : {}),
+    ...(recoveryPath && isGatewayPath(recoveryPath) ? { recoveryPath } : {}),
     recovery: record['recovery'],
   };
-}
-
-// Multi-line `data:` is one payload per the SSE spec, but the server also
-// forwards raw provider lines with no blank separator, which arrive joined.
-// Parsing is what tells the two apart; splitting unconditionally breaks the first.
-function splitJoinedFrames(dataPayload: string): string[] {
-  if (!dataPayload.includes('\n')) return [dataPayload];
-  try {
-    JSON.parse(dataPayload);
-    return [dataPayload];
-  } catch {
-    return dataPayload.split('\n');
-  }
 }
 
 class ManagedChatProtocolError extends Error {
@@ -1022,6 +1088,20 @@ const ACCOUNT_REFUSAL_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 42
 
 function accountRefusal(status: number, body: string): Extract<FreeTrialChunk, { type: 'error' }> {
   const gatewayError = readGatewayErrorBody(body);
+  if (isGatewayCode(gatewayError.code, ACCOUNT_UNAVAILABLE_CODE)) {
+    return {
+      type: 'error',
+      code: 'account_suspended',
+      message: gatewayError.message ?? ACCOUNT_UNAVAILABLE_MESSAGE,
+    };
+  }
+  if (isGatewayCode(gatewayError.code, TERMS_ACCEPTANCE_REQUIRED_CODE)) {
+    return {
+      type: 'error',
+      code: 'terms_required',
+      message: gatewayError.message ?? TERMS_ACCEPTANCE_REQUIRED_MESSAGE,
+    };
+  }
   const block = accountLimitBlock(gatewayError.code);
   if (block && gatewayError.code) {
     const code = accountLimitFailureCode(block);
@@ -1326,7 +1406,7 @@ export async function* streamFreeChat(
     }
 
     const decoder = new TextDecoder('utf-8', { fatal: true });
-    const sseDecoder = new BoundedSseDecoder(MANAGED_CHAT_MAX_SSE_FRAME_CHARS);
+    const sseDecoder = new ServerSentEventDecoder(MANAGED_CHAT_MAX_SSE_FRAME_CHARS);
     let sawVisibleText = false;
     let sawAgentActivity = false;
     let sawRichOutput = false;
@@ -1346,10 +1426,12 @@ export async function* streamFreeChat(
     };
 
     const handleEvents = async (
-      dataEvents: readonly string[],
+      dataEvents: readonly ServerSentEvent[],
     ): Promise<{ chunks: FreeTrialChunk[]; terminal: boolean }> => {
       const chunks: FreeTrialChunk[] = [];
-      for (const data of dataEvents.flatMap((event) => splitJoinedFrames(event))) {
+      for (const data of dataEvents.flatMap((event) =>
+        splitJoinedServerSentEventData(event.data),
+      )) {
         const frame = parseSseData(data);
         if (frame.error) {
           chunks.push(frame.error);
@@ -1518,7 +1600,7 @@ export async function* streamFreeChat(
     };
 
     const emitHandled = async function* (
-      dataEvents: readonly string[],
+      dataEvents: readonly ServerSentEvent[],
     ): AsyncGenerator<FreeTrialChunk, boolean> {
       const handled = await handleEvents(dataEvents);
       for (const chunk of handled.chunks) yield chunk;
@@ -1582,7 +1664,10 @@ export async function* streamFreeChat(
         yield abortError();
         return;
       }
-      if (error instanceof SseFrameLimitError || error instanceof ManagedChatProtocolError) {
+      if (
+        error instanceof ServerSentEventFrameLimitError ||
+        error instanceof ManagedChatProtocolError
+      ) {
         yield {
           type: 'error',
           message: error.message,

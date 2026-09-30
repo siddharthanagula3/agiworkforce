@@ -15,9 +15,6 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | files are written to disk; editing happens outside the CLI | ui |
-
-Code: `apps/cli/src/features/exec/tools/file_ops/mod.rs:604-607`, `apps/cli/src/platform/runtime/tool_catalog.rs:99-108`
 
 ## S28.02: Multi-file project tree.
 
@@ -40,10 +37,7 @@ Code: `apps/cli/src/features/exec/tools/file_ops/mod.rs:604-607`, `apps/cli/src/
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can create files (write_file), but there is no delete tool and no user command to create or delete files in the CLI. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/exec/tools/file_ops/mod.rs:604-607`, `apps/cli/src/platform/runtime/tool_catalog.rs:99-108`
 
 ## S28.04: File rename.
 
@@ -85,21 +79,6 @@ Code: `apps/cli/src/features/exec/tools/file_ops/mod.rs:604-607`, `apps/cli/src/
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S28.07: Code completion where offered.
-
-- Done when: The code editor offers code completion (where the product offers it).
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| vscode | partial | Inline ghost-text completions exist but are off by default; the user must turn on agiWorkforce.inlineCompletions.enabled in Settings. | flag-off |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/package.json:1060-1064`, `apps/extension-vscode/src/core/providerSetup.ts:78-90`
-
 ## S28.08: Search across generated files.
 
 - Done when: The user can search across all the generated files of a project.
@@ -111,50 +90,33 @@ Code: `apps/extension-vscode/package.json:1060-1064`, `apps/extension-vscode/src
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Searching files is an agent tool (grep/glob) the model calls; there is no user search command over generated files. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:203-208`
 
 ## S28.10: HTML preview.
 
 - Done when: HTML artifacts render as a live, interactive preview.
-- Wave: 3
+- Wave: 2
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cited SandboxedIframe branch (src=sandboxOrigin, 217-229) exists only when getSandboxOrigin() returns a value from NEXT_PUBLIC_SANDBOX_ORIGIN (artifact-sandbox.ts:24-43); otherwise the component renders the srcDoc fallback (236-250), and fallbackWillRunScripts (75-77) marks any document with an inline script as dead because the page CSP in proxy.ts:39 allows only nonce'd scripts. A live, interactive preview is therefore off by default behind an env gate; whether production sets it is S96.16's open production-state question. |  |
-| desktop | partial | The cited SandboxedIframe branch (src=sandboxOrigin, 217-229) exists only when getSandboxOrigin() returns a value from NEXT_PUBLIC_SANDBOX_ORIGIN (artifact-sandbox.ts:24-43); otherwise the component renders the srcDoc fallback (236-250), and fallbackWillRunScripts (75-77) marks any document with an inline script as dead because the page CSP in proxy.ts:39 allows only nonce'd scripts. A live, interactive preview is therefore off by default behind an env gate; whether production sets it is S96.16's open production-state question. Hosted-web inherits the same gate. |  |
-| mobile | partial | HTML previews render with JavaScript disabled (only Mermaid enables it), so interactive pages show layout only. | states |
-| cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
+| web | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
+| desktop | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1800-1812`, `apps/web/features/chat/components/SandboxedIframe.tsx:217-229`, `infrastructure/sandbox/index.html:459-462`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:638-639`
+Code: `apps/web/lib/artifact-sandbox.ts:95-95`
 
 ## S28.11: React or supported framework preview.
 
 - Done when: React (or other supported framework) components render as a live preview.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cited SandboxedIframe branch (src=sandboxOrigin, 217-229) exists only when getSandboxOrigin() returns a value from NEXT_PUBLIC_SANDBOX_ORIGIN (artifact-sandbox.ts:24-43); otherwise the component renders the srcDoc fallback (236-250), and fallbackWillRunScripts (75-77) marks any document with an inline script as dead because the page CSP in proxy.ts:39 allows only nonce'd scripts. A live, interactive preview is therefore off by default behind an env gate; whether production sets it is S96.16's open production-state question. |  |
-| desktop | partial | The cited SandboxedIframe branch (src=sandboxOrigin, 217-229) exists only when getSandboxOrigin() returns a value from NEXT_PUBLIC_SANDBOX_ORIGIN (artifact-sandbox.ts:24-43); otherwise the component renders the srcDoc fallback (236-250), and fallbackWillRunScripts (75-77) marks any document with an inline script as dead because the page CSP in proxy.ts:39 allows only nonce'd scripts. A live, interactive preview is therefore off by default behind an env gate; whether production sets it is S96.16's open production-state question. Hosted-web inherits the same gate. |  |
+| web | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
+| desktop | partial | switch-on: redeploy infrastructure/sandbox (project agiworkforce-sandbox) so its index.html matches the repo, then set NEXT_PUBLIC_SANDBOX_ORIGIN=https://sandbox.agiworkforce.com and rebuild web (inlined at build, apps/web/lib/artifact-sandbox.ts:95); live-check an HTML and a React artifact | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The cited lines open a browser URL: the share page when published, else the web conversation (browse_url, artifacts.rs:449-459). For an unpublished artifact that is a link-out to the web app, which the same auditor scored as partial/surface-only on S26.14 cli with this exact evidence. Done is inconsistent with that call and with R-a; partial with surface-only matches. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1800-1812`, `infrastructure/sandbox/index.html:360-383`, `apps/web/features/chat/components/SandboxedIframe.tsx:217-229`, `apps/cli/src/lib.rs:1955-1975`
-
-## S28.16: Runtime-error overlay.
-
-- Done when: Runtime errors in the preview appear as an overlay with a way to recover.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only a failed Mermaid diagram shows a message ("Could not render this diagram."); there is no error panel with View source or Retry. | states |
-
-Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:30-36`
+Code: `apps/web/lib/artifact-sandbox.ts:95-95`
 
 ## S28.18: Preview reload.
 
@@ -175,6 +137,30 @@ Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
+
+## S28.22: AI-backed app behavior through a brokered API.
+
+- Done when: An app can call AI through a brokered product API instead of embedding keys.
+- Wave: 3
+- Already works on: web
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| desktop | missing | Not built on this surface. |  |
+| mobile | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
+
+## S28.23: App-local storage or database configuration.
+
+- Done when: An app can be given persistent local storage or a database, configured by the user.
+- Wave: 3
+- Already works on: web
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| desktop | missing | Not built on this surface. |  |
+| mobile | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
 
 ## S28.25: Export project archive.
 
@@ -210,18 +196,6 @@ Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-
-## S28.28: Publish production version.
-
-- Done when: The user can publish a separate production version (stable URL or domain) distinct from previews.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Publishing makes one unlisted share link; there is no separate production stage, stable domain or promotion from a preview. | ui |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-429`
 
 ## S28.30: Rollback.
 

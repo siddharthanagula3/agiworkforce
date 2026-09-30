@@ -291,10 +291,10 @@ export function UpgradePlanDialog({
 
         <div className="max-h-[90vh] overflow-y-auto p-6 pb-4">
           {/* pr-10: DialogContent paints its own close control absolutely at
-              right-4 with an h-8 w-8 hit area, so it covers the first 3rem of
+              end-4 with an h-8 w-8 hit area, so it covers the first 3rem of
               this row. Without the reserved gutter the × lands on top of the
               heading. Same reservation DialogHeader makes. */}
-          <div className="mb-6 flex items-start justify-between pr-10">
+          <div className="mb-6 flex items-start justify-between pe-10">
             <div>
               <h2 className="text-h2 text-foreground">
                 {focusedPlanLabel ? `Upgrade to ${focusedPlanLabel}` : 'Upgrade your plan'}

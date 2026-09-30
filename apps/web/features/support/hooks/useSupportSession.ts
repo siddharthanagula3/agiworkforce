@@ -10,7 +10,7 @@ import {
   type SupportRefusedAction,
   type SupportSurface,
   type SupportTurn,
-} from '../lib/contract';
+} from '@agiworkforce/cloud-contracts/support';
 import { makeAbstention } from '../lib/normalize-answer';
 import {
   askSupport,

@@ -109,6 +109,11 @@ function readZeroDataRetentionOnly(metadata: Record<string, unknown> | null): bo
   return metadata?.['zeroDataRetentionOnly'] === true;
 }
 
+function readAllowProductAnalytics(metadata: Record<string, unknown> | null): boolean {
+  const value = metadata?.['allowProductAnalytics'];
+  return value === undefined || value === null ? true : value === true;
+}
+
 function readIpAllowList(metadata: Record<string, unknown> | null): readonly string[] {
   const value = metadata?.['ipAllowList'];
   if (!Array.isArray(value)) return [];
@@ -277,6 +282,7 @@ export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
     requireMfa: readRequireMfa(row.metadata),
     monthlySpendCapCents: readMonthlySpendCapCents(row.metadata),
     zeroDataRetentionOnly: readZeroDataRetentionOnly(row.metadata),
+    allowProductAnalytics: readAllowProductAnalytics(row.metadata),
     ipAllowList: readIpAllowList(row.metadata),
     controls: readWorkspaceControls(row.metadata),
     metadata: row.metadata ?? {},
@@ -423,6 +429,7 @@ export async function upsertOrganizationPolicy(
         requireMfa: input.requireMfa,
         monthlySpendCapCents: input.monthlySpendCapCents,
         zeroDataRetentionOnly: input.zeroDataRetentionOnly,
+        allowProductAnalytics: input.allowProductAnalytics,
         ipAllowList: input.ipAllowList,
         controls: input.controls,
       }),
@@ -461,6 +468,7 @@ export function diffAdminPolicy(
     'requireMfa',
     'monthlySpendCapCents',
     'zeroDataRetentionOnly',
+    'allowProductAnalytics',
     'ipAllowList',
     'controls',
   ];
@@ -500,6 +508,7 @@ const PERMISSIVE_WHEN_TRUE: readonly string[] = [
   'auditExportEnabled',
   'externalSharingEnabled',
   'allowMemory',
+  'allowProductAnalytics',
   'allowedPrivacyModes',
 ];
 

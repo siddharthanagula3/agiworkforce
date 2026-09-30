@@ -203,8 +203,11 @@ describe('POST /api/plugins/authored', () => {
               content: expect.stringContaining('name: draft-release-notes'),
             },
           ],
+          dependencies: [],
         },
       ],
+      allowlist: [],
+      installAlongside: expect.any(Function),
     });
   });
 

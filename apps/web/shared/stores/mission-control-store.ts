@@ -1,3 +1,4 @@
+import type { LifecycleStatus } from '@agiworkforce/types';
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
@@ -7,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 export interface Task {
   id: string;
   description: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: Extract<LifecycleStatus, 'pending' | 'completed' | 'failed'> | 'in_progress';
   assignedTo: string | null;
   toolRequired?: string;
   result?: string;
@@ -66,12 +67,7 @@ export interface MissionMessage {
 }
 
 export type MissionStatusType =
-  | 'idle'
-  | 'planning'
-  | 'executing'
-  | 'paused'
-  | 'completed'
-  | 'failed';
+  Extract<LifecycleStatus, 'idle' | 'completed' | 'failed'> | 'planning' | 'executing' | 'paused';
 
 export type EmployeeStatusType = 'thinking' | 'using_tool' | 'idle' | 'error';
 

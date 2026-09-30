@@ -9,6 +9,7 @@ jest.mock('../lib/mmkv', () => ({
 
 import { ManagedMediaImageGenerationRequestSchema } from '@agiworkforce/cloud-contracts';
 import { ApiPaywallError } from '../services/api';
+import { CLOUD_SIGN_IN_MESSAGE } from '../services/apiErrors';
 import { runImageGenerationTurn } from '../src/features/chat/actions/runImageGenerationTurn';
 import {
   __resetCloudAccountSessionForTests,
@@ -35,7 +36,7 @@ describe('runImageGenerationTurn', () => {
   it('fails closed before creating a turn when no Cloud account owns the request', async () => {
     __resetCloudAccountSessionForTests();
     mockMmkvValues.clear();
-    const callbacks = { ...createCallbacks(), onUnexpectedError: jest.fn() };
+    const callbacks = { ...createCallbacks(), onStarted: jest.fn(), onUnexpectedError: jest.fn() };
     const generate = jest.fn();
 
     await expect(
@@ -53,17 +54,18 @@ describe('runImageGenerationTurn', () => {
     ).resolves.toEqual({ status: 'failed', assistantMessageId: null });
 
     expect(callbacks.begin).not.toHaveBeenCalled();
+    expect(callbacks.onStarted).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
     expect(callbacks.onUnexpectedError).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'Sign in to an active AGI Cloud account before generating an image.',
+        message: CLOUD_SIGN_IN_MESSAGE,
       }),
     );
   });
 
   it('fails closed when the request owner does not match the active Cloud account', async () => {
     activateCloudAccount('account-a');
-    const callbacks = { ...createCallbacks(), onUnexpectedError: jest.fn() };
+    const callbacks = { ...createCallbacks(), onStarted: jest.fn(), onUnexpectedError: jest.fn() };
     const generate = jest.fn();
 
     await expect(
@@ -81,6 +83,7 @@ describe('runImageGenerationTurn', () => {
     ).resolves.toEqual({ status: 'failed', assistantMessageId: null });
 
     expect(callbacks.begin).not.toHaveBeenCalled();
+    expect(callbacks.onStarted).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
     expect(callbacks.onUnexpectedError).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -90,7 +93,7 @@ describe('runImageGenerationTurn', () => {
   });
 
   it('owns the shared begin, provider call, and completion mechanics', async () => {
-    const callbacks = createCallbacks();
+    const callbacks = { ...createCallbacks(), onStarted: jest.fn() };
     const generate = jest.fn(async () => ({
       success: true,
       images: [{ url: 'https://example.com/generated.png', revisedPrompt: 'Refined prompt' }],
@@ -112,16 +115,17 @@ describe('runImageGenerationTurn', () => {
       },
     );
 
-    expect(generate).toHaveBeenCalledWith({
-      prompt: 'Create an image of Mars',
-      model: 'registry-image-route',
-    });
+    expect(generate).toHaveBeenCalledWith(
+      { prompt: 'Create an image of Mars', model: 'registry-image-route' },
+      { operationId: 'assistant-1' },
+    );
     expect(callbacks.begin).toHaveBeenCalledWith(
       'conversation-1',
       'Create an image of Mars',
       'Create an image of Mars',
       'registry-image-route',
     );
+    expect(callbacks.onStarted).toHaveBeenCalledTimes(1);
     expect(callbacks.complete).toHaveBeenCalledWith('conversation-1', 'assistant-1', {
       imageUrl: 'https://example.com/generated.png',
       persisted: false,
@@ -203,7 +207,7 @@ describe('runImageGenerationTurn', () => {
         ...callbacks,
       },
       {
-        generate: async () => ({ success: false, error: 'Provider unavailable' }),
+        generate: async () => ({ success: false, error: 'Provider unavailable at /private/route' }),
         getUri: () => null,
       },
     );
@@ -211,9 +215,36 @@ describe('runImageGenerationTurn', () => {
     expect(callbacks.fail).toHaveBeenCalledWith(
       'conversation-1',
       'assistant-1',
-      'Provider unavailable',
+      'AGI Cloud did not return an image. Try again.',
     );
     expect(outcome).toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
+  });
+
+  it('keeps thrown provider diagnostics out of a failed image turn', async () => {
+    const callbacks = createCallbacks();
+    const outcome = await runImageGenerationTurn(
+      {
+        conversationId: 'conversation-1',
+        displayText: '/image Mars',
+        prompt: 'Mars',
+        model: 'registry-image-route',
+        ownerId: 'default-test-account',
+        ...callbacks,
+      },
+      {
+        generate: async () => {
+          throw new Error('Provider token failed at /private/image-route');
+        },
+        getUri: () => null,
+      },
+    );
+
+    expect(outcome).toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      'Image generation failed. Try again.',
+    );
   });
 
   it('drops an account-A image result that resolves after account B becomes active', async () => {
@@ -294,12 +325,15 @@ describe('runImageGenerationTurn', () => {
       'registry-image-route',
       [{ url: 'file:///photo.jpg', mimeType: 'image/jpeg', fileName: 'photo.jpg' }],
     );
-    expect(generate).toHaveBeenCalledWith({
-      prompt: 'make it a poster',
-      model: 'registry-image-route',
-      operation: 'edit',
-      source_image: { b64_json: 'cmVmZXJlbmNlLWJ5dGVz' },
-    });
+    expect(generate).toHaveBeenCalledWith(
+      {
+        prompt: 'make it a poster',
+        model: 'registry-image-route',
+        operation: 'edit',
+        source_image: { b64_json: 'cmVmZXJlbmNlLWJ5dGVz' },
+      },
+      { operationId: expect.any(String) },
+    );
     expect(
       ManagedMediaImageGenerationRequestSchema.safeParse(generate.mock.calls[0]?.[0]).success,
     ).toBe(true);

@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { router } from 'expo-router';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
@@ -14,16 +14,27 @@ import {
   type UploadTask,
 } from 'expo-file-system/legacy';
 import {
+  TERMS_ACCEPTANCE_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
   MAX_CHAT_ATTACHMENT_BYTES,
   ManagedCloudChatAttachmentCompleteResponseSchema,
   ManagedCloudChatAttachmentPresignResponseSchema,
+  chatAttachmentSizeLabel,
   resolveChatAttachmentMimeType,
 } from '@agiworkforce/cloud-contracts';
+import { readPasskeyRequired } from '@agiworkforce/cloud-contracts/account-security';
 import { BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier } from '@agiworkforce/types';
+import { announcePasskeyRequired } from '@/src/features/auth/services/accountSecurityEvents';
 
-import { ApiPaywallError, httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
+import {
+  ApiHttpError,
+  ApiPaywallError,
+  CloudCredentialUnavailableError,
+  httpErrorFrom,
+  parseJsonBody,
+  rateLimitErrorFrom,
+} from './apiErrors';
 import { platformRequestHeaders } from '../lib/platformHeaders';
 
 export { ApiFreeCapacityError, ApiHttpError, ApiPaywallError } from './apiErrors';
@@ -39,6 +50,9 @@ const MAX_REFRESH_FAILURES = 3;
 // account itself (deleted, suspended, locked), not one action being denied.
 const ACCOUNT_IDENTITY_PATH = '/api/me';
 const REFRESH_TIMEOUT_MS = 10_000;
+const PASSKEY_REQUIRED_CODE = 'PASSKEY_REQUIRED';
+const PASSKEY_REQUIRED_MESSAGE =
+  "Verify it's you with one of your passkeys or security keys to keep using this account.";
 
 class StaleApiAccountOperationError extends Error {
   constructor() {
@@ -75,11 +89,15 @@ async function tryRefreshToken(): Promise<boolean> {
 
   const generation = _accountGeneration;
   const operation = (async () => {
+    let refreshTimeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       const refreshPromise = refreshAuthSession();
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Token refresh timed out')), REFRESH_TIMEOUT_MS),
-      );
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        refreshTimeoutId = setTimeout(
+          () => reject(new Error('Token refresh timed out')),
+          REFRESH_TIMEOUT_MS,
+        );
+      });
       const refreshed = await Promise.race([refreshPromise, timeoutPromise]);
       if (generation !== _accountGeneration) return false;
       if (refreshed) {
@@ -96,6 +114,7 @@ async function tryRefreshToken(): Promise<boolean> {
       _refreshBackoffUntil = Date.now() + Math.min(2 ** _refreshFailures * 1000, 60_000);
       return false;
     } finally {
+      if (refreshTimeoutId !== undefined) clearTimeout(refreshTimeoutId);
       if (generation === _accountGeneration) {
         _refreshing = null;
       }
@@ -106,8 +125,95 @@ async function tryRefreshToken(): Promise<boolean> {
   return operation;
 }
 
+async function refusedForPasskey(response: Response): Promise<boolean> {
+  try {
+    return readPasskeyRequired(await response.clone().json());
+  } catch {
+    return false;
+  }
+}
+
 function isAccountIdentityPath(path: string): boolean {
   return path === ACCOUNT_IDENTITY_PATH || path.startsWith(`${ACCOUNT_IDENTITY_PATH}?`);
+}
+
+interface AccountUnavailableRefusal {
+  message: string;
+  recoveryPath: string | null;
+}
+
+async function readAccountUnavailable(
+  response: Response,
+): Promise<AccountUnavailableRefusal | null> {
+  return accountUnavailableFrom(
+    await response
+      .clone()
+      .json()
+      .catch(() => null),
+  );
+}
+
+function accountUnavailableFrom(parsed: unknown): AccountUnavailableRefusal | null {
+  const body = parsed as {
+    error?: { code?: unknown; message?: unknown; details?: unknown };
+  } | null;
+  const error = body?.error;
+  const code = typeof error?.code === 'string' ? error.code.toUpperCase() : null;
+  if (code !== 'ACCOUNT_UNAVAILABLE' || typeof error?.message !== 'string') return null;
+  const recoveryPath = (error.details as { recoveryPath?: unknown } | undefined)?.recoveryPath;
+  return {
+    message: error.message,
+    recoveryPath:
+      typeof recoveryPath === 'string' && recoveryPath.startsWith('/') ? recoveryPath : null,
+  };
+}
+
+function handleAccountUnavailable(refusal: AccountUnavailableRefusal): void {
+  invalidateCloudAccount();
+  clearLocalCloudAccountState();
+  clearAuthSession().catch((err) => {
+    console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
+  });
+  const { recoveryPath } = refusal;
+  Alert.alert('Account unavailable', refusal.message, [
+    { text: 'Close', style: 'cancel' },
+    ...(recoveryPath
+      ? [
+          {
+            text: 'Open on the web',
+            style: 'default' as const,
+            onPress: () => {
+              Linking.openURL(`${new URL(API_URL).origin}${recoveryPath}`).catch((err: unknown) => {
+                if (__DEV__) console.warn('[API] recovery link failed (non-blocking):', err);
+              });
+            },
+          },
+        ]
+      : []),
+  ]);
+}
+
+export function streamAuthRefusal(status: number, text: string): Error | null {
+  if (status !== 403) return null;
+  const body = parseJsonBody(text);
+  if (readPasskeyRequired(body)) {
+    announcePasskeyRequired();
+    return new ApiHttpError(PASSKEY_REQUIRED_MESSAGE, 403, PASSKEY_REQUIRED_CODE);
+  }
+  const refusal = accountUnavailableFrom(body);
+  if (refusal) {
+    handleAccountUnavailable(refusal);
+    return new Error(`HTTP 403: ${refusal.message}`);
+  }
+  return null;
+}
+
+export async function recoverStreamSession(): Promise<boolean> {
+  const accountGeneration = _accountGeneration;
+  const refreshed = await tryRefreshToken();
+  assertApiAccountGeneration(accountGeneration);
+  if (!refreshed) handleUnrecoverableAuth();
+  return refreshed;
 }
 
 function handleUnrecoverableAuth(): void {
@@ -187,13 +293,21 @@ async function sendRequest(
   options: RequestOptions,
 ): Promise<SentRequest> {
   const accountGeneration = _accountGeneration;
+  const authHeaders = await getAuthHeaders();
   const headers = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
     ...platformRequestHeaders(),
-    ...(await getAuthHeaders()),
+    ...authHeaders,
   };
   assertApiAccountGeneration(accountGeneration);
+  if (
+    path === TERMS_ACCEPTANCE_PATH &&
+    options.baseUrl === undefined &&
+    !authHeaders.Authorization
+  ) {
+    throw new CloudCredentialUnavailableError();
+  }
   const controller = new AbortController();
   const timeout = options.timeout ?? TIMEOUTS.DEFAULT;
 
@@ -205,30 +319,51 @@ async function sendRequest(
   );
 
   try {
-    const response = await guardedFetch(`${options.baseUrl ?? API_URL}${path}`, {
-      ...init,
-      headers: {
-        ...headers,
-        ...(options.headers ?? {}),
-        ...(init.headers as Record<string, string>),
+    const response = await guardedFetch(
+      `${options.baseUrl ?? API_URL}${path}`,
+      {
+        ...init,
+        headers: {
+          ...headers,
+          ...(options.headers ?? {}),
+          ...(init.headers as Record<string, string>),
+        },
+        signal:
+          callerSignals.length > 0
+            ? combineAbortSignals([...callerSignals, controller.signal])
+            : controller.signal,
       },
-      signal:
-        callerSignals.length > 0
-          ? combineAbortSignals([...callerSignals, controller.signal])
-          : controller.signal,
-    });
+      { authControl: path === TERMS_ACCEPTANCE_PATH && options.baseUrl === undefined },
+    );
     assertApiAccountGeneration(accountGeneration);
 
-    if (response.status === 401 && !options._skipAuthRetry) {
-      const refreshed = await tryRefreshToken();
-      assertApiAccountGeneration(accountGeneration);
-      release();
-      if (refreshed) {
-        return sendRequest(path, init, { ...options, _skipAuthRetry: true });
+    if (response.status === 401) {
+      if (!options._skipAuthRetry) {
+        const refreshed = await tryRefreshToken();
+        assertApiAccountGeneration(accountGeneration);
+        if (refreshed) {
+          release();
+          return sendRequest(path, init, { ...options, _skipAuthRetry: true });
+        }
       }
-
+      release();
       handleUnrecoverableAuth();
       throw new Error('HTTP 401: Session expired. Please sign in again.');
+    }
+
+    if (response.status === 403 && (await refusedForPasskey(response))) {
+      release();
+      announcePasskeyRequired();
+      throw new ApiHttpError(PASSKEY_REQUIRED_MESSAGE, 403, PASSKEY_REQUIRED_CODE);
+    }
+
+    if (response.status === 403) {
+      const refusal = await readAccountUnavailable(response);
+      if (refusal) {
+        release();
+        handleAccountUnavailable(refusal);
+        throw new Error(`HTTP 403: ${refusal.message}`);
+      }
     }
 
     if (response.status === 403 && isAccountIdentityPath(path)) {
@@ -259,6 +394,34 @@ export async function apiFetch(
       statusText: response.statusText,
       headers: response.headers,
     });
+  } finally {
+    release();
+  }
+}
+
+export interface ApiBinaryResponse {
+  ok: boolean;
+  status: number;
+  contentType: string | null;
+  bytes: ArrayBuffer;
+}
+
+export async function apiFetchBinary(
+  path: string,
+  init: RequestInit = {},
+  options: RequestOptions = {},
+): Promise<ApiBinaryResponse> {
+  const { response, release } = await sendRequest(path, init, options);
+  try {
+    const bytes = BODYLESS_STATUSES.has(response.status)
+      ? new ArrayBuffer(0)
+      : await response.arrayBuffer();
+    return {
+      ok: response.ok,
+      status: response.status,
+      contentType: response.headers.get('content-type'),
+      bytes,
+    };
   } finally {
     release();
   }
@@ -420,7 +583,9 @@ export const api = {
       throw new Error(`"${file.name}" is empty and cannot be attached.`);
     }
     if (byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
-      throw new Error(`"${file.name}" is larger than the 12 MiB chat attachment limit.`);
+      throw new Error(
+        `"${file.name}" is larger than the ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_BYTES)} chat attachment limit.`,
+      );
     }
 
     const token = await getAuthToken();
@@ -454,17 +619,22 @@ export const api = {
       );
       assertApiAccountGeneration(accountGeneration);
 
-      if (presignResponse.status === 401 && !options?._skipAuthRetry) {
-        const refreshed = await tryRefreshToken();
-        assertApiAccountGeneration(accountGeneration);
-        if (refreshed) {
-          return api.uploadFile(file, { ...options, _skipAuthRetry: true });
+      if (presignResponse.status === 401) {
+        if (!options?._skipAuthRetry) {
+          const refreshed = await tryRefreshToken();
+          assertApiAccountGeneration(accountGeneration);
+          if (refreshed) {
+            return api.uploadFile(file, { ...options, _skipAuthRetry: true });
+          }
         }
         handleUnrecoverableAuth();
         throw new Error('Upload failed: session expired. Please sign in again.');
       }
       if (!presignResponse.ok) {
-        throw new Error(await uploadErrorMessage(presignResponse, file.name));
+        throw new ApiHttpError(
+          await uploadErrorMessage(presignResponse, file.name),
+          presignResponse.status,
+        );
       }
 
       const presign = ManagedCloudChatAttachmentPresignResponseSchema.parse(
@@ -523,30 +693,55 @@ export const api = {
         );
       }
 
-      const completeResponse = await guardedFetch(
-        `${API_URL}${MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH}`,
-        {
+      const completionBody = JSON.stringify({
+        storageKey: presign.storageKey,
+        fileName: file.name,
+        mimeType,
+        byteCount,
+        ...(options?.conversationId ? { conversationId: options.conversationId } : {}),
+        ...(options?.temporary ? { temporary: true } : {}),
+      });
+      const completeAttachment = (authToken: string) =>
+        guardedFetch(`${API_URL}${MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
             ...platformRequestHeaders(),
-            ...authHeaders,
+            Authorization: `Bearer ${authToken}`,
           },
-          body: JSON.stringify({
-            storageKey: presign.storageKey,
-            fileName: file.name,
-            mimeType,
-            byteCount,
-            ...(options?.conversationId ? { conversationId: options.conversationId } : {}),
-            ...(options?.temporary ? { temporary: true } : {}),
-          }),
+          body: completionBody,
           signal,
-        },
-      );
+        });
+      const completionToken = await getAuthToken();
       assertApiAccountGeneration(accountGeneration);
+      if (!completionToken) {
+        handleUnrecoverableAuth();
+        throw new Error('Upload failed: session expired. Please sign in again.');
+      }
+      let completeResponse = await completeAttachment(completionToken);
+      assertApiAccountGeneration(accountGeneration);
+      if (completeResponse.status === 401) {
+        const refreshed = await tryRefreshToken();
+        assertApiAccountGeneration(accountGeneration);
+        const refreshedToken = refreshed ? await getAuthToken() : null;
+        assertApiAccountGeneration(accountGeneration);
+        if (!refreshedToken) {
+          handleUnrecoverableAuth();
+          throw new Error('Upload failed: session expired. Please sign in again.');
+        }
+        completeResponse = await completeAttachment(refreshedToken);
+        assertApiAccountGeneration(accountGeneration);
+        if (completeResponse.status === 401) {
+          handleUnrecoverableAuth();
+          throw new Error('Upload failed: session expired. Please sign in again.');
+        }
+      }
       if (!completeResponse.ok) {
-        throw new Error(await uploadErrorMessage(completeResponse, file.name));
+        throw new ApiHttpError(
+          await uploadErrorMessage(completeResponse, file.name),
+          completeResponse.status,
+        );
       }
 
       const { attachment } = ManagedCloudChatAttachmentCompleteResponseSchema.parse(

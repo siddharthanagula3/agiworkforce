@@ -14,6 +14,56 @@ export const CLOUD_CODE_SHARED_SESSIONS_PATH = '/api/code/shared';
 export const CLOUD_CODE_REPOSITORIES_PATH = '/api/github/repositories';
 export const CLOUD_CODE_BRANCHES_PATH = '/api/code/repositories/branches';
 
+export const GITHUB_INSTALL_APP_START_PATH = '/api/github/install/app-start';
+export const GITHUB_INSTALL_COMPLETE_PATH = '/api/github/install/complete';
+export const GITHUB_INSTALL_APP_LINK_RETURN_URL = 'https://agiworkforce.com/github/installed';
+export const GITHUB_INSTALL_PENDING_PATH = '/api/github/install/pending';
+
+export const GITHUB_INSTALL_CONNECT_PAGE_PATH = '/github/connect';
+
+export const GitHubInstallPendingRequestSchema = z.object({
+  state: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type GitHubInstallPendingRequest = z.infer<typeof GitHubInstallPendingRequestSchema>;
+
+export const GitHubInstallPendingResponseSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('ready'),
+    accountLogin: z.string().min(1).max(256),
+    accountType: z.enum(['User', 'Organization']),
+  }),
+  z.object({ status: z.literal('invalid_state') }),
+  z.object({ status: z.literal('unavailable') }),
+]);
+export type GitHubInstallPendingResponse = z.infer<typeof GitHubInstallPendingResponseSchema>;
+
+export const GitHubInstallAppStartResponseSchema = z.object({
+  url: z.string().url(),
+});
+export type GitHubInstallAppStartResponse = z.infer<typeof GitHubInstallAppStartResponseSchema>;
+
+export const GITHUB_INSTALL_COMPLETE_STATUSES = [
+  'connected',
+  'already_linked',
+  'ownership_failed',
+  'denied',
+  'invalid_state',
+  'failed',
+] as const;
+export type GitHubInstallCompleteStatus = (typeof GITHUB_INSTALL_COMPLETE_STATUSES)[number];
+
+export const GitHubInstallCompleteRequestSchema = z.object({
+  state: z.string().regex(/^[a-f0-9]{64}$/),
+  code: z.string().min(1).max(512).optional(),
+  error: z.string().max(64).optional(),
+});
+export type GitHubInstallCompleteRequest = z.infer<typeof GitHubInstallCompleteRequestSchema>;
+
+export const GitHubInstallCompleteResponseSchema = z.object({
+  status: z.enum(GITHUB_INSTALL_COMPLETE_STATUSES),
+});
+export type GitHubInstallCompleteResponse = z.infer<typeof GitHubInstallCompleteResponseSchema>;
+
 export function cloudCodeSessionPath(sessionId: string): string {
   return `${CLOUD_CODE_SESSIONS_PATH}/${encodeURIComponent(sessionId)}`;
 }
@@ -281,3 +331,16 @@ export interface DecideCloudCodeApprovalRequest {
   stepIndex: number;
   decision: CloudCodeApprovalDecision;
 }
+
+export const CLOUD_CODE_TURN_STILL_RUNNING_CODE = 'turn_still_running';
+
+export type CloudCodeSessionReply = z.input<typeof CloudCodeSessionResponseSchema>;
+export type CloudCodeCommandReply = z.input<typeof CloudCodeCommandResponseSchema>;
+export type CloudCodeChangesReply = z.input<typeof CloudCodeChangesSchema>;
+export type CloudCodeDiscardReply = z.input<typeof CloudCodeDiscardResultSchema>;
+export type CloudCodePullRequestReply = z.input<typeof CloudCodePullRequestSchema>;
+export type CloudCodePullRequestStatusReply = z.input<typeof CloudCodePullRequestStatusSchema>;
+export type CloudCodeTurnCancellationReply = z.input<typeof CloudCodeTurnCancellationSchema>;
+export type CloudCodeAgentTurnReply = z.input<typeof CloudCodeAgentTurnSchema>;
+export type CloudCodeAgentApprovalsReply = z.input<typeof CloudCodeAgentApprovalsSchema>;
+export type CloudCodeSharedSessionReply = z.input<typeof CloudCodeSharedSessionSchema>;

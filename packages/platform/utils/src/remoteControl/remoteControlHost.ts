@@ -1,9 +1,13 @@
 import { SignalingClient, endsPairing, type SignalingEvent } from '../signaling';
 import {
   REMOTE_CODE_LIMITS,
+  clipRemoteResult,
   clipRemoteText,
   isRelayPairingCode,
+  isSecureRelayUrl,
   type DispatchTaskLifecycleStatus,
+  type DispatchTaskPendingStep,
+  type DispatchTaskReplyError,
 } from '@agiworkforce/types';
 import {
   IDLE_REMOTE_CONTROL_STATE,
@@ -30,6 +34,7 @@ import {
 
 const MAX_TOKEN_LENGTH = 16_384;
 const MAX_ID_LENGTH = 128;
+const MAX_REMEMBERED_TASKS = 10_000;
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 30_000;
@@ -47,7 +52,7 @@ export type RemoteSocketFactory = (wsUrl: string) => WebSocket;
 
 export type DispatchPageEvent = Extract<
   DesktopRuntimeEvent,
-  { kind: 'dispatch-task' | 'dispatch-task-cancel' }
+  { kind: 'dispatch-task' | 'dispatch-task-cancel' | 'dispatch-task-reply' }
 >;
 
 export interface DispatchTaskPages {
@@ -56,6 +61,7 @@ export interface DispatchTaskPages {
 }
 
 export interface RemoteControlHostOptions {
+  allowInsecureLoopback?: boolean;
   code: Omit<CodeRemoteDependencies, 'send'>;
   deviceName: () => string;
   appVersion: () => string;
@@ -80,20 +86,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseStartRequest(args: Record<string, unknown>): RemoteControlStartRequest {
+function parseStartRequest(
+  args: Record<string, unknown>,
+  allowInsecureLoopback: boolean,
+): RemoteControlStartRequest {
   const { code, wsUrl, pairToken, expiresAt } = args;
   if (typeof code !== 'string' || !isRelayPairingCode(code)) {
     throw new RemoteControlRefused('The pairing code is not valid.');
   }
   if (typeof wsUrl !== 'string') throw new RemoteControlRefused('The relay address is missing.');
-  let protocol: string;
-  try {
-    protocol = new URL(wsUrl).protocol;
-  } catch {
-    throw new RemoteControlRefused('The relay address is not valid.');
-  }
-  if (protocol !== 'wss:' && protocol !== 'ws:') {
-    throw new RemoteControlRefused('The relay address is not a WebSocket address.');
+  if (!isSecureRelayUrl(wsUrl, allowInsecureLoopback)) {
+    throw new RemoteControlRefused('The relay address must use a secure WebSocket connection.');
   }
   if (
     typeof pairToken !== 'string' ||
@@ -115,6 +118,19 @@ function signedEnvelopeFrom(payload: unknown): unknown {
   return payload;
 }
 
+/**
+ * The phone names itself, so its name is text from the other end of the pairing.
+ * Control characters and bidirectional overrides could make it display as a
+ * different name, so they are removed before it is shown.
+ */
+function displayableName(raw: string): string | null {
+  const cleaned = raw
+    .replace(/[\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, '')
+    .trim()
+    .slice(0, 120);
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 export function createRemoteControlHost(options: RemoteControlHostOptions) {
   let state: RemoteControlState = { ...IDLE_REMOTE_CONTROL_STATE };
   let client: Pick<SignalingClient, 'sendSignal' | 'close'> | null = null;
@@ -127,7 +143,15 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   const receipts = createControlReceiptLedger();
   const pageTasks = new Map<string, PageTask>();
+  const createdTasks = new Set<string>();
   let queue: Promise<void> = Promise.resolve();
+
+  function rememberCreatedTask(requestId: string): void {
+    createdTasks.add(requestId);
+    if (createdTasks.size <= MAX_REMEMBERED_TASKS) return;
+    const oldest = createdTasks.values().next().value;
+    if (oldest !== undefined) createdTasks.delete(oldest);
+  }
 
   function enqueue(work: () => Promise<void>): void {
     queue = queue.then(work).catch((error: unknown) => {
@@ -163,10 +187,19 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     requestId: string,
     task: PageTask,
     status: DispatchTaskLifecycleStatus,
-    detail: { message?: string; result?: string; error?: string } = {},
+    detail: {
+      message?: string;
+      result?: string;
+      error?: string;
+      pending?: DispatchTaskPendingStep[];
+      replyError?: DispatchTaskReplyError;
+    } = {},
   ): Promise<void> {
     const message = clipped(detail.message);
-    const result = clipped(detail.result);
+    const result =
+      detail.result === undefined || detail.result === ''
+        ? undefined
+        : clipRemoteResult(detail.result, REMOTE_CODE_LIMITS.partialResponseLength);
     const error = clipped(detail.error);
     const payload: Record<string, unknown> = {
       version: 1,
@@ -176,6 +209,8 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       ...(message === undefined ? {} : { message }),
       ...(result === undefined ? {} : { result }),
       ...(error === undefined ? {} : { error }),
+      ...(status === 'awaiting_input' && detail.pending?.length ? { pending: detail.pending } : {}),
+      ...(detail.replyError ? { replyError: detail.replyError } : {}),
       updatedAt: new Date().toISOString(),
     };
     const delivered = await send('dispatch.task.status', payload);
@@ -221,6 +256,17 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       }
       return true;
     }
+    if (request.action === 'dispatch.task.reply') {
+      const task = pageTasks.get(request.taskRequestId);
+      if (!task) return false;
+      if (task.finished) return true;
+      pages.deliver(task.page, {
+        kind: 'dispatch-task-reply',
+        requestId: request.taskRequestId,
+        replies: request.replies,
+      });
+      return true;
+    }
     const page = pages.current();
     if (page === null) return false;
     const delivered = pages.deliver(page, {
@@ -253,6 +299,8 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
         ...(report.message === undefined ? {} : { message: report.message }),
         ...(report.result === undefined ? {} : { result: report.result }),
         ...(report.error === undefined ? {} : { error: report.error }),
+        ...(report.pending === undefined ? {} : { pending: report.pending }),
+        ...(report.replyError === undefined ? {} : { replyError: report.replyError }),
       }),
     );
     return true;
@@ -298,9 +346,14 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       requestId.length > 0 &&
       requestId.length <= MAX_ID_LENGTH
     ) {
+      const repeatedTask = action === 'dispatch.task.create' && createdTasks.has(requestId);
       const receipt = receipts.record(action, requestId);
-      await send(receipt.action, { ...receipt });
-      if (receipt.outcome === 'duplicate') return;
+      await send(receipt.action, {
+        ...receipt,
+        ...(repeatedTask ? { outcome: 'duplicate' as const } : {}),
+      });
+      if (receipt.outcome === 'duplicate' || repeatedTask) return;
+      if (action === 'dispatch.task.create') rememberCreatedTask(requestId);
     }
 
     if (await routeDispatchToPage(action, inner)) return;
@@ -336,7 +389,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     publish({
       status: 'connected',
       error: null,
-      phoneName: typeof phoneName === 'string' ? phoneName.slice(0, 120) : null,
+      phoneName: typeof phoneName === 'string' ? displayableName(phoneName) : null,
     });
     enqueue(flushPageTasks);
     void controller
@@ -352,6 +405,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     if (eventGeneration !== generation) return;
     switch (event.type) {
       case 'registered':
+        if (active) active = { ...active, pairToken: event.pairToken };
         registered = true;
         reconnectAttempts = 0;
         if (state.status === 'reconnecting') publish({ status: 'waiting', error: null });
@@ -420,7 +474,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   }
 
   function start(args: Record<string, unknown>): RemoteControlState {
-    const request = parseStartRequest(args);
+    const request = parseStartRequest(args, options.allowInsecureLoopback === true);
     stop();
     pairingSecret = generatePairingSecret();
     active = request;
@@ -440,6 +494,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   function connect(request: RemoteControlStartRequest): void {
     const eventGeneration = ++generation;
     const clientOptions = {
+      allowInsecureLoopback: options.allowInsecureLoopback,
       wsUrl: request.wsUrl,
       code: request.code,
       pairToken: request.pairToken,
@@ -449,7 +504,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
         deviceName: options.deviceName(),
         app: 'agiworkforce-desktop',
         version: options.appVersion(),
-        capabilities: ['code-sessions'],
+        capabilities: ['code-sessions', 'code-session-start'],
       },
       heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
       createSocket: options.createSocket,
@@ -473,6 +528,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     pairingSecret = null;
     receipts.clear();
     pageTasks.clear();
+    createdTasks.clear();
     controller.reset();
     if (state.status !== 'idle') publish({ ...IDLE_REMOTE_CONTROL_STATE });
     return state;

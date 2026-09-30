@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { z } from 'zod';
 
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -17,16 +16,9 @@ import {
   escalateTicket,
   readEscalations,
 } from '@/lib/support/tickets/service';
-import { ESCALATION_TRACKERS, MAX_ESCALATION_SUMMARY_CHARS } from '@/lib/support/tickets/types';
+import { SupportTicketEscalateRequestSchema } from '@agiworkforce/cloud-contracts/support';
 
 export const runtime = 'nodejs';
-
-const EscalateSchema = z
-  .object({
-    summary: z.string().trim().min(1).max(MAX_ESCALATION_SUMMARY_CHARS),
-    tracker: z.enum(ESCALATION_TRACKERS).optional(),
-  })
-  .strict();
 
 type RouteContext = { params: Promise<{ ticketId: string }> };
 
@@ -62,7 +54,7 @@ async function handleEscalate(request: NextRequest, context: RouteContext) {
   const limited = await withRateLimit(request, 'support-tickets-write', `user:${userId}`);
   if (limited) return limited;
 
-  const parsed = EscalateSchema.safeParse(await readJsonBody(request));
+  const parsed = SupportTicketEscalateRequestSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     throw createError.validation('Send a summary and, optionally, a tracker', parsed.error);
   }

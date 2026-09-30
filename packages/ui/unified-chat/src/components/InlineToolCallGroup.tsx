@@ -1,4 +1,3 @@
-
 import { useState, useCallback, type KeyboardEvent, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -84,7 +83,7 @@ export function InlineToolCallGroup({
           id={bodyId}
           role="region"
           aria-label={`${integrationName} tool calls`}
-          className="inline-tool-call-group__body flex flex-col gap-0.5 pl-2"
+          className="inline-tool-call-group__body flex flex-col gap-0.5 ps-2"
         >
           {children}
         </div>

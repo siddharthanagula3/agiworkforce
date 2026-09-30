@@ -16,6 +16,7 @@ import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import { logger } from '@/lib/logger';
 import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
+import { conversationKeepsOutOfTraining } from '@/lib/services/health-space-service';
 
 export const FOLLOW_UP_SUGGESTIONS_METADATA_KEY = 'followUpSuggestions';
 export const FOLLOW_UP_SUGGESTION_COUNT = 3;
@@ -101,13 +102,24 @@ export async function generateFollowUpSuggestions(
 ): Promise<string[]> {
   if (!input.answer.trim()) return [];
 
-  const routing = await sideCallRoutingRequest(input.db, input.userId, {
-    selection: 'auto',
-    taskType: 'simple_chat',
-    subscriptionTier: 'free',
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-  });
+  const routing = await sideCallRoutingRequest(
+    input.db,
+    input.userId,
+    {
+      selection: 'auto',
+      taskType: 'simple_chat',
+      subscriptionTier: 'free',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+    },
+    {
+      forceNoTraining: await conversationKeepsOutOfTraining(
+        input.db,
+        input.userId,
+        input.conversationId,
+      ),
+    },
+  );
   if (!routing) return [];
   const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {

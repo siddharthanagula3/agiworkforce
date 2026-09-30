@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -10,8 +11,10 @@ import { Paperclip, Globe, ChevronRight, ChevronDown, ExternalLink } from 'lucid
 import type { AgentEventSource } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { translatePlural } from '@/src/i18n/plural';
 
 interface CollapsibleSourcesProps {
   sources: AgentEventSource[];
@@ -41,7 +44,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
     animatedHeight.value = withTiming(nextExpanded ? 1 : 0, {
-      duration: 250,
+      duration: motion.moved,
       easing: Easing.bezier(0.4, 0, 0.2, 1),
     });
   }, [expanded, animatedHeight]);
@@ -75,7 +78,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
       }}
     >
       {/* Toggle header */}
-      <Pressable
+      <PressableBox
         onPress={toggleExpanded}
         style={{
           flexDirection: 'row',
@@ -96,14 +99,17 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
           <Paperclip size={14} color={themeColors.textMuted} />
           <Text
             style={{
-              fontSize: 13,
+              fontSize: typeScale.footnote,
               fontWeight: '500',
               color: themeColors.textSecondary,
             }}
           >
             {expanded
               ? 'Sources'
-              : `View ${sources.length} source${sources.length === 1 ? '' : 's'}`}
+              : translatePlural('chat', 'counts.viewSources', sources.length, {
+                  one: 'View {{count}} source',
+                  other: 'View {{count}} sources',
+                })}
           </Text>
         </View>
         {expanded ? (
@@ -111,13 +117,13 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
         ) : (
           <ChevronRight size={16} color={themeColors.textMuted} />
         )}
-      </Pressable>
+      </PressableBox>
 
       {/* Expandable source list */}
       <Animated.View style={listStyle}>
         <View style={{ paddingHorizontal: 12, paddingBottom: 8, gap: 2 }}>
           {sources.map((source, index) => (
-            <Pressable
+            <PressableBox
               key={`source-${index}`}
               onPress={() => handleSourcePress(source.url)}
               accessibilityLabel={`Source ${index + 1}: ${source.title || getDomain(source.url)}`}
@@ -150,7 +156,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                   >
                     <Text
                       style={{
-                        fontSize: 10,
+                        fontSize: typeScale.caption,
                         fontWeight: '700',
                         color: themeColors.teal,
                       }}
@@ -165,7 +171,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                       <Globe size={12} color={themeColors.textMuted} />
                       <Text
                         style={{
-                          fontSize: 11,
+                          fontSize: typeScale.caption,
                           color: themeColors.textMuted,
                         }}
                         numberOfLines={1}
@@ -176,7 +182,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                     {source.title && (
                       <Text
                         style={{
-                          fontSize: 13,
+                          fontSize: typeScale.footnote,
                           color: themeColors.textSecondary,
                         }}
                         numberOfLines={2}
@@ -186,7 +192,11 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                     )}
                     {source.snippet ? (
                       <Text
-                        style={{ fontSize: 12, lineHeight: 17, color: themeColors.textMuted }}
+                        style={{
+                          fontSize: typeScale.caption,
+                          lineHeight: 17,
+                          color: themeColors.textMuted,
+                        }}
                         numberOfLines={2}
                       >
                         {source.snippet}
@@ -198,7 +208,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                   <ExternalLink size={12} color={themeColors.textMuted} style={{ marginTop: 3 }} />
                 </View>
               )}
-            </Pressable>
+            </PressableBox>
           ))}
         </View>
       </Animated.View>

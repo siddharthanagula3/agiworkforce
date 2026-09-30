@@ -179,7 +179,7 @@ export function ChipInput({
               <li
                 key={value}
                 className={cn(
-                  'flex max-w-full items-center gap-0.5 rounded-sm border border-border bg-muted py-0.5 pl-2 pr-0.5 text-xs text-foreground',
+                  'flex max-w-full items-center gap-0.5 rounded-sm border border-border bg-muted py-0.5 ps-2 pe-0.5 text-xs text-foreground',
                   chipClassName,
                 )}
               >

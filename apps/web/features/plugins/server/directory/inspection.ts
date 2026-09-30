@@ -1,3 +1,4 @@
+import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 import {
   CLAUDE_PLUGIN_AGENTS_DIRECTORY,
   CLAUDE_PLUGIN_COMMANDS_DIRECTORY,
@@ -302,8 +303,10 @@ export function parsePluginMetadata(json: unknown): PluginMetadata {
 
 async function fetchRawJson(url: string, fetchImpl: DirectoryFetch): Promise<unknown | null> {
   try {
+    await assertResolvedPublicHostname(url);
     const response = await fetchImpl(url, {
       headers: { 'User-Agent': GITHUB_API_USER_AGENT },
+      redirect: 'manual',
       signal: AbortSignal.timeout(PLUGIN_DIRECTORY_FETCH_TIMEOUT_MS),
     });
     if (!response.ok) return null;

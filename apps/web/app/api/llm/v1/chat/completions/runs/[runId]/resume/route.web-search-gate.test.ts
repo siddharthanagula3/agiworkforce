@@ -15,7 +15,13 @@ vi.mock('../../../lib/turn-slot', () => ({
   withManagedTurnSlot: (_slot: unknown, run: () => Promise<Response>) => run(),
 }));
 
+const workspaceControls = vi.hoisted(() =>
+  vi.fn(async (..._args: unknown[]) => ({ ok: true, controls: null }) as unknown),
+);
+
 vi.mock('@/lib/managed-compute-gate', () => ({
+  resolveWorkspaceControlsForRequest: (...args: unknown[]) => workspaceControls(...args),
+  buildWorkspaceFeatureGateResponse: vi.fn(async () => null),
   buildManagedComputeGateResponse: vi.fn(() => null),
   buildOrganizationPolicyGateResponse: vi.fn(async () => null),
   buildModelPolicyGateResponse: async () => null,

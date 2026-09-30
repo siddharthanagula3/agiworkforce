@@ -901,7 +901,7 @@ export function LibraryView({
       <div className="flex flex-col gap-3">
         <label className="relative block">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--chat-text-muted)]"
+            className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--chat-text-muted)]"
             aria-hidden
           />
           <input
@@ -910,7 +910,7 @@ export function LibraryView({
             onChange={(event) => setSearchInput(event.target.value)}
             placeholder="Search files and projects"
             aria-label="Search the library by name"
-            className="w-full rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-2 pl-9 pr-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
+            className="w-full rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-2 ps-9 pe-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
           />
         </label>
 
@@ -950,7 +950,7 @@ export function LibraryView({
             <div
               role="group"
               aria-label="Library layout"
-              className="ml-1 flex items-center gap-1 border-l border-[var(--chat-border)] pl-1"
+              className="ms-1 flex items-center gap-1 border-s border-[var(--chat-border)] ps-1"
             >
               <IconToggle
                 label="Grid view"
@@ -1027,7 +1027,7 @@ export function LibraryView({
             onClick={() => void loadPage(page.nextOffset ?? 0, true)}
             data-testid="library-show-more"
           >
-            {loadingMore ? <Spinner size="sm" className="mr-1.5 h-3.5 w-3.5" /> : null}
+            {loadingMore ? <Spinner size="sm" className="me-1.5 h-3.5 w-3.5" /> : null}
             Show more
           </Button>
         </div>
@@ -1227,7 +1227,7 @@ function FileViewerOverlay({
             />
             <p>Preview isn&rsquo;t available for this file inline.</p>
             <Button size="sm" onClick={() => void onDownload(item)}>
-              <Download className="mr-1.5 h-4 w-4" aria-hidden />
+              <Download className="me-1.5 h-4 w-4" aria-hidden />
               Download to view
             </Button>
           </div>
@@ -1360,7 +1360,7 @@ function GridTile({
         <button type="button" onClick={onOpen} aria-label={ariaLabel} className={TILE_MEDIA_CLASS}>
           {children}
         </button>
-        {menu ? <div className="absolute right-1.5 top-1.5">{menu}</div> : null}
+        {menu ? <div className="absolute end-1.5 top-1.5">{menu}</div> : null}
       </div>
       <div className="flex flex-col gap-0.5 px-0.5">
         <span className="truncate text-sm text-[var(--chat-text-primary)]" title={name}>
@@ -1462,7 +1462,7 @@ const TILE_MEDIA_CLASS = `flex aspect-square w-full items-center justify-center 
 const TILE_GLYPH_CLASS = 'h-1/3 w-1/3 text-[var(--chat-text-secondary)]';
 
 const HEADER_CELL_CLASS =
-  'px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-[var(--chat-text-muted)]';
+  'px-3 py-2 text-start text-xs font-medium uppercase tracking-wide text-[var(--chat-text-muted)]';
 
 function LibraryList(props: LibraryListProps) {
   return (
@@ -1537,7 +1537,7 @@ function LibraryList(props: LibraryListProps) {
                     <button
                       type="button"
                       onClick={() => props.actions.onOpen(item)}
-                      className="flex w-full items-center gap-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+                      className="flex w-full items-center gap-2 text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
                     >
                       <FileKindIcon
                         kind={iconKindFor(item.file_name, item.mime_type)}
@@ -1595,7 +1595,7 @@ function LibraryList(props: LibraryListProps) {
 }
 
 const MENU_PANEL_CLASS =
-  'absolute right-0 z-[var(--z-content-sticky)] mt-1 min-w-44 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
+  'absolute end-0 z-[var(--z-content-sticky)] mt-1 min-w-44 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
 
 const MENU_TRIGGER_CLASS =
   'flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
@@ -1609,10 +1609,10 @@ const MENU_TRIGGER_OVERLAY_CLASS =
   'flex h-8 w-8 items-center justify-center rounded-sm border border-transparent bg-[var(--chat-surface-overlay)] text-[var(--chat-text-muted)] group-hover:border-[var(--chat-border)] group-hover:text-[var(--chat-text-primary)] group-focus-within:border-[var(--chat-border)] group-focus-within:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
 
 const MENU_ITEM_CLASS =
-  'flex w-full min-h-9 items-center gap-2 rounded-sm px-2.5 py-1.5 text-left text-sm text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
+  'flex w-full min-h-9 items-center gap-2 rounded-sm px-2.5 py-1.5 text-start text-sm text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
 
 const MENU_ITEM_DESTRUCTIVE_CLASS =
-  'flex w-full min-h-9 items-center gap-2 rounded-sm px-2.5 py-1.5 text-left text-sm text-[var(--chat-destructive-text)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
+  'flex w-full min-h-9 items-center gap-2 rounded-sm px-2.5 py-1.5 text-start text-sm text-[var(--chat-destructive-text)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
 
 function useDismissOnOutsideClick(
   open: boolean,

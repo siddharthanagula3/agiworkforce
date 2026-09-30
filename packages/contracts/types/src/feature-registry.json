@@ -227,7 +227,7 @@
       "governance": {
         "owner": "packages/contracts/cloud-contracts/src/domain-events.ts",
         "exitCriteria": "A trigger fires once per event, a run it started is attributable to the event that started it, and pausing a trigger stops it without deleting its history.",
-        "killSwitch": "work",
+        "killSwitch": "canUseAgiWork",
         "dataMigration": "Trigger definitions carry the event contract version they were written against; an event name a newer contract renamed keeps its old name on stored rows until the trigger is edited.",
         "rolloutRing": "event_triggers",
         "support": "Answered on the normal support queue; a missed fire is a defect, a third party's webhook not arriving is not.",
@@ -570,6 +570,23 @@
         "policy": null,
         "permission": null,
         "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "artifact_connectors": {
+      "label": "Connected apps in artifacts",
+      "domain": "artifacts",
+      "maturity": "general_availability",
+      "dependsOn": ["connectors"],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "artifact_connectors",
+        "policy": "artifact_connectors",
+        "permission": null,
+        "trustBoundary": "managed-cloud",
         "rolloutFlag": null
       }
     }

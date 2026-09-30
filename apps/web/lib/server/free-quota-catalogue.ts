@@ -24,7 +24,12 @@ import { getKeyValueProvider, getKeyValueStore } from '@/lib/server/key-value';
 import { isFreePlanTier } from '@/lib/services/free-trial-service';
 import { isGeneratedMediaStorageConfigured } from '@/lib/server/media-storage';
 import freePoolsDocument from '@/config/free-pools.json';
-import { loadFreePools, type FreeQuotaInventory, type FreeQuotaObservation } from './free-pools';
+import {
+  loadFreePools,
+  reviewedQuotaOfferingKeys,
+  type FreeQuotaInventory,
+  type FreeQuotaObservation,
+} from './free-pools';
 
 const SHARED_STORE_PROVIDERS: ReadonlySet<string> = new Set(['upstash', 'redis']);
 
@@ -152,6 +157,7 @@ export async function resolveFreeQuotaDecisions(
     ? inventory.entries.filter((entry) => entry.offeringKey === options.offeringKey)
     : inventory.entries;
   const state = await loadState(context, inventory, entries);
+  const reviewed = reviewedQuotaOfferingKeys(inventory, context.nowMs);
   return {
     inventory,
     offerings: entries.map((entry) => {
@@ -168,6 +174,7 @@ export async function resolveFreeQuotaDecisions(
           apiKey: context.apiKey,
           mediaServed: context.mediaServed,
           state,
+          termsReviewed: reviewed.has(entry.offeringKey),
         }),
       };
     }),

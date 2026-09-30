@@ -9,7 +9,23 @@ import { FatalError, RetryableError, getWritable } from 'workflow';
 import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { buildApprovalCheckpointRequest } from '@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request';
 import type { ProviderStreamShape } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-anthropic';
-import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import {
+  connectorToolPermissionsFromEntries,
+  EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  loadConnectorToolPermissions,
+  withoutStandingApprovals,
+} from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import {
+  runResearchLoop,
+  usageOfFailedResearchTurn,
+  type ResearchLoopCheckpoint,
+  type ResearchOperationExecutor,
+  type ResearchSteerRecord,
+  type ResearchToolRecord,
+  type ResearchTurnRecord,
+} from '@/app/api/llm/v1/chat/completions/lib/research-loop';
+import { buildResearchRunOptions } from '@/app/api/llm/v1/chat/completions/lib/research-run-options';
+import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/managed-failover';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import {
@@ -33,7 +49,12 @@ import {
   takeCloudAgentRunSteers,
 } from '@/lib/services/cloud-agent-run-service';
 import { createCloudAgentEventJournal } from '@/lib/services/cloud-agent-event-journal';
-import { CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS } from '@/lib/deadline-policy';
+import {
+  CLOUD_AGENT_RESEARCH_HANDOFF_AFTER_MS,
+  CLOUD_AGENT_RESEARCH_INVOCATION_DEADLINE_MS,
+  CLOUD_AGENT_RESEARCH_SYNTHESIS_WINDOW_MS,
+  CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
+} from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
@@ -79,6 +100,7 @@ const ProviderCallObservationSchema = z
     routeId: z.string().min(1).nullable().optional(),
     upstreamProvider: z.string().min(1).optional(),
     providerReportedCostUsd: z.number().finite().nonnegative().optional(),
+    speed: z.enum(['standard', 'fast']).optional(),
   })
   .strict();
 const providerCallObservationSchemaCoversObservation: SameKeys<
@@ -329,6 +351,137 @@ export function parseCloudAgentToolResult(value: unknown): z.infer<typeof ToolRe
   return ToolResultSchema.parse(value);
 }
 
+const ResearchSourceAddSchema = z
+  .object({
+    url: z.string().min(1),
+    title: z.string(),
+    snippet: z.string().optional(),
+    date: z.string().optional(),
+    retrievedAt: z.string().optional(),
+  })
+  .strict();
+
+const ResearchTurnRecordSchema = z
+  .object({
+    text: z.string(),
+    finishReason: z.string().nullable(),
+    searchEvents: z.number().int().nonnegative(),
+    hadToolCalls: z.boolean(),
+    toolCalls: z.array(
+      z
+        .object({
+          id: z.string().min(1),
+          name: z.string(),
+          args: z.record(z.string(), z.unknown()),
+        })
+        .strict(),
+    ),
+    promptTokens: z.number().nonnegative(),
+    completionTokens: z.number().nonnegative(),
+    canonicalText: z.string(),
+    thinkingBlocks: z.array(ThinkingBlockSchema),
+    sourceAdds: z.array(ResearchSourceAddSchema),
+    usage: UsageSchema,
+  })
+  .strict();
+const researchTurnRecordSchemaCoversRecord: SameKeys<
+  z.infer<typeof ResearchTurnRecordSchema>,
+  ResearchTurnRecord
+> = true;
+void researchTurnRecordSchemaCoversRecord;
+
+const ResearchToolRecordSchema = z
+  .object({
+    content: z.string(),
+    isError: z.boolean(),
+    sourceAdds: z.array(ResearchSourceAddSchema),
+    readsUntrustedContent: z.boolean(),
+    outcome: z.enum(['ran', 'refused']),
+  })
+  .strict();
+const researchToolRecordSchemaCoversRecord: SameKeys<
+  z.infer<typeof ResearchToolRecordSchema>,
+  ResearchToolRecord
+> = true;
+void researchToolRecordSchemaCoversRecord;
+
+const ResearchSteerRecordSchema = z
+  .object({
+    steers: z.array(z.object({ id: z.string().min(1), text: z.string() }).strict()),
+  })
+  .strict();
+const researchSteerRecordSchemaCoversRecord: SameKeys<
+  z.infer<typeof ResearchSteerRecordSchema>,
+  ResearchSteerRecord
+> = true;
+void researchSteerRecordSchemaCoversRecord;
+
+function researchOperations(
+  db: ReturnType<typeof getNeonDb>,
+  input: CloudAgentWorkflowInput,
+  billingIdempotencyKey: string,
+): ResearchOperationExecutor {
+  return {
+    turn: ({ operationKey, payload, execute }) =>
+      executeCloudAgentOperation<ResearchTurnRecord>(db, {
+        userId: input.userId,
+        runId: input.runId,
+        billingIdempotencyKey,
+        operationKey,
+        operationKind: 'provider',
+        retrySafety: 'unsafe',
+        payload,
+        resultSchema: ResearchTurnRecordSchema,
+        execute,
+        usage: (result) => ({ ...result.usage }),
+        failureUsage: (error) => {
+          const spent = usageOfFailedResearchTurn(error);
+          return spent ? { ...spent } : null;
+        },
+      }),
+    tool: ({ operationKey, payload, execute }) =>
+      executeCloudAgentOperation<ResearchToolRecord>(db, {
+        userId: input.userId,
+        runId: input.runId,
+        billingIdempotencyKey,
+        operationKey,
+        operationKind: 'tool',
+        retrySafety: 'unsafe',
+        payload,
+        resultSchema: ResearchToolRecordSchema,
+        execute,
+      }),
+    steers: ({ operationKey, payload, execute }) =>
+      executeCloudAgentOperation<ResearchSteerRecord>(db, {
+        userId: input.userId,
+        runId: input.runId,
+        billingIdempotencyKey,
+        operationKey,
+        operationKind: 'tool',
+        retrySafety: 'unsafe',
+        payload,
+        resultSchema: ResearchSteerRecordSchema,
+        execute,
+      }),
+  };
+}
+
+function researchContinuation(
+  input: CloudAgentWorkflowInput,
+  serving: ProcessedRequest,
+  checkpoint: ResearchLoopCheckpoint,
+): CloudAgentWorkflowInput {
+  return parseCloudAgentWorkflowInput(
+    JSON.parse(
+      JSON.stringify({
+        ...input,
+        processed: continuationRequest(serving),
+        research: { ...input.research, checkpoint },
+      }),
+    ),
+  );
+}
+
 type WorkflowInvocationResult =
   | { kind: 'continue'; input: CloudAgentWorkflowInput }
   | { kind: 'terminal'; outcome: WorkflowTerminalOutcome };
@@ -395,6 +548,7 @@ export async function executeCloudAgentWorkflowInvocation(
     : undefined;
   const toolPermissionGate = createCloudAgentToolPermissionGate(db, {
     userId: input.userId,
+    organizationId: input.processed.organizationId ?? null,
     connectorToolNames: connectorToolNames(input.mcpTools),
   });
   let nextInput: CloudAgentWorkflowInput | null = null;
@@ -412,164 +566,223 @@ export async function executeCloudAgentWorkflowInvocation(
     modelPolicy: processed.modelPolicy ?? null,
   });
 
-  const generator = runToolLoop(processed, {
-    mcpTools: input.mcpTools,
-    approvalMode: input.approvalMode,
-    toolApprovalPolicy: input.toolApprovalPolicy,
-    ...(input.connectorPermissions
-      ? { connectorPermissions: connectorToolPermissionsFromEntries(input.connectorPermissions) }
-      : {}),
-    userId: input.userId,
-    connectorExecutor,
-    signal: cancellation.signal,
-    resume: input.continuation?.resume,
-    eventSessionId: input.continuation?.eventSessionId,
-    eventTurnId: input.continuation?.eventTurnId,
-    initialEventSequence: input.continuation?.initialEventSequence,
-    initialCompletedSteps: input.continuation?.initialCompletedSteps,
-    invocationContinuation: input.continuation?.invocationContinuation,
-    resumedFromPause: input.continuation?.resumedFromPause,
-    maxDurationMs: CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
-    isCancellationRequested: async () => {
-      const cancelled = await isCloudAgentRunCancellationRequested(db, {
-        userId: input.userId,
-        runId: input.runId,
-      });
-      if (cancelled) cancellation.abort();
-      return cancelled;
-    },
-    failover: {
-      next: (error, context) => {
-        const attempt = failover.next(error, context);
-        if (attempt) serving = attempt.processed;
-        return attempt;
-      },
-    },
-    shouldPropagateExecutionError: (error) =>
-      error instanceof FatalError || error instanceof RetryableError,
-    providerExecutor: ({ operationKey, step, request, execute }) =>
-      executeCloudAgentOperation<ToolLoopProviderStepResult>(db, {
-        userId: input.userId,
-        runId: input.runId,
-        billingIdempotencyKey: billingLedgerKey,
-        operationKey,
-        operationKind: 'provider',
-        retrySafety: 'unsafe',
-        payload: { step, request },
-        resultSchema: ProviderStepResultSchema,
-        execute: async () => {
-          const { lines, ...persisted } = await execute();
-          return persisted;
+  const research = input.research;
+  const invocationStartedAt = Date.now();
+  const researchGenerator = research
+    ? runResearchLoop(
+        processed,
+        { userId: input.userId, token: '' },
+        {
+          ...buildResearchRunOptions({
+            processed,
+            userId: input.userId,
+            runId: input.runId,
+            db: managedUsageDb,
+            connectorIds: research.connectorIds,
+            fileSources: research.fileSources,
+            connectorPermissions: input.connectorPermissions
+              ? connectorToolPermissionsFromEntries(input.connectorPermissions)
+              : EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+            toolApprovalPolicy: input.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY,
+            signal: cancellation.signal,
+            failover: {
+              next: (error) => {
+                const attempt = failover.next(error);
+                if (attempt) serving = attempt.processed;
+                return attempt;
+              },
+            },
+            onCancellationRequested: () => cancellation.abort(),
+            onReportStored: () => undefined,
+          }),
+          operations: researchOperations(db, input, billingLedgerKey),
+          reloadConnectorPermissions: async () => {
+            const permissions = await loadConnectorToolPermissions(
+              managedUsageDb,
+              input.userId,
+              input.processed.organizationId ?? null,
+            );
+            return processed.conversationIsTemporary
+              ? withoutStandingApprovals(permissions)
+              : permissions;
+          },
+          ...(research.checkpoint ? { resumeFrom: research.checkpoint } : {}),
+          invocation: {
+            startedAtMs: invocationStartedAt,
+            handOffAfterMs: CLOUD_AGENT_RESEARCH_HANDOFF_AFTER_MS,
+            synthesisStartsWithinMs: CLOUD_AGENT_RESEARCH_SYNTHESIS_WINDOW_MS,
+            deadlineMs: CLOUD_AGENT_RESEARCH_INVOCATION_DEADLINE_MS,
+            onCheckpoint: async (checkpoint) => {
+              nextInput = researchContinuation(input, serving, checkpoint);
+            },
+          },
         },
-        usage: (result) => ({ ...result.usage }),
-      }),
-    toolExecutor: async ({ operationKey, retrySafety, toolCall, execute }) => {
-      const refused = await toolPermissionGate.refusalFor(toolCall.qualifiedName);
-      if (refused) return refused;
-      return executeCloudAgentOperation<ToolLoopToolResult>(db, {
-        userId: input.userId,
-        runId: input.runId,
-        billingIdempotencyKey: billingLedgerKey,
-        operationKey,
-        operationKind: 'tool',
-        retrySafety,
-        payload: toolCall,
-        resultSchema: ToolResultSchema,
-        execute,
-        usage: (result) =>
-          result.freeTrialSpendMicrousd ? { toolSpendMicrousd: result.freeTrialSpendMicrousd } : {},
-      });
-    },
-    onInvocationCheckpoint: async (checkpoint) => {
-      nextInput = workflowContinuation(input, serving, checkpoint);
-    },
-    isPauseRequested: () =>
-      isCloudAgentRunPauseRequested(db, { userId: input.userId, runId: input.runId }),
-    takeSteerMessages: () =>
-      takeCloudAgentRunSteers(db, {
-        userId: input.userId,
-        organizationId: input.processed.organizationId ?? null,
-        runId: input.runId,
-      }),
-    onPauseCheckpoint: async (checkpoint) => {
-      await saveCloudAgentPauseCheckpoint(db, {
-        userId: input.userId,
-        runId: input.runId,
-        sessionId: checkpoint.sessionId,
-        turnId: checkpoint.turnId,
-        nextEventSequence: checkpoint.nextEventSequence,
-        completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(
-          processed.chatRequest,
-          processed.callerToolFields,
-          processed.turnAttachments,
-        ),
-        messages: checkpoint.messages,
-        events: checkpoint.events,
-      });
-      pauseCheckpointSaved = true;
-    },
-    onApprovalCheckpoint: async (checkpoint) => {
-      await saveCloudAgentApprovalCheckpoint(db, {
-        userId: input.userId,
-        runId: input.runId,
-        sessionId: checkpoint.sessionId,
-        turnId: checkpoint.turnId,
-        nextEventSequence: checkpoint.nextEventSequence,
-        completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(
-          processed.chatRequest,
-          processed.callerToolFields,
-          processed.turnAttachments,
-        ),
-        messages: checkpoint.messages,
-        pendingToolCalls: checkpoint.pendingToolCalls,
-        events: checkpoint.events,
-      });
-      approvalCheckpointSaved = true;
-    },
-    onInputCheckpoint: async (checkpoint) => {
-      await saveCloudAgentInputCheckpoint(db, {
-        userId: input.userId,
-        runId: input.runId,
-        sessionId: checkpoint.sessionId,
-        turnId: checkpoint.turnId,
-        nextEventSequence: checkpoint.nextEventSequence,
-        completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(
-          processed.chatRequest,
-          processed.callerToolFields,
-          processed.turnAttachments,
-        ),
-        messages: checkpoint.messages,
-        pendingToolCalls: checkpoint.pendingToolCalls,
-        inputRequests: checkpoint.inputRequests,
-        requestState: checkpoint.requestState,
-        events: checkpoint.events,
-      });
-      inputCheckpointSaved = true;
-    },
-    onDeviceCheckpoint: async (checkpoint) => {
-      await saveCloudAgentDeviceCheckpoint(db, {
-        userId: input.userId,
-        runId: input.runId,
-        sessionId: checkpoint.sessionId,
-        turnId: checkpoint.turnId,
-        nextEventSequence: checkpoint.nextEventSequence,
-        completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(
-          processed.chatRequest,
-          processed.callerToolFields,
-          processed.turnAttachments,
-        ),
-        messages: checkpoint.messages,
-        pendingToolCalls: checkpoint.pendingToolCalls,
-        deviceStep: checkpoint.deviceStep,
-        events: checkpoint.events,
-      });
-      inputCheckpointSaved = true;
-    },
-  });
+      )
+    : null;
+  const generator =
+    researchGenerator ??
+    runToolLoop(processed, {
+      mcpTools: input.mcpTools,
+      approvalMode: input.approvalMode,
+      toolApprovalPolicy: input.toolApprovalPolicy,
+      ...(input.connectorPermissions
+        ? {
+            connectorPermissions: connectorToolPermissionsFromEntries(input.connectorPermissions),
+          }
+        : {}),
+      userId: input.userId,
+      connectorExecutor,
+      signal: cancellation.signal,
+      resume: input.continuation?.resume,
+      eventSessionId: input.continuation?.eventSessionId,
+      eventTurnId: input.continuation?.eventTurnId,
+      initialEventSequence: input.continuation?.initialEventSequence,
+      initialCompletedSteps: input.continuation?.initialCompletedSteps,
+      invocationContinuation: input.continuation?.invocationContinuation,
+      resumedFromPause: input.continuation?.resumedFromPause,
+      maxDurationMs: CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
+      isCancellationRequested: async () => {
+        const cancelled = await isCloudAgentRunCancellationRequested(db, {
+          userId: input.userId,
+          runId: input.runId,
+        });
+        if (cancelled) cancellation.abort();
+        return cancelled;
+      },
+      failover: {
+        next: (error, context) => {
+          const attempt = failover.next(error, context);
+          if (attempt) serving = attempt.processed;
+          return attempt;
+        },
+      },
+      shouldPropagateExecutionError: (error) =>
+        error instanceof FatalError || error instanceof RetryableError,
+      providerExecutor: ({ operationKey, step, request, execute }) =>
+        executeCloudAgentOperation<ToolLoopProviderStepResult>(db, {
+          userId: input.userId,
+          runId: input.runId,
+          billingIdempotencyKey: billingLedgerKey,
+          operationKey,
+          operationKind: 'provider',
+          retrySafety: 'unsafe',
+          payload: { step, request },
+          resultSchema: ProviderStepResultSchema,
+          execute: async () => {
+            const { lines, ...persisted } = await execute();
+            return persisted;
+          },
+          usage: (result) => ({ ...result.usage }),
+        }),
+      toolExecutor: async ({ operationKey, retrySafety, toolCall, execute }) => {
+        const refused = await toolPermissionGate.refusalFor(toolCall.qualifiedName);
+        if (refused) return refused;
+        return executeCloudAgentOperation<ToolLoopToolResult>(db, {
+          userId: input.userId,
+          runId: input.runId,
+          billingIdempotencyKey: billingLedgerKey,
+          operationKey,
+          operationKind: 'tool',
+          retrySafety,
+          payload: toolCall,
+          resultSchema: ToolResultSchema,
+          execute,
+          usage: (result) =>
+            result.freeTrialSpendMicrousd
+              ? { toolSpendMicrousd: result.freeTrialSpendMicrousd }
+              : {},
+        });
+      },
+      onInvocationCheckpoint: async (checkpoint) => {
+        nextInput = workflowContinuation(input, serving, checkpoint);
+      },
+      isPauseRequested: () =>
+        isCloudAgentRunPauseRequested(db, { userId: input.userId, runId: input.runId }),
+      takeSteerMessages: () =>
+        takeCloudAgentRunSteers(db, {
+          userId: input.userId,
+          organizationId: input.processed.organizationId ?? null,
+          runId: input.runId,
+        }),
+      onPauseCheckpoint: async (checkpoint) => {
+        await saveCloudAgentPauseCheckpoint(db, {
+          userId: input.userId,
+          runId: input.runId,
+          sessionId: checkpoint.sessionId,
+          turnId: checkpoint.turnId,
+          nextEventSequence: checkpoint.nextEventSequence,
+          completedSteps: checkpoint.completedSteps,
+          request: buildApprovalCheckpointRequest(
+            processed.chatRequest,
+            processed.callerToolFields,
+            processed.turnAttachments,
+          ),
+          messages: checkpoint.messages,
+          events: checkpoint.events,
+        });
+        pauseCheckpointSaved = true;
+      },
+      onApprovalCheckpoint: async (checkpoint) => {
+        await saveCloudAgentApprovalCheckpoint(db, {
+          userId: input.userId,
+          runId: input.runId,
+          sessionId: checkpoint.sessionId,
+          turnId: checkpoint.turnId,
+          nextEventSequence: checkpoint.nextEventSequence,
+          completedSteps: checkpoint.completedSteps,
+          request: buildApprovalCheckpointRequest(
+            processed.chatRequest,
+            processed.callerToolFields,
+            processed.turnAttachments,
+          ),
+          messages: checkpoint.messages,
+          pendingToolCalls: checkpoint.pendingToolCalls,
+          events: checkpoint.events,
+        });
+        approvalCheckpointSaved = true;
+      },
+      onInputCheckpoint: async (checkpoint) => {
+        await saveCloudAgentInputCheckpoint(db, {
+          userId: input.userId,
+          runId: input.runId,
+          sessionId: checkpoint.sessionId,
+          turnId: checkpoint.turnId,
+          nextEventSequence: checkpoint.nextEventSequence,
+          completedSteps: checkpoint.completedSteps,
+          request: buildApprovalCheckpointRequest(
+            processed.chatRequest,
+            processed.callerToolFields,
+            processed.turnAttachments,
+          ),
+          messages: checkpoint.messages,
+          pendingToolCalls: checkpoint.pendingToolCalls,
+          inputRequests: checkpoint.inputRequests,
+          requestState: checkpoint.requestState,
+          events: checkpoint.events,
+        });
+        inputCheckpointSaved = true;
+      },
+      onDeviceCheckpoint: async (checkpoint) => {
+        await saveCloudAgentDeviceCheckpoint(db, {
+          userId: input.userId,
+          runId: input.runId,
+          sessionId: checkpoint.sessionId,
+          turnId: checkpoint.turnId,
+          nextEventSequence: checkpoint.nextEventSequence,
+          completedSteps: checkpoint.completedSteps,
+          request: buildApprovalCheckpointRequest(
+            processed.chatRequest,
+            processed.callerToolFields,
+            processed.turnAttachments,
+          ),
+          messages: checkpoint.messages,
+          pendingToolCalls: checkpoint.pendingToolCalls,
+          deviceStep: checkpoint.deviceStep,
+          events: checkpoint.events,
+        });
+        inputCheckpointSaved = true;
+      },
+    });
 
   const journal = createCloudAgentEventJournal({ db, userId: input.userId, runId: input.runId });
   const writer = getWritable<Uint8Array>().getWriter();
@@ -587,6 +800,13 @@ export async function executeCloudAgentWorkflowInvocation(
           }
           if (projected.envelope.event.type === 'task-state-changed') {
             lastTaskState = projected.envelope.event.state;
+          }
+          if (
+            research &&
+            projected.envelope.event.type === 'stop' &&
+            projected.envelope.event.reason === 'error'
+          ) {
+            reportedFailure = true;
           }
         }
         await stream.write(new TextEncoder().encode(projected.sse));

@@ -6,7 +6,7 @@
     "pageRoutes": 167
   },
   "maxFindings": {
-    "untested-api-route": 38,
+    "untested-api-route": 0,
     "unspecced-page-route": 12
   }
 }

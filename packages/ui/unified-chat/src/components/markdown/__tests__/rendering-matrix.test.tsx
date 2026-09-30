@@ -75,7 +75,7 @@ describe('blockquote', () => {
     const container = renderMarkdown('> a quoted line\n>\n> and a second paragraph');
 
     const quote = container.querySelector('blockquote');
-    expect(quote?.className).toContain('border-l-2');
+    expect(quote?.className).toContain('border-s-2');
     expect(quote?.querySelectorAll('p')).toHaveLength(2);
   });
 

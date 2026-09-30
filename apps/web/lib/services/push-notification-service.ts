@@ -5,6 +5,12 @@ import { recordNotificationDelivery, type NotificationChannel } from '@/lib/obse
 import { getNeonDb } from '@/lib/server/neon-db';
 import { sendWebPushToUser } from './web-push-service';
 import { heldByQuietHours } from './quiet-hours-service';
+import { MobilePushPreferencesSchema, mobilePushWantsEvent } from '@agiworkforce/cloud-contracts';
+import {
+  isDateWithinQuietHours,
+  isQuietHoursExemptNotification,
+  normalizeTimeFocusPreferences,
+} from '@agiworkforce/types';
 
 const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -40,16 +46,40 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   return chunks;
 }
 
-export async function getPushTokensForUser(userId: string): Promise<string[]> {
-  const rows = await getNeonDb().query<{ push_token: string }>(
-    `select push_token
+export function deviceAcceptsNotice(
+  preferences: unknown,
+  notificationType: string | undefined,
+  now: Date,
+): boolean {
+  if (preferences === null || preferences === undefined) return true;
+  const parsed = MobilePushPreferencesSchema.safeParse(preferences);
+  if (!parsed.success) return true;
+  if (!mobilePushWantsEvent(parsed.data, notificationType)) return false;
+  if (isQuietHoursExemptNotification(notificationType)) return true;
+  const { quietHours } = normalizeTimeFocusPreferences(
+    { quietHours: parsed.data.quietHours },
+    parsed.data.timezone,
+  );
+  return !isDateWithinQuietHours(now, quietHours);
+}
+
+export async function getPushTokensForUser(
+  userId: string,
+  notificationType?: string,
+  now: Date = new Date(),
+): Promise<string[]> {
+  const rows = await getNeonDb().query<{ push_token: string; push_preferences?: unknown }>(
+    `select push_token, to_jsonb(mobile_devices) -> 'push_preferences' as push_preferences
        from public.mobile_devices
       where user_id = $1
         and push_token is not null
         and push_token <> ''`,
     [userId],
   );
-  return rows.map((row) => row.push_token).filter(isExpoPushToken);
+  return rows
+    .filter((row) => deviceAcceptsNotice(row.push_preferences, notificationType, now))
+    .map((row) => row.push_token)
+    .filter(isExpoPushToken);
 }
 
 async function invalidateTokens(tokens: readonly string[]): Promise<void> {
@@ -72,7 +102,7 @@ async function sendExpoPushToUser(
 ): Promise<PushDeliveryResult> {
   let tokens: string[];
   try {
-    tokens = await getPushTokensForUser(userId);
+    tokens = await getPushTokensForUser(userId, message.data?.['type']);
   } catch (error) {
     logger.warn({ error, userId }, '[push] could not load device tokens');
     return { sent: 0, invalidated: 0, error: 'token_lookup_failed' };

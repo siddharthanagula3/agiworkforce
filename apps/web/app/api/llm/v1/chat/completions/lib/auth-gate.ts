@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getClerkAuthUser, isAccountUnavailableError } from '@/lib/api-auth';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
 import { buildFreeWebsiteSubscription, isFreePlanTier } from '@/lib/services/free-trial-service';
@@ -17,6 +17,7 @@ import {
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isPasskeyRequiredError } from '@/lib/server/account-security/gate';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
@@ -30,6 +31,13 @@ import { timePhase } from '@/lib/observability/phase-timer';
 import { developerProjectSpendRefusal } from '@/lib/developer-api/project-spend';
 import { resolveAuthenticatedSurface } from './request-surface';
 import { CHAT_TURN_PHASE } from './turn-phases';
+import {
+  CURRENT_TERMS_VERSION,
+  readTermsStanding,
+  termsNoticeHeaders,
+  type TermsStanding,
+} from '@/lib/server/terms';
+import { recordFailure } from '@/lib/observability/metrics';
 
 const ENTERPRISE_PLAN_TIER = 'enterprise';
 
@@ -59,6 +67,8 @@ export type AuthGateSuccess = {
   surfaceClass?: AuthenticatedSurfaceClass;
   boundSurface?: BoundSurface;
   apiKeyId?: string;
+  /** Headers telling the client a newer Terms of Service version is published. */
+  termsNotice?: Record<string, string>;
 };
 
 type AuthGateFailure = {
@@ -116,6 +126,59 @@ function enforceManagedCloudSurface(
   };
 }
 
+function termsRefusal(
+  request: NextRequest,
+  standing: Extract<TermsStanding, { kind: 'required' }>,
+): NextResponse {
+  const acceptanceUrl = new URL('/login/complete', new URL(request.url).origin);
+  acceptanceUrl.searchParams.set('redirectTo', '/chat');
+  const message =
+    standing.reason === 'never_accepted'
+      ? `Accept the Terms of Service at ${acceptanceUrl.toString()} to start using AGI Workforce, then try again.`
+      : `The Terms of Service were updated. Accept the updated terms at ${acceptanceUrl.toString()} to keep using AGI Workforce, then try again.`;
+  return NextResponse.json(
+    {
+      error: {
+        message,
+        type: 'invalid_request_error',
+        code: 'terms_acceptance_required',
+        acceptance_url: acceptanceUrl.toString(),
+      },
+      terms_version: CURRENT_TERMS_VERSION,
+      acceptance_url: acceptanceUrl.toString(),
+    },
+    { status: 403 },
+  );
+}
+
+/**
+ * Terms acceptance is a notice requirement, not a safety kill switch. A call
+ * made with an API key runs under the commercial terms its owner already
+ * agreed to and is never refused per call. Any other caller with no acceptance
+ * on record, or one past the effective date of a material revision it has not
+ * accepted, is refused with a link to accept; a caller on an older but still
+ * valid version passes with a notice. When the acceptance cannot be read the
+ * turn is allowed, logged and counted rather than locking every account out.
+ */
+async function checkTermsStanding(
+  request: NextRequest,
+  userId: string,
+): Promise<{ refusal: NextResponse } | { notice?: Record<string, string> }> {
+  let standing: TermsStanding;
+  try {
+    standing = await readTermsStanding(userId);
+  } catch (error) {
+    logger.error({ error, userId }, '[auth-gate] terms acceptance unreadable; allowing the turn');
+    recordFailure('database', 'terms_acceptance_unreadable');
+    return {};
+  }
+  if (standing.kind === 'current') return {};
+  if (standing.kind === 'required') {
+    return { refusal: termsRefusal(request, standing) };
+  }
+  return { notice: termsNoticeHeaders(standing) };
+}
+
 export async function runAuthGate(request: NextRequest): Promise<AuthGateResult> {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) {
@@ -167,6 +230,22 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
         ),
       };
     }
+    if (isPasskeyRequiredError(error)) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: error.message,
+              type: 'invalid_request_error',
+              code: 'passkey_required',
+              ...(error.details ? { details: error.details } : {}),
+            },
+          },
+          { status: 403 },
+        ),
+      };
+    }
     if (isIpNotAllowedError(error)) {
       return {
         ok: false,
@@ -176,6 +255,22 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
               message: error.message,
               type: 'invalid_request_error',
               code: 'ip_not_allowed',
+            },
+          },
+          { status: 403 },
+        ),
+      };
+    }
+    if (isAccountUnavailableError(error)) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: error.message,
+              type: 'invalid_request_error',
+              code: 'account_unavailable',
+              ...(error.details ? { details: error.details } : {}),
             },
           },
           { status: 403 },
@@ -200,7 +295,10 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  const credential = {
+  const credential: Pick<
+    AuthGateSuccess,
+    'surfaceClass' | 'boundSurface' | 'apiKeyId' | 'termsNotice'
+  > = {
     ...(surfaceClass ? { surfaceClass } : {}),
     ...(boundSurface ? { boundSurface } : {}),
     ...(apiKeyId ? { apiKeyId } : {}),
@@ -219,6 +317,12 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     withRateLimit(request, 'llm-completion', `user:${userId}`),
   );
   if (userRateLimitResponse) return { ok: false, response: userRateLimitResponse };
+
+  if (!apiKeyId) {
+    const terms = await checkTermsStanding(request, userId);
+    if ('refusal' in terms) return { ok: false, response: terms.refusal };
+    if (terms.notice) credential.termsNotice = terms.notice;
+  }
 
   if (apiKeyId) {
     const spendRefusal = await developerProjectSpendRefusal({ userId, apiKeyId });

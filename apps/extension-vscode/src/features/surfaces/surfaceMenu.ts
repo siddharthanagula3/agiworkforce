@@ -89,7 +89,7 @@ export const BUILT_IN_SLASH_COMMANDS: readonly SlashCommandItem[] = [
   { name: '/hooks', description: 'Hooks the CLI runs', command: 'agi-workforce.showHooks' },
   {
     name: '/permissions',
-    description: 'Approvals the CLI saved for every session',
+    description: 'What the agent may do: mode, tools, rules and trusted folders',
     command: 'agi-workforce.showSavedApprovals',
   },
   {

@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/services/enterprise-funding-organization', async (importOriginal) => ({

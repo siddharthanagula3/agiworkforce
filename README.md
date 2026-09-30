@@ -75,12 +75,12 @@ description of what runs today, not a shipped-feature claim.
 
 | Surface           | Version | Status                                                                                                                                                                                                  |
 | ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mobile            | 1.2.0   | On-device Local chat exists in the codebase, but no build has reached TestFlight, Play Internal Testing, or a store listing. In-app purchase is fail-closed.                                            |
-| Web               | 0.1.1   | The deepest surface: product site, chat, and billing run in production.                                                                                                                                 |
-| Desktop           | 1.2.0   | Electron is the only public Desktop product: a managed-cloud shell with approved folders and computer use. No current public installer has been published; retained Tauri code is not a public product. |
-| CLI               | 1.7.1   | Interactive TUI and one-shot mode. `release-cli.yml` only cuts a release from a git tag matching `Cargo.toml`; the last published release predates this repo's version.                                 |
-| Chrome Extension  | 1.2.0   | Manifest V3 with browser automation and a side panel. Not yet published to the Chrome Web Store.                                                                                                        |
-| VS Code Extension | 0.3.0   | IDE-native surface. Not yet published to the VS Code Marketplace; depends on a CLI release that has not shipped.                                                                                        |
+| Mobile            | 0.0.1   | On-device Local chat exists in the codebase, but no build has reached TestFlight, Play Internal Testing, or a store listing. In-app purchase is fail-closed.                                            |
+| Web               | 0.0.1   | The deepest surface: product site, chat, and billing run in production.                                                                                                                                 |
+| Desktop           | 0.0.1   | Electron is the only public Desktop product: a managed-cloud shell with approved folders and computer use. No current public installer has been published; retained Tauri code is not a public product. |
+| CLI               | 0.0.1   | Interactive TUI and one-shot mode. `release-cli.yml` only cuts a release from a git tag matching `Cargo.toml`; GitHub release artifacts were removed.                                                   |
+| Chrome Extension  | 0.0.1   | Manifest V3 with browser automation and a side panel. Not yet published to the Chrome Web Store.                                                                                                        |
+| VS Code Extension | 0.0.1   | IDE-native surface. Not yet published to the VS Code Marketplace; depends on a CLI release that has not shipped.                                                                                        |
 
 `services/signaling-server` (WebRTC/WebSocket relay for cross-device sync,
 deployed continuously to Fly.io and Railway) and `infrastructure/sandbox`

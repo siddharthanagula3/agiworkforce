@@ -22,10 +22,17 @@ import {
   authoredSkillFiles,
   authoredSkillIssues,
 } from '@/features/plugins/server/directory/authored-plugin';
-import { refusePluginInstall } from '@/features/plugins/server/directory/install-gate';
-import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
+import {
+  pluginDependencyRefusal,
+  refusePluginInstall,
+} from '@/features/plugins/server/directory/install-gate';
+import {
+  installRefusalResponse,
+  installsDisabledResponse,
+} from '@/features/plugins/server/directory/install-responses';
 import {
   PLUGIN_DIRECTORY_FALLBACK_VERSION,
+  uploadUnreadableDependenciesMessage,
   uploadUnusableNameMessage,
 } from '@/features/plugins/server/directory/constants';
 import {
@@ -33,6 +40,13 @@ import {
   type PluginSourceInstallResponse,
 } from '@agiworkforce/cloud-contracts';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
+import { parsePluginDependencies } from '@/lib/services/plugin-dependencies';
+import { installedDependencies } from '@/features/plugins/server/directory/dependencies';
+import {
+  prepareOwnedPluginDependencies,
+  writeDependencyPlan,
+} from '@/features/plugins/server/directory/install';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -101,6 +115,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       agents: [],
       examplePrompts: [],
       permissions: [],
+      dependencies: parsed.data.dependencies ?? [],
     });
   } catch (error) {
     if (error instanceof ZodError) {
@@ -112,10 +127,34 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     throw error;
   }
 
+  const dependencyRefs = parsePluginDependencies(declared.dependencies);
+  if (!dependencyRefs) return rejected(uploadUnreadableDependenciesMessage(declared.name));
+  const allowlist = [
+    ...new Set(
+      dependencyRefs.flatMap((reference) =>
+        reference.marketplace === null ? [] : [reference.marketplace],
+      ),
+    ),
+  ];
+
   try {
     if (await findOwnedPluginEntryByKey(db, userId, SOURCE_KIND_AUTHORED, declared.id)) {
       return duplicateName(declared.name);
     }
+    const prepared = await prepareOwnedPluginDependencies(
+      db,
+      userId,
+      {
+        marketplace: declared.name,
+        allowlist,
+        plugins: [{ key: declared.id, dependencies: dependencyRefs }],
+      },
+      {
+        admitDependencies: (dependencies) => pluginDependencyRefusal(request, scope, dependencies),
+      },
+    );
+    if ('refused' in prepared) return installRefusalResponse(prepared.refused);
+    let dependencyInstallations = new Map<string, string>();
     const plugins = await storeOwnedPluginSource(db, userId, {
       kind: SOURCE_KIND_AUTHORED,
       sourceName: declared.name,
@@ -126,13 +165,43 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
           description: declared.description,
           version: declared.version,
           skills: files,
+          dependencies: dependencyRefs,
         },
       ],
+      allowlist,
+      installAlongside: async (tx) => {
+        dependencyInstallations = await writeDependencyPlan(tx, userId, prepared.plan);
+      },
     });
+    const dependencies = installedDependencies(prepared.plan, dependencyInstallations);
+    for (const dependency of dependencies) {
+      await recordWorkspaceAuditEvent(db, request, {
+        userId,
+        eventType: 'plugin_installed',
+        detail: {
+          resourceType: 'plugin',
+          resourceId: dependency.installationId,
+          resourceName: dependency.pluginId,
+          version: dependency.version,
+          source: SOURCE_KIND_AUTHORED,
+          reason: `required by ${dependency.requiredBy}`,
+        },
+      });
+    }
     const body: PluginSourceInstallResponse = {
       sourceName: declared.name,
       kind: SOURCE_KIND_AUTHORED,
       plugins,
+      ...(dependencies.length > 0
+        ? {
+            dependencies: dependencies.map(({ pluginId, name, version, requiredBy }) => ({
+              pluginId,
+              name,
+              version,
+              requiredBy,
+            })),
+          }
+        : {}),
     };
     await recordAuditEvent({
       userId,

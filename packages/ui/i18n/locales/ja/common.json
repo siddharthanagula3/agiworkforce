@@ -99,6 +99,7 @@
   "navImages": "画像",
   "navModels": "モデル",
   "navSchedules": "スケジュール",
+  "navHealth": "ヘルスケア",
   "navAdmin": "管理",
   "navWorkspaceSection": "ワークスペース",
   "navLoadingWorkspaces": "ワークスペースを読み込み中…",
@@ -169,7 +170,13 @@
     "toolsAwaitingApproval_one": "承認待ちのツールが1件あります。",
     "toolsAwaitingApproval_other": "承認待ちのツールが {{count}} 件あります。",
     "unsentMessages_one": "未送信のメッセージが1件あります。",
-    "unsentMessages_other": "未送信のメッセージが {{count}} 件あります。"
+    "unsentMessages_other": "未送信のメッセージが {{count}} 件あります。",
+    "packages_other": "{{count}} 個のパッケージ",
+    "unreadNotifications_other": "未読の通知 {{count}} 件",
+    "packages_one": "{{count}} 個のパッケージ",
+    "unreadNotifications_one": "未読の通知 {{count}} 件",
+    "textBlocks_one": "{{count}} 個のテキストブロック",
+    "textBlocks_other": "{{count}} 個のテキストブロック"
   },
   "relative": {
     "minutesAgo_one": "{{count}} 分前",

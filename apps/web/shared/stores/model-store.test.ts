@@ -3,6 +3,7 @@ import {
   CHAT_MODEL_TYPES,
   getAutoRoutingProfiles,
   getModelsForTierAndSurface,
+  isCurrentModel,
   listChatModels,
   listManagedRoutesForModel,
 } from '@agiworkforce/types';
@@ -38,7 +39,7 @@ describe('web model selection trust boundary', () => {
 
   it('derives manual rows from every chat model a managed route can serve', () => {
     const expectedIds = listChatModels()
-      .filter((model) => listManagedRoutesForModel(model.id).length > 0)
+      .filter((model) => isCurrentModel(model) && listManagedRoutesForModel(model.id).length > 0)
       .map((model) => model.id);
     const actualIds = AVAILABLE_MODELS.filter(
       (model) => model.providerKey !== 'managed_cloud' && model.availability !== 'coming_soon',
@@ -67,7 +68,7 @@ describe('web model selection trust boundary', () => {
    */
   it('holds every model the catalogue projection can offer', () => {
     const offerable = listChatModels().filter(
-      (model) => listManagedRoutesForModel(model.id).length > 0,
+      (model) => isCurrentModel(model) && listManagedRoutesForModel(model.id).length > 0,
     );
 
     expect(offerable.length).toBeGreaterThan(0);

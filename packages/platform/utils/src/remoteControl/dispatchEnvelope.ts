@@ -73,11 +73,19 @@ function canonicalize(value: unknown): unknown {
   return sorted;
 }
 
+export function dispatchSigningInput(
+  type: string,
+  payload: unknown,
+  ts: number,
+  nonce: string,
+): string {
+  return JSON.stringify(canonicalize({ nonce, payload, ts, type, v: DISPATCH_ENVELOPE_VERSION }));
+}
+
 function mac(key: Buffer, type: string, payload: unknown, ts: number, nonce: string): string {
-  const input = JSON.stringify(
-    canonicalize({ nonce, payload, ts, type, v: DISPATCH_ENVELOPE_VERSION }),
-  );
-  return createHmac('sha256', key).update(input, 'utf8').digest('hex');
+  return createHmac('sha256', key)
+    .update(dispatchSigningInput(type, payload, ts, nonce), 'utf8')
+    .digest('hex');
 }
 
 export function signDispatchEnvelope(

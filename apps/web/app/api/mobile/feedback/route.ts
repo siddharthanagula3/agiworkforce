@@ -10,10 +10,18 @@ import { getOptionalAuthUser } from '@/lib/api-auth';
 import { normalizeDiagnostics } from '@/lib/support/diagnostics/schema';
 import { deployEnvironment, releaseSha } from '@/lib/server/hosting';
 
+const SafetyRefusalContextSchema = z.object({
+  kind: z.literal('safety_refusal'),
+  conversationId: z.string().uuid().optional(),
+  messageId: z.string().trim().min(1).max(200),
+  finishReason: z.string().trim().min(1).max(40).optional(),
+});
+
 const FeedbackSchema = z.object({
   type: z.enum(['bug', 'feature', 'general']),
   message: z.string().trim().min(1).max(2000),
   diagnostics: z.unknown().optional(),
+  context: SafetyRefusalContextSchema.optional(),
 });
 
 async function handleSubmitFeedback(request: NextRequest) {
@@ -28,7 +36,7 @@ async function handleSubmitFeedback(request: NextRequest) {
   if (!parsed.success) {
     throw createError.badRequest('Invalid feedback payload', parsed.error.flatten());
   }
-  const { type, message } = parsed.data;
+  const { type, message, context } = parsed.data;
   // Validated, clamped and secret-redacted here rather than trusted: a mobile
   // build is a client. A bundle that fails validation is dropped, because
   // losing the machine context must not lose the feedback.
@@ -46,9 +54,21 @@ async function handleSubmitFeedback(request: NextRequest) {
        values ($1, $2, $3, $4::jsonb)`,
       [
         userId ?? null,
-        type,
+        context ? 'Incorrect safety refusal · Mobile chat' : type,
         message,
-        JSON.stringify({ type, source: 'mobile', ...(diagnostics ? { diagnostics } : {}) }),
+        JSON.stringify({
+          type,
+          source: 'mobile',
+          ...(context
+            ? {
+                feedback_context: context.kind,
+                message_id: context.messageId,
+                ...(context.conversationId ? { conversation_id: context.conversationId } : {}),
+                ...(context.finishReason ? { finish_reason: context.finishReason } : {}),
+              }
+            : {}),
+          ...(diagnostics ? { diagnostics } : {}),
+        }),
       ],
     );
   } catch (error) {

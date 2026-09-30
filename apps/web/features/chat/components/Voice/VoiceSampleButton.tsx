@@ -30,12 +30,15 @@ export function VoiceSampleButton({
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     let active = true;
     setUrl(null);
     setPlaying(false);
+    setErrorMessage(null);
     void loadVoiceSamples().then((samples) => {
       const file = samples[voiceUri];
       if (active && file) setUrl(voiceSampleUrl(file));
@@ -61,29 +64,47 @@ export function VoiceSampleButton({
     audio.onended = () => setPlaying(false);
     audio.onerror = () => {
       setPlaying(false);
-      setUrl(null);
+      setStarting(false);
+      setErrorMessage('The sample could not play. Try again later.');
     };
+    setErrorMessage(null);
+    setStarting(true);
     void audio.play().then(
-      () => setPlaying(true),
-      () => setPlaying(false),
+      () => {
+        setStarting(false);
+        setPlaying(true);
+      },
+      () => {
+        setStarting(false);
+        setPlaying(false);
+        setErrorMessage('The sample could not play. Try again later.');
+      },
     );
   };
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-pressed={playing}
-      aria-label={playing ? `Stop the ${voiceName} sample` : `Play a sample of ${voiceName}`}
-      data-testid="voice-sample-toggle"
-      className="mx-auto inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[var(--chat-border-strong)] px-4 py-2 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
-    >
-      {playing ? (
-        <Square className="h-4 w-4" aria-hidden="true" />
-      ) : (
-        <Volume2 className="h-4 w-4" aria-hidden="true" />
-      )}
-      {playing ? 'Stop' : 'Play sample'}
-    </button>
+    <div className="mx-auto flex flex-col items-center gap-1">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-pressed={playing}
+        aria-busy={starting}
+        aria-label={playing ? `Stop the ${voiceName} sample` : `Play a sample of ${voiceName}`}
+        data-testid="voice-sample-toggle"
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[var(--chat-border-strong)] px-4 py-2 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+      >
+        {playing ? (
+          <Square className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Volume2 className="h-4 w-4" aria-hidden="true" />
+        )}
+        {playing ? 'Stop' : 'Play sample'}
+      </button>
+      {errorMessage ? (
+        <p role="status" className="text-xs text-[var(--chat-text-secondary)]">
+          {errorMessage}
+        </p>
+      ) : null}
+    </div>
   );
 }

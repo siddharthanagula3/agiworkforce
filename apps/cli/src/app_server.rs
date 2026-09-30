@@ -11,7 +11,9 @@
 //!    connecting client is responsible for confirming each call.
 
 pub(crate) mod account;
+mod cloud_threads;
 mod developer_host;
+mod pull_request;
 pub(crate) mod surfaces;
 mod threads;
 
@@ -65,7 +67,6 @@ const MCP_SERVER_CORE_TOOLS: &[&str] = &[
     "list_worktrees",
     "lsp_definition",
     "lsp_hover",
-    "lsp_diagnostics",
     "lsp_completion",
     "lsp_document_symbols",
     "lsp_format",
@@ -154,6 +155,7 @@ async fn call_cli_tool(params: Option<&Value>) -> Result<Value, RpcError> {
     let refuse_prompts: crate::tools::ApprovalCallback =
         Arc::new(|_| Box::pin(async { ApprovalDecision::Deny }));
     let opts = crate::tools::ToolExecOptions {
+        additional_workspace_roots: Vec::new(),
         require_confirmation: false,
         auto_approve_safe: false,
         auto_approve_edits: false,

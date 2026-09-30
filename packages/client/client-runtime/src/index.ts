@@ -135,11 +135,17 @@ export type {
   SyncManagerState,
 } from './offline-sync';
 
-export { pollDeviceAuthorization, requestDeviceAuthorization } from './deviceAuthorization';
+export {
+  pollDeviceAuthorization,
+  refreshDeviceSession,
+  requestDeviceAuthorization,
+  slowedDevicePollIntervalMs,
+} from './deviceAuthorization';
 export type {
   DeviceAuthorizationPollResult,
   DeviceAuthorizationPost,
   DeviceAuthorizationRequest,
+  DeviceSessionRefreshResult,
 } from './deviceAuthorization';
 
 export {
@@ -151,6 +157,22 @@ export {
   resolveAuthProviders,
 } from './authProviders';
 export type { AuthProvider, AuthProviderId } from './authProviders';
+export {
+  AUTH_ERROR_KINDS,
+  AUTH_NOTICE_KINDS,
+  classifyAuthError,
+  classifyProviderCallbackError,
+  isAuthNoticeKind,
+  isRetryableAuthError,
+  readVendorAuthError,
+} from './authErrorTaxonomy';
+export type {
+  AuthErrorDescriptor,
+  AuthErrorField,
+  AuthErrorKind,
+  AuthNoticeKind,
+  VendorAuthError,
+} from './authErrorTaxonomy';
 export {
   WORKSPACE_POLICY_POLL_INTERVAL_MS,
   browserWorkspacePolicyEnvironment,

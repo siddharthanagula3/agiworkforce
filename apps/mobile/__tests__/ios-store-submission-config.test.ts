@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
+import { getAgeThreshold } from '../src/features/auth/services/ageGate';
+
+jest.mock('@/lib/mmkv', () => ({ storage: {} }));
 
 const appConfig = require('../app.config.js') as {
   expo: { ios?: { infoPlist?: Record<string, unknown> } };
@@ -11,11 +14,12 @@ const listingIos = require('../store-listing/LISTING-METADATA-IOS.json') as {
   pricing: { in_app_purchase_note: string; guideline_3_1_1_residual_risk?: string };
   export_compliance?: { uses_non_exempt_encryption?: boolean };
   privacy_nutrition_labels: unknown;
+  age_rating: { rating: string };
 };
 
 const listingAndroid = require('../store-listing/LISTING-METADATA-ANDROID.json') as {
   play_console_review_notes_file: string;
-  target_audience: { age_group: string };
+  target_audience: { age_group: string; play_age_bands: string[] };
   data_safety: { data_shared: boolean; data_collected_types: Array<{ type: string }> };
   in_app_products: { has_in_app_products: boolean; note: string };
 };
@@ -187,7 +191,8 @@ describe('iOS submission config', () => {
   });
 
   it('keeps the residual Guideline 3.1.1 exposure recorded rather than silent', () => {
-    expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/known-flaws\.md/);
+    expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/App Review purchase policy/);
+    expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/Contact Sales/);
   });
 
   it('discloses the native-purchase code that ships in the binary on every claim surface', () => {
@@ -232,16 +237,18 @@ describe('iOS submission config', () => {
     }
   });
 
-  it('discloses every external-link call site the reviewer notes claim to enumerate', () => {
+  it('discloses account and billing links reachable from the current app', () => {
     const CALL_SITES: Array<[string, RegExp]> = [
-      ['cloud-billing invoices', /cloud-billing\/index\.tsx:497/],
-      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:335/],
-      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:155/],
-      ['paywall contact sales', /PaywallBottomSheet\.tsx:121/],
-      ['cloud-usage view on web', /cloud-usage\/index\.tsx:131/],
+      ['cloud-billing invoices', /cloud-billing\/index\.tsx:617/],
+      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:377/],
+      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:176/],
+      ['paywall contact sales', /PaywallBottomSheet\.tsx:120/],
+      ['purchase help', /cloud-billing\/index\.tsx:624/],
       ['cloud-account change email', /cloud-account\/index\.tsx:98/],
       ['workspace empty state', /workspace\.tsx:438/],
       ['workspace rename or delete', /workspace\.tsx:545/],
+      ['auth legal links', /app\/\(auth\)\/login\.tsx/],
+      ['signup legal links', /MobileSignUp\.tsx/],
     ];
     for (const file of REVIEWER_NOTES) {
       const text = surfaceText(file);
@@ -249,8 +256,25 @@ describe('iOS submission config', () => {
         expect([file, label, pattern.test(text)]).toEqual([file, label, true]);
       }
     }
-    expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/cloud-usage\/index\.tsx:131/);
-    expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/workspace\.tsx:438/);
+    expect(listingIos.pricing.guideline_3_1_1_residual_risk).not.toMatch(
+      /cloud-usage\/index\.tsx:131/,
+    );
+    expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/workspace administration/);
+  });
+
+  it('names every production openExternalUrl owner in both platform review notes', () => {
+    const owners = SOURCE_ROOTS.flatMap((root) => sourceFiles(join(mobileRoot, root)))
+      .filter((file) => file !== join(mobileRoot, 'lib', 'safeOpenURL.ts'))
+      .filter((file) => /\bopenExternalUrl\s*\(/.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(mobileRoot, file).split(sep).join('/'));
+
+    expect(owners.length).toBeGreaterThan(0);
+    for (const file of REVIEWER_NOTES) {
+      const notes = surfaceText(file);
+      for (const owner of owners) {
+        expect([file, owner, notes.includes(owner)]).toEqual([file, owner, true]);
+      }
+    }
   });
 
   it('discloses the first-paint native-purchase loading block wherever the screen is enumerated', () => {
@@ -305,11 +329,24 @@ describe('Play data safety declarations', () => {
     }
   });
 
-  it('targets the lowest age the shipped age gate admits', () => {
+  it('rates both stores at the lowest age the shipped age gate admits', () => {
     const ageGate = readFileSync(join(mobileRoot, 'src/features/auth/services/ageGate.ts'), 'utf8');
     const fallback = /DEFAULT_RULE:\s*RegionAgeRule\s*=\s*\{[^}]*threshold:\s*(\d+)/.exec(ageGate);
+    const regionalAges = [...ageGate.matchAll(/threshold:\s*(\d+)/g)].map(([, age]) => Number(age));
     expect(fallback).not.toBeNull();
-    expect(listingAndroid.target_audience.age_group).toBe(`${fallback![1]}+`);
+    expect(Number(fallback![1])).toBe(Math.min(...regionalAges));
+
+    const resolvedOptions = jest
+      .spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+      .mockReturnValue({ timeZone: 'Etc/UTC' } as Intl.ResolvedDateTimeFormatOptions);
+    const lowestAdmittedAge = getAgeThreshold();
+    resolvedOptions.mockRestore();
+
+    expect(listingIos.age_rating.rating).toBe(`${lowestAdmittedAge}+`);
+    expect(listingAndroid.target_audience.age_group).toBe(`${lowestAdmittedAge}+`);
+    expect(Number.parseInt(listingAndroid.target_audience.play_age_bands[0] ?? '', 10)).toBe(
+      lowestAdmittedAge,
+    );
   });
 
   it('carries no HealthKit claims in the privacy manifest', () => {

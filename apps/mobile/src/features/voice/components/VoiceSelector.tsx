@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, forwardRef } from 'react';
-import { View, Pressable, ActivityIndicator, ScrollView as RNScrollView } from 'react-native';
+import { View, ActivityIndicator, ScrollView as RNScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Play, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -9,6 +10,7 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import * as TTS from '@/src/features/voice/services/tts';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { VOICE_PRESETS, findVoiceForPreset } from '@/src/features/voice/voicePresets';
 import type { VoiceInfo } from '@/src/features/voice/services/tts';
 
@@ -128,7 +130,7 @@ export const VoiceSelector = forwardRef<
     ({ item }: { item: VoiceInfo }) => {
       const isSelected = selectedVoiceId === item.identifier && selectedPresetId === null;
       return (
-        <Pressable
+        <PressableBox
           onPress={() => handleSelectSystemVoice(item)}
           style={{
             flexDirection: 'row',
@@ -153,17 +155,17 @@ export const VoiceSelector = forwardRef<
             <Text
               style={{
                 color: isSelected ? colors.teal : colors.textPrimary,
-                fontSize: 14,
+                fontSize: typeScale.subhead,
                 fontWeight: '500',
               }}
             >
               {item.name}
             </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
               {item.quality} · {item.language}
             </Text>
           </View>
-          <Pressable
+          <PressableBox
             onPress={() => handlePlaySample(item)}
             style={{
               padding: 8,
@@ -174,8 +176,8 @@ export const VoiceSelector = forwardRef<
             accessibilityRole="button"
           >
             <Play size={16} color={colors.textSecondary} />
-          </Pressable>
-        </Pressable>
+          </PressableBox>
+        </PressableBox>
       );
     },
     [
@@ -212,7 +214,7 @@ export const VoiceSelector = forwardRef<
         {/* Sheet title */}
         <Text
           style={{
-            fontSize: 16,
+            fontSize: typeScale.callout,
             fontWeight: '600',
             color: colors.textPrimary,
             marginBottom: 16,
@@ -226,7 +228,7 @@ export const VoiceSelector = forwardRef<
           <View style={{ marginBottom: 20 }}>
             <Text
               style={{
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: '600',
                 color: colors.textMuted,
                 textTransform: 'uppercase',
@@ -244,7 +246,7 @@ export const VoiceSelector = forwardRef<
               {availableLanguages.map((lang) => {
                 const selected = speechLanguage === lang.code;
                 return (
-                  <Pressable
+                  <PressableBox
                     key={lang.code}
                     onPress={() => handleSelectLanguage(lang.code)}
                     style={{
@@ -261,14 +263,14 @@ export const VoiceSelector = forwardRef<
                   >
                     <Text
                       style={{
-                        fontSize: 13,
+                        fontSize: typeScale.footnote,
                         fontWeight: '500',
                         color: selected ? colors.teal : colors.textSecondary,
                       }}
                     >
                       {lang.label}
                     </Text>
-                  </Pressable>
+                  </PressableBox>
                 );
               })}
             </RNScrollView>
@@ -278,7 +280,7 @@ export const VoiceSelector = forwardRef<
         {/* Branded voice presets grid */}
         <Text
           style={{
-            fontSize: 12,
+            fontSize: typeScale.caption,
             fontWeight: '600',
             color: colors.textMuted,
             textTransform: 'uppercase',
@@ -299,7 +301,7 @@ export const VoiceSelector = forwardRef<
           {VOICE_PRESETS.map((preset) => {
             const isSelected = selectedPresetId === preset.id;
             return (
-              <Pressable
+              <PressableBox
                 key={preset.id}
                 onPress={() => handleSelectPreset(preset.id)}
                 style={{
@@ -324,7 +326,7 @@ export const VoiceSelector = forwardRef<
                 >
                   <Text
                     style={{
-                      fontSize: 14,
+                      fontSize: typeScale.subhead,
                       fontWeight: '600',
                       color: isSelected ? colors.teal : colors.textPrimary,
                     }}
@@ -335,14 +337,14 @@ export const VoiceSelector = forwardRef<
                 </View>
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: typeScale.caption,
                     color: colors.textMuted,
                     lineHeight: 15,
                   }}
                 >
                   {preset.description}
                 </Text>
-              </Pressable>
+              </PressableBox>
             );
           })}
         </View>
@@ -350,7 +352,7 @@ export const VoiceSelector = forwardRef<
         {/* System voices section */}
         <Text
           style={{
-            fontSize: 12,
+            fontSize: typeScale.caption,
             fontWeight: '600',
             color: colors.textMuted,
             textTransform: 'uppercase',

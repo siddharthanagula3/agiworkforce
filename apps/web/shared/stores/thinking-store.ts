@@ -10,6 +10,7 @@ const EFFORT_CYCLE: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 interface ThinkingState {
   enabled: boolean;
   effort: EffortLevel;
+  fast: boolean;
 }
 
 interface ThinkingActions {
@@ -17,6 +18,7 @@ interface ThinkingActions {
   toggle: () => void;
   setEffort: (level: EffortLevel) => void;
   cycleEffort: () => void;
+  setFast: (fast: boolean) => void;
 }
 
 export type ThinkingStore = ThinkingState & ThinkingActions;
@@ -27,6 +29,12 @@ export const useThinkingStore = create<ThinkingStore>()(
       immer<ThinkingStore>((set) => ({
         enabled: false,
         effort: 'medium',
+        fast: false,
+
+        setFast: (fast) =>
+          set((state) => {
+            state.fast = fast;
+          }),
 
         setEnabled: (enabled) =>
           set((state) => {

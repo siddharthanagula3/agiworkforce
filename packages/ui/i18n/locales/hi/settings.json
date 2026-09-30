@@ -196,6 +196,10 @@
     "windowMinutes_one": "मिनट",
     "windowMinutes_other": "{{count}} मिनट",
     "windowSeconds_one": "सेकंड",
-    "windowSeconds_other": "{{count}} सेकंड"
+    "windowSeconds_other": "{{count}} सेकंड",
+    "memoriesAdded_one": "{{count}} मेमोरी जोड़ी गई",
+    "memoriesAdded_other": "{{count}} मेमोरी जोड़ी गईं",
+    "factsFound_one": "{{source}} से {{count}} तथ्य मिला।",
+    "factsFound_other": "{{source}} से {{count}} तथ्य मिले।"
   }
 }

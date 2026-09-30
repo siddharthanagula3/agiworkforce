@@ -3,6 +3,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { getWaitingQueue } from '@/lib/support/handoff/handoff-service';
+import { type HandoffQueueEntry } from '@agiworkforce/cloud-contracts/support';
 
 async function handleQueue(request: NextRequest) {
   const limited = await withRateLimit(request, 'support-handoff-agent');
@@ -10,7 +11,7 @@ async function handleQueue(request: NextRequest) {
 
   await requirePlatformAdmin(request);
 
-  const queue = await getWaitingQueue();
+  const queue: HandoffQueueEntry[] = await getWaitingQueue();
   return NextResponse.json({ queue }, { headers: { 'cache-control': 'no-store' } });
 }
 

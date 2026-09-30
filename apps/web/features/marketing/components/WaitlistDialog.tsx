@@ -182,7 +182,7 @@ export function WaitlistDialog({
         <button
           type="button"
           aria-label="Close waitlist dialog"
-          className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+          className="absolute end-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
           onClick={() => handleOpenChange(false)}
         >
           <X className="h-4 w-4" aria-hidden="true" />

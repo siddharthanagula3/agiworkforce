@@ -13,7 +13,14 @@ export const MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH = '/api/uploads/presign'
 export const MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH = '/api/uploads/chat-attachment/complete';
 
 export const MAX_CHAT_ATTACHMENT_BYTES = 12 * 1024 * 1024;
+export const MAX_CHAT_ATTACHMENT_MESSAGE_BYTES = 12 * 1024 * 1024;
 export const MAX_CHAT_ATTACHMENT_COUNT = 10;
+
+const BYTES_PER_MEBIBYTE = 1024 * 1024;
+
+export function chatAttachmentSizeLabel(bytes: number): string {
+  return `${Math.round((bytes / BYTES_PER_MEBIBYTE) * 10) / 10} MiB`;
+}
 
 export const CHAT_ATTACHMENT_MIME_TYPES = [
   'image/png',
@@ -170,6 +177,9 @@ export const ManagedCloudChatAttachmentCompleteResponseSchema = z.object({
 });
 
 export type ManagedCloudChatAttachment = z.infer<typeof ManagedCloudChatAttachmentSchema>;
+export type ManagedCloudChatAttachmentCompleteResponse = z.input<
+  typeof ManagedCloudChatAttachmentCompleteResponseSchema
+>;
 
 /**
  * The canonical reference to an uploaded attachment. A text-like upload is

@@ -99,6 +99,7 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
               executionMode: c.executionMode ?? ('cloud' as const),
               ...(serverVersion !== undefined ? { serverVersion } : {}),
               ...(activeLeafMessageId !== undefined ? { activeLeafMessageId } : {}),
+              ...(c.unread === undefined && local?.unread ? { unread: true } : {}),
             };
             if (dirtyIds.includes(c.id)) {
               if (local) return { ...base, ...local, serverVersion };
@@ -108,7 +109,8 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
           const snapshotIds = new Set(normalized.map((conversation) => conversation.id));
           const dirtyOutsideSnapshot = state.conversations.filter(
             (conversation) =>
-              dirtyIds.includes(conversation.id) && !snapshotIds.has(conversation.id),
+              (dirtyIds.includes(conversation.id) || conversation.temporary === true) &&
+              !snapshotIds.has(conversation.id),
           );
           return {
             conversations: [...dirtyOutsideSnapshot, ...normalized],

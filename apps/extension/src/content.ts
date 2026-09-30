@@ -42,6 +42,11 @@ import { extractPageMetadata } from './page-metadata';
 import { setupInPagePanel } from './inPagePanel/setup';
 import { isDomSmallEnoughToRead } from './dom-helpers';
 import {
+  fillPageFields,
+  findPageElements,
+  watchPasswordFields,
+} from './features/content/pageElements';
+import {
   validateShortcutActions,
   MAX_CONTEXT_HTML_CHARS,
   sanitizePageText,
@@ -114,6 +119,7 @@ function initialize(): void {
   }
   scope.__agiWorkforceContentScriptReady = true;
 
+  watchPasswordFields();
   void setupInPagePanel(originApproved, logger);
 
   chrome.runtime.onMessage.addListener(handleMessage);
@@ -227,6 +233,12 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'SELECT_OPTION':
       return handleSelectOption(message as import('./types').SelectOptionMessage);
+
+    case 'FIND_ELEMENTS':
+      return handleFindElements(message as import('./types').FindElementsMessage);
+
+    case 'FILL_FIELDS':
+      return handleFillFields(message as import('./types').FillFieldsMessage);
 
     case 'CHECK':
       return handleCheck(message as import('./types').CheckMessage, true);
@@ -1230,6 +1242,32 @@ async function handleSubmitForm(message: SubmitFormMessage): Promise<ExtensionRe
   }
 }
 
+function handleFindElements(message: import('./types').FindElementsMessage): ExtensionResponse {
+  try {
+    const query = typeof message.query === 'string' ? message.query : undefined;
+    return { success: true, elements: findPageElements(query) } as ExtensionResponse;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+function handleFillFields(message: import('./types').FillFieldsMessage): ExtensionResponse {
+  try {
+    const fields = Array.isArray(message.fields)
+      ? message.fields.filter(
+          (field): field is { selector: string; value: string } =>
+            typeof field?.selector === 'string' && typeof field?.value === 'string',
+        )
+      : [];
+    if (fields.length === 0) {
+      return { success: false, error: 'FILL_FIELDS needs at least one selector and value' };
+    }
+    return { success: true, ...fillPageFields(fields) } as ExtensionResponse;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
 async function handleSelectOption(
   message: import('./types').SelectOptionMessage,
 ): Promise<ExtensionResponse> {
@@ -1820,6 +1858,8 @@ const VALID_MESSAGE_TYPES = new Set([
   'TAB_READY',
   'SYNC_PAGE_CONTEXT',
   'SELECT_OPTION',
+  'FIND_ELEMENTS',
+  'FILL_FIELDS',
   'CHECK',
   'UNCHECK',
   'FOCUS',

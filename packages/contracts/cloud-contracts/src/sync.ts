@@ -3,6 +3,10 @@ import {
   MANAGED_MEMORY_MAX_CATEGORY_CHARS,
   MANAGED_MEMORY_MAX_CONTENT_CHARS,
 } from '@agiworkforce/types';
+import {
+  CONVERSATION_TITLE_MAX_LENGTH,
+  MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH,
+} from './conversations';
 
 export const ServerVersionSchema = z
   .string()
@@ -157,6 +161,17 @@ export const ArtifactWireDeltaSchema = z.object({
 });
 export type ArtifactWireDelta = z.infer<typeof ArtifactWireDeltaSchema>;
 
+export const CHAT_SYNC_PATH = '/api/chat/sync';
+export const CHAT_SYNC_CONVERSATIONS_SCOPE = 'conversations';
+
+export function chatSyncPullPath(
+  since: string,
+  scope?: typeof CHAT_SYNC_CONVERSATIONS_SCOPE,
+): string {
+  const query = new URLSearchParams({ since, ...(scope ? { scope } : {}) });
+  return `${CHAT_SYNC_PATH}?${query.toString()}`;
+}
+
 export const ChatSyncPullResponseSchema = z.object({
   conversations: z.array(ConversationWireDeltaSchema),
   messages: z.array(MessageWireDeltaSchema),
@@ -168,7 +183,7 @@ export type ChatSyncPullResponse = z.infer<typeof ChatSyncPullResponseSchema>;
 
 export const ConversationSyncPushItemSchema = z.object({
   id: z.string().uuid(),
-  title: z.string().max(500),
+  title: z.string().max(CONVERSATION_TITLE_MAX_LENGTH),
   model: z.string().max(200).nullable().optional(),
   projectId: z.string().max(200).nullable().optional(),
   pinned: z.boolean().optional(),
@@ -181,7 +196,7 @@ export const MessageSyncPushItemSchema = z.object({
   id: z.string().uuid(),
   conversationId: z.string().uuid(),
   role: z.enum(['user', 'assistant', 'system']),
-  content: z.string().max(1_000_000),
+  content: z.string().max(MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH),
   model: z.string().max(200).nullable().optional(),
   provider: z.string().max(200).nullable().optional(),
   inputTokens: z.number().int().nonnegative().optional(),
@@ -263,6 +278,8 @@ export const MemoryWireDeltaSchema = z.object({
   server_version: ServerVersionSchema,
   source_conversation_id: z.string().nullable().optional(),
   source_conversation_title: z.string().nullable().optional(),
+  project_id: z.string().nullable().optional(),
+  project_name: z.string().nullable().optional(),
 });
 export type MemoryWireDelta = z.infer<typeof MemoryWireDeltaSchema>;
 
@@ -270,6 +287,7 @@ export const MemorySyncPullResponseSchema = z.object({
   memories: z.array(MemoryWireDeltaSchema),
   cursor: ServerVersionSchema,
   hasMore: z.boolean(),
+  memoryEnabled: z.boolean().optional(),
 });
 export type MemorySyncPullResponse = z.infer<typeof MemorySyncPullResponseSchema>;
 
@@ -300,6 +318,8 @@ export const MemorySyncConflictSchema = z.object({
 export const MemorySyncRejectionSchema = z.object({
   id: z.string(),
   term: z.string().nullable().optional(),
+  reason: z.string().optional(),
+  message: z.string().optional(),
 });
 export type MemorySyncRejection = z.infer<typeof MemorySyncRejectionSchema>;
 

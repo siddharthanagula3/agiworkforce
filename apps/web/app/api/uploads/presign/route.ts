@@ -26,7 +26,11 @@ import {
   validateAttachmentMeta,
 } from '@agiworkforce/types';
 import { randomUUID } from 'node:crypto';
-import { isSupportedChatAttachment, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
+import {
+  chatAttachmentSizeLabel,
+  isSupportedChatAttachment,
+  MAX_CHAT_ATTACHMENT_BYTES,
+} from '@/lib/chat-attachment-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { uploadNeedsSameOriginRelay } from '@/lib/server/upload-transport';
 import { uploadObjectKey } from '@/lib/server/upload-keys';
@@ -90,7 +94,9 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   }
   if (kind === 'chat-attachment') {
     if (byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
-      throw createError.validation('Chat attachments are limited to 12 MiB.');
+      throw createError.validation(
+        `Chat attachments are limited to ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_BYTES)} each.`,
+      );
     }
     if (!isSupportedChatAttachment(fileName, mimeType)) {
       throw createError.validation(

@@ -49,19 +49,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
-## S39.07: Profile summary.
-
-- Done when: The user can read a summary of what the assistant has learned about them as a person (a profile summary).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S39.09: Ongoing-work summary.
 
 - Done when: The user can read a summary of the ongoing work or projects the assistant knows they are pursuing.
@@ -95,18 +82,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S39.17: Memory source/provenance.
-
-- Done when: Each saved memory shows where it came from (typed by the user, imported, or learned from a named conversation).
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Show which chat a memory came from; agi memory list prints only the writer label (web, mobile, auto...), and the chat link needs pending migration 0285. | ui |
-
-Code: `apps/cli/src/lib.rs:2070-2074`
 
 ## S39.19: Correction of stale information.
 
@@ -156,6 +131,7 @@ Code: `apps/cli/src/lib.rs:2070-2074`
 
 - Done when: Where memory has a limit, the user can see how much of it is used and which memories fall outside it.
 - Wave: 3
+- Already works on: cli
 - Needs a founder decision: true
 
 | Surface | Status | What is left | Gap |
@@ -163,11 +139,8 @@ Code: `apps/cli/src/lib.rs:2070-2074`
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Show how many learned facts are stored against the cap; the /memories overlay shows and sets only the max-facts limit (default 500). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3914-3928`, `apps/cli/src/memory_pipeline.rs:90-90`
 
 ## S39.24: Project-scoped Memory.
 
@@ -180,18 +153,6 @@ Code: `apps/cli/src/tui/tui_app.rs:3914-3928`, `apps/cli/src/memory_pipeline.rs:
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S39.26: Organization knowledge distinct from personal Memory.
-
-- Done when: Organization or workspace knowledge is kept apart from personal memory: work memories never appear in personal chats and vice versa, and the user can tell which is which.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
-
-Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`
 
 ## S39.27: Memory-used indication.
 
@@ -218,18 +179,6 @@ Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.t
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S39.29: Sensitive-Memory controls.
-
-- Done when: The user can stop sensitive information from being remembered (e.g. never-remember terms or categories), and sensitive facts such as credentials are refused automatically.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | partials/slack cf040c03f9: in Cloud mode the phone edits the never-remember terms and the per-source switches in the same memory preference namespace the server enforces. Left: Local mode learning has no credential or special-category filter; the shared prohibitedMemoryCategory lives in @agiworkforce/context, which apps/mobile/package.json (held by Codex) does not list, so it needs that dependency after Codex lands or the classifier moved into @agiworkforce/types. | handler |
-
-Code: `apps/mobile/app/(app)/settings/memory.tsx:460-460`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:15-15`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:98-98`, `apps/mobile/app/(app)/settings/memory-exclusions.tsx:248-248`
 
 ## S39.30: Memory reset independent from chat deletion.
 

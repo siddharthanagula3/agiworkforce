@@ -9,15 +9,22 @@ import {
   SettingsSwitchRow,
 } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
-import { isNotificationCategory, NOTIFICATION_CATEGORY_COPY } from './categories';
+import { typeScale } from '@/src/ui/theme/tokens';
+import { PUSH_PREFERENCE_GROUP_COPY, resolvePushPreferenceGroup } from './categories';
 import { View } from 'react-native';
 
-export default function NotificationCategoryDetailScreen({ category }: { category: string }) {
+export default function NotificationCategoryDetailScreen({
+  category: requestedCategory,
+}: {
+  category: string;
+}) {
   const colors = useThemeColors();
   const categoryEnabled = useNotificationPrefsStore((state) => state.categoryEnabled);
   const setCategoryEnabled = useNotificationPrefsStore((state) => state.setCategoryEnabled);
 
-  if (!isNotificationCategory(category)) {
+  const category = resolvePushPreferenceGroup(requestedCategory);
+
+  if (!category) {
     return (
       <SettingsScreenShell title="Notification" backHref="/(app)/settings/notifications">
         <SettingsInfo
@@ -29,7 +36,7 @@ export default function NotificationCategoryDetailScreen({ category }: { categor
     );
   }
 
-  const copy = NOTIFICATION_CATEGORY_COPY[category];
+  const copy = PUSH_PREFERENCE_GROUP_COPY[category];
 
   return (
     <SettingsScreenShell title={copy.label} backHref="/(app)/settings/notifications">
@@ -60,12 +67,21 @@ export default function NotificationCategoryDetailScreen({ category }: { categor
         >
           <Mail size={19} color={colors.textMuted} />
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.textPrimary, fontSize: 15 }}>Email notifications</Text>
-            <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 3 }}>
+            <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>
+              Email notifications
+            </Text>
+            <Text
+              style={{
+                color: colors.textMuted,
+                fontSize: typeScale.caption,
+                lineHeight: 17,
+                marginTop: 3,
+              }}
+            >
               No account email sender exists for this category.
             </Text>
           </View>
-          <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, fontWeight: '600' }}>
             Unavailable
           </Text>
         </View>

@@ -1,6 +1,11 @@
 import 'server-only';
 
+import type { NextRequest } from 'next/server';
+
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { randomUUID } from 'node:crypto';
+import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { classifyTaskLocally, detectIndicScript, resolveAutoRoute } from '@agiworkforce/routing';
@@ -27,6 +32,11 @@ import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/to
 import { runToolLoop } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { classifyToolLoopInputs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-routing';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import {
+  GOOGLE_USER_DATA_ARTIFACT_NO_MODEL_MESSAGE,
+  toolsReachGoogleUserData,
+} from '@/lib/connectors/google-user-data-runs';
+import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
@@ -53,10 +63,15 @@ import {
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
+import {
+  ARTIFACT_STORAGE_VALUE_LIMIT_BYTES,
+  type ArtifactRuntimeConnector,
+  type ArtifactRuntimeConnectorTool,
+} from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 
 export const ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES = 20 * 1024 * 1024;
-export const ARTIFACT_STORAGE_VALUE_LIMIT_BYTES = 4 * 1024 * 1024;
+export { ARTIFACT_STORAGE_VALUE_LIMIT_BYTES };
 export const ARTIFACT_STORAGE_LIST_LIMIT = 1_000;
 
 const MAX_OUTPUT_TOKENS = 4_096;
@@ -76,9 +91,20 @@ export interface ArtifactRuntimeRoute {
 }
 
 export class ArtifactRuntimeRouteUnavailableError extends Error {
-  constructor() {
-    super('No model on your plan can answer this app right now.');
+  constructor(message = 'No model on your plan can answer this app right now.') {
+    super(message);
     this.name = 'ArtifactRuntimeRouteUnavailableError';
+  }
+}
+
+/**
+ * The run can reach a Google connector, and no model that keeps inputs out of
+ * training can serve it. Google API Limited Use forbids the alternative.
+ */
+export class ArtifactRuntimeGoogleUserDataRouteError extends ArtifactRuntimeRouteUnavailableError {
+  constructor() {
+    super(GOOGLE_USER_DATA_ARTIFACT_NO_MODEL_MESSAGE);
+    this.name = 'ArtifactRuntimeGoogleUserDataRouteError';
   }
 }
 
@@ -216,20 +242,33 @@ export async function selectArtifactRuntimeRoute(
   userId: string,
   prompt: string,
   planTier: string,
-  options: { needsTools?: boolean } = {},
+  options: { needsTools?: boolean; googleUserData?: boolean } = {},
 ): Promise<ArtifactRuntimeRoute> {
-  const routing = await sideCallRoutingRequest(db, userId, {
-    selection: 'auto',
-    taskType: classifyTaskLocally(prompt, []).type,
-    subscriptionTier: planTier,
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-    ...(options.needsTools ? { requiredCapabilities: ['functionCalling'] as const } : {}),
-  });
-  if (!routing) throw new ArtifactRuntimeRouteUnavailableError();
+  const googleUserData = options.googleUserData === true;
+  const unavailable = () =>
+    googleUserData
+      ? new ArtifactRuntimeGoogleUserDataRouteError()
+      : new ArtifactRuntimeRouteUnavailableError();
+  const routing = await sideCallRoutingRequest(
+    db,
+    userId,
+    {
+      selection: 'auto',
+      taskType: classifyTaskLocally(prompt, []).type,
+      subscriptionTier: planTier,
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+      ...(options.needsTools ? { requiredCapabilities: ['functionCalling'] as const } : {}),
+    },
+    { forceNoTraining: googleUserData },
+  );
+  if (!routing) throw unavailable();
   const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable' || route.harnessId.endsWith('/media')) {
-    throw new ArtifactRuntimeRouteUnavailableError();
+    throw unavailable();
+  }
+  if (googleUserData && !modelKeepsInputsOutOfTraining(route.modelKey)) {
+    throw new ArtifactRuntimeGoogleUserDataRouteError();
   }
   return {
     provider: route.provider,
@@ -263,25 +302,41 @@ function runsWithoutAsking(
   );
 }
 
-export async function buildArtifactConnectorPlan(input: {
+interface ArtifactConnectorScope {
   db: DatabaseAdapter;
   userId: string;
   organizationId: string | null;
   planTier: string;
-  modelKey: string;
   connectors: readonly string[];
-}): Promise<ArtifactConnectorPlan | null> {
+  request: NextRequest;
+}
+
+interface ArtifactConnectorAccess {
+  toolApprovalPolicy: ToolApprovalPolicy;
+  connectorPermissions: ConnectorToolPermissions;
+  tools: WebMcpToolDef[];
+}
+
+type ArtifactToolStanding = 'available' | ArtifactRuntimeConnectorTool['unavailableReason'];
+
+async function loadArtifactConnectorAccess(
+  input: ArtifactConnectorScope,
+): Promise<ArtifactConnectorAccess | null> {
   const policy = getTierPolicy(input.planTier);
   if (
-    getModelMetadataById(input.modelKey)?.capabilities?.tools !== true ||
     policy.allowToolUse === false ||
-    policy.allowMCP === false
+    policy.allowMCP === false ||
+    !(await connectorsAllowedForTurn(input.request, input.userId, {
+      organizationId: input.organizationId,
+      subscriptionTier: input.planTier,
+      chatSurface: resolveCloudChatSurface(input.request),
+    }))
   ) {
     return null;
   }
   const [toolApprovalPolicy, connectorPermissions] = await Promise.all([
     loadToolApprovalPolicy(input.db, input.userId),
-    loadConnectorToolPermissions(input.db, input.userId),
+    loadConnectorToolPermissions(input.db, input.userId, input.organizationId),
   ]);
   const catalog = await loadUserConnectorToolCatalog(input.userId, {
     customConnectorLimit: getCustomRemoteMcpLimit(input.planTier) ?? undefined,
@@ -289,18 +344,81 @@ export async function buildArtifactConnectorPlan(input: {
     organizationId: input.organizationId,
     isToolDenied: connectorPermissions.isConnectorToolDenied,
   });
-  const mcpTools = catalog.tools.filter(
-    (tool) =>
-      tool.origin === 'connector' &&
-      input.connectors.includes(tool.serverId) &&
-      !connectorPermissions.isDenied(tool.qualifiedName) &&
-      runsWithoutAsking(tool.qualifiedName, toolApprovalPolicy, connectorPermissions),
+  return {
+    toolApprovalPolicy,
+    connectorPermissions,
+    tools: catalog.tools.filter(
+      (tool) => tool.origin === 'connector' && input.connectors.includes(tool.serverId),
+    ),
+  };
+}
+
+function artifactToolStanding(
+  tool: WebMcpToolDef,
+  access: ArtifactConnectorAccess,
+): ArtifactToolStanding {
+  if (access.connectorPermissions.isDenied(tool.qualifiedName)) return 'blocked';
+  return runsWithoutAsking(
+    tool.qualifiedName,
+    access.toolApprovalPolicy,
+    access.connectorPermissions,
+  )
+    ? 'available'
+    : 'needs_approval';
+}
+
+function artifactConnectorLabel(id: string, tools: readonly WebMcpToolDef[]): string {
+  return (
+    tools.find((tool) => tool.serverId === id && tool.serverLabel)?.serverLabel ??
+    id
+      .split(/[_.-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ')
   );
-  const usable = new Set(mcpTools.map((tool) => tool.serverId));
+}
+
+export async function describeArtifactConnectors(
+  input: ArtifactConnectorScope,
+): Promise<ArtifactRuntimeConnector[] | null> {
+  const access = await loadArtifactConnectorAccess(input);
+  if (!access) return null;
+  return input.connectors.map((id) => {
+    const tools = access.tools.filter((tool) => tool.serverId === id);
+    return {
+      id,
+      label: artifactConnectorLabel(id, access.tools),
+      connected: tools.length > 0,
+      tools: tools.map((tool) => {
+        const standing = artifactToolStanding(tool, access);
+        return {
+          name: tool.qualifiedName,
+          label: tool.toolName,
+          description: tool.description,
+          available: standing === 'available',
+          unavailableReason: standing === 'available' ? null : standing,
+        };
+      }),
+    };
+  });
+}
+
+export async function buildArtifactConnectorPlan(
+  input: ArtifactConnectorScope & { modelKey: string; allowedTools: readonly string[] },
+): Promise<ArtifactConnectorPlan | null> {
+  if (getModelMetadataById(input.modelKey)?.capabilities?.tools !== true) return null;
+  const access = await loadArtifactConnectorAccess(input);
+  if (!access) return null;
+  const allowed = new Set(input.allowedTools);
+  const available = access.tools.filter(
+    (tool) => artifactToolStanding(tool, access) === 'available',
+  );
+  const mcpTools = available.filter((tool) => allowed.has(tool.qualifiedName));
+  const usable = new Set(available.map((tool) => tool.serverId));
   return {
     mcpTools,
-    connectorPermissions,
-    toolApprovalPolicy,
+    connectorPermissions: access.connectorPermissions,
+    toolApprovalPolicy: access.toolApprovalPolicy,
     connectorExecutor: makeUserConnectorExecutor(input.userId, input.organizationId),
     unusable: input.connectors.filter((connector) => !usable.has(connector)),
   };
@@ -434,6 +552,8 @@ async function runArtifactToolLoop(input: {
   };
 }
 
+const ARTIFACT_RUNTIME_USAGE_NAMESPACE = 'agi.artifact.runtime';
+
 export async function completeArtifactPrompt(input: {
   db: DatabaseAdapter;
   userId: string;
@@ -444,6 +564,7 @@ export async function completeArtifactPrompt(input: {
   planTier: string;
   signal: AbortSignal;
   plan?: ArtifactConnectorPlan | null;
+  idempotencyKey: string | null;
 }): Promise<string> {
   const { route } = input;
   const estimatedPromptTokens = Math.ceil(input.prompt.length / 3.5) + 32;
@@ -454,20 +575,34 @@ export async function completeArtifactPrompt(input: {
     MAX_OUTPUT_TOKENS,
   );
   const plan = input.plan && input.plan.mcpTools.length > 0 ? input.plan : null;
+  // Fail closed whatever route the caller picked: a run offered any Google
+  // connector tool only runs on a model that keeps inputs out of training.
+  if (
+    plan &&
+    toolsReachGoogleUserData(plan.mcpTools) &&
+    !modelKeepsInputsOutOfTraining(route.modelKey)
+  ) {
+    throw new ArtifactRuntimeGoogleUserDataRouteError();
+  }
+  const identity = {
+    kind: 'artifact_runtime_completion',
+    publishedArtifactId: input.artifact.publishedArtifactId,
+    prompt: input.prompt,
+    provider: route.provider,
+    model: route.modelKey,
+    providerModelId: route.providerModelId,
+    connectors: plan ? [...new Set(plan.mcpTools.map((tool) => tool.serverId))].sort() : [],
+  };
   const reservation = await reserveManagedUsageRequest({
     db: input.db,
     userId: input.userId,
     organizationId: input.organizationId,
-    idempotencyKey: `artifact-runtime:${randomUUID()}`,
-    requestHash: fingerprintManagedUsageRequest({
-      kind: 'artifact_runtime_completion',
-      publishedArtifactId: input.artifact.publishedArtifactId,
-      prompt: input.prompt,
-      provider: route.provider,
-      model: route.modelKey,
-      providerModelId: route.providerModelId,
-      connectors: plan ? [...new Set(plan.mcpTools.map((tool) => tool.serverId))].sort() : [],
+    idempotencyKey: managedUsageIdempotencyKey({
+      namespace: ARTIFACT_RUNTIME_USAGE_NAMESPACE,
+      suppliedKey: input.idempotencyKey,
+      identity,
     }),
+    requestHash: fingerprintManagedUsageRequest(identity),
     provider: route.provider,
     model: route.modelKey,
     estimatedCostMicrousd,

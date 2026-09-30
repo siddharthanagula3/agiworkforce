@@ -1,15 +1,15 @@
 import type { ReactElement } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Cloud, Cpu } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { AppMode } from './ModeSwitchModal';
 
 export interface ModeToggleProps {
   mode?: AppMode;
-  cloudJoined?: boolean;
   cloudUnlocked?: boolean;
-  waitlistRank?: number | undefined;
   compact?: boolean;
   onChange?: (mode: AppMode) => void;
   onTapLocal?: () => void;
@@ -18,9 +18,7 @@ export interface ModeToggleProps {
 
 export function ModeToggle({
   mode = 'local',
-  cloudJoined = false,
   cloudUnlocked = false,
-  waitlistRank,
   compact = false,
   onTapLocal,
   onTapCloud,
@@ -28,8 +26,6 @@ export function ModeToggle({
   const colors = useThemeColors();
   const cloudLabel = 'Cloud';
   const cloudActive = mode === 'cloud';
-  void cloudJoined;
-  void waitlistRank;
   const cloudAccessibilityLabel = cloudUnlocked ? 'AGI Cloud' : 'AGI Cloud, sign in required';
   const toggleWidth = compact ? 172 : 216;
   const selectedBackground = colors.charcoal700;
@@ -78,7 +74,7 @@ export function ModeToggle({
       accessibilityRole="tablist"
       accessibilityLabel="Chat execution mode"
     >
-      <Pressable
+      <PressableBox
         testID="chat.mode-toggle.local"
         onPress={onTapLocal}
         disabled={!onTapLocal}
@@ -101,9 +97,9 @@ export function ModeToggle({
           <Cpu size={13} color={mode === 'local' ? selectedTextColor : inactiveTextColor} />
           <Text
             numberOfLines={1}
-            maxFontSizeMultiplier={1.3}
+            maxFontSizeMultiplier={2}
             style={{
-              fontSize: 12,
+              fontSize: typeScale.caption,
               lineHeight: 14,
               fontWeight: '600',
               color: mode === 'local' ? selectedTextColor : inactiveTextColor,
@@ -114,9 +110,9 @@ export function ModeToggle({
             Local
           </Text>
         </View>
-      </Pressable>
+      </PressableBox>
 
-      <Pressable
+      <PressableBox
         testID="chat.mode-toggle.cloud"
         onPress={onTapCloud}
         hitSlop={8}
@@ -138,9 +134,9 @@ export function ModeToggle({
           <Cloud size={13} color={cloudActive ? selectedTextColor : inactiveTextColor} />
           <Text
             numberOfLines={1}
-            maxFontSizeMultiplier={1.3}
+            maxFontSizeMultiplier={2}
             style={{
-              fontSize: 12,
+              fontSize: typeScale.caption,
               lineHeight: 14,
               fontWeight: cloudActive ? '600' : '500',
               color: cloudActive ? selectedTextColor : inactiveTextColor,
@@ -151,7 +147,7 @@ export function ModeToggle({
             {cloudLabel}
           </Text>
         </View>
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

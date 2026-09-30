@@ -14,10 +14,13 @@ import {
   applyBaseline,
   checkClientInference,
   exportsSymbol,
+  findLocalShapes,
   findLocalVocabularies,
   inferenceFamilies,
+  inferenceShapes,
   loadBaseline,
   loadOwnershipRegistry,
+  readShape,
   readVocabulary,
 } from './check-client-inference.mjs';
 
@@ -157,9 +160,11 @@ test('a baseline entry without a reason fails', () => {
 test('every recorded entry names a file and a vocabulary that still exist', () => {
   const baseline = loadBaseline(REPO_ROOT);
   assert.ok(baseline.entries.length > 0, `${BASELINE_PATH} is empty`);
-  const symbols = new Set(inferenceFamilies(REPO_ROOT).map((family) => family.symbol));
+  const symbols = new Set(
+    [...inferenceFamilies(REPO_ROOT), ...inferenceShapes(REPO_ROOT)].map((family) => family.symbol),
+  );
   for (const entry of baseline.entries) {
-    assert.ok(symbols.has(entry.symbol), `${entry.symbol} is not a checked vocabulary`);
+    assert.ok(symbols.has(entry.symbol), `${entry.symbol} is not a checked vocabulary or shape`);
   }
 });
 
@@ -349,4 +354,58 @@ test('a contract kind owned outside the contract package, or missing its symbol,
       error.includes('which that module does not export'),
     ),
   );
+});
+
+const SHAPE_CONTRACT = `${CONTRACT_ROOT}/generated/protocol/AgentEventSource.ts`;
+const SHAPE = [{ name: 'source records', file: SHAPE_CONTRACT, symbol: 'AgentEventSource' }];
+const SHAPE_SOURCE =
+  'export type AgentEventSource = { url: string; title: string; snippet?: string };\n';
+
+test('every shape concept reads its fields out of its contract, through re-exports', () => {
+  const shapes = inferenceShapes(REPO_ROOT);
+  assert.ok(shapes.some((shape) => shape.symbol === 'AgentEventSource'));
+  for (const shape of shapes) {
+    const members = readShape({ repoRoot: REPO_ROOT, ...shape });
+    assert.ok(Array.isArray(members) && members.length > 0, `${shape.symbol} read nothing`);
+  }
+  const dir = sandbox({
+    [SHAPE_CONTRACT]: SHAPE_SOURCE,
+    [`${CONTRACT_ROOT}/sources.ts`]:
+      "export type { AgentEventSource } from './generated/protocol/AgentEventSource';\n",
+  });
+  assert.deepEqual(
+    readShape({ repoRoot: dir, file: `${CONTRACT_ROOT}/sources.ts`, symbol: 'AgentEventSource' }),
+    ['url', 'title', 'snippet'],
+  );
+});
+
+test('a client that declares every field of a shared shape without naming it is flagged', () => {
+  const dir = sandbox({
+    [SHAPE_CONTRACT]: SHAPE_SOURCE,
+    [CLIENT]:
+      "import { Card } from '@agiworkforce/types';\nexport interface SearchRow {\n  url: string;\n  title?: string;\n  /** Shown under the title. */\n  snippet?: string;\n}\n",
+  });
+  const { violations } = findLocalShapes({ repoRoot: dir, files: [CLIENT], shapes: SHAPE });
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].symbol, 'AgentEventSource');
+});
+
+test('a client that extends the shape, builds a value, or names only some fields is clean', () => {
+  const dir = sandbox({
+    [SHAPE_CONTRACT]: SHAPE_SOURCE,
+    [CLIENT]: [
+      "import type { AgentEventSource } from '@agiworkforce/types';",
+      'export interface SearchRow extends AgentEventSource { publishedDate?: string }',
+    ].join('\n'),
+    [`${CLIENT_ROOTS[0]}/Value.ts`]:
+      'export const row = (r: Hit) => ({ url: r.url, title: r.title, snippet: r.snippet });\n',
+    [`${CLIENT_ROOTS[0]}/Link.ts`]: 'export interface Link { url: string; title: string }\n',
+  });
+  const { violations, unreadable } = findLocalShapes({
+    repoRoot: dir,
+    files: [CLIENT, `${CLIENT_ROOTS[0]}/Value.ts`, `${CLIENT_ROOTS[0]}/Link.ts`],
+    shapes: SHAPE,
+  });
+  assert.deepEqual(violations, []);
+  assert.deepEqual(unreadable, []);
 });

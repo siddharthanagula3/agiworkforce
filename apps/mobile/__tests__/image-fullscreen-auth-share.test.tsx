@@ -26,8 +26,13 @@ jest.mock('expo-haptics', () => ({
 }));
 
 jest.mock('lucide-react-native', () => ({
+  Check: jest.fn().mockReturnValue(null),
+  Copy: jest.fn().mockReturnValue(null),
   X: jest.fn().mockReturnValue(null),
   Share2: jest.fn().mockReturnValue(null),
+  Download: jest.fn().mockReturnValue(null),
+  Paintbrush: jest.fn().mockReturnValue(null),
+  Trash2: jest.fn().mockReturnValue(null),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({

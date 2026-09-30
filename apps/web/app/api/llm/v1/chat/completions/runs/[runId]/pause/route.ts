@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { CloudAgentRunReply } from '@agiworkforce/cloud-contracts';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -45,10 +46,11 @@ async function handlePause(request: NextRequest, context: RouteContext) {
       request,
       detail: { resourceId: parsedRunId.data, status: 'pause_requested' },
     });
-    return NextResponse.json(
-      { run },
-      { status: 202, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
-    );
+    const reply: CloudAgentRunReply = { run };
+    return NextResponse.json(reply, {
+      status: 202,
+      headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+    });
   } catch (error) {
     if (error instanceof CloudAgentRunNotFoundError) {
       throw createError.notFound('Cloud agent run not found');

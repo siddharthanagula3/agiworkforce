@@ -162,6 +162,10 @@ export { Tooltip } from './components/ui/Tooltip';
 export { ChatBadge } from './components/ui/ChatBadge';
 
 export { MarkdownContent, type MarkdownContentProps } from './components/markdown/MarkdownContent';
+export {
+  CodeBlockEditorContext,
+  type OpenCodeBlockInEditor,
+} from './components/markdown/codeBlockEditor';
 export { toggleMarkdownTask } from './components/markdown/taskList';
 export {
   StreamingMarkdownContent,
@@ -600,8 +604,8 @@ export {
   greetingTimeBand,
   greetingVariantIndex,
   resolveGreetingHeadline,
-} from './lib/greeting';
-export type { GreetingGroup, GreetingTimeBand } from './lib/greeting';
+} from '@agiworkforce/utils/greeting';
+export type { GreetingGroup, GreetingTimeBand } from '@agiworkforce/utils/greeting';
 export { AdvancedEmptyState } from './components/AdvancedEmptyState';
 export type { AdvancedEmptyStateProps } from './components/AdvancedEmptyState';
 export {

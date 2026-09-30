@@ -7,6 +7,7 @@ vi.mock('next/navigation', () => ({
 }));
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import React from 'react';
+import { EFFORT_LABEL } from '@agiworkforce/types';
 
 const sel = vi.hoisted(() => ({ id: 'fixture-six-level' }));
 
@@ -184,6 +185,8 @@ vi.mock('@shared/stores/thinking-store', () => ({
     selector({
       enabled: thinking.enabled,
       effort: thinking.effort,
+      fast: false,
+      setFast: () => undefined,
       setEnabled: (v: boolean) => {
         thinking.enabled = v;
       },
@@ -327,12 +330,14 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
   it('(a) Six-Level Fixture exposes its six exact levels on the effort slider', () => {
     sel.id = 'fixture-six-level';
     render(<ComposerFooter />);
-    expect(effortTrigger()).toHaveTextContent('Medium');
+    expect(effortTrigger()).toHaveTextContent(EFFORT_LABEL.medium);
     expect(effortTrigger()).toHaveClass('pointer-coarse:min-h-11');
     expect(effortSlider()).toHaveAttribute('min', '0');
     expect(effortSlider()).toHaveAttribute('max', '5');
-    expect(effortLevel()).toBe('Medium');
-    expect(screen.getByRole('button', { name: 'Change model' })).not.toHaveTextContent('Medium');
+    expect(effortLevel()).toBe(EFFORT_LABEL.medium);
+    expect(screen.getByRole('button', { name: 'Change model' })).not.toHaveTextContent(
+      EFFORT_LABEL.medium,
+    );
   });
 
   it('(b) non-reasoning Non-Reasoning Fixture shows NO effort control', () => {
@@ -349,7 +354,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
 
     expect(screen.getByText('Always on for this model')).toBeInTheDocument();
     expect(effortSlider()).toHaveAttribute('max', '3');
-    expect(effortLevel()).toBe('Low');
+    expect(effortLevel()).toBe(EFFORT_LABEL.low);
   });
 
   it('(c) Five-Level Fixture exposes five catalog levels through the slider', () => {
@@ -372,7 +377,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     thinking.effort = 'minimal';
     render(<ComposerFooter />);
     expect(effortSlider()).toHaveAttribute('max', '3');
-    expect(effortLevel()).toBe('Minimal');
+    expect(effortLevel()).toBe(EFFORT_LABEL.minimal);
     moveEffort(3);
     expect(thinking.effort).toBe('high');
   });
@@ -421,12 +426,14 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     render(<ComposerFooter onUpgradeRequest={onUpgradeRequest} />);
 
     expect(effortSlider()).toHaveAttribute('max', '5');
-    expect(effortLevel()).toBe('Medium');
+    expect(effortLevel()).toBe(EFFORT_LABEL.medium);
     moveEffort(4);
     expect(thinking.effort).toBe('medium');
     expect(onUpgradeRequest).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByText('High, Extra high, Max effort levels are not included in your plan.'),
+      screen.getByText(
+        `${EFFORT_LABEL.high}, ${EFFORT_LABEL.xhigh}, ${EFFORT_LABEL.max} effort levels are not included in your plan.`,
+      ),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
@@ -439,8 +446,8 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     thinking.effort = 'max';
     render(<ComposerFooter />);
 
-    expect(effortTrigger()).toHaveTextContent('Medium');
-    expect(effortLevel()).toBe('Medium');
+    expect(effortTrigger()).toHaveTextContent(EFFORT_LABEL.medium);
+    expect(effortLevel()).toBe(EFFORT_LABEL.medium);
   });
 
   it('keeps a synthetic future preview non-selectable and non-focusable', () => {

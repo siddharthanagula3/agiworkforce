@@ -8,7 +8,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })) }));
+vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
+  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -21,6 +24,7 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  appReturnOwner: vi.fn(async () => null),
   ConnectorOAuthStoreUnavailableError: class extends Error {},
   consumePendingAuthorization: (...a: unknown[]) => mocks.consumePending(...a),
   upsertConnectorOAuthGrant: vi.fn(),

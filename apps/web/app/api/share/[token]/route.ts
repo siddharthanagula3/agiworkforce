@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ConversationShareAudienceChangeSchema,
+  type ConversationShareAudienceResponse,
+  type ConversationShareRevoked,
+  type SharedConversation,
+} from '@agiworkforce/cloud-contracts';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getCurrentUserRlsDb, getUserScopedDb } from '@/lib/server/rls-db';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import {
   requireOrganizationPermission,
   SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
@@ -12,9 +18,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { recordAuditEvent } from '@/lib/security-audit';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 
 import { shareRef } from '@/lib/share-ref';
 import {
@@ -25,14 +30,10 @@ import {
   setSharedSessionVisibility,
   shareSessionWithOrganization,
   unshareSessionFromOrganization,
-  SHARED_SESSION_VISIBILITIES,
 } from '@/lib/services/org-shared-session-service';
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
-
-const VisibilitySchema = z.object({
-  visibility: z.enum(SHARED_SESSION_VISIBILITIES),
-});
+const SHARE_AUDIT_ENDPOINT = '/api/share/[token]';
 
 function sharingUnavailableResponse(): NextResponse {
   return NextResponse.json(
@@ -92,18 +93,19 @@ async function handleGetShare(request: NextRequest, context: RouteContext) {
     );
   }
 
-  return NextResponse.json({
+  const shared: SharedConversation = {
     id: data.id,
     token: data.token,
     title: data.title,
     model_id: data.modelId,
     provider: data.provider,
-    messages: data.messages,
+    messages: Array.isArray(data.messages) ? data.messages : [],
     total_messages: data.messageCount,
     visibility: data.visibility,
     expires_at: data.expiresAt,
     created_at: data.createdAt,
-  });
+  };
+  return NextResponse.json(shared);
 }
 
 async function handleDeleteShare(request: NextRequest, context: RouteContext) {
@@ -121,7 +123,7 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
     const authResult = await getClerkAuthUser(request);
     userId = authResult.userId;
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     throw createError.unauthorized();
@@ -129,23 +131,40 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
 
   const db = getNeonDb();
 
-  let deleted: number;
+  let deleted: Array<{ id: string }>;
   try {
-    deleted = await db.execute('delete from shared_sessions where token = $1 and owner_id = $2', [
-      token,
-      userId,
-    ]);
+    deleted = await db.query<{ id: string }>(
+      'delete from shared_sessions where token = $1 and owner_id = $2 returning id',
+      [token, userId],
+    );
   } catch (err) {
     logger.error({ err, share: shareRef(token), userId }, 'Failed to revoke shared session');
     throw createError.internal('Failed to revoke share');
   }
 
   // A caller who merely holds the link must not be told the revocation worked.
-  if (deleted === 0) {
+  const revoked = deleted[0];
+  if (!revoked) {
     throw createError.notFound('Shared session not found');
   }
 
-  return NextResponse.json({ success: true });
+  const organizationId = await resolveActiveOrganizationId(db, userId, request).catch(() => null);
+
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'share_link_revoked',
+    request,
+    endpoint: SHARE_AUDIT_ENDPOINT,
+    outcome: 'success',
+    severity: 'info',
+    detail: { resourceType: 'share_link', resourceId: revoked.id },
+  }).catch((error) => {
+    logger.error({ error, userId }, 'Failed to record share-link audit event');
+  });
+
+  const answer: ConversationShareRevoked = { success: true };
+  return NextResponse.json(answer);
 }
 
 /**
@@ -177,7 +196,7 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
     throw createError.validation('Request body must be JSON');
   }
 
-  const parsed = VisibilitySchema.safeParse(rawBody);
+  const parsed = ConversationShareAudienceChangeSchema.safeParse(rawBody);
   if (!parsed.success) {
     throw createError.validation('Invalid share visibility request', parsed.error.flatten());
   }
@@ -188,6 +207,7 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
   try {
     const target = await resolveSessionShareTarget(db, { userId, token });
 
+    let revoked = false;
     if (visibility === 'organization') {
       await requireOrganizationPermission(
         userId,
@@ -201,7 +221,11 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
         actorUserId: userId,
       });
     } else {
-      await unshareSessionFromOrganization(db, target.organizationId, target.sharedSessionId);
+      revoked = await unshareSessionFromOrganization(
+        db,
+        target.organizationId,
+        target.sharedSessionId,
+      );
     }
 
     const updated = await setSharedSessionVisibility(db, { userId, token, visibility });
@@ -209,14 +233,29 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
       throw createError.notFound('Shared session not found');
     }
 
+    if (visibility === 'organization' || revoked) {
+      await recordAuditEvent({
+        userId,
+        organizationId: target.organizationId,
+        eventType:
+          visibility === 'organization'
+            ? 'organization_share_granted'
+            : 'organization_share_revoked',
+        request,
+        endpoint: SHARE_AUDIT_ENDPOINT,
+        detail: { resourceType: 'conversation', resourceId: target.sharedSessionId },
+      });
+    }
+
     const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
-    return NextResponse.json({
+    const changed: ConversationShareAudienceResponse = {
       token: updated.token,
       shareUrl: `${appUrl}/share/${updated.token}`,
       visibility: updated.visibility,
       organizationId: visibility === 'organization' ? target.organizationId : null,
       expiresAt: updated.expiresAt,
-    });
+    };
+    return NextResponse.json(changed);
   } catch (error) {
     if (isConversationSharingSchemaUnavailable(error)) return sharingUnavailableResponse();
     throw error;

@@ -4,11 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { logger } from '@/lib/logger';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
+import { appInstallReturnUrl, recordAppInstallation } from '@/lib/github-install-app-return';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import {
   generateGitHubInstallState,
   getGitHubUserAuthorizationUrl,
@@ -27,6 +26,28 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   if (!Number.isSafeInteger(installationId) || installationId <= 0) {
     return NextResponse.redirect(new URL('/connectors?github=install_failed', request.url));
+  }
+
+  if (state && GITHUB_STATE_PATTERN.test(state)) {
+    const appAuthorization = await recordAppInstallation(state, installationId);
+    if (appAuthorization) {
+      if (!isGitHubInstallationLinkingAvailable()) {
+        return NextResponse.redirect(appInstallReturnUrl({ error: 'unavailable' }));
+      }
+      try {
+        const callbackUrl = new URL('/api/github/oauth/callback', request.url).toString();
+        return NextResponse.redirect(
+          getGitHubUserAuthorizationUrl(
+            appAuthorization.oauthState,
+            callbackUrl,
+            appAuthorization.codeChallenge,
+          ),
+        );
+      } catch (error) {
+        logger.error({ error }, 'Failed to start GitHub user authorization for an app install');
+        return NextResponse.redirect(appInstallReturnUrl({ error: 'failed' }));
+      }
+    }
   }
 
   const cookieStore = await cookies();
@@ -49,7 +70,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   try {
     await getClerkAuthUser(request);
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     const loginUrl = new URL('/login', request.url);

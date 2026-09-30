@@ -14,6 +14,8 @@ export const DEVICE_STEP_RESUME_PATH = '/api/llm/v1/chat/completions/resume-devi
 
 export const MAX_DEVICE_STEP_OUTPUT_LENGTH = 24_000;
 
+export const MAX_DEVICE_STEPS_PER_PAUSE = 8;
+
 /**
  * A screen capture is the only device result that is not text, and it is bounded
  * hard: the desktop shell already scales a capture down and falls back to JPEG,
@@ -52,7 +54,7 @@ export const DeviceStepResumeRequestSchema = z.object({
    * never ran.
    */
   device_id: z.string().min(1).max(200),
-  device_results: z.array(DeviceStepResultSchema).min(1).max(8),
+  device_results: z.array(DeviceStepResultSchema).min(1).max(MAX_DEVICE_STEPS_PER_PAUSE),
 });
 export type DeviceStepResumeRequest = z.infer<typeof DeviceStepResumeRequestSchema>;
 
@@ -71,6 +73,6 @@ export const PendingDeviceStepSchema = z.object({
       }),
     )
     .min(1)
-    .max(8),
+    .max(MAX_DEVICE_STEPS_PER_PAUSE),
 });
 export type PendingDeviceStep = z.infer<typeof PendingDeviceStepSchema>;

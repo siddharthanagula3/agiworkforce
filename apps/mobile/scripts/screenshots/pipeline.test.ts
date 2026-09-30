@@ -5,8 +5,10 @@ import { join, resolve } from 'node:path';
 import { SCREENSHOTS, VERIFY_SCREENSHOT, deviceForClassName } from './catalog';
 import {
   DEVICES,
+  newlyBootedDetoxCloneIds,
   resolveAndroidAvd,
   resolveSimulatorUdid,
+  selectScreenshots,
   type SimctlDevice,
   type SimctlDeviceListing,
 } from './pipeline';
@@ -49,6 +51,46 @@ const DEVICE_TYPES: Record<string, string> = {
 
 const DATA_PATH_SIZE = 18337792;
 const LOG_PATH_SIZE = 516096;
+
+describe('newlyBootedDetoxCloneIds', () => {
+  it('selects only clones booted by the current capture', () => {
+    const before: SimctlDeviceListing = {
+      devices: {
+        [IOS_26_5]: [
+          simDevice('existing', `${IPHONE_17_PRO_MAX}-Detox`, { state: 'Booted' }),
+          simDevice('sleeping', `${IPHONE_17_PRO_MAX}-Detox`),
+        ],
+      },
+    };
+    const after: SimctlDeviceListing = {
+      devices: {
+        [IOS_26_5]: [
+          ...before.devices[IOS_26_5],
+          simDevice('new', `${IPHONE_17_PRO_MAX}-Detox`, { state: 'Booted' }),
+          simDevice('other', `${IPAD_PRO_13}-Detox`, { state: 'Booted' }),
+        ],
+      },
+    };
+
+    expect(newlyBootedDetoxCloneIds(before, after, IPHONE_17_PRO_MAX)).toEqual(['new']);
+  });
+});
+
+describe('selectScreenshots', () => {
+  it('captures a requested frame without running earlier frames', () => {
+    expect(selectScreenshots('04', false).map((shot) => shot.id)).toEqual(['04']);
+  });
+
+  it('rejects unknown and empty screenshot IDs', () => {
+    expect(() => selectScreenshots('99', false)).toThrow(/Known IDs/u);
+    expect(() => selectScreenshots('', false)).toThrow(/Known IDs/u);
+  });
+
+  it('keeps capture verification separate from store frames', () => {
+    expect(selectScreenshots(undefined, true)).toEqual([VERIFY_SCREENSHOT]);
+    expect(() => selectScreenshots('04', true)).toThrow(/verification/u);
+  });
+});
 
 function simDevice(
   udid: string,
@@ -158,6 +200,14 @@ describe('resolveAndroidAvd', () => {
 
 describe('screenshot catalog', () => {
   const allShots = [...SCREENSHOTS, VERIFY_SCREENSHOT];
+
+  it('runs first-launch onboarding before captures that require a ready chat', () => {
+    const resetShots = SCREENSHOTS.filter((shot) =>
+      readFileSync(join(SPEC_DIR, shot.spec), 'utf8').includes('delete: true'),
+    );
+    expect(resetShots).toHaveLength(1);
+    expect(SCREENSHOTS[0]).toBe(resetShots[0]);
+  });
 
   it('points every screenshot at a spec file that exists', () => {
     for (const shot of allShots) {

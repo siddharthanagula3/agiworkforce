@@ -22,6 +22,7 @@ import {
   isAccountScopedUiStateCurrent,
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
+import { prohibitedMemoryMessage } from '@agiworkforce/context';
 
 export type { MemoryFact };
 
@@ -83,6 +84,8 @@ function cloudMemoryFact(entry: CloudMemoryEntry): MemoryFact {
     fact: entry.content,
     source_conversation_id: entry.sourceConversationId ?? null,
     source_conversation_title: entry.sourceConversationTitle ?? null,
+    project_id: entry.projectId ?? null,
+    project_name: entry.projectName ?? null,
     pinned: entry.pinned,
     created_at: new Date(entry.createdAt).getTime(),
     updated_at: new Date(entry.updatedAt).getTime(),
@@ -150,7 +153,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       if (!isMemoryOperationScopeCurrent(operationScope)) return;
       set({
         loading: false,
-        error: err instanceof Error ? err.message : 'Failed to load memories',
+        error: 'Could not load memories. Try again.',
       });
     }
   },
@@ -200,6 +203,10 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       } else {
         const result = await writeLocalMemoryFact({ fact: fact.trim(), source: 'typed' });
         if (!isMemoryOperationScopeCurrent(operationScope)) return;
+        if (result.refusedCategory) {
+          set({ error: prohibitedMemoryMessage(result.refusedCategory) });
+          return;
+        }
         if (result.outcome === 'already_known' || !result.fact) {
           set({ error: ALREADY_SAVED_MESSAGE });
           return;
@@ -226,7 +233,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       }
     } catch (err) {
       if (!isMemoryOperationScopeCurrent(operationScope)) return;
-      set({ error: err instanceof Error ? err.message : 'Failed to add memory' });
+      set({ error: 'Could not add this memory. Try again.' });
     }
   },
 
@@ -271,8 +278,9 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       }
     } catch (err) {
       if (!isMemoryOperationScopeCurrent(operationScope)) return;
-      set({ error: err instanceof Error ? err.message : 'Failed to update memory' });
       await get().fetchMemories();
+      if (!isMemoryOperationScopeCurrent(operationScope)) return;
+      set({ error: 'Could not update this memory. Try again.' });
     }
   },
 
@@ -311,7 +319,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       set({
         entries: prev,
         filteredEntries: prevFiltered,
-        error: err instanceof Error ? err.message : 'Failed to delete memory',
+        error: 'Could not delete this memory. Try again.',
       });
     }
   },
@@ -384,8 +392,9 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       }
     } catch (err) {
       if (!isMemoryOperationScopeCurrent(operationScope)) return;
-      set({ error: err instanceof Error ? err.message : 'Failed to update pin' });
       await get().fetchMemories();
+      if (!isMemoryOperationScopeCurrent(operationScope)) return;
+      set({ error: 'Could not update this memory. Try again.' });
     }
   },
 
@@ -421,7 +430,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       const q = query.toLowerCase();
       set((state) => ({
         filteredEntries: state.entries.filter((e) => e.fact.toLowerCase().includes(q)),
-        error: err instanceof Error ? err.message : 'Search failed',
+        error: 'Could not search memories. Showing local matches instead.',
       }));
     }
   },

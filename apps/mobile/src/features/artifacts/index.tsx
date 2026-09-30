@@ -22,12 +22,15 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useArtifactStore, accentColorForKind, mergeMobileArtifactsForGallery } from './store';
 import type { MobileArtifact, MobileArtifactKind } from './types';
 import { GeneratedImage } from '@/src/features/chat/components/GeneratedImage';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
+import { ArtifactAudienceChip } from '@/src/features/chat/components/ArtifactAudienceChip';
+import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   captureAccountScopedUiState,
@@ -104,6 +107,13 @@ export function ArtifactsGalleryScreen({
       ),
     [cloudArtifacts, cloudArtifactsOwnerId, storedArtifacts, c],
   );
+
+  useEffect(() => {
+    if (!clerkUserId) return;
+    refreshPublishedArtifactAudiences().catch((error: unknown) => {
+      console.warn('[ArtifactsGallery] publication states unavailable', error);
+    });
+  }, [clerkUserId]);
 
   const openDrawer = useCallback(() => {
     openNearestDrawer(navigation);
@@ -191,7 +201,7 @@ export function ArtifactsGalleryScreen({
           style={{
             flex: 1,
             color: c.textPrimary,
-            fontSize: 17,
+            fontSize: typeScale.headline,
             fontWeight: '700',
           }}
         >
@@ -282,7 +292,7 @@ function ArtifactImagePreview({
     >
       <ImageIcon size={30} color={artifact.accentColor} />
       <Text
-        className="text-[10px] leading-[14px] mt-2"
+        className="text-xs leading-[14px] mt-2"
         numberOfLines={2}
         style={{ color: c.textSecondary, textAlign: 'center' }}
       >
@@ -325,6 +335,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
         <View className="absolute top-3 left-3 z-10 flex-row items-center gap-1.5">
           <KindIcon size={12} color={artifact.accentColor} />
           <Badge label={badgeLabel(artifact)} color={KIND_BADGE[artifact.kind]} />
+          <ArtifactAudienceChip artifactId={artifact.id} />
         </View>
 
         {/* Code / text preview area */}
@@ -338,7 +349,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
             {artifact.previewLines.slice(0, 5).map((line, index) => (
               <Text
                 key={`${artifact.id}-${index}`}
-                className="text-[10px] leading-[14px]"
+                className="text-xs leading-[14px]"
                 numberOfLines={1}
                 style={{
                   color: index === 0 ? artifact.accentColor : c.textSecondary,

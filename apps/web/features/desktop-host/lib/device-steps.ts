@@ -25,6 +25,7 @@ import {
   type BackgroundShellOutput,
   type ShellRunResult,
 } from '@agiworkforce/local-runtime-contract';
+import { isPhoneStepTool, type PhoneStepTool } from '@agiworkforce/types';
 import { noteComputerUseConversation } from './computer-use-conversation';
 import { DesktopHostUnavailable } from './runtime-client';
 
@@ -72,9 +73,11 @@ export async function readDeviceHostDeclaration(): Promise<DesktopHostDeclaratio
   return response.ok ? response.value : null;
 }
 
+const TRUNCATION_MARK = '\n[truncated]';
+
 function cap(text: string): string {
   return text.length > MAX_DEVICE_STEP_RESULT_LENGTH
-    ? `${text.slice(0, MAX_DEVICE_STEP_RESULT_LENGTH)}\n[truncated]`
+    ? `${text.slice(0, MAX_DEVICE_STEP_RESULT_LENGTH - TRUNCATION_MARK.length)}${TRUNCATION_MARK}`
     : text;
 }
 
@@ -154,7 +157,7 @@ type BrowserStepTool = Extract<DeviceStepTool, `device_browser_${string}`>;
 
 type ActionStepTool = Exclude<
   DeviceStepTool,
-  'device_screenshot' | 'device_zoom' | BrowserStepTool
+  'device_screenshot' | 'device_zoom' | BrowserStepTool | PhoneStepTool
 >;
 
 function isBrowserStepTool(tool: DeviceStepTool): tool is BrowserStepTool {
@@ -178,6 +181,18 @@ function readPageText(value: unknown): string {
   return `${title}\n${url}\n\n${text || '(the page has no visible text)'}`;
 }
 
+function browserRecordsText(value: unknown, key: 'console' | 'network'): string {
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const entries = Array.isArray(record[key]) ? record[key] : [];
+  const origin = typeof record['origin'] === 'string' ? record['origin'] : 'the Chrome tab';
+  if (entries.length === 0) {
+    return key === 'console'
+      ? `No console messages matched on ${origin}.`
+      : `No network requests matched on ${origin}.`;
+  }
+  return `${origin}\n\n${JSON.stringify(entries, null, 2)}`;
+}
+
 function browserStepArgs(
   tool: BrowserStepTool,
   input: Record<string, unknown>,
@@ -190,6 +205,10 @@ function browserStepArgs(
       return { selector: input['selector'] };
     case 'device_browser_type':
       return { selector: input['selector'], text: input['text'], clear: input['clear'] === true };
+    case 'device_browser_console':
+      return { pattern: input['pattern'], level: input['level'] };
+    case 'device_browser_network':
+      return { pattern: input['pattern'], failedOnly: input['failedOnly'] === true };
     case 'device_browser_read_page':
     case 'device_browser_screenshot':
       return {};
@@ -204,6 +223,7 @@ async function runBrowserStep(
     command: deviceStepBrowserCommand(tool),
     args: browserStepArgs(tool, input),
     ...reviewOf(input),
+    ...(input['siteRules'] ? { siteRules: input['siteRules'] } : {}),
   });
   switch (tool) {
     case 'device_browser_read_page':
@@ -231,6 +251,10 @@ async function runBrowserStep(
         content: `Chrome started downloading ${String(input['url'])} into the user's downloads folder.`,
         isError: false,
       };
+    case 'device_browser_console':
+      return { content: cap(browserRecordsText(value, 'console')), isError: false };
+    case 'device_browser_network':
+      return { content: cap(browserRecordsText(value, 'network')), isError: false };
   }
 }
 
@@ -343,6 +367,7 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
         rootId: input['rootId'],
         command: input['command'],
         ...(typeof input['path'] === 'string' ? { path: input['path'] } : {}),
+        ...reviewOf(input),
       });
       return describeCommandRun(result);
     }
@@ -352,6 +377,7 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
         rootId: input['rootId'],
         command: input['command'],
         ...(typeof input['path'] === 'string' ? { path: input['path'] } : {}),
+        ...reviewOf(input),
       });
       return describeBackgroundOutput(result);
     }
@@ -384,7 +410,7 @@ export async function executeDeviceStep(
   tool: string,
   input: Record<string, unknown>,
 ): Promise<DeviceStepOutcome> {
-  if (!isDeviceStepTool(tool)) {
+  if (!isDeviceStepTool(tool) || isPhoneStepTool(tool)) {
     return { content: `"${tool}" is not a step this device runs.`, isError: true };
   }
   if (isScreenDeviceStep(tool)) noteComputerUseConversation();

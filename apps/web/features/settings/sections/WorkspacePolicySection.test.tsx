@@ -1,16 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DEFAULT_WORKSPACE_CONTROLS, type AdminPolicy } from '@agiworkforce/types';
 
-const { mockOverview, mockUpdate } = vi.hoisted(() => ({
+const { mockOverview, mockUpdate, mockTwoFactorStatus } = vi.hoisted(() => ({
   mockOverview: vi.fn(),
   mockUpdate: vi.fn(),
+  mockTwoFactorStatus: vi.fn(),
 }));
 
 vi.mock('../hooks/use-settings-queries', () => ({
   useWorkspacePolicy: () => mockOverview(),
   useUpdateWorkspacePolicy: () => ({ mutate: mockUpdate, isPending: false }),
+}));
+
+vi.mock('../services/user-preferences', () => ({
+  default: { get2FAStatus: () => mockTwoFactorStatus() },
 }));
 
 import { WorkspacePolicySection } from './WorkspacePolicySection';
@@ -37,6 +43,7 @@ function policy(overrides: Partial<AdminPolicy> = {}): AdminPolicy {
     requireMfa: false,
     monthlySpendCapCents: null,
     zeroDataRetentionOnly: false,
+    allowProductAnalytics: true,
     ipAllowList: [],
     controls: DEFAULT_WORKSPACE_CONTROLS,
     updatedAt: '2026-08-01T00:00:00.000Z',
@@ -62,11 +69,19 @@ function overview(overrides: Record<string, unknown> = {}) {
 }
 
 function renderSection() {
-  return render(<WorkspacePolicySection />);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <WorkspacePolicySection />
+    </QueryClientProvider>,
+  );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockTwoFactorStatus.mockResolvedValue({
+    data: { enabled: false, backupCodesReady: false, enrollmentAvailable: true },
+  });
 });
 
 describe('WorkspacePolicySection security controls', () => {
@@ -92,6 +107,7 @@ describe('WorkspacePolicySection security controls', () => {
 
     const toggle = screen.getByLabelText('Require multi-factor authentication');
     expect(toggle).not.toBeChecked();
+    await waitFor(() => expect(toggle).toBeEnabled());
 
     await user.click(toggle);
     await user.click(screen.getByRole('button', { name: /save policy/i }));

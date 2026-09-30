@@ -12,6 +12,7 @@ import {
   readManagedSkillFileBytes,
 } from '@/lib/services/skill-catalog-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import { workspaceAllowsPlugins } from '@/lib/services/workspace-plugin-access';
 import { hashSkillContent } from '@agiworkforce/skills';
 
 export const runtime = 'nodejs';
@@ -63,11 +64,15 @@ async function handleReadFile(
     throw createError.validation('A file path is required');
   }
 
+  const pluginsAllowed = await workspaceAllowsPlugins(db, userId);
+
   const found = await findSelectableSkillWithFiles({
     db,
     userId,
     name,
-    loadEnabledPluginIds: () => listEnabledPluginIds(db, userId),
+    loadEnabledPluginIds: () =>
+      pluginsAllowed ? listEnabledPluginIds(db, userId) : Promise.resolve(new Set<string>()),
+    pluginsAllowed,
   });
   if (!found) {
     throw createError.notFound(`Skill "${name}" not found`);

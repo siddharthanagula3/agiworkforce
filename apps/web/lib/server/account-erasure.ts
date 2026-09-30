@@ -27,6 +27,7 @@ import {
   purgeMcpResponseCachePartitions,
 } from '@/lib/connectors/mcp-runtime-cache';
 import { removeBankAccountsItem } from '@/lib/connectors/bank-accounts';
+import { revokeAllConnectorTokensAtProviders } from '@/lib/connectors/oauth-access';
 
 export const USER_SCOPED_TABLES: ReadonlyArray<{
   table: string;
@@ -69,11 +70,13 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'user_custom_connectors', column: 'user_id' },
   { table: 'connector_tool_permissions', column: 'user_id' },
   { table: 'connector_oauth_grants', column: 'user_id' },
+  { table: 'bank_account_items', column: 'user_id' },
   { table: 'connector_oauth_authorizations', column: 'user_id' },
   { table: 'mcp_app_payloads', column: 'user_id' },
   { table: 'mcp_task_bindings', column: 'user_id' },
   { table: 'messaging_connections', column: 'user_id' },
   { table: 'github_installations', column: 'user_id' },
+  { table: 'github_install_authorizations', column: 'user_id' },
   { table: 'slack_account_links', column: 'user_id' },
   { table: 'slack_assistant_runs', column: 'user_id' },
   { table: 'plugin_installations', column: 'user_id' },
@@ -97,9 +100,11 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'account_sessions', column: 'user_id' },
   { table: 'account_lockout_attempts', column: 'user_id' },
   { table: 'device_authorization_codes', column: 'user_id' },
+  { table: 'desktop_sign_in_grants', column: 'user_id' },
   { table: 'desktop_devices', column: 'user_id' },
   { table: 'mobile_devices', column: 'user_id' },
   { table: 'device_registrations', column: 'user_id' },
+  { table: 'mobile_intent_tokens', column: 'user_id' },
   { table: 'connector_call_events', column: 'user_id' },
   { table: 'event_trigger_events', column: 'user_id' },
   { table: 'event_triggers', column: 'user_id' },
@@ -404,6 +409,10 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   release_events:
     'Hash-chained release audit trail. actor names the operator or workflow behind a promotion, not a customer, and deleting a row breaks the chain.',
   account_security_settings: 'Cascades from profiles.',
+  account_security_enrollments: 'Cascades from profiles.',
+  account_security_credentials: 'Cascades from profiles.',
+  account_security_sessions: 'Cascades from profiles.',
+  account_security_challenges: 'Cascades from profiles.',
   support_ticket_escalations: 'Cascades from support_tickets.',
 };
 
@@ -968,6 +977,14 @@ export async function eraseUserAccountData(
       }
     }
     await eraseConnectorResponseCache(db, userId);
+    // Hand each connector credential back to its provider before the grant rows
+    // go, as disconnect does. Best effort, so it never holds up the erasure.
+    await revokeAllConnectorTokensAtProviders(userId).catch((error: unknown) => {
+      logger.warn(
+        { userId, error: error instanceof Error ? error.name : 'unknown' },
+        'Account erasure could not revoke connector tokens upstream',
+      );
+    });
     await removeBankAccountsItem(userId).catch((error: unknown) => {
       logger.warn(
         { userId, error: error instanceof Error ? error.name : 'unknown' },

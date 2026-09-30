@@ -75,6 +75,7 @@ export function TrialCancelControls({ token, plan, endsOn }: TrialSummary & { to
           data-variant="primary"
           onClick={cancelTrial}
           disabled={status === 'working'}
+          aria-busy={status === 'working'}
         >
           {status === 'working' ? 'Cancelling…' : 'Cancel trial'}
         </button>

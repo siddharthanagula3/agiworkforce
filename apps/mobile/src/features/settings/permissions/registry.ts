@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy';
 import { Platform } from 'react-native';
 import { Camera } from 'expo-camera';
 import {
@@ -141,7 +141,7 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
     calendar: {
       kind: 'calendar',
       label: 'Calendar',
-      description: 'Optional. Used only after you enable device calendar context.',
+      description: 'Optional. Used when you ask about your schedule or confirm an event in a chat.',
       icon: CalendarDays,
       applicableLevels: ['denied', 'allow_always'],
       getStatus: getCalendarStatus,
@@ -150,8 +150,7 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
     reminders: {
       kind: 'reminders',
       label: 'Reminders',
-      description:
-        'Used only when you explicitly create an Apple Reminder; never read automatically.',
+      description: 'Used only when you create a reminder or confirm one in a chat; never read.',
       icon: ListChecks,
       applicableLevels: ['denied', 'allow_always'],
       levelLabels: { allow_always: 'Read & write' },
@@ -163,7 +162,7 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
 export const PERMISSION_KINDS: MobilePermissionKind[] = [
   'microphone',
   'camera',
-  'photos',
+  ...(Platform.OS === 'ios' ? (['photos'] as const) : []),
   'notifications',
   'calendar',
   ...(Platform.OS === 'ios' ? (['reminders'] as const) : []),

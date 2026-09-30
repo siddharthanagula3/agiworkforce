@@ -43,13 +43,17 @@ export {
 export type { SlashCommandItem, SurfaceMenuItem } from './surfaceMenu';
 export { formatSessionAge, mergeSessionRows } from './sessionRows';
 export {
+  chooseSessionTools,
   manageHooks,
   manageMcpServers,
   managePlugins,
+  manageProviderKeys,
   manageSavedApprovals,
   manageSkills,
+  type SessionPermissions,
 } from './capabilityManagement';
 export { MCP_SERVER_DETAILS_SCHEME, McpServerDetailsProvider } from './mcpServerDetails';
+export { CREATE_PULL_REQUEST_COMMAND, createPullRequest } from './pullRequest';
 export type {
   SessionListSource,
   SessionOrigin,

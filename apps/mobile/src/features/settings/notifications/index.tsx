@@ -15,10 +15,9 @@ import {
   BellOff,
   Bot,
   CheckSquare,
-  AlertTriangle,
-  AlertOctagon,
   ChevronRight,
   Info,
+  MessageSquare,
   Moon,
   Clock,
   Vibrate,
@@ -30,7 +29,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import {
   useNotificationPrefsStore,
-  type NotificationCategory,
+  type PushPreferenceGroup,
 } from '@/stores/notificationPrefsStore';
 import { SettingsScreenShell } from '@/src/features/settings/common';
 import {
@@ -40,9 +39,10 @@ import {
 } from '@/services/notifications';
 import { androidChannelVibrates } from '@/services/notificationChannels';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { ColorScheme } from '@/src/ui/theme';
 import type { LucideIcon } from 'lucide-react-native';
-import { NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_COPY } from './categories';
+import { PUSH_PREFERENCE_GROUPS, PUSH_PREFERENCE_GROUP_COPY } from './categories';
 import { useAgentActivityPushSync } from './useAgentActivityPushSync';
 import { useTimeFocusSync } from './useTimeFocusSync';
 import { BREAK_REMINDER_MINUTES, type TimeFocusWeekday } from '@agiworkforce/types';
@@ -63,7 +63,7 @@ function breakReminderLabel(minutes: number | null): string {
 }
 
 interface CategoryMeta {
-  id: NotificationCategory;
+  id: PushPreferenceGroup;
   label: string;
   description: string;
   icon: LucideIcon;
@@ -71,27 +71,23 @@ interface CategoryMeta {
 }
 
 function getCategories(c: ColorScheme): CategoryMeta[] {
-  const presentation: Record<NotificationCategory, Pick<CategoryMeta, 'icon' | 'iconColor'>> = {
-    approvals: {
+  const presentation: Record<PushPreferenceGroup, Pick<CategoryMeta, 'icon' | 'iconColor'>> = {
+    chat_replies: {
+      icon: MessageSquare,
+      iconColor: c.teal,
+    },
+    tasks: {
       icon: CheckSquare,
       iconColor: c.agentWarning,
     },
-    task_updates: {
+    product: {
       icon: Info,
-      iconColor: c.teal,
-    },
-    errors: {
-      icon: AlertOctagon,
-      iconColor: c.agentError,
-    },
-    status: {
-      icon: AlertTriangle,
       iconColor: c.textMuted,
     },
   };
-  return NOTIFICATION_CATEGORIES.map((id) => ({
+  return PUSH_PREFERENCE_GROUPS.map((id) => ({
     id,
-    ...NOTIFICATION_CATEGORY_COPY[id],
+    ...PUSH_PREFERENCE_GROUP_COPY[id],
     ...presentation[id],
   }));
 }
@@ -221,7 +217,7 @@ function TimePickerModal({
                   style={{
                     flex: 1,
                     color: colors.textPrimary,
-                    fontSize: 18,
+                    fontSize: typeScale.headline,
                     fontVariant: ['tabular-nums'],
                   }}
                   selectTextOnFocus
@@ -270,7 +266,13 @@ function TimePickerModal({
                     width: '100%',
                   }}
                 >
-                  <Text style={{ color: colors.surfaceElevated, fontSize: 14, fontWeight: '600' }}>
+                  <Text
+                    style={{
+                      color: colors.surfaceElevated,
+                      fontSize: typeScale.subhead,
+                      fontWeight: '600',
+                    }}
+                  >
                     Set Time
                   </Text>
                 </Pressable>
@@ -290,7 +292,13 @@ function TimePickerModal({
                     width: '100%',
                   }}
                 >
-                  <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: typeScale.subhead,
+                      fontWeight: '600',
+                    }}
+                  >
                     Cancel
                   </Text>
                 </Pressable>
@@ -340,7 +348,7 @@ function PushPermissionCard({
           <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
             {copy.title}
           </Text>
-          <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+          <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
             {copy.body}
           </Text>
         </View>
@@ -482,7 +490,7 @@ export default function NotificationPreferencesScreen() {
     <SettingsScreenShell title="Notification Preferences">
       <View className="mt-3 mb-2">
         <Text
-          className="text-[11px] uppercase mb-3"
+          className="text-xs uppercase mb-3"
           style={{ color: colors.textMuted, letterSpacing: 0 }}
         >
           Device Permission
@@ -497,7 +505,7 @@ export default function NotificationPreferencesScreen() {
       {/* Categories */}
       <View className="mt-3 mb-2">
         <Text
-          className="text-[11px] uppercase mb-3"
+          className="text-xs uppercase mb-3"
           style={{ color: colors.textMuted, letterSpacing: 0 }}
         >
           Notification Types
@@ -529,7 +537,7 @@ export default function NotificationPreferencesScreen() {
                     <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
                       {cat.label}
                     </Text>
-                    <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+                    <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
                       {cat.description}
                     </Text>
                   </View>
@@ -549,7 +557,7 @@ export default function NotificationPreferencesScreen() {
           consent the cloud agent sender reads before it calls Expo at all. */}
       <View className="mt-6 mb-2">
         <Text
-          className="text-[11px] uppercase mb-3"
+          className="text-xs uppercase mb-3"
           style={{ color: colors.textMuted, letterSpacing: 0 }}
         >
           Agent Runs
@@ -563,7 +571,7 @@ export default function NotificationPreferencesScreen() {
               <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
                 Agent Run Push
               </Text>
-              <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+              <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
                 Approvals, questions, and finished or failed runs
               </Text>
             </View>
@@ -576,7 +584,7 @@ export default function NotificationPreferencesScreen() {
           />
         </View>
       </Card>
-      <Text className="text-[11px] mt-2 px-1" style={{ color: colors.textMuted }}>
+      <Text className="text-xs mt-2 px-1" style={{ color: colors.textMuted }}>
         {agentActivityPush.status === 'local'
           ? 'Switch to AGI Cloud to control agent run push, local mode has no cloud agents to notify you.'
           : agentActivityPush.status === 'loading'
@@ -591,7 +599,7 @@ export default function NotificationPreferencesScreen() {
       {/* Quiet hours */}
       <View className="mt-6 mb-2">
         <Text
-          className="text-[11px] uppercase mb-3"
+          className="text-xs uppercase mb-3"
           style={{ color: colors.textMuted, letterSpacing: 0 }}
         >
           Quiet Hours
@@ -606,7 +614,7 @@ export default function NotificationPreferencesScreen() {
               <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
                 Enable Quiet Hours
               </Text>
-              <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+              <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
                 Suppress non-critical alerts
               </Text>
             </View>
@@ -663,7 +671,7 @@ export default function NotificationPreferencesScreen() {
                 })}
               </View>
               {quietHours.days.length === 0 && (
-                <Text className="text-[11px] mt-2" style={{ color: colors.agentWarning }}>
+                <Text className="text-xs mt-2" style={{ color: colors.agentWarning }}>
                   Pick at least one day, or quiet hours stay off.
                 </Text>
               )}
@@ -729,7 +737,7 @@ export default function NotificationPreferencesScreen() {
                 borderWidth: 1,
               }}
             >
-              <Text className="text-[11px] leading-4" style={{ color: colors.textMuted }}>
+              <Text className="text-xs leading-4" style={{ color: colors.textMuted }}>
                 Critical notifications (agent failures, emergency stops, approval requests) always
                 bypass quiet hours.
               </Text>
@@ -755,7 +763,7 @@ export default function NotificationPreferencesScreen() {
               <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
                 Break Reminder
               </Text>
-              <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+              <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
                 Nudge to step away during long sessions
               </Text>
             </View>
@@ -774,7 +782,7 @@ export default function NotificationPreferencesScreen() {
       {/* Where these settings live. Quiet hours and break reminders are an
             account setting on web; in Local Mode there is no account to sync
             with, so they stay on this device only. */}
-      <Text className="text-[11px] mt-2 px-1" style={{ color: colors.textMuted }}>
+      <Text className="text-xs mt-2 px-1" style={{ color: colors.textMuted }}>
         {timeFocusSync.status === 'local'
           ? 'Saved on this device. Switch to AGI Cloud to share quiet hours with web and desktop.'
           : timeFocusSync.status === 'loading'
@@ -792,7 +800,7 @@ export default function NotificationPreferencesScreen() {
         <>
           <View className="mt-6 mb-2">
             <Text
-              className="text-[11px] uppercase mb-3"
+              className="text-xs uppercase mb-3"
               style={{ color: colors.textMuted, letterSpacing: 0 }}
             >
               Vibration
@@ -819,7 +827,7 @@ export default function NotificationPreferencesScreen() {
             ))}
           </Card>
           {channelOverridden ? (
-            <Text className="text-[11px] mt-2 px-1" style={{ color: colors.textMuted }}>
+            <Text className="text-xs mt-2 px-1" style={{ color: colors.textMuted }}>
               Your device has turned vibration off for one of these channels, which overrides the
               switches above.
             </Text>

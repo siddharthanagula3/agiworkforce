@@ -1,11 +1,20 @@
 import { z } from 'zod';
 import {
+  CONVERSATION_SHARES_PATH,
+  ConversationShareListResponseSchema,
+  conversationSharePath,
+  type ConversationShareSummary,
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudDeleteConversationResponseSchema,
   ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationPath,
+  managedCloudPublishedArtifactVersionPath,
+  managedCloudPublishedArtifactVersionsPath,
+  ManagedCloudPublishedArtifactVersionDetailSchema,
+  ManagedCloudPublishedArtifactVersionListResponseSchema,
   normalizeManagedCloudConversation,
+  type ManagedCloudPublishedArtifactVersion,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
@@ -17,25 +26,8 @@ const BulkConversationResponseSchema = z.object({
   affectedCount: z.number().int().nonnegative(),
 });
 
-const SharedLinkSchema = z.object({
-  token: z.string().min(1),
-  title: z.string(),
-  shareUrl: z.string().url(),
-  modelId: z.string().nullable(),
-  provider: z.string().nullable(),
-  messageCount: z.number().int().nonnegative(),
-  visibility: z.enum(['public', 'organization']).default('public'),
-  createdAt: z.string(),
-  expiresAt: z.string(),
-  expired: z.boolean(),
-});
-
-const SharedLinkListResponseSchema = z.object({
-  shares: z.array(SharedLinkSchema),
-});
-
 export type BulkConversationAction = z.infer<typeof BulkConversationResponseSchema>['action'];
-export type SharedLinkSummary = z.infer<typeof SharedLinkSchema>;
+export type SharedLinkSummary = ConversationShareSummary;
 
 export interface ArchivedConversationSummary {
   id: string;
@@ -192,15 +184,15 @@ export async function applyBulkConversationAction(action: BulkConversationAction
 }
 
 export async function listSharedLinks(signal?: AbortSignal): Promise<SharedLinkSummary[]> {
-  const response = await fetch('/api/share', { credentials: 'include', signal });
+  const response = await fetch(CONVERSATION_SHARES_PATH, { credentials: 'include', signal });
   if (!response.ok) {
     throw await responseError(response, 'Failed to load shared links');
   }
-  return SharedLinkListResponseSchema.parse(await response.json()).shares;
+  return ConversationShareListResponseSchema.parse(await response.json()).shares;
 }
 
 export async function revokeSharedLink(token: string): Promise<void> {
-  const response = await fetch(`/api/share/${encodeURIComponent(token)}`, {
+  const response = await fetch(conversationSharePath(token), {
     method: 'DELETE',
     credentials: 'include',
     headers: await addCsrfHeaders(),
@@ -238,6 +230,52 @@ export async function listPublishedArtifacts(
     throw await responseError(response, 'Failed to load published artifacts');
   }
   return PublishedArtifactListResponseSchema.parse(await response.json()).artifacts;
+}
+
+export async function listPublishedArtifactVersions(
+  token: string,
+  signal?: AbortSignal,
+): Promise<ManagedCloudPublishedArtifactVersion[]> {
+  const response = await fetch(managedCloudPublishedArtifactVersionsPath(token), {
+    credentials: 'include',
+    signal,
+  });
+  if (!response.ok) {
+    throw await responseError(response, 'Failed to load the publish history');
+  }
+  return ManagedCloudPublishedArtifactVersionListResponseSchema.parse(await response.json())
+    .versions;
+}
+
+export async function republishArtifactVersion(
+  artifact: PublishedArtifactSummary,
+  version: number,
+): Promise<void> {
+  const detailResponse = await fetch(
+    managedCloudPublishedArtifactVersionPath(artifact.token, version),
+    { credentials: 'include' },
+  );
+  if (!detailResponse.ok) {
+    throw await responseError(detailResponse, 'Failed to read that published version');
+  }
+  const detail = ManagedCloudPublishedArtifactVersionDetailSchema.parse(
+    await detailResponse.json(),
+  );
+  const response = await fetch('/api/artifacts/publish', {
+    method: 'POST',
+    credentials: 'include',
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      artifactId: artifact.artifactId,
+      title: detail.title,
+      kind: detail.kind,
+      ...(detail.language ? { language: detail.language } : {}),
+      content: detail.content,
+    }),
+  });
+  if (!response.ok) {
+    throw await responseError(response, 'Failed to put that version live');
+  }
 }
 
 export async function unpublishArtifact(token: string): Promise<void> {

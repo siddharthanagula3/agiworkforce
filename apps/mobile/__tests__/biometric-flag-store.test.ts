@@ -12,7 +12,7 @@ import { useBiometricFlag, hydrateBiometricFlag } from '../lib/biometricFlagStor
 beforeEach(() => {
   mockGetItemAsync.mockReset().mockResolvedValue(null);
   mockSetItemAsync.mockReset().mockResolvedValue(undefined);
-  useBiometricFlag.setState({ hydrated: false, enabled: true });
+  useBiometricFlag.setState({ hydrated: false, enabled: true, prompted: false });
 });
 
 describe('biometricFlagStore, initial state', () => {
@@ -66,6 +66,22 @@ describe('biometricFlagStore, hydrate', () => {
     mockGetItemAsync.mockResolvedValueOnce('true');
     await hydrateBiometricFlag();
     expect(useBiometricFlag.getState().enabled).toBe(true);
+  });
+
+  it('remembers when the one-time App Lock offer was dismissed', async () => {
+    mockGetItemAsync.mockResolvedValueOnce('false').mockResolvedValueOnce('true');
+    await hydrateBiometricFlag();
+    expect(useBiometricFlag.getState().prompted).toBe(true);
+  });
+});
+
+describe('biometricFlagStore, offer', () => {
+  it('persists dismissal in device-only secure storage', async () => {
+    await useBiometricFlag.getState().markPrompted();
+    expect(mockSetItemAsync).toHaveBeenCalledWith('agi_biometric_lock_prompted_v1', 'true', {
+      keychainAccessible: 'WUTDO',
+    });
+    expect(useBiometricFlag.getState().prompted).toBe(true);
   });
 });
 

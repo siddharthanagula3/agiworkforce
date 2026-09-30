@@ -102,9 +102,13 @@ function attachTurnSlotToStream(
  * here rather than repeating the acquire-and-attach pair means the next entry
  * point inherits the ceiling instead of having to remember it.
  */
+export interface ManagedTurnSlotHold {
+  holdUntil: (settled: Promise<unknown>) => void;
+}
+
 export async function withManagedTurnSlot(
   caller: { userId: string; planTier: string },
-  dispatch: () => Promise<NextResponse | Response>,
+  dispatch: (hold: ManagedTurnSlotHold) => Promise<NextResponse | Response>,
 ): Promise<NextResponse | Response> {
   const turnSlot = await acquireManagedTurnSlot({
     userId: caller.userId,
@@ -131,8 +135,20 @@ export async function withManagedTurnSlot(
   };
 
   let streamOwnsSlot = false;
+  const hold: { settled: Promise<unknown> | null } = { settled: null };
   try {
-    const response = await dispatch();
+    const response = await dispatch({
+      holdUntil: (settled) => {
+        hold.settled = settled;
+      },
+    });
+    if (hold.settled) {
+      streamOwnsSlot = true;
+      void hold.settled.finally(() => {
+        void release();
+      });
+      return response;
+    }
     if (isEventStreamResponse(response)) {
       // Flag set only AFTER the pipe is installed, so a throw while wrapping
       // still falls through to the `finally` release below.

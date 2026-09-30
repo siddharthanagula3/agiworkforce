@@ -32,9 +32,12 @@ export async function sideCallRoutingRequest<T extends AutoRoutingRequest>(
   db: Pick<DatabaseAdapter, 'query'> | null,
   userId: string,
   request: T,
+  options: { forceNoTraining?: boolean } = {},
 ): Promise<T | null> {
   const scopedDb = db ?? createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
-  if (!(await sideCallTrainingOptOut(scopedDb, userId))) return request;
+  if (!options.forceNoTraining && !(await sideCallTrainingOptOut(scopedDb, userId))) {
+    return request;
+  }
   const providerIds = noTrainingProviderIds(
     request.availableProviderIds ?? listAvailableManagedProviderIds(),
   );

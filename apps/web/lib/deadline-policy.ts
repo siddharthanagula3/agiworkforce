@@ -26,6 +26,13 @@ export const DURABLE_STREAM_SILENCE_MARGIN_MS = 30_000;
 export const DURABLE_STREAM_SILENCE_DEADLINE_MS =
   TOOL_CALL_DEADLINE_MS + DURABLE_STREAM_SILENCE_MARGIN_MS;
 
+export const CLOUD_AGENT_RESEARCH_INVOCATION_DEADLINE_MS =
+  CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS - DURABLE_STREAM_SILENCE_MARGIN_MS;
+
+export const CLOUD_AGENT_RESEARCH_HANDOFF_AFTER_MS = CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS / 2;
+
+export const CLOUD_AGENT_RESEARCH_SYNTHESIS_WINDOW_MS = 30_000;
+
 export const DURABLE_STREAM_DETACH_DEADLINE_MS = CHAT_TOOL_LOOP_BUDGET_MS;
 
 export const WORKFLOW_WORLD_CALL_DEADLINE_MS = 10_000;
@@ -118,6 +125,24 @@ export const DEADLINE_HIERARCHY = [
     parentMs: TURN_FIRST_TOKEN_BUDGET_MS,
     child: 'provider first token',
     childMs: PROVIDER_FIRST_TOKEN_DEADLINE_MS,
+  },
+  {
+    parent: 'cloud agent step invocation limit',
+    parentMs: CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
+    child: 'research invocation deadline',
+    childMs: CLOUD_AGENT_RESEARCH_INVOCATION_DEADLINE_MS,
+  },
+  {
+    parent: 'research invocation deadline',
+    parentMs: CLOUD_AGENT_RESEARCH_INVOCATION_DEADLINE_MS,
+    child: 'research round handoff',
+    childMs: CLOUD_AGENT_RESEARCH_HANDOFF_AFTER_MS,
+  },
+  {
+    parent: 'research round handoff',
+    parentMs: CLOUD_AGENT_RESEARCH_HANDOFF_AFTER_MS,
+    child: 'research synthesis window',
+    childMs: CLOUD_AGENT_RESEARCH_SYNTHESIS_WINDOW_MS,
   },
   {
     parent: 'cloud agent step invocation limit',

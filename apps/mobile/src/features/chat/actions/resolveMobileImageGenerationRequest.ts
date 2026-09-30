@@ -6,6 +6,7 @@ import {
 import {
   MANAGED_MEDIA_IMAGE_ASPECT_RATIOS,
   MANAGED_MEDIA_IMAGE_REF_MAX_BYTES,
+  MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   supportsManagedMediaImageEdit,
   type ManagedMediaImageAspectRatio,
   type ManagedMediaImageOperation,
@@ -31,6 +32,11 @@ export interface MobileImageGenerationAlert {
   message: string;
 }
 
+export interface MobileImageModelOption {
+  id: string;
+  name: string;
+}
+
 export interface MobileImageReferenceAttachment {
   uri: string;
   mimeType: string;
@@ -44,15 +50,18 @@ export type MobileImageGenerationRequestDecision =
       status: 'blocked';
       code: MobileImageGenerationBlockCode;
       alert: MobileImageGenerationAlert;
+      switchModel?: MobileImageModelOption;
     }
   | {
       status: 'ready';
       prompt: string;
       model: string;
       aspectRatio?: ManagedMediaImageAspectRatio;
+      transparentBackground?: true;
       ownerId: string;
       operation?: ManagedMediaImageOperation;
       sourceImage?: MobileImageReferenceAttachment;
+      referenceImages?: MobileImageReferenceAttachment[];
     };
 
 export interface ResolveMobileImageGenerationRequestInput {
@@ -69,6 +78,17 @@ export interface ResolveMobileImageGenerationRequestInput {
   grantedCapabilities: readonly string[];
   isOnline: boolean;
   aspectRatio?: string;
+  transparentBackground?: boolean;
+}
+
+function transparencyFor(
+  modelId: string,
+  requested: boolean | undefined,
+): { transparentBackground?: true } {
+  return requested === true &&
+    supportsManagedMediaImageEdit(getModelMetadataById(modelId)?.provider)
+    ? { transparentBackground: true }
+    : {};
 }
 
 function resolveAspectRatio(
@@ -139,23 +159,30 @@ const BLOCKED_ALERTS: Readonly<Record<MobileImageGenerationBlockCode, MobileImag
 function blocked(
   code: MobileImageGenerationBlockCode,
   message?: string,
+  switchModel?: MobileImageModelOption,
 ): MobileImageGenerationRequestDecision {
   return {
     status: 'blocked',
     code,
     alert: message ? { ...BLOCKED_ALERTS[code], message } : BLOCKED_ALERTS[code],
+    ...(switchModel ? { switchModel } : {}),
   };
 }
 
-function editCapableImageModelNames(): string[] {
+function editCapableImageModels(): MobileImageModelOption[] {
   return listMediaModels('image')
     .filter((id) => supportsManagedMediaImageEdit(getModelMetadataById(id)?.provider))
-    .map((id) => getModelMetadataById(id)?.name ?? id);
+    .map((id) => ({ id, name: getModelMetadataById(id)?.name ?? id }));
 }
 
 type ReferenceImageDecision =
   | { kind: 'none' }
-  | { kind: 'blocked'; code: MobileImageGenerationBlockCode; message?: string }
+  | {
+      kind: 'blocked';
+      code: MobileImageGenerationBlockCode;
+      message?: string;
+      switchModel?: MobileImageModelOption;
+    }
   | { kind: 'ready'; attachment: MobileImageReferenceAttachment };
 
 function resolveReferenceImage(
@@ -163,7 +190,15 @@ function resolveReferenceImage(
   modelId: string,
 ): ReferenceImageDecision {
   if (attachments.length === 0) return { kind: 'none' };
-  if (attachments.length > 1) return { kind: 'blocked', code: 'reference_image_invalid' };
+  if (attachments.length > MANAGED_MEDIA_MAX_IMAGE_REFERENCES + 1) {
+    return {
+      kind: 'blocked',
+      code: 'reference_image_invalid',
+      message: `Attach up to ${MANAGED_MEDIA_MAX_IMAGE_REFERENCES + 1} images: the first is edited and the others guide it.`,
+    };
+  }
+  const guideRefusal = guideImageRefusal(attachments.slice(1));
+  if (guideRefusal) return guideRefusal;
   const attachment = attachments[0]!;
   if (!attachment.mimeType.startsWith('image/')) {
     return { kind: 'blocked', code: 'reference_image_invalid' };
@@ -175,13 +210,14 @@ function resolveReferenceImage(
     return { kind: 'blocked', code: 'reference_image_too_large' };
   }
   if (!supportsManagedMediaImageEdit(getModelMetadataById(modelId)?.provider)) {
-    const capable = editCapableImageModelNames();
+    const capable = editCapableImageModels();
     return {
       kind: 'blocked',
       code: 'reference_image_unsupported',
       ...(capable.length > 0
         ? {
-            message: `${getModelMetadataById(modelId)?.name ?? modelId} cannot edit an attached image. Pick ${capable.join(' or ')} as the image model in Add to chat, or remove the attachment.`,
+            message: `${getModelMetadataById(modelId)?.name ?? modelId} cannot edit an attached image. Pick ${capable.map((model) => model.name).join(' or ')} as the image model in Add to chat, or remove the attachment.`,
+            switchModel: capable[0],
           }
         : {}),
     };
@@ -229,16 +265,23 @@ export function resolveMobileImageGenerationRequest(
       return blocked('route_unavailable');
     }
     const reference = resolveReferenceImage(attachments, modelId);
-    if (reference.kind === 'blocked') return blocked(reference.code, reference.message);
+    if (reference.kind === 'blocked') {
+      return blocked(reference.code, reference.message, reference.switchModel);
+    }
     const aspectRatio = resolveAspectRatio(modelId, input.aspectRatio);
     return {
       status: 'ready',
       prompt,
       model: modelId,
       ...(aspectRatio ? { aspectRatio } : {}),
+      ...transparencyFor(modelId, input.transparentBackground),
       ownerId: input.ownerId,
       ...(reference.kind === 'ready'
-        ? { operation: 'edit' as const, sourceImage: reference.attachment }
+        ? {
+            operation: 'edit' as const,
+            sourceImage: reference.attachment,
+            ...(attachments.length > 1 ? { referenceImages: attachments.slice(1) } : {}),
+          }
         : {}),
     };
   }
@@ -257,6 +300,21 @@ export function resolveMobileImageGenerationRequest(
     prompt,
     model: imageDispatch.modelKey,
     ...(dispatchAspectRatio ? { aspectRatio: dispatchAspectRatio } : {}),
+    ...transparencyFor(imageDispatch.modelKey, input.transparentBackground),
     ownerId: input.ownerId,
   };
+}
+
+function guideImageRefusal(
+  guides: readonly MobileImageReferenceAttachment[],
+): ReferenceImageDecision | null {
+  for (const guide of guides) {
+    if (!guide.mimeType.startsWith('image/')) {
+      return { kind: 'blocked', code: 'reference_image_invalid' };
+    }
+    if (typeof guide.fileSize === 'number' && guide.fileSize > MANAGED_MEDIA_IMAGE_REF_MAX_BYTES) {
+      return { kind: 'blocked', code: 'reference_image_too_large' };
+    }
+  }
+  return null;
 }

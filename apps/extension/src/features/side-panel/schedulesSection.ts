@@ -11,6 +11,7 @@ import {
   type ManagedCloudScheduleTask,
   type ManagedCloudScheduleTemplate,
 } from '@agiworkforce/cloud-contracts';
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
 import {
   createChromeSchedule,
@@ -25,6 +26,7 @@ import {
 } from '../cloud-bridge/schedulesClient';
 import { t } from '../../i18n';
 import { el } from './dom';
+import { buildHelpArticleLink } from './helpLinks';
 import { renderMarkdown, sanitizeHtml } from './markdown';
 
 export const SCHEDULES_SECTION_CSS = `
@@ -375,7 +377,9 @@ function weekdayLabel(day: number): string {
   );
 }
 
-function badgeTone(schedule: ManagedCloudScheduleTask): string {
+function badgeTone(
+  schedule: ManagedCloudScheduleTask,
+): Extract<LifecycleStatus, 'failed' | 'idle'> | 'active' {
   if (schedule.status === 'failed') return 'failed';
   return schedule.isEnabled && schedule.status === 'active' ? 'active' : 'idle';
 }
@@ -388,6 +392,7 @@ export function buildSchedulesSection(
   const sectionEl = el('div', { class: 'sp-schedules', id: 'sp-schedules' });
   const head = el('div', { class: 'sp-schedules-head' });
   head.appendChild(el('h2', { class: 'sp-schedules-title' }, t('spSchedulesTitle')));
+  head.appendChild(buildHelpArticleLink('schedules-and-triggers', t('spHelpLinkSchedules')));
   const newBtn = el(
     'button',
     {

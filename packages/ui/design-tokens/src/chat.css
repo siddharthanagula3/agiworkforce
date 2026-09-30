@@ -56,6 +56,12 @@
     --chat-code-lang-label: #4b5563;
     --chat-code-copy-hover-bg: rgba(31, 41, 55, 0.08);
     --chat-code-copy-hover-fg: #111827;
+    --chat-code-syntax-keyword: #cf222e;
+    --chat-code-syntax-string: #0a3069;
+    --chat-code-syntax-comment: #57606a;
+    --chat-code-syntax-number: #0550ae;
+    --chat-code-syntax-function: #8250df;
+    --chat-code-syntax-type: #953800;
     --chat-text-primary: #1a1915;
     /* Used at 11-12px, where WCAG AA requires 4.5:1. Ratios below are the
        WORST case across every light surface a --chat-text-* can land on, not
@@ -160,6 +166,12 @@
     --chat-code-lang-label: #9ca3af;
     --chat-code-copy-hover-bg: rgba(55, 65, 81, 0.5);
     --chat-code-copy-hover-fg: #e5e7eb;
+    --chat-code-syntax-keyword: #ff7b72;
+    --chat-code-syntax-string: #a5d6ff;
+    --chat-code-syntax-comment: #8b949e;
+    --chat-code-syntax-number: #79c0ff;
+    --chat-code-syntax-function: #d2a8ff;
+    --chat-code-syntax-type: #ffa657;
     --chat-text-primary: hsl(var(--neutral-fg-1));
     --chat-text-secondary: hsl(var(--neutral-fg-2));
     --chat-text-muted: hsl(var(--neutral-fg-3));
@@ -397,4 +409,123 @@
 .chat-quiet-field:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+.artifact-document-editor__content {
+  min-height: 100%;
+  outline: none;
+  color: var(--chat-text-primary);
+  font-size: 1rem;
+  line-height: 1.625rem;
+  overflow-wrap: anywhere;
+}
+
+.artifact-document-editor__content > * + * {
+  margin-top: 0.75rem;
+}
+
+.artifact-document-editor__content h1 {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+}
+
+.artifact-document-editor__content h2 {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+}
+
+.artifact-document-editor__content h3,
+.artifact-document-editor__content h4 {
+  font-size: 1.0625rem;
+  line-height: 1.625rem;
+  font-weight: 600;
+}
+
+.artifact-document-editor__content ul {
+  list-style: disc;
+  padding-inline-start: 1.5rem;
+}
+
+.artifact-document-editor__content ol {
+  list-style: decimal;
+  padding-inline-start: 1.5rem;
+}
+
+.artifact-document-editor__content ul[data-type='taskList'] {
+  list-style: none;
+  padding-inline-start: 0.25rem;
+}
+
+.artifact-document-editor__content ul[data-type='taskList'] li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.artifact-document-editor__content ul[data-type='taskList'] li > label {
+  margin-top: 0.3rem;
+}
+
+.artifact-document-editor__content blockquote {
+  border-inline-start: 3px solid var(--chat-border-strong);
+  padding-inline-start: 1rem;
+  color: var(--chat-text-secondary);
+}
+
+.artifact-document-editor__content a {
+  color: var(--chat-accent-primary-text);
+  text-decoration: underline;
+}
+
+.artifact-document-editor__content code {
+  border-radius: var(--corner-compact);
+  background: var(--chat-code-bg);
+  color: var(--chat-code-text);
+  padding: 0.1rem 0.3rem;
+  font-family: var(--chat-font-mono);
+  font-size: 0.875em;
+}
+
+.artifact-document-editor__content pre {
+  border: 1px solid var(--chat-code-border);
+  border-radius: var(--corner-field);
+  background: var(--chat-code-bg);
+  color: var(--chat-code-text);
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+}
+
+.artifact-document-editor__content pre code {
+  background: none;
+  padding: 0;
+}
+
+.artifact-document-editor__content hr {
+  border: none;
+  border-top: 1px solid var(--chat-border);
+}
+
+.artifact-document-editor__content table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.artifact-document-editor__content th,
+.artifact-document-editor__content td {
+  border: 1px solid var(--chat-border);
+  padding: 0.375rem 0.625rem;
+  vertical-align: top;
+  text-align: start;
+}
+
+.artifact-document-editor__content th {
+  font-weight: 600;
+  background: var(--chat-surface-hover);
+}
+
+.artifact-document-editor__content .selectedCell {
+  background: var(--chat-surface-hover);
 }

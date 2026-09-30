@@ -7,6 +7,7 @@ import {
   isAutoModeModelId,
   type WorkspaceCodeToggleKey,
 } from '@agiworkforce/types';
+import { createError } from '@/lib/errors';
 
 const MAX_ALLOWED_COUNTRIES = 250;
 const FeatureAccessSchema = z
@@ -73,3 +74,14 @@ export const ControlsPatchSchema = z
 export const OverrideLayerPatchSchema = ControlsPatchSchema.extend({
   code: CodeControlsPatchSchema.optional(),
 }).strict();
+
+/** Fast mode bills usage credits, so as in Claude only the Owner can turn it on. */
+export function assertOwnerTurnsOnFastMode(
+  role: string,
+  wasOn: boolean,
+  turnsOn: boolean | undefined,
+): void {
+  if (turnsOn === true && !wasOn && role !== 'owner') {
+    throw createError.forbidden('Only the workspace Owner can turn on fast mode.').asUserSafe();
+  }
+}

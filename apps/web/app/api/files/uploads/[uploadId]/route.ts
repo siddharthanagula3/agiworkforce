@@ -235,7 +235,7 @@ async function finishKnowledgeFile(
     if (isAppError(error) && error.statusCode < 500) {
       await deleteProjectKnowledgeObject(session.key).catch((deleteError: unknown) => {
         logger.error(
-          { err: deleteError, userId: scope.userId, projectId, key: session.key },
+          { err: deleteError, userId: scope.userId, projectId, objectKey: session.key },
           '[uploads] an assembled project source that failed registration was not deleted',
         );
       });

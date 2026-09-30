@@ -343,6 +343,7 @@ async function hydratePastChatMessages(
         and c.organization_id is not distinct from $2::uuid
         and c.deleted_at is null
         and coalesce(c.is_temporary, false) = false
+        and c.google_user_data_at is null
         and ($3::uuid is null or c.id <> $3::uuid)
         and m.deleted_at is null
         and m.role in ('user', 'assistant')
@@ -368,6 +369,7 @@ async function loadSemanticPastChatExcerpts(
     userId: params.userId,
     organizationId: params.organizationId ?? null,
     semantic: true,
+    healthSpaceProjectId: scope.projectId,
   }).search({
     text: params.query,
     kinds: ['conversation'],
@@ -426,6 +428,7 @@ async function loadKeywordPastChatExcerpts(
         and c.organization_id is not distinct from $2::uuid
         and c.deleted_at is null
         and coalesce(c.is_temporary, false) = false
+        and c.google_user_data_at is null
         and ($3::uuid is null or c.id <> $3::uuid)
         and m.deleted_at is null
         and m.role in ('user', 'assistant')
@@ -588,6 +591,7 @@ async function loadRecentChatExcerpts(
         and c.organization_id is not distinct from $2::uuid
         and c.deleted_at is null
         and coalesce(c.is_temporary, false) = false
+        and c.google_user_data_at is null
         and m.deleted_at is null
         and m.role in ('user', 'assistant')
         and m.created_at >= now() - make_interval(hours => ${RECENT_CHATS_WINDOW_HOURS})

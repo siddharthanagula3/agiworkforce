@@ -11,12 +11,15 @@ jest.mock('../services/api', () => ({
 
 import {
   addCustomConnector,
+  browseConnectorListings,
   fetchConnectorDirectory,
+  fetchConnectorListing,
   fetchConnectorToolPermissions,
-  getGitHubInstallWebUrl,
   resetConnectorToolPermission,
+  saveConnectorApiKey,
   setConnectorToolPermission,
 } from '../services/connectors';
+import { ApiHttpError } from '../services/apiErrors';
 import { ConnectorPolicyError, invalidateConnectorPolicy } from '../services/connectors';
 import { isLikelyHttpsUrl } from '../src/features/settings/cloud-connectors/AddCustomConnectorModal';
 
@@ -83,12 +86,6 @@ describe('addCustomConnector', () => {
       name: 'n',
       url: 'https://x.y',
     });
-  });
-});
-
-describe('getGitHubInstallWebUrl', () => {
-  it('points at the vetted web GitHub-App install-start flow', () => {
-    expect(getGitHubInstallWebUrl()).toMatch(/^https:\/\/.+\/api\/github\/install\/start$/);
   });
 });
 
@@ -192,5 +189,103 @@ describe('isLikelyHttpsUrl', () => {
     expect(isLikelyHttpsUrl('mcp.example.com')).toBe(false);
     expect(isLikelyHttpsUrl('https://')).toBe(false);
     expect(isLikelyHttpsUrl('')).toBe(false);
+  });
+});
+
+const LISTING = {
+  id: 'io.example/notes',
+  name: 'Notes',
+  publisher: 'Example',
+  description: 'Search your notes',
+  categories: ['Productivity'],
+  remotes: [{ url: 'https://mcp.example.com/mcp', transport: 'streamable-http' }],
+  authMode: 'api-key',
+  connectable: 'api-key-form',
+  toolNames: ['search_notes'],
+  repositoryUrl: null,
+  version: null,
+  sourceRegistry: 'mcp-registry',
+  badge: 'registry',
+  iconUrl: null,
+  monogram: 'N',
+  documentationUrl: null,
+  iconSource: 'monogram',
+  brandSlug: null,
+  authorName: null,
+  authorUrl: null,
+  websiteUrl: null,
+  supportUrl: null,
+  privacyPolicyUrl: null,
+  toolCount: 1,
+  connectorUrl: null,
+};
+
+describe('connector directory listings', () => {
+  it('asks the registry for connectable entries with the search, category and cursor', async () => {
+    const mockGet = jest.requireMock('../services/api').api.get as jest.Mock;
+    mockGet.mockResolvedValueOnce({
+      entries: [LISTING],
+      total: 1,
+      nextCursor: null,
+      categories: ['Productivity'],
+      connectableModes: ['connect'],
+      stats: {},
+    });
+
+    const page = await browseConnectorListings({
+      search: '  notes ',
+      category: 'Productivity',
+      cursor: '100',
+    });
+
+    const href = String(mockGet.mock.calls[0]?.[0]);
+    const query = new URLSearchParams(href.slice(href.indexOf('?') + 1));
+    expect(href.startsWith('/api/connectors/directory?')).toBe(true);
+    expect(query.get('connectableOnly')).toBe('true');
+    expect(query.get('search')).toBe('notes');
+    expect(query.get('category')).toBe('Productivity');
+    expect(query.get('cursor')).toBe('100');
+    expect(page.entries.map((entry) => entry.id)).toEqual(['io.example/notes']);
+  });
+
+  it('rejects a malformed directory page instead of rendering an empty list', async () => {
+    const mockGet = jest.requireMock('../services/api').api.get as jest.Mock;
+    mockGet.mockResolvedValueOnce({ entries: 'none' });
+
+    await expect(browseConnectorListings({})).rejects.toThrow(
+      'Invalid connector directory response',
+    );
+  });
+
+  it('reads one listing and treats a missing one as absent', async () => {
+    const mockGet = jest.requireMock('../services/api').api.get as jest.Mock;
+    mockGet.mockResolvedValueOnce({ entry: LISTING });
+    await expect(fetchConnectorListing('io.example/notes')).resolves.toMatchObject({
+      name: 'Notes',
+    });
+    expect(mockGet).toHaveBeenLastCalledWith('/api/connectors/directory/io.example/notes');
+
+    mockGet.mockRejectedValueOnce(new ApiHttpError('Not found', 404, null));
+    await expect(fetchConnectorListing('custom-ab12')).resolves.toBeNull();
+  });
+});
+
+describe('saveConnectorApiKey', () => {
+  it('posts the trimmed key to the path the server named', async () => {
+    mockPost.mockResolvedValueOnce({ toolCount: 3 });
+
+    await saveConnectorApiKey('/api/connectors/io.example%2Fnotes/credentials', '  sk-123  ');
+
+    expect(mockPost).toHaveBeenCalledWith('/api/connectors/io.example%2Fnotes/credentials', {
+      apiKey: 'sk-123',
+    });
+  });
+
+  it('rejects a response that does not confirm the saved connection', async () => {
+    mockPost.mockResolvedValueOnce({ ok: true });
+
+    await expect(saveConnectorApiKey('/api/connectors/x/credentials', 'k')).rejects.toThrow(
+      'Invalid connector key response',
+    );
   });
 });

@@ -2,11 +2,12 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
+import type { Provider } from '@agiworkforce/types';
 import type { AgentStatus } from '@shared/types';
 
 export interface TokenUsageByModel {
   [model: string]: {
-    provider: 'anthropic' | 'openai' | 'google' | 'perplexity';
+    provider: Provider;
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
@@ -336,7 +337,7 @@ export const useCompanyHubStore = create<CompanyHubStore>()(
           set((state) => {
             if (!state.tokenUsage[model]) {
               state.tokenUsage[model] = {
-                provider: provider as 'anthropic' | 'openai' | 'google' | 'perplexity',
+                provider: provider as Provider,
                 inputTokens: 0,
                 outputTokens: 0,
                 totalTokens: 0,

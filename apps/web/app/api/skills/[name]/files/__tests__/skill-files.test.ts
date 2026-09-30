@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
+vi.mock('@/lib/services/workspace-plugin-access', () => ({
+  workspaceAllowsPlugins: vi.fn(async () => true),
+}));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: mocks.listEnabledPluginIds,
 }));

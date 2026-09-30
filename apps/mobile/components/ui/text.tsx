@@ -12,7 +12,18 @@ const variantClasses: Record<NonNullable<TextProps['variant']>, string> = {
   mono: 'text-sm font-mono text-white',
 };
 
-export function Text({ variant = 'default', className = '', style, ...props }: TextProps) {
+const HEADER_VARIANTS: ReadonlySet<NonNullable<TextProps['variant']>> = new Set([
+  'heading',
+  'subheading',
+]);
+
+export function Text({
+  variant = 'default',
+  className = '',
+  style,
+  accessibilityRole,
+  ...props
+}: TextProps) {
   const flattened = StyleSheet.flatten(style);
   const fontSize = typeof flattened?.fontSize === 'number' ? flattened.fontSize : null;
   const needsLineHeight = fontSize !== null && flattened?.lineHeight == null;
@@ -24,6 +35,7 @@ export function Text({ variant = 'default', className = '', style, ...props }: T
     <RNText
       className={`${variantClasses[variant]} ${className}`}
       style={resolvedStyle}
+      accessibilityRole={accessibilityRole ?? (HEADER_VARIANTS.has(variant) ? 'header' : undefined)}
       {...props}
     />
   );

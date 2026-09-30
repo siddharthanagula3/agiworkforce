@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -18,6 +19,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { storage } from '@/lib/mmkv';
@@ -25,7 +27,11 @@ import {
   getCapabilities,
   getDefaultModel as getDefaultLocalModel,
   getModelById as getLocalModelById,
+  loadLocalModel,
+  loadedLocalModel,
+  unloadLocalModels,
 } from '@agiworkforce/local-llm';
+import { resolveLocalModelRef } from '@/src/features/model-picker/localModelRuntime';
 import type { DeviceCapabilities } from '@agiworkforce/local-llm';
 import {
   getThermalState,
@@ -37,6 +43,7 @@ import {
   type PerfEvent,
   type BenchmarkResult,
 } from '@/services/performanceMonitor';
+import { readMemoryFootprintMB } from '@/services/processFootprint';
 
 export const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
 
@@ -264,9 +271,11 @@ function ToggleRow({
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}>
       <Icon size={16} color={c.textSecondary} style={{ marginRight: 12 }} />
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, color: c.textPrimary }}>{label}</Text>
+        <Text style={{ fontSize: typeScale.subhead, color: c.textPrimary }}>{label}</Text>
         {sublabel ? (
-          <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 1 }}>{sublabel}</Text>
+          <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginTop: 1 }}>
+            {sublabel}
+          </Text>
         ) : null}
       </View>
       <Switch accessibilityLabel={label} value={value} onValueChange={onChange} />
@@ -288,8 +297,8 @@ function StatChip({ label, value, color }: { label: string; value: string; color
       accessible
       accessibilityLabel={`${label}: ${value}`}
     >
-      <Text style={{ fontSize: 18, fontWeight: '700', color }}>{value}</Text>
-      <Text style={{ fontSize: 10, color: c.textMuted, marginTop: 2 }}>{label}</Text>
+      <Text style={{ fontSize: typeScale.headline, fontWeight: '700', color }}>{value}</Text>
+      <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginTop: 2 }}>{label}</Text>
     </View>
   );
 }
@@ -315,6 +324,24 @@ export default function PerformanceScreen() {
   const [lastBenchmark, setLastBenchmark] = useState<BenchmarkResult | null>(null);
 
   const [chartWidth, setChartWidth] = useState(280);
+  const [memoryNowMB, setMemoryNowMB] = useState<number | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const sample = () => {
+        void readMemoryFootprintMB().then((mb) => {
+          if (active) setMemoryNowMB(mb);
+        });
+      };
+      sample();
+      const timer = setInterval(sample, 2_000);
+      return () => {
+        active = false;
+        clearInterval(timer);
+      };
+    }, []),
+  );
 
   useEffect(() => {
     getCapabilities()
@@ -386,9 +413,8 @@ export default function PerformanceScreen() {
         `Benchmark complete: ${Math.round(result.tokensPerSecond)} tokens per second, ` +
           `${result.firstTokenLatencyMs} ms first token latency.`,
       );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      AccessibilityInfo.announceForAccessibility(`Benchmark failed: ${msg}`);
+    } catch {
+      AccessibilityInfo.announceForAccessibility('Benchmark failed. Try again.');
     } finally {
       setIsBenchmarking(false);
     }
@@ -406,6 +432,37 @@ export default function PerformanceScreen() {
     if (!selectedModelId) return null;
     return getLocalModelById(selectedModelId) ?? null;
   }, [selectedModelId]);
+
+  const [runtimeState, setRuntimeState] = useState<
+    { kind: 'idle' | 'busy' } | { kind: 'failed'; message: string }
+  >({ kind: 'idle' });
+  const [loadedModel, setLoadedModel] = useState(() => loadedLocalModel());
+  const systemManaged = activeLocalModel?.fileSizeBytes === 0;
+
+  const handleLoadModel = useCallback(async () => {
+    if (!selectedModelId) return;
+    setRuntimeState({ kind: 'busy' });
+    try {
+      const ref = await resolveLocalModelRef(selectedModelId);
+      await loadLocalModel(ref.modelPath, ref.modelId);
+      setLoadedModel(loadedLocalModel());
+      setRuntimeState({ kind: 'idle' });
+    } catch (error) {
+      console.warn('[local-model] load failed', error);
+      setLoadedModel(loadedLocalModel());
+      setRuntimeState({
+        kind: 'failed',
+        message: 'Try again, or choose a smaller model.',
+      });
+    }
+  }, [selectedModelId]);
+
+  const handleUnloadModel = useCallback(async () => {
+    setRuntimeState({ kind: 'busy' });
+    await unloadLocalModels();
+    setLoadedModel(loadedLocalModel());
+    setRuntimeState({ kind: 'idle' });
+  }, []);
 
   const tIndicator = useMemo(
     () => thermalColor(thermalState, c.teal, c.agentWarning, c.agentError),
@@ -435,7 +492,14 @@ export default function PerformanceScreen() {
         >
           <ArrowLeft size={20} color={c.textSecondary} />
         </Pressable>
-        <Text style={{ fontSize: 16, fontWeight: '600', color: c.textPrimary, marginLeft: 8 }}>
+        <Text
+          style={{
+            fontSize: typeScale.callout,
+            fontWeight: '600',
+            color: c.textPrimary,
+            marginLeft: 8,
+          }}
+        >
           Performance
         </Text>
 
@@ -454,7 +518,9 @@ export default function PerformanceScreen() {
                 backgroundColor: tIndicator.dot,
               }}
             />
-            <Text style={{ fontSize: 12, color: tIndicator.dot }}>{tIndicator.label}</Text>
+            <Text style={{ fontSize: typeScale.caption, color: tIndicator.dot }}>
+              {tIndicator.label}
+            </Text>
           </View>
         </View>
       </View>
@@ -470,7 +536,7 @@ export default function PerformanceScreen() {
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Cpu size={16} color={c.teal} />
-            <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>
+            <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: c.textPrimary }}>
               Device Tier
             </Text>
           </View>
@@ -501,11 +567,13 @@ export default function PerformanceScreen() {
                   }}
                   accessibilityLabel={`Device tier: ${tierInfo.label}`}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: c.accentText }}>
+                  <Text
+                    style={{ fontSize: typeScale.footnote, fontWeight: '700', color: c.accentText }}
+                  >
                     {tierInfo.label}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 13, color: c.textSecondary, flex: 1 }}>
+                <Text style={{ fontSize: typeScale.footnote, color: c.textSecondary, flex: 1 }}>
                   {tierInfo.description}
                 </Text>
               </View>
@@ -516,7 +584,7 @@ export default function PerformanceScreen() {
                 >
                   <ActivityIndicator size="small" color={c.teal} />
                   <Text
-                    style={{ fontSize: 12, color: c.textMuted, flex: 1 }}
+                    style={{ fontSize: typeScale.caption, color: c.textMuted, flex: 1 }}
                     accessibilityLabel={tierInfo.fetchingNote}
                   >
                     {tierInfo.fetchingNote}
@@ -528,26 +596,32 @@ export default function PerformanceScreen() {
 
               <View style={{ gap: 6, marginTop: 10 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13, color: c.textMuted }}>RAM</Text>
-                  <Text style={{ fontSize: 13, color: c.textPrimary }}>
+                  <Text style={{ fontSize: typeScale.footnote, color: c.textMuted }}>RAM</Text>
+                  <Text style={{ fontSize: typeScale.footnote, color: c.textPrimary }}>
                     {caps.totalRAMMB > 0
                       ? `${(caps.totalRAMMB / 1024).toFixed(1)} GB`
                       : 'Unavailable'}
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13, color: c.textMuted }}>OS Version</Text>
-                  <Text style={{ fontSize: 13, color: c.textPrimary }}>{displayedOsVersion}</Text>
+                  <Text style={{ fontSize: typeScale.footnote, color: c.textMuted }}>
+                    OS Version
+                  </Text>
+                  <Text style={{ fontSize: typeScale.footnote, color: c.textPrimary }}>
+                    {displayedOsVersion}
+                  </Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13, color: c.textMuted }}>Thermal</Text>
-                  <Text style={{ fontSize: 13, color: tIndicator.dot }}>
+                  <Text style={{ fontSize: typeScale.footnote, color: c.textMuted }}>Thermal</Text>
+                  <Text style={{ fontSize: typeScale.footnote, color: tIndicator.dot }}>
                     {tIndicator.label}, {tIndicator.text}
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13, color: c.textMuted }}>Capabilities</Text>
-                  <Text style={{ fontSize: 13, color: c.textPrimary }}>
+                  <Text style={{ fontSize: typeScale.footnote, color: c.textMuted }}>
+                    Capabilities
+                  </Text>
+                  <Text style={{ fontSize: typeScale.footnote, color: c.textPrimary }}>
                     {[
                       caps.tier1Available
                         ? tierInfo.tier === 1 && caps.tier1Runtime === 'foundation_models'
@@ -572,7 +646,7 @@ export default function PerformanceScreen() {
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Zap size={16} color={c.teal} />
-            <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>
+            <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: c.textPrimary }}>
               Active Model
             </Text>
           </View>
@@ -582,22 +656,80 @@ export default function PerformanceScreen() {
               <View
                 style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}
               >
-                <Text style={{ fontSize: 14, color: c.textPrimary, fontWeight: '600' }}>
+                <Text
+                  style={{ fontSize: typeScale.subhead, color: c.textPrimary, fontWeight: '600' }}
+                >
                   {activeLocalModel.displayName}
                 </Text>
-                <Text style={{ fontSize: 12, color: c.textMuted }}>
+                <Text style={{ fontSize: typeScale.caption, color: c.textMuted }}>
                   {activeLocalModel.fileSizeBytes === 0
                     ? 'System managed'
                     : `${(activeLocalModel.fileSizeBytes / 1_073_741_824).toFixed(1)} GB`}
                 </Text>
               </View>
-              <Text style={{ fontSize: 12, color: c.textMuted, marginBottom: 12 }}>
+              <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginBottom: 12 }}>
                 {activeLocalModel.supportedRuntimes.map(backendDisplayName).join(' · ')}
                 {' · '}
                 {activeLocalModel.paramCountB > 0
                   ? `${activeLocalModel.paramCountB}B params`
                   : 'Device-managed model'}
               </Text>
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={{
+                    flex: 1,
+                    fontSize: typeScale.caption,
+                    color: runtimeState.kind === 'failed' ? c.agentError : c.textSecondary,
+                  }}
+                >
+                  {systemManaged
+                    ? 'Managed by the system, ready when needed'
+                    : runtimeState.kind === 'busy'
+                      ? 'Working…'
+                      : runtimeState.kind === 'failed'
+                        ? `Failed to load: ${runtimeState.message}`
+                        : loadedModel
+                          ? 'Loaded in memory'
+                          : 'Not loaded, loads on first use'}
+                </Text>
+                {systemManaged ? null : (
+                  <Pressable
+                    onPress={() => void (loadedModel ? handleUnloadModel() : handleLoadModel())}
+                    disabled={runtimeState.kind === 'busy'}
+                    accessibilityRole="button"
+                    accessibilityLabel={loadedModel ? 'Unload model from memory' : 'Load model now'}
+                    accessibilityState={{ disabled: runtimeState.kind === 'busy' }}
+                    style={{
+                      minHeight: 44,
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: c.border,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: typeScale.subhead,
+                        fontWeight: '600',
+                        color: c.textPrimary,
+                      }}
+                    >
+                      {loadedModel ? 'Unload' : 'Load'}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
 
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <StatChip
@@ -630,21 +762,33 @@ export default function PerformanceScreen() {
               </View>
 
               {rollingStats.sampleCount > 0 && (
-                <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 8 }}>
+                <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginTop: 8 }}>
                   Rolling average over last {rollingStats.sampleCount} inferences
+                </Text>
+              )}
+              {memoryNowMB !== null && (
+                <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginTop: 4 }}>
+                  The app is using {Math.round(memoryNowMB)}MB of memory now
                 </Text>
               )}
             </>
           ) : (
-            <Text style={{ fontSize: 14, color: c.textMuted }}>
-              No local model loaded. Download a model to see performance stats.
+            <Text style={{ fontSize: typeScale.subhead, color: c.textMuted }}>
+              No local model selected. Download a model to see performance stats.
             </Text>
           )}
 
           {lastBenchmark && (
             <>
               <Separator />
-              <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 10, marginBottom: 6 }}>
+              <Text
+                style={{
+                  fontSize: typeScale.caption,
+                  color: c.textMuted,
+                  marginTop: 10,
+                  marginBottom: 6,
+                }}
+              >
                 Last benchmark result
               </Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -658,6 +802,13 @@ export default function PerformanceScreen() {
                   value={`${lastBenchmark.firstTokenLatencyMs}ms`}
                   color={c.terraCotta}
                 />
+                {lastBenchmark.peakMemoryMB > 0 && (
+                  <StatChip
+                    label="mem peak"
+                    value={`${Math.round(lastBenchmark.peakMemoryMB)}MB`}
+                    color={c.textSecondary}
+                  />
+                )}
                 <StatChip
                   label="thermal"
                   value={lastBenchmark.thermalState}
@@ -678,10 +829,10 @@ export default function PerformanceScreen() {
           <Card>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <BarChart2 size={16} color={c.teal} />
-              <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>
+              <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: c.textPrimary }}>
                 Tok/s, Last 7 Days
               </Text>
-              <Text style={{ fontSize: 12, color: c.textMuted, marginLeft: 'auto' }}>
+              <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginLeft: 'auto' }}>
                 {toksData.length} events
               </Text>
             </View>
@@ -710,7 +861,7 @@ export default function PerformanceScreen() {
           <Card>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <Timer size={16} color={c.terraCotta} />
-              <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>
+              <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: c.textPrimary }}>
                 First-Token Latency, Last 7 Days
               </Text>
             </View>
@@ -735,11 +886,11 @@ export default function PerformanceScreen() {
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <PlayCircle size={16} color={c.teal} />
-            <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>
+            <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: c.textPrimary }}>
               Benchmark This Device
             </Text>
           </View>
-          <Text style={{ fontSize: 13, color: c.textMuted, marginBottom: 12 }}>
+          <Text style={{ fontSize: typeScale.footnote, color: c.textMuted, marginBottom: 12 }}>
             Runs a standardized 60-token prompt against the loaded model. Result is stored for
             comparison across sessions.
           </Text>
@@ -760,12 +911,14 @@ export default function PerformanceScreen() {
             {isBenchmarking ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <ActivityIndicator size="small" color={c.textSecondary} />
-                <Text style={{ fontSize: 14, fontWeight: '600', color: c.textSecondary }}>
+                <Text
+                  style={{ fontSize: typeScale.subhead, fontWeight: '600', color: c.textSecondary }}
+                >
                   Benchmarking…
                 </Text>
               </View>
             ) : (
-              <Text style={{ fontSize: 14, fontWeight: '600', color: c.accentText }}>
+              <Text style={{ fontSize: typeScale.subhead, fontWeight: '600', color: c.accentText }}>
                 Run Benchmark
               </Text>
             )}
@@ -778,7 +931,7 @@ export default function PerformanceScreen() {
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Thermometer size={16} color={tIndicator.dot} />
-            <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>
+            <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: c.textPrimary }}>
               Thermal State
             </Text>
           </View>
@@ -795,10 +948,14 @@ export default function PerformanceScreen() {
               accessibilityLabel={`Current thermal state: ${tIndicator.label}`}
             />
             <View>
-              <Text style={{ fontSize: 14, color: tIndicator.dot, fontWeight: '600' }}>
+              <Text
+                style={{ fontSize: typeScale.subhead, color: tIndicator.dot, fontWeight: '600' }}
+              >
                 {tIndicator.label}
               </Text>
-              <Text style={{ fontSize: 12, color: c.textMuted }}>{tIndicator.text}</Text>
+              <Text style={{ fontSize: typeScale.caption, color: c.textMuted }}>
+                {tIndicator.text}
+              </Text>
             </View>
           </View>
 
@@ -822,7 +979,7 @@ export default function PerformanceScreen() {
                 >
                   <Text
                     style={{
-                      fontSize: 10,
+                      fontSize: typeScale.caption,
                       color: isActive ? info.dot : c.textMuted,
                       fontWeight: isActive ? '700' : '400',
                     }}
@@ -840,8 +997,9 @@ export default function PerformanceScreen() {
         {/* ---------------------------------------------------------------- */}
         <Card>
           <Text
+            accessibilityRole="header"
             style={{
-              fontSize: 11,
+              fontSize: typeScale.caption,
               textTransform: 'uppercase',
               letterSpacing: 0,
               fontWeight: '600',

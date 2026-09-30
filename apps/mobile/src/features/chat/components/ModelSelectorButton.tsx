@@ -2,6 +2,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import * as Haptics from 'expo-haptics';
 import {
   EFFORT_LABEL,
+  ROUTING_PROFILE_CHOICE_OPTIONS,
   getModelEffortOptions,
   getModelReasoning,
   type Effort,
@@ -11,10 +12,12 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useAgentControlStore } from '@/stores/agentControlStore';
-import { getShortDisplayName } from '@/src/features/model-picker/service';
+import { DEFAULT_AUTO_MODE_ID, getShortDisplayName } from '@/src/features/model-picker/service';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors, radii } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ModelSelectorButtonProps {
   onPress: () => void;
@@ -40,13 +43,19 @@ interface ModelSelectorButtonProps {
 export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
   const colors = useThemeColors();
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const routingProfile = useModelStore((s) => s.routingProfile);
+  const appMode = useChatAppModeStore((s) => s.appMode);
   const thinkingEnabled = useModelStore((s) => s.thinkingEnabledPerModel[s.selectedModel] ?? false);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const subscriptionTier = useTierStore((s) => s.tier);
   const conversationId = useChatStore((s) => s.currentConversationId);
   const selectedEffort = useAgentControlStore((s) => s.resolve(conversationId ?? '', null).effort);
 
-  const label = getShortDisplayName(selectedModel, subscriptionTier);
+  const routingProfileLabel =
+    appMode === 'cloud' && selectedModel === DEFAULT_AUTO_MODE_ID && routingProfile !== 'auto'
+      ? ROUTING_PROFILE_CHOICE_OPTIONS.find((option) => option.choice === routingProfile)?.label
+      : undefined;
+  const label = routingProfileLabel ?? getShortDisplayName(selectedModel, subscriptionTier);
   const turnEffort = resolveTurnEffort({
     selectedEffort,
     supportedEfforts: getModelEffortOptions(selectedModel),
@@ -87,7 +96,7 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
         numberOfLines={1}
         style={{
           color: colors.textSecondary,
-          fontSize: 13,
+          fontSize: typeScale.footnote,
           lineHeight: 16,
           fontWeight: '500',
           flexShrink: 1,
@@ -101,7 +110,7 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
           numberOfLines={1}
           style={{
             color: colors.textMuted,
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             lineHeight: 16,
             includeFontPadding: false,
           }}

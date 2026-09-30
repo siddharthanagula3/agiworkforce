@@ -6,11 +6,23 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S30.01: Presentation title.
+
+- Done when: A deck has a title the user can see and set.
+- Wave: 4
+- Build on: cli, vscode
+
 ## S30.02: Slide thumbnail rail.
 
 - Done when: A rail of slide thumbnails shows every slide and selecting one opens it.
 - Wave: 4
 - Build on: web, desktop, mobile, vscode, chrome
+
+## S30.03: Add slide.
+
+- Done when: The user can add a slide to a deck.
+- Wave: 4
+- Build on: cli, vscode
 
 ## S30.04: Duplicate slide.
 
@@ -96,6 +108,18 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, vscode, chrome
 
+## S30.18: Slide notes.
+
+- Done when: Each slide can carry notes the user can view and edit.
+- Wave: 4
+- Build on: cli, vscode
+
+## S30.19: Presenter notes.
+
+- Done when: While presenting, the presenter sees each slide’s notes.
+- Wave: 4
+- Build on: cli, vscode
+
 ## S30.20: Selection-based AI edits.
 
 - Done when: The user selects part of a slide and asks the AI to change only that part.
@@ -114,6 +138,12 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
+## S30.23: Whole-deck restructuring.
+
+- Done when: The user can have the AI restructure a whole existing deck (reorder, merge, split sections).
+- Wave: 4
+- Build on: cli, vscode, chrome
+
 ## S30.24: Comments.
 
 - Done when: Users can leave and read comments on slides.
@@ -125,6 +155,12 @@ nothing is left.
 - Done when: A deck keeps a version history the user can browse and restore.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
+
+## S30.26: Presentation mode.
+
+- Done when: The user can present a deck full screen, advancing slide by slide.
+- Wave: 4
+- Build on: vscode, chrome
 
 ## S30.27: Speaker view where offered.
 

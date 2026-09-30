@@ -1,4 +1,3 @@
-
 export type ToolDisplayCategory =
   | 'search'
   | 'browser'
@@ -92,6 +91,26 @@ const TOOL_DISPLAY_LABEL: Record<string, ToolDisplayLabel> = {
     displayName: 'Run code',
     activeForm: 'Running code…',
     completedForm: 'Ran code',
+  },
+  device_calendar_events: {
+    displayName: 'Read your calendar',
+    activeForm: 'Reading your calendar…',
+    completedForm: 'Read your calendar',
+  },
+  device_calendar_availability: {
+    displayName: 'Check your availability',
+    activeForm: 'Checking your availability…',
+    completedForm: 'Checked your availability',
+  },
+  device_calendar_create_event: {
+    displayName: 'Add to your calendar',
+    activeForm: 'Adding to your calendar…',
+    completedForm: 'Added to your calendar',
+  },
+  device_reminder_create: {
+    displayName: 'Add a reminder',
+    activeForm: 'Adding a reminder…',
+    completedForm: 'Added a reminder',
   },
 };
 

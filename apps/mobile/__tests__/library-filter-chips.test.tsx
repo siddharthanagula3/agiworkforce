@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { ScrollView } from 'react-native';
-import { fireEvent, render, within } from '@testing-library/react-native';
+import { Alert, ScrollView } from 'react-native';
+import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -115,5 +115,41 @@ describe('Library filter chips', () => {
 
     expect(screen.getByLabelText('Artifacts filter').props.accessibilityState.selected).toBe(true);
     expect(screen.getByLabelText('All filter').props.accessibilityState.selected).toBe(false);
+  });
+
+  it('opens the saved-files sort options from the Library header', () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<LibraryScreen />);
+
+    fireEvent.press(screen.getByLabelText('Library options'));
+    let options = alert.mock.calls.at(-1)?.[2] as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
+    act(() => options.find((option) => option.text === 'Sort saved files')?.onPress?.());
+    expect(alert).toHaveBeenCalledWith(
+      'Sort saved files',
+      'Artifacts keep their own order.',
+      expect.arrayContaining([
+        expect.objectContaining({ text: '✓ Recently added' }),
+        expect.objectContaining({ text: 'Oldest first' }),
+        expect.objectContaining({ text: 'Type' }),
+      ]),
+    );
+    options = alert.mock.calls.at(-1)?.[2] as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
+    act(() => options.find((option) => option.text === 'Name')?.onPress?.());
+    fireEvent.press(screen.getByLabelText('Library options'));
+    options = alert.mock.calls.at(-1)?.[2] as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
+    act(() => options.find((option) => option.text === 'Sort saved files')?.onPress?.());
+    expect(alert.mock.calls.at(-1)?.[2]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ text: '✓ Name' })]),
+    );
+    alert.mockRestore();
   });
 });

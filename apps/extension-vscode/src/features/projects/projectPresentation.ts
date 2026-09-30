@@ -3,6 +3,7 @@ import type {
   ManagedCloudProjectKnowledgeFile,
 } from '@agiworkforce/cloud-contracts';
 import { t, tPlural } from '../../l10n';
+import { accountRefusalMessage } from '../../utils/accountRefusal';
 
 const PROJECT_FAILURE_REASON_MAX_LENGTH = 240;
 
@@ -76,6 +77,8 @@ export function projectDeleteConsequence(project: ManagedCloudProject): string {
 }
 
 export function describeProjectFailure(error: unknown): string {
+  const refusal = accountRefusalMessage(error);
+  if (refusal) return refusal;
   const status = (error as { status?: unknown } | null)?.status;
   if (status === 401) return 'your AGI Cloud session expired, sign in again';
   if (status === 403) return 'this account cannot manage projects on its current plan';

@@ -34,6 +34,13 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
 import { useStepUp } from './use-step-up';
 import { finalizeWorkspaceSwitch } from '@/features/workspaces/lib/workspace-cache-scope';
+import {
+  MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
+  NO_PENDING_ACCOUNT_DELETION,
+  parseAccountDeletionStatus,
+  type AccountDeletionStatus,
+} from '@agiworkforce/cloud-contracts';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -447,29 +454,7 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
  * stays `true`, the grace window is closed and the purge cron owns the row
  * from here, so the UI must not offer a cancel control it cannot honour.
  */
-export interface AccountDeletionStatus {
-  pending: boolean;
-  canCancel: boolean;
-  requestedAt: string | null;
-  scheduledFor: string | null;
-}
-
-const NO_PENDING_DELETION: AccountDeletionStatus = {
-  pending: false,
-  canCancel: false,
-  requestedAt: null,
-  scheduledFor: null,
-};
-
-function parseAccountDeletionStatus(data: unknown): AccountDeletionStatus {
-  const record = data !== null && typeof data === 'object' ? (data as Record<string, unknown>) : {};
-  return {
-    pending: record['pending'] === true,
-    canCancel: record['canCancel'] === true,
-    requestedAt: typeof record['requestedAt'] === 'string' ? record['requestedAt'] : null,
-    scheduledFor: typeof record['scheduledFor'] === 'string' ? record['scheduledFor'] : null,
-  };
-}
+export type { AccountDeletionStatus } from '@agiworkforce/cloud-contracts';
 
 /**
  * Reads whether an account deletion is currently scheduled, so the settings
@@ -482,7 +467,7 @@ export function useAccountDeletionStatus(): UseQueryResult<AccountDeletionStatus
     queryFn: async ({ signal }): Promise<AccountDeletionStatus> => {
       const timeoutSignal = AbortSignal.timeout(TimeoutPresets.FAST);
       const requestSignal = AbortSignal.any([signal, timeoutSignal]);
-      const response = await fetch('/api/user/delete-account', {
+      const response = await fetch(MANAGED_CLOUD_ACCOUNT_DELETION_PATH, {
         method: 'GET',
         cache: 'no-store',
         signal: requestSignal,
@@ -525,7 +510,10 @@ export function useCancelAccountDeletion(): UseMutationResult<
   return useMutation<CancelAccountDeletionResult, Error, void>({
     mutationFn: async (): Promise<CancelAccountDeletionResult> => {
       const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-      const res = await fetch('/api/user/delete-account/cancel', { method: 'POST', headers });
+      const res = await fetch(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH, {
+        method: 'POST',
+        headers,
+      });
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(
@@ -542,7 +530,7 @@ export function useCancelAccountDeletion(): UseMutationResult<
     onSuccess: (): void => {
       queryClient.setQueryData<AccountDeletionStatus>(
         queryKeys.settings.accountDeletionStatus(),
-        NO_PENDING_DELETION,
+        NO_PENDING_ACCOUNT_DELETION,
       );
     },
     onError: (error: Error): void => {

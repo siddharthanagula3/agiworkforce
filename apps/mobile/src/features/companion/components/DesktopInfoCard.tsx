@@ -1,5 +1,6 @@
 import Animated, { SlideInDown } from 'react-native-reanimated';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Monitor, Cpu, HardDrive, Unlink } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -8,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { AgentDashboard } from '@/src/features/companion/components/AgentDashboard';
 import { CodeSessionsCard } from './CodeSessionsCard';
 import { DispatchTaskComposer } from '@/src/features/companion/components/DispatchTaskComposer';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { RemoteWorkspaceBoundaryNotice } from './RemoteWorkspaceBoundaryNotice';
 import { SingleDesktopSessionNotice } from './SingleDesktopSessionNotice';
 
@@ -25,7 +26,7 @@ export function DesktopInfoCard({
 }: DesktopInfoCardProps) {
   const colors = useThemeColors();
   return (
-    <Animated.View entering={SlideInDown.duration(300).springify()} className="flex-1">
+    <Animated.View entering={SlideInDown.duration(motion.moved).springify()} className="flex-1">
       <View className="px-4 mb-3">
         <Card variant="elevated">
           <View className="flex-row items-center gap-3 mb-3">
@@ -51,14 +52,12 @@ export function DesktopInfoCard({
               <View className="flex-row items-center gap-4">
                 <View className="flex-row items-center gap-1.5">
                   <Cpu size={12} color={colors.textMuted} />
-                  <Text className="text-[10px] text-white/40">{String(desktopMetadata.os)}</Text>
+                  <Text className="text-xs text-white/40">{String(desktopMetadata.os)}</Text>
                 </View>
                 {desktopMetadata.arch != null && (
                   <View className="flex-row items-center gap-1.5">
                     <HardDrive size={12} color={colors.textMuted} />
-                    <Text className="text-[10px] text-white/40">
-                      {String(desktopMetadata.arch)}
-                    </Text>
+                    <Text className="text-xs text-white/40">{String(desktopMetadata.arch)}</Text>
                   </View>
                 )}
               </View>
@@ -72,7 +71,7 @@ export function DesktopInfoCard({
 
       {Array.isArray(desktopMetadata?.capabilities) &&
       desktopMetadata.capabilities.includes('code-sessions') ? (
-        <CodeSessionsCard />
+        <CodeSessionsCard canStart={desktopMetadata.capabilities.includes('code-session-start')} />
       ) : null}
 
       <DispatchTaskComposer />
@@ -82,13 +81,13 @@ export function DesktopInfoCard({
       </View>
 
       <View className="px-4 pb-4 pt-2">
-        <Pressable
+        <PressableBox
           onPress={onDisconnect}
           className="flex-row items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 active:bg-red-500/20"
         >
           <Unlink size={16} color={colors.agentError} />
           <Text className="text-sm text-red-400 font-medium">Disconnect</Text>
-        </Pressable>
+        </PressableBox>
       </View>
     </Animated.View>
   );

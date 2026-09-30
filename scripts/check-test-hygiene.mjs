@@ -6,6 +6,7 @@
  * vacuous tests by check-test-integrity.
  */
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -53,6 +54,16 @@ function walk(root, relative, out) {
   return out;
 }
 
+function productFiles(root) {
+  if (!fs.existsSync(path.join(root, '.git'))) return walk(root, '.', []);
+  return execFileSync('git', ['ls-files', '-c', '-o', '--exclude-standard', '-z'], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+    .split('\0')
+    .filter(Boolean);
+}
+
 function lineOf(source, index) {
   return source.slice(0, index).split('\n').length;
 }
@@ -69,11 +80,11 @@ export function maskNonCode(source) {
 }
 
 export function testFiles(root) {
-  return walk(root, '.', []).filter((relative) => TEST_FILE.test(path.basename(relative)));
+  return productFiles(root).filter((relative) => TEST_FILE.test(path.basename(relative)));
 }
 
 export function configFiles(root) {
-  return walk(root, '.', []).filter((relative) => CONFIG_FILE.test(path.basename(relative)));
+  return productFiles(root).filter((relative) => CONFIG_FILE.test(path.basename(relative)));
 }
 
 function scan(source, rules) {

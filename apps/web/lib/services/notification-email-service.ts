@@ -176,6 +176,88 @@ export async function sendSecurityAlertEmail(
   return result;
 }
 
+export interface AccountSecurityCodeEmailInput {
+  to: string;
+  code: string;
+  expiresMinutes: number;
+  idempotencyKey: string;
+}
+
+export async function sendAccountSecurityCodeEmail(
+  input: AccountSecurityCodeEmailInput,
+): Promise<SendEmailResult> {
+  const from = notificationsFromEmail();
+  if (!isNotificationEmailConfigured()) {
+    return {
+      delivered: false,
+      reason: 'not_configured',
+      detail: 'RESEND_API_KEY and AGI_NOTIFICATIONS_FROM_EMAIL are required',
+    };
+  }
+
+  const paragraphs = [
+    `Your code to turn on Advanced Account Security is ${input.code}.`,
+    `It works once and expires in ${input.expiresMinutes} minutes.`,
+    'If you did not ask for this code, someone may know your password. Change your password now.',
+  ];
+  const result = await sendTransactionalEmail({
+    from,
+    to: input.to,
+    subject: 'Your code to turn on Advanced Account Security',
+    text: paragraphs.join('\n\n'),
+    html: paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join(''),
+    idempotencyKey: input.idempotencyKey,
+  });
+
+  if (!result.delivered && result.reason !== 'not_configured') {
+    logger.warn({ reason: result.reason }, '[notifications] account security code email failed');
+  }
+  return result;
+}
+
+export interface AccountSecurityEnabledEmailInput {
+  to: string;
+  undoUrl: string;
+  undoExpiresAt: string;
+  idempotencyKey: string;
+}
+
+export async function sendAccountSecurityEnabledEmail(
+  input: AccountSecurityEnabledEmailInput,
+): Promise<SendEmailResult> {
+  const from = notificationsFromEmail();
+  if (!isNotificationEmailConfigured()) {
+    return {
+      delivered: false,
+      reason: 'not_configured',
+      detail: 'RESEND_API_KEY and AGI_NOTIFICATIONS_FROM_EMAIL are required',
+    };
+  }
+
+  const summary =
+    'Advanced Account Security was turned on for your AGI Workforce account. Every sign-in now needs one of the passkeys or security keys that were added, and your other devices were signed out.';
+  const undo = `If this was not you, turn it off with the link below. It signs everyone out and resets your password, and it does not need a passkey. It works until ${input.undoExpiresAt}. Afterwards, choose a new password with Forgot password on the sign-in screen.`;
+  const ignore = 'If it was you, you can ignore this email.';
+  const result = await sendTransactionalEmail({
+    from,
+    to: input.to,
+    subject: 'Was this you? Advanced Account Security was turned on',
+    text: [summary, '', undo, input.undoUrl, '', ignore].join('\n'),
+    html: [
+      `<p>${escapeHtml(summary)}</p>`,
+      `<p>${escapeHtml(undo)}</p>`,
+      `<p><a href="${escapeHtml(input.undoUrl)}">This was not me: turn it off</a></p>`,
+      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${escapeHtml(ignore)}</p>`,
+    ].join(''),
+    idempotencyKey: input.idempotencyKey,
+  });
+
+  if (!result.delivered && result.reason !== 'not_configured') {
+    logger.warn({ reason: result.reason }, '[notifications] account security undo email failed');
+  }
+  return result;
+}
+
 export interface DataExportReadyEmailInput {
   to: string;
   downloadUrls: readonly string[];

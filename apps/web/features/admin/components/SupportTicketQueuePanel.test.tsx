@@ -192,7 +192,7 @@ describe('SupportTicketQueuePanel', () => {
     await user.click(screen.getByRole('button', { name: 'Send reply' }));
 
     expect(await screen.findByText('Re-queued, fixed.')).toBeVisible();
-    expect(screen.getByRole('status')).toHaveTextContent('it is not emailed to them');
+    expect(screen.getByRole('status')).toHaveTextContent('emailed to the contact address');
     expect(screen.getByText('Resolved')).toBeVisible();
     const { url, init } = call(2);
     expect(url).toBe(`/api/support/staff/tickets/${TICKET.id}`);

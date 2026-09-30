@@ -15,7 +15,13 @@ vi.mock('../../../lib/turn-slot', () => ({
   withManagedTurnSlot: (_slot: unknown, run: () => Promise<Response>) => run(),
 }));
 
+const workspaceControls = vi.hoisted(() =>
+  vi.fn(async (..._args: unknown[]) => ({ ok: true, controls: null }) as unknown),
+);
+
 vi.mock('@/lib/managed-compute-gate', () => ({
+  resolveWorkspaceControlsForRequest: (...args: unknown[]) => workspaceControls(...args),
+  buildWorkspaceFeatureGateResponse: vi.fn(async () => null),
   buildManagedComputeGateResponse: vi.fn(() => null),
   buildOrganizationPolicyGateResponse: vi.fn(async () => null),
   buildModelPolicyGateResponse: async () => null,
@@ -251,6 +257,29 @@ describe('POST /api/llm/v1/chat/completions/runs/[runId]/resume', () => {
       leaseToken: LEASE_TOKEN,
     });
     expect(workflowMocks.start).not.toHaveBeenCalled();
+  });
+
+  it('revalidates the resumed turn under the workspace controls', async () => {
+    const controls = { featureAccess: { 'computer.use': false } };
+    workspaceControls.mockResolvedValueOnce({ ok: true, controls });
+
+    const response = await POST(makeRequest({}), context);
+    await response.text();
+
+    expect(mockProcessRequest.mock.calls[0]![2]).toEqual({ workspaceControls: controls });
+  });
+
+  it('returns the pause to the user when the workspace controls refuse the resume', async () => {
+    workspaceControls.mockResolvedValueOnce({
+      ok: false,
+      response: new Response(null, { status: 403 }),
+    });
+
+    const response = await POST(makeRequest({}), context);
+
+    expect(response.status).toBe(403);
+    expect(mockProcessRequest).not.toHaveBeenCalled();
+    expect(runMocks.release).toHaveBeenCalled();
   });
 
   it('blocks guidance that carries a secret before claiming the pause', async () => {

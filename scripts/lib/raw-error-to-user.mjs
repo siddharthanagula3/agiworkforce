@@ -5,9 +5,8 @@ const ts = require('typescript');
 
 /**
  * Sinks whose argument is rendered to a person, so a raw exception message
- * reaching one of them puts the browser's own wording on screen: "Failed to
- * fetch" in Chrome, "Load failed" in Safari. Neither names a condition nor
- * suggests an action.
+ * reaching one of them puts runtime, provider, or storage diagnostics on screen.
+ * They may reveal internal details and rarely suggest a recovery action.
  */
 export const USER_VISIBLE_SINKS = [
   'setError',
@@ -17,6 +16,10 @@ export const USER_VISIBLE_SINKS = [
   'setListError',
   'toast.error',
   'toast.warning',
+  'Alert.alert',
+  'ToastAndroid.show',
+  'ToastAndroid.showWithGravity',
+  'ToastAndroid.showWithGravityAndOffset',
 ];
 
 const SINK_ALTERNATION = USER_VISIBLE_SINKS.map((s) => s.replace('.', '\\.')).join('|');
@@ -72,6 +75,7 @@ function callName(expression, sourceFile) {
 
 function isUserVisibleSink(expression, sourceFile) {
   const name = callName(expression, sourceFile);
+  if (name === 'setTimeout' || name === 'setInterval' || name === 'setImmediate') return false;
   return RAW_TO_SINK.test(name) || /^set[A-Z][A-Za-z0-9]*$/.test(name);
 }
 
@@ -89,6 +93,13 @@ function containsUnsanitizedMessage(node, sourceFile) {
   return node
     .getChildren(sourceFile)
     .some((child) => containsUnsanitizedMessage(child, sourceFile));
+}
+
+function containsJsxMarkup(node, sourceFile) {
+  if (ts.isJsxElement(node) || ts.isJsxFragment(node) || ts.isJsxSelfClosingElement(node)) {
+    return true;
+  }
+  return node.getChildren(sourceFile).some((child) => containsJsxMarkup(child, sourceFile));
 }
 
 export function findRawErrorSinks(source, file) {
@@ -111,6 +122,15 @@ export function findRawErrorSinks(source, file) {
   }
 
   function visit(node) {
+    if (
+      ts.isJsxExpression(node) &&
+      (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent)) &&
+      node.expression &&
+      !containsJsxMarkup(node.expression, sourceFile) &&
+      containsUnsanitizedMessage(node.expression, sourceFile)
+    ) {
+      record(node);
+    }
     if (ts.isObjectLiteralExpression(node) && declaresErrorMarker(node)) {
       for (const property of node.properties) {
         if (!ts.isPropertyAssignment(property)) continue;
@@ -121,7 +141,9 @@ export function findRawErrorSinks(source, file) {
       }
     }
     if (ts.isCallExpression(node) && isUserVisibleSink(node.expression, sourceFile)) {
-      const rawArgument = node.arguments.find((argument) =>
+      const name = callName(node.expression, sourceFile);
+      const visibleArguments = name === 'Alert.alert' ? node.arguments.slice(0, 2) : node.arguments;
+      const rawArgument = visibleArguments.find((argument) =>
         containsUnsanitizedMessage(argument, sourceFile),
       );
       if (rawArgument) record(node);

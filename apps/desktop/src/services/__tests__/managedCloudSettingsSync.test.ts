@@ -24,16 +24,15 @@ function createHarness(privacyMode: 'local' | 'byok' | 'managed' = 'local') {
   const authListeners = new Set<() => void>();
   const settingsListeners = new Set<() => void>();
   const storage = new Map<string, string>();
-  const pull = vi.fn(
-    async (): Promise<SettingsSyncPullResponse> => ({
-      settings: { appearance: { theme: 'dark' } },
-      cursor: '2',
-      hasMore: false,
-    }),
-  );
-  const push = vi.fn(
-    async (): Promise<SettingsSyncPushResponse> => ({ applied: true, cursor: '3' }),
-  );
+  const pull = vi.fn(async (): Promise<SettingsSyncPullResponse> => ({
+    settings: { appearance: { theme: 'dark' } },
+    cursor: '2',
+    hasMore: false,
+  }));
+  const push = vi.fn(async (): Promise<SettingsSyncPushResponse> => ({
+    applied: true,
+    cursor: '3',
+  }));
   const events: Array<{ phase: string; error?: unknown }> = [];
 
   const ports: ManagedCloudSettingsSyncPorts = {

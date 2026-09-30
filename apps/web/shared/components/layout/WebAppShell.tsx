@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-space-available';
 import { usePathname } from 'next/navigation';
 import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
 import { useTranslation } from 'react-i18next';
@@ -453,6 +454,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   // why (the two hand-maintained copies had drifted and this shell was the only
   // one exposing Tasks).
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
+  const healthSpaceAvailable = useHealthSpaceAvailable();
   const { t } = useTranslation('common');
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
@@ -463,9 +465,10 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
         disabledFeatures,
+        healthSpaceAvailable,
         translate: (key, fallback) => t(key, { defaultValue: fallback }),
       }),
-    [disabledFeatures, hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
+    [disabledFeatures, healthSpaceAvailable, hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
   );
 
   // ---- Account footer ----
@@ -531,7 +534,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
           <button
             type="button"
             aria-label={`Account menu for ${displayName}`}
-            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            className="flex w-full items-center gap-2 px-3 py-3 text-start transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
           >
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {userInitial}

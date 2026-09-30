@@ -17,6 +17,7 @@ import {
   AGENT_TASK_BOARD_STAGES,
   agentTaskBoardStage,
   agentTaskStateLabel,
+  messageKindForAgentEvent,
   type AgentTaskBoardStage,
 } from '@agiworkforce/types';
 import {
@@ -27,6 +28,7 @@ import {
   isLiveTaskState,
   isPausableState,
   runWorkState,
+  taskResultText,
 } from '@agiworkforce/unified-chat/task-display';
 import {
   ALL_MANAGED_RUN_STATES,
@@ -48,6 +50,9 @@ import {
   type SchedulesSectionDependencies,
 } from './schedulesSection';
 import { el } from './dom';
+import { buildHelpArticleLink } from './helpLinks';
+import { renderMarkdown, sanitizeHtml } from './markdown';
+import { t } from '../../i18n';
 
 export const CLOUD_RUNS_PANEL_CSS =
   `
@@ -613,6 +618,27 @@ export const CLOUD_RUNS_PANEL_CSS =
   .sp-run-approval .sp-connector-input {
     margin: 6px 0 0;
   }
+
+  .sp-runs-help {
+    padding: 8px 14px;
+  }
+
+  .sp-run-result {
+    max-height: 320px;
+    overflow-y: auto;
+    font-size: var(--type-caption-size);
+    line-height: var(--type-body-height);
+    color: var(--agi-ext-text);
+    overflow-wrap: anywhere;
+  }
+
+  .sp-run-result > :first-child {
+    margin-top: 0;
+  }
+
+  .sp-run-result > :last-child {
+    margin-bottom: 0;
+  }
 ` + SCHEDULES_SECTION_CSS;
 
 type RunFilter = 'active' | 'needs-you' | 'all';
@@ -705,6 +731,7 @@ function saveRunLayout(layout: RunLayout): void {
   }
 }
 const MAX_RENDERED_JOURNAL_ENTRIES = 200;
+const MAX_RESULT_EVENTS = 20_000;
 const MAX_RENDERED_TEXT_CHARACTERS = 20_000;
 
 export interface CloudRunsPanelDependencies {
@@ -894,6 +921,7 @@ function runStateLabel(run: CloudAgentRun): string {
 
 function describeEnvelope(envelope: AgentEventEnvelope): JournalEntry | null {
   const event = envelope.event;
+  if (messageKindForAgentEvent(event.type) === null) return null;
   switch (event.type) {
     case 'text-delta':
       return { kind: 'text', title: event.delta };
@@ -1043,6 +1071,7 @@ export function buildCloudRunsPanel(
   let pendingControlRunId: string | null = null;
   let pendingInputRunId: string | null = null;
   let openActivity: AgentActivityState | undefined;
+  let openEvents: AgentEventEnvelope[] = [];
   let statusOrigin: StatusOrigin = 'progress';
   const guidanceByRunId = new Map<string, string>();
   const steerDraftByRunId = new Map<string, string>();
@@ -1343,6 +1372,31 @@ export function buildCloudRunsPanel(
       }
       section.appendChild(summary);
     }
+    return section;
+  }
+
+  function buildResultSection(run: CloudAgentRun): HTMLElement | null {
+    const text = taskResultText(openEvents);
+    if (!text) return null;
+    const live = isLiveTaskState(runWorkState(run));
+    const section = el('section', {
+      class: 'sp-run-section',
+      'aria-labelledby': 'sp-run-result-title',
+    });
+    section.appendChild(
+      el(
+        'h3',
+        { class: 'sp-run-section-title', id: 'sp-run-result-title' },
+        live
+          ? t('spRunLatestOutput')
+          : run.workMode === 'research'
+            ? t('spRunReport')
+            : t('spRunResult'),
+      ),
+    );
+    const body = el('div', { class: 'sp-run-result' });
+    body.innerHTML = sanitizeHtml(renderMarkdown(text));
+    section.appendChild(body);
     return section;
   }
 
@@ -1762,6 +1816,9 @@ export function buildCloudRunsPanel(
         fragment.appendChild(moreBtn);
       }
     }
+    fragment.appendChild(
+      el('div', { class: 'sp-runs-help' }, buildHelpArticleLink('agi-work', t('spHelpLinkRuns'))),
+    );
     listEl.replaceChildren(fragment);
   }
 
@@ -1801,6 +1858,8 @@ export function buildCloudRunsPanel(
       if (attention) fragment.appendChild(attention);
       const plan = buildPlanSection(run);
       if (plan) fragment.appendChild(plan);
+      const result = buildResultSection(run);
+      if (result) fragment.appendChild(result);
       const outputs = buildOutputsSection();
       if (outputs) fragment.appendChild(outputs);
     }
@@ -1870,6 +1929,7 @@ export function buildCloudRunsPanel(
         const loaded = mergeRun(detailRun, result.journal.run);
         detailRun = loaded;
         openEntries = summarizeRunJournal(result.journal.events, openEntries);
+        openEvents = [...openEvents, ...result.journal.events].slice(-MAX_RESULT_EVENTS);
         openActivity = result.journal.events.reduce<AgentActivityState | undefined>(
           (activity, envelope) => applyAgentActivityEvent(activity, envelope),
           openActivity,
@@ -1919,6 +1979,7 @@ export function buildCloudRunsPanel(
   function resetOpenJournal(): void {
     openEntries = [];
     openActivity = undefined;
+    openEvents = [];
     openAfterSequence = null;
     openJournalTruncated = false;
   }

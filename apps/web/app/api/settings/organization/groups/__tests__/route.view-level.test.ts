@@ -8,9 +8,39 @@ const mocks = vi.hoisted(() => ({
   listed: [] as Array<string | undefined>,
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: async () => null }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: async () => [] }) }));
+vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: vi.fn(),
+  acquireManagedTurnSlot: vi.fn(),
+  checkRateLimit: vi.fn(),
+  clientIpRateLimitIdentifier: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveRedisOutagePolicy: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
+  withRateLimit: async () => null,
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
+  getNeonDb: () => ({ query: async () => [] }),
+}));
 vi.mock('@/lib/services/organization-role-service', () => ({
+  assertPermissionsWithinActor: vi.fn(),
+  createCustomRole: vi.fn(),
+  deleteCustomRole: vi.fn(),
+  deleteWorkspaceGroup: vi.fn(),
+  isDirectoryGroupManager: vi.fn(),
+  listMemberRoleGrants: vi.fn(),
+  listOrganizationRoles: vi.fn(),
+  readWorkspaceGroupMembers: vi.fn(),
+  renameWorkspaceGroup: vi.fn(),
+  setDirectoryGroupManagers: vi.fn(),
+  setDirectoryGroupRoles: vi.fn(),
+  setMemberRoles: vi.fn(),
+  setWorkspaceGroupMembers: vi.fn(),
+  updateCustomRole: vi.fn(),
   MAX_WORKSPACE_GROUP_NAME_CHARS: 255,
   createWorkspaceGroup: vi.fn(),
   listDirectoryGroupsWithRoles: async (_db: unknown, _org: string, managerId?: string) => {

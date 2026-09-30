@@ -160,10 +160,10 @@ export function ToolTimeline({
                 other: 'Used {{count}} tools',
               })}
               {errorCount > 0 && (
-                <span className="text-danger-text ml-1">({errorCount} failed)</span>
+                <span className="text-danger-text ms-1">({errorCount} failed)</span>
               )}
               {totalDuration > 0 && (
-                <span className="text-muted-foreground ml-1">
+                <span className="text-muted-foreground ms-1">
                   (
                   {totalDuration < 1000
                     ? `${totalDuration}ms`
@@ -194,7 +194,7 @@ export function ToolTimeline({
                   return (
                     <div
                       key={group.parallelGroup}
-                      className="border-l-2 border-info-fill/30 pl-2 py-0.5 space-y-1.5"
+                      className="border-s-2 border-info-fill/30 ps-2 py-0.5 space-y-1.5"
                     >
                       <div className="flex items-center gap-1 mb-0.5">
                         <GitBranch className="w-2.5 h-2.5 text-info-text shrink-0" />

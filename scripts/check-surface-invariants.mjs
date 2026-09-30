@@ -151,7 +151,7 @@ export function analyzeRouteNavigation({ routes, literalsByFile, declaredScreens
     if (navigated) continue;
 
     const segments = route.routeRelative.replace(/\.[cm]?[jt]sx?$/, '').split('/');
-    if (declaredScreens.has(segments.at(-1)) || declaredScreens.has(segments.slice(-2).join('/'))) {
+    if (segments.some((_, index) => declaredScreens.has(segments.slice(index).join('/')))) {
       continue;
     }
 

@@ -223,15 +223,15 @@ export function WorkspaceDomainRetention() {
       ) : null}
       {data.sweeps.length > 0 ? (
         <div className="overflow-x-auto border-t" style={{ borderColor: 'var(--settings-border)' }}>
-          <table className="w-full text-left text-xs" style={{ borderCollapse: 'collapse' }}>
+          <table className="w-full text-start text-xs" style={{ borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ color: 'var(--text-3)' }}>
                 <th className="px-5 py-2 font-medium">When</th>
                 <th className="px-5 py-2 font-medium">Type</th>
                 <th className="px-5 py-2 font-medium">Outcome</th>
-                <th className="px-5 py-2 text-right font-medium">Deleted</th>
-                <th className="px-5 py-2 text-right font-medium">Files deleted</th>
-                <th className="px-5 py-2 text-right font-medium">Held</th>
+                <th className="px-5 py-2 text-end font-medium">Deleted</th>
+                <th className="px-5 py-2 text-end font-medium">Files deleted</th>
+                <th className="px-5 py-2 text-end font-medium">Held</th>
               </tr>
             </thead>
             <tbody>
@@ -256,19 +256,19 @@ export function WorkspaceDomainRetention() {
                     {sweep.outcome.replace(/_/g, ' ')}
                   </td>
                   <td
-                    className="px-5 py-2.5 text-right tabular-nums"
+                    className="px-5 py-2.5 text-end tabular-nums"
                     style={{ color: 'var(--text-1)' }}
                   >
                     {sweep.recordsDeleted}
                   </td>
                   <td
-                    className="px-5 py-2.5 text-right tabular-nums"
+                    className="px-5 py-2.5 text-end tabular-nums"
                     style={{ color: 'var(--text-1)' }}
                   >
                     {sweep.objectsDeleted}
                   </td>
                   <td
-                    className="px-5 py-2.5 text-right tabular-nums"
+                    className="px-5 py-2.5 text-end tabular-nums"
                     style={{ color: 'var(--text-1)' }}
                   >
                     {sweep.recordsHeld}

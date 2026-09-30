@@ -35,6 +35,7 @@ function permissions(denied: readonly string[] = []) {
 function gate(tools: readonly string[]) {
   return createCloudAgentToolPermissionGate(db, {
     userId: 'user-1',
+    organizationId: null,
     connectorToolNames: new Set(tools),
   });
 }

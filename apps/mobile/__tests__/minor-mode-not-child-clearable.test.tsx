@@ -33,15 +33,23 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
 }));
 
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
-}));
+jest.mock('react-native-safe-area-context', () => {
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: (props: Record<string, unknown>) => <View {...props} />,
+  };
+});
 
 jest.mock('lucide-react-native', () => {
   const { View } = require('react-native');
   const icon = (props: Record<string, unknown>) => <View {...props} />;
   return { ArrowLeft: icon, Baby: icon, ChevronRight: icon, Lock: icon, Shield: icon };
 });
+
+jest.mock('@/src/features/auth/store', () => ({
+  useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ isClerkSignedIn: false, signOut: jest.fn() }),
+}));
 
 jest.mock('../stores/settingsStore', () => ({
   useSettingsStore: (selector: (state: { hapticsEnabled: boolean }) => unknown) =>
@@ -92,7 +100,7 @@ describe('minor-safe mode cannot be cleared by the device it protects', () => {
 
     expect(queryByTestId('age-gate-input')).toBeNull();
     expect(queryByTestId('age-gate-continue-btn')).toBeNull();
-    expect(getByTestId('age-gate-minor-locked')).toBeTruthy();
+    expect(getByTestId('age-gate-refused')).toBeTruthy();
   });
 
   it('shows the age input while no minor record exists', () => {

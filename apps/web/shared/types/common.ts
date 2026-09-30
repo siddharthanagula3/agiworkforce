@@ -1,4 +1,4 @@
-import type { SurfaceState } from '@agiworkforce/types';
+import type { AgentEventSource, SurfaceState } from '@agiworkforce/types';
 
 export type { SurfaceState } from '@agiworkforce/types';
 
@@ -200,13 +200,10 @@ export interface ThinkingStep {
   duration?: number;
 }
 
-export interface Citation {
+export interface Citation extends AgentEventSource {
   id: string;
-  title: string;
-  url: string;
   description?: string;
   favicon?: string;
-  snippet?: string;
   timestamp?: Date | string;
 }
 

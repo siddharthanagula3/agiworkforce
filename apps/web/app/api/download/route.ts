@@ -17,6 +17,11 @@ type MacArchitecture = 'arm64' | 'x64';
 
 const DESKTOP_INSTALLER_FILENAME = 'agiworkforce.dmg';
 
+function installerFilename(assetName: string): string {
+  const name = assetName.replace(/[^\w .()-]/g, '').trim();
+  return name.endsWith('.dmg') ? name : DESKTOP_INSTALLER_FILENAME;
+}
+
 function macInstallerAsset(release: StableDesktopRelease, architecture: MacArchitecture | null) {
   const installers = release.assets.filter((asset) => asset.name.endsWith('.dmg'));
   const arm64 = installers.find((asset) => /arm64|aarch64/i.test(asset.name)) ?? null;
@@ -98,7 +103,7 @@ async function handleDownload(request: NextRequest) {
     headers: {
       'Content-Type': fileResponse.headers.get('Content-Type') || 'application/octet-stream',
       'Content-Length': fileResponse.headers.get('Content-Length') || '',
-      'Content-Disposition': `attachment; filename="${DESKTOP_INSTALLER_FILENAME}"`,
+      'Content-Disposition': `attachment; filename="${installerFilename(asset.name)}"`,
       'Cache-Control': 'public, max-age=3600',
     },
   });

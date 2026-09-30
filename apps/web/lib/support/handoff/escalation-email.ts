@@ -1,17 +1,17 @@
 import 'server-only';
 
-import { redactSecrets } from '@/lib/security/secrets-audit';
+import { redactAuditedSecrets } from '@/lib/security/secrets-audit';
 import { SITE_URL } from '@/lib/seo/site';
 import {
   STAFF_QUEUE_PATH,
   severityForPriority,
   type SupportTicket,
-} from '@/lib/support/tickets/types';
+  type HandoffReason,
+} from '@agiworkforce/cloud-contracts/support';
 
 import type { HandoffSessionRow } from './store';
 import { sendSupportEmail, type SendEmailResult } from './resend-client';
 import { getHandoffConfig } from './config';
-import type { HandoffReason } from './types';
 
 const REASON_COPY: Record<HandoffReason, string> = {
   user_requested: 'The user asked for a human',
@@ -165,7 +165,7 @@ export function buildTicketOpenedEmail({
   userId,
 }: TicketOpenedEmailInput): SupportInboxEmailContent {
   const severity = severityForPriority(ticket.priority);
-  const subjectLine = singleLine(redactSecrets(ticket.subject));
+  const subjectLine = singleLine(redactAuditedSecrets(ticket.subject));
   const queueUrl = `${SITE_URL}${STAFF_QUEUE_PATH}`;
 
   const text = [
@@ -180,7 +180,7 @@ export function buildTicketOpenedEmail({
     `Answer it: ${queueUrl}`,
     '',
     'MESSAGE (credentials redacted)',
-    redactSecrets(ticket.message),
+    redactAuditedSecrets(ticket.message),
   ].join('\n');
 
   const html = [
@@ -224,7 +224,7 @@ export interface CustomerTicketEmailInput {
 export async function sendCustomerTicketEmail(
   input: CustomerTicketEmailInput,
 ): Promise<SendEmailResult> {
-  const subjectLine = singleLine(redactSecrets(input.subject));
+  const subjectLine = singleLine(redactAuditedSecrets(input.subject));
   const followUrl = `${SITE_URL}${input.followPath}`;
   const text = [
     input.body,

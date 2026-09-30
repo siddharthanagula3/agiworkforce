@@ -1,15 +1,17 @@
+import { ARTIFACT_CSP_CONTENT } from '@agiworkforce/types';
 import {
   buildMermaidPreviewHtml,
   buildSandboxedArtifactHtml,
+  parseArtifactPreviewError,
 } from '../src/features/chat/components/sandboxedArtifactHtml';
 
 describe('buildSandboxedArtifactHtml', () => {
-  it('injects a strict Content-Security-Policy that blocks external loads by default', () => {
+  it('runs HTML under the canonical artifact policy, which allows no network calls', () => {
     const html = buildSandboxedArtifactHtml('<p>hi</p>', 'html');
-    expect(html).toContain('http-equiv="Content-Security-Policy"');
+    expect(html).toContain(`content="${ARTIFACT_CSP_CONTENT}"`);
     expect(html).toContain("default-src 'none'");
-    expect(html).not.toMatch(/script-src[^;"]*'unsafe-inline'/i);
-    expect(html).not.toContain("connect-src 'self'");
+    expect(html).toContain("connect-src 'none'");
+    expect(html).toContain("form-action 'none'");
   });
 
   it('embeds the untrusted HTML content in the document body', () => {
@@ -25,13 +27,23 @@ describe('buildSandboxedArtifactHtml', () => {
     expect(html).toContain("default-src 'none'");
   });
 
-  it('does not execute, a <script> in the artifact is inert under the CSP (no script-src allowed)', () => {
-    const html = buildSandboxedArtifactHtml(
-      '<script>fetch("https://evil.example")</script>',
-      'html',
-    );
+  it('keeps SVG script-free', () => {
+    const html = buildSandboxedArtifactHtml('<svg><script>alert(1)</script></svg>', 'svg');
     expect(html).toContain("default-src 'none'");
     expect(html).not.toMatch(/script-src/i);
+  });
+
+  it('reports only a well-formed error message from the page', () => {
+    expect(
+      parseArtifactPreviewError('{"type":"error","message":"x is not defined\\nstack"}'),
+    ).toEqual({
+      type: 'error',
+      message: 'x is not defined',
+    });
+    expect(
+      parseArtifactPreviewError('{"type":"navigate","url":"https://evil.example"}'),
+    ).toBeNull();
+    expect(parseArtifactPreviewError('not json')).toBeNull();
   });
 });
 

@@ -21,6 +21,22 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/server/developer-token', () => ({
   issueDeveloperToken: (...args: unknown[]) => mocks.issueDeveloperToken(...args),
 }));
+const policy = vi.hoisted(() => ({
+  minRequired: null as string | null,
+  effectiveAt: null as string | null,
+}));
+vi.mock('@/lib/server/terms', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/terms')>();
+  return {
+    ...actual,
+    termsStandingFor: (acceptance: { version: string } | null, now?: Date) =>
+      actual.termsStandingFor(acceptance, now, {
+        current: actual.CURRENT_TERMS_VERSION,
+        minRequired: policy.minRequired,
+        minRequiredEffectiveAt: policy.effectiveAt,
+      }),
+  };
+});
 
 import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
 import { POST } from './route';
@@ -55,6 +71,8 @@ function storedToken(termsVersion: string | null) {
 describe('device refresh across a terms revision', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    policy.minRequired = null;
+    policy.effectiveAt = null;
     mocks.execute.mockResolvedValue(1);
     mocks.issueDeveloperToken.mockReturnValue({
       accessToken: 'next-access-token',
@@ -68,7 +86,45 @@ describe('device refresh across a terms revision', () => {
     );
   });
 
-  it('withholds the token without destroying the session when the revision is stale', async () => {
+  it('renews an account on an older version and tells the client a new one is published', async () => {
+    mocks.query
+      .mockResolvedValueOnce([storedToken('2026-01-01')])
+      .mockResolvedValueOnce([{ id: '33333333-3333-4333-8333-333333333333' }]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Terms-Notice')).toBe(CURRENT_TERMS_VERSION);
+    expect(response.headers.get('X-AGI-Terms-Required-From')).toBeNull();
+  });
+
+  it('renews an account on the current version with no notice', async () => {
+    mocks.query
+      .mockResolvedValueOnce([storedToken(CURRENT_TERMS_VERSION)])
+      .mockResolvedValueOnce([{ id: '33333333-3333-4333-8333-333333333333' }]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Terms-Notice')).toBeNull();
+  });
+
+  it('names the deadline while a material revision is inside its grace period', async () => {
+    policy.minRequired = CURRENT_TERMS_VERSION;
+    policy.effectiveAt = new Date(Date.now() + 86_400_000).toISOString();
+    mocks.query
+      .mockResolvedValueOnce([storedToken('2026-01-01')])
+      .mockResolvedValueOnce([{ id: '33333333-3333-4333-8333-333333333333' }]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Terms-Required-From')).toBe(policy.effectiveAt);
+  });
+
+  it('withholds the token without destroying the session past a material revision deadline', async () => {
+    policy.minRequired = CURRENT_TERMS_VERSION;
+    policy.effectiveAt = new Date(Date.now() - 1_000).toISOString();
     mocks.query.mockResolvedValueOnce([storedToken('2026-01-01')]);
 
     const response = await POST(request());
@@ -76,6 +132,8 @@ describe('device refresh across a terms revision', () => {
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({
       error: 'terms_acceptance_required',
+      error_description:
+        'Accept the Terms of Service at https://agiworkforce.com/login/complete?redirectTo=%2F to keep using AGI Workforce on this device.',
       terms_version: CURRENT_TERMS_VERSION,
       acceptance_url: 'https://agiworkforce.com/login/complete?redirectTo=%2F',
     });
@@ -86,8 +144,8 @@ describe('device refresh across a terms revision', () => {
     expect(revokedFamilies).toEqual([]);
   });
 
-  it('rotates the very same credential once the account accepts the new revision', async () => {
-    mocks.query.mockResolvedValueOnce([storedToken('2026-01-01')]);
+  it('rotates the very same credential once an account with no acceptance accepts', async () => {
+    mocks.query.mockResolvedValueOnce([storedToken(null)]);
     const withheld = await POST(request());
     expect(withheld.status).toBe(403);
 

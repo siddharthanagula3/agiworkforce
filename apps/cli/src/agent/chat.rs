@@ -610,6 +610,7 @@ impl AgentSession {
             task_type: crate::routing::classify::developer_task_type(task_type),
             trust_mode: previous.trust_mode,
             speed_first: previous.speed_first,
+            policy_version: crate::runtime::session::current_routing_policy_version(),
         }));
     }
 
@@ -633,6 +634,30 @@ impl AgentSession {
             agiworkforce_model_registry::harness_feature_implemented(&harness, "parallelToolCalls")
                 .unwrap_or(false)
         })
+    }
+
+    async fn prepare_documents(&mut self) {
+        let privacy = self.privacy_mode;
+        let native_pdf = privacy != super::PrivacyMode::Managed
+            && crate::model_catalog::find(&self.model).is_some_and(|model| model.supports_pdf);
+        let mut notices = Vec::new();
+        let mut pending = std::mem::take(&mut self.pending_image_blocks);
+        for block in &mut pending {
+            notices.extend(settle_document(block, privacy, native_pdf, true).await);
+        }
+        self.pending_image_blocks = pending;
+        let mut messages = std::mem::take(&mut self.messages);
+        for message in &mut messages {
+            if let models::MessageContent::Blocks(blocks) = &mut message.content {
+                for block in blocks {
+                    notices.extend(settle_document(block, privacy, native_pdf, false).await);
+                }
+            }
+        }
+        self.messages = messages;
+        for notice in notices {
+            self.emit_turn_notice(notice);
+        }
     }
 
     fn image_limit_refusal(&self) -> Option<String> {
@@ -710,6 +735,17 @@ impl AgentSession {
         crate::tools::search_key_provider().is_none().then(|| {
             "/search needs a web search key in this session. Save a Brave Search or Tavily key with `agi login brave` or `agi login tavily`, or set BRAVE_SEARCH_API_KEY or TAVILY_API_KEY.".to_string()
         })
+    }
+
+    pub(crate) fn offers_hosted_search(&self) -> bool {
+        self.privacy_mode == super::PrivacyMode::Managed
+            && crate::tier_cache::capability_allowed(crate::tier_cache::WEB_SEARCH_CAPABILITY)
+                == Some(true)
+            && crate::model_catalog::supports_web_search(&self.model)
+            && self
+                .effective_tool_definitions()
+                .iter()
+                .any(|tool| tool.name == models::WEB_SEARCH_TOOL)
     }
 
     async fn project_conversation(&self) -> Option<String> {
@@ -862,15 +898,14 @@ impl AgentSession {
         self.complete_pending_privacy_handoff(user_input)?;
         self.validate_privacy_boundary()?;
         self.claim_writer_lease();
-        if self.privacy_mode == super::PrivacyMode::Managed {
-            crate::cloud::workspace_policy::refresh_when_due().await;
-        }
+        crate::cloud::workspace_policy::refresh_when_due().await;
 
         // Auto sessions: classify this turn and re-resolve the route before
         // anything downstream reads `self.model` (compaction limits, request
         // construction, cost attribution).
         self.re_resolve_auto_route_for_turn(user_input);
 
+        self.prepare_documents().await;
         if let Some(refusal) = self.image_limit_refusal() {
             self.pending_image_blocks.clear();
             anyhow::bail!(refusal);
@@ -1076,7 +1111,9 @@ message -- revise and call `update_plan` again.\n\n",
         let max_tokens = config.effective_max_tokens(&self.model);
 
         let mut tool_defs = self.effective_tool_definitions();
-        if search_turn && self.privacy_mode == super::PrivacyMode::Managed {
+        if self.privacy_mode == super::PrivacyMode::Managed
+            && (search_turn || self.offers_hosted_search())
+        {
             tool_defs.retain(|tool| tool.name != models::WEB_SEARCH_TOOL);
         }
         let callable_tool_defs = self.callable_tool_definitions(&tool_defs);
@@ -2106,9 +2143,22 @@ impl TurnHostAdapter<'_> {
                     output: format!("tool error: {:#}", e),
                 },
             }
+        } else if call.name.starts_with("mcp_") && !self.session.mcp_server_permitted(&call.name) {
+            crate::tools::ToolResult {
+                tool_name: call.name.clone(),
+                success: false,
+                output: "This agent is not set up to use that MCP server, so the tool did not run."
+                    .to_string(),
+            }
         } else if call.name.starts_with("mcp_") {
             let approval_callback = self.session.recorded_approval_callback();
             let require_confirmation = !self.session.skips_approval();
+            let workspace_root = self
+                .session
+                .managed_session
+                .as_ref()
+                .and_then(|session| session.workspace_root.clone())
+                .or_else(|| std::env::current_dir().ok());
             match execute_mcp_tool(
                 &mut self.session.mcp_manager,
                 &call.name,
@@ -2116,6 +2166,7 @@ impl TurnHostAdapter<'_> {
                 self.session.privacy_mode,
                 require_confirmation,
                 approval_callback,
+                workspace_root.as_deref(),
             )
             .await
             {
@@ -2128,6 +2179,7 @@ impl TurnHostAdapter<'_> {
             }
         } else {
             let opts = crate::tools::ToolExecOptions {
+                additional_workspace_roots: self.session.additional_context_dirs.clone(),
                 mcp_tool_definitions: self.session.mcp_catalog_for(&call.name),
                 require_confirmation: !self.session.skips_approval(),
                 auto_approve_safe: self.session.auto_approve_safe,
@@ -2138,12 +2190,7 @@ impl TurnHostAdapter<'_> {
                 quiet: self.session.quiet,
                 approval_callback: self.session.recorded_approval_callback(),
                 privacy_mode: self.session.privacy_mode,
-                workspace_root: self
-                    .session
-                    .managed_session
-                    .as_ref()
-                    .and_then(|session| session.workspace_root.clone())
-                    .or_else(|| std::env::current_dir().ok()),
+                workspace_root: self.session.workspace_root(),
             };
             match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
                 Ok(r) => r,
@@ -2190,12 +2237,33 @@ impl TurnHost for TurnHostAdapter<'_> {
         // caller's `on_chunk` for the first completion, `continuation_sink()`
         // thereafter) to preserve byte-for-byte incremental output, so the
         // engine's stream sink is intentionally unused here.
+        if matches!(phase, TurnPhase::First) {
+            emit_tool_event(
+                self.session.on_tool_event.as_ref(),
+                crate::tui::app_event::TuiAppEvent::ModelRequested,
+            );
+        }
         let routing_profile = self.session.request_routing_profile();
+        let offer_search = self.session.offers_hosted_search();
         let completion = match phase {
             TurnPhase::First if self.search_turn => {
                 models::routed(routing_profile, models::searching(self.complete_first())).await
             }
+            TurnPhase::First if offer_search => {
+                models::routed(
+                    routing_profile,
+                    models::offering_search(self.complete_first()),
+                )
+                .await
+            }
             TurnPhase::First => models::routed(routing_profile, self.complete_first()).await,
+            TurnPhase::Continuation if offer_search => {
+                models::routed(
+                    routing_profile,
+                    models::offering_search(self.complete_continuation()),
+                )
+                .await
+            }
             TurnPhase::Continuation => {
                 models::routed(routing_profile, self.complete_continuation()).await
             }
@@ -2627,6 +2695,7 @@ impl TurnHost for TurnHostAdapter<'_> {
 
     fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
         let opts = crate::tools::ToolExecOptions {
+            additional_workspace_roots: self.session.additional_context_dirs.clone(),
             mcp_tool_definitions: self.session.mcp_catalog_for(&prepared.name),
             require_confirmation: !self.session.skips_approval(),
             auto_approve_safe: self.session.auto_approve_safe,
@@ -2637,12 +2706,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             quiet: self.session.quiet,
             approval_callback: self.session.recorded_approval_callback(),
             privacy_mode: self.session.privacy_mode,
-            workspace_root: self
-                .session
-                .managed_session
-                .as_ref()
-                .and_then(|session| session.workspace_root.clone())
-                .or_else(|| std::env::current_dir().ok()),
+            workspace_root: self.session.workspace_root(),
         };
         let legacy = super::executor::ToolCall {
             name: prepared.name.clone(),
@@ -3137,6 +3201,97 @@ impl TurnHost for TurnHostAdapter<'_> {
     }
 }
 
+async fn settle_document(
+    block: &mut ContentBlock,
+    privacy: super::PrivacyMode,
+    native_pdf: bool,
+    upload: bool,
+) -> Option<String> {
+    use base64::Engine as _;
+
+    let ContentBlock::Document {
+        name,
+        mime,
+        data_b64,
+        asset_id,
+    } = block
+    else {
+        return None;
+    };
+    let managed = privacy == super::PrivacyMode::Managed;
+    if asset_id.is_some() {
+        if managed {
+            return None;
+        }
+        let text = crate::documents::untrusted(
+            name,
+            "[this file was uploaded to AGI Workforce Cloud and is not available in this mode]",
+        );
+        *block = ContentBlock::Text { text };
+        return None;
+    }
+    if data_b64.is_empty() || (native_pdf && mime == "application/pdf") {
+        return None;
+    }
+    let (name, mime) = (name.clone(), mime.clone());
+    let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(data_b64.as_bytes()) else {
+        *block = ContentBlock::Text {
+            text: crate::documents::untrusted(&name, "[the attachment could not be decoded]"),
+        };
+        return Some(format!("{name} could not be attached."));
+    };
+    let mut notice = None;
+    if upload && managed && crate::cloud::attachments::managed_accepts(&name, &mime) {
+        match crate::cloud::attachments::upload_chat_attachment(
+            privacy,
+            &name,
+            &mime,
+            bytes.clone(),
+            None,
+        )
+        .await
+        {
+            Ok(id) => {
+                *block = ContentBlock::Document {
+                    name,
+                    mime,
+                    data_b64: String::new(),
+                    asset_id: Some(id),
+                };
+                return None;
+            }
+            Err(error) => {
+                notice = Some(format!(
+                    "{name} could not be uploaded ({error}), so its text is sent instead."
+                ))
+            }
+        }
+    }
+    let text = match crate::documents::DocumentKind::for_path(std::path::Path::new(&name)) {
+        Some(kind) => match crate::documents::extract_isolated(
+            bytes,
+            kind,
+            Some(1..=crate::documents::MAX_ATTACHED_PDF_PAGES),
+        )
+        .await
+        {
+            Ok(document) => match document.note {
+                Some(note) => format!("{}\n{note}", document.text),
+                None => document.text,
+            },
+            Err(error) => {
+                notice = Some(format!("{name}: {error:#}"));
+                format!("[{error:#}]")
+            }
+        },
+        None => "[this file type cannot be read]".to_string(),
+    };
+    *block = ContentBlock::Text {
+        text: crate::documents::untrusted(&name, &text),
+    };
+    notice
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3397,6 +3552,7 @@ mod tests {
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
                 trust_mode: agiworkforce_model_registry::TrustMode::Byok,
                 speed_first: false,
+                policy_version: crate::runtime::session::current_routing_policy_version(),
             },
         ));
         session

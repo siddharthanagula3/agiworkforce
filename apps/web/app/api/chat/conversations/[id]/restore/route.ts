@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -22,6 +23,9 @@ async function handleRestoreConversation(request: NextRequest, context: RouteCon
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await context.params;
+  if (!z.string().uuid().safeParse(id).success) {
+    throw createError.notFound('Conversation not found');
+  }
 
   let restored: ChatConversationRow | undefined;
   try {

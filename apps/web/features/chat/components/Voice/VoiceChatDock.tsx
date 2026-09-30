@@ -13,7 +13,7 @@ const LABEL = {
 } as const;
 
 const ITEM_CLASS =
-  'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
+  'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
 
 export interface VoiceChatDockProps {
   open: boolean;
@@ -64,7 +64,7 @@ export function VoiceChatDock({
       role="menu"
       aria-label={LABEL.panel}
       data-testid="voice-chat-dock"
-      className="fixed right-4 top-16 z-[var(--z-popover)] w-[290px] rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-overlay)] p-2 shadow-[var(--chat-shadow-lg)]"
+      className="fixed end-4 top-16 z-[var(--z-popover)] w-[290px] rounded-2xl border border-[var(--chat-border-strong)] bg-[var(--chat-surface-overlay)] p-2 shadow-[var(--chat-shadow-lg)]"
     >
       <p className="px-3 pb-1 pt-2 text-xs font-medium text-[var(--chat-text-muted)]">
         {LABEL.panel}

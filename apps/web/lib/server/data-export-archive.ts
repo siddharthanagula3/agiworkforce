@@ -358,7 +358,10 @@ async function discardExport(userId: string, payload: BuildArchivePayload): Prom
   ];
   for (const key of keys) {
     await deletePrivateObject(key).catch((error: unknown) => {
-      logger.error({ err: error, userId, key }, '[data-export] a failed export object was kept');
+      logger.error(
+        { err: error, userId, objectKey: key },
+        '[data-export] a failed export object was kept',
+      );
     });
   }
 }
@@ -683,7 +686,7 @@ export async function eraseUserDataExportArchives(
       deleted += 1;
     } catch (error) {
       failed += 1;
-      logger.warn({ err: error, key }, '[data-export] an export object was not erased');
+      logger.warn({ err: error, objectKey: key }, '[data-export] an export object was not erased');
     }
   }
   return { deleted, failed };

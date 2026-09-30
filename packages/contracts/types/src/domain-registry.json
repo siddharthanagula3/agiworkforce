@@ -9,6 +9,10 @@
       "tables": [
         "account_compromise_responses",
         "account_lockout_attempts",
+        "account_security_challenges",
+        "account_security_credentials",
+        "account_security_enrollments",
+        "account_security_sessions",
         "account_security_settings",
         "authentication_attempts",
         "directory_sync_connections",
@@ -71,6 +75,7 @@
         "device_pairings",
         "device_registrations",
         "mobile_devices",
+        "mobile_intent_tokens",
         "web_push_subscriptions"
       ]
     },
@@ -328,7 +333,7 @@
       "name": "work",
       "label": "Work",
       "owner": "apps/web/lib/services/work-plan-service.ts",
-      "capabilities": [],
+      "capabilities": ["canUseAgiWork"],
       "concepts": [],
       "tables": ["background_jobs", "work_plan_revisions", "work_plan_steps", "work_plans"]
     },
@@ -424,7 +429,7 @@
       "name": "video-generation",
       "label": "Video Generation",
       "owner": "apps/web/lib/server/video-generation-jobs.ts",
-      "capabilities": [],
+      "capabilities": ["canUseVideoGeneration"],
       "concepts": [],
       "tables": ["video_generation_jobs"]
     },
@@ -436,6 +441,7 @@
       "concepts": ["artifact"],
       "tables": [
         "organization_shared_artifacts",
+        "published_artifact_storage",
         "published_artifact_versions",
         "published_artifacts",
         "web_artifact_index",
@@ -482,6 +488,7 @@
       "capabilities": [],
       "concepts": [],
       "tables": [
+        "bank_account_items",
         "connector_oauth_authorizations",
         "connector_oauth_grants",
         "messaging_connections",

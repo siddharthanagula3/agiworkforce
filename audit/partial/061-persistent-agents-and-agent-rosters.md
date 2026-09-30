@@ -16,11 +16,8 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Mobile Remote dashboard renders desktop agents, but only the internal Tauri app sends agents_update; the public Electron desktop never does, so the list stays empty. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:484-490`, `apps/mobile/stores/connectionStore.ts:614-624`
 
 ## S61.02: Create persistent agent.
 
@@ -106,22 +103,6 @@ Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:484-490`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S61.11: Presence/activity indicator.
-
-- Done when: The roster shows whether each agent is currently working, idle or offline.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | partial | Mobile Remote dashboard renders desktop agents, but only the internal Tauri app sends agents_update; the public Electron desktop never does, so the list stays empty. | handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:484-490`, `apps/mobile/stores/connectionStore.ts:614-624`
-
 ## S61.13: Agent conversation.
 
 - Done when: The user can open a conversation with a specific agent that answers as that agent.
@@ -196,33 +177,14 @@ Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:484-490`
 
 - Done when: An agent can escalate a decision to the user and wait for the answer.
 - Wave: 3
-- Already works on: cli
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Mobile Remote dashboard renders desktop agents, but only the internal Tauri app sends agents_update; the public Electron desktop never does, so the list stays empty. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:415-426`, `apps/mobile/stores/connectionStore.ts:614-624`
-
-## S61.19: Agent pause/disable.
-
-- Done when: The user can pause or disable an agent so it stops acting until re-enabled.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | partial | Mobile Remote dashboard renders desktop agents, but only the internal Tauri app sends agents_update; the public Electron desktop never does, so the list stays empty. Its Pause/Resume agent_command is handled only by internal Tauri coworkDispatch. | handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:563-569`, `apps/mobile/services/companion.ts:89-99`
 
 ## S61.20: Resource-budget controls.
 
@@ -248,8 +210,5 @@ Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:563-569`
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Mobile Remote dashboard renders desktop agents, but only the internal Tauri app sends agents_update; the public Electron desktop never does, so the list stays empty. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/AgentDashboard.tsx:233-239`, `apps/mobile/stores/connectionStore.ts:614-624`

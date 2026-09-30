@@ -1,9 +1,8 @@
 import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
-import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
-import type { HandoffPriority } from './priority';
 import type {
+  SupportDiagnostics,
   HandoffAccountContext,
   HandoffAttemptedAction,
   HandoffCitation,
@@ -11,7 +10,8 @@ import type {
   HandoffStatus,
   HandoffSurface,
   HandoffTranscriptTurn,
-} from './types';
+} from '@agiworkforce/cloud-contracts/support';
+import type { HandoffPriority } from './priority';
 
 export interface HandoffSessionRow {
   id: string;

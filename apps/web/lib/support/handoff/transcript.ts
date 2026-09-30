@@ -1,5 +1,9 @@
-import { SECRET_PATTERNS } from '@/lib/leak-detector';
-import type { HandoffAttemptedAction, HandoffCitation, HandoffTranscriptTurn } from './types';
+import { redactWithPolicy } from '@agiworkforce/utils/secret-redaction';
+import type {
+  HandoffAttemptedAction,
+  HandoffCitation,
+  HandoffTranscriptTurn,
+} from '@agiworkforce/cloud-contracts/support';
 
 export const MAX_TRANSCRIPT_TURNS = 200;
 export const MAX_TRANSCRIPT_CHARS = 60_000;
@@ -10,28 +14,15 @@ export const MAX_CITATIONS = 25;
 // see is bounded first; the margin keeps a secret straddling the turn cap fully redactable.
 const REDACTION_SCAN_MARGIN_CHARS = 4_096;
 
-const PATTERN_LABELS = [
-  'api-key',
-  'stripe-live-key',
-  'stripe-test-key',
-  'jwt',
-  'database-url',
-  'bearer-token',
-];
-
-export function redactSecrets(value: string): string {
-  let out = value;
-  SECRET_PATTERNS.forEach((pattern, index) => {
-    const label = PATTERN_LABELS[index] ?? 'secret';
-    const global = new RegExp(pattern.source, `${pattern.flags.replace('g', '')}g`);
-    out = out.replace(global, `[redacted:${label}]`);
-  });
-  return out;
+export function redactTranscriptText(value: string): string {
+  return redactWithPolicy(value, 'content');
 }
 
 function clampTurnText(value: string): string {
   const scanLimit = MAX_TURN_CHARS + REDACTION_SCAN_MARGIN_CHARS;
-  const redacted = redactSecrets(value.length > scanLimit ? value.slice(0, scanLimit) : value);
+  const redacted = redactTranscriptText(
+    value.length > scanLimit ? value.slice(0, scanLimit) : value,
+  );
   if (redacted.length <= MAX_TURN_CHARS) return redacted;
   return `${redacted.slice(0, MAX_TURN_CHARS)}… [truncated]`;
 }
@@ -87,9 +78,9 @@ export function normalizeAttemptedActions(
 ): HandoffAttemptedAction[] {
   if (!actions?.length) return [];
   return actions.slice(-MAX_ATTEMPTED_ACTIONS).map((action) => ({
-    action: redactSecrets(action.action).slice(0, 200),
+    action: redactTranscriptText(action.action).slice(0, 200),
     outcome: action.outcome,
-    ...(action.detail ? { detail: redactSecrets(action.detail).slice(0, 1_000) } : {}),
+    ...(action.detail ? { detail: redactTranscriptText(action.detail).slice(0, 1_000) } : {}),
     at: action.at,
   }));
 }
@@ -97,11 +88,11 @@ export function normalizeAttemptedActions(
 export function normalizeCitations(citations: HandoffCitation[] | undefined): HandoffCitation[] {
   if (!citations?.length) return [];
   return citations.slice(0, MAX_CITATIONS).map((citation) => ({
-    title: redactSecrets(citation.title).slice(0, 300),
-    url: redactSecrets(citation.url).slice(0, 2_000),
+    title: redactTranscriptText(citation.title).slice(0, 300),
+    url: redactTranscriptText(citation.url).slice(0, 2_000),
   }));
 }
 
 export function normalizeSummary(summary: string): string {
-  return redactSecrets(summary).slice(0, 1_000);
+  return redactTranscriptText(summary).slice(0, 1_000);
 }

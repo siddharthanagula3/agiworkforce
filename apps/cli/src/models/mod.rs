@@ -11,7 +11,7 @@ pub use provider_dispatch::{
     resolve_selected_provider, resolve_turn_route, select_turn_route, selection_provider_override,
     try_detect_provider, turn_can_start, AccountRoute, TurnRoute,
 };
-pub use streaming::{parse_paywall_body, stream_completion, WEB_SEARCH_TOOL};
+pub use streaming::{offering_search, parse_paywall_body, stream_completion, WEB_SEARCH_TOOL};
 pub(crate) use streaming::{routed, searching};
 
 // Chat wire types are shared with other surfaces through the extracted

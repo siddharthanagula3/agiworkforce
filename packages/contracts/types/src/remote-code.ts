@@ -7,6 +7,8 @@ export const REMOTE_CODE_REQUEST_ACTIONS = [
   'code.session.steer',
   'code.turn.interrupt',
   'code.approval.respond',
+  'code.session.start',
+  'code.session.history',
 ] as const;
 export type RemoteCodeRequestAction = (typeof REMOTE_CODE_REQUEST_ACTIONS)[number];
 
@@ -14,6 +16,8 @@ export const REMOTE_CODE_HOST_ACTIONS = [
   'code.sessions',
   'code.session.snapshot',
   'code.session.event',
+  'code.session.started',
+  'code.session.transcript',
 ] as const;
 export type RemoteCodeHostAction = (typeof REMOTE_CODE_HOST_ACTIONS)[number];
 
@@ -31,6 +35,13 @@ export const REMOTE_CODE_LIMITS = {
   testOutputLength: 3_000,
   queuedGuidance: 3,
   sessions: 30,
+  roots: 30,
+  taskLength: 8_000,
+  titleLength: 500,
+  tools: 20,
+  toolOutputLength: 1_500,
+  historyMessages: 40,
+  historyMessageLength: 8_000,
   payloadBytes: 40_000,
 } as const;
 
@@ -46,6 +57,39 @@ export interface RemoteCodeSessionSummary {
   status: RemoteCodeSessionStatus;
   model: string | null;
   updatedAt: string;
+  /** The tool that started the session, so the phone can tell VS Code from the CLI. */
+  origin?: RemoteCodeSessionOrigin;
+  /** A cloud Code session listed beside the local ones; it is read-only from the phone. */
+  location?: 'cloud';
+}
+
+export const REMOTE_CODE_SESSION_ORIGINS = ['cli', 'vscode', 'desktop'] as const;
+export type RemoteCodeSessionOrigin = (typeof REMOTE_CODE_SESSION_ORIGINS)[number];
+
+function sessionOrigin(value: unknown): RemoteCodeSessionOrigin | undefined {
+  return typeof value === 'string' &&
+    (REMOTE_CODE_SESSION_ORIGINS as readonly string[]).includes(value)
+    ? (value as RemoteCodeSessionOrigin)
+    : undefined;
+}
+
+export interface RemoteCodeRoot {
+  rootId: string;
+  name: string;
+  branch: string | null;
+  available: boolean;
+}
+
+export interface RemoteCodeToolRecord {
+  toolCallId: string;
+  name: string;
+  summary: string;
+  state: 'running' | 'done' | 'failed';
+  output: string;
+}
+
+export interface RemoteCodeIndexedMessage extends RemoteCodeTranscriptEntry {
+  index: number;
 }
 
 export interface RemoteCodeFileChange {
@@ -89,6 +133,7 @@ export interface RemoteCodeSessionsEvent {
   version: typeof REMOTE_CODE_PROTOCOL_VERSION;
   sessions: RemoteCodeSessionSummary[];
   unavailable: Array<{ folder: string; message: string }>;
+  roots: RemoteCodeRoot[];
   syncedAt: string;
 }
 
@@ -105,6 +150,28 @@ export interface RemoteCodeSessionSnapshot {
   pendingApprovals: RemoteCodePendingApproval[];
   fileChanges: RemoteCodeFileChange[];
   queuedGuidance: string[];
+  tools: RemoteCodeToolRecord[];
+  syncedAt: string;
+}
+
+export interface RemoteCodeSessionStarted {
+  action: 'code.session.started';
+  version: typeof REMOTE_CODE_PROTOCOL_VERSION;
+  requestId: string;
+  rootId: string;
+  threadId: string | null;
+  error: string | null;
+  sentAt: string;
+}
+
+export interface RemoteCodeTranscriptPage {
+  action: 'code.session.transcript';
+  version: typeof REMOTE_CODE_PROTOCOL_VERSION;
+  rootId: string;
+  threadId: string;
+  before: number | null;
+  messages: RemoteCodeIndexedMessage[];
+  hasEarlier: boolean;
   syncedAt: string;
 }
 
@@ -112,7 +179,14 @@ export type RemoteCodeLiveEvent =
   | { type: 'turn-started'; turnId: string }
   | { type: 'output-delta'; turnId: string; delta: string }
   | { type: 'tool-started'; turnId: string; toolCallId: string; name: string; summary: string }
-  | { type: 'tool-finished'; turnId: string; toolCallId: string; name: string; isError: boolean }
+  | {
+      type: 'tool-finished';
+      turnId: string;
+      toolCallId: string;
+      name: string;
+      isError: boolean;
+      output?: string;
+    }
   | ({ type: 'approval-requested' } & RemoteCodePendingApproval)
   | { type: 'approval-answered'; requestId: string; approved: boolean }
   | {
@@ -167,6 +241,18 @@ export type RemoteCodeRequest =
       requestId: string;
       approvalRequestId: string;
       approved: boolean;
+    })
+  | (RemoteCodeRequestBase & {
+      action: 'code.session.start';
+      rootId: string;
+      text: string;
+      title?: string;
+    })
+  | (RemoteCodeRequestBase & {
+      action: 'code.session.history';
+      rootId: string;
+      threadId: string;
+      before: number | null;
     });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -197,6 +283,22 @@ export function parseRemoteCodeRequest(action: string, payload: unknown): Remote
 
   if (action === 'code.sessions.list') return { ...base, action };
 
+  if (action === 'code.session.start') {
+    const rootId = boundedId(payload['rootId']);
+    const text = typeof payload['text'] === 'string' ? payload['text'].trim() : '';
+    const title =
+      payload['title'] === undefined
+        ? undefined
+        : typeof payload['title'] === 'string'
+          ? payload['title'].trim()
+          : null;
+    if (!rootId || text.length === 0 || text.length > REMOTE_CODE_LIMITS.taskLength) return null;
+    if (title === null || (title !== undefined && title.length > REMOTE_CODE_LIMITS.titleLength)) {
+      return null;
+    }
+    return { ...base, action, rootId, text, ...(title ? { title } : {}) };
+  }
+
   const rootId = boundedId(payload['rootId']);
   const threadId = boundedId(payload['threadId']);
   if (!rootId || !threadId) return null;
@@ -213,6 +315,16 @@ export function parseRemoteCodeRequest(action: string, payload: unknown): Remote
     case 'code.turn.interrupt': {
       const turnId = boundedId(payload['turnId']);
       return turnId ? { ...base, action, rootId, threadId, turnId } : null;
+    }
+    case 'code.session.history': {
+      const before = payload['before'] ?? null;
+      if (
+        before !== null &&
+        (typeof before !== 'number' || !Number.isInteger(before) || before < 0)
+      ) {
+        return null;
+      }
+      return { ...base, action, rootId, threadId, before };
     }
     case 'code.approval.respond': {
       const turnId = boundedId(payload['turnId']);
@@ -236,6 +348,15 @@ export function parseRemoteCodeRequest(action: string, payload: unknown): Remote
 export function clipRemoteText(value: string, limit: number): { text: string; truncated: boolean } {
   if (value.length <= limit) return { text: value, truncated: false };
   return { text: value.slice(value.length - limit), truncated: true };
+}
+
+export const REMOTE_RESULT_SHORTENED_NOTE =
+  '[The start of this answer was cut to fit. The full answer is on the computer.]\n';
+
+export function clipRemoteResult(value: string, limit: number): string {
+  if (value.length <= limit) return value;
+  const kept = clipRemoteText(value, limit - REMOTE_RESULT_SHORTENED_NOTE.length).text;
+  return `${REMOTE_RESULT_SHORTENED_NOTE}${kept}`;
 }
 
 const DIFF_HEADER = /^(diff --git |--- (?:a\/|\/dev\/null)|\+\+\+ (?:b\/|\/dev\/null)|@@ )/m;
@@ -323,8 +444,12 @@ export function fitRemoteSnapshot(snapshot: RemoteCodeSessionSnapshot): RemoteCo
     ...snapshot,
     messages: [...snapshot.messages],
     fileChanges: [...snapshot.fileChanges],
+    tools: [...snapshot.tools],
   };
   const size = () => JSON.stringify(fitted).length;
+  while (size() > REMOTE_CODE_LIMITS.payloadBytes && fitted.tools.length > 0) {
+    fitted.tools.shift();
+  }
   while (size() > REMOTE_CODE_LIMITS.payloadBytes && fitted.messages.length > 0) {
     fitted.messages.shift();
   }
@@ -426,6 +551,44 @@ function parseApproval(value: unknown): RemoteCodePendingApproval | null {
   return { turnId, requestId, summary, detail };
 }
 
+function parseRoot(value: unknown): RemoteCodeRoot | null {
+  if (!isRecord(value)) return null;
+  const rootId = boundedId(value['rootId']);
+  const name = text(value['name'], 500);
+  const branch = nullableText(value['branch'], 500);
+  if (!rootId || name === null || branch === undefined || typeof value['available'] !== 'boolean') {
+    return null;
+  }
+  return { rootId, name, branch, available: value['available'] };
+}
+
+function parseToolRecord(value: unknown): RemoteCodeToolRecord | null {
+  if (!isRecord(value)) return null;
+  const toolCallId = boundedId(value['toolCallId']);
+  const name = text(value['name'], REMOTE_CODE_LIMITS.idLength);
+  const summary = text(value['summary'], REMOTE_CODE_LIMITS.messageLength);
+  const output = text(value['output'], REMOTE_CODE_LIMITS.toolOutputLength);
+  const state = value['state'];
+  if (
+    !toolCallId ||
+    name === null ||
+    summary === null ||
+    output === null ||
+    (state !== 'running' && state !== 'done' && state !== 'failed')
+  ) {
+    return null;
+  }
+  return { toolCallId, name, summary, state, output };
+}
+
+function optionalList<T>(
+  value: unknown,
+  max: number,
+  parse: (entry: unknown) => T | null,
+): T[] | null {
+  return value === undefined ? [] : list(value, max, parse);
+}
+
 function guidanceList(value: unknown): string[] | null {
   return list(value, REMOTE_CODE_LIMITS.queuedGuidance, (entry) =>
     text(entry, REMOTE_CODE_LIMITS.guidanceLength),
@@ -465,7 +628,19 @@ export function parseRemoteCodeSessions(payload: unknown): RemoteCodeSessionsEve
     ) {
       return null;
     }
-    return { rootId, threadId, title, folder, branch, status, model, updatedAt };
+    const origin = sessionOrigin(entry['origin']);
+    return {
+      rootId,
+      threadId,
+      title,
+      folder,
+      branch,
+      status,
+      model,
+      updatedAt,
+      ...(origin ? { origin } : {}),
+      ...(entry['location'] === 'cloud' ? { location: 'cloud' as const } : {}),
+    };
   });
   const unavailable = list(base['unavailable'], 50, (entry) => {
     if (!isRecord(entry)) return null;
@@ -473,13 +648,15 @@ export function parseRemoteCodeSessions(payload: unknown): RemoteCodeSessionsEve
     const message = text(entry['message'], REMOTE_CODE_LIMITS.messageLength);
     return folder !== null && message !== null ? { folder, message } : null;
   });
+  const roots = optionalList(base['roots'], REMOTE_CODE_LIMITS.roots, parseRoot);
   const syncedAt = text(base['syncedAt'], 64);
-  if (!sessions || !unavailable || syncedAt === null) return null;
+  if (!sessions || !unavailable || !roots || syncedAt === null) return null;
   return {
     action: 'code.sessions',
     version: REMOTE_CODE_PROTOCOL_VERSION,
     sessions,
     unavailable,
+    roots,
     syncedAt,
   };
 }
@@ -509,6 +686,7 @@ export function parseRemoteCodeSnapshot(payload: unknown): RemoteCodeSessionSnap
   const pendingApprovals = list(base['pendingApprovals'], 20, parseApproval);
   const fileChanges = list(base['fileChanges'], REMOTE_CODE_LIMITS.fileChanges, parseFileChange);
   const queuedGuidance = guidanceList(base['queuedGuidance']);
+  const tools = optionalList(base['tools'], REMOTE_CODE_LIMITS.tools, parseToolRecord);
   const syncedAt = text(base['syncedAt'], 64);
   if (
     !rootId ||
@@ -521,6 +699,7 @@ export function parseRemoteCodeSnapshot(payload: unknown): RemoteCodeSessionSnap
     !pendingApprovals ||
     !fileChanges ||
     !queuedGuidance ||
+    !tools ||
     syncedAt === null
   ) {
     return null;
@@ -538,6 +717,72 @@ export function parseRemoteCodeSnapshot(payload: unknown): RemoteCodeSessionSnap
     pendingApprovals,
     fileChanges,
     queuedGuidance,
+    tools,
+    syncedAt,
+  };
+}
+
+export function parseRemoteCodeStarted(payload: unknown): RemoteCodeSessionStarted | null {
+  const base = hostBase(payload, 'code.session.started');
+  if (!base) return null;
+  const requestId = boundedId(base['requestId']);
+  const rootId = boundedId(base['rootId']);
+  const threadId = base['threadId'] === null ? null : (boundedId(base['threadId']) ?? undefined);
+  const error = nullableText(base['error'], REMOTE_CODE_LIMITS.messageLength);
+  const sentAt = text(base['sentAt'], 64);
+  if (!requestId || !rootId || threadId === undefined || error === undefined || sentAt === null) {
+    return null;
+  }
+  if ((threadId === null) === (error === null)) return null;
+  return {
+    action: 'code.session.started',
+    version: REMOTE_CODE_PROTOCOL_VERSION,
+    requestId,
+    rootId,
+    threadId,
+    error,
+    sentAt,
+  };
+}
+
+export function parseRemoteCodeTranscript(payload: unknown): RemoteCodeTranscriptPage | null {
+  const base = hostBase(payload, 'code.session.transcript');
+  if (!base) return null;
+  const rootId = boundedId(base['rootId']);
+  const threadId = boundedId(base['threadId']);
+  const before = base['before'] ?? null;
+  const messages = list<RemoteCodeIndexedMessage>(
+    base['messages'],
+    REMOTE_CODE_LIMITS.historyMessages,
+    (entry) => {
+      if (!isRecord(entry)) return null;
+      const role = entry['role'];
+      const body = text(entry['text'], REMOTE_CODE_LIMITS.historyMessageLength);
+      const index = count(entry['index']);
+      return (role === 'user' || role === 'assistant') && body !== null && typeof index === 'number'
+        ? { role, text: body, index }
+        : null;
+    },
+  );
+  const syncedAt = text(base['syncedAt'], 64);
+  if (
+    !rootId ||
+    !threadId ||
+    (before !== null && typeof count(before) !== 'number') ||
+    !messages ||
+    typeof base['hasEarlier'] !== 'boolean' ||
+    syncedAt === null
+  ) {
+    return null;
+  }
+  return {
+    action: 'code.session.transcript',
+    version: REMOTE_CODE_PROTOCOL_VERSION,
+    rootId,
+    threadId,
+    before: before as number | null,
+    messages,
+    hasEarlier: base['hasEarlier'],
     syncedAt,
   };
 }
@@ -563,8 +808,23 @@ function parseLiveEvent(value: unknown): RemoteCodeLiveEvent | null {
     case 'tool-finished': {
       const toolCallId = boundedId(value['toolCallId']);
       const name = text(value['name'], REMOTE_CODE_LIMITS.idLength);
-      return turnId && toolCallId && name !== null && typeof value['isError'] === 'boolean'
-        ? { type: 'tool-finished', turnId, toolCallId, name, isError: value['isError'] }
+      const output =
+        value['output'] === undefined
+          ? undefined
+          : (text(value['output'], REMOTE_CODE_LIMITS.toolOutputLength) ?? null);
+      return turnId &&
+        toolCallId &&
+        name !== null &&
+        output !== null &&
+        typeof value['isError'] === 'boolean'
+        ? {
+            type: 'tool-finished',
+            turnId,
+            toolCallId,
+            name,
+            isError: value['isError'],
+            ...(output === undefined ? {} : { output }),
+          }
         : null;
     }
     case 'approval-requested': {

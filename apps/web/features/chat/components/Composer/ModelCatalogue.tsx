@@ -47,11 +47,11 @@ const FREE_POOL_COST_TEXT = 'Free, uses no credits';
 const TYPICAL_MESSAGE_NOTE = `A typical message is about ${TYPICAL_MESSAGE_TOKENS.input.toLocaleString()} tokens in and ${TYPICAL_MESSAGE_TOKENS.output.toLocaleString()} out.`;
 
 const RAIL_CLASS =
-  'flex w-full shrink-0 flex-row gap-0.5 overflow-x-auto border-b border-[var(--chat-border)] p-1 sm:w-40 sm:flex-col sm:overflow-x-visible sm:overflow-y-auto sm:border-b-0 sm:border-r';
+  'flex w-full shrink-0 flex-row gap-0.5 overflow-x-auto border-b border-[var(--chat-border)] p-1 sm:w-40 sm:flex-col sm:overflow-x-visible sm:overflow-y-auto sm:border-b-0 sm:border-e';
 const RAIL_ROW_CLASS =
-  'flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm transition-colors focus-visible:outline-none sm:w-full sm:whitespace-normal';
+  'flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 text-start text-sm transition-colors focus-visible:outline-none sm:w-full sm:whitespace-normal';
 const ROW_CLASS =
-  'flex h-12 w-full shrink-0 items-center gap-2.5 rounded-md px-2 text-left transition-colors focus-visible:outline-none';
+  'flex h-12 w-full shrink-0 items-center gap-2.5 rounded-md px-2 text-start transition-colors focus-visible:outline-none';
 const ROW_NAME_CLASS = 'block truncate text-sm leading-5';
 const ROW_GUIDANCE_CLASS = 'block truncate text-xs leading-4 text-muted-foreground';
 const TAG_CLASS = 'shrink-0 rounded-full px-1.5 py-px text-xs font-medium';
@@ -535,7 +535,7 @@ export function ModelCatalogue({
               {[entry.developerLabel, speedLabel].filter(Boolean).join(' · ')}
             </span>
           </span>
-          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          <span className="ms-auto flex shrink-0 items-center gap-1.5">
             {isNewRelease(entry, now) && (
               <span
                 className={`${TAG_CLASS} bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]`}
@@ -591,7 +591,7 @@ export function ModelCatalogue({
             )}
             {!hardLocked && planLocked && entry.minimumPlanLabel && (
               <span className={`${TAG_CLASS} whitespace-nowrap bg-primary/10 text-primary`}>
-                <Lock className="mr-0.5 inline h-4 w-4 align-[-0.1em]" aria-hidden="true" />
+                <Lock className="me-0.5 inline h-4 w-4 align-[-0.1em]" aria-hidden="true" />
                 {`Upgrade to use · ${entry.minimumPlanLabel}`}
               </span>
             )}

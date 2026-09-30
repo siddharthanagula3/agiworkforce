@@ -5,14 +5,94 @@ import {
   getModelMetadataById,
   getProvidersWithImplementedHarnessFeature,
   getModelsForTierAndSurface,
+  getProviderOfferings,
 } from '@agiworkforce/types';
-import { resolveMobileCloudDispatch } from '../src/features/chat/utils/cloudDispatchRouting';
+import {
+  cloudDispatchUnavailableMessage,
+  resolveMobileCloudDispatch,
+} from '../src/features/chat/utils/cloudDispatchRouting';
+import { getModelListForCloudAccess } from '../src/features/model-picker/service';
 
 describe('Mobile Managed Cloud dispatch routing', () => {
   const autoSelection = getAutoRoutingProfiles()[0]?.id;
   if (!autoSelection) {
     throw new Error('Expected a selectable Auto profile in the canonical model registry.');
   }
+
+  it('admits each catalogued Qwen model only through an entitled managed plan', () => {
+    const qwenModels = getModelsForTierAndSurface('max', 'mobile/cloud-chat').filter(
+      (model) => model.provider === 'qwen',
+    );
+    expect(qwenModels.length).toBeGreaterThan(0);
+    const freeModelIds = new Set(
+      getModelsForTierAndSurface('free', 'mobile/cloud-chat').map((model) => model.id),
+    );
+    const maxPicker = getModelListForCloudAccess(true, 'max');
+    const freePicker = getModelListForCloudAccess(true, 'free');
+
+    for (const qwenModel of qwenModels) {
+      expect(maxPicker.find((model) => model.id === qwenModel.id)?.availability).toBe('ready');
+      expect(
+        resolveMobileCloudDispatch({
+          selection: qwenModel.id,
+          message: 'Explain how this works.',
+          subscriptionTier: 'max',
+        }),
+      ).toMatchObject({ status: 'selected', dispatch: 'chat', modelKey: qwenModel.id });
+
+      if (!freeModelIds.has(qwenModel.id)) {
+        expect(freePicker.find((model) => model.id === qwenModel.id)?.availability).toBe('locked');
+        expect(
+          resolveMobileCloudDispatch({
+            selection: qwenModel.id,
+            message: 'Explain how this works.',
+            subscriptionTier: 'free',
+          }),
+        ).toMatchObject({ status: 'unavailable', code: 'explicit_model_ineligible' });
+      }
+    }
+  });
+
+  it('does not send Qwen promotional offerings through ordinary paid routing', () => {
+    const qwenOffering = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
+    );
+    if (!qwenOffering) throw new Error('Expected a Qwen chat offering in the shared catalog.');
+
+    expect(
+      getModelListForCloudAccess(true, 'free').some((model) => model.id === qwenOffering[0]),
+    ).toBe(false);
+    expect(
+      resolveMobileCloudDispatch({
+        selection: qwenOffering[0],
+        message: 'Explain how this works.',
+        subscriptionTier: 'free',
+      }).status,
+    ).toBe('unavailable');
+  });
+
+  it('does not expose routing diagnostics when no Cloud route is available', () => {
+    const decision = resolveMobileCloudDispatch({
+      selection: getDefaultModelFor('pro', 'chat'),
+      message: 'Help me plan tomorrow.',
+      subscriptionTier: 'free',
+    });
+    if (decision.status !== 'unavailable') {
+      throw new Error('Expected the paid model to be unavailable on Free.');
+    }
+
+    const diagnostic = 'internal provider route and credential details';
+    const message = cloudDispatchUnavailableMessage({ ...decision, reasons: [diagnostic] });
+    expect(message).toContain('Choose another AGI Cloud model');
+    expect(message).not.toContain(diagnostic);
+    expect(
+      cloudDispatchUnavailableMessage({
+        ...decision,
+        code: 'no_eligible_route',
+        reasons: [diagnostic],
+      }),
+    ).not.toContain(diagnostic);
+  });
 
   it('preserves an eligible explicit model for ordinary chat', () => {
     const modelId = getDefaultModelFor('pro', 'chat');
@@ -135,5 +215,25 @@ describe('Mobile Managed Cloud dispatch routing', () => {
       status: 'unavailable',
       code: 'explicit_model_ineligible',
     });
+  });
+
+  it('rejects an economy model excluded from the shared Free plan before dispatch', () => {
+    const freeIds = new Set(
+      getModelsForTierAndSurface('free', 'mobile/cloud-chat').map((model) => model.id),
+    );
+    const economyOnly = getModelsForTierAndSurface('max', 'mobile/cloud-chat').find(
+      (model) => model.tier === 'economy' && !freeIds.has(model.id),
+    );
+    if (!economyOnly) {
+      throw new Error('Expected an economy model outside the shared Free offering.');
+    }
+
+    expect(
+      resolveMobileCloudDispatch({
+        selection: economyOnly.id,
+        message: 'Help me plan tomorrow.',
+        subscriptionTier: 'free',
+      }),
+    ).toMatchObject({ status: 'unavailable', code: 'explicit_model_ineligible' });
   });
 });

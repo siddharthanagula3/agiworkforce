@@ -59,6 +59,16 @@ import {
   type OperationIdentity,
 } from '@/lib/identity/operation-identity';
 import { logger } from '@/lib/logger';
+import {
+  GOOGLE_USER_DATA_MEMORY_REFUSAL,
+  GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE,
+  GOOGLE_USER_DATA_UNROUTED_MESSAGE,
+  isGoogleUserDataToolName,
+  markConversationGoogleUserData,
+  messagesCarryGoogleToolUse,
+  readsGoogleUserData,
+  turnHoldsGoogleUserData,
+} from '@/lib/connectors/google-user-data';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { recordBrowserTask, recordToolOutcome } from '@/lib/observability/metrics';
 import { withSpan } from '@/lib/observability/span';
@@ -84,6 +94,7 @@ import {
   isAutoModeModelId,
   isBrowserCommand,
   isImageChatToolName,
+  isPhoneWriteStep,
   resolveMaxOutputTokens,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -91,7 +102,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
-import { redactSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
+import { redactAuditedSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
 import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { getRoutePricing } from '@agiworkforce/model-registry';
@@ -148,7 +159,7 @@ import {
   TOOL_DIRECTORY_TOOL_NAME,
 } from './tool-schema-loader';
 import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
-import type { ResearchDomainPolicy } from './research-sources';
+import { researchDomainAllowed, type ResearchDomainPolicy } from './research-sources';
 import {
   STORED_RESULT_NOTICE_MARKER,
   TOOL_RESULT_READER_TOOL_NAME,
@@ -182,6 +193,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import {
   DEVICE_SCREENSHOT_MESSAGE_PREFIX,
+  MAX_DEVICE_STEPS_PER_PAUSE,
   cloudAgentRunSteerProgressId,
 } from '@agiworkforce/cloud-contracts';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
@@ -313,9 +325,11 @@ import {
   isParallelSafeTool,
   PLATFORM_TOOL_METADATA,
   toolAcceptsUntrustedContent,
+  toolCreatesEgressPath,
 } from './tool-metadata';
 import {
   batchIntroducesUntrustedContent,
+  privateToolContentInContext,
   resolveToolCallGate,
   sensitiveSourceReachable,
   untrustedToolContentInContext,
@@ -337,7 +351,10 @@ import {
   findManagedSkillWithFiles,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
-import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import {
+  listPermittedPluginIds,
+  workspaceAllowsPlugins,
+} from '@/lib/services/workspace-plugin-access';
 import { findUserSkillWithFiles } from '@/lib/services/user-skill-service';
 import { findInstalledDirectorySkillWithFiles } from '@/features/plugins/server/directory/installed-skills';
 import {
@@ -354,7 +371,7 @@ import {
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
 import { searchToolsByKeyword } from '@/lib/connectors/tool-search';
-import { executeFileSearchTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { executeFileTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
 import { executeScheduleTool, isScheduleTool } from '@/lib/server/tools/schedule-tool';
 import { executePluginDraftTool, isPluginDraftTool } from '@/lib/server/tools/plugin-draft-tool';
 import {
@@ -1981,6 +1998,43 @@ function callerScopedDb(
   });
 }
 
+function googleHostedServerIdsOf(tools: readonly WebMcpToolDef[]): ReadonlySet<string> {
+  return new Set(tools.filter((tool) => tool.googleUserData === true).map((tool) => tool.serverId));
+}
+
+async function recordGoogleUserDataToolUse(
+  executionContext:
+    | {
+        userId?: string;
+        organizationId: string | null;
+        conversationId?: string | null;
+        googleUserDataRouted?: boolean;
+      }
+    | undefined,
+): Promise<ToolLoopToolResult | null> {
+  const userId = executionContext?.userId;
+  const conversationId = executionContext?.conversationId;
+  if (!userId || !conversationId) {
+    return executionContext?.googleUserDataRouted === true
+      ? null
+      : { content: GOOGLE_USER_DATA_UNROUTED_MESSAGE, isError: true };
+  }
+  try {
+    await markConversationGoogleUserData(
+      callerScopedDb(executionContext, userId),
+      userId,
+      conversationId,
+    );
+    return null;
+  } catch (error) {
+    logger.error(
+      { error, userId, conversationId },
+      'Google connector withheld: the conversation could not be marked as holding Google data',
+    );
+    return { content: GOOGLE_USER_DATA_TOOL_UNRECORDED_MESSAGE, isError: true };
+  }
+}
+
 function placesSearchBilling(
   executionContext:
     | {
@@ -2042,6 +2096,10 @@ async function runMcpTool(
     conversationId?: string | null;
     latestAttachedImage?: () => string | null;
     sensitiveDataRead?: () => boolean;
+    googleUserDataRead?: () => boolean;
+    googleHostedServerIds?: ReadonlySet<string>;
+    googleUserDataRouted?: boolean;
+    healthSpaceProjectId?: string | null;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -2052,7 +2110,7 @@ async function runMcpTool(
     const queueSandboxFiles = executionContext?.queueSandboxFiles;
     const requestedSkillName = skillRequestedName(toolCall.args);
     const enabledPluginIds = userId
-      ? await listEnabledPluginIds(callerScopedDb(executionContext, userId), userId)
+      ? await listPermittedPluginIds(callerScopedDb(executionContext, userId), userId)
       : null;
     const result = enabledPluginIds
       ? await executeManagedSkillToolForPlugins(enabledPluginIds, toolCall.args, {
@@ -2069,11 +2127,13 @@ async function runMcpTool(
       );
     }
     if (result.code === 'skill_not_found' && userId && requestedSkillName) {
-      const directorySkill = await findInstalledDirectorySkillWithFiles(
-        getNeonDb(),
+      const pluginsAllowed = await workspaceAllowsPlugins(
+        callerScopedDb(executionContext, userId),
         userId,
-        requestedSkillName,
       );
+      const directorySkill =
+        pluginsAllowed &&
+        (await findInstalledDirectorySkillWithFiles(getNeonDb(), userId, requestedSkillName));
       if (directorySkill) {
         return withSkillSandboxNote(
           await executeSkillToolWithFiles(
@@ -2134,11 +2194,14 @@ async function runMcpTool(
     if (!executionContext?.userId) {
       return { content: 'A signed-in account is required to search files.', isError: true };
     }
-    return executeFileSearchTool(toolCall.args, {
+    return executeFileTool(toolCall.qualifiedName, toolCall.args, {
       db: callerScopedDb(executionContext, executionContext.userId),
       userId: executionContext.userId,
       organizationId: executionContext.organizationId,
       temporaryChat: executionContext.temporaryChat === true,
+      healthSpaceProjectId: executionContext.healthSpaceProjectId ?? null,
+      conversationId: executionContext.conversationId ?? null,
+      googleUserDataRouted: executionContext.googleUserDataRouted === true,
     });
   }
 
@@ -2155,12 +2218,27 @@ async function runMcpTool(
     ) {
       return { content: SENSITIVE_DATA_MEMORY_REFUSAL, isError: true };
     }
+    if (
+      toolCall.qualifiedName === SAVE_MEMORY_TOOL_NAME &&
+      (await turnHoldsGoogleUserData(
+        callerScopedDb(executionContext, executionContext.userId),
+        executionContext.userId,
+        {
+          conversationId: executionContext.conversationId,
+          messages: [],
+          googleToolRan: executionContext.googleUserDataRead?.() === true,
+        },
+      ))
+    ) {
+      return { content: GOOGLE_USER_DATA_MEMORY_REFUSAL, isError: true };
+    }
     return executeMemoryTool(toolCall.qualifiedName, toolCall.args, {
       db: callerScopedDb(executionContext, executionContext.userId),
       userId: executionContext.userId,
       organizationId: executionContext.organizationId,
       source: memoryToolSource(executionContext.surface),
       temporaryChat: executionContext.temporaryChat === true,
+      projectId: executionContext.healthSpaceProjectId ?? null,
     });
   }
 
@@ -2184,6 +2262,9 @@ async function runMcpTool(
       provider: 'agi-managed-office',
       origin: 'managed-office-tool',
       model: executionContext.model,
+      ...(executionContext.conversationId
+        ? { conversationId: executionContext.conversationId }
+        : {}),
       extraMetadata: { format: toolCall.args['format'] },
     });
     if (!persisted.ok) {
@@ -2414,6 +2495,7 @@ async function runMcpTool(
       toolCall.args,
       undefined,
       cause,
+      executionContext?.signal,
     );
     const referenced =
       result.ok && result.overflow
@@ -2448,6 +2530,14 @@ async function runMcpTool(
       content: `Unknown tool: ${toolCall.qualifiedName}`,
       isError: true,
     };
+  }
+
+  if (
+    readsGoogleUserData(parsed.serverId, parsed.toolName) ||
+    executionContext?.googleHostedServerIds?.has(parsed.serverId) === true
+  ) {
+    const unrecorded = await recordGoogleUserDataToolUse(executionContext);
+    if (unrecorded) return unrecorded;
   }
 
   if (connectorExecutor) {
@@ -2861,6 +2951,20 @@ function recordProviderStepFailure(input: {
   }
 }
 
+function isBrowserDeviceStep(tool: string): boolean {
+  return tool.startsWith('device_browser_');
+}
+
+/** The address a device browser step would open or download, if it has one. */
+function deviceStepAddress(input: Record<string, unknown>): string | null {
+  const tool = input['tool'];
+  const url = input['url'];
+  return (tool === 'device_browser_navigate' || tool === 'device_browser_download') &&
+    typeof url === 'string'
+    ? url
+    : null;
+}
+
 /**
  * Private data is a sensitive source in its own right: memory facts,
  * attachments and earlier turns are all in the model's hands when an injected
@@ -2885,7 +2989,18 @@ export function hasPrivateContext(
     processed.sensitiveContextPresent === true ||
     (processed.autoMemoryFacts?.length ?? 0) > 0 ||
     messages.filter((message) => message.role === 'user').length > 1 ||
-    messages.some((message) => hasNonTextPart(message))
+    messages.some((message) => hasNonTextPart(message)) ||
+    privateToolContentInContext(priorToolCallNames(messages))
+  );
+}
+
+function priorToolCallNames(
+  messages: readonly ProcessedRequest['llmRequest']['messages'][number][],
+): string[] {
+  return messages.flatMap((message) =>
+    Array.isArray(message.tool_calls)
+      ? parseAssistantToolCalls(message.tool_calls).map((call) => call.qualifiedName)
+      : [],
   );
 }
 
@@ -2913,13 +3028,7 @@ export function hasUntrustedContext(
   return (
     processed.untrustedContextPresent === true ||
     messages.some((message) => hasNonTextPart(message)) ||
-    untrustedToolContentInContext(
-      messages.flatMap((message) =>
-        Array.isArray(message.tool_calls)
-          ? parseAssistantToolCalls(message.tool_calls).map((call) => call.qualifiedName)
-          : [],
-      ),
-    )
+    untrustedToolContentInContext(priorToolCallNames(messages))
   );
 }
 
@@ -2961,7 +3070,7 @@ export async function applyToolResultSecretPolicy(
   let nextContent = content;
   if (action === 'redacted') {
     const highConfidenceNames = new Set(highConfidence.map((detection) => detection.name));
-    nextContent = redactSecrets(content, highConfidenceNames);
+    nextContent = redactAuditedSecrets(content, highConfidenceNames);
   } else if (action === 'blocked') {
     nextContent = toolResultSecretBlockedMessage(toolName);
   }
@@ -3229,6 +3338,8 @@ export async function executeOfferedToolCall(
             requestId,
             planTier: input.planTier,
             surface: input.surface,
+            conversationId,
+            googleHostedServerIds: googleHostedServerIdsOf(input.mcpTools ?? []),
             loadSkillInstallOverrides: () => readSkillInstallOverrides(userId),
             queueSandboxFiles: async (files) => {
               const { executor } = await resolveExecutor();
@@ -3323,6 +3434,7 @@ export async function* runToolLoop(
     return skillInstallOverridesPromise;
   };
   let sensitiveDataRead = false;
+  let googleUserDataRead = messagesCarryGoogleToolUse(processed.chatRequest?.messages ?? []);
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
   const turnId = options.eventTurnId ?? (processed.requestId || crypto.randomUUID());
@@ -3375,6 +3487,7 @@ export async function* runToolLoop(
 
   const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
   const mcpTools = options.mcpTools ?? [];
+  const googleHostedServerIds = googleHostedServerIdsOf(mcpTools);
   // Schemas are admitted against a byte budget rather than sent whole, so the
   // prompt payload stays bounded as the connected count grows. Nothing is
   // hidden: what is left out is listed on TOOL_DIRECTORY_TOOL_NAME.
@@ -3460,7 +3573,8 @@ export async function* runToolLoop(
       ? callerDeclaredTools
       : callerDeclaredTools.filter(
           (name) =>
-            !PLATFORM_TOOL_METADATA[name] && !mcpTools.some((tool) => tool.qualifiedName === name),
+            !mcpTools.some((tool) => tool.qualifiedName === name) &&
+            (isBrowserCommand(name) || !PLATFORM_TOOL_METADATA[name]),
         ),
   );
   const auditToolCall = (
@@ -4003,7 +4117,9 @@ export async function* runToolLoop(
     processed.chatSurface === 'web' &&
     searchRequired &&
     getModelMetadataById(processed.requestedModel)?.webSearchToolOfferPolicy === 'required_only';
-  const serverOwnedSearchQuery = redactSecrets(lastUserTurnText(processed.chatRequest?.messages))
+  const serverOwnedSearchQuery = redactAuditedSecrets(
+    lastUserTurnText(processed.chatRequest?.messages),
+  )
     .slice(0, WEB_SEARCH_MAX_QUERY_LENGTH)
     .trim();
   let searchObserved = false;
@@ -4116,6 +4232,7 @@ export async function* runToolLoop(
           organizationId: processed.organizationId ?? null,
           refs: [...providerGeneratedFileRefs.values()],
           model: responseModel,
+          conversationId: processed.conversationId,
         });
         files.push(...persisted.files.map((file) => file.wire));
         failedCount += persisted.failedCount;
@@ -4707,10 +4824,20 @@ export async function* runToolLoop(
               ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
               sensitiveDataRead: () => sensitiveDataRead,
+              googleUserDataRead: () => googleUserDataRead,
+              googleHostedServerIds,
+              googleUserDataRouted: processed.googleUserData === true,
+              healthSpaceProjectId: processed.healthSpaceProjectId ?? null,
             },
           );
           if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {
             sensitiveDataRead = true;
+          }
+          if (
+            isGoogleUserDataToolName(tc.qualifiedName) ||
+            googleHostedServerIds.has(parseQualifiedToolName(tc.qualifiedName)?.serverId ?? '')
+          ) {
+            googleUserDataRead = true;
           }
           await settleSearch();
           const freeTrialSpendMicrousd = callSpend?.spentMicrousd() ?? 0;
@@ -6324,13 +6451,28 @@ export async function* runToolLoop(
         }> = [];
         for (const tc of deviceCalls) {
           let refusal: string | null = null;
+          let plan: (typeof planned)[number] | null = null;
           try {
             const step = planDeviceStep(tc.qualifiedName, tc.args, deviceHost.roots);
-            planned.push({
+            const summary = describeDeviceStep(step, deviceHost.roots);
+            plan = {
               tc,
-              summary: describeDeviceStep(step, deviceHost.roots),
-              input: { ...step } as Record<string, unknown>,
-            });
+              summary,
+              input: {
+                ...step,
+                // The device holds the page a step ends on, after any redirect or
+                // click-through, to the same rules, so it needs them.
+                ...(isBrowserDeviceStep(step.tool) && processed.deviceWebDomainPolicy
+                  ? { siteRules: processed.deviceWebDomainPolicy }
+                  : {}),
+                ...(isPhoneWriteStep(step.tool) ||
+                (untrustedContentInContext &&
+                  sensitiveSourceAvailable &&
+                  toolCreatesEgressPath(step.tool))
+                  ? { review: summary }
+                  : {}),
+              } as Record<string, unknown>,
+            };
           } catch (error) {
             refusal =
               error instanceof DeviceStepRefused
@@ -6340,6 +6482,15 @@ export async function* runToolLoop(
           // A pause can hold only one boundary per step, and an approval already
           // claims it. The model is told why rather than left with a call that
           // silently never ran, so it can ask again once the approval is decided.
+          if (!refusal && plan) {
+            const address = deviceStepAddress(plan.input);
+            if (
+              address !== null &&
+              !researchDomainAllowed(processed.deviceWebDomainPolicy ?? null, address)
+            ) {
+              refusal = `Your workspace administrator does not allow the assistant to open ${address} in your browser.`;
+            }
+          }
           if (!refusal && approvalCalls.length > 0) {
             refusal =
               'This turn is waiting on an approval, so the step was not sent to your device. Ask again after the approval is decided.';
@@ -6347,18 +6498,22 @@ export async function* runToolLoop(
           if (!refusal && !options.onDeviceCheckpoint) {
             refusal = 'This turn cannot pause for your device. Ask again in a new message.';
           }
-          if (refusal) {
+          if (!refusal && planned.length >= MAX_DEVICE_STEPS_PER_PAUSE) {
+            refusal = `Only ${MAX_DEVICE_STEPS_PER_PAUSE} device steps can run at once, so this one was not sent. Ask for it again after these finish.`;
+          }
+          if (!refusal && plan) {
+            planned.push(plan);
+          } else {
             await auditToolCall(tc.qualifiedName, 'blocked');
             const content = await applyToolResultSecretPolicy(
               options.userId,
               tc.qualifiedName,
-              refusal,
+              refusal ?? 'That step could not be sent to your device.',
             );
             yield encoder.encode(
               toolResultEvent(tc.id, tc.qualifiedName, content, true, responseModel),
             );
             messages.push({ role: 'tool', content, tool_call_id: tc.id });
-            planned.length = 0;
           }
         }
 

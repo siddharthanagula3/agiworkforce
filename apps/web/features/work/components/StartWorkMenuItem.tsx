@@ -37,7 +37,7 @@ export function StartWorkMenuItem({
       role="menuitem"
       className={
         className ??
-        'flex min-h-8 w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+        'flex min-h-8 w-full items-center gap-2 rounded-md px-3 py-1.5 text-start text-xs transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
       }
       style={{ color: 'var(--text-1)' }}
       onClick={() => {

@@ -141,6 +141,7 @@ describe('GET /api/me, shared cloud contract', () => {
         status: 'none',
         current_period_end: null,
         cancel_at_period_end: false,
+        effective_tier: 'free',
         subscription_source: 'none',
       });
       expect(parsed.data.routing_preferences).toEqual({});
@@ -224,6 +225,7 @@ describe('GET /api/me, shared cloud contract', () => {
         status: 'active',
         current_period_end: Date.parse(SEAT_PERIOD_END) / 1000,
         cancel_at_period_end: false,
+        effective_tier: orgTier,
         subscription_source: 'manual',
       });
       expect(parsed.capability_handshake?.sources.tier).toBe(tierPolicy);

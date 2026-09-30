@@ -73,6 +73,8 @@ export const FACTOR_CHANGE_EVENTS: ReadonlySet<string> = new Set([
   RECOVERY_EVENT_KEY,
 ]);
 
+const COOLDOWN_EVENT_KEYS: ReadonlySet<string> = new Set(['email_changed']);
+
 const COMPROMISE_SIGNALS: ReadonlySet<RiskSignal> = new Set<RiskSignal>([
   'impossible_travel',
   'repeated_auth_failures',
@@ -355,6 +357,13 @@ export async function recordIdentityObservation(
       ],
     );
   } catch (error) {
+    if (COOLDOWN_EVENT_KEYS.has(current.eventKey)) {
+      logger.error(
+        { error, userId: input.userId, riskEvent: current.eventKey },
+        '[risk-signals] a change that starts a cooldown could not be recorded; refusing it',
+      );
+      throw error;
+    }
     logger.warn(
       { error, userId: input.userId },
       '[risk-signals] observation could not be recorded',

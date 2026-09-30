@@ -2,7 +2,9 @@ export {
   CHAT_ATTACHMENT_MIME_TYPES,
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   chatAttachmentAcceptAttribute,
+  chatAttachmentSizeLabel,
   isChatImageMimeType,
   isSupportedChatAttachment,
   normalizeChatDocumentMimeType,
@@ -28,6 +30,8 @@ export const CHAT_ATTACHMENT_UNAVAILABLE_NOTES = {
   empty: 'is empty. Add content to the file and attach it again.',
   too_large: 'is larger than this chat can send.',
   too_many: 'was left out because this message already carries as many files as it can.',
+  over_message_budget:
+    'was left out because this message already carries as much file data as it can.',
 } as const;
 
 export type ChatAttachmentUnavailableReason = keyof typeof CHAT_ATTACHMENT_UNAVAILABLE_NOTES;

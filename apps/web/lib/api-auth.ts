@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
-import { createError, isAppError } from '@/lib/errors';
+import { AppError, ErrorCode, createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { logAuthFailure } from '@/lib/security-audit';
 import { setTenantScope } from '@/lib/observability/trace-context';
@@ -32,6 +32,11 @@ import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
 import { bindSurfaceFromClaims, type BoundSurface } from '@/lib/free-chat-surface-policy';
 import { noteSessionSighting } from '@/lib/server/session-sightings';
+import {
+  assertAccountSecurity,
+  isPasskeyRequiredError,
+  type AccountSecurityPrincipal,
+} from '@/lib/server/account-security/gate';
 
 export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
@@ -52,6 +57,7 @@ export interface AuthOptions {
   apiKeyScope?: ApiKeyScope;
   mfaGateExemptForOwner?: boolean;
   mfaEnrollment?: boolean;
+  accountSecurityVerification?: boolean;
 }
 
 const EXEMPT_ORGANIZATION_ROLE = 'owner';
@@ -115,7 +121,14 @@ async function withDeadline<T>(
 function assertStatusAllowsAccess(status: string | null): void {
   const decision = accountAccessDecision(status);
   if (decision.allowed) return;
-  throw createError.forbidden(decision.message);
+  throw new AppError(ErrorCode.ACCOUNT_UNAVAILABLE, decision.message, 403, {
+    reason: decision.reason,
+    recoveryPath: decision.recoveryPath,
+  });
+}
+
+export function isAccountUnavailableError(error: unknown): error is AppError {
+  return isAppError(error) && error.code === ErrorCode.ACCOUNT_UNAVAILABLE;
 }
 
 /**
@@ -148,6 +161,23 @@ async function assertSessionWithinAbsoluteLifetime(
 
   await endSessionPastAbsoluteLifetime(identity, sessionId, userId);
   throw createError.unauthorized();
+}
+
+async function assertAccountSecurityUnlessVerifying(
+  userId: string,
+  principal: AccountSecurityPrincipal,
+  options: AuthOptions,
+  request: NextRequest,
+): Promise<void> {
+  if (options.accountSecurityVerification) return;
+  try {
+    await assertAccountSecurity(userId, principal);
+  } catch (error) {
+    if (principal.kind === 'session' && isPasskeyRequiredError(error)) {
+      noteSessionSighting(userId, principal.sessionId, request);
+    }
+    throw error;
+  }
 }
 
 export async function assertAccountActive(userId: string, request?: NextRequest): Promise<void> {
@@ -228,6 +258,7 @@ interface VerifiedBearer {
   auth: AuthResult;
   /** Null for a device token, which is bound to a credential family rather than a session. */
   sessionId: string | null;
+  principal: AccountSecurityPrincipal;
 }
 
 async function verifyBearerToken(
@@ -257,6 +288,7 @@ async function verifyBearerToken(
         surfaceClass: 'developer',
       },
       sessionId: null,
+      principal: { kind: 'device', issuedAtSeconds: developerToken.issuedAt ?? null },
     };
   }
 
@@ -284,6 +316,7 @@ async function verifyBearerToken(
         ...(boundSurface ? { boundSurface } : {}),
       },
       sessionId: claims.sessionId,
+      principal: { kind: 'session', sessionId: claims.sessionId },
     };
   }
 
@@ -337,9 +370,10 @@ export async function getClerkAuthUser(
 
     const verified = await verifyBearerToken(token, request);
     if (verified) {
-      const { auth, sessionId } = verified;
+      const { auth, sessionId, principal } = verified;
       await assertSessionWithinAbsoluteLifetime(sessionId, auth.userId);
       await assertAccountActive(auth.userId, request);
+      await assertAccountSecurityUnlessVerifying(auth.userId, principal, options, request);
       setTenantScope({ userId: auth.userId });
       await assertMfaPolicyUnlessExemptOwner(
         auth.userId,
@@ -360,6 +394,12 @@ export async function getClerkAuthUser(
     const userId = account.accountId;
     await assertSessionWithinAbsoluteLifetime(sessionId, userId);
     await assertAccountActive(userId, request);
+    await assertAccountSecurityUnlessVerifying(
+      userId,
+      { kind: 'session', sessionId },
+      options,
+      request,
+    );
     setTenantScope({ userId });
     await assertMfaPolicyUnlessExemptOwner(
       userId,

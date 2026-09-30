@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { getModelMetadataById, ROUTING_PROFILE_CHOICE_OPTIONS } from '@agiworkforce/types';
 import {
-  getAutoRoutingProfileTiers,
-  getModelMetadataById,
-  isAutoModeModelId,
-} from '@agiworkforce/types';
-import { MODEL_PICKER_OPTIONS } from '../features/model-picker/modelConstants';
+  isAutoPickerModelId,
+  MODEL_PICKER_OPTIONS,
+  routingProfileForModel,
+} from '../features/model-picker/modelConstants';
 import { buildExtensionStatusBarText } from '../core/statusBar';
 import { commandLabel } from '../core/runInlineCommand';
 import { activate } from '../extension';
@@ -122,14 +122,11 @@ describe('model selection', () => {
     expect(providers.size).toBeGreaterThanOrEqual(6);
   });
 
-  it('exposes the shared self-routing Auto option first, then its Economy and Best profiles', () => {
-    const autoModels = MODELS.filter((m) => isAutoModeModelId(m));
+  it('lists Auto first, then one row per routing choice the web offers', () => {
+    const autoModels = MODELS.filter((m) => isAutoPickerModelId(m));
     expect(autoModels[0]).toBe('auto');
-    expect(autoModels.slice(1).sort()).toEqual(
-      getAutoRoutingProfileTiers()
-        .filter((tier) => tier.profile !== 'balanced')
-        .map((tier) => tier.id)
-        .sort(),
+    expect(autoModels.map((m) => routingProfileForModel(m))).toEqual(
+      ROUTING_PROFILE_CHOICE_OPTIONS.map((option) => option.choice),
     );
   });
 

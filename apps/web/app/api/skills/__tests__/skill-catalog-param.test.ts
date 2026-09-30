@@ -27,6 +27,13 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockAuthUser }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn().mockReturnValue({}) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockUserScopedDb }));
+vi.mock('@/lib/services/workspace-plugin-access', async () => {
+  const { listEnabledPluginIds } = await import('@/lib/services/plugin-installation-service');
+  return {
+    workspaceAllowsPlugins: vi.fn(async () => true),
+    listPermittedPluginIds: listEnabledPluginIds,
+  };
+});
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: mockListEnabledPluginIds,
@@ -43,6 +50,7 @@ vi.mock('@/lib/services/skill-install-service', () => ({
   resolveInstalledManagedSkills: mockResolveInstalled,
 }));
 vi.mock('@/lib/services/user-skill-service', () => ({
+  findUserSkillWithFiles: vi.fn(async () => null),
   findUserSkillByName: vi.fn(async () => null),
   listUserSkillsAsManagedSkills: vi.fn(async () => []),
   toManagedSkillFromUserSkill: vi.fn(),
@@ -56,6 +64,7 @@ vi.mock('@/lib/services/user-skill-authoring', () => ({
   USER_SKILL_AUTHORING_ENV_VAR: 'AGI_USER_SKILL_AUTHORING',
 }));
 vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+  findInstalledDirectorySkillWithFiles: vi.fn(async () => null),
   listInstalledDirectorySkills: vi.fn(async () => []),
 }));
 

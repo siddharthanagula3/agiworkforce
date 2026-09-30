@@ -29,3 +29,9 @@ nothing is left.
 - Done when: The agent can open an application on the computer.
 - Wave: 4
 - Build on: web, desktop
+
+## S65.17: Native file-dialog interaction.
+
+- Done when: The agent can work native open/save file dialogs.
+- Wave: 4
+- Build on: web

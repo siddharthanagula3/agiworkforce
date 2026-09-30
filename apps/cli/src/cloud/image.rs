@@ -36,7 +36,7 @@ const UNSUPPORTED_ASPECT_RATIO: &str = "unsupported_aspect_ratio";
 const SLUG_MAX_CHARS: usize = 32;
 const DEFAULT_STEM: &str = "image";
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ImageGenerationRequest {
     pub prompt: String,
     pub n: u8,
@@ -91,6 +91,33 @@ pub struct ImageModelAdmission {
     pub state: String,
     #[serde(default)]
     pub supports_edit: bool,
+    #[serde(default)]
+    pub aspect_ratios: Vec<String>,
+    #[serde(default)]
+    pub max_images: Option<u32>,
+}
+
+fn unsupported_for_model(model: &ImageModelAdmission, settings: &ImageSettings) -> Option<String> {
+    if let Some(ratio) = settings.aspect_ratio.as_deref() {
+        if !model.aspect_ratios.is_empty()
+            && !model.aspect_ratios.iter().any(|allowed| allowed == ratio)
+        {
+            return Some(format!(
+                "{} does not make {ratio} images. It supports {}.",
+                model.name,
+                model.aspect_ratios.join(", ")
+            ));
+        }
+    }
+    let count = settings.count.unwrap_or(1);
+    match model.max_images {
+        Some(max) if u32::from(count) > max => Some(format!(
+            "{} makes at most {max} image{} per request.",
+            model.name,
+            if max == 1 { "" } else { "s" }
+        )),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -786,6 +813,9 @@ async fn generate_with(
         Ok(model) => model,
         Err(message) => return Ok(ImageRun::Failed(ImageFailure::local(message))),
     };
+    if let Some(message) = unsupported_for_model(&model, &options.settings) {
+        return Ok(ImageRun::Failed(ImageFailure::local(message)));
+    }
     let settings = ImageSettings {
         model: Some(model.model_id.clone()),
         ..options.settings.clone()
@@ -1350,6 +1380,8 @@ mod tests {
             provider: "openai".to_string(),
             state: state.to_string(),
             supports_edit: false,
+            aspect_ratios: Vec::new(),
+            max_images: None,
         }
     }
 

@@ -6,116 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S81.03: Basic-plan feature bundle.
-
-- Done when: The Basic plan has a defined, priced bundle (capabilities and limits) shown on pricing and in-app and enforced from the catalog.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Basic's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED (lead switches FEATURES.billing on at run end; MOBILE_IAP_ENABLED is an owner setting). | flag-off |
-
-Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
-
-## S81.04: Pro-plan feature bundle.
-
-- Done when: The Pro plan has a defined, priced bundle (capabilities and limits) shown on pricing and in-app and enforced from the catalog.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Pro's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
-
-Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
-
-## S81.05: Max 5x feature bundle.
-
-- Done when: The Max 5x plan has a defined, priced bundle (capabilities and limits) shown on pricing and in-app and enforced from the catalog.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Max 5x's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
-
-Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
-
-## S81.06: Max 15x feature bundle.
-
-- Done when: The Max 15x plan has a defined, priced bundle (capabilities and limits) shown on pricing and in-app and enforced from the catalog.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The top Max tier's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
-
-Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
-
-## S81.14: Separate generation settings.
-
-- Done when: Plans differ in generation settings (e.g. reasoning effort, manual model choice), the UI shows the gated options, and the server clamps requests to the plan.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Not plan marketing: generation settings live in the mobile model picker, which shows plan-locked models (routes to billing) and an effort control. Gated models are shown, gated efforts are not, and the server clamps. |  |
-
-## S81.18: Trial entitlements.
-
-- Done when: A plan can be granted as a time-limited trial that is shown as a trial and ends (reverts or bills) when its period is over.
-- Wave: 2
-- Already works on: web, desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile has an invite-code modal but it is never mounted and its redeem is a local stub that accepts only a built-in alpha code, so no trial can be claimed. | mount, handler |
-
-Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
-
-## S81.19: Promotional entitlements.
-
-- Done when: Promotional entitlements (promo codes, bonus credits, invite grants) exist, are applied to the account and are visible to the user.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile cannot apply any promotion: its invite-code modal is unmounted and stubbed, and store purchases (where store offers would apply) are gated off. | mount, handler |
-| chrome | partial | Chrome can redeem an invite code (plan/trial grant) but shows no promotional credit or discount; bonus credits and promo codes are applied on web. | surface-only |
-
-Code: `apps/mobile/src/features/waitlist/service.ts:85-95`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/extension/src/side_panel.ts:8149-8168`, `apps/extension/src/lib/waitlistService.ts:116-125`
-
-## S81.20: Purchased credit balances.
-
-- Done when: Users can buy credit top-ups that form a separate purchased balance, which carries over and is shown apart from the plan allowance.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Native top-up products exist but are gated off (MOBILE_IAP_ENABLED unset) and the app never shows the purchased balance. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off, ui |
-| cli | partial | CLI shows the purchased balance and overage state (agi usage) but cannot buy credits; top-ups happen on web. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
-| vscode | partial | VS Code shows the credit balance with an 'Add credits' action that opens web billing; no in-extension purchase. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`, `apps/cli/src/usage_summary.rs:317-329`
-
-## S81.21: Optional overage.
-
-- Done when: Users can opt in to spending purchased credits past a plan limit (overage), off by default, and overage use is accounted separately from the plan windows.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Migration 0281 is now applied in production (2026-09-27). Still open: CLI shows overage on/off but cannot change it (web billing), and overage accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
-| vscode | partial | Migration 0281 is now applied in production (2026-09-27). Still open: VS Code shows whether credits are spent past a limit and points to billing to enable it; toggle lives on web; accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
-
-Code: `apps/cli/src/usage_summary.rs:317-328`, `apps/extension-vscode/src/data/usageMeter.ts:220-223`
-
 ## S81.23: Upgrade effective time.
 
 - Done when: An upgrade takes effect at a stated time (immediately), with the charge and the new renewal date shown before confirming.
@@ -124,6 +14,6 @@ Code: `apps/cli/src/usage_summary.rs:317-328`, `apps/extension-vscode/src/data/u
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile copy now says an upgrade starts a new billing period that day; upgrading in the app still needs FEATURES.billing and MOBILE_IAP_ENABLED, which the lead switches on at run end. | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:388-388`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`

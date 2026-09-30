@@ -216,6 +216,41 @@ describe('cloudAccountAuth', () => {
     });
   });
 
+  it.each([
+    [400, { error: 'invalid_grant' }, true],
+    [403, { error: 'terms_acceptance_required', error_description: 'Accept the terms.' }, false],
+    [429, { error: 'slow_down' }, false],
+    [503, {}, false],
+  ])(
+    'ends the saved session on a %i refresh refusal only when the credential is gone',
+    async (status, body, cleared) => {
+      const expiredAccessToken = jwtWithClaims({
+        sub: 'user_123',
+        email: 'user@example.com',
+        exp: Math.floor(Date.now() / 1000) - 60,
+      });
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'account_restore_access_token') return expiredAccessToken;
+        if (command === 'account_restore_refresh_token') return 'saved-refresh-token';
+        return undefined;
+      });
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        if (String(input).includes('/api/auth/device/refresh')) {
+          return { ok: false, status, json: async () => body } as Response;
+        }
+        return { ok: false, status: 401, json: async () => ({}) } as Response;
+      });
+      invokeMock.mockClear();
+
+      await cloudAccountAuth.checkSession();
+
+      const clears = invokeMock.mock.calls.filter(
+        ([command]) => command === 'account_clear_tokens',
+      );
+      expect(clears.length > 0).toBe(cleared);
+    },
+  );
+
   it('fails closed when a restored Cloud token is expired or revoked', async () => {
     const accessToken = jwtWithClaims({
       sub: 'user_123',

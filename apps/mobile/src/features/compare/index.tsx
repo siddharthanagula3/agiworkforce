@@ -1,12 +1,13 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
-  View,
-  ScrollView,
-  Pressable,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
+import { View, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Trophy, Zap, Hash, Clock } from 'lucide-react-native';
@@ -17,22 +18,26 @@ import { ChatInput } from '@/src/features/chat/components/ChatInput';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { streamChat, type StreamDelta } from '@/services/streaming';
-import { getModelById, getProviderById, getDisplayName } from '@/lib/models';
-import { getProviderDefaultModel } from '@agiworkforce/types';
+import { getCloudModelsForTier, getModelById, getProviderById, getDisplayName } from '@/lib/models';
+import { getPlanMaxConcurrentTurns, requireProviderDefaultModel } from '@agiworkforce/types';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
 import { CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import { EgressBlockedError } from '@/lib/egressGuard';
 
 interface CompareStreamState {
   content: string;
+  isQueued: boolean;
   isStreaming: boolean;
   isDone: boolean;
   errorMessage: string | null;
@@ -43,6 +48,7 @@ interface CompareStreamState {
 
 const initialStreamState = (): CompareStreamState => ({
   content: '',
+  isQueued: false,
   isStreaming: false,
   isDone: false,
   errorMessage: null,
@@ -58,14 +64,34 @@ const LOCAL_MODE_COMPARE_NOTICE =
   'Model comparison runs on AGI Cloud, so it is unavailable while chat is in Local Mode. ' +
   'Nothing was sent from this device. Switch to AGI Cloud to compare two models.';
 
+const ONE_ANSWER_AT_A_TIME_NOTE =
+  'Your plan runs one answer at a time, so the second answer starts when the first finishes.';
+
+function runsOneAnswerAtATime(tier: string): boolean {
+  const limit = getPlanMaxConcurrentTurns(tier);
+  return limit !== null && limit <= 1;
+}
+
 function compareErrorMessage(err: unknown): string {
   if (err instanceof EgressBlockedError) return LOCAL_MODE_COMPARE_NOTICE;
   const raw = err instanceof Error ? err.message.trim() : '';
   return raw || 'This model could not respond. Please try again.';
 }
 
-const DEFAULT_MODEL_A = getProviderDefaultModel('anthropic') ?? 'anthropic/default';
-const DEFAULT_MODEL_B = getProviderDefaultModel('openai') ?? 'openai/default';
+const DEFAULT_MODEL_A = requireProviderDefaultModel('anthropic');
+const DEFAULT_MODEL_B = requireProviderDefaultModel('openai');
+
+function comparisonModelsForTier(tier: string): [string, string] | null {
+  const models = getCloudModelsForTier(tier);
+  if (models.length < 2) return null;
+  const ids = models.map((model) => model.id);
+  const first = ids.includes(DEFAULT_MODEL_A) ? DEFAULT_MODEL_A : ids[0]!;
+  const second =
+    ids.includes(DEFAULT_MODEL_B) && DEFAULT_MODEL_B !== first
+      ? DEFAULT_MODEL_B
+      : ids.find((id) => id !== first)!;
+  return [first, second];
+}
 
 export default function CompareScreen() {
   const colors = useThemeColors();
@@ -74,10 +100,13 @@ export default function CompareScreen() {
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
+  const tier = useTierStore((state) => state.tier);
   const isCloudMode = appMode === 'cloud';
+  const availableModels = comparisonModelsForTier(tier);
+  const oneAnswerAtATime = runsOneAnswerAtATime(tier);
 
-  const [modelA, setModelA] = useState(DEFAULT_MODEL_A);
-  const [modelB, setModelB] = useState(DEFAULT_MODEL_B);
+  const [modelA, setModelA] = useState(() => availableModels?.[0] ?? DEFAULT_MODEL_A);
+  const [modelB, setModelB] = useState(() => availableModels?.[1] ?? DEFAULT_MODEL_B);
 
   const [stateA, setStateA] = useState<CompareStreamState>(initialStreamState);
   const [stateB, setStateB] = useState<CompareStreamState>(initialStreamState);
@@ -91,6 +120,17 @@ export default function CompareScreen() {
   const modelPickerBRef = useRef<BottomSheet>(null);
 
   const [activePickerSlot, setActivePickerSlot] = useState<'A' | 'B' | null>(null);
+
+  const resetComparison = useCallback(() => {
+    compareGenerationRef.current += 1;
+    controllerARef.current?.abort();
+    controllerBRef.current?.abort();
+    controllerARef.current = null;
+    controllerBRef.current = null;
+    setLastPrompt(null);
+    setStateA(initialStreamState());
+    setStateB(initialStreamState());
+  }, []);
 
   const handleBack = useCallback(() => {
     compareGenerationRef.current += 1;
@@ -107,24 +147,26 @@ export default function CompareScreen() {
     compareGenerationRef.current += 1;
     controllerARef.current?.abort();
     controllerBRef.current?.abort();
-    setStateA((prev) => ({ ...prev, isStreaming: false, isDone: true }));
-    setStateB((prev) => ({ ...prev, isStreaming: false, isDone: true }));
+    setStateA((prev) => ({ ...prev, isQueued: false, isStreaming: false, isDone: true }));
+    setStateB((prev) => ({ ...prev, isQueued: false, isStreaming: false, isDone: true }));
   }, []);
 
   useLayoutEffect(() => {
-    compareGenerationRef.current += 1;
-    controllerARef.current?.abort();
-    controllerBRef.current?.abort();
-    controllerARef.current = null;
-    controllerBRef.current = null;
-    setLastPrompt(null);
-    setStateA(initialStreamState());
-    setStateB(initialStreamState());
-  }, [clerkUserId]);
+    resetComparison();
+  }, [clerkUserId, appMode, resetComparison]);
+
+  useLayoutEffect(() => {
+    resetComparison();
+    const next = comparisonModelsForTier(tier);
+    if (next) {
+      setModelA(next[0]);
+      setModelB(next[1]);
+    }
+  }, [tier, resetComparison]);
 
   const handleSwitchToCloud = useCallback(() => {
     if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent('cloud-compare'));
       return;
     }
     setAppMode('cloud');
@@ -156,6 +198,18 @@ export default function CompareScreen() {
         return false;
       }
 
+      const eligibleIds = getCloudModelsForTier(useTierStore.getState().tier).map(
+        (model) => model.id,
+      );
+      if (
+        eligibleIds.length < 2 ||
+        !eligibleIds.includes(modelA) ||
+        !eligibleIds.includes(modelB) ||
+        modelA === modelB
+      ) {
+        return false;
+      }
+
       const accountEpoch = captureCloudAccountEpoch();
       if (!accountEpoch) {
         const signedOutState: CompareStreamState = {
@@ -173,129 +227,91 @@ export default function CompareScreen() {
       controllerARef.current?.abort();
       controllerBRef.current?.abort();
 
-      setLastPrompt(text.trim());
+      const prompt = text.trim();
+      const queueB = runsOneAnswerAtATime(useTierStore.getState().tier);
+      setLastPrompt(prompt);
       setStateA(initialStreamState());
-      setStateB(initialStreamState());
+      setStateB({ ...initialStreamState(), isQueued: queueB });
 
-      const messages = [{ role: 'user', content: text.trim() }];
+      const runAnswer = (
+        model: string,
+        setState: Dispatch<SetStateAction<CompareStreamState>>,
+        controller: AbortController,
+        onSettled?: () => void,
+      ) => {
+        const isActive = () =>
+          compareGenerationRef.current === generation &&
+          !controller.signal.aborted &&
+          isCloudAccountEpochCurrent(accountEpoch);
+        const startedAt = Date.now();
+        setState((prev) => ({ ...prev, isQueued: false, isStreaming: true }));
+
+        streamChat(
+          {
+            model,
+            messages: [{ role: 'user', content: prompt }],
+            stream: true as const,
+            operationId: uuidv7(),
+            thinking: false,
+            tool_choice: 'none',
+            memory_enabled: false,
+            connector_tools_enabled: false,
+          },
+          {
+            onDelta: (delta: StreamDelta) => {
+              if (!isActive()) return;
+              if (delta.content) {
+                setState((prev) => {
+                  const newContent = prev.content + delta.content;
+                  const ttft = prev.ttftMs === null ? Date.now() - startedAt : prev.ttftMs;
+                  return {
+                    ...prev,
+                    content: newContent,
+                    ttftMs: ttft,
+                    tokenCount: Math.round(newContent.length / 4),
+                  };
+                });
+              }
+            },
+            onDone: () => {
+              if (!isActive()) return;
+              setState((prev) => ({
+                ...prev,
+                isStreaming: false,
+                isDone: true,
+                durationMs: Date.now() - startedAt,
+              }));
+              onSettled?.();
+            },
+            onError: (err: Error) => {
+              if (!isActive()) return;
+              setState((prev) => ({
+                ...prev,
+                isStreaming: false,
+                isDone: true,
+                errorMessage: compareErrorMessage(err),
+              }));
+              onSettled?.();
+            },
+          },
+          controller.signal,
+        );
+      };
 
       const ctrlA = new AbortController();
-      controllerARef.current = ctrlA;
-      const isAActive = () =>
-        compareGenerationRef.current === generation &&
-        !ctrlA.signal.aborted &&
-        isCloudAccountEpochCurrent(accountEpoch);
-
-      const startA = Date.now();
-      setStateA((prev) => ({ ...prev, isStreaming: true }));
-
-      streamChat(
-        {
-          model: modelA,
-          messages,
-          stream: true as const,
-          operationId: uuidv7(),
-          thinking: false,
-        },
-        {
-          onDelta: (delta: StreamDelta) => {
-            if (!isAActive()) return;
-            if (delta.content) {
-              setStateA((prev) => {
-                const newContent = prev.content + delta.content;
-                const ttft = prev.ttftMs === null ? Date.now() - startA : prev.ttftMs;
-                return {
-                  ...prev,
-                  content: newContent,
-                  ttftMs: ttft,
-                  tokenCount: Math.round(newContent.length / 4),
-                };
-              });
-            }
-          },
-          onDone: () => {
-            if (!isAActive()) return;
-            setStateA((prev) => ({
-              ...prev,
-              isStreaming: false,
-              isDone: true,
-              durationMs: Date.now() - startA,
-            }));
-          },
-          onError: (err: Error) => {
-            if (!isAActive()) return;
-            setStateA((prev) => ({
-              ...prev,
-              isStreaming: false,
-              isDone: true,
-              errorMessage: compareErrorMessage(err),
-            }));
-          },
-        },
-        ctrlA.signal,
-      );
-
       const ctrlB = new AbortController();
+      controllerARef.current = ctrlA;
       controllerBRef.current = ctrlB;
-      const isBActive = () =>
-        compareGenerationRef.current === generation &&
-        !ctrlB.signal.aborted &&
-        isCloudAccountEpochCurrent(accountEpoch);
-
-      const startB = Date.now();
-      setStateB((prev) => ({ ...prev, isStreaming: true }));
-
-      streamChat(
-        {
-          model: modelB,
-          messages,
-          stream: true as const,
-          operationId: uuidv7(),
-          thinking: false,
-        },
-        {
-          onDelta: (delta: StreamDelta) => {
-            if (!isBActive()) return;
-            if (delta.content) {
-              setStateB((prev) => {
-                const newContent = prev.content + delta.content;
-                const ttft = prev.ttftMs === null ? Date.now() - startB : prev.ttftMs;
-                return {
-                  ...prev,
-                  content: newContent,
-                  ttftMs: ttft,
-                  tokenCount: Math.round(newContent.length / 4),
-                };
-              });
-            }
-          },
-          onDone: () => {
-            if (!isBActive()) return;
-            setStateB((prev) => ({
-              ...prev,
-              isStreaming: false,
-              isDone: true,
-              durationMs: Date.now() - startB,
-            }));
-          },
-          onError: (err: Error) => {
-            if (!isBActive()) return;
-            setStateB((prev) => ({
-              ...prev,
-              isStreaming: false,
-              isDone: true,
-              errorMessage: compareErrorMessage(err),
-            }));
-          },
-        },
-        ctrlB.signal,
-      );
+      const startB = () => runAnswer(modelB, setStateB, ctrlB);
+      runAnswer(modelA, setStateA, ctrlA, queueB ? startB : undefined);
+      if (!queueB) startB();
       return true;
     },
     [modelA, modelB],
   );
 
-  const isAnyStreaming = stateA.isStreaming || stateB.isStreaming;
+  const isAnyStreaming =
+    stateA.isStreaming || stateB.isStreaming || stateA.isQueued || stateB.isQueued;
   const bothDone = stateA.isDone && stateB.isDone;
 
   const winner = bothDone ? determineWinner(stateA, stateB) : null;
@@ -310,15 +326,33 @@ export default function CompareScreen() {
     modelPickerBRef.current?.snapToIndex(0);
   }, []);
 
-  const handleSelectModelA = useCallback((id: string) => {
-    setModelA(id);
-    setActivePickerSlot(null);
-  }, []);
+  const handleSelectModelA = useCallback(
+    (id: string) => {
+      if (!getCloudModelsForTier(useTierStore.getState().tier).some((model) => model.id === id))
+        return;
+      if (id !== modelA) {
+        resetComparison();
+        if (id === modelB) setModelB(modelA);
+        setModelA(id);
+      }
+      setActivePickerSlot(null);
+    },
+    [modelA, modelB, resetComparison],
+  );
 
-  const handleSelectModelB = useCallback((id: string) => {
-    setModelB(id);
-    setActivePickerSlot(null);
-  }, []);
+  const handleSelectModelB = useCallback(
+    (id: string) => {
+      if (!getCloudModelsForTier(useTierStore.getState().tier).some((model) => model.id === id))
+        return;
+      if (id !== modelB) {
+        resetComparison();
+        if (id === modelA) setModelA(modelB);
+        setModelB(id);
+      }
+      setActivePickerSlot(null);
+    },
+    [modelA, modelB, resetComparison],
+  );
 
   return (
     <SafeAreaView
@@ -343,14 +377,14 @@ export default function CompareScreen() {
             gap: 8,
           }}
         >
-          <Pressable
+          <PressableBox
             onPress={handleBack}
             className="p-2 rounded-lg active:bg-white/5"
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
             <ArrowLeft size={20} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
           <Text className="flex-1 text-[15px] font-semibold text-white">Compare Models</Text>
         </View>
 
@@ -368,6 +402,25 @@ export default function CompareScreen() {
               message={LOCAL_MODE_COMPARE_NOTICE}
             />
           </ScrollView>
+        ) : !availableModels ? (
+          <View className="flex-1 items-center justify-center px-8">
+            <Text className="text-white text-center text-base font-semibold">
+              Compare two models
+            </Text>
+            <Text className="text-white/50 text-center text-sm leading-5 mt-3">
+              Your current plan has fewer than two models available for comparison. You can use your
+              available model in Chat.
+            </Text>
+            <PressableBox
+              onPress={handleBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go to Chat"
+              className="rounded-xl px-5 py-3 mt-6"
+              style={{ backgroundColor: colors.surfaceElevated }}
+            >
+              <Text className="text-white font-medium">Go to Chat</Text>
+            </PressableBox>
+          </View>
         ) : (
           <>
             {/* ---- Model Selector Pills ---- */}
@@ -429,7 +482,7 @@ export default function CompareScreen() {
 
       {/* ---- Model Picker Sheets ---- */}
       {/* Rendered outside KeyboardAvoidingView so they overlay correctly */}
-      {isCloudMode ? (
+      {isCloudMode && availableModels ? (
         <>
           <ModelPickerSheet
             sheetRef={modelPickerARef}
@@ -464,7 +517,7 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
   const slotColor = slot === 'A' ? colors.teal : colors.terraCotta;
 
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       className="flex-1 rounded-xl border active:opacity-80"
       style={{
@@ -482,7 +535,9 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
           className="w-5 h-5 rounded-md items-center justify-center"
           style={{ backgroundColor: `${slotColor}30` }}
         >
-          <Text style={{ fontSize: 10, fontWeight: '700', color: slotColor }}>{slot}</Text>
+          <Text style={{ fontSize: typeScale.caption, fontWeight: '700', color: slotColor }}>
+            {slot}
+          </Text>
         </View>
 
         <View className="flex-1">
@@ -490,7 +545,7 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
             {displayName}
           </Text>
           {provider && (
-            <Text className="text-[10px] text-fg-muted" numberOfLines={1}>
+            <Text className="text-xs text-fg-muted" numberOfLines={1}>
               {provider.name}
             </Text>
           )}
@@ -503,11 +558,11 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
         )}
         {winner === 'tie' && (
           <View className="flex-row items-center gap-0.5">
-            <Text style={{ fontSize: 10, color: colors.textMuted }}>tie</Text>
+            <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>tie</Text>
           </View>
         )}
       </View>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -531,7 +586,9 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
           className="w-5 h-5 rounded-md items-center justify-center"
           style={{ backgroundColor: `${slotColor}30` }}
         >
-          <Text style={{ fontSize: 10, fontWeight: '700', color: slotColor }}>{slot}</Text>
+          <Text style={{ fontSize: typeScale.caption, fontWeight: '700', color: slotColor }}>
+            {slot}
+          </Text>
         </View>
         <Text className="flex-1 text-[13px] font-medium text-white" numberOfLines={1}>
           {displayName}
@@ -541,7 +598,9 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
         {winner && (
           <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30">
             <Trophy size={10} color="#f59e0b" />
-            <Text style={{ fontSize: 10, fontWeight: '600', color: '#f59e0b' }}>Faster</Text>
+            <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: '#f59e0b' }}>
+              Faster
+            </Text>
           </View>
         )}
       </View>
@@ -561,6 +620,8 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
         </View>
       ) : state.content ? (
         <Text className="text-[13px] text-white leading-5">{state.content}</Text>
+      ) : state.isQueued ? (
+        <Text className="text-[12px] text-fg-muted">{ONE_ANSWER_AT_A_TIME_NOTE}</Text>
       ) : !state.isStreaming ? (
         <Text className="text-[12px] text-fg-muted italic">No response yet.</Text>
       ) : null}
@@ -605,7 +666,7 @@ function StatChip({ icon, label, title }: StatChipProps) {
   return (
     <View className="flex-row items-center gap-1" accessibilityLabel={title}>
       {icon}
-      <Text className="text-[10px] text-fg-muted">{label}</Text>
+      <Text className="text-xs text-fg-muted">{label}</Text>
     </View>
   );
 }

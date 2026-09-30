@@ -9,39 +9,12 @@ nothing is left.
 ## S23.03: Project icon and color.
 
 - Done when: The user can choose a project's icon and colour, and the choice is shown wherever the project appears.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile has no icon or colour picker, and the only view that renders a project's emoji and accent is the fetched header, which v1 hides behind the off crossDeviceSync flag. | ui, flag-off |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:190-220`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`
-
-## S23.05: Project overview.
-
-- Done when: Opening a project shows an overview: its name, description, counts and its main sections (chats, files, instructions).
-- Wave: 2
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A cloud project's page shows only its name and 'Cloud project · synced across your devices'; the full header (description, counts) is fetched only when crossDeviceSync is on, and that v1 flag is off. | flag-off |
-
-Code: `apps/mobile/app/(app)/projects/[id].tsx:82-84`, `apps/mobile/app/(app)/projects/[id].tsx:172-175`, `apps/mobile/app/(app)/projects/[id].tsx:100-101`
-
-## S23.06: Project conversations.
-
-- Done when: A project lists its conversations, opens them, and starts new chats that are filed under the project.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Project conversations now open (f6f8c2f2a). VS Code turns are still not filed under the project: the CLI app-server's thread/start takes no project id (p-desktop-cli). | handler |
-
-Code: `apps/extension-vscode/src/features/projects/projectActions.ts:120-120`
+| chrome | missing | Not built on this surface. |  |
 
 ## S23.07: Project files.
 
@@ -61,28 +34,25 @@ Code: `apps/extension-vscode/src/features/projects/projectActions.ts:120-120`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Google Drive files are picked with the Google Picker and added as project sources through the upload pipeline (partials/privacy bd63f0822, e562a9956, c07ecd0ad; Drive only for unshared projects as in Claude, support.claude.com/en/articles/10166901). Needs owner settings GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same Google Cloud project as the Drive connector OAuth client) and a live check of the Picker under the page CSP. Slack as a project source is declined (no leader offers it); the knowledge-storage cap now reads the entitled plan. | config |
-| desktop | partial | Google Drive files are picked with the Google Picker and added as project sources through the upload pipeline (partials/privacy bd63f0822, e562a9956, c07ecd0ad; Drive only for unshared projects as in Claude, support.claude.com/en/articles/10166901). Needs owner settings GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same Google Cloud project as the Drive connector OAuth client) and a live check of the Picker under the page CSP. Slack as a project source is declined (no leader offers it); the knowledge-storage cap now reads the entitled plan. | config |
-| mobile | partial | Mobile adds picked files as sources, but has no text or connected-service sources, and uploads hit the same 0-byte cap for never-paid Free users and Team seat members. | handler, ui |
+| web | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
+| desktop | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
+| mobile | partial | owner: files and text work on the phone; a Google Drive source waits on the owner's Google connector keys (Drive entry and GOOGLE_PICKER_API_KEY/APP_ID). Plan storage caps are 100 MB for Free and the team allowance for Team seats (billing-catalog.ts:358, :413). | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/projects/[id]/knowledge-files/google-drive/route.ts:123-123`, `apps/web/features/projects/components/AddSourcesModal.tsx:295-295`, `apps/web/features/projects/lib/google-drive-picker.ts:82-82`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`
+Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:264-264`
 
 ## S23.11: Project Memory.
 
 - Done when: A project keeps its own memories, and the user can choose whether the project also draws on account-wide memory.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The CLI keeps a per-workspace memory file (the project's CLAUDE.md in the memory hierarchy), but a directory linked to an account project never reads or writes that project's memories. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/memory.rs:86-97`, `apps/cli/src/memory.rs:194-208`
 
 ## S23.12: Project artifacts.
 
@@ -113,16 +83,13 @@ Code: `apps/cli/src/memory.rs:86-97`, `apps/cli/src/memory.rs:194-208`
 
 - Done when: Autonomous work tasks can be started in a project and the project lists their state.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile's Start Work sheet can file a new task under a project, but a project's page has no Work tab listing its tasks. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:165-175`, `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:63-63`
 
 ## S23.15: Project routines.
 
@@ -141,17 +108,15 @@ Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:165-175`, `a
 
 - Done when: A project can set which tools and Skills are on by default for chats in it.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The criterion is tools AND Skills. The cited evidence covers only the project skills directory; the tool allow/deny lists are set on the session from flags, and the only project-level config loader is annotated #[allow(dead_code)] and never called, so a project cannot set default tools. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/skills.rs:191-204`, `apps/cli/src/app_server/surfaces.rs:132-136`
 
 ## S23.20: Project search.
 
@@ -234,16 +199,13 @@ Code: `apps/cli/src/skills.rs:191-204`, `apps/cli/src/app_server/surfaces.rs:132
 
 - Done when: A project can be archived out of the active list and restored later with its contents intact.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The hosted project PUT empties the project's conversations when isArchived is true (apps/web/app/api/projects/[id]/route.ts:233), so archive/undo loses filing on every surface; a server change is needed. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/cloud/mod.rs:256-256`
 
 ## S23.33: Project-only context mode.
 
@@ -275,14 +237,12 @@ Code: `apps/cli/src/cloud/mod.rs:256-256`
 
 - Done when: Where offered, one coordinating conversation can split work into parallel child threads and bring their results back together.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The session can fan a turn out to parallel subagents (the model calls the task tool; each runs on its own thread) and merges their results, but only inside one turn; the user cannot start, name or return to child threads. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/chat.rs:1716-1716`, `apps/cli/src/agent/chat.rs:1976-1985`, `apps/cli/src/subagent.rs:355-358`

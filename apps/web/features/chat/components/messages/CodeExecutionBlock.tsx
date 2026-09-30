@@ -50,7 +50,7 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
       {/* Header */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/30 rounded-lg transition-colors"
+        className="flex w-full items-center gap-2 px-3 py-2 text-start hover:bg-muted/30 rounded-lg transition-colors"
         aria-expanded={expanded}
       >
         <Code2 className="h-4 w-4 shrink-0 text-muted-foreground" />

@@ -99,6 +99,7 @@
   "navImages": "Imagens",
   "navModels": "Modelos",
   "navSchedules": "Agendamentos",
+  "navHealth": "Saúde",
   "navAdmin": "Administração",
   "navWorkspaceSection": "Espaço de trabalho",
   "navLoadingWorkspaces": "Carregando espaços de trabalho…",
@@ -169,7 +170,13 @@
     "toolsAwaitingApproval_one": "Uma ferramenta está aguardando sua aprovação.",
     "toolsAwaitingApproval_other": "{{count}} ferramentas estão aguardando sua aprovação.",
     "unsentMessages_one": "Você tem uma mensagem não enviada.",
-    "unsentMessages_other": "Você tem {{count}} mensagens não enviadas."
+    "unsentMessages_other": "Você tem {{count}} mensagens não enviadas.",
+    "packages_one": "{{count}} pacote",
+    "packages_other": "{{count}} pacotes",
+    "unreadNotifications_one": "{{count}} notificação não lida",
+    "unreadNotifications_other": "{{count}} notificações não lidas",
+    "textBlocks_one": "{{count}} bloco de texto",
+    "textBlocks_other": "{{count}} blocos de texto"
   },
   "relative": {
     "minutesAgo_one": "há {{count}} minuto",

@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S83.01: Plan-comparison dialog.
-
-- Done when: A plan-comparison view/dialog lets the user compare plans (price, usage, features) before choosing.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/no-yearly-s83-mobile-billing.patch adds a Compare plans row to Settings > Billing (cloud-billing/index.tsx is Codex-held); in-app purchase still needs FEATURES.billing and MOBILE_IAP_ENABLED | flag-off |
-
-Code: `apps/mobile/src/features/settings/plans/index.tsx:59-59`
-
 ## S83.03: Upgrade checkout.
 
 - Done when: A signed-in user can start and complete a paid upgrade checkout.
@@ -27,21 +15,9 @@ Code: `apps/mobile/src/features/settings/plans/index.tsx:59-59`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Native store purchase code exists but is gated off (MOBILE_IAP_ENABLED unset; FEATURES.billing false), so no upgrade can be bought in the app. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
-
-## S83.05: Proration explanation.
-
-- Done when: Upgrades explain proration: credit for unused time, the charge today and when the next renewal happens.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/no-yearly-s83-mobile-billing.patch replaces the wrong 'renewal date stays the same' note with the web rule (an upgrade starts a new billing period that day, with a credit for unused time) and states top-ups in credits with the real expiry rule; buying in the app still needs FEATURES.billing and MOBILE_IAP_ENABLED | flag-off |
-
-Code: `apps/mobile/src/features/settings/plans/index.tsx:59-59`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`
 
 ## S83.06: Tax and total-price display.
 
@@ -51,81 +27,9 @@ Code: `apps/mobile/src/features/settings/plans/index.tsx:59-59`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile relies on the store sheet to show tax and total, but native purchase is gated off (MOBILE_IAP_ENABLED unset). Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:407-411`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
-
-## S83.07: Coupon entry.
-
-- Done when: Users can enter a coupon/promotion code when buying.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile has no coupon entry: its invite-code modal is never mounted and its redeem is a local stub, and store offer codes are not wired. | mount, handler |
-
-Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
-
-## S83.08: Trial terms.
-
-- Done when: When a plan starts as a trial, the user sees the trial terms: length, end date, what is charged after and how to cancel.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/no-yearly-s83-mobile-billing.patch shows 'Free trial ends <date>, then renews unless you cancel.' on the Billing plan card; apply after Codex lands | ui |
-
-Code: `apps/mobile/src/features/billing/store.ts:25-25`, `apps/mobile/src/features/billing/store.ts:26-26`
-
-## S83.09: Payment-method entry.
-
-- Done when: Users can add a payment method.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile cannot add a card: the portal action is behind FEATURES.billing and Stripe-billed users are sent to web billing; store payment methods live with Apple/Google. | flag-off, surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
-
-## S83.10: Payment-method management.
-
-- Done when: Users can see and manage saved payment methods (default card, update, remove).
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile shows no card; management is behind FEATURES.billing and otherwise opens web billing. | flag-off, surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
-
-## S83.11: Billing address.
-
-- Done when: Users can enter and update a billing address.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile cannot collect or edit an address; Stripe-billed users are sent to web billing and the portal action is flag-gated. | flag-off, surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
-
-## S83.12: Tax identifier.
-
-- Done when: Business buyers can enter a tax identifier (VAT/GST) that is applied to their invoices.
-- Wave: 2
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile has no tax-ID entry; store purchases handle tax themselves and are gated off. | flag-off, surface-only |
-
-Code: `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`
 
 ## S83.13: Purchase confirmation.
 
@@ -135,45 +39,9 @@ Code: `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Native purchases show 'Purchase verified' after server verification, but native purchase is gated off. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:506-514`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
-
-## S83.15: Retry payment.
-
-- Done when: After a failed payment the user can retry it (pay the open invoice or update the card) from the product.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile only links a past-due Stripe user to web billing. | surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`
-
-## S83.21: Cancel subscription.
-
-- Done when: Users can cancel their subscription themselves.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile sends cancellation to the store (store-billed) or to web billing (Stripe-billed); no cancel in the app. | surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`
-
-## S83.24: End-of-term access explanation.
-
-- Done when: After cancelling, the user is told what they keep until the end of the term and what happens after.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/no-yearly-s83-mobile-billing.patch shows 'Access ends <date>. You keep <plan> until then.' for a subscription set to cancel; apply after Codex lands | ui |
-
-Code: `apps/mobile/src/features/billing/store.ts:25-25`, `apps/mobile/src/features/billing/store.ts:26-26`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`
 
 ## S83.25: Mobile purchase restoration.
 
@@ -182,9 +50,9 @@ Code: `apps/mobile/src/features/billing/store.ts:25-25`, `apps/mobile/src/featur
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Restore purchases' is built but renders only when the native catalog is enabled, which needs MOBILE_IAP_ENABLED (unset by default). | flag-off |
+| mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:485-496`, `apps/mobile/src/features/billing/useMobileIap.ts:345-365`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
+Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`
 
 ## S83.28: Team seat purchase.
 
@@ -194,19 +62,7 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:485-496`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Open paid checkout to all eligible users: seat count is chosen at checkout and increased in place, but the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so a first Team purchase is blocked. | flag-off |
+| desktop | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
 | api | partial | POST /checkout accepts a seat count, but a first Team purchase hits the upgrade-waitlist gate (403); seat increases are app-only (/api/upgrade). Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 
-Code: `apps/web/app/pricing/page.tsx:1078-1093`, `apps/web/lib/validations/checkout.ts:52-58`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/web/lib/server/billing-waitlist-access.ts:23-34`
-
-## S83.29: Seat assignment.
-
-- Done when: Admins can assign seats to members and see seats used vs licensed.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile shows 'X of Y seats used' and adds members in-app on iOS only; Android opens web to add a member. | surface-only |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:459-463`, `apps/mobile/app/(app)/settings/workspace.tsx:129-141`
+Code: `apps/web/lib/server/billing-waitlist-access.ts:22-24`, `apps/web/lib/validations/checkout.ts:52-58`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/web/lib/server/billing-waitlist-access.ts:23-34`

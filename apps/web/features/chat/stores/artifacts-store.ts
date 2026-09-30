@@ -388,11 +388,34 @@ const _persistStore = create<PersistedShape>()(
       }
       return persisted as PersistedShape;
     },
-    partialize: (state) => ({
-      artifacts: state.artifacts,
-      versionsById: state.versionsById,
-      selectedArtifactId: state.selectedArtifactId,
-    }),
+    partialize: (state) => {
+      const temporaryIds = new Set(
+        useChatStore
+          .getState()
+          .conversations.filter((conversation) => conversation.isTemporary)
+          .map((conversation) => conversation.id),
+      );
+      if (temporaryIds.size === 0) {
+        return {
+          artifacts: state.artifacts,
+          versionsById: state.versionsById,
+          selectedArtifactId: state.selectedArtifactId,
+        };
+      }
+      const artifacts = state.artifacts.filter(
+        (artifact) => !artifact.conversationId || !temporaryIds.has(artifact.conversationId),
+      );
+      const keptIds = new Set(artifacts.map((artifact) => artifact.id));
+      return {
+        artifacts,
+        versionsById: Object.fromEntries(
+          Object.entries(state.versionsById).filter(([id]) => keptIds.has(id)),
+        ),
+        selectedArtifactId: keptIds.has(state.selectedArtifactId ?? '')
+          ? state.selectedArtifactId
+          : null,
+      };
+    },
     onRehydrateStorage: () => (state) => {
       if (!state) return;
       rehydrateSharedStore(state);

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ManagedCloudProjectDuplicateResponse } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -15,6 +16,7 @@ import {
   isUserResourceLimitError,
 } from '@/lib/services/free-plan-entitlements';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { HEALTH_SPACE_KIND } from '@/lib/health-space';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -68,6 +70,9 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
   );
   if (!source) {
     throw createError.notFound('Project not found');
+  }
+  if (source['space_kind'] === HEALTH_SPACE_KIND) {
+    throw createError.conflict('Health cannot be duplicated. Its chats and files stay in Health.');
   }
 
   const planTier = await resolveEntitledPlanTier(db, userId);
@@ -174,7 +179,11 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
     }
   }
 
-  return NextResponse.json({ project: mapProjectRow(created), copiedKnowledgeFiles: copiedFiles });
+  const duplicated: ManagedCloudProjectDuplicateResponse = {
+    project: mapProjectRow(created),
+    copiedKnowledgeFiles: copiedFiles,
+  };
+  return NextResponse.json(duplicated);
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleDuplicateProject));

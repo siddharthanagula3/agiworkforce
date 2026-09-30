@@ -2,13 +2,12 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
+import { isAuthGateRefusal } from '@/lib/api-auth-response';
 import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { toCsv } from '@/lib/csv';
 import {
   USAGE_EXPORT_ROW_LIMIT,
@@ -39,7 +38,7 @@ async function handler(request: NextRequest) {
   try {
     scoped = await getUserScopedDb(request);
   } catch (error) {
-    if (isApiKeyScopeError(error) || isMfaRequiredError(error) || isIpNotAllowedError(error)) {
+    if (isApiKeyScopeError(error) || isAuthGateRefusal(error)) {
       throw error;
     }
     throw createError.unauthorized('Authentication required');

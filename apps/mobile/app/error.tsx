@@ -2,13 +2,14 @@ import { View, Pressable, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ErrorBoundaryProps {
   error: Error;
   retry: () => void;
 }
 
-export default function RootErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+export default function RootErrorBoundary({ retry }: ErrorBoundaryProps) {
   const router = useRouter();
   const colors = useThemeColors();
 
@@ -27,13 +28,7 @@ export default function RootErrorBoundary({ error, retry }: ErrorBoundaryProps) 
         <Text style={[styles.description, { color: colors.textSecondary }]}>
           An unexpected error occurred. Please try again.
         </Text>
-        {__DEV__ ? (
-          <Text style={[styles.errorText, { color: colors.textMuted }]} numberOfLines={3}>
-            {error.message}
-          </Text>
-        ) : (
-          <View style={styles.errorSpacer} />
-        )}
+        <View style={styles.errorSpacer} />
 
         <Pressable
           onPress={retry}
@@ -71,7 +66,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emoji: {
-    fontSize: 48,
+    fontSize: typeScale.display,
     fontWeight: '700',
     width: 80,
     height: 80,
@@ -82,22 +77,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   heading: {
-    fontSize: 20,
+    fontSize: typeScale.title3,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 8,
   },
   description: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 16,
-    marginBottom: 32,
   },
   retryButton: {
     flexDirection: 'row',
@@ -109,7 +98,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   retryText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontWeight: '600',
   },
   errorSpacer: {
@@ -123,6 +112,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   backText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
 });

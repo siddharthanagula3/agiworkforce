@@ -1,4 +1,7 @@
-import { RESUMABLE_UPLOAD_PART_BYTES } from '@agiworkforce/cloud-contracts';
+import {
+  ARTIFACT_RUNTIME_BODY_CEILING_BYTES,
+  RESUMABLE_UPLOAD_PART_BYTES,
+} from '@agiworkforce/cloud-contracts';
 import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
 export const DEFAULT_API_PAYLOAD_CEILING_BYTES = 4 * 1024 * 1024;
@@ -16,6 +19,7 @@ const PAYLOAD_CEILINGS: ReadonlyArray<readonly [string, number]> = [
   ['/api/uploads/', MAX_ATTACHMENT_BYTES],
   ['/api/files/uploads/', RESUMABLE_UPLOAD_PART_BYTES],
   ['/api/chat/conversations/', 24 * 1024 * 1024],
+  ['/api/artifacts/runtime/', ARTIFACT_RUNTIME_BODY_CEILING_BYTES],
 ];
 
 const BODYLESS_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'DELETE']);

@@ -110,6 +110,13 @@
         "restoredBy": null
       }
     },
+    "developer_projects": {
+      "concept": "developer-project",
+      "archived": {
+        "column": "archived_at",
+        "restoredBy": null
+      }
+    },
     "feature_flag_definitions": {
       "concept": "feature-flag",
       "archived": {
@@ -119,6 +126,12 @@
     }
   },
   "recoveryGaps": [
+    {
+      "table": "developer_projects",
+      "facet": "archived.restore",
+      "why": "Archiving a project revokes its API keys in the same transaction and the developer console offers no unarchive, so an archived project stays listed read-only with its usage history.",
+      "fix": "An unarchive action beside archive in the developer projects route that clears archived_at; the revoked keys stay revoked and new keys are created for the project."
+    },
     {
       "table": "web_messages",
       "facet": "softDeleted.restore",
@@ -184,6 +197,12 @@
       "facet": "archived.restore",
       "why": "An archived flag definition is retired deliberately; bringing it back would resurrect a rollout nobody is watching.",
       "fix": "Define a new flag instead, or add an explicit unarchive with an audit event."
+    },
+    {
+      "table": "developer_projects",
+      "facet": "archived.restore",
+      "why": "Archiving a developer project revokes its keys in the same request and is one-way by design, as OpenAI project archiving is; an unarchive would bring back a spend scope whose keys no longer work.",
+      "fix": "Create a new project instead, or add an explicit unarchive that issues no key back and records an audit event."
     }
   ],
   "readExemptions": [
@@ -242,12 +261,6 @@
       "why": "The read answers only whether the caller owns the conversation id it passed; it returns no content."
     },
     {
-      "file": "apps/web/app/api/media/image/generate/route.ts",
-      "table": "web_conversations",
-      "class": "ownership-check",
-      "why": "The read answers only whether the caller owns the conversation it is attaching the image to."
-    },
-    {
       "file": "apps/web/app/api/projects/sync/route.ts",
       "table": "user_projects",
       "class": "tombstone-sync",
@@ -267,7 +280,19 @@
     },
     {
       "file": "apps/web/app/api/user/export/route.ts",
+      "table": "developer_projects",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
       "table": "conversations",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "developer_projects",
       "class": "data-export",
       "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
     },
@@ -314,6 +339,12 @@
       "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
     },
     {
+      "file": "apps/web/lib/developer-api/project-spend.ts",
+      "table": "developer_projects",
+      "class": "ownership-check",
+      "why": "The read resolves the monthly cap of the project the calling key belongs to. Archiving revokes that project's keys in the same request, and a cap must keep binding any key that outlived the archive rather than lapse with it."
+    },
+    {
       "file": "apps/web/lib/feature-flags/flag-store.ts",
       "table": "feature_flag_definitions",
       "class": "write-path",
@@ -344,6 +375,12 @@
       "why": "The read resolves the parent row a revision is being written against; the write itself fences on ownership."
     },
     {
+      "file": "apps/web/lib/developer-api/project-spend.ts",
+      "table": "developer_projects",
+      "class": "ownership-check",
+      "why": "The read resolves which project the API key on this request belongs to and its monthly cap. Archiving a project revokes its keys in the same transaction, so a key that authenticated the request never belongs to an archived project, and the join returns no project content."
+    },
+    {
       "file": "apps/web/lib/server/media-assets.ts",
       "table": "media_assets",
       "class": "tombstone-check",
@@ -362,10 +399,22 @@
       "why": "Workspace erasure removes withdrawn assets as well as live ones."
     },
     {
+      "file": "apps/web/lib/server/project-deletion.ts",
+      "table": "user_projects",
+      "class": "write-path",
+      "why": "The statement withdraws the knowledge files of the project being deleted, which is already marked deleted when its contents are released; filtering on the project marker would leave those files live."
+    },
+    {
       "file": "apps/web/lib/server/temporary-files/purge.ts",
       "table": "media_assets",
       "class": "purge",
       "why": "The purge exists to collect rows nobody may read any more."
+    },
+    {
+      "file": "apps/web/lib/services/account-usage-history-service.ts",
+      "table": "user_projects",
+      "class": "data-export",
+      "why": "Usage history and its CSV are the account's record of what it spent, so a turn made in a project that was later deleted or archived keeps that project's name. Filtering the withdrawn project would relabel real past spend as belonging to no project."
     },
     {
       "file": "apps/web/lib/services/cloud-code-session-service.ts",
@@ -434,6 +483,18 @@
       "why": "A legal export answers what the workspace held in a period, which is not the same question as what a reader may still see."
     },
     {
+      "file": "apps/web/lib/services/health-space-service.ts",
+      "table": "user_projects",
+      "class": "ownership-check",
+      "why": "The read answers whether a conversation sits in the Health space so its turns stay out of memory; a withdrawn space must still count as Health, or its content would reach general memory."
+    },
+    {
+      "file": "apps/web/lib/services/health-space-service.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "The read answers whether a conversation sits in the Health space so its turns stay out of memory; a withdrawn chat must still count as Health, or its content would reach general memory."
+    },
+    {
       "file": "apps/web/lib/services/managed-auto-memory-service.ts",
       "table": "web_conversations",
       "class": "ownership-check",
@@ -446,22 +507,40 @@
       "why": "The resolver selects deleted_at and answers \"deleted\" on it, which it cannot do without reading the withdrawn row."
     },
     {
-      "file": "apps/web/lib/services/published-artifact-service.ts",
-      "table": "web_conversations",
-      "class": "ownership-check",
-      "why": "The read answers whether the publisher owns the conversation the artifact came from."
-    },
-    {
       "file": "apps/web/lib/services/retention-service.ts",
       "table": "web_conversations",
       "class": "retention-sweep",
       "why": "A retention sweep ages out rows by their own clock and must see withdrawn rows to collect them."
     },
     {
-      "file": "apps/web/lib/services/account-usage-history-service.ts",
+      "file": "apps/web/lib/services/retrieval-search-service.ts",
+      "table": "media_assets",
+      "class": "ownership-check",
+      "why": "The health_space_documents fence resolves which indexed documents belong to a Health space so they stay out of search elsewhere; a withdrawn space, chat, file, artifact or image must still count as Health. The result statement filters each withdrawal marker itself."
+    },
+    {
+      "file": "apps/web/lib/services/retrieval-search-service.ts",
+      "table": "project_knowledge_files",
+      "class": "ownership-check",
+      "why": "The health_space_documents fence resolves which indexed documents belong to a Health space so they stay out of search elsewhere; a withdrawn space, chat, file, artifact or image must still count as Health. The result statement filters each withdrawal marker itself."
+    },
+    {
+      "file": "apps/web/lib/services/retrieval-search-service.ts",
       "table": "user_projects",
-      "class": "data-export",
-      "why": "Usage history and its CSV are the account's record of what it spent, so a turn made in a project that was later deleted or archived keeps that project's name. Filtering the withdrawn project would relabel real past spend as belonging to no project."
+      "class": "ownership-check",
+      "why": "The health_space_documents fence resolves which indexed documents belong to a Health space so they stay out of search elsewhere; a withdrawn space, chat, file, artifact or image must still count as Health. The result statement filters each withdrawal marker itself."
+    },
+    {
+      "file": "apps/web/lib/services/retrieval-search-service.ts",
+      "table": "web_artifacts",
+      "class": "ownership-check",
+      "why": "The health_space_documents fence resolves which indexed documents belong to a Health space so they stay out of search elsewhere; a withdrawn space, chat, file, artifact or image must still count as Health. The result statement filters each withdrawal marker itself."
+    },
+    {
+      "file": "apps/web/lib/services/retrieval-search-service.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "The health_space_documents fence resolves which indexed documents belong to a Health space so they stay out of search elsewhere; a withdrawn space, chat, file, artifact or image must still count as Health. The result statement filters each withdrawal marker itself."
     },
     {
       "file": "apps/web/lib/services/tier-unit-quota-service.ts",

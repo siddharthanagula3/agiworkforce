@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
@@ -188,10 +188,15 @@ describe('GET /api/settings/organization/policy', () => {
 describe('PATCH /api/settings/organization/policy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
     mockGetUserScopedDb.mockResolvedValue({
       db: { query: (...args: unknown[]) => mockQuery(...args) },
       userId: 'user-1',
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('refuses a member', async () => {
@@ -201,6 +206,38 @@ describe('PATCH /api/settings/organization/policy', () => {
 
     expect(response.status).toBe(403);
     expect(upsertParams()).toEqual([]);
+  });
+
+  it('lets only the Owner turn on fast mode', async () => {
+    bindCaller({ role: 'admin', policyRow: SAVED_POLICY });
+    const refused = await PATCH(
+      request({ controls: { featureAccess: { fast_mode: true } } }) as never,
+    );
+    expect(refused.status).toBe(403);
+    expect(upsertParams()).toEqual([]);
+
+    bindCaller({ role: 'owner', policyRow: SAVED_POLICY });
+    const allowed = await PATCH(
+      request({ controls: { featureAccess: { fast_mode: true } } }) as never,
+    );
+    expect(allowed.status).toBe(200);
+    expect(upsertParams()).not.toEqual([]);
+  });
+
+  it('lets an admin turn fast mode off', async () => {
+    bindCaller({
+      role: 'admin',
+      policyRow: {
+        ...SAVED_POLICY,
+        metadata: { controls: { featureAccess: { fast_mode: true } } },
+      },
+    });
+
+    const response = await PATCH(
+      request({ controls: { featureAccess: { fast_mode: false } } }) as never,
+    );
+
+    expect(response.status).toBe(200);
   });
 
   it('merges a partial patch onto the SAVED policy, never onto the table defaults', async () => {
@@ -397,6 +434,20 @@ describe('PATCH /api/settings/organization/policy', () => {
     const response = await PATCH(request({ requireMfa: true }) as never);
 
     expect(response.status).toBe(400);
+    expect(upsertParams()).toEqual([]);
+  });
+
+  it('refuses to start requiring mfa while members cannot enrol an authenticator', async () => {
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '');
+    bindCaller({ policyRow: SAVED_POLICY });
+    mockResolveMfaEnrolled.mockResolvedValueOnce(true);
+
+    const response = await PATCH(request({ requireMfa: true }) as never);
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toMatch(
+      /requiring multi-factor authentication is temporarily unavailable/i,
+    );
     expect(upsertParams()).toEqual([]);
   });
 

@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ChevronDown, ChevronUp, Cloud, HardDrive, Lock } from 'lucide-react-native';
 import type { ReactElement } from 'react';
 import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export interface SendPreviewProps {
   presentation: SendPreviewPresentation;
@@ -77,8 +79,13 @@ function DetailRow({
 }) {
   return (
     <View style={{ flexDirection: 'row', gap: 6 }}>
-      <Text style={{ fontSize: 10, color: colors.textMuted, minWidth: 90 }}>{term}</Text>
-      <Text style={{ flex: 1, fontSize: 10, color: colors.textSecondary }} numberOfLines={1}>
+      <Text style={{ fontSize: typeScale.caption, color: colors.textMuted, minWidth: 90 }}>
+        {term}
+      </Text>
+      <Text
+        style={{ flex: 1, fontSize: typeScale.caption, color: colors.textSecondary }}
+        numberOfLines={1}
+      >
         {definition}
       </Text>
     </View>
@@ -144,7 +151,7 @@ export function SendPreview({
   if (variant === 'compact') {
     return (
       <View testID="send-preview" style={{ gap: 6 }}>
-        <Pressable
+        <PressableBox
           testID="send-preview-toggle"
           onPress={() => setExpanded((prev) => !prev)}
           accessibilityRole="button"
@@ -164,7 +171,7 @@ export function SendPreview({
           }}
         >
           <DestinationIcon presentation={presentation} colors={colors} />
-          <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}>
             {getCompactDestinationLabel(presentation)}
           </Text>
           {expanded ? (
@@ -172,7 +179,7 @@ export function SendPreview({
           ) : (
             <ChevronDown size={10} color={colors.textMuted} />
           )}
-        </Pressable>
+        </PressableBox>
         {expanded ? (
           <View
             testID="send-preview-panel"
@@ -187,7 +194,12 @@ export function SendPreview({
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text
-                style={{ flex: 1, fontSize: 12, fontWeight: '600', color: colors.textPrimary }}
+                style={{
+                  flex: 1,
+                  fontSize: typeScale.caption,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
                 numberOfLines={1}
               >
                 {getMobileDestinationLabel(presentation)}
@@ -208,7 +220,7 @@ export function SendPreview({
                 <Lock size={10} color={colors.textSecondary} />
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: typeScale.caption,
                     fontWeight: '700',
                     color: colors.textSecondary,
                     textTransform: 'uppercase',
@@ -220,11 +232,13 @@ export function SendPreview({
               </View>
             </View>
             {getMobileModelLabel(presentation) ? (
-              <Text style={{ fontSize: 10, color: colors.textMuted }}>
+              <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
                 {getMobileModelLabel(presentation)}
               </Text>
             ) : null}
-            <Text style={{ fontSize: 11, lineHeight: 15, color: colors.textSecondary }}>
+            <Text
+              style={{ fontSize: typeScale.caption, lineHeight: 15, color: colors.textSecondary }}
+            >
               {getMobileBannerCopy(presentation)}
             </Text>
             {detailsAvailable ? <DetailBlock presentation={presentation} colors={colors} /> : null}
@@ -249,7 +263,12 @@ export function SendPreview({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <DestinationIcon presentation={presentation} colors={colors} />
         <Text
-          style={{ flex: 1, fontSize: 12, fontWeight: '600', color: colors.textPrimary }}
+          style={{
+            flex: 1,
+            fontSize: typeScale.caption,
+            fontWeight: '600',
+            color: colors.textPrimary,
+          }}
           numberOfLines={1}
         >
           {getMobileDestinationLabel(presentation)}
@@ -270,7 +289,7 @@ export function SendPreview({
           <Lock size={10} color={colors.textSecondary} />
           <Text
             style={{
-              fontSize: 11,
+              fontSize: typeScale.caption,
               fontWeight: '700',
               color: colors.textSecondary,
               textTransform: 'uppercase',
@@ -282,15 +301,15 @@ export function SendPreview({
         </View>
       </View>
       {getMobileModelLabel(presentation) ? (
-        <Text style={{ fontSize: 10, color: colors.textMuted }}>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
           {getMobileModelLabel(presentation)}
         </Text>
       ) : null}
-      <Text style={{ fontSize: 11, lineHeight: 15, color: colors.textSecondary }}>
+      <Text style={{ fontSize: typeScale.caption, lineHeight: 15, color: colors.textSecondary }}>
         {getMobileBannerCopy(presentation)}
       </Text>
       {detailsAvailable ? (
-        <Pressable
+        <PressableBox
           onPress={() => setExpanded((prev) => !prev)}
           accessibilityRole="button"
           accessibilityLabel={expanded ? 'Hide send details' : 'Show send details'}
@@ -303,7 +322,7 @@ export function SendPreview({
           )}
           <Text
             style={{
-              fontSize: 11,
+              fontSize: typeScale.caption,
               fontWeight: '700',
               color: colors.textMuted,
               textTransform: 'uppercase',
@@ -312,7 +331,7 @@ export function SendPreview({
           >
             {expanded ? 'Hide details' : 'Show details'}
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
       {expanded && detailsAvailable ? (
         <DetailBlock presentation={presentation} colors={colors} />

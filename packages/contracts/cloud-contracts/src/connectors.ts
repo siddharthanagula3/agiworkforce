@@ -238,6 +238,10 @@ export const CONNECTOR_OAUTH_START_PATH = '/api/connectors/oauth/start';
 
 export const CONNECTOR_OAUTH_CALLBACK_PATH = '/api/connectors/oauth/callback';
 
+export const CONNECTOR_OAUTH_COMPLETE_PATH = '/api/connectors/oauth/complete';
+export const CONNECTOR_OAUTH_APP_RETURN_PARAM = 'appReturn';
+export const CONNECTOR_OAUTH_APP_RETURN_URL = 'agiworkforce://connectors/oauth';
+
 export const CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM = 'connector';
 export const CONNECTOR_OAUTH_RESULT_STATUS_PARAM = 'status';
 
@@ -270,6 +274,7 @@ export type ConnectorOAuthResultStatus = ConnectorOAuthStartStatus | ConnectorOA
 export const ConnectorOAuthStartResponseSchema = z.object({
   connectorId: z.string(),
   authorizeUrl: z.string().min(1).optional(),
+  appReturn: z.boolean().optional(),
   status: z.enum(CONNECTOR_OAUTH_START_STATUSES).optional(),
   addedScopes: z.array(z.string()).optional(),
   connectorName: z.string().optional(),
@@ -280,6 +285,20 @@ export const ConnectorOAuthStartResponseSchema = z.object({
   message: z.string().optional(),
 });
 export type ConnectorOAuthStartResponse = z.infer<typeof ConnectorOAuthStartResponseSchema>;
+
+export const ConnectorOAuthCompleteRequestSchema = z.object({
+  state: z.string().regex(/^[a-f0-9]{64}$/),
+  code: z.string().min(1).max(2048).optional(),
+  iss: z.string().max(2048).optional(),
+  error: z.string().max(64).optional(),
+});
+export type ConnectorOAuthCompleteRequest = z.infer<typeof ConnectorOAuthCompleteRequestSchema>;
+
+export const ConnectorOAuthCompleteResponseSchema = z.object({
+  connectorId: z.string(),
+  status: z.enum(CONNECTOR_OAUTH_CALLBACK_STATUSES),
+});
+export type ConnectorOAuthCompleteResponse = z.infer<typeof ConnectorOAuthCompleteResponseSchema>;
 
 export const CONNECTOR_ACCOUNT_SCOPES = ['personal', 'work', 'service'] as const;
 export type ConnectorAccountScope = (typeof CONNECTOR_ACCOUNT_SCOPES)[number];
@@ -576,12 +595,53 @@ export function normalizeWebDomain(raw: string): string | null {
   return WEB_DOMAIN_PATTERN.test(value) ? value : null;
 }
 
+/** A workspace's website rules: when `allow` is non-empty, nothing else may be read. */
+export interface WebDomainRules {
+  readonly allow: readonly string[];
+  readonly deny: readonly string[];
+}
+
+/** The hostname a rule is compared with: lower case, no `www.`, no trailing dot. */
+export function webHostnameOf(url: string): string | null {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/\.+$/, '');
+    return hostname.startsWith('www.') ? hostname.slice(4) : hostname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether the rules let the assistant read this URL. A rule covers its
+ * subdomains and a block beats an allow. A URL that will not parse is refused
+ * only when an allow list is in force. Every surface that opens a page, the
+ * gateway's fetch and search and the desktop's paired browser, asks this.
+ */
+export function webDomainAllowed(rules: WebDomainRules | null | undefined, url: string): boolean {
+  if (!rules) return true;
+  const hostname = webHostnameOf(url);
+  if (!hostname) return rules.allow.length === 0;
+  const matches = (rule: string) => hostname === rule || hostname.endsWith(`.${rule}`);
+  if (rules.deny.some(matches)) return false;
+  if (rules.allow.length === 0) return true;
+  return rules.allow.some(matches);
+}
+
 const WORKSPACE_MEMBER_ROLES = [
   'owner',
   'admin',
   'member',
   'viewer',
 ] as const satisfies readonly OrganizationRole[];
+
+export const WorkspaceConnectorToolRuleSchema = z
+  .object({
+    connectorId: z.string().trim().min(1).max(200),
+    toolName: z.string().trim().min(1).max(200),
+    level: z.enum(CONNECTOR_TOOL_PERMISSION_LEVELS),
+  })
+  .strict();
+export type WorkspaceConnectorToolRule = z.infer<typeof WorkspaceConnectorToolRuleSchema>;
 
 export const ConnectorPolicyListsSchema = z.object({
   allowedConnectors: z.array(z.string()),
@@ -592,6 +652,7 @@ export const ConnectorPolicyListsSchema = z.object({
   allowedMcpHosts: z.array(z.string()),
   allowedWebDomains: z.array(z.string()),
   blockedWebDomains: z.array(z.string()),
+  toolRules: z.array(WorkspaceConnectorToolRuleSchema).default([]),
 });
 export type ConnectorPolicyLists = z.infer<typeof ConnectorPolicyListsSchema>;
 
@@ -634,6 +695,10 @@ export const UpdateConnectorPolicyRequestSchema = z
       .max(CONNECTOR_POLICY_LIST_LIMIT),
     allowedWebDomains: WebDomainListSchema,
     blockedWebDomains: WebDomainListSchema,
+    toolRules: z
+      .array(WorkspaceConnectorToolRuleSchema)
+      .max(CONNECTOR_POLICY_LIST_LIMIT)
+      .optional(),
   })
   .strict();
 export type UpdateConnectorPolicyRequest = z.infer<typeof UpdateConnectorPolicyRequestSchema>;

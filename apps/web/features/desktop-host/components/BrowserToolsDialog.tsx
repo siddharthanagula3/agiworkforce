@@ -8,7 +8,7 @@ import {
   type BrowserActivityEntry,
   type BrowserPairingState,
 } from '@agiworkforce/local-runtime-contract';
-import type { BrowserCommand } from '@agiworkforce/types';
+import type { BrowserCommand, BrowserTabSummary } from '@agiworkforce/types';
 import { Spinner, useDialogKeyboard } from '@agiworkforce/ui';
 import {
   capturePairedBrowser,
@@ -17,6 +17,7 @@ import {
   navigatePairedBrowser,
   openDownloadsFolder,
   readBrowserActivity,
+  listPairedTabs,
   readBrowserPairing,
   readPairedBrowserConsole,
   readPairedBrowserNetwork,
@@ -38,6 +39,11 @@ const NO_ACTIVITY = 'Nothing has used the paired browser since AGI Cloud opened.
 const DOWNLOADS_HEADING = 'Downloads';
 const OPEN_DOWNLOADS_LABEL = 'Open Downloads folder';
 const SUB_HEADING_CLASS = 'text-xs font-medium text-muted-foreground';
+const TAB_LABEL = 'Tab';
+const ACTIVE_TAB_LABEL = 'The tab open now';
+const CHOOSE_TAB_LABEL = 'Choose a tab';
+const CHOOSE_TAB_HINT =
+  'Reads the tab open now. To pick another, list the open tabs; the desktop asks first, and their titles and addresses are shown only here.';
 const ACTIVITY_TIME = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
 const BUTTON_CLASS =
@@ -47,8 +53,13 @@ const FIELD_CLASS =
 
 type Field = 'selector' | 'text' | 'url';
 
+type DialogCommand = Exclude<
+  BrowserCommand,
+  'browser_find' | 'browser_fill_form' | 'browser_history'
+>;
+
 interface BrowserAction {
-  command: BrowserCommand;
+  command: DialogCommand;
   label: string;
   fields: readonly Field[];
 }
@@ -99,14 +110,24 @@ function messageFor(error: unknown): string | null {
   return toUserMessage(error, FAILED);
 }
 
+function tabLabel(tab: BrowserTabSummary): string {
+  const title = tab.title.trim();
+  return title ? `${title} (${tab.url})` : tab.url;
+}
+
 async function runAction(
-  command: BrowserCommand,
+  command: DialogCommand,
   values: Record<Field, string>,
+  tabId: number | null,
 ): Promise<{ transcript: string; files: File[] }> {
   const now = Date.now();
   switch (command) {
+    case 'browser_list_tabs': {
+      const tabs = await listPairedTabs();
+      return { transcript: tabs.map(tabLabel).join('\n'), files: [] };
+    }
     case 'browser_read_page': {
-      const page = await readPairedPage();
+      const page = await readPairedPage(tabId ?? undefined);
       return {
         transcript: `${page.title}\n${page.url}\n\n${page.text}`,
         files: [
@@ -174,12 +195,16 @@ async function runAction(
 export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDialogProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [pairing, setPairing] = useState<BrowserPairingState | null>(null);
-  const [action, setAction] = useState<BrowserCommand>('browser_read_page');
+  const [action, setAction] = useState<DialogCommand>('browser_read_page');
   const [values, setValues] = useState<Record<Field, string>>({ selector: '', text: '', url: '' });
   const [result, setResult] = useState<{ transcript: string; files: File[] } | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activity, setActivity] = useState<BrowserActivityEntry[]>([]);
+  const [tabs, setTabs] = useState<BrowserTabSummary[]>([]);
+  const [tabsError, setTabsError] = useState<string | null>(null);
+  const [listingTabs, setListingTabs] = useState(false);
+  const [tabId, setTabId] = useState<number | null>(null);
 
   const refreshActivity = useCallback(() => {
     readBrowserActivity()
@@ -197,6 +222,30 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
     refreshActivity();
   }, [open, refreshActivity]);
 
+  useEffect(() => {
+    if (open) return;
+    setTabs([]);
+    setTabId(null);
+    setTabsError(null);
+  }, [open]);
+
+  const onListTabs = useCallback(async () => {
+    setListingTabs(true);
+    setTabsError(null);
+    try {
+      const listed = await listPairedTabs();
+      setTabs(listed);
+      setTabId((current) =>
+        current !== null && listed.some((tab) => tab.tabId === current) ? current : null,
+      );
+    } catch (cause) {
+      setTabsError(messageFor(cause));
+    } finally {
+      setListingTabs(false);
+      refreshActivity();
+    }
+  }, [refreshActivity]);
+
   useDialogKeyboard({ open, onClose, panelRef });
 
   const selected = ACTIONS.find((entry) => entry.command === action) ?? DEFAULT_ACTION;
@@ -207,7 +256,7 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
     setError(null);
     setResult(null);
     try {
-      setResult(await runAction(action, values));
+      setResult(await runAction(action, values, tabId));
       setPairing(await readBrowserPairing());
     } catch (cause) {
       setError(messageFor(cause));
@@ -215,7 +264,7 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
       setRunning(false);
       refreshActivity();
     }
-  }, [action, values, refreshActivity]);
+  }, [action, values, tabId, refreshActivity]);
 
   const onAddToChat = useCallback(() => {
     if (!result || result.files.length === 0) return;
@@ -274,6 +323,46 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
             </button>
           ))}
         </div>
+
+        {action === 'browser_read_page' && tabs.length === 0 ? (
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-muted-foreground">{CHOOSE_TAB_HINT}</p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className={BUTTON_CLASS}
+                disabled={listingTabs || pairing?.paired === false}
+                onClick={() => void onListTabs()}
+              >
+                {CHOOSE_TAB_LABEL}
+              </button>
+              {listingTabs ? <Spinner aria-label="Listing tabs" /> : null}
+            </div>
+          </div>
+        ) : null}
+        {action === 'browser_read_page' && tabs.length > 0 ? (
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {TAB_LABEL}
+            <select
+              className={FIELD_CLASS}
+              value={tabId === null ? '' : String(tabId)}
+              onChange={(event) => {
+                setTabId(event.target.value === '' ? null : Number(event.target.value));
+                setResult(null);
+              }}
+            >
+              <option value="">{ACTIVE_TAB_LABEL}</option>
+              {tabs.map((tab) => (
+                <option key={tab.tabId} value={String(tab.tabId)}>
+                  {tabLabel(tab)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {action === 'browser_read_page' && tabsError ? (
+          <p className="text-xs text-muted-foreground">{tabsError}</p>
+        ) : null}
 
         {selected.fields.map((field) => (
           <label key={field} className="flex flex-col gap-1 text-xs text-muted-foreground">

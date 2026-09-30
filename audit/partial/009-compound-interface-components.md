@@ -39,10 +39,10 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud picker lists GitHub App repositories or takes a URL, but cloud coding sessions need AGI_E2B_EXECUTION=1, which ships off; switch the managed sandbox on in production. | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
 | mobile | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/features/code/hooks/use-code-repositories.ts:32-42`, `apps/web/lib/e2b/gate.ts:16-18`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S9.08: Branch picker.
 
@@ -52,12 +52,11 @@ Code: `apps/web/features/code/components/CodeComposer.tsx:532-552`, `apps/web/fe
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once AGI_E2B_EXECUTION is switched on at the end of the run (decisions.md); the managed sandbox ships off | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The extension has no branch choice of its own; it works on whatever VS Code has checked out and can only switch to a cloud task's branch ("Bring the branch in"). | ui |
 
-Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/lib/github-app.ts:764-764`, `apps/web/features/code/hooks/use-code-branches.ts:15-15`, `apps/web/features/code/components/CodeComposer.tsx:706-706`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S9.09: Device picker.
 
@@ -67,11 +66,8 @@ Code: `apps/web/app/api/code/repositories/branches/route.ts:89-89`, `apps/web/li
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only an iOS route choice (speaker, Bluetooth, headset); no list of individual devices and nothing on Android. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `apps/mobile/src/features/voice/services/audioRoute.ts:59-61`
 
 ## S9.11: Member and recipient picker.
 
@@ -95,9 +91,6 @@ Code: `apps/mobile/src/features/voice/components/AudioRoutePicker.tsx:46-52`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Only generated artifacts are listed in the drawer; uploaded and library files cannot be browsed from the side panel. | ui |
-
-Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:230-236`, `apps/extension/src/side_panel.ts:7021-7021`
 
 ## S9.14: Folder tree.
 
@@ -115,28 +108,21 @@ Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:230-236`, `apps
 
 - Done when: Tabular data is shown in a table with column headers that the user can sort (and scroll) to inspect the rows.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Tables in answers render as static rows; there is no sortable data table for tabular results. | ui |
-| cli | partial | Tables now wrap without losing text; there is still no sorting or horizontal scrolling. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:306-332`, `apps/cli/src/tui/markdown_renderer.rs:448-448`
 
 ## S9.17: Media gallery.
 
 - Done when: The user can browse their images and videos as a gallery and open one in a larger viewer.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Only this session's generated images show as chips and `/image open` opens the last one; add a list of past images and videos. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3278-3295`
 
 ## S9.20: Activity feed.
 
@@ -158,10 +144,7 @@ Code: `apps/cli/src/tui/tui_app.rs:3278-3295`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Tasks are a filtered list; add a board with a column per status (queued, running, needs approval, done) that the user can scan and move work across. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 
 ## S9.22: Stepper.
 
@@ -173,18 +156,6 @@ Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S9.23: Multi-step setup wizard.
-
-- Done when: A guided setup runs as ordered steps that collect the user's choices (name, model, sign-in) and saves them when it finishes.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The intro and the Get Started walkthrough explain steps and link to commands but collect no choices; add steps that sign in, pick a model and set autonomy inside the flow. | handler |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2283-2283`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2703-2703`, `apps/extension-vscode/package.json:673-673`
-
 ## S9.24: Split-pane container.
 
 - Done when: Two panes sit side by side (e.g. chat and artifact) and the user can resize the split, by pointer and by keyboard.
@@ -193,10 +164,7 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2283
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | On tablets the drawer stays open beside the chat at a fixed width; let the user resize it, and add a chat-plus-artifact split. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/_layout.tsx:15-15`, `apps/mobile/src/shared/hooks/useTabletLayout.ts:50-50`
 
 ## S9.25: Docking layout manager.
 
@@ -213,15 +181,12 @@ Code: `apps/mobile/app/(app)/_layout.tsx:15-15`, `apps/mobile/src/shared/hooks/u
 
 - Done when: A panel lists a resource's saved versions (when, what) and lets the user open or restore one.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Versions are paged one at a time (vN/M with Restore); add a panel listing every version with when and what changed. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:575-575`
 
 ## S9.27: Diff viewer.
 
@@ -237,16 +202,12 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:556-556`,
 
 - Done when: The user can open an answer's sources and see each one's title, origin and the excerpt it contributed, then open it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sources expand to a list of titles and domains that open in the browser; show the excerpt each source contributed. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Reviewed sources show only as title links inside an activity step; add an inspector with each source's excerpt. | ui |
-
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:120-120`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `apps/extension/src/features/side-panel/bubbles.ts:411-411`, `apps/extension/src/features/side-panel/bubbles.ts:540-540`
 
 ## S9.30: Credit-balance card.
 
@@ -258,73 +219,40 @@ Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:120-120`,
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S9.31: Permission summary.
+## S9.34: Capability-warning card.
 
-- Done when: One view states in plain language what the assistant or a connected app is allowed to do (scopes, autonomy, allowed sites or tools).
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The header pill names the trust boundary and the mode picker sets autonomy, but nothing lists what a session may do (tools, folders, commands) in one place. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2181-2181`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2866-2866`
-
-## S9.33: Integration connection card.
-
-- Done when: Each integration shows a card with its connection state (connected, expired, not connected) and the action to connect or disconnect.
+- Done when: Before sending, a visible notice warns when the chosen model cannot handle something in the request (images, tools, attachments, context size).
 - Wave: 3
 - Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Configured servers now show their real state; the account's cloud connectors with a connect action are still not listed. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:4021-4021`
-
-## S9.34: Capability-warning card.
-
-- Done when: Before sending, a visible notice warns when the chosen model cannot handle something in the request (images, tools, attachments, context size).
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Warns only about plan tier (premium model on Free) and reference images for image models; add warnings when the model cannot read an attachment or use tools. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ModelTierWarningBanner.tsx:33-33`, `apps/mobile/app/(app)/chat/[id].tsx:1467-1467`
 
 ## S9.36: Interactive result widget.
 
 - Done when: An answer can embed a widget the user operates in place (choices, map, app card), and the choice or state feeds back into the conversation.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the map-search card renders; clarify choices and MCP app widgets fall back to text. Add renderers that let the user answer in place. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:357-357`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:988-988`
 
 ## S9.37: Notification inbox.
 
 - Done when: An inbox lists the user's notifications newest first, marks which are unread (visibly and for screen readers), and lets them open or mark them read.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Unread is shown by colour and weight only and the row label omits it; add "unread" to the accessibility label. The inbox also holds only pushes this device received. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/app/(app)/notifications/index.tsx:113-113`, `apps/mobile/app/(app)/notifications/index.tsx:170-170`
 
 ## S9.38: Keyboard-command palette.
 
@@ -334,6 +262,6 @@ Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/app/(a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a composer slash list (/image, /voice, /compare, /export); add a searchable palette for destinations and settings, reachable from a hardware keyboard. | ui |
+| mobile | partial | D-2026-09-28-27: a global command palette is not built on mobile. | codex |
 
-Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/mobile/src/features/chat/components/ChatInput.tsx:784-784`
+Code: `apps/mobile/src/features/search/mobileDestinations.ts:180-180`

@@ -50,22 +50,6 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S52.05: Live test/preview pane.
-
-- Done when: While configuring an assistant the user can try it in a preview/test chat that reflects unsaved changes.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | An agent can be activated in the current session (/agents <name>) to try it, but there is no separate test session beside the editor; activation changes the live conversation. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3663-3680`, `apps/cli/src/agents.rs:55-76`
-
 ## S52.06: Assistant name.
 
 - Done when: An assistant has a user-set name shown wherever it is listed or used.
@@ -168,17 +152,15 @@ Code: `apps/cli/src/tui/tui_app.rs:3663-3680`, `apps/cli/src/agents.rs:55-76`
 
 - Done when: An assistant's configuration selects which connectors it can use.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Only individual MCP tool names can be allowed or denied in the tools lists; an agent cannot pick which connectors/MCP servers it gets. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:67-78`
 
 ## S52.31: Private access.
 
@@ -198,30 +180,12 @@ Code: `apps/cli/src/agents.rs:67-78`
 
 - Done when: A builder can make an assistant available to everyone in their workspace/organization.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Project agents (.agiworkforce/agents in the repo) reach teammates only by committing the file; there is no workspace-level sharing or access control. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:396-445`, `apps/cli/src/agents.rs:376-385`, `apps/cli/src/agents.rs:167-190`
-
-## S52.39: Export or migration.
-
-- Done when: A user can export an assistant or migrate assistants in from/out to another product.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | Claude Code agents are read in place and copied in by the Claude migration, but there is no export of an agent to another product or format. | handler |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:160-166`, `apps/cli/src/ecosystem.rs:585-589`

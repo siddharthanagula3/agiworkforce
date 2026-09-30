@@ -13,6 +13,7 @@ import {
   AUTH_LABEL_CLASS,
   AUTH_PRIMARY_BUTTON_CLASS,
 } from './authStyles';
+import { SUPPORT_RECOVERY_PATH } from '@agiworkforce/cloud-contracts/support';
 
 export type RecoveryLoss = 'password' | 'email' | 'factor';
 
@@ -42,7 +43,8 @@ export function AccountRecoveryForm({ initialLoss }: { initialLoss: RecoveryLoss
       <p role="status" className={`${AUTH_HINT_CLASS} mt-8`}>
         If that address belongs to an account, your request is recorded and a receipt is on its way
         to the address you gave for replies. A person checks that the account is yours before
-        restoring access, and the account owner is told a recovery was requested.
+        restoring access, and the account owner is told a recovery was requested. An account with
+        Advanced Account Security recovers only with a recovery key.
       </p>
     );
   }
@@ -59,7 +61,7 @@ export function AccountRecoveryForm({ initialLoss }: { initialLoss: RecoveryLoss
     setError(null);
     try {
       const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-      const response = await fetch('/api/support/recovery', {
+      const response = await fetch(SUPPORT_RECOVERY_PATH, {
         method: 'POST',
         headers,
         credentials: 'same-origin',

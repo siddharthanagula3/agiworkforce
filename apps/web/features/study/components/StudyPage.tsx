@@ -150,7 +150,7 @@ export function StudyPage({
                 aria-checked={mode === entry}
                 disabled={starting}
                 onClick={() => setMode(entry)}
-                className={`flex min-h-11 flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`flex min-h-11 flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                   mode === entry
                     ? 'border-transparent bg-accent text-accent-foreground ring-1 ring-inset ring-primary'
                     : 'border-border text-muted-foreground hover:text-foreground'
@@ -225,7 +225,7 @@ export function StudyPage({
                 <button
                   type="button"
                   onClick={() => router.push(`/chat/${session.conversationId}`)}
-                  className="flex min-h-11 flex-col items-start gap-0.5 text-left"
+                  className="flex min-h-11 flex-col items-start gap-0.5 text-start"
                 >
                   <span className="text-[13px] font-medium text-foreground">{session.topic}</span>
                   <span className="text-xs text-muted-foreground">

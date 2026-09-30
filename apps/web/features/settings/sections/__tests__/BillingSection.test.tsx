@@ -441,9 +441,26 @@ describe('BillingSection', () => {
 
     const failure = await screen.findByText('Could not open billing portal.');
     expect(failure.closest('[role="alert"]')).not.toBeNull();
-    expect(billingMocks.openBillingPortal).toHaveBeenCalledWith(undefined, 'cancel');
+    expect(billingMocks.openBillingPortal).toHaveBeenCalledWith(
+      undefined,
+      'cancel',
+      expect.any(Function),
+    );
     await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel plan' })).toBeEnabled());
     expect(screen.getByRole('button', { name: 'Manage billing' })).toBeEnabled();
+  });
+
+  it('hands the controls back when the desktop opens the portal in the browser', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+    billingMocks.openBillingPortal.mockResolvedValueOnce('browser');
+
+    render(<BillingSection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Manage billing' }));
+
+    await waitFor(() => expect(billingMocks.openBillingPortal).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Manage billing' })).toBeEnabled(),
+    );
   });
 
   it('distinguishes renewal from a scheduled cancellation', () => {

@@ -2,8 +2,11 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { ApiHttpError } from '../services/apiErrors';
 
 const mockFetchDirectory = jest.fn();
+const mockFetchListing = jest.fn();
+const mockFetchCapabilities = jest.fn();
 const mockFetchPermissions = jest.fn();
 const mockStartOAuth = jest.fn();
 const mockOpenUntrusted = jest.fn();
@@ -39,24 +42,23 @@ jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return {
     SafeAreaView: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
+});
+
+jest.mock('react-native-svg', () => {
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    Path: () => null,
   };
 });
 
 jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
-  const icon = () => <Text>icon</Text>;
-  return {
-    ArrowLeft: icon,
-    ChevronRight: icon,
-    CloudOff: icon,
-    KeyRound: icon,
-    Link2: icon,
-    Plug: icon,
-    RotateCcw: icon,
-    ShieldCheck: icon,
-    Trash2: icon,
-    UserRound: icon,
-  };
+  const Icon = () => <Text>icon</Text>;
+  return new Proxy({}, { get: (_target, name) => (name === '__esModule' ? true : Icon) });
 });
 
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { connectors: true } }));
@@ -83,13 +85,20 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
 }));
 
 jest.mock('@/services/connectors', () => ({
-  fetchConnectorDirectory: (...args: unknown[]) => mockFetchDirectory(...args),
-  fetchConnectorToolPermissions: (...args: unknown[]) => mockFetchPermissions(...args),
-  setConnectorToolPermission: jest.fn(),
-  resetConnectorToolPermission: jest.fn(),
-  disconnectConnector: jest.fn(),
+  connectConnector: jest.fn(),
+  connectorListingIconUrl: jest.fn(() => null),
+  fetchConnectorCalls: jest.fn(async () => []),
   deleteCustomConnector: jest.fn(),
+  disconnectConnector: jest.fn(),
+  fetchConnectorCapabilities: (...args: unknown[]) => mockFetchCapabilities(...args),
+  fetchConnectorDirectory: (...args: unknown[]) => mockFetchDirectory(...args),
+  fetchConnectorListing: (...args: unknown[]) => mockFetchListing(...args),
+  fetchConnectorToolPermissions: (...args: unknown[]) => mockFetchPermissions(...args),
+  resetConnectorToolPermission: jest.fn(),
+  setConnectorToolPermission: jest.fn(),
   startConnectorOAuth: (...args: unknown[]) => mockStartOAuth(...args),
+  fetchConnectorCredentialStatus: jest.fn(),
+  saveConnectorApiKey: jest.fn(),
 }));
 
 import ConnectorDetailScreen from '../src/features/settings/cloud-connectors/ConnectorDetailScreen';
@@ -111,8 +120,12 @@ function grant(overrides: Record<string, unknown> = {}) {
         ...overrides,
       },
     ],
-    available: ['linear'],
+    available: [],
   };
+}
+
+function catalog(tools: Record<string, unknown>[] = []) {
+  return { connectorId: 'linear', tools };
 }
 
 describe('Connector detail, OAuth reauthorization', () => {
@@ -122,6 +135,8 @@ describe('Connector detail, OAuth reauthorization', () => {
     jest.clearAllMocks();
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockFetchDirectory.mockResolvedValue(grant());
+    mockFetchListing.mockResolvedValue(null);
+    mockFetchCapabilities.mockResolvedValue(catalog());
     mockFetchPermissions.mockResolvedValue([]);
     mockStartOAuth.mockResolvedValue({ connectorId: 'linear', authorizeUrl: AUTHORIZE_URL });
     mockOpenUntrusted.mockResolvedValue(true);
@@ -134,6 +149,26 @@ describe('Connector detail, OAuth reauthorization', () => {
 
     await waitFor(() => expect(screen.getByText('Granted access')).toBeTruthy());
     expect(screen.getByText('issues:read')).toBeTruthy();
+  });
+
+  it('lists the tools the connected server reports, grouped by what they can change', async () => {
+    mockFetchCapabilities.mockResolvedValue(
+      catalog([
+        { name: 'list_issues', title: 'List issues', readOnly: true },
+        { name: 'create_issue', readOnly: false },
+      ]),
+    );
+
+    const screen = render(<ConnectorDetailScreen connectorId="linear" />);
+
+    await waitFor(() => expect(screen.getByText('Read-only tools')).toBeTruthy());
+    expect(mockFetchCapabilities).toHaveBeenCalledWith('linear');
+    expect(mockFetchPermissions).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('List issues')).toBeTruthy();
+    expect(screen.getByText('Write and delete tools')).toBeTruthy();
+    expect(screen.getByText('Create Issue')).toBeTruthy();
+    expect(screen.getByLabelText('list_issues permission. Not set')).toBeTruthy();
+    expect(screen.getByLabelText('create_issue permission. Not set')).toBeTruthy();
   });
 
   it('flags an expired grant instead of showing it as healthy', async () => {
@@ -170,12 +205,13 @@ describe('Connector detail, OAuth reauthorization', () => {
     fireEvent.press(screen.getByLabelText('Reauthorize Linear'));
 
     await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('Reauthorize')).toBeTruthy());
     expect(screen.getByText('Authorization expired')).toBeTruthy();
   });
 
   it('surfaces a start failure as an error and opens no browser', async () => {
     mockStartOAuth.mockRejectedValue(
-      new Error('This connector has no OAuth application configured in this deployment.'),
+      new ApiHttpError('Private connector configuration detail', 501),
     );
 
     const screen = render(<ConnectorDetailScreen connectorId="linear" />);
@@ -186,8 +222,22 @@ describe('Connector detail, OAuth reauthorization', () => {
     await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
     expect(alertSpy.mock.calls[0]?.[0]).toBe('Could not reauthorize');
     expect(alertSpy.mock.calls[0]?.[1]).toBe(
-      'This connector has no OAuth application configured in this deployment.',
+      'This connector is unavailable in this deployment. Try another connector.',
     );
+    expect(mockOpenUntrusted).not.toHaveBeenCalled();
+  });
+
+  it('does not show unclassified provider error details', async () => {
+    mockStartOAuth.mockRejectedValue(new Error('client_secret at /internal/oauth/linear'));
+
+    const screen = render(<ConnectorDetailScreen connectorId="linear" />);
+    await waitFor(() => expect(screen.getByLabelText('Reauthorize Linear')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('Reauthorize Linear'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
+    expect(alertSpy.mock.calls[0]?.[1]).toBe('The connector was not reauthorized. Try again.');
+    expect(JSON.stringify(alertSpy.mock.calls)).not.toContain('client_secret');
     expect(mockOpenUntrusted).not.toHaveBeenCalled();
   });
 
@@ -203,7 +253,7 @@ describe('Connector detail, OAuth reauthorization', () => {
           source: 'github-app',
         },
       ],
-      available: ['github'],
+      available: [],
     });
 
     const screen = render(<ConnectorDetailScreen connectorId="github" />);

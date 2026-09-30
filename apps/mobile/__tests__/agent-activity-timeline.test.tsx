@@ -82,14 +82,14 @@ describe('AgentActivityTimeline', () => {
     expect(view.getByLabelText(/show agent activity/i).props.accessibilityState).toEqual({
       expanded: false,
     });
-    expect(view.queryByLabelText('Show details for Searching official sources')).toBeNull();
+    expect(view.queryByLabelText(/^Searching official sources, /)).toBeNull();
 
     fireEvent.press(view.getByLabelText(/show agent activity/i));
 
     expect(view.getByLabelText(/hide agent activity/i).props.accessibilityState).toEqual({
       expanded: true,
     });
-    fireEvent.press(view.getByLabelText('Show details for Searching official sources'));
+    fireEvent.press(view.getByLabelText(/^Searching official sources, /));
     expect(view.getByText('Official agent documentation')).toBeTruthy();
     expect(view.getByText('example.com')).toBeTruthy();
   });
@@ -171,7 +171,7 @@ describe('AgentActivityTimeline', () => {
     fireEvent.press(view.getByLabelText('Allow Install the document library'));
     fireEvent.press(view.getByLabelText('Deny Install the document library'));
 
-    expect(onResolveApproval).toHaveBeenNthCalledWith(1, 'shell-1', 'approved');
-    expect(onResolveApproval).toHaveBeenNthCalledWith(2, 'shell-1', 'rejected');
+    expect(onResolveApproval).toHaveBeenNthCalledWith(1, 'shell-1', 'approved', undefined);
+    expect(onResolveApproval).toHaveBeenNthCalledWith(2, 'shell-1', 'rejected', undefined);
   });
 });

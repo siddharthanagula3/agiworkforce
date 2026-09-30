@@ -12,6 +12,7 @@ pub mod agent;
 pub mod agent_events;
 pub mod agents;
 pub mod auth;
+pub mod background;
 pub mod broken_pipe;
 pub mod browser_bridge;
 pub mod claude_parity;
@@ -31,6 +32,7 @@ pub mod device_registry;
 pub mod diagnostics_bundle;
 pub mod diff_model;
 pub mod doctor;
+pub mod documents;
 pub mod errors;
 pub mod hex;
 // hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
@@ -53,15 +55,18 @@ pub mod output_styles;
 pub mod path_security;
 pub mod permissions;
 pub mod plans;
+pub mod pr_feedback;
 pub(crate) mod process_tree;
 // plan_mode lives at features::plan::plan_mode; re-exported here so all
 // internal callers using `crate::plan_mode::*` continue to resolve unchanged.
 pub use features::plan::plan_mode;
 pub mod provider;
+pub mod remote_control;
 pub mod repl;
 pub mod repo;
 pub mod safety;
 pub mod secret_redaction;
+pub mod secure_store;
 pub mod sensitive_files;
 pub mod sessions;
 pub mod skills;
@@ -329,6 +334,10 @@ pub struct Cli {
     /// Skip all tool confirmation prompts (DANGEROUS)
     #[arg(long)]
     dangerously_skip_permissions: bool,
+
+    /// Add Bypass and FullAuto to the Shift+Tab mode cycle without starting in them (DANGEROUS)
+    #[arg(long)]
+    allow_dangerously_skip_permissions: bool,
 
     /// Auto-approve safe tool calls (reads, searches, listings).
     /// Unknown tools still prompt; dangerous tools always prompt.
@@ -855,12 +864,26 @@ enum Command {
         #[arg(long)]
         no_memory: bool,
     },
+    /// Let the AGI Workforce phone app list, start, follow and steer sessions in this folder.
+    #[command(alias = "rc")]
+    RemoteControl,
+    /// Run a prompt in the background so it keeps working after this terminal closes (alias: bg).
+    #[command(alias = "bg")]
+    Background {
+        #[command(subcommand)]
+        action: BackgroundSubcommand,
+    },
     /// Continue previous session, from this device or from your account.
     Resume {
         session_id: Option<String>,
         /// Resolve the id against your AGI Workforce account rather than this device.
         #[arg(long)]
         cloud: bool,
+        /// Bring a cloud Code session here: check out its branch in this repository and
+        /// continue it with its history. Without an id, pick one of this repository's
+        /// open sessions.
+        #[arg(long, conflicts_with = "cloud")]
+        teleport: bool,
     },
     /// Fork a previous session.
     Fork { session_id: String },
@@ -930,11 +953,44 @@ enum Command {
     Logout,
     /// Show authentication status for all configured providers.
     AuthStatus,
+    /// Browse your Library: generated images and videos, uploaded and generated files.
+    Library {
+        #[command(subcommand)]
+        action: Option<LibrarySubcommand>,
+        /// Only this kind: image, video or file (comma-separated for several).
+        #[arg(long)]
+        kind: Option<String>,
+        /// Only items whose name or prompt matches this text.
+        #[arg(long)]
+        search: Option<String>,
+        /// How many items to list.
+        #[arg(long, default_value_t = 24)]
+        limit: u32,
+    },
+    /// List the conversation links you shared, or revoke one.
+    Shares {
+        #[command(subcommand)]
+        action: Option<SharesSubcommand>,
+    },
+    /// List your account's connectors with their state, or disconnect one.
+    Connectors {
+        #[command(subcommand)]
+        action: Option<ConnectorsSubcommand>,
+    },
+    /// Export your account data: request an export, or download the one that is ready.
+    ExportData {
+        /// Directory to save the export in (defaults to the current directory).
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
     /// Run local preflight diagnostics.
     Doctor {
         /// Emit the diagnostic report as JSON.
         #[arg(long)]
         json: bool,
+        /// Write a redacted diagnostics file to review and attach to a support request.
+        #[arg(long)]
+        export: bool,
     },
     /// Browse and install marketplace plugins.
     Marketplace {
@@ -1068,6 +1124,22 @@ enum CodeSubcommand {
         #[arg(long)]
         json: bool,
     },
+    /// Continue a local session in a new cloud Code session: its objective,
+    /// plan, decisions and changed files travel with the pushed branch.
+    Handoff {
+        /// Local session id. Defaults to the latest session in this folder.
+        session: Option<String>,
+        /// Model for the cloud session. Defaults to `default.cloud_model`, then
+        /// to a coding model your plan includes.
+        #[arg(long)]
+        model: Option<String>,
+        /// Hand off without the review prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        /// Print the result as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// List cloud Code sessions.
     List {
         /// Which sessions to list.
@@ -1090,6 +1162,17 @@ enum CodeSubcommand {
         /// Session id, as `agi code list` prints it.
         id: String,
     },
+    /// List the approvals cloud Code sessions are waiting on.
+    Approvals {
+        /// Only this session. Omit to check every open session.
+        id: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Approve a waiting cloud Code step, by the handle `agi code approvals` prints.
+    Approve { handle: String },
+    /// Reject a waiting cloud Code step, by the handle `agi code approvals` prints.
+    Reject { handle: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1107,9 +1190,56 @@ enum HistorySubcommand {
 }
 
 #[derive(Subcommand, Debug)]
+enum LibrarySubcommand {
+    /// Print a text file from your Library (text, Markdown, code or a table).
+    Show {
+        /// Library item id, as agi library lists it.
+        id: String,
+    },
+    /// Save the original file from your Library.
+    Download {
+        /// Library item id, as agi library lists it.
+        id: String,
+        /// Directory to save into (defaults to the current directory).
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum SharesSubcommand {
+    /// Turn off a shared link for everyone who has it.
+    Revoke {
+        /// The link's token, as agi shares lists it.
+        token: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ConnectorsSubcommand {
+    /// Disconnect a connector from your account.
+    Disconnect {
+        /// Connector id, as agi connectors lists it.
+        connector: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
 enum ProjectsSubcommand {
     /// List the account's projects, refreshed from the account.
     List,
+    /// List the folders you worked in most recently, to start a session in one with agi -C.
+    Recent {
+        /// How many to list.
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+    },
     /// Create a project in the account.
     Create {
         /// Project name.
@@ -1259,6 +1389,10 @@ enum MemorySubcommand {
         /// Optional category label.
         #[arg(long)]
         category: Option<String>,
+        /// Keep it with the account project this directory is linked to (`agi projects link`),
+        /// so only that project's conversations draw on it.
+        #[arg(long)]
+        project: bool,
     },
     /// Remove a memory from the account by id or exact text.
     Forget {
@@ -1287,6 +1421,12 @@ enum MemorySubcommand {
         #[arg(long)]
         out: Option<std::path::PathBuf>,
     },
+    /// Turn account memory on, so details are carried across conversations on every surface.
+    On,
+    /// Turn account memory off on every surface.
+    Off,
+    /// Show whether account memory is on.
+    Status,
     /// Show or change the terms no memory may mention; the account refuses such memories everywhere.
     Never {
         /// Term to add. Repeatable.
@@ -1432,6 +1572,195 @@ enum SchedulesSubcommand {
         #[arg(long)]
         json: bool,
     },
+    /// Start a schedule when an event arrives instead of, or as well as, on its clock.
+    Triggers {
+        #[command(subcommand)]
+        action: ScheduleTriggersSubcommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ScheduleTriggersSubcommand {
+    /// List the event triggers on a schedule.
+    List {
+        /// Schedule id, or its exact name.
+        schedule: String,
+        /// Maximum number of triggers to return.
+        #[arg(long, default_value_t = schedules::triggers::DEFAULT_TRIGGER_LIMIT)]
+        limit: u32,
+        /// Number of triggers to skip.
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run a schedule's task whenever an event arrives from GitHub, Slack, Gmail, Google Calendar or a connector.
+    Add {
+        /// Schedule id, or its exact name.
+        schedule: String,
+        /// Where the event comes from: github, slack, gmail, google_calendar or connector.
+        #[arg(long)]
+        source: String,
+        /// Event type to listen to, such as pull_request.opened. Repeatable or comma-separated. Defaults to every event the source sends.
+        #[arg(long = "event")]
+        events: Vec<String>,
+        /// What to listen to: a GitHub repository as owner/name, a Slack workspace id or a Gmail address.
+        #[arg(long)]
+        account: Option<String>,
+        /// Name shown for the trigger.
+        #[arg(long)]
+        name: Option<String>,
+        /// Only fire when this holds, written FIELD OPERATOR VALUE, such as "data.baseRef equals main". Repeatable; all must hold.
+        #[arg(long = "when")]
+        conditions: Vec<String>,
+        /// Ignore repeats of the event for this many seconds.
+        #[arg(long, default_value_t = 0)]
+        debounce: u32,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop a trigger from starting runs until it is resumed.
+    Pause {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Let a paused trigger start runs again.
+    Resume {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Register a Gmail trigger's mailbox watch again after it lapsed or failed.
+    Watch {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Delete a trigger. The schedule and its other triggers stay.
+    Remove {
+        /// Trigger id, as `agi schedules triggers list` shows it.
+        trigger: String,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+fn run_background_command(action: &BackgroundSubcommand) -> Result<()> {
+    match action {
+        BackgroundSubcommand::Start {
+            prompt,
+            model,
+            permission_mode,
+        } => {
+            let mode = permission_mode.and_then(|mode| {
+                clap::ValueEnum::to_possible_value(&mode).map(|value| value.get_name().to_string())
+            });
+            let run = background::start(background::StartRequest {
+                prompt: &prompt.join(" "),
+                resume_session: None,
+                model: model.as_deref(),
+                permission_mode: mode.as_deref(),
+                parent_session: None,
+            })?;
+            println!(
+                "Started background run {id}. It keeps going after this terminal closes.\n  agi background logs {id}    see its output\n  agi background attach {id}  continue the conversation when it is done\n  agi background stop {id}    stop it",
+                id = run.id
+            );
+            Ok(())
+        }
+        BackgroundSubcommand::List { json } => {
+            let runs = background::list()?;
+            if *json {
+                let rows: Vec<serde_json::Value> = runs
+                    .iter()
+                    .map(|run| {
+                        serde_json::json!({
+                            "id": run.id,
+                            "state": background::state(run).label(),
+                            "prompt": run.prompt,
+                            "cwd": run.cwd,
+                            "sessionId": run.session_id,
+                            "startedAt": run.started_at,
+                            "finishedAt": run.finished_at,
+                            "exitCode": run.exit_code,
+                        })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else if runs.is_empty() {
+                println!("No background runs. Start one with `agi background start <prompt>`.");
+            } else {
+                for run in &runs {
+                    println!("{}", background::describe(run));
+                }
+            }
+            Ok(())
+        }
+        BackgroundSubcommand::Logs { id } => {
+            let run = background::find(id)?;
+            let log = background::read_log(&run)?;
+            if log.is_empty() {
+                println!("Background run {} has written nothing yet.", run.id);
+            } else {
+                print!("{}", terminal_text::sanitize_terminal_text(&log));
+            }
+            Ok(())
+        }
+        BackgroundSubcommand::Stop { id } => {
+            let run = background::stop(id)?;
+            println!("Stopping background run {}.", run.id);
+            Ok(())
+        }
+        BackgroundSubcommand::Rm { id } => {
+            let run = background::remove(id)?;
+            println!("Removed background run {}.", run.id);
+            Ok(())
+        }
+        BackgroundSubcommand::Attach { id } => {
+            let run = background::find(id)?;
+            if background::state(&run) == background::RunState::Running {
+                println!(
+                    "Background run {} is still running. Its output so far:\n",
+                    run.id
+                );
+                print!(
+                    "{}",
+                    terminal_text::sanitize_terminal_text(&background::read_log(&run)?)
+                );
+                println!(
+                    "\nAttach again when it is done, or stop it with `agi background stop {}`.",
+                    run.id
+                );
+                return Ok(());
+            }
+            if runtime::session_control::load_managed_session(&run.session_id).is_err() {
+                anyhow::bail!(
+                    "Background run {} {} before it saved a conversation. `agi background logs {}` shows why.",
+                    run.id,
+                    background::state(&run).label(),
+                    run.id
+                );
+            }
+            let exe = std::env::current_exe().context("find the agi executable")?;
+            let status = std::process::Command::new(exe)
+                .args(["resume", &run.session_id])
+                .current_dir(&run.cwd)
+                .status()
+                .context("open the background run's conversation")?;
+            if !status.success() {
+                anyhow::bail!("agi resume exited with {status}");
+            }
+            Ok(())
+        }
+        BackgroundSubcommand::Supervise { id } => background::supervise(id),
+    }
 }
 
 fn invocation_requires_project_trust(cli: &Cli) -> bool {
@@ -1446,8 +1775,12 @@ fn invocation_requires_project_trust(cli: &Cli) -> bool {
                 | Command::Review { .. }
                 | Command::Apply { .. }
                 | Command::AppServer { .. }
+                | Command::RemoteControl
                 | Command::Resume { .. }
                 | Command::Fork { .. }
+                | Command::Background {
+                    action: BackgroundSubcommand::Start { .. }
+                }
                 | Command::Onboarding
         )
     )
@@ -1490,11 +1823,13 @@ enum ApprovalsSubcommand {
     Allow { rule: String },
     /// Always deny a command prefix, or domain:<host> (*.host for subdomains) to block a site for web_fetch and the browser.
     Deny { rule: String },
+    /// Always ask before a command prefix, even when an allow rule covers it.
+    Ask { rule: String },
     /// Allow a command prefix for this process.
     Session { rule: String },
     /// Remove a saved or session rule.
     Remove {
-        /// allow, deny, or session.
+        /// allow, ask, deny, or session.
         scope: String,
         rule: String,
     },
@@ -1603,7 +1938,14 @@ enum PluginSubcommand {
         /// settings forbid the override. A signature that fails to verify is never accepted.
         #[arg(long)]
         unsafe_allow_unsigned: bool,
+        /// Install this tag or branch of a git plugin. A tag stays pinned: `agi plugin update` leaves it in place.
+        #[arg(long = "ref", value_name = "TAG_OR_BRANCH")]
+        git_ref: Option<String>,
     },
+    /// Show one installed plugin's publisher, signature, version, links and source.
+    Info { name: String },
+    /// Sign in to the remote connections an installed plugin bundles.
+    Login { name: String },
     /// Remove a plugin you installed.
     Remove { name: String },
     /// Turn an installed plugin back on.
@@ -1623,6 +1965,38 @@ enum PluginSubcommand {
         #[arg(long)]
         key_file: std::path::PathBuf,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum BackgroundSubcommand {
+    /// Start a prompt in the background in this directory.
+    Start {
+        #[arg(required = true, trailing_var_arg = true)]
+        prompt: Vec<String>,
+        /// Model for the run. Defaults to your configured model.
+        #[arg(short, long)]
+        model: Option<String>,
+        /// Permission mode for the run's tool use. Nobody is at the terminal to approve
+        /// a tool, so a tool that needs approval is refused unless this mode allows it.
+        #[arg(long, value_name = "MODE", value_enum)]
+        permission_mode: Option<cli_options::PermissionMode>,
+    },
+    /// List background runs, newest first.
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print what a background run has written so far.
+    Logs { id: String },
+    /// Stop a running background run.
+    Stop { id: String },
+    /// Delete a finished background run's record and log.
+    #[command(alias = "remove")]
+    Rm { id: String },
+    /// Continue a finished background run's conversation here.
+    Attach { id: String },
+    #[command(hide = true)]
+    Supervise { id: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1675,6 +2049,34 @@ enum McpSubcommand {
         /// Registry name of the server to show.
         name: String,
     },
+    /// Let a server's tools, or one tool, run without asking.
+    Allow {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for all of its tools.
+        tool: Option<String>,
+    },
+    /// Ask before a server's tools, or one tool, run.
+    Ask {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for all of its tools.
+        tool: Option<String>,
+    },
+    /// Never run a server's tools, or one tool.
+    Block {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for all of its tools.
+        tool: Option<String>,
+    },
+    /// Drop your allow, ask or block setting for a server or one tool.
+    Unset {
+        /// Registry name of the server.
+        server: String,
+        /// One tool of that server; omit for the server-wide setting.
+        tool: Option<String>,
+    },
     /// Authorize a remote MCP server over OAuth and store the token.
     Login {
         /// Registry name of the remote server to authorize.
@@ -1714,6 +2116,42 @@ enum KeysSubcommand {
 enum TriggersSubcommand {
     /// Show every trigger and its filter.
     List,
+    /// Add a trigger that runs a prompt on a schedule, a webhook event (GitHub, GitLab or
+    /// any sender) or a file change. `agi --daemon` runs it.
+    Add {
+        /// Trigger id: letters, digits, '-' and '_'.
+        id: String,
+        /// Instruction the agent runs when the trigger fires.
+        #[arg(long)]
+        prompt: String,
+        /// Five-field cron schedule, e.g. "0 9 * * 1-5".
+        #[arg(long, group = "trigger_kind")]
+        cron: Option<String>,
+        /// Webhook path the daemon listens on, e.g. github-prs.
+        #[arg(long, group = "trigger_kind")]
+        webhook: Option<String>,
+        /// Directory whose file changes fire the trigger.
+        #[arg(long, group = "trigger_kind")]
+        watch: Option<String>,
+        /// Glob that limits which watched files count, e.g. "*.rs".
+        #[arg(long, requires = "watch")]
+        glob: Option<String>,
+        /// Model for the run.
+        #[arg(long)]
+        model: Option<String>,
+        /// Event that may start it, as for `agi triggers filter`. Repeatable.
+        #[arg(long = "event")]
+        events: Vec<String>,
+        /// Webhook payload condition as /json/pointer=value. Repeatable; all must hold.
+        #[arg(long = "when")]
+        conditions: Vec<String>,
+    },
+    /// Remove a trigger.
+    Remove { id: String },
+    /// Turn a trigger back on.
+    Enable { id: String },
+    /// Turn a trigger off without removing it.
+    Disable { id: String },
     /// Narrow which events start a trigger.
     Filter {
         /// Trigger id from `agi triggers list`.
@@ -1777,6 +2215,29 @@ enum SyncSubcommand {
 
 #[derive(Subcommand, Debug)]
 enum MarketplaceSubcommand {
+    /// Add a publisher's marketplace (a public GitHub repository with a marketplace manifest)
+    /// to your account, so its plugins show up on every surface.
+    Add {
+        /// GitHub repository URL of the marketplace.
+        repository_url: String,
+        /// Branch or tag to read the manifest from.
+        #[arg(long = "ref")]
+        git_ref: Option<String>,
+        /// Name to show for it.
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// List the marketplaces added to your account.
+    Sources,
+    /// Remove a marketplace from your account by the id `agi marketplace sources` prints.
+    Remove { id: String },
+    /// List the plugins a marketplace on your account offers.
+    Browse {
+        /// Marketplace id or name from `agi marketplace sources`. Omit for every marketplace.
+        source: Option<String>,
+    },
+    /// Install a plugin from a marketplace on your account, as `plugin@marketplace`.
+    Get { reference: String },
     /// Search the remote plugin marketplace.
     Search {
         /// Search query.
@@ -1993,6 +2454,100 @@ fn account_privacy_mode() -> platform::runtime::session::PrivacyMode {
 
 /// Pull one conversation out of the account and write it into the managed
 /// session store, returning the local id the resume path takes.
+async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
+    use cloud::{code_sessions, code_teleport};
+
+    let client = cloud::CloudClient::connect(account_privacy_mode())
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let session_id = match session_id {
+        Some(id) => id.to_string(),
+        None => pick_code_session(&client).await?,
+    };
+    let detail = code_sessions::show(&client, &session_id)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let teleported = code_teleport::check_out(&detail.session).map_err(anyhow::Error::msg)?;
+    let local_id = code_teleport::local_session_id(&detail.session.id);
+    let title = code_teleport::title(&detail.session);
+    let conn = sessions::open_db()?;
+    sessions::import_hosted_session(
+        &conn,
+        &local_id,
+        &title,
+        None,
+        code_teleport::history(&detail),
+        "the cloud Code session",
+    )?;
+    eprintln!(
+        "{} `{}` from {} and loaded '{}' ({} turns). New work here stays on this computer; \
+         push the branch to share it.",
+        if teleported.created_branch {
+            "Checked out"
+        } else {
+            "Updated"
+        },
+        teleported.branch,
+        teleported.remote,
+        title,
+        detail.turns.len()
+    );
+    Ok(local_id)
+}
+
+async fn pick_code_session(client: &cloud::CloudClient) -> Result<String> {
+    use std::io::{BufRead, IsTerminal, Write};
+
+    let checkout = cloud::code_handoff::inspect().ok();
+    let sessions = cloud::code_sessions::list(client, "open")
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?
+        .into_iter()
+        .filter(|session| {
+            let repository = session
+                .repository_url
+                .as_deref()
+                .and_then(cloud::code_handoff::github_full_name);
+            match (&checkout, repository) {
+                (Some(checkout), Some(repository)) => {
+                    repository.eq_ignore_ascii_case(&checkout.full_name)
+                }
+                (None, Some(_)) => true,
+                _ => false,
+            }
+        })
+        .collect::<Vec<_>>();
+    if sessions.is_empty() {
+        anyhow::bail!(
+            "No open cloud Code session works on this repository. See them all with `agi code list`."
+        );
+    }
+    if !std::io::stdin().is_terminal() {
+        anyhow::bail!(
+            "Name the session: `agi resume --teleport <id>`. `agi code list` prints the ids."
+        );
+    }
+    for (index, session) in sessions.iter().enumerate() {
+        eprintln!(
+            "  {}. {}  {}",
+            index + 1,
+            cloud::code_teleport::title(session),
+            session.working_branch.as_deref().unwrap_or("")
+        );
+    }
+    eprint!("Teleport which session? ");
+    std::io::stderr().flush()?;
+    let mut answer = String::new();
+    std::io::stdin().lock().read_line(&mut answer)?;
+    let choice = answer
+        .trim()
+        .parse::<usize>()
+        .ok()
+        .and_then(|number| number.checked_sub(1))
+        .and_then(|index| sessions.get(index))
+        .ok_or_else(|| anyhow::anyhow!("No session picked."))?;
+    Ok(choice.id.clone())
+}
+
 async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
     let privacy = account_privacy_mode();
     let conversation = cloud::hosted_conversation(privacy, conversation_id)
@@ -2014,6 +2569,7 @@ async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
         &conversation.title,
         conversation.model.as_deref(),
         messages,
+        "your AGI Workforce account",
     )?;
     eprintln!(
         "Resuming '{}' from your account ({} messages).",
@@ -2039,7 +2595,9 @@ async fn print_project_history(project: &str, limit: usize) -> Result<()> {
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     let filed: Vec<_> = conversations
         .iter()
-        .filter(|conversation| conversation.project_id.as_deref() == Some(found.id.as_str()))
+        .filter(|conversation| {
+            !conversation.archived && conversation.project_id.as_deref() == Some(found.id.as_str())
+        })
         .collect();
     if filed.is_empty() {
         println!("No conversations are filed under {} yet.", found.name);
@@ -2063,12 +2621,21 @@ async fn print_project_history(project: &str, limit: usize) -> Result<()> {
 async fn print_hosted_history(limit: usize) {
     let privacy = account_privacy_mode();
     match cloud::hosted_conversations(privacy).await {
-        Ok(conversations) if conversations.is_empty() => {
+        Ok(conversations)
+            if conversations
+                .iter()
+                .all(|conversation| conversation.archived) =>
+        {
             println!("No conversations in your AGI Workforce account yet.");
+            print_archived_note(&conversations);
         }
         Ok(conversations) => {
             println!("In your AGI Workforce account:");
-            for conversation in conversations.iter().take(limit) {
+            for conversation in conversations
+                .iter()
+                .filter(|conversation| !conversation.archived)
+                .take(limit)
+            {
                 println!(
                     "  {}  {}  {} messages  {}",
                     conversation.id,
@@ -2079,8 +2646,26 @@ async fn print_hosted_history(limit: usize) {
             }
             println!();
             println!("Resume one with `agi resume --cloud <id>`.");
+            print_archived_note(&conversations);
         }
         Err(error) => println!("Account history unavailable: {error}"),
+    }
+}
+
+fn print_archived_note(conversations: &[cloud::chat::HostedConversation]) {
+    let archived = conversations
+        .iter()
+        .filter(|conversation| conversation.archived)
+        .count();
+    if archived > 0 {
+        println!(
+            "{archived} archived {} not shown; they still resume by id.",
+            if archived == 1 {
+                "conversation is"
+            } else {
+                "conversations are"
+            }
+        );
     }
 }
 
@@ -2100,6 +2685,23 @@ async fn handle_code_command(
             yes,
             json,
         } => handle_code_start(&client, config, task, model.as_deref(), *yes, *json, output).await,
+        CodeSubcommand::Handoff {
+            session,
+            model,
+            yes,
+            json,
+        } => {
+            handle_code_handoff(
+                &client,
+                config,
+                session.as_deref(),
+                model.as_deref(),
+                *yes,
+                *json,
+                output,
+            )
+            .await
+        }
         CodeSubcommand::List { status, json } => {
             let sessions = code_sessions::list(&client, status)
                 .await
@@ -2110,6 +2712,75 @@ async fn handle_code_command(
                 *json,
                 output,
             )
+        }
+        CodeSubcommand::Approvals { id, json } => {
+            let sessions = match id {
+                Some(id) => vec![
+                    code_sessions::show(&client, id)
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?
+                        .session,
+                ],
+                None => code_sessions::list(&client, "open")
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?,
+            };
+            let mut pending = Vec::new();
+            for session in sessions {
+                let approvals = code_sessions::approvals(&client, &session.id)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                if !approvals.is_empty() {
+                    pending.push((session, approvals));
+                }
+            }
+            let value = serde_json::to_value(
+                pending
+                    .iter()
+                    .flat_map(|(session, approvals)| {
+                        approvals.iter().map(move |approval| {
+                            serde_json::json!({
+                                "handle": code_sessions::approval_handle(&session.id, approval),
+                                "sessionId": session.id,
+                                "approval": approval,
+                            })
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )?;
+            render_structured(
+                value,
+                code_sessions::render_approvals(&pending),
+                *json,
+                output,
+            )
+        }
+        CodeSubcommand::Approve { handle } | CodeSubcommand::Reject { handle } => {
+            let approve = matches!(action, CodeSubcommand::Approve { .. });
+            let (session, turn, step) =
+                code_sessions::parse_approval_handle(handle).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Use the handle `agi code approvals` prints, as <session>/<turn>/<step>."
+                    )
+                })?;
+            println!(
+                "{} the step; the session continues in the cloud, which can take a few minutes.",
+                if approve { "Approving" } else { "Rejecting" }
+            );
+            let outcome = code_sessions::decide_approval(&client, session, turn, step, approve)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let status = outcome
+                .get("status")
+                .or_else(|| outcome.get("stopReason"))
+                .and_then(|value| value.as_str())
+                .unwrap_or("recorded");
+            println!(
+                "{} ({}). `agi code show {session}` shows what it did next.",
+                if approve { "Approved" } else { "Rejected" },
+                terminal_text::sanitize_terminal_text(status)
+            );
+            Ok(())
         }
         CodeSubcommand::Show { id, json } => {
             let detail = code_sessions::show(&client, id)
@@ -2140,26 +2811,13 @@ async fn handle_code_command(
     }
 }
 
-async fn handle_code_start(
-    client: &cloud::CloudClient,
-    config: &config::CliConfig,
-    task: &str,
-    model: Option<&str>,
-    yes: bool,
-    json: bool,
-    output: Option<OutputFormat>,
-) -> Result<()> {
-    use cloud::code_handoff;
-    use cloud::code_sessions;
-
-    let task = code_handoff::validate_task(task).map_err(anyhow::Error::msg)?;
-    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
-    let model = match model
+async fn cloud_code_model(config: &config::CliConfig, model: Option<&str>) -> Result<String> {
+    match model
         .or(config.default.cloud_model.as_deref())
         .map(str::trim)
         .filter(|model| !model.is_empty())
     {
-        Some(model) => model_catalog::canonical_model_id(model),
+        Some(model) => Ok(model_catalog::canonical_model_id(model)),
         None => model_catalog::resolve_auto_model(
             "auto",
             agiworkforce_model_registry::RoutingTaskType::Coding,
@@ -2171,8 +2829,101 @@ async fn handle_code_start(
             anyhow::anyhow!(
                 "No coding model your plan includes could be chosen ({error}). Name one with --model."
             )
-        })?,
-    };
+        }),
+    }
+}
+
+async fn handle_code_handoff(
+    client: &cloud::CloudClient,
+    config: &config::CliConfig,
+    session: Option<&str>,
+    model: Option<&str>,
+    yes: bool,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::{code_handoff, code_push};
+
+    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
+    if checkout.unpushed_commits > 0 {
+        anyhow::bail!(
+            "{} has {} commit(s) that are not pushed. The cloud session clones the pushed branch, so push first, then hand off.",
+            checkout.branch,
+            checkout.unpushed_commits
+        );
+    }
+    let local =
+        code_push::local_session(session, &std::env::current_dir()?).map_err(anyhow::Error::msg)?;
+    let model = cloud_code_model(config, model).await?;
+    let access = code_handoff::repository_access(client, &checkout.full_name)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let review = code_handoff::review(&checkout, &access, &model, client.base());
+    let title = local
+        .title
+        .clone()
+        .unwrap_or_else(|| local.session_id.clone());
+    eprintln!(
+        "{}\n",
+        code_handoff::render_review(&review, &format!("Continue \"{title}\" in the cloud"))
+    );
+    match resolve_destructive_decision(yes, interactive::can_prompt()) {
+        DestructiveDecision::Proceed => {}
+        DestructiveDecision::Refuse => anyhow::bail!(
+            "Nothing was handed off: this run cannot ask for confirmation. Re-run with --yes."
+        ),
+        DestructiveDecision::Prompt => {
+            if !dialoguer::Confirm::new()
+                .with_prompt("Hand this session to the cloud?")
+                .default(false)
+                .interact()
+                .unwrap_or(false)
+            {
+                println!("Nothing was handed off.");
+                return Ok(());
+            }
+        }
+    }
+    let record = code_push::record(&local);
+    let pushed = code_push::submit(client, &code_push::body(&record, &access))
+        .await
+        .map_err(|error| anyhow::anyhow!("The cloud did not take the session: {error}"))?;
+    for warning in &pushed.warnings {
+        output::print_warn(&code_push::warning_text(warning));
+    }
+    run_first_cloud_turn(
+        client,
+        &pushed.session,
+        &pushed.seed_prompt,
+        &model,
+        &checkout.remote,
+        serde_json::json!({
+            "repository": checkout.full_name,
+            "branch": checkout.branch,
+            "review": review,
+            "handedOffFrom": local.session_id,
+            "warnings": pushed.warnings,
+        }),
+        json,
+        output,
+    )
+    .await
+}
+
+async fn handle_code_start(
+    client: &cloud::CloudClient,
+    config: &config::CliConfig,
+    task: &str,
+    model: Option<&str>,
+    yes: bool,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::code_handoff;
+
+    let task = code_handoff::validate_task(task).map_err(anyhow::Error::msg)?;
+    let checkout = code_handoff::inspect().map_err(anyhow::Error::msg)?;
+    let model = cloud_code_model(config, model).await?;
     let access = code_handoff::repository_access(client, &checkout.full_name)
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -2210,8 +2961,47 @@ async fn handle_code_start(
     let session = code_handoff::create(client, &body)
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?;
+    run_first_cloud_turn(
+        client,
+        &session,
+        &task,
+        &model,
+        &checkout.remote,
+        serde_json::json!({
+            "repository": checkout.full_name,
+            "branch": checkout.branch,
+            "review": review,
+        }),
+        json,
+        output,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_first_cloud_turn(
+    client: &cloud::CloudClient,
+    session: &cloud::code_sessions::CodeSession,
+    task: &str,
+    model: &str,
+    remote: &str,
+    details: serde_json::Value,
+    json: bool,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use cloud::code_handoff;
+    use cloud::code_sessions;
+
+    let with_details = |mut value: serde_json::Value| {
+        if let (Some(target), Some(extra)) = (value.as_object_mut(), details.as_object()) {
+            for (key, item) in extra {
+                target.insert(key.clone(), item.clone());
+            }
+        }
+        value
+    };
     let url = code_sessions::page_url(client.base(), &session.id);
-    let session_text = code_handoff::render_session(&session, &checkout.remote, &url);
+    let session_text = code_handoff::render_session(session, remote, &url);
     if session.state == "failed" {
         anyhow::bail!(
             "The cloud session could not be set up: {}\n{session_text}",
@@ -2223,10 +3013,10 @@ async fn handle_code_start(
     }
     eprintln!(
         "Working on it in the cloud with {}. Follow along at {url}\nCtrl-C stops the turn; the session stays open.",
-        model_catalog::display_name(&model)
+        model_catalog::display_name(model)
     );
     let outcome = tokio::select! {
-        outcome = code_handoff::start_turn(client, &session.id, &task, &model) => Some(outcome),
+        outcome = code_handoff::start_turn(client, &session.id, task, model) => Some(outcome),
         _ = code_interrupt() => None,
     };
     let Some(outcome) = outcome else {
@@ -2247,17 +3037,14 @@ async fn handle_code_start(
                 .collect::<Vec<_>>()
                 .join("\n\n");
             render_structured(
-                serde_json::json!({
+                with_details(serde_json::json!({
                     "ok": true,
                     "sessionId": session.id,
                     "url": url,
-                    "repository": checkout.full_name,
-                    "branch": checkout.branch,
                     "workingBranch": session.working_branch,
                     "model": model,
-                    "review": review,
                     "turn": turn,
-                }),
+                })),
                 text,
                 json,
                 output,
@@ -2267,16 +3054,15 @@ async fn handle_code_start(
             status: 409,
             message,
         }) => render_structured(
-            serde_json::json!({
+            with_details(serde_json::json!({
                 "ok": true,
                 "sessionId": session.id,
                 "url": url,
                 "workingBranch": session.working_branch,
                 "model": model,
-                "review": review,
                 "turn": null,
                 "note": message,
-            }),
+            })),
             format!("{message}\n\n{session_text}"),
             json,
             output,
@@ -2354,6 +3140,12 @@ async fn handle_image_command(
                     ""
                 }
             );
+            if !model.aspect_ratios.is_empty() {
+                println!("    aspect ratios: {}", model.aspect_ratios.join(", "));
+            }
+            if let Some(max) = model.max_images {
+                println!("    up to {max} per request");
+            }
         }
         return Ok(());
     }
@@ -2501,6 +3293,45 @@ async fn handle_projects_command(
                 *json,
                 output,
             )
+        }
+        ProjectsSubcommand::Recent { limit } => {
+            let home = config::CliConfig::config_dir()?;
+            let registry = project_registry::ProjectRegistry::load(&home)?;
+            let linked = cloud::load_project_cache(&home);
+            let mut recent: Vec<(&String, &project_registry::ProjectEntry)> = registry
+                .projects
+                .iter()
+                .filter(|(path, _)| std::path::Path::new(path.as_str()).is_dir())
+                .collect();
+            recent.sort_by(|left, right| right.1.last_seen.cmp(&left.1.last_seen));
+            if recent.is_empty() {
+                println!("No recent project folders yet. Run agi inside a project to add it here.");
+                return Ok(());
+            }
+            println!("Recent project folders");
+            for (index, (path, entry)) in recent.iter().take(*limit).enumerate() {
+                let account = entry
+                    .cloud_project_id
+                    .as_deref()
+                    .and_then(|id| linked.find(id))
+                    .map(|project| {
+                        format!(
+                            "  linked to '{}'",
+                            terminal_text::sanitize_terminal_text(&project.name)
+                        )
+                    })
+                    .unwrap_or_default();
+                println!(
+                    "  {}. {}  last used {}{account}",
+                    index + 1,
+                    terminal_text::sanitize_terminal_text(path),
+                    terminal_text::sanitize_terminal_text(
+                        entry.last_seen.get(..10).unwrap_or(&entry.last_seen)
+                    )
+                );
+            }
+            println!("Start a session in one with: agi -C <folder>");
+            Ok(())
         }
         ProjectsSubcommand::List => {
             let cache = cloud::refresh_projects(privacy)
@@ -2946,14 +3777,21 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
     let privacy = account_privacy_mode();
     match action {
         MemorySubcommand::List => {
-            let cache = cloud::refresh_memory(privacy)
-                .await
-                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            let (cache, workspace) = tokio::join!(
+                cloud::refresh_memory(privacy),
+                cloud::active_workspace_label(privacy)
+            );
+            let cache = cache.map_err(|error| anyhow::anyhow!("{error}"))?;
+            let workspace = workspace.unwrap_or_else(|_| "your active workspace".to_string());
+            if cache.account_memory_off {
+                println!("Memory is off for your account. Turn it on with `agi memory on`.");
+            }
             if cache.entries.is_empty() {
-                println!("Your AGI Workforce account holds no memories.");
+                println!("Your AGI Workforce account holds no memories in {workspace}.");
                 println!("Add one with `agi memory add <text>`.");
                 return Ok(());
             }
+            let linked = agent::linked_cloud_project();
             let mut topics: Vec<&str> = cache
                 .entries
                 .iter()
@@ -2962,7 +3800,7 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
             topics.sort_unstable();
             topics.dedup();
             println!(
-                "{} memories in your account (* pinned, used first):",
+                "{} memories in {workspace} (* pinned, used first):",
                 cache.entries.len()
             );
             for topic in topics {
@@ -2975,11 +3813,29 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                     let pin = if entry.pinned { "*" } else { " " };
                     let origin = entry.source.as_deref().unwrap_or("web");
                     let updated = entry.updated_at.get(..10).unwrap_or(&entry.updated_at);
-                    println!("{pin} {}  [{origin}, updated {updated}]", entry.id);
+                    let scope = match entry.project_id.as_deref() {
+                        Some(project) if Some(project) == linked.as_deref() => ", this project",
+                        Some(_) => ", another project",
+                        None => "",
+                    };
+                    println!("{pin} {}  [{origin}{scope}, updated {updated}]", entry.id);
                     println!(
                         "    {}",
                         terminal_text::sanitize_terminal_text(&entry.content)
                     );
+                    if let Some(conversation) = entry.source_conversation_id.as_deref() {
+                        let title = entry
+                            .source_conversation_title
+                            .as_deref()
+                            .map(|title| {
+                                format!("'{}'", terminal_text::sanitize_terminal_text(title))
+                            })
+                            .unwrap_or_else(|| "a chat".to_string());
+                        println!(
+                            "    learned in {title}; agi resume --cloud {} opens it",
+                            terminal_text::sanitize_terminal_text(conversation)
+                        );
+                    }
                 }
             }
             Ok(())
@@ -3033,6 +3889,18 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 Some(_) => anyhow::bail!("Your account did not store this change"),
             }
         }
+        MemorySubcommand::On | MemorySubcommand::Off | MemorySubcommand::Status => {
+            let enabled = match action {
+                MemorySubcommand::On => Some(true),
+                MemorySubcommand::Off => Some(false),
+                _ => None,
+            };
+            let text = cloud::personalization::memory_switch(enabled)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+            println!("{text}");
+            Ok(())
+        }
         MemorySubcommand::Never { add, remove } => {
             let text = cloud::personalization::never_remember(add, remove)
                 .await
@@ -3083,10 +3951,35 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
             }
             Ok(())
         }
-        MemorySubcommand::Add { text, category } => {
+        MemorySubcommand::Add {
+            text,
+            category,
+            project,
+        } => {
             let content = text.join(" ");
             if content.trim().is_empty() {
                 anyhow::bail!("Usage: agi memory add <text>");
+            }
+            if *project {
+                let project_id = agent::linked_cloud_project().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "This directory is not linked to an account project. Link it with `agi projects link`, or drop --project to remember it account-wide."
+                    )
+                })?;
+                let merged =
+                    cloud::add_project_memory(privacy, &project_id, &content, category.as_deref())
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                let _ = cloud::refresh_memory(privacy).await;
+                println!(
+                    "{} in this project's memory; its conversations on every client draw on it.",
+                    if merged {
+                        "Merged with a memory already"
+                    } else {
+                        "Remembered"
+                    }
+                );
+                return Ok(());
             }
             let refusals = cloud::add_memory(privacy, &content, category.as_deref())
                 .await
@@ -3319,11 +4212,148 @@ async fn handle_schedules_command(
                 *json,
             )
         }),
+        SchedulesSubcommand::Triggers { action } => {
+            handle_schedule_triggers_command(&client, action, output).await
+        }
     };
 
     match result {
         Ok(()) => Ok(()),
         Err(error) => schedules_command_failure(error.to_string()),
+    }
+}
+
+async fn handle_schedule_triggers_command(
+    client: &schedules::SchedulesClient,
+    action: &ScheduleTriggersSubcommand,
+    output: Option<OutputFormat>,
+) -> Result<()> {
+    use schedules::triggers;
+
+    let render = |value: serde_json::Value, text: String, json_flag: bool| -> Result<()> {
+        match structured_output(json_flag, output) {
+            StructuredOutput::Text => {
+                println!("{text}");
+                Ok(())
+            }
+            mode => print_structured(&value, mode),
+        }
+    };
+    let failed = |error: schedules::ScheduleError| anyhow::anyhow!("{error}");
+    if account_privacy_mode() == platform::runtime::session::PrivacyMode::Local {
+        return Err(failed(schedules::ScheduleError::LocalPrivacy));
+    }
+
+    match action {
+        ScheduleTriggersSubcommand::List {
+            schedule,
+            limit,
+            offset,
+            json,
+        } => {
+            let schedule_id = client.resolve_id(schedule).await.map_err(failed)?;
+            let rows = client
+                .triggers(&schedule_id, *limit, *offset)
+                .await
+                .map_err(failed)?;
+            render(
+                serde_json::to_value(&rows)?,
+                triggers::render_triggers(&schedule_id, &rows),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Add {
+            schedule,
+            source,
+            events,
+            account,
+            name,
+            conditions,
+            debounce,
+            json,
+        } => {
+            let parsed = conditions
+                .iter()
+                .map(|spec| triggers::parse_condition(spec))
+                .collect::<std::result::Result<Vec<_>, String>>()
+                .map_err(|message| anyhow::anyhow!(message))?;
+            let schedule_id = client.resolve_id(schedule).await.map_err(failed)?;
+            let request = triggers::trigger_create_request(
+                &schedule_id,
+                source,
+                events,
+                account.as_deref(),
+                name.as_deref(),
+                parsed,
+                *debounce,
+            );
+            let created = client.create_trigger(&request).await.map_err(failed)?;
+            let endpoint = client.api_url(&created.webhook_path);
+            let show_secrets = interactive::person_at_terminal(io::stdout().is_terminal());
+            let mut value = if show_secrets {
+                serde_json::to_value(&created)?
+            } else {
+                serde_json::to_value(triggers::withhold_secrets(&created))?
+            };
+            if !show_secrets && triggers::created_has_secrets(&created) {
+                value["secretsWithheld"] = serde_json::Value::String(
+                    triggers::withheld_secrets_notice(&created.trigger.id),
+                );
+            }
+            render(
+                value,
+                triggers::render_created_trigger(&created, &endpoint, show_secrets),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Pause { trigger, json }
+        | ScheduleTriggersSubcommand::Resume { trigger, json } => {
+            let enabled = matches!(action, ScheduleTriggersSubcommand::Resume { .. });
+            let updated = client
+                .set_trigger_enabled(trigger, enabled)
+                .await
+                .map_err(failed)?;
+            render(
+                serde_json::to_value(&updated)?,
+                triggers::render_triggers(&updated.task_id, std::slice::from_ref(&updated)),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Watch { trigger, json } => {
+            let updated = client
+                .register_trigger_watch(trigger)
+                .await
+                .map_err(failed)?;
+            render(
+                serde_json::to_value(&updated)?,
+                triggers::render_triggers(&updated.task_id, std::slice::from_ref(&updated)),
+                *json,
+            )
+        }
+        ScheduleTriggersSubcommand::Remove { trigger, yes, json } => {
+            if let Some(refusal) = triggers::removal_refusal(
+                trigger,
+                interactive::can_prompt() && !interactive::spawned_by_agent(),
+            ) {
+                anyhow::bail!(refusal);
+            }
+            if !confirm_destructive(
+                &format!(
+                    "Delete trigger {trigger}? Its events stop starting runs of the schedule. \
+                     This cannot be undone."
+                ),
+                *yes,
+            ) {
+                println!("Left the trigger in place.");
+                return Ok(());
+            }
+            client.delete_trigger(trigger).await.map_err(failed)?;
+            render(
+                serde_json::json!({ "deleted": trigger }),
+                format!("Deleted trigger {trigger}."),
+                *json,
+            )
+        }
     }
 }
 
@@ -3707,12 +4737,19 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 );
                 return Ok(());
             }
-            let configs = mcp::McpManager::load_configs().unwrap_or_default();
             for row in rows {
-                let refusal = configs
-                    .get(&row.name)
+                let config: Option<mcp::McpServerConfig> = registry_file
+                    .entry(&row.name)
+                    .cloned()
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .with_context(|| {
+                        format!("registry entry for '{}' is not a server config", row.name)
+                    })?;
+                let refusal = config
+                    .as_ref()
                     .filter(|_| row.enabled)
-                    .and_then(mcp::policy_refusal);
+                    .and_then(|config| mcp::policy_refusal(&row.name, config));
                 println!(
                     "{:<24} {:<8} {:<6} {}",
                     terminal_text::sanitize_terminal_text(&row.name),
@@ -3725,7 +4762,11 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                     terminal_text::sanitize_terminal_text(&row.target)
                 );
                 if let Some(reason) = refusal {
-                    println!("{:<24} not started: {reason}", "");
+                    println!(
+                        "{:<24} {}",
+                        "",
+                        terminal_text::sanitize_terminal_text(&reason)
+                    );
                 }
             }
             Ok(())
@@ -3765,6 +4806,133 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 terminal_text::sanitize_terminal_text(&row.target)
             );
             println!("{:<10} {}", "file", McpRegistry::default_path()?.display());
+            let prefix = crate::platform::policy::mcp_rule_target(name, None);
+            for (target, decision) in crate::platform::policy::user_mcp_rules()
+                .into_iter()
+                .filter(|(target, _)| {
+                    target == &prefix || target.starts_with(&format!("{prefix}__"))
+                })
+            {
+                let scope = target
+                    .strip_prefix(&format!("{prefix}__"))
+                    .map_or_else(|| "all tools".to_string(), str::to_string);
+                println!(
+                    "{:<10} {} {}",
+                    "rule",
+                    terminal_text::sanitize_terminal_text(&scope),
+                    match decision {
+                        crate::platform::policy::PolicyDecision::Allow => "runs without asking",
+                        crate::platform::policy::PolicyDecision::Ask => "asks first",
+                        crate::platform::policy::PolicyDecision::Deny => "blocked",
+                    }
+                );
+            }
+            if !row.enabled {
+                println!("\nTurn it on with `agi mcp enable {name}` to see what it offers.");
+                return Ok(());
+            }
+            let config: crate::mcp::McpServerConfig = registry_file
+                .entry(name)
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .with_context(|| format!("registry entry for '{name}' is not a server config"))?
+                .ok_or_else(|| anyhow::anyhow!("no MCP server named '{name}' in the registry"))?;
+            let connected = tokio::time::timeout(
+                std::time::Duration::from_secs(20),
+                crate::mcp::McpConnection::connect(name, &config),
+            )
+            .await;
+            let mut connection = match connected {
+                Ok(Ok(connection)) => connection,
+                Ok(Err(error)) => {
+                    println!("{:<10} could not connect: {error:#}", "connection");
+                    return Ok(());
+                }
+                Err(_) => {
+                    println!("{:<10} did not answer within 20 seconds", "connection");
+                    return Ok(());
+                }
+            };
+            let negotiated = connection.negotiated().clone();
+            if let Some(info) = negotiated.server_info.as_ref() {
+                println!(
+                    "{:<10} {} {}",
+                    "server",
+                    terminal_text::sanitize_terminal_text(&info.name),
+                    terminal_text::sanitize_terminal_text(&info.version)
+                );
+            }
+            if let Some(instructions) = negotiated
+                .instructions
+                .as_deref()
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+            {
+                println!(
+                    "{:<10} {}",
+                    "about",
+                    terminal_text::sanitize_terminal_text(
+                        instructions.lines().next().unwrap_or(instructions)
+                    )
+                );
+            }
+            match connection.list_tools().await {
+                Ok(tools) if tools.is_empty() => println!("\nIt offers no tools."),
+                Ok(tools) => {
+                    println!("\nTools ({}):", tools.len());
+                    for tool in tools {
+                        println!(
+                            "  {}  {}",
+                            terminal_text::sanitize_terminal_text(&tool.original_name),
+                            terminal_text::sanitize_terminal_text(
+                                tool.description.lines().next().unwrap_or_default()
+                            )
+                        );
+                    }
+                }
+                Err(error) => println!("\nIts tools could not be listed: {error:#}"),
+            }
+            let _ = connection.shutdown().await;
+            Ok(())
+        }
+        McpSubcommand::Allow { server, tool }
+        | McpSubcommand::Ask { server, tool }
+        | McpSubcommand::Block { server, tool }
+        | McpSubcommand::Unset { server, tool } => {
+            use crate::platform::policy::PolicyDecision;
+            let decision = match action {
+                McpSubcommand::Allow { .. } => Some(PolicyDecision::Allow),
+                McpSubcommand::Ask { .. } => Some(PolicyDecision::Ask),
+                McpSubcommand::Block { .. } => Some(PolicyDecision::Deny),
+                _ => None,
+            };
+            let path =
+                crate::platform::policy::set_user_mcp_rule(server, tool.as_deref(), decision)?;
+            let subject = match tool {
+                Some(tool) => format!(
+                    "'{}' from '{}'",
+                    terminal_text::sanitize_terminal_text(tool),
+                    terminal_text::sanitize_terminal_text(server)
+                ),
+                None => format!(
+                    "every tool from '{}'",
+                    terminal_text::sanitize_terminal_text(server)
+                ),
+            };
+            println!(
+                "{} ({})",
+                match decision {
+                    Some(PolicyDecision::Allow) => format!("{subject} now runs without asking"),
+                    Some(PolicyDecision::Ask) => format!("{subject} now asks before it runs"),
+                    Some(PolicyDecision::Deny) => format!("{subject} is now blocked"),
+                    None => format!("Your setting for {subject} is removed"),
+                },
+                path.display()
+            );
+            println!(
+                "A workspace administrator's managed rules still come first, and a project's policy.toml applies once you trust the project."
+            );
             Ok(())
         }
         McpSubcommand::Login { name } => {
@@ -3784,16 +4952,25 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
         }
         McpSubcommand::Logout { name } => {
             let url = remote_server_url(&registry_file, name)?;
-            let had_token = crate::mcp::logout_from_remote_server(&url)?;
-            println!(
-                "{} '{}'.",
-                if had_token {
-                    "Removed the stored OAuth token for"
-                } else {
-                    "No OAuth token was stored for"
-                },
-                terminal_text::sanitize_terminal_text(name)
-            );
+            let config: Option<crate::mcp::McpServerConfig> = registry_file
+                .entry(name)
+                .cloned()
+                .and_then(|entry| serde_json::from_value(entry).ok());
+            let outcome = crate::mcp::logout_from_remote_server(&url, config.as_ref()).await?;
+            let shown = terminal_text::sanitize_terminal_text(name);
+            match outcome.revocation {
+                None => println!("No OAuth token was stored for '{shown}'."),
+                Some(crate::mcp::McpRevocation::Revoked) => println!(
+                    "Revoked the OAuth grant for '{shown}' at its provider and removed the stored token."
+                ),
+                Some(crate::mcp::McpRevocation::NotOffered) => println!(
+                    "Removed the stored OAuth token for '{shown}'. Its provider offers no revocation endpoint, so remove the app's access in the provider's own settings to end the grant there too."
+                ),
+                Some(crate::mcp::McpRevocation::Failed(reason)) => println!(
+                    "Removed the stored OAuth token for '{shown}', but the provider did not confirm revocation ({}). Remove the app's access in the provider's own settings to end the grant there too.",
+                    terminal_text::sanitize_terminal_text(&reason)
+                ),
+            }
             Ok(())
         }
         McpSubcommand::Remove { name } => {
@@ -3818,16 +4995,15 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
     let mut store = permissions::PermissionStore::load()?;
     match action {
         ApprovalsSubcommand::List => {
-            println!("{}", store.display_tab("allow"));
-            println!();
-            println!("{}", store.display_tab("deny"));
-            println!();
-            println!("{}", store.display_tab("ask"));
-            println!();
-            println!("{}", store.display_tab("workspace"));
+            for tab in ["allow", "ask", "deny"] {
+                println!("{}", store.display_tab(tab, &[], &[]));
+            }
             Ok(())
         }
         ApprovalsSubcommand::Allow { rule } => {
+            if let Some(message) = permissions::open_ended_allow_error(rule) {
+                anyhow::bail!(message);
+            }
             store.allow_always(rule);
             store.save()?;
             println!("Always allow: {}", rule.trim());
@@ -3839,6 +5015,12 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
             println!("Always deny: {}", rule.trim());
             Ok(())
         }
+        ApprovalsSubcommand::Ask { rule } => {
+            store.ask_always(rule);
+            store.save()?;
+            println!("Always ask: {}", rule.trim());
+            Ok(())
+        }
         ApprovalsSubcommand::Session { rule } => {
             store.allow_session_for_process(rule);
             println!("Allow for this process: {}", rule.trim());
@@ -3847,11 +5029,12 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
         ApprovalsSubcommand::Remove { scope, rule } => {
             let removed = match scope.as_str() {
                 "allow" => store.remove_always_allow(rule),
+                "ask" => store.remove_ask(rule),
                 "deny" => store.remove_always_deny(rule),
                 "session" => store.remove_session(rule),
                 other => {
                     anyhow::bail!(
-                        "unknown approval scope '{}'; use allow, deny, or session",
+                        "unknown approval scope '{}'; use allow, ask, deny, or session",
                         other
                     )
                 }
@@ -4278,6 +5461,10 @@ pub async fn run_main() -> Result<()> {
     // rather than resolved per call site.
     output::set_plain_output(cli.plain || output::plain_output_requested_by_environment());
 
+    if let Some(reason) = crate::app_server::account::renew_managed_session_if_expiring().await {
+        output::print_info(&reason);
+    }
+
     // Before anything reads the working directory.
     if let Some(repo) = cli.repo.as_deref() {
         enter_repo_directory(repo)?;
@@ -4346,7 +5533,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
     // the flags were inert (CLI-DEBUG-CONTROLS-INERT-01).
     let effective_log_filter = init_tracing(cli.verbose, cli.debug.as_ref());
 
-    sandbox::set_sandbox_disabled(cli.no_sandbox);
+    let no_sandbox_requested =
+        cli.no_sandbox || std::env::var_os("AGIWORKFORCE_NO_SANDBOX").is_some();
+    sandbox::set_sandbox_mode(sandbox::launch_mode(no_sandbox_requested, None, None));
     if cli.no_sandbox && sandbox::sandbox_settings().forced {
         eprintln!(
             "{} --no-sandbox is ignored: your organization requires the sandbox",
@@ -4449,6 +5638,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
     } else {
         config::CliConfig::load_without_project()?
     };
+    let user_sandbox_mode = config::CliConfig::load()
+        .ok()
+        .and_then(|config| config.default.sandbox_mode);
+    sandbox::set_sandbox_mode(sandbox::launch_mode(
+        no_sandbox_requested,
+        user_sandbox_mode.as_deref(),
+        app_config.default.sandbox_mode.as_deref(),
+    ));
 
     // Pull any user-defined `[providers.<name>]` blocks into the runtime
     // OpenAI-compatible registry (OpenRouter, NVIDIA NIM, Groq, Together,
@@ -4517,6 +5714,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     None,
                     exec_provider_override.as_deref(),
                 )?;
+                session.additional_context_dirs =
+                    crate::path_security::registered_additional_workspace_roots();
                 session.apply_ui_config(&app_config);
                 session.apply_tool_filters(
                     &normalized_cli_options.allowed_tools,
@@ -4738,8 +5937,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }
                 }
             }
-            Command::Resume { session_id, cloud } => {
+            Command::Background { action } => run_background_command(action),
+            Command::Resume {
+                session_id,
+                cloud,
+                teleport,
+            } => {
                 let resolved_id = match (session_id, cloud) {
+                    _ if *teleport => Some(teleport_code_session(session_id.as_deref()).await?),
                     (Some(id), true) => Some(adopt_hosted_conversation(id).await?),
                     (Some(id), false) => Some(match resolve_resume_payload(id, false) {
                         Ok(_) => id.clone(),
@@ -4750,11 +5955,20 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }),
                     (None, _) => None,
                 };
-                let (session_label, (messages, managed_session)) = match resolved_id.as_ref() {
+                let (session_label, (mut messages, managed_session)) = match resolved_id.as_ref() {
                     Some(id) => (id.clone(), resolve_resume_payload(id, false)?),
                     None => resolve_latest_resume_payload()?
                         .ok_or_else(|| anyhow::anyhow!("No sessions found"))?,
                 };
+                let interrupted = agent::mark_interrupted_tool_calls(&mut messages);
+                if interrupted > 0 {
+                    eprintln!(
+                        "The last turn stopped while {interrupted} tool {} still running. The assistant is told {} result is unknown and checks before relying on {}.",
+                        if interrupted == 1 { "call was" } else { "calls were" },
+                        if interrupted == 1 { "its" } else { "their" },
+                        if interrupted == 1 { "it" } else { "them" }
+                    );
+                }
                 if messages.is_empty() {
                     eprintln!("Warning: session '{}' has no messages.", session_label);
                 } else {
@@ -4916,6 +6130,39 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Triggers { action } => {
                 let text = match action {
                     None | Some(TriggersSubcommand::List) => daemon::list_triggers()?,
+                    Some(TriggersSubcommand::Add {
+                        id,
+                        prompt,
+                        cron,
+                        webhook,
+                        watch,
+                        glob,
+                        model,
+                        events,
+                        conditions,
+                    }) => {
+                        let mut text = daemon::add_trigger(daemon::NewTrigger {
+                            id: id.clone(),
+                            prompt: prompt.clone(),
+                            model: model.clone(),
+                            cron: cron.clone(),
+                            webhook: webhook.clone(),
+                            watch: watch.clone(),
+                            glob: glob.clone(),
+                        })?;
+                        if !events.is_empty() || !conditions.is_empty() {
+                            daemon::set_trigger_filter(id, events, conditions, None, false)?;
+                            text.push_str("\nApplied the --event and --when filter.");
+                        }
+                        text
+                    }
+                    Some(TriggersSubcommand::Remove { id }) => daemon::remove_trigger(id)?,
+                    Some(TriggersSubcommand::Enable { id }) => {
+                        daemon::set_trigger_enabled(id, true)?
+                    }
+                    Some(TriggersSubcommand::Disable { id }) => {
+                        daemon::set_trigger_enabled(id, false)?
+                    }
                     Some(TriggersSubcommand::Filter {
                         id,
                         events,
@@ -4933,6 +6180,27 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 generate_shell_completion(*shell, "agi", &mut io::stdout());
                 Ok(())
             }
+            Command::RemoteControl => {
+                let workspace_root = std::env::current_dir()?;
+                let host = std::sync::Arc::new(
+                    app_server::CliDeveloperSessionHost::new(
+                        app_config.clone(),
+                        workspace_root.clone(),
+                    )?
+                    .with_bypass_permissions_available(
+                        cli.allow_dangerously_skip_permissions
+                            || normalized_cli_options
+                                .effective_permissions(
+                                    cli.mode,
+                                    cli.dangerously_skip_permissions,
+                                    cli.yes,
+                                    None,
+                                )
+                                .skip_permissions,
+                    ),
+                );
+                remote_control::run(host, &workspace_root).await
+            }
             Command::AppServer {
                 listen,
                 allow_public_listen,
@@ -4943,10 +6211,20 @@ async fn run_cli(cli: Cli) -> Result<()> {
             } => {
                 cli_options::set_memory_enabled(!no_memory);
                 let workspace_root = std::env::current_dir()?;
-                let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
-                    app_config.clone(),
-                    workspace_root,
-                )?);
+                let host = std::sync::Arc::new(
+                    app_server::CliDeveloperSessionHost::new(app_config.clone(), workspace_root)?
+                        .with_bypass_permissions_available(
+                            cli.allow_dangerously_skip_permissions
+                                || normalized_cli_options
+                                    .effective_permissions(
+                                        cli.mode,
+                                        cli.dangerously_skip_permissions,
+                                        cli.yes,
+                                        None,
+                                    )
+                                    .skip_permissions,
+                        ),
+                );
                 let capabilities = host.capabilities();
                 let _heartbeat = device_registry::spawn_heartbeat_loop();
                 if listen == "stdio" {
@@ -4965,11 +6243,6 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             "AGI_CLI_SERVER_ADDR (or default 127.0.0.1:8788) must be a valid SocketAddr",
                         )
                     });
-                if !allow_public_listen && !addr.ip().is_loopback() {
-                    anyhow::bail!(
-                        "app-server refuses non-loopback listen address {addr}; pass --allow-public-listen only after adding network/firewall controls"
-                    );
-                }
                 let token = auth_token
                     .clone()
                     .or_else(|| std::env::var("AGI_APP_SERVER_TOKEN").ok())
@@ -4986,6 +6259,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         auth_token: Some(token),
                         allowed_origins: allowed_origin.clone(),
                         allow_query_token: *allow_query_token,
+                        allow_public_listen: *allow_public_listen,
                     },
                     host,
                     capabilities,
@@ -5037,12 +6311,36 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         }
                         Ok(())
                     }
+                    PluginSubcommand::Info { name } => {
+                        mgr.load_all(std::env::current_dir().ok().as_deref())?;
+                        let plugin = mgr
+                            .plugins()
+                            .iter()
+                            .find(|plugin| {
+                                plugin.config_name == *name
+                                    || plugin.manifest_name.as_deref() == Some(name.as_str())
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "No installed plugin named '{name}'. `agi plugin list` shows them."
+                                )
+                            })?;
+                        let signature_policy = plugins::PluginSignaturePolicy {
+                            publishers:
+                                features::plugins::signature::TrustedPublishers::configured()
+                                    .unwrap_or_default(),
+                            ..plugins::PluginSignaturePolicy::default()
+                        };
+                        println!("{}", plugins::describe_plugin(plugin, &signature_policy));
+                        Ok(())
+                    }
                     PluginSubcommand::Install {
                         source,
                         name,
                         integrity,
                         unsafe_no_integrity,
                         unsafe_allow_unsigned,
+                        git_ref,
                     } => {
                         // AUDIT-FIX: H-16, supply-chain integrity is required.
                         let pintegrity = match (integrity.as_deref(), *unsafe_no_integrity) {
@@ -5066,6 +6364,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             name.as_deref(),
                             pintegrity,
                             psignature,
+                            git_ref.as_deref(),
                         )
                         .map_err(|error| anyhow::anyhow!("Refusing install: {error}"))?;
                         match outcome {
@@ -5106,6 +6405,69 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                 anyhow::bail!("Failed: {}", error)
                             }
                         }
+                    }
+                    PluginSubcommand::Login { name } => {
+                        mgr.load_all(std::env::current_dir().ok().as_deref())?;
+                        let plugin = mgr
+                            .plugins()
+                            .iter()
+                            .find(|plugin| {
+                                plugin.config_name == *name
+                                    || plugin.manifest_name.as_deref() == Some(name.as_str())
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "No installed plugin named '{name}'. `agi plugin list` shows them."
+                                )
+                            })?;
+                        let shown = terminal_text::sanitize_terminal_text(name);
+                        if !plugin.enabled {
+                            anyhow::bail!(
+                                "Plugin '{shown}' is turned off. Turn it on with `agi plugin enable {shown}` first."
+                            );
+                        }
+                        let bundled: Vec<String> = plugin.mcp_servers.keys().cloned().collect();
+                        let configs = mgr.mcp_configs();
+                        let mut remote: Vec<(String, crate::mcp::McpServerConfig)> = bundled
+                            .into_iter()
+                            .filter_map(|server| {
+                                let config = configs.get(&server)?.clone();
+                                crate::mcp::is_remote_server(&config).then_some((server, config))
+                            })
+                            .collect();
+                        remote.sort_by(|a, b| a.0.cmp(&b.0));
+                        if remote.is_empty() {
+                            println!(
+                                "Plugin '{shown}' bundles no remote connections, so there is nothing to sign in to."
+                            );
+                            return Ok(());
+                        }
+                        let mut failed = 0usize;
+                        for (server, config) in &remote {
+                            let server_shown = terminal_text::sanitize_terminal_text(server);
+                            match crate::mcp::login_to_remote_server(server, config).await {
+                                Ok(()) => println!("Signed in to '{server_shown}'."),
+                                Err(error) => {
+                                    failed += 1;
+                                    eprintln!(
+                                        "Could not sign in to '{server_shown}': {}",
+                                        terminal_text::sanitize_terminal_text(&format!(
+                                            "{error:#}"
+                                        ))
+                                    );
+                                }
+                            }
+                        }
+                        if failed > 0 {
+                            anyhow::bail!(
+                                "{failed} of {} connections in plugin '{shown}' are not signed in. Run `agi plugin login {shown}` again to retry.",
+                                remote.len()
+                            );
+                        }
+                        println!(
+                            "Every connection in plugin '{shown}' is signed in. The tokens are stored in the OS credential store."
+                        );
+                        Ok(())
                     }
                     PluginSubcommand::Enable { name } => {
                         println!("{}", installs::set_plugin_enabled(name, true)?);
@@ -5337,10 +6699,13 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             }
                         }
                         if !report.conflicts.is_empty() {
-                            println!("Conflicts (local kept):");
+                            println!("Conflicts (local kept, imported version saved beside it):");
                             for f in &report.conflicts {
-                                println!("  {}", f);
+                                println!("  {f}  ->  {f}.imported");
                             }
+                            println!(
+                                "Compare the two, keep the one you want under the original name, and delete the .imported copy."
+                            );
                         }
                         Ok(())
                     }
@@ -5359,15 +6724,172 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 if store.entries.is_empty() {
                     println!("No active sessions to logout from.");
                 } else {
+                    let revoked = crate::app_server::account::revoke_managed_sessions().await;
                     let count = store.entries.len();
                     store.entries.clear();
                     store.save()?;
                     println!("Logged out from {} provider(s).", count);
+                    if !revoked {
+                        println!(
+                            "AGI Cloud did not confirm the sign-out. The device session ends when it expires, or unlink it in Settings, Account, Linked devices."
+                        );
+                    }
                 }
                 Ok(())
             }
 
             // --- Auth Status ---
+            Command::Library {
+                action,
+                kind,
+                search,
+                limit,
+            } => {
+                let client = cloud::CloudClient::connect(account_privacy_mode())
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match action {
+                    None => {
+                        let page = cloud::library::list(
+                            &client,
+                            kind.as_deref(),
+                            search.as_deref(),
+                            *limit,
+                        )
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::library::render(&page));
+                    }
+                    Some(LibrarySubcommand::Show { id }) => {
+                        let preview = cloud::library::text(&client, id)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        match cloud::library::formatted_source(&preview) {
+                            Some(source) if std::io::IsTerminal::is_terminal(&std::io::stdout()) => {
+                                print!("{}", tui::markdown_renderer::render_markdown_ansi(&source));
+                            }
+                            _ => {
+                                println!("{}", terminal_text::sanitize_terminal_text(&preview.text))
+                            }
+                        }
+                        if preview.truncated {
+                            println!(
+                                "\n(The preview stops here; agi library download {id} saves the whole file.)"
+                            );
+                        }
+                    }
+                    Some(LibrarySubcommand::Download { id, out }) => {
+                        let directory = match out {
+                            Some(directory) => directory.clone(),
+                            None => std::env::current_dir()?,
+                        };
+                        let saved = cloud::library::download(&client, id, &directory)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Saved {}", saved.display());
+                    }
+                }
+                Ok(())
+            }
+            Command::Shares { action } => {
+                let client = cloud::CloudClient::connect(account_privacy_mode())
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match action {
+                    None => {
+                        let links = cloud::shares::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::shares::render(&links));
+                    }
+                    Some(SharesSubcommand::Revoke { token, yes }) => {
+                        if !confirm_destructive(
+                            &format!(
+                                "Revoke shared link {token}? Anyone who has it can no longer open the conversation. A new share gets a new link."
+                            ),
+                            *yes,
+                        ) {
+                            println!("Left the link on.");
+                            return Ok(());
+                        }
+                        cloud::shares::revoke(&client, token)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Revoked shared link {token}.");
+                    }
+                }
+                Ok(())
+            }
+            Command::Connectors { action } => {
+                if let Some(refusal) =
+                    tier_cache::capability_refusal(tier_cache::CONNECTORS_CAPABILITY, "Connectors")
+                {
+                    anyhow::bail!(refusal);
+                }
+                let client = cloud::CloudClient::connect(account_privacy_mode())
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match action {
+                    None => {
+                        let list = cloud::connectors::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::connectors::render_list(&list));
+                    }
+                    Some(ConnectorsSubcommand::Disconnect { connector, yes }) => {
+                        if !confirm_destructive(
+                            &format!(
+                                "Disconnect {connector} from your account? Its saved sign-in and tool permissions are removed, and every surface loses it until you connect it again."
+                            ),
+                            *yes,
+                        ) {
+                            println!("Left {connector} connected.");
+                            return Ok(());
+                        }
+                        cloud::connectors::disconnect(&client, connector)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Disconnected {connector} from your account.");
+                    }
+                }
+                Ok(())
+            }
+            Command::ExportData { out } => {
+                let client = cloud::CloudClient::connect_managed()
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                let archive = cloud::data_export::current(&client)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                match archive {
+                    Some(archive) if archive.status == "ready" => {
+                        let directory = match out {
+                            Some(directory) => directory.clone(),
+                            None => std::env::current_dir()?,
+                        };
+                        let saved = cloud::data_export::download(&client, &archive, &directory)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        for path in &saved {
+                            println!("Saved {}", path.display());
+                        }
+                    }
+                    Some(archive) if archive.status == "preparing" => println!(
+                        "Your export requested at {} is still being prepared. Run `agi export-data` again later to download it.",
+                        terminal_text::sanitize_terminal_text(&archive.requested_at)
+                    ),
+                    _ => {
+                        let requested = cloud::data_export::request(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        match requested {
+                            Some(archive) if archive.status == "ready" => println!(
+                                "Your export is ready. Run `agi export-data` again to download it."
+                            ),
+                            _ => println!(
+                                "Your account export is being prepared. Run `agi export-data` again later to download it."
+                            ),
+                        }
+                    }
+                }
+                Ok(())
+            }
             Command::AuthStatus => {
                 let statuses = auth::auth_status()?;
                 if statuses.is_empty() {
@@ -5394,13 +6916,174 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Doctor ---
-            Command::Doctor { json } => doctor::run_doctor(&app_config, *json),
+            Command::Doctor { json, export } => {
+                if !*export {
+                    return doctor::run_doctor(&app_config, *json);
+                }
+                let report = doctor::collect_doctor_report(&app_config);
+                let exported = diagnostics_bundle::export(&report)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                let path = std::env::current_dir()?.join(&exported.filename);
+                std::fs::write(&path, serde_json::to_string_pretty(&exported.diagnostics)?)?;
+                println!(
+                    "{}\nWrote {}. Read it before you attach it to a support request; it holds only what is listed above.",
+                    terminal_text::sanitize_terminal_text(&exported.summary),
+                    path.display()
+                );
+                Ok(())
+            }
 
             // --- Marketplace ---
             Command::Marketplace { action } => {
                 let home = config::CliConfig::config_dir()?;
                 let mp = marketplace::Marketplace::new_production();
                 match action {
+                    MarketplaceSubcommand::Add {
+                        repository_url,
+                        git_ref,
+                        name,
+                    } => {
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let source = cloud::marketplaces::add(
+                            &client,
+                            repository_url,
+                            git_ref.as_deref(),
+                            name.as_deref(),
+                        )
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!(
+                            "Added {} to your account ({} plugins).",
+                            terminal_text::sanitize_terminal_text(&source.name),
+                            source.entry_count
+                        );
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Sources => {
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let sources = cloud::marketplaces::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{}", cloud::marketplaces::render(&sources));
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Remove { id } => {
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        cloud::marketplaces::remove(&client, id)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("Removed that marketplace from your account.");
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Browse { source } => {
+                        if let Some(refusal) = tier_cache::capability_refusal(
+                            tier_cache::MARKETPLACE_CAPABILITY,
+                            "The plugin marketplace",
+                        ) {
+                            anyhow::bail!(refusal);
+                        }
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let sources = cloud::marketplaces::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let entries = cloud::marketplaces::entries(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let chosen: Vec<&cloud::marketplaces::MarketplaceSource> = sources
+                            .iter()
+                            .filter(|candidate| {
+                                source.as_deref().is_none_or(|reference| {
+                                    cloud::marketplaces::source_matches(candidate, reference)
+                                })
+                            })
+                            .collect();
+                        if chosen.is_empty() {
+                            println!("{}", cloud::marketplaces::render(&sources));
+                            if source.is_some() {
+                                anyhow::bail!("No marketplace on your account matches that name.");
+                            }
+                            return Ok(());
+                        }
+                        let blocks: Vec<String> = chosen
+                            .into_iter()
+                            .map(|candidate| {
+                                let own: Vec<cloud::marketplaces::MarketplaceEntry> = entries
+                                    .iter()
+                                    .filter(|entry| entry.source_id == candidate.id)
+                                    .cloned()
+                                    .collect();
+                                cloud::marketplaces::render_entries(candidate, &own)
+                            })
+                            .collect();
+                        println!("{}", blocks.join("\n\n"));
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Get { reference } => {
+                        if let Some(refusal) = tier_cache::capability_refusal(
+                            tier_cache::MARKETPLACE_CAPABILITY,
+                            "The plugin marketplace",
+                        ) {
+                            anyhow::bail!(refusal);
+                        }
+                        let (plugin, marketplace_name) =
+                            reference.rsplit_once('@').ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "Name the plugin as plugin@marketplace; `agi marketplace browse` lists them."
+                                )
+                            })?;
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let sources = cloud::marketplaces::list(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let source = sources
+                            .iter()
+                            .find(|candidate| {
+                                cloud::marketplaces::source_matches(candidate, marketplace_name)
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "No marketplace named {} on your account. Add it with `agi marketplace add <github url>`.",
+                                    terminal_text::sanitize_terminal_text(marketplace_name)
+                                )
+                            })?;
+                        let entries = cloud::marketplaces::entries(&client)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let entry = entries
+                            .iter()
+                            .find(|entry| {
+                                entry.source_id == source.id
+                                    && entry.name.eq_ignore_ascii_case(plugin)
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "{} does not list a plugin named {}. `agi marketplace browse {}` lists them.",
+                                    terminal_text::sanitize_terminal_text(&source.name),
+                                    terminal_text::sanitize_terminal_text(plugin),
+                                    terminal_text::sanitize_terminal_text(&source.name)
+                                )
+                            })?;
+                        let installation = cloud::marketplaces::install(&client, &entry.id)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!(
+                            "Installed {} {} on your account from {}, as the web marketplace does; it is listed with your plugins on the web and desktop apps.",
+                            terminal_text::sanitize_terminal_text(&entry.name),
+                            installation
+                                .installed_version
+                                .as_deref()
+                                .map(terminal_text::sanitize_terminal_text)
+                                .unwrap_or_default(),
+                            terminal_text::sanitize_terminal_text(&source.name)
+                        );
+                        Ok(())
+                    }
                     MarketplaceSubcommand::Search { query } => {
                         let results = mp.search(query).await?;
                         println!(
@@ -6016,11 +7699,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     task_type: routing::classify::developer_task_type(*task),
                     trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
                     speed_first: false,
+                    policy_version: crate::runtime::session::current_routing_policy_version(),
                 },
                 tier: tier.clone(),
             });
 
     if let Some(ref prompt) = effective_prompt {
+        let oneshot_resume = match cli.session.as_ref().or(cli.resume.as_ref()) {
+            Some(reference) => resolve_resume_payload(reference, cli.fork_session)?.1,
+            None => None,
+        };
         return run_oneshot(
             &app_config,
             &model,
@@ -6041,6 +7729,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             file_context_result.images,
             cli.max_budget_usd,
             cli.session_id_override.clone(),
+            oneshot_resume,
             cli.json_events,
             cli.agent.clone(),
             model_fallback_chain.clone(),
@@ -6149,6 +7838,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             resume_managed_session,
             effective_max_turns,
             effective_skip_permissions,
+            cli.allow_dangerously_skip_permissions,
             model_fallback_chain.clone(),
             cli.name,
             team_mode,
@@ -6157,7 +7847,6 @@ async fn run_cli(cli: Cli) -> Result<()> {
             effective_provider_override.map(str::to_string),
             effective_permission_mode,
             effective_auto_approve_plan,
-            sandbox::sandbox_disabled(),
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
@@ -6197,20 +7886,53 @@ impl ImageAttachment {
 /// [`read_file_contexts`] it returns the error instead of exiting, because the
 /// interactive paths have to keep the session alive after a bad path.
 pub fn load_image_attachment(path: &str) -> Result<ImageAttachment> {
-    use agiworkforce_utils_image::{load_for_prompt_bytes, PromptImageMode};
+    load_image_attachment_with(path, agiworkforce_utils_image::PromptImageMode::ResizeToFit)
+}
+
+pub fn load_image_attachment_with(
+    path: &str,
+    mode: agiworkforce_utils_image::PromptImageMode,
+) -> Result<ImageAttachment> {
+    use agiworkforce_utils_image::load_for_prompt_bytes;
     use base64::Engine as _;
 
     let bytes = std::fs::read(path).with_context(|| format!("Failed to read image '{path}'"))?;
-    let encoded = load_for_prompt_bytes(
-        std::path::Path::new(path),
-        bytes,
-        PromptImageMode::ResizeToFit,
-    )
-    .with_context(|| format!("Failed to process image '{path}'"))?;
+    let encoded = load_for_prompt_bytes(std::path::Path::new(path), bytes, mode)
+        .with_context(|| format!("Failed to process image '{path}'"))?;
     Ok(ImageAttachment {
         path: path.to_string(),
         mime: encoded.mime,
         data_b64: base64::engine::general_purpose::STANDARD.encode(&encoded.bytes),
+    })
+}
+
+/// Read a PDF or Office file as a document block. Whether it reaches the model
+/// natively or as extracted text is settled when the turn is sent.
+pub fn load_document_attachment(path: &str) -> Result<models::ContentBlock> {
+    use base64::Engine as _;
+
+    let file = std::path::Path::new(path);
+    let kind = documents::DocumentKind::for_path(file)
+        .with_context(|| format!("'{path}' is not a PDF or Office document"))?;
+    let size = std::fs::metadata(file)
+        .with_context(|| format!("Failed to read '{path}'"))?
+        .len();
+    if size > documents::max_document_bytes() {
+        anyhow::bail!(
+            "'{path}' is {}; attachments are limited to {}",
+            tools::format_size(size),
+            tools::format_size(documents::max_document_bytes())
+        );
+    }
+    let bytes = std::fs::read(file).with_context(|| format!("Failed to read '{path}'"))?;
+    Ok(models::ContentBlock::Document {
+        name: file
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string()),
+        mime: kind.mime(file),
+        data_b64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+        asset_id: None,
     })
 }
 
@@ -6236,8 +7958,8 @@ pub fn clipboard_image_attachment(
 pub struct FileContextResult {
     /// Formatted text from non-image files (XML-wrapped, as before).
     pub text: String,
-    /// Image files encoded and ready for multipart message injection.
-    pub images: Vec<ImageAttachment>,
+    /// Image and document files encoded and ready for multipart message injection.
+    pub images: Vec<models::ContentBlock>,
 }
 
 /// Image file extensions recognised for vision attachment.
@@ -6260,7 +7982,15 @@ pub fn read_file_contexts(files: &[String]) -> Result<FileContextResult> {
     for path in files {
         if is_image_extension(path) {
             match load_image_attachment(path) {
-                Ok(attachment) => images.push(attachment),
+                Ok(attachment) => images.push(attachment.into_image_block()),
+                Err(e) => {
+                    output::print_error(&format!("{e:#}"));
+                    std::process::exit(1);
+                }
+            }
+        } else if documents::DocumentKind::for_path(std::path::Path::new(path)).is_some() {
+            match load_document_attachment(path) {
+                Ok(block) => images.push(block),
                 Err(e) => {
                     output::print_error(&format!("{e:#}"));
                     std::process::exit(1);
@@ -6330,6 +8060,10 @@ pub fn exit_with_error(e: &anyhow::Error) -> ! {
 }
 
 pub fn run_to_exit_code() -> std::process::ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some(documents::EXTRACT_COMMAND) {
+        return documents::run_extract_command(&args[1..]);
+    }
     broken_pipe::install_panic_hook();
     let result = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -6527,9 +8261,10 @@ pub async fn run_oneshot(
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: mcp::McpConfigLoadOptions,
-    image_attachments: Vec<ImageAttachment>,
+    image_attachments: Vec<models::ContentBlock>,
     max_budget_usd: Option<f64>,
     session_id_override: Option<String>,
+    resume_session: Option<ManagedResumeSession>,
     json_events: bool,
     agent_name: Option<String>,
     fallback_chain: routing::fallback::FallbackChain,
@@ -6551,6 +8286,7 @@ pub async fn run_oneshot(
         custom_system_prompt,
         resolved_provider_override,
     )?;
+    session.additional_context_dirs = crate::path_security::registered_additional_workspace_roots();
     session.apply_ui_config(config);
     session.max_turns = max_turns;
     session.max_budget_usd = max_budget_usd;
@@ -6586,11 +8322,15 @@ pub async fn run_oneshot(
             }
         }
     }
+    let resuming = resume_session.is_some();
+    if let Some((managed, path)) = resume_session {
+        session.load_managed_conversation(managed, path)?;
+    }
     session.enable_managed_session()?;
     // Wire --session-id: override the auto-generated session UUID with the
     // caller-supplied one.  Must be called after enable_managed_session so
     // the managed session object exists.
-    if let Some(ref sid) = session_id_override {
+    if let Some(sid) = session_id_override.as_ref().filter(|_| !resuming) {
         session.override_session_id(sid)?;
     }
     if let Some(seed) = auto_route_seed {
@@ -6636,10 +8376,7 @@ pub async fn run_oneshot(
     // blocks on the session.  The next `session.send()` call will prepend them
     // to the user message so text + images arrive in a single multipart turn.
     if !image_attachments.is_empty() {
-        session.pending_image_blocks = image_attachments
-            .into_iter()
-            .map(ImageAttachment::into_image_block)
-            .collect();
+        session.pending_image_blocks = image_attachments;
     }
 
     let sdk_stream_context = if output_mode == OneShotOutputMode::JsonLine {

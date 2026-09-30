@@ -15,6 +15,13 @@ const POPS = /router\.back\(\)|navigation\.goBack\(\)|\buseGoBack\(|\bSettingsSc
 const GUARDS_EMPTY_HISTORY = /canGoBack\(\)|\buseGoBack\(|\bSettingsScreenShell\b/;
 const OPENS_DRAWER = /<DrawerButton|openNearestDrawer|openDrawer\(/;
 const REDIRECT_ONLY = /<Redirect\b/;
+const OTHER_ELEMENT = /<(?!Redirect\b)[A-Za-z]/;
+
+// A route that renders nothing but a Redirect (an OAuth or hosted-link return
+// target) is never on screen, so it has no control to offer.
+function rendersOnlyARedirect(source: string): boolean {
+  return REDIRECT_ONLY.test(source) && !OTHER_ELEMENT.test(source);
+}
 
 function routeScreens(): string[] {
   const found: string[] = [];
@@ -96,7 +103,10 @@ describe('every authenticated screen answers back', () => {
   it('gives a pushed screen a control that pops the stack', () => {
     const stranded = SCREENS.filter(
       (screen) =>
-        !screen.isDestination && !POPS.test(screen.source) && !OPENS_DRAWER.test(screen.source),
+        !screen.isDestination &&
+        !POPS.test(screen.source) &&
+        !OPENS_DRAWER.test(screen.source) &&
+        !rendersOnlyARedirect(screen.source),
     ).map((screen) => screen.route);
 
     expect(stranded).toEqual([]);
@@ -112,6 +122,12 @@ describe('every authenticated screen answers back', () => {
     ).map((screen) => screen.route);
 
     expect(stranded).toEqual([]);
+  });
+
+  it('exempts only routes that render a bare Redirect', () => {
+    expect(rendersOnlyARedirect('return <Redirect href="/(app)/connectors" />;')).toBe(true);
+    expect(rendersOnlyARedirect('return ok ? <Redirect href="/" /> : <View />;')).toBe(false);
+    expect(rendersOnlyARedirect('return <View />;')).toBe(false);
   });
 
   it('never pops a screen a deep link opened with no history behind it', () => {

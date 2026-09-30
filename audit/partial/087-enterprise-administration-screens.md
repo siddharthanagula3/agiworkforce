@@ -136,29 +136,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S87.15: Tool policy.
-
-- Done when: An administrator decides which individual tools members and agents may use (allow, block or require approval) and the tool loop enforces it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Admins can block whole connectors, plugins, MCP hosts and features (browser, computer use, code), but cannot allow, block or require approval for individual tools such as web search or code execution. | ui, handler |
-| desktop | partial | Admins can block whole connectors, plugins, MCP hosts and features (browser, computer use, code), but cannot allow, block or require approval for individual tools such as web search or code execution. | ui, handler |
-| cli | partial | The CLI enforces per-tool allow/ask/deny rules an administrator installs as a machine-wide managed-settings.json (not from the workspace console), and a managed deny is reported as coming from the repository policy.toml. | states |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx:549-551`, `apps/web/lib/services/connector-policy-service.ts:89-96`, `apps/web/lib/user-connector-tools.ts:1790-1808`, `apps/cli/src/platform/policy/engine.rs:96-116`
-
-## S87.16: Connector policy.
-
-- Done when: An administrator allows or blocks connectors (and custom connectors) for the workspace, and blocked connectors are not offered or connectable.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Not 'missing': the CLI ships a connector-policy evaluator, the /api/settings/organization/connector-policy path, a /connectors slash command that renders the policy, and an install-app gate that consults it; the chain is dead only because fetch_workspace_policy is never called. That is a partial with miss ['handler'] (remaining: call connectors::fetch_workspace_policy at session start so /connectors and the install gate see the workspace policy). The auditor treated the same code as partial for S87.17 cli, so the cell is inconsistent (L7). |  |
-
 ## S87.18: Private marketplace.
 
 - Done when: A workspace curates its own private catalogue of plugins, skills or servers that members browse and install, separate from the public directory.
@@ -227,8 +204,8 @@ Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.t
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: the region move is built (partials/auth 82ade1df1); only the home region is provisioned, so the EU region needs its database, bucket, log sink and KMS stood up and the AGI_DATA_REGION_EU_* settings set | infra |
-| desktop | partial | Owner: the region move is built (partials/auth 82ade1df1); only the home region is provisioned, so the EU region needs its database, bucket, log sink and KMS stood up and the AGI_DATA_REGION_EU_* settings set | infra |
+| web | partial | owner: stand up the EU database, bucket, log sink and KMS, then set the AGI_DATA_REGION_EU_* variables (apps/web/lib/server/data-region.ts) | infra |
+| desktop | partial | owner: stand up the EU database, bucket, log sink and KMS, then set the AGI_DATA_REGION_EU_* variables (apps/web/lib/server/data-region.ts) | infra |
 
 Code: `apps/web/app/workspace/data/page.tsx:24-24`, `apps/web/features/workspace-console/components/WorkspaceDataRegion.tsx:196-196`, `apps/web/app/api/settings/organization/data-region/route.ts:117-117`, `apps/web/app/api/settings/organization/data-region/route.ts:148-148`
 
@@ -333,9 +310,6 @@ Code: `apps/web/app/workspace/data/page.tsx:24-24`, `apps/web/features/workspace
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| api | partial | Workspace API keys can export held records and read preservation status, but cannot place or release a hold (session only). | api |
-
-Code: `apps/web/lib/server/service-principals/route-access.ts:35-41`, `apps/web/app/api/settings/organization/legal-holds/[holdId]/preservation/route.ts:40-46`
 
 ## S87.39: Policy diagnostics.
 

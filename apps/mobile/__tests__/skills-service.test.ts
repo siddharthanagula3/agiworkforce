@@ -1,12 +1,34 @@
-import { api } from '@/services/api';
-import { fetchManagedSkills, parseManagedSkillsResponse } from '@/src/features/skills/service';
+import { ApiHttpError, api } from '@/services/api';
+import {
+  fetchInstalledSkillNames,
+  fetchManagedSkills,
+  fetchSkillCatalog,
+  installSkill,
+  isPluginOwnedSkill,
+  isSkillInstalled,
+  parseManagedSkillsResponse,
+  skillActionFailureMessage,
+  uninstallSkill,
+} from '@/src/features/skills/service';
 
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { skills: true } }));
-jest.mock('@/services/api', () => ({
-  api: {
-    get: jest.fn(),
-  },
-}));
+jest.mock('@/services/api', () => {
+  class ApiHttpError extends Error {
+    readonly status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.status = status;
+    }
+  }
+  return {
+    api: {
+      get: jest.fn(),
+      post: jest.fn(),
+      delete: jest.fn(),
+    },
+    ApiHttpError,
+  };
+});
 
 const apiMock = api as jest.Mocked<typeof api>;
 
@@ -159,6 +181,79 @@ describe('mobile Skills service', () => {
   ])('rejects malformed server payload %# instead of rendering drifted data', (payload) => {
     expect(() => parseManagedSkillsResponse(payload)).toThrow(
       'Skills returned an invalid response.',
+    );
+  });
+
+  it('reads the whole catalog and the account installs the way web does', async () => {
+    apiMock.get.mockResolvedValueOnce({ skills: [] });
+    apiMock.get.mockResolvedValueOnce({ installed: ['Documents'] });
+    const controller = new AbortController();
+
+    await expect(fetchSkillCatalog(controller.signal)).resolves.toEqual([]);
+    await expect(fetchInstalledSkillNames(controller.signal)).resolves.toEqual(
+      new Set(['Documents']),
+    );
+    expect(apiMock.get).toHaveBeenNthCalledWith(1, '/api/skills?catalog=all', {
+      signal: controller.signal,
+    });
+    expect(apiMock.get).toHaveBeenNthCalledWith(2, '/api/skills/installs', {
+      signal: controller.signal,
+    });
+  });
+
+  it('installs by name and uninstalls by the encoded name', async () => {
+    apiMock.post.mockResolvedValueOnce({ installed: ['release notes'] });
+    apiMock.delete.mockResolvedValueOnce({ installed: [] });
+
+    await expect(installSkill('release notes')).resolves.toEqual(new Set(['release notes']));
+    await expect(uninstallSkill('release notes')).resolves.toEqual(new Set());
+    expect(apiMock.post).toHaveBeenCalledWith('/api/skills/installs', { name: 'release notes' });
+    expect(apiMock.delete).toHaveBeenCalledWith('/api/skills/installs/release%20notes');
+  });
+
+  it('rejects an installs payload that is not a list of names', async () => {
+    apiMock.get.mockResolvedValueOnce({ installed: [1] });
+
+    await expect(fetchInstalledSkillNames()).rejects.toThrow(
+      'Skills returned an invalid response.',
+    );
+  });
+
+  it('counts a draft as never installed and an authored Skill as always installed', () => {
+    const base = { description: '', downloadable: false } as const;
+
+    expect(
+      isSkillInstalled(
+        { ...base, name: 'a', source: 'bundled', lifecycle: 'draft' },
+        new Set(['a']),
+      ),
+    ).toBe(false);
+    expect(
+      isSkillInstalled(
+        { ...base, name: 'b', source: 'personal', lifecycle: 'included' },
+        new Set(),
+      ),
+    ).toBe(true);
+    expect(
+      isPluginOwnedSkill({
+        ...base,
+        name: 'c',
+        source: 'bundled',
+        lifecycle: 'included',
+        origin: { kind: 'catalog', pluginId: 'office' },
+      }),
+    ).toBe(true);
+  });
+
+  it('passes a server refusal through and hides everything else behind the web copy', () => {
+    expect(
+      skillActionFailureMessage(new ApiHttpError('"x" is not available yet.', 409), true),
+    ).toBe('"x" is not available yet.');
+    expect(skillActionFailureMessage(new ApiHttpError('boom', 500), true)).toBe(
+      'Could not install this skill. Try again.',
+    );
+    expect(skillActionFailureMessage(new Error('Network request failed'), false)).toBe(
+      'Could not remove this skill. Try again.',
     );
   });
 });

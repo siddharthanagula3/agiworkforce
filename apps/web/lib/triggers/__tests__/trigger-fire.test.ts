@@ -6,24 +6,34 @@ const mocks = vi.hoisted(() => ({
   createEventTriggeredScheduleRun: vi.fn(),
   processClaimedScheduleRun: vi.fn(),
   createClaimedUserScopedDb: vi.fn((db: unknown) => db),
+  executor: vi.fn(),
+  scheduledAgentExecutor: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.createClaimedUserScopedDb,
 }));
-vi.mock('@/lib/services/scheduled-agent-executor', () => ({ executeScheduledAgent: vi.fn() }));
-vi.mock('@/lib/services/schedule-service', async () => {
+vi.mock('@/lib/services/scheduled-agent-executor', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  executeScheduledAgent: vi.fn(),
+  scheduledAgentExecutor: mocks.scheduledAgentExecutor,
+}));
+vi.mock('@/lib/services/schedule-service', async (importOriginal) => {
   class ScheduleConflictError extends Error {}
   class ScheduleNotFoundError extends Error {}
   return {
+    ...(await importOriginal<Record<string, unknown>>()),
     ScheduleConflictError,
     ScheduleNotFoundError,
     createEventTriggeredScheduleRun: mocks.createEventTriggeredScheduleRun,
     processClaimedScheduleRun: mocks.processClaimedScheduleRun,
   };
 });
-vi.mock('../trigger-ingest', () => ({ settleTriggerDelivery: mocks.settleTriggerDelivery }));
+vi.mock('../trigger-ingest', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  settleTriggerDelivery: mocks.settleTriggerDelivery,
+}));
 
 import { ScheduleConflictError } from '@/lib/services/schedule-service';
 import { PermanentJobError } from '@/lib/jobs/job-service';
@@ -119,6 +129,7 @@ function claim() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.scheduledAgentExecutor.mockReturnValue(mocks.executor);
   mocks.createEventTriggeredScheduleRun.mockResolvedValue({
     claim: claim(),
     replay: false,
@@ -168,6 +179,26 @@ describe('fireEventTriggerJob', () => {
       { runId: 'run-1' },
     );
   });
+
+  it('routes a run started by a non-Google event under the account setting', async () => {
+    await fireEventTriggerJob(context());
+
+    expect(mocks.scheduledAgentExecutor).toHaveBeenCalledWith({ googleUserDataEvent: false });
+    expect(mocks.processClaimedScheduleRun.mock.calls[0]?.[2]).toBe(mocks.executor);
+  });
+
+  it.each(['gmail', 'google_calendar', 'connector'])(
+    'keeps a run started by a %s event on models that do not train on it',
+    async (source) => {
+      const googleEvent = context();
+      googleEvent.job.payload.event = { ...googleEvent.job.payload.event, source };
+
+      await fireEventTriggerJob(googleEvent);
+
+      expect(mocks.scheduledAgentExecutor).toHaveBeenCalledWith({ googleUserDataEvent: true });
+      expect(mocks.processClaimedScheduleRun.mock.calls[0]?.[2]).toBe(mocks.executor);
+    },
+  );
 
   it('skips without retrying when the trigger was deleted or disabled', async () => {
     const result = await fireEventTriggerJob(context(database([])));

@@ -6,25 +6,38 @@
 
 pub mod api_keys;
 pub mod artifacts;
+pub mod attachments;
 pub mod chat;
 pub mod client;
 pub mod code_handoff;
+pub mod code_push;
 pub mod code_sessions;
+pub mod code_teleport;
 pub mod connectors;
+#[cfg(test)]
+mod contract_fixtures;
+pub mod data_export;
 pub mod devices;
+pub mod feedback;
 pub mod handshake;
 pub mod image;
 pub mod image_provenance;
 pub mod knowledge;
+pub mod library;
+pub mod marketplaces;
 pub mod memory;
 pub mod personalization;
+pub mod product_analytics;
 pub mod projects;
 pub mod referrals;
+pub mod shares;
 pub mod state;
 pub mod workspace_policy;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+
+use serde::Deserialize;
 
 use crate::config::CliConfig;
 use crate::platform::runtime::session::PrivacyMode;
@@ -167,6 +180,44 @@ pub async fn ensure_hosted_conversation(
     Ok(conversation_id)
 }
 
+pub fn continue_elsewhere(session: &crate::agent::AgentSession, arg: &str) -> String {
+    if session.privacy_mode != PrivacyMode::Managed {
+        return format!(
+            "This conversation runs in {} mode, so it stays on this device. Switch it to your account with /continue-with-cloud, then continue it on another device.",
+            session.privacy_mode.label()
+        );
+    }
+    let Some(snapshot) = session.cloud_snapshot() else {
+        return "This conversation is not being saved, so it cannot continue on another device."
+            .to_string();
+    };
+    let cloud = match CloudSession::open(session.privacy_mode) {
+        Ok(cloud) => cloud,
+        Err(error) => return format!("Could not reach your account: {error}"),
+    };
+    let conversation_id = chat::conversation_id_for(&snapshot.session_id);
+    if !cloud
+        .state
+        .conversations
+        .versions
+        .contains_key(&conversation_id)
+    {
+        return "This conversation reaches your account after its next reply. Send a message, then run /continue-elsewhere again.".to_string();
+    }
+    let url = format!(
+        "{}/chat/{}",
+        cloud.client.base().trim_end_matches('/'),
+        conversation_id
+    );
+    let opened = arg.trim() == "open"
+        && crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated());
+    format!(
+        "This conversation is in your account's chat history. Continue it on the web{} at {url}, or open it from the chat list in the desktop or mobile app.{}",
+        if opened { " (opened in your browser)" } else { "" },
+        if opened { "" } else { " /continue-elsewhere open opens it in your browser." }
+    )
+}
+
 pub(crate) fn forget_hosted_conversation(conversation_id: &str) {
     if let Ok(mut session) = CloudSession::open(PrivacyMode::Managed) {
         if session
@@ -216,6 +267,21 @@ pub async fn sync_session(
     chat::apply_push_response(&response, &mut session.state);
     session.persist();
     Ok(response.applied.messages.len())
+}
+
+pub async fn send_feedback(kind: feedback::FeedbackKind, message: &str) -> String {
+    let client = match CloudClient::connect_managed() {
+        Ok(client) => client,
+        Err(error) => {
+            return format!(
+                "Feedback needs a signed-in AGI Workforce account ({error}). Sign in with `agi login`, then send it again."
+            )
+        }
+    };
+    match feedback::submit(&client, kind, message).await {
+        Ok(confirmation) => confirmation,
+        Err(error) => format!("Feedback was not sent: {error}"),
+    }
 }
 
 /// The account's conversations, newest first, with the cached cursor advanced.
@@ -414,6 +480,40 @@ pub async fn delete_conversation(
     Ok(())
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceListing {
+    #[serde(default)]
+    active_organization_id: Option<String>,
+    #[serde(default)]
+    workspaces: Vec<WorkspaceEntry>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceEntry {
+    #[serde(default)]
+    organization_id: Option<String>,
+    #[serde(default)]
+    name: String,
+}
+
+pub async fn active_workspace_label(privacy: PrivacyMode) -> Result<String, CloudError> {
+    let client = CloudClient::connect(privacy)?;
+    let listing: WorkspaceListing = client.get("/api/settings/organization", &[]).await?;
+    let Some(active) = listing.active_organization_id else {
+        return Ok("your personal workspace".to_string());
+    };
+    Ok(listing
+        .workspaces
+        .into_iter()
+        .find(|workspace| workspace.organization_id.as_deref() == Some(active.as_str()))
+        .map(|workspace| workspace.name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .map(|name| format!("the {name} workspace"))
+        .unwrap_or_else(|| "your active workspace".to_string()))
+}
+
 /// Refresh the local memory cache from the account and return it.
 pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache, CloudError> {
     let mut session = CloudSession::open(privacy)?;
@@ -421,6 +521,9 @@ pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache,
     let response = sync.pull_all(&session.state.memories.cursor).await?;
     let mut cache = load_memory_cache(&session.config_dir);
     cache.apply(&response.memories);
+    if let Some(enabled) = response.memory_enabled {
+        cache.account_memory_off = !enabled;
+    }
     memory::apply_pull_response(&response, &mut session.state);
     if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
         crate::output::print_warn(&format!("could not cache the account memory: {error}"));
@@ -458,6 +561,9 @@ pub async fn add_memory(
                 source: Some(MEMORY_SOURCE.to_string()),
                 pinned: false,
                 updated_at: chrono::Utc::now().to_rfc3339(),
+                source_conversation_id: None,
+                source_conversation_title: None,
+                project_id: None,
             },
         );
         if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
@@ -633,13 +739,73 @@ pub async fn forget_memory(privacy: PrivacyMode, id_or_content: &str) -> Result<
 /// What the hosted store records as the origin of a memory this CLI wrote.
 pub const MEMORY_SOURCE: &str = "cli";
 
+/// Whether the account has memory turned off, as last read from the account.
+pub fn account_memory_off(config_dir: &Path) -> bool {
+    load_memory_cache(config_dir).account_memory_off
+}
+
 /// The account memory block for the system prompt, read from the cache so a
 /// turn never blocks on the network. `refresh_memory` is what makes it current.
 pub fn account_memory_context(privacy: PrivacyMode, config_dir: &Path) -> String {
     if privacy != PrivacyMode::Managed {
         return String::new();
     }
-    load_memory_cache(config_dir).context_prompt()
+    let cache = load_memory_cache(config_dir);
+    if cache.account_memory_off {
+        return String::new();
+    }
+    cache.context_prompt()
+}
+
+pub fn account_memory_context_for(
+    privacy: PrivacyMode,
+    config_dir: &Path,
+    project: Option<&str>,
+) -> String {
+    if privacy != PrivacyMode::Managed {
+        return String::new();
+    }
+    let cache = load_memory_cache(config_dir);
+    if cache.account_memory_off {
+        return String::new();
+    }
+    cache.context_prompt_for(project)
+}
+
+pub async fn add_project_memory(
+    privacy: PrivacyMode,
+    project_id: &str,
+    content: &str,
+    category: Option<&str>,
+) -> Result<bool, CloudError> {
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CreateMemory<'a> {
+        content: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        category: Option<&'a str>,
+        source: &'a str,
+        project_id: &'a str,
+    }
+    #[derive(serde::Deserialize)]
+    struct Created {
+        #[serde(default)]
+        merged: bool,
+    }
+    let session = CloudSession::open(privacy)?;
+    let created: Created = session
+        .client
+        .post(
+            "/api/memory",
+            &CreateMemory {
+                content,
+                category,
+                source: MEMORY_SOURCE,
+                project_id,
+            },
+        )
+        .await?;
+    Ok(created.merged)
 }
 
 pub fn project_instructions_context(
@@ -676,6 +842,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn memory_off_on_the_account_is_read_from_the_cache_in_any_mode() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        assert!(!account_memory_off(dir.path()));
+        let cache = memory::MemoryCache {
+            account_memory_off: true,
+            ..memory::MemoryCache::default()
+        };
+        save_memory_cache(dir.path(), &cache).expect("cache written");
+        assert!(account_memory_off(dir.path()));
+    }
+
+    #[test]
     fn a_local_session_injects_no_account_memory() {
         let dir = tempfile::tempdir().expect("temp dir");
         let mut cache = memory::MemoryCache::default();
@@ -686,6 +864,9 @@ mod tests {
             source: None,
             pinned: false,
             updated_at: "2026-09-13T00:00:00Z".to_string(),
+            source_conversation_id: None,
+            source_conversation_title: None,
+            project_id: None,
         });
         save_memory_cache(dir.path(), &cache).expect("save");
 

@@ -1,36 +1,10 @@
 import * as vscode from 'vscode';
 
-import ar from './locales/ar';
-import de from './locales/de';
-import en from './locales/en';
-import es from './locales/es';
-import fr from './locales/fr';
-import hi from './locales/hi';
-import it from './locales/it';
-import ja from './locales/ja';
-import ko from './locales/ko';
-import pt from './locales/pt';
-import ru from './locales/ru';
-import zh from './locales/zh';
+import { VSCODE_CATALOGS as CATALOGS, type VsCodeMessageKey } from '@agiworkforce/i18n/vscode';
 
 export const DEFAULT_LOCALE = 'en';
 
-const CATALOGS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  ar,
-  de,
-  en,
-  es,
-  fr,
-  hi,
-  it,
-  ja,
-  ko,
-  pt,
-  ru,
-  zh,
-};
-
-export type MessageKey = keyof typeof en;
+export type MessageKey = VsCodeMessageKey;
 
 export const PLURAL_CATEGORIES = ['zero', 'one', 'two', 'few', 'many', 'other'] as const;
 

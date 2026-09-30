@@ -62,12 +62,20 @@ jest.mock('../src/features/billing/store', () => ({
   useTierStore: { getState: jest.fn() },
 }));
 
+jest.mock('../src/lib/capabilities', () => ({
+  useRemoteCapabilityStore: { getState: jest.fn() },
+}));
+
 jest.mock('../src/features/schedules/store', () => ({
   useScheduleStore: { getState: jest.fn() },
 }));
 
 jest.mock('../services/api', () => ({
   resetApiAccountState: jest.fn(),
+}));
+
+jest.mock('../src/features/chat/upload/uploadLifecycle', () => ({
+  useUploadLifecycleStore: { getState: jest.fn() },
 }));
 
 jest.mock('../services/notifications', () => ({
@@ -100,6 +108,7 @@ jest.mock('../stores/settings/localSettingsStore', () => ({
 
 jest.mock('../stores/chat/chatMessageStore', () => ({
   useChatMessageStore: { getState: jest.fn(), setState: jest.fn() },
+  clearCloudConversationPagination: jest.fn(),
 }));
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -152,11 +161,17 @@ const { useCloudSettingsStore } = require('../stores/settings/cloudSettingsStore
 const { useTierStore } = require('../src/features/billing/store') as {
   useTierStore: { getState: jest.Mock };
 };
+const { useRemoteCapabilityStore } = require('../src/lib/capabilities') as {
+  useRemoteCapabilityStore: { getState: jest.Mock };
+};
 const { useScheduleStore } = require('../src/features/schedules/store') as {
   useScheduleStore: { getState: jest.Mock };
 };
 const { resetApiAccountState } = require('../services/api') as {
   resetApiAccountState: jest.Mock;
+};
+const { useUploadLifecycleStore } = require('../src/features/chat/upload/uploadLifecycle') as {
+  useUploadLifecycleStore: { getState: jest.Mock };
 };
 const { notificationCenterStore } = require('../services/notifications') as {
   notificationCenterStore: { clear: jest.Mock };
@@ -197,9 +212,11 @@ describe('clearLocalCloudAccountState', () => {
   const clearCloudConversationSelection = jest.fn();
   const clearCloudAgentControls = jest.fn();
   const clearEntitlements = jest.fn();
+  const clearCapabilitySwitches = jest.fn();
   const clearSchedules = jest.fn();
   const clearCloudSearch = jest.fn();
   const clearManagedCloudAccess = jest.fn();
+  const resetCloudUploads = jest.fn();
   let mmkvReadyCallbacks: Array<() => void>;
 
   beforeEach(() => {
@@ -230,9 +247,11 @@ describe('clearLocalCloudAccountState', () => {
     useTierStore.getState.mockReturnValue({
       clearAccountEntitlements: clearEntitlements,
     });
+    useRemoteCapabilityStore.getState.mockReturnValue({ clear: clearCapabilitySwitches });
     useScheduleStore.getState.mockReturnValue({ clearAccountSchedules: clearSchedules });
     useChatViewStore.getState.mockReturnValue({ clearCloudSearchState: clearCloudSearch });
     useWaitlistStore.getState.mockReturnValue({ clear: clearManagedCloudAccess });
+    useUploadLifecycleStore.getState.mockReturnValue({ reset: resetCloudUploads });
   });
 
   it('clears account A Cloud data before account B while preserving Local data', () => {
@@ -257,8 +276,10 @@ describe('clearLocalCloudAccountState', () => {
     expect(resetProjectSync).toHaveBeenCalledTimes(1);
     expect(resetSettingsSync).toHaveBeenCalledTimes(1);
     expect(clearEntitlements).toHaveBeenCalledTimes(1);
+    expect(clearCapabilitySwitches).toHaveBeenCalledTimes(1);
     expect(clearSchedules).toHaveBeenCalledTimes(1);
     expect(resetApiAccountState).toHaveBeenCalledTimes(1);
+    expect(resetCloudUploads).toHaveBeenCalledTimes(1);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(1);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(1);
     expect(clearCloudSearch).toHaveBeenCalledTimes(1);
@@ -267,7 +288,7 @@ describe('clearLocalCloudAccountState', () => {
       accentColor: 'neutral',
       fontPreference: 'default',
       notificationsEnabled: true,
-      speechLanguage: 'en',
+      speechLanguage: 'auto',
       autoListenEnabled: true,
       referencePastChats: false,
       generateMemoryFromHistory: true,
@@ -308,8 +329,10 @@ describe('clearLocalCloudAccountState', () => {
     expect(clearCloudProjects).toHaveBeenCalledTimes(2);
     expect(resetSettingsSync).toHaveBeenCalledTimes(2);
     expect(clearEntitlements).toHaveBeenCalledTimes(2);
+    expect(clearCapabilitySwitches).toHaveBeenCalledTimes(2);
     expect(clearSchedules).toHaveBeenCalledTimes(2);
     expect(resetApiAccountState).toHaveBeenCalledTimes(2);
+    expect(resetCloudUploads).toHaveBeenCalledTimes(2);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(2);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(2);
     expect(clearCloudSearch).toHaveBeenCalledTimes(2);
@@ -333,6 +356,7 @@ describe('clearLocalCloudAccountState', () => {
     expect(clearCloudMemory).toHaveBeenCalledTimes(2);
     expect(clearCloudProjects).toHaveBeenCalledTimes(2);
     expect(clearEntitlements).toHaveBeenCalledTimes(2);
+    expect(clearCapabilitySwitches).toHaveBeenCalledTimes(2);
     expect(useLocalSettingsStore.setState).not.toHaveBeenCalled();
     expect(useChatMessageStore.setState).not.toHaveBeenCalled();
   });

@@ -465,6 +465,35 @@ impl MarkdownRenderer {
 // Table helpers
 // ---------------------------------------------------------------------------
 
+pub struct MarkdownTable {
+    pub header: Vec<String>,
+    pub rows: Vec<Vec<String>>,
+}
+
+pub fn tables_in(text: &str) -> Vec<MarkdownTable> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut tables = Vec::new();
+    let mut i = 0;
+    while i + 1 < lines.len() {
+        if !is_table_row(lines[i]) || !is_table_separator(lines[i + 1]) {
+            i += 1;
+            continue;
+        }
+        let header = parse_table_row(lines[i]);
+        let mut rows = Vec::new();
+        let mut next = i + 2;
+        while next < lines.len() && is_table_row(lines[next]) {
+            let mut row = parse_table_row(lines[next]);
+            row.resize(header.len(), String::new());
+            rows.push(row);
+            next += 1;
+        }
+        tables.push(MarkdownTable { header, rows });
+        i = next;
+    }
+    tables
+}
+
 /// Check if a line looks like a table row (starts and ends with |, or starts with |).
 fn is_table_row(line: &str) -> bool {
     let trimmed = line.trim();
@@ -593,6 +622,30 @@ fn canonicalize_language(lang: &str) -> &str {
 // ---------------------------------------------------------------------------
 // Bare URL extraction
 // ---------------------------------------------------------------------------
+
+pub fn web_links(text: &str) -> Vec<(Option<String>, String)> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut links: Vec<(Option<String>, String)> = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let found = match chars[i] {
+            '[' => extract_link(&chars, i).map(|(label, url, end)| (Some(label), url, end)),
+            'h' => extract_bare_url(&chars, i).map(|(url, end)| (None, url, end)),
+            _ => None,
+        };
+        let Some((label, url, end)) = found else {
+            i += 1;
+            continue;
+        };
+        let url = url.trim().to_string();
+        let is_web = url.starts_with("https://") || url.starts_with("http://");
+        if is_web && !links.iter().any(|(_, seen)| *seen == url) {
+            links.push((label.filter(|label| !label.trim().is_empty()), url));
+        }
+        i = end;
+    }
+    links
+}
 
 /// Extract a bare URL starting with http:// or https:// at position i.
 /// Returns (url_string, index_after_url).

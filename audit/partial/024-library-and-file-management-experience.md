@@ -6,49 +6,29 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S24.01: All-files view.
-
-- Done when: One Library view lists every file the user owns across chats, generation, uploads and projects.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | All lists media_assets plus local/cloud artifacts; project files are absent, and type filters and artifact search run only over pages already loaded. | ui, handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/library/index.tsx:1-8`, `apps/mobile/src/features/library/index.tsx:249-270`, `apps/mobile/src/features/library/index.tsx:91-120`, `apps/mobile/src/features/library/libraryClient.ts:53-80`
-
 ## S24.02: Uploaded-files view.
 
 - Done when: A view shows only the files the user uploaded.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Rows carry a source label ("Upload") but no view shows uploaded files only. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/features/library/libraryClient.ts:37-50`
 
 ## S24.03: Generated-files view.
 
 - Done when: A view shows only files the assistant generated.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Rows show the generating model as a source label, but there is no generated-only view. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/features/library/libraryClient.ts:37-50`
 
 ## S24.05: Image collection.
 
@@ -78,37 +58,10 @@ Code: `apps/mobile/src/features/library/index.tsx:518-522`, `apps/mobile/src/fea
 
 - Done when: A recent-files view surfaces the files used or added most recently.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Library is always newest-first, but there is no recent-files view or shortcut. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/library/libraryClient.ts:60-62`, `apps/mobile/app/(app)/library/index.tsx:1-8`
-
-## S24.10: Shared-with-me view.
-
-- Done when: A Shared-with-me view lists files and items others shared with the user.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S24.11: Folder hierarchy.
-
-- Done when: Files can be organised in a folder hierarchy that can be browsed in the Library.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -193,16 +146,13 @@ Code: `apps/mobile/src/features/library/libraryClient.ts:60-62`, `apps/mobile/ap
 
 - Done when: Users can attach a Library file to a conversation.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The composer's "Attach from Library" re-attaches only non-image documents already in local chat history; the Library screen and cloud Library files cannot be attached. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:404-420`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:171-182`
 
 ## S24.29: Open originating conversation.
 
@@ -217,65 +167,35 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:404-420`, `ap
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S24.32: Version history.
-
-- Done when: Users can see and restore earlier versions of a file.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S24.33: Storage-consumption display.
 
 - Done when: The product shows how much storage the user's files consume against their allowance.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Settings > Storage shows on-device bytes (downloaded models, cache, free space), not cloud Library usage. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/storage.tsx:260-300`
 
 ## S24.34: Trash and restore.
 
 - Done when: Deleted files go to a trash from which they can be restored.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Delete moves a file to "deleted items", but mobile has no deleted view or restore. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/library/index.tsx:155-175`
 
 ## S24.35: Expired-resource display.
 
 - Done when: Expired or no-longer-available files are clearly marked in the Library.
 - Wave: 3
 - Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S24.36: Processing-status display.
-
-- Done when: The Library shows a file's processing status (uploading, processing, ready, failed).
-- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

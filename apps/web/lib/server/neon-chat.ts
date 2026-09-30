@@ -73,12 +73,17 @@ export async function requireCurrentUserId(request?: NextRequest): Promise<strin
     return (await getClerkAuthUser(request)).userId;
   }
   const { getRequestIdentity } = await import('@/lib/server/identity');
-  const { subject: userId } = await getRequestIdentity();
+  const { subject: userId, sessionId } = await getRequestIdentity();
   if (!userId) {
     throw createError.unauthorized();
   }
   const { assertAccountActive } = await import('@/lib/api-auth');
   await assertAccountActive(userId);
+  const { PasskeyRequiredError, subjectSessionPassesAccountSecurity } =
+    await import('@/lib/server/account-security/gate');
+  if (!(await subjectSessionPassesAccountSecurity(userId, sessionId))) {
+    throw new PasskeyRequiredError();
+  }
   return userId;
 }
 

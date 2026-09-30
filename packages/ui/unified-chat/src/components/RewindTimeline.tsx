@@ -186,7 +186,7 @@ export function RewindTimeline({
       <div className="flex-1 overflow-y-auto">
         {loading && checkpoints.length === 0 ? (
           <div className="flex items-center justify-center h-24 text-xs text-muted-foreground">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin mr-2" />
+            <RefreshCw className="w-3.5 h-3.5 animate-spin me-2" />
             Loading…
           </div>
         ) : checkpoints.length === 0 ? (
@@ -199,7 +199,7 @@ export function RewindTimeline({
         ) : (
           <ul className="relative px-3 py-3">
             <div
-              className="absolute left-6 top-4 bottom-4 w-px bg-[var(--chat-surface-hover)]"
+              className="absolute start-6 top-4 bottom-4 w-px bg-[var(--chat-surface-hover)]"
               aria-hidden
             />
 
@@ -212,13 +212,13 @@ export function RewindTimeline({
                 <li
                   key={checkpoint.id}
                   className={cn(
-                    'relative flex items-start gap-3 pl-6 pb-4',
+                    'relative flex items-start gap-3 ps-6 pb-4',
                     index === checkpoints.length - 1 && 'pb-0',
                   )}
                 >
                   <div
                     className={cn(
-                      'absolute left-[18px] top-1.5 w-2 h-2 rounded-full border-2 shrink-0 -translate-x-1/2',
+                      'absolute start-[18px] top-1.5 w-2 h-2 rounded-full border-2 shrink-0 -translate-x-1/2',
                       index === 0
                         ? 'border-[var(--chat-accent-secondary)] bg-[var(--chat-accent-secondary)]/20'
                         : 'border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)]',
@@ -234,13 +234,13 @@ export function RewindTimeline({
                         </span>
                         {/* Show toolName as sub-label when a store label is present */}
                         {storeLabel && (
-                          <span className="ml-1 text-xs font-mono text-muted-foreground">
+                          <span className="ms-1 text-xs font-mono text-muted-foreground">
                             {checkpoint.toolName}
                           </span>
                         )}
                         {fileLabel && (
                           <span
-                            className="ml-1 text-xs text-muted-foreground font-mono truncate block max-w-[160px]"
+                            className="ms-1 text-xs text-muted-foreground font-mono truncate block max-w-[160px]"
                             title={checkpoint.filePath}
                           >
                             {fileLabel}

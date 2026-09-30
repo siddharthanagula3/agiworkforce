@@ -3,13 +3,23 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 const mockModelPicker = jest.fn().mockReturnValue(null);
 
+jest.mock('../src/shared/hooks/useUnsavedChangesGuard', () => ({
+  useUnsavedChangesGuard: jest.fn(),
+  confirmDiscardChanges: jest.fn((discard: () => void) => discard()),
+}));
+
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(async () => undefined),
   ImpactFeedbackStyle: { Light: 'light' },
 }));
 
 jest.mock('lucide-react-native', () => ({
+  CalendarDays: jest.fn().mockReturnValue(null),
   ChevronDown: jest.fn().mockReturnValue(null),
+  Clock: jest.fn().mockReturnValue(null),
+  Check: jest.fn().mockReturnValue(null),
+  Globe: jest.fn().mockReturnValue(null),
+  X: jest.fn().mockReturnValue(null),
 }));
 
 jest.mock('../stores/settingsStore', () => ({
@@ -54,7 +64,13 @@ describe('Mobile schedule form', () => {
     expect(mockModelPicker).toHaveBeenCalledWith(expect.objectContaining({ modelScope: 'cloud' }));
     expect(screen.queryByLabelText('Recurrence: Custom')).toBeNull();
     expect(screen.queryByLabelText('Recurrence: Interval')).toBeNull();
-    expect(screen.getByDisplayValue('2030-07-15')).toBeTruthy();
+    const shownDate = new Date(2030, 6, 15, 12).toLocaleDateString(undefined, {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    expect(screen.getByLabelText(`Date: ${shownDate}`)).toBeTruthy();
     expect(screen.getByLabelText('Schedules use saved prompt text only')).toBeTruthy();
     expect(
       screen.getByText(

@@ -14,15 +14,3 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S105.30: Publishing workflow.
-
-- Done when: A developer can submit a plugin/app for review and publish versions to users.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `agi plugin sign` signs a plugin with a publisher key, but there is no command to submit or publish it. | handler |
-
-Code: `apps/cli/src/lib.rs:1313-1323`

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
@@ -88,12 +88,28 @@ beforeEach(() => {
   mocks.readSecondFactorStatus.mockResolvedValue(ENROLLED);
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe('GET /api/settings/2fa', () => {
   it('reports whether sign-in asks for the authenticator and whether backup codes exist', async () => {
     const response = await GET(getRequest());
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ enabled: true, backup_codes_ready: true });
+    await expect(response.json()).resolves.toEqual({
+      enabled: true,
+      backup_codes_ready: true,
+      enrollment_available: false,
+    });
+  });
+
+  it('reports enrollment as available once authenticator enrollment is switched on', async () => {
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
+
+    const response = await GET(getRequest());
+
+    await expect(response.json()).resolves.toMatchObject({ enrollment_available: true });
   });
 
   it('stays reachable for a member whose workspace requires two-factor', async () => {

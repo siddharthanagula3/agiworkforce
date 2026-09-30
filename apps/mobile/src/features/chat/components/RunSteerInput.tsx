@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { MAX_CLOUD_AGENT_RUN_STEER_LENGTH } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { describeCloudRunSteerError, steerCloudRun } from '@/src/features/tasks/cloudRunSteer';
 
 export function RunSteerInput({ runId }: { runId: string }) {
@@ -33,16 +35,18 @@ export function RunSteerInput({ runId }: { runId: string }) {
 
   if (!open) {
     return (
-      <Pressable
+      <PressableBox
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityHint="Sends guidance the agent reads at its next step, without stopping it"
         style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
       >
-        <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+        <Text
+          style={{ color: colors.textSecondary, fontSize: typeScale.footnote, fontWeight: '600' }}
+        >
           Message the agent
         </Text>
-      </Pressable>
+      </PressableBox>
     );
   }
 
@@ -68,12 +72,12 @@ export function RunSteerInput({ runId }: { runId: string }) {
           borderRadius: 12,
           padding: 10,
           color: colors.textPrimary,
-          fontSize: 15,
+          fontSize: typeScale.body,
           minHeight: 56,
           textAlignVertical: 'top',
         }}
       />
-      <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 17 }}>
         {sent
           ? 'Sent. The agent reads your message at its next step.'
           : 'The agent reads your message at its next step and keeps its progress.'}
@@ -82,7 +86,7 @@ export function RunSteerInput({ runId }: { runId: string }) {
         <Text
           accessibilityRole="alert"
           selectable
-          style={{ color: colors.agentError, fontSize: 13, lineHeight: 19 }}
+          style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
         >
           {error}
         </Text>

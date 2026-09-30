@@ -16,22 +16,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Side panel strings come from _locales and follow Chrome's UI language; no in-extension choice. | ui |
-
-Code: `apps/extension/src/side_panel.ts:8120-8122`
-
-## S84.03: Theme.
-
-- Done when: The user can choose light, dark or system theme and it applies and persists.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | TUI /theme changes the theme for the session only; saving it needs the --no-tui REPL /theme or editing ui.theme in config.toml. | ui |
-| chrome | partial | The side panel follows the system/Chrome color scheme (prefers-color-scheme); no theme choice. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:3818-3825`, `apps/cli/src/config.rs:821-826`, `apps/extension/src/side_panel.ts:3673-3673`
 
 ## S84.04: Accent color where offered.
 
@@ -55,18 +39,6 @@ Code: `apps/cli/src/tui/tui_app.rs:3818-3825`, `apps/cli/src/config.rs:821-826`,
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
-## S84.07: Reduced motion.
-
-- Done when: The user can reduce animation (in-app setting or honouring the OS reduce-motion preference).
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The side panel honours prefers-reduced-motion in CSS; no in-extension toggle. | ui |
-
-Code: `apps/extension/src/side_panel.ts:3111-3111`
-
 ## S84.09: Code line wrapping.
 
 - Done when: The user can turn line wrapping for code blocks on or off.
@@ -78,44 +50,16 @@ Code: `apps/extension/src/side_panel.ts:3111-3111`
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S84.11: Default effort.
-
-- Done when: The user can set a default reasoning effort used for new turns.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Effort is picked per turn from the composer model chip; there is no saved default. | ui |
-| chrome | partial | Only an extended-thinking on/off toggle is saved; no effort levels. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ModelSelectorButton.tsx:1-16`, `apps/extension/src/side_panel.ts:6195-6198`
-
 ## S84.12: Default mode.
 
 - Done when: The user can choose the default mode new conversations start in (e.g. chat vs agent/work, ask vs auto).
 - Wave: 3
-- Already works on: mobile, cli, vscode
+- Already works on: mobile, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | The autonomy level is chosen per session from the composer chip and is not saved as a default. | ui |
-
-Code: `apps/extension/src/side_panel.ts:9979-9983`
-
-## S84.18: Notification channels.
-
-- Done when: The user can choose which channels (push, email, in-app/browser) deliver each notification category.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only one on/off toggle for task notifications; no per-category or per-channel choice. | ui |
-
-Code: `apps/extension/src/options.ts:1012-1016`, `apps/extension/src/options.ts:1048-1052`
 
 ## S84.19: Quiet hours.
 
@@ -137,19 +81,3 @@ Code: `apps/extension/src/options.ts:1012-1016`, `apps/extension/src/options.ts:
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-
-## S84.25: Experimental-feature enrollment.
-
-- Done when: The user can opt into experimental or preview features from settings.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | agi features only lists feature flags; there is no opt-in command. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:853-854`

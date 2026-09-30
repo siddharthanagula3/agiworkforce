@@ -6,8 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clock3, Globe2, ListChecks, X, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   acknowledgeContinuityOnboarding,
   CONTINUITY_COMPLETION_NOTIFICATION_TYPE,
@@ -62,7 +64,7 @@ export default function ContinuityOnboardingScreen() {
 
   const startTask = useCallback(() => {
     if (!isClerkSignedIn || !clerkUserId) {
-      router.push('/(auth)/login');
+      router.push(beginCloudPostAuthIntent());
       return;
     }
 
@@ -119,7 +121,7 @@ export default function ContinuityOnboardingScreen() {
             <Text
               style={{
                 color: colors.purple,
-                fontSize: 11,
+                fontSize: typeScale.caption,
                 fontWeight: '800',
                 letterSpacing: 0.6,
                 textTransform: 'uppercase',
@@ -132,7 +134,7 @@ export default function ContinuityOnboardingScreen() {
             accessibilityRole="header"
             style={{
               color: colors.textPrimary,
-              fontSize: 34,
+              fontSize: typeScale.largeTitle,
               lineHeight: 39,
               fontWeight: '700',
               letterSpacing: -1,
@@ -144,7 +146,7 @@ export default function ContinuityOnboardingScreen() {
           <Text
             style={{
               color: colors.textSecondary,
-              fontSize: 16,
+              fontSize: typeScale.callout,
               lineHeight: 23,
               textAlign: 'center',
             }}
@@ -190,7 +192,9 @@ export default function ContinuityOnboardingScreen() {
               opacity: pressed ? 0.78 : 1,
             })}
           >
-            <Text style={{ color: colors.accentText, fontSize: 16, fontWeight: '700' }}>
+            <Text
+              style={{ color: colors.accentText, fontSize: typeScale.callout, fontWeight: '700' }}
+            >
               Start a task
             </Text>
           </Pressable>
@@ -207,13 +211,20 @@ export default function ContinuityOnboardingScreen() {
               backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
             })}
           >
-            <Text style={{ color: colors.textSecondary, fontSize: 15, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.textSecondary, fontSize: typeScale.body, fontWeight: '600' }}
+            >
               Not now
             </Text>
           </Pressable>
           <Text
             testID="continuity-notification-contract"
-            style={{ color: colors.textMuted, fontSize: 11, lineHeight: 16, textAlign: 'center' }}
+            style={{
+              color: colors.textMuted,
+              fontSize: typeScale.caption,
+              lineHeight: 16,
+              textAlign: 'center',
+            }}
           >
             Completion alerts use the existing {CONTINUITY_COMPLETION_NOTIFICATION_TYPE} Cloud
             notification route.
@@ -261,11 +272,16 @@ function BenefitRow({ benefit, isLast }: { benefit: ContinuityBenefit; isLast: b
       </View>
       <View style={{ flex: 1, gap: 4 }}>
         <Text
-          style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700', lineHeight: 20 }}
+          style={{
+            color: colors.textPrimary,
+            fontSize: typeScale.body,
+            fontWeight: '700',
+            lineHeight: 20,
+          }}
         >
           {benefit.title}
         </Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
           {benefit.description}
         </Text>
       </View>

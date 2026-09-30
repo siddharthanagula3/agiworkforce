@@ -74,7 +74,15 @@
     "runtimeConsent": "Este app quer usar IA com sua conta. Cada solicitação conta para o uso do seu plano.",
     "runtimeConsentConnectors": "Este app quer usar IA com sua conta e ler ou alterar dados em {{apps}}. Ele vê o que esses apps retornam, e cada solicitação conta para o uso do seu plano.",
     "runtimeAllow": "Permitir",
-    "runtimeDecline": "Não permitir"
+    "runtimeDecline": "Não permitir",
+    "runtimeConnectorsLoading": "Verificando seus apps conectados",
+    "runtimeConnectorNotConnected": "Não conectado. Conecte em Configurações, Conectores, para usar esta parte do app.",
+    "runtimeToolNeedsApproval": "Pede aprovação antes de cada uso, então este app não pode usá-la.",
+    "runtimeToolBlocked": "Bloqueada nas suas configurações.",
+    "runtimeManageConnectors": "Apps conectados",
+    "saveCopy": "Salvar uma cópia nos meus chats",
+    "saveCopyBusy": "Copiando…",
+    "saveCopyFailed": "Não foi possível copiar este artefato."
   },
   "sidebar": {
     "activeConversation": "Conversa ativa",
@@ -441,10 +449,22 @@
     "videoModeAttachments_other": "A geração de vídeo usa apenas o seu prompt. Os arquivos anexados não são enviados ao modelo de vídeo. Saia do modo vídeo primeiro se quiser enviar estes arquivos ao modelo de chat.",
     "viewSources_one": "Ver {{count}} fonte",
     "viewSources_other": "Ver {{count}} fontes",
+    "folderFilesLeftOut_one": "{{count}} arquivo em {{folder}} não foi anexado. Anexe-o a partir de uma pasta local.",
+    "folderFilesLeftOut_other": "{{count}} arquivos em {{folder}} não foram anexados. Anexe-os a partir de uma pasta local.",
     "savedMemoriesUsed_one": "Usou {{count}} memória salva",
     "savedMemoriesUsed_other": "Usou {{count}} memórias salvas",
     "moreSavedMemories_one": "E mais {{count}}",
-    "moreSavedMemories_other": "E mais {{count}}"
+    "moreSavedMemories_other": "E mais {{count}}",
+    "filesCreated_one": "{{count}} arquivo criado",
+    "filesCreated_other": "{{count}} arquivos criados",
+    "foundSources_one": "{{count}} fonte encontrada",
+    "foundSources_other": "{{count}} fontes encontradas",
+    "mapPreviewPlaces_one": "Prévia do mapa com {{count}} local",
+    "mapPreviewPlaces_other": "Prévia do mapa com {{count}} locais",
+    "lines_one": "{{count}} linha",
+    "lines_other": "{{count}} linhas",
+    "words_one": "{{count}} palavra",
+    "words_other": "{{count}} palavras"
   },
   "markdownTable": {
     "label": "Tabela",
@@ -466,7 +486,9 @@
     "expand": "Expandir código",
     "close": "Fechar código expandido",
     "codeTitle": "Código {{language}}",
-    "codeBlockLabel": "Bloco de código {{language}}"
+    "codeBlockLabel": "Bloco de código {{language}}",
+    "edit": "Editar",
+    "editLabel": "Editar este código ao lado do chat"
   },
   "streaming": {
     "reconnecting": "Reconectando…",

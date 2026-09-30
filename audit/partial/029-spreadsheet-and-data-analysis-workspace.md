@@ -6,69 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S29.01: Workbook title and metadata.
-
-- Done when: A workbook carries a user-visible title and document metadata (author, description) that can be viewed and set.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-## S29.02: Sheet tabs.
-
-- Done when: A workbook shows its sheets as tabs the user can switch between.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-## S29.03: Add, rename, duplicate, and delete sheets.
-
-- Done when: The user can add, rename, duplicate and delete sheets in an open workbook.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-## S29.04: Grid selection.
-
-- Done when: The user can select cells and ranges in a spreadsheet grid with mouse and keyboard.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S29.10: Sort and filter.
-
-- Done when: The user can sort and filter rows in a sheet by column.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S29.11: Freeze rows and columns.
-
-- Done when: The user can freeze chosen rows or columns so they stay visible while scrolling.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S29.17: Chart insertion.
 
 - Done when: The user can insert a chart built from sheet data into the workbook.
@@ -106,15 +43,11 @@ nothing is left.
 
 - Done when: A panel lets the user run Python analysis on data and see code, output and charts.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Code execution output appears only as a tool row in the transcript timeline; no analysis panel. | ui |
-| cli | partial | The agent can run Python only through its general shell tool (text output in the transcript) and can edit .ipynb cells without running them; no analysis panel, no chart display. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:97-110`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:389-408`, `apps/cli/src/features/exec/tools/mod.rs:548-554`, `apps/cli/src/features/exec/tools/mod.rs:616-622`
 
 ## S29.28: Query-result table.
 
@@ -144,15 +77,12 @@ Code: `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts:97-110`, `apps
 
 - Done when: The user can download tabular data as a CSV file.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A CSV exists only if the assistant creates one with the office-file tool; no Download-as-CSV action on tables. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:118-123`
 
 ## S29.36: Export chart.
 
@@ -164,9 +94,6 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Charts only inside a generated .xlsx; no chart image export. Chrome offers the tool only when the prompt names an Office file (no toggle). | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:577-583`, `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/web/lib/services/managed-workbook-builder.ts:218-231`
 
 ## S29.38: Generate a report from analysis.
 

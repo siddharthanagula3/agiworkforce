@@ -505,7 +505,7 @@ export function TaskDetailPanel({
           {autoRefreshing ? (
             <span
               data-testid="task-auto-refreshing"
-              className="ml-2 inline-flex items-center gap-1 text-caption text-muted-foreground"
+              className="ms-2 inline-flex items-center gap-1 text-caption text-muted-foreground"
             >
               <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
               Updating automatically
@@ -571,7 +571,7 @@ export function TaskDetailPanel({
                 onRerun({ goal: goalEntry.summary, ...parseGoalDetail(goalEntry.detail) })
               }
             >
-              <RotateCcw className="mr-1.5 h-3 w-3" />
+              <RotateCcw className="me-1.5 h-3 w-3" />
               Re-run this task
             </Button>
           ) : null}
@@ -764,7 +764,7 @@ export function TaskDetailPanel({
               className="mt-3 h-7 text-xs"
               onClick={() => onOpenConversation(run.conversationId!)}
             >
-              <ExternalLink className="mr-1.5 h-3 w-3" />
+              <ExternalLink className="me-1.5 h-3 w-3" />
               Open source chat
             </Button>
           ) : (
@@ -776,10 +776,10 @@ export function TaskDetailPanel({
             <Button
               variant="outline"
               size="sm"
-              className="ml-2 mt-3 h-7 text-xs"
+              className="ms-2 mt-3 h-7 text-xs"
               onClick={() => onShare(run.conversationId!)}
             >
-              <Share2 className="mr-1.5 h-3 w-3" />
+              <Share2 className="me-1.5 h-3 w-3" />
               Share task
             </Button>
           ) : null}

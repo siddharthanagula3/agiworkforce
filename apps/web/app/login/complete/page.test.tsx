@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   accepted: vi.fn(),
+  acceptedAny: vi.fn(),
+  must: vi.fn(),
   redirect: vi.fn(),
   recorder: vi.fn(),
   continue: vi.fn(),
@@ -29,6 +31,9 @@ vi.mock('./StaleSessionRecovery', () => ({
     />
   ),
 }));
+vi.mock('./TermsReviewSignOut', () => ({
+  TermsReviewSignOut: () => <button type="button">Sign out</button>,
+}));
 vi.mock('next/navigation', () => ({
   redirect: (url: string) => {
     mocks.redirect(url);
@@ -37,6 +42,8 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (userId: string) => mocks.accepted(userId),
+  mustAcceptTerms: (userId: string) => mocks.must(userId),
+  hasAcceptedAnyTerms: (userId: string) => mocks.acceptedAny(userId),
 }));
 vi.mock('../../signup/TermsGate', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -78,7 +85,31 @@ describe('/login/complete', () => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ userId: 'user-1' });
     mocks.accepted.mockResolvedValue(false);
+    mocks.must.mockImplementation(async (userId: string) => !(await mocks.accepted(userId)));
+    mocks.acceptedAny.mockResolvedValue(true);
     mocks.access.mockResolvedValue({ allowed: true });
+  });
+
+  it('lets an account on an older valid version continue without a click-through', async () => {
+    mocks.must.mockResolvedValue(false);
+
+    render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+    expect(mocks.recorder).not.toHaveBeenCalled();
+    expect(mocks.continue).toHaveBeenCalledWith({ redirectTo: '/chat' });
+  });
+
+  it('offers the published revision to an account that asked to review it', async () => {
+    mocks.must.mockResolvedValue(false);
+
+    render(
+      await LoginCompletePage({
+        searchParams: Promise.resolve({ redirectTo: '/chat', review: 'terms' }),
+      }),
+    );
+
+    expect(screen.getByTestId('terms-recorder')).toBeInTheDocument();
+    expect(mocks.must).not.toHaveBeenCalled();
   });
 
   it('does not rewrite a current durable acceptance', async () => {
@@ -91,16 +122,45 @@ describe('/login/complete', () => {
     expect(mocks.continue).toHaveBeenCalledWith({ redirectTo: '/chat' });
   });
 
+  it('keeps the desktop window layout on the terms step', async () => {
+    const { container } = render(
+      await LoginCompletePage({
+        searchParams: Promise.resolve({ redirectTo: '/chat', surface: 'desktop' }),
+      }),
+    );
+
+    expect(screen.getByTestId('terms-recorder')).toBeInTheDocument();
+    expect(container.querySelector('[data-embedded="true"]')).not.toBeNull();
+  });
+
   it('requires missing or outdated acceptance on the login surface', async () => {
     render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
 
     expect(screen.getByTestId('terms-gate')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Finish signing in' })).toBeInTheDocument();
     expect(screen.getByTestId('terms-recorder')).toBeInTheDocument();
-    expect(mocks.recorder).toHaveBeenCalledWith({ redirectTo: '/chat', surface: 'web-login' });
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+    expect(mocks.recorder).toHaveBeenCalledWith({
+      redirectTo: '/chat',
+      surface: 'web-login',
+      confirmAge: false,
+    });
     expect(mocks.gate).toHaveBeenCalledWith(
       expect.objectContaining({ restorePreAuthMarker: false, confirmationLabel: 'Continue' }),
     );
+  });
+
+  it('asks an account that never accepted the terms to confirm 18 or older first', async () => {
+    mocks.acceptedAny.mockResolvedValue(false);
+
+    render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+    expect(mocks.acceptedAny).toHaveBeenCalledWith('user-1');
+    expect(mocks.recorder).toHaveBeenCalledWith({
+      redirectTo: '/chat',
+      surface: 'web-login',
+      confirmAge: true,
+    });
   });
 
   // Redirecting straight back to /login is what produced an infinite loop:

@@ -36,6 +36,19 @@ export const CLI_CAPABILITY_METHODS = {
   savedPermissionsRemove: 'removeSavedPermission',
   mcpInspect: 'inspectMcpServer',
   pluginsUpdate: 'updatePlugin',
+  memoryAdd: 'addMemory',
+  worktreeCreate: 'createWorktree',
+  worktreeList: 'listWorktrees',
+  worktreeRemove: 'removeWorktree',
+  pullRequestPlan: 'planPullRequest',
+  pullRequestCreate: 'createPullRequest',
+  permissionRules: 'listPermissionRules',
+  permissionRulesAdd: 'addPermissionRule',
+  trustedFolders: 'listTrustedFolders',
+  trustedFoldersRevoke: 'revokeTrustedFolder',
+  providerKeys: 'listProviderKeys',
+  providerKeysSet: 'setProviderKey',
+  providerKeysRemove: 'removeProviderKey',
 } as const;
 
 export type CliCapability = keyof typeof CLI_CAPABILITY_METHODS;
@@ -55,6 +68,13 @@ export type CliFamily = keyof Pick<
   | 'savedPermissions'
   | 'mcpInspect'
   | 'pluginUpdates'
+  | 'memory'
+  | 'worktrees'
+  | 'pullRequests'
+  | 'permissionRules'
+  | 'trust'
+  | 'providerKeys'
+  | 'turnToolFilters'
 >;
 
 const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
@@ -89,6 +109,19 @@ const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
   savedPermissionsRemove: 'savedPermissions',
   mcpInspect: 'mcpInspect',
   pluginsUpdate: 'pluginUpdates',
+  memoryAdd: 'memory',
+  worktreeCreate: 'worktrees',
+  worktreeList: 'worktrees',
+  worktreeRemove: 'worktrees',
+  pullRequestPlan: 'pullRequests',
+  pullRequestCreate: 'pullRequests',
+  permissionRules: 'permissionRules',
+  permissionRulesAdd: 'permissionRules',
+  trustedFolders: 'trust',
+  trustedFoldersRevoke: 'trust',
+  providerKeys: 'providerKeys',
+  providerKeysSet: 'providerKeys',
+  providerKeysRemove: 'providerKeys',
 };
 
 const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
@@ -105,6 +138,13 @@ const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
   savedPermissions: 'saved approvals',
   mcpInspect: 'MCP server details',
   pluginUpdates: 'updating plugins',
+  memory: 'repository memory',
+  worktrees: 'session worktrees',
+  pullRequests: 'opening pull requests',
+  permissionRules: 'permission rules',
+  trust: 'trusted folders',
+  providerKeys: 'provider API keys',
+  turnToolFilters: 'choosing tools for a session',
 };
 
 export function cliCapabilityNotOffered(capability: CliCapability): string {

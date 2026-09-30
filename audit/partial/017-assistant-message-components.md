@@ -35,10 +35,7 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `/artifacts` lists cloud artifacts as a system message; answers carry no per-answer artifact link. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3312-3312`, `apps/cli/src/tui/tui_app.rs:4713-4722`
 
 ## S17.10: Image results.
 
@@ -62,18 +59,6 @@ Code: `apps/cli/src/tui/tui_app.rs:3312-3312`, `apps/cli/src/tui/tui_app.rs:4713
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S17.13: Interactive widgets.
-
-- Done when: Answers can contain interactive widgets (cards with choices, maps, actions) the user operates in place.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Only MCP elicitation forms and approval prompts are interactive in the terminal; answer cards (choices, maps) are not rendered. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-960`
-
 ## S17.14: Follow-up suggestions.
 
 - Done when: After an answer the product offers relevant follow-up prompts the user can pick.
@@ -81,13 +66,13 @@ Code: `apps/cli/src/tui/tui_app.rs:945-952`, `apps/cli/src/tui/tui_app.rs:953-96
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | owner switch only: set FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true; the flagged-on path renders chips for ordinary and searched answers. | flag-off |
-| desktop | partial | owner switch only: set FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true; the flagged-on path renders chips for ordinary and searched answers. | flag-off |
+| web | partial | switch-on (deploy step 'follow-ups on'): change FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true at apps/web/features/chat/components/messages/ChatMessageList.tsx:1048; generator and settings toggle are built | flag-off |
+| desktop | partial | switch-on (deploy step 'follow-ups on'): change FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true at apps/web/features/chat/components/messages/ChatMessageList.tsx:1048; generator and settings toggle are built | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1046-1046`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1372-1372`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1920-1920`
+Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 
 ## S17.17: Read aloud.
 
@@ -137,95 +122,48 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1046-1046`
 
 - Done when: From an answer, the user can regenerate it with a different model in one step.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Retry with Another Model' on an answer opens the model picker and reruns the question with the chosen model (retryMessage takes a model override; threaded Cloud chats keep the old answer as a sibling), in post-codex/chat-gates-s17.22-mobile-retry-with-model.patch. ChatGPT's iOS app runs a message on a chosen model (help.openai.com 6825453, 2026-06-08). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2987-2987`
-
-## S17.23: Shorten answer.
-
-- Done when: One action rewrites an answer shorter.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S17.24: Expand answer.
-
-- Done when: One action rewrites an answer longer/more detailed.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S17.25: Change tone.
-
-- Done when: One action rewrites an answer in a different tone.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 ## S17.26: Revise selected text.
 
 - Done when: The user can select part of an answer and ask for that span to be revised or asked about.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Swipe-to-quote quotes the whole message into the composer; add selecting a span of the answer to revise or ask about. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageList.tsx:91-91`, `apps/mobile/app/(app)/chat/[id].tsx:1454-1455`, `apps/mobile/app/(app)/chat/[id].tsx:1449-1449`
 
 ## S17.27: Branch from answer.
 
 - Done when: From any answer, the user can branch a new conversation that keeps history up to that point and leaves the original unchanged.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | 'Fork Conversation' copies a whole session from the command palette/tree; add branching from a chosen answer. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1210-1229`
 
 ## S17.28: Navigate answer variants.
 
 - Done when: When an answer has several attempts, the user can page between them (e.g. '2 of 3').
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same pager as S16.11, in post-codex/chat-gates-s16.11-s17.28-mobile-version-pager.patch. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 
 ## S17.29: Positive feedback.
 
@@ -273,18 +211,6 @@ Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S17.33: Save answer to Project knowledge.
-
-- Done when: From an answer, the user can save it into a Project's knowledge/sources.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S17.35: Export answer.
 
 - Done when: A single answer can be exported to a file (e.g. PDF, Markdown, text).
@@ -296,40 +222,12 @@ Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S17.36: Actual-model and usage details.
-
-- Done when: For each answer the user can see which model actually answered and its usage (tokens/cost/time).
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | An answer shows its tokens and time under the model line from the usage the server persists (tokensUsed, inputTokens, outputTokens, totalDurationMs), in post-codex/chat-gates-s17.36-mobile-answer-usage.patch. Cost is not shown, as users see credits. | ui |
-| cli | partial | The cited /usage and /cost print session-wide totals (total_input_tokens, cost_ledger.total_usd, turn_count) and the session model; nothing is stored or shown per answer (ChatMessage is role+text). The criterion is per-answer model and usage. Partial, miss ui; remaining: record and show per-turn model/tokens/cost (e.g. a trailing line after each answer or /usage --last). |  |
-
-Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`, `apps/cli/src/tui/tui_app.rs:3897-3910`, `apps/cli/src/tui/tui_app.rs:3324-3331`
-
 ## S17.38: Refusal state.
 
 - Done when: When the model/safety layer refuses, the answer shows a distinct refusal state (not a generic error or a normal answer), with a next step.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A refused answer (finishReason refusal or content_filter, already stored) gets the web's refusal notice with a next step in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch; applies once Codex releases MessageBubble. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2050-2050`
-
-## S17.39: Interrupted state.
-
-- Done when: An answer the user stopped (or that was interrupted) is marked as stopped, keeps what arrived, and offers to try again.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Stop now stamps finishReason 'stopped' (the web's marker, so it syncs) and the answer keeps what arrived with 'Response stopped.' and Try again, in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch (chatExecutionStore and MessageBubble are held). | ui |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`

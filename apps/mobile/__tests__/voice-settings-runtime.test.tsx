@@ -9,8 +9,11 @@ import * as TTS from '@/src/features/voice/services/tts';
 import {
   activeSpeechLanguage,
   autoListenEnabled,
+  deviceSpeechLocale,
 } from '@/src/features/voice/services/speechSettings';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
+import * as VoiceService from '@/src/features/voice/services/voice';
+import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
 import {
   useVoiceConversation,
   VOICE_INPUT_DISABLED_MESSAGE,
@@ -48,6 +51,13 @@ describe('speech settings reach every speaking surface', () => {
     expect(activeSpeechLanguage()).toBe('fr');
     useChatAppModeStore.setState({ appMode: 'cloud' });
     expect(activeSpeechLanguage()).toBe('de');
+  });
+
+  it('leaves an Automatic language to the device instead of naming one', () => {
+    useLocalSettingsStore.setState({ speechLanguage: SPEECH_LANGUAGE_AUTO });
+
+    expect(activeSpeechLanguage()).toBeUndefined();
+    expect(TTS.speechOptionsFromSettings().language).toBe(deviceSpeechLocale());
   });
 
   it('reads Auto-listen from the active trust domain', () => {
@@ -150,5 +160,40 @@ describe('the Voice Input toggle gates the microphone', () => {
     });
 
     expect(onCaptureError).not.toHaveBeenCalled();
+  });
+});
+
+describe('composer dictation follows the speech language', () => {
+  let startSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    startSpy = jest.spyOn(VoiceInput, 'startCaptureSession');
+    startSpy.mockReset();
+    startSpy.mockResolvedValue({
+      result: Promise.resolve({ text: '', isOnDevice: true, confidence: 1 }),
+    });
+    useChatAppModeStore.setState({ appMode: 'local' });
+  });
+
+  afterEach(() => {
+    startSpy.mockRestore();
+  });
+
+  async function dictate(): Promise<unknown> {
+    await VoiceService.startRecording();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return startSpy.mock.calls[0]?.[2];
+  }
+
+  it('recognizes in the chosen language', async () => {
+    useLocalSettingsStore.setState({ speechLanguage: 'hi' });
+
+    await expect(dictate()).resolves.toEqual({ lang: 'hi' });
+  });
+
+  it('keeps the device language while the setting is Automatic', async () => {
+    useLocalSettingsStore.setState({ speechLanguage: SPEECH_LANGUAGE_AUTO });
+
+    await expect(dictate()).resolves.toEqual({ lang: undefined });
   });
 });

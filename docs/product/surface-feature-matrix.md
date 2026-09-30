@@ -36,7 +36,7 @@ Seven technical surfaces implement one product across two continuity domains: Ac
 `Unverified` means the tree does not settle it, and says what would.
 
 `Declared maturity` is the feature registry's answer for the whole feature, not for one surface.
-Most rows read "not in the feature registry": the registry holds 30 features
+Most rows read "not in the feature registry": the registry holds 31 features
 and this matrix holds more, so there is no declared maturity to show for the rest.
 
 ## Core consumer
@@ -77,6 +77,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | Plugins | beta | Present | Present | Absent | Present | Absent | Absent | Present |
 | MCP | beta | Present | Unverified | Absent | Unverified | Unverified | Partial | Present |
 | Tool approvals | general_availability | Present | Present | Present | Unverified | Present | Present | Present |
+| Connected apps in artifacts | general_availability | Present | Absent | Absent | Absent | Absent | Absent | Present |
 
 ## Developer
 
@@ -120,7 +121,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 
 ## Features with no declared maturity
 
-19 of 49 rows name no feature in
+19 of 50 rows name no feature in
 `packages/contracts/types/src/feature-registry.json`, so nothing in the tree declares how finished they are, who owns
 them, or what would take them out of an unfinished state. That is a gap in the registry, not in
 this document.
@@ -386,6 +387,16 @@ this document.
 - **vscode**: present. `apps/extension-vscode/src/features/permissions/approvalScope.ts`, reached by `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts` (import).
 - **chrome**: present. `apps/extension/src/features/computer-use/approvalPolicy.ts`, reached by `apps/extension/src/background.ts` (import).
 - **api**: present. `apps/web/app/api/llm/v1/chat/completions/lib/tool-approval-policy.ts`, reached by `apps/web/app/api/settings/preferences/route.ts` (import).
+
+### Connected apps in artifacts
+
+- **web**: present. `apps/web/app/shared-artifact/[token]/page.tsx`, reached by `apps/web/app/layout.tsx` (route).
+- **desktop**: absent. The desktop window keeps only product and sign-in paths; a published app opens in the system browser, where the web page serves it.
+- **mobile**: absent. Nothing under apps/mobile hosts a published app's runtime; a published link opens in the browser.
+- **cli**: absent. The CLI does not render published apps.
+- **vscode**: absent. The VS Code extension does not render published apps.
+- **chrome**: absent. The extension does not render published apps.
+- **api**: present. `apps/web/app/api/artifacts/runtime/[token]/connectors/route.ts`, reached by `apps/web/app/layout.tsx` (route).
 
 ### Code sessions
 

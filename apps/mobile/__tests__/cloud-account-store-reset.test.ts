@@ -31,6 +31,10 @@ import {
 /* eslint-disable @typescript-eslint/no-require-imports */
 const scheduleService = require('../src/features/schedules/service') as {
   fetchSchedules: jest.Mock;
+  createSchedule: jest.Mock;
+  deleteSchedule: jest.Mock;
+  toggleSchedule: jest.Mock;
+  fetchScheduleRuns: jest.Mock;
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -104,5 +108,102 @@ describe('Cloud account store resets', () => {
       loading: false,
       error: null,
     });
+  });
+
+  it('does not report a task as created when the Cloud account changes during creation', async () => {
+    let resolveCreate!: (value: { id: string }) => void;
+    scheduleService.createSchedule.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+
+    const pending = useScheduleStore.getState().createSchedule({} as never);
+    activateCloudAccount('account-b');
+    useScheduleStore.getState().clearAccountSchedules();
+    resolveCreate({ id: 'account-a-schedule' });
+
+    await expect(pending).resolves.toBe(false);
+    expect(useScheduleStore.getState().schedules).toEqual([]);
+  });
+
+  it('keeps service diagnostics out of scheduled-task and run-history errors', async () => {
+    scheduleService.fetchSchedules.mockRejectedValueOnce(new Error('internal provider token'));
+    await useScheduleStore.getState().fetchSchedules();
+    expect(useScheduleStore.getState().error).toBe(
+      'Could not load scheduled tasks. Check your connection and retry.',
+    );
+
+    scheduleService.createSchedule.mockRejectedValueOnce(new Error('database connection string'));
+    await expect(useScheduleStore.getState().createSchedule({} as never)).rejects.toThrow(
+      'database connection string',
+    );
+    expect(useScheduleStore.getState().error).toBe(
+      'Could not create this task. Check your connection and retry.',
+    );
+
+    scheduleService.fetchScheduleRuns.mockRejectedValueOnce(
+      new Error('private schedule identifier'),
+    );
+    await useScheduleStore.getState().fetchRuns('schedule-a');
+    expect(useScheduleStore.getState().runsErrorBySchedule['schedule-a']).toBe(
+      'Could not load run history. Check your connection and retry.',
+    );
+  });
+
+  it('restores a task and reports failure when deletion is refused', async () => {
+    useScheduleStore.setState({ schedules: [{ id: 'schedule-a' }] as never });
+    scheduleService.deleteSchedule.mockRejectedValueOnce(new Error('private storage path'));
+
+    await expect(useScheduleStore.getState().deleteSchedule('schedule-a')).resolves.toBe(false);
+    expect(useScheduleStore.getState().schedules).toEqual([{ id: 'schedule-a' }]);
+    expect(useScheduleStore.getState().error).toBe(
+      'Could not delete this task. Check your connection and retry.',
+    );
+  });
+
+  it('preserves other task changes when a deletion fails after they arrive', async () => {
+    useScheduleStore.setState({ schedules: [{ id: 'schedule-a' }] as never });
+    let rejectDeletion!: (error: Error) => void;
+    scheduleService.deleteSchedule.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectDeletion = reject;
+      }),
+    );
+
+    const pending = useScheduleStore.getState().deleteSchedule('schedule-a');
+    useScheduleStore.setState({ schedules: [{ id: 'schedule-b' }] as never });
+    rejectDeletion(new Error('delete refused'));
+
+    await expect(pending).resolves.toBe(false);
+    expect(useScheduleStore.getState().schedules).toEqual([
+      { id: 'schedule-a' },
+      { id: 'schedule-b' },
+    ]);
+  });
+
+  it('uses the server schedule after changing activation', async () => {
+    useScheduleStore.setState({
+      schedules: [
+        { id: 'schedule-a', recurrence: 'daily', isActive: false, nextRunAt: null },
+      ] as never,
+    });
+    scheduleService.toggleSchedule.mockResolvedValueOnce({
+      id: 'schedule-a',
+      recurrence: 'daily',
+      isActive: true,
+      nextRunAt: '2026-09-28T14:00:00.000Z',
+    });
+
+    await useScheduleStore.getState().toggleSchedule('schedule-a');
+
+    expect(useScheduleStore.getState().schedules).toEqual([
+      {
+        id: 'schedule-a',
+        recurrence: 'daily',
+        isActive: true,
+        nextRunAt: '2026-09-28T14:00:00.000Z',
+      },
+    ]);
   });
 });

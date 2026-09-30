@@ -13,6 +13,7 @@ const SourceSurfaceSchema = z.enum(SYNCED_APP_SURFACES);
 export const ManagedCloudProjectSchema = z.object({
   id: z.string().min(1),
   ownerUserId: z.string().min(1),
+  serverVersion: z.string().regex(/^\d+$/).optional(),
   organizationId: z.string().nullable().optional(),
   name: z.string(),
   description: z.string().nullable().optional(),
@@ -36,6 +37,7 @@ export const ManagedCloudProjectSchema = z.object({
   importedFrom: ProjectImportSourceSchema.nullable().optional(),
   isOrgShared: z.boolean().optional(),
   sharedAccess: z.enum(['read', 'write']).nullable().optional(),
+  space: z.enum(['health']).nullable().optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 });
@@ -92,6 +94,14 @@ export type ManagedCloudProjectUpdateRequest = z.infer<
 export const ManagedCloudProjectResponseSchema = z.object({
   project: ManagedCloudProjectSchema,
 });
+
+export const ManagedCloudProjectDuplicateResponseSchema = z.object({
+  project: ManagedCloudProjectSchema,
+  copiedKnowledgeFiles: z.number().int().nonnegative(),
+});
+export type ManagedCloudProjectDuplicateResponse = z.infer<
+  typeof ManagedCloudProjectDuplicateResponseSchema
+>;
 
 export const ManagedCloudProjectDeleteResponseSchema = z.object({ success: z.literal(true) });
 

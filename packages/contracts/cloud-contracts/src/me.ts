@@ -13,6 +13,7 @@ export const MePlanSchema = z.object({
   current_period_end: z.number().nullable(),
   cancel_at_period_end: z.boolean().optional(),
   subscription_source: MeSubscriptionSourceSchema.optional(),
+  effective_tier: z.string().optional(),
 });
 
 export const MeFeatureFlagsSchema = z
@@ -23,6 +24,17 @@ export const MeFeatureFlagsSchema = z
   })
   // Forward-compat: the server may add flags before clients know about them.
   .catchall(z.unknown());
+
+export const ME_ROUTING_PREFERENCES_PATH = '/api/me/routing-preferences';
+
+export const ROUTING_GEO_OVERLAYS = ['auto', 'us', 'in', 'cn'] as const;
+
+/** What the routing preferences route stores and returns; unknown keys are dropped. */
+export const RoutingPreferencesSchema = z.object({
+  us_only: z.boolean().optional(),
+  geo_overlay: z.enum(ROUTING_GEO_OVERLAYS).optional(),
+});
+export type RoutingPreferences = z.infer<typeof RoutingPreferencesSchema>;
 
 export const MeRoutingPreferencesSchema = z
   .object({
@@ -47,6 +59,12 @@ export const MeProfileSchema = z.object({
   work_description: z.string().nullable(),
 });
 
+/** The region the member's active workspace stores its data in; null outside a workspace. */
+export const MeWorkspaceDataRegionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+});
+
 export const MeResponseSchema = z.object({
   id: z.string(),
   email: z.string().nullable(),
@@ -61,12 +79,14 @@ export const MeResponseSchema = z.object({
   routing_preferences: MeRoutingPreferencesSchema,
   capability_handshake: EffectiveCapabilityDocumentSchema.optional(),
   disabled_features: z.array(MeDisabledFeatureSchema).optional(),
+  workspace_data_region: MeWorkspaceDataRegionSchema.nullable().optional(),
 });
 
 export type MePlan = z.infer<typeof MePlanSchema>;
 export type MeSubscriptionSource = z.infer<typeof MeSubscriptionSourceSchema>;
 export type MeProfile = z.infer<typeof MeProfileSchema>;
 export type MeDisabledFeature = z.infer<typeof MeDisabledFeatureSchema>;
+export type MeWorkspaceDataRegion = z.infer<typeof MeWorkspaceDataRegionSchema>;
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 export function parseMeResponse(data: unknown): MeResponse {

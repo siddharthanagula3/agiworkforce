@@ -8,13 +8,14 @@ const preferences: Awaited<ReturnType<ElectronHostBridge['readPreferences']>> = 
     launchAtLogin: false,
     quickAskShortcut: '',
     screenshotShortcut: '',
+    windowShotShortcut: '',
     voiceShortcut: '',
     showInMenuBar: true,
     cliPath: '',
     sessionCompletionAlerts: 'background',
     sessionApprovalAlerts: true,
   },
-  shortcutStatus: { quickAsk: 'off', screenshot: 'off', voice: 'off' },
+  shortcutStatus: { quickAsk: 'off', screenshot: 'off', windowShot: 'off', voice: 'off' },
 };
 
 function installHost(openExternal: ElectronHostBridge['openExternal']): void {

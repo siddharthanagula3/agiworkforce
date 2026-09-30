@@ -218,7 +218,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                 onClose();
               }}
               className={cn(
-                'flex w-full items-center gap-3 px-3.5 py-2 text-sm text-left',
+                'flex w-full items-center gap-3 px-3.5 py-2 text-sm text-start',
                 'text-[var(--chat-text-primary)] transition-colors',
                 'hover:bg-[var(--chat-surface-hover)]',
               )}
@@ -870,7 +870,7 @@ export function ChatInterface({
           hostBridge.rewindCodingCheckpoint && (
             <div className="absolute inset-0 z-[var(--z-modal)] flex justify-end bg-black/35">
               <section
-                className="flex h-full w-full max-w-sm flex-col border-l border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-e4"
+                className="flex h-full w-full max-w-sm flex-col border-s border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-e4"
                 aria-label={t('interface.rewindCheckpoints', 'Rewind checkpoints')}
               >
                 <header className="flex items-center justify-between border-b border-[var(--chat-border)] px-4 py-3">
@@ -927,7 +927,7 @@ export function ChatInterface({
           {artifactOpen && (
             <div
               className={cn(
-                'border-l border-[var(--chat-border)] bg-[var(--chat-surface-base)]',
+                'border-s border-[var(--chat-border)] bg-[var(--chat-surface-base)]',
                 artifactMode === 'fullscreen' ? 'flex-1' : 'shrink-0',
               )}
               style={artifactMode === 'split' ? { width: artifactPanelWidth } : undefined}

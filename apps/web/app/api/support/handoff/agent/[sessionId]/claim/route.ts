@@ -6,6 +6,7 @@ import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { createError } from '@/lib/errors';
 import { claimHandoffForAgent } from '@/lib/support/handoff/handoff-service';
 import { appendHandoffMessage, getSessionById } from '@/lib/support/handoff/store';
+import { type HandoffClaimResponse } from '@agiworkforce/cloud-contracts/support';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
@@ -19,7 +20,7 @@ async function handleClaim(request: NextRequest, context: RouteContext) {
   const { userId } = await requirePlatformAdmin(request);
   const { sessionId } = await context.params;
 
-  const claim = await claimHandoffForAgent(sessionId, userId);
+  const claim: HandoffClaimResponse | null = await claimHandoffForAgent(sessionId, userId);
   if (!claim) {
     const existing = await getSessionById(sessionId);
     if (!existing) throw createError.notFound('Support request not found');

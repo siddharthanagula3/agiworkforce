@@ -41,6 +41,26 @@ const routes = routeFiles(API_ROOT).map((file) => ({
   source: fs.readFileSync(file, 'utf8'),
 }));
 
+/**
+ * Routes the route-authentication contract declares public serve a caller with
+ * no account on purpose, so they are held to rate limiting and CSRF only.
+ */
+const ROUTE_AUTHENTICATION = path.resolve(
+  import.meta.dirname,
+  '../../../../packages/contracts/types/src/route-authentication.json',
+);
+const DECLARED_PUBLIC = new Set(
+  Object.keys(
+    (
+      JSON.parse(fs.readFileSync(ROUTE_AUTHENTICATION, 'utf8')) as {
+        public: Record<string, string>;
+      }
+    ).public,
+  )
+    .filter((file) => file.startsWith('apps/web/app/api/llm/v1/'))
+    .map((file) => file.slice('apps/web/app/api/llm/v1/'.length)),
+);
+
 describe('every public API route is behind rate limiting, CSRF and authentication', () => {
   it('finds the routes to check at all, so an empty sweep cannot pass', () => {
     expect(routes.length).toBeGreaterThan(0);
@@ -53,21 +73,32 @@ describe('every public API route is behind rate limiting, CSRF and authenticatio
     expect(calls(gate, 'getUserScopedDb') || calls(gate, 'getClerkAuthUser')).toBe(true);
   });
 
-  it.each(routes.map((route) => [route.name, route.source] as const))(
-    '%s authenticates its caller',
-    (_name, source) => {
-      const authenticated =
-        calls(source, 'runAuthGate') ||
-        calls(source, 'getUserScopedDb') ||
-        calls(source, 'getClerkAuthUser');
-      expect(authenticated).toBe(true);
-    },
-  );
+  it('declares every signed-out route it exempts as public in the route authentication contract', () => {
+    for (const name of DECLARED_PUBLIC) {
+      expect(routes.some((route) => route.name === name)).toBe(true);
+    }
+  });
+
+  it.each(
+    routes
+      .filter((route) => !DECLARED_PUBLIC.has(route.name))
+      .map((route) => [route.name, route.source] as const),
+  )('%s authenticates its caller', (_name, source) => {
+    const authenticated =
+      calls(source, 'runAuthGate') ||
+      calls(source, 'getUserScopedDb') ||
+      calls(source, 'getClerkAuthUser');
+    expect(authenticated).toBe(true);
+  });
 
   it.each(routes.map((route) => [route.name, route.source] as const))(
     '%s rate limits its caller',
     (_name, source) => {
-      expect(calls(source, 'runAuthGate') || calls(source, 'withRateLimit')).toBe(true);
+      expect(
+        calls(source, 'runAuthGate') ||
+          calls(source, 'withRateLimit') ||
+          calls(source, 'checkRateLimit'),
+      ).toBe(true);
     },
   );
 

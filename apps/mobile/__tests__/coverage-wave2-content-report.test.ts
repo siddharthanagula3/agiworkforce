@@ -1,9 +1,14 @@
 const mockStorage = new Map<string, string>();
+let mockFailNextStorageWrite = false;
 
 jest.mock('@/lib/mmkv', () => ({
   storage: {
     getString: (key: string) => mockStorage.get(key),
     set: (key: string, value: string) => {
+      if (mockFailNextStorageWrite) {
+        mockFailNextStorageWrite = false;
+        throw new Error('private storage failure');
+      }
       mockStorage.set(key, value);
     },
     delete: (key: string) => {
@@ -59,6 +64,7 @@ let openUrlSpy: jest.SpyInstance;
 
 beforeEach(() => {
   mockStorage.clear();
+  mockFailNextStorageWrite = false;
   mockApiPost.mockReset();
   mockApiPost.mockRejectedValue(new Error('offline'));
   canOpenSpy = jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(true);
@@ -265,6 +271,19 @@ describe('saveContentReport, server intake', () => {
     expect(delivery).toEqual({ kind: 'submitted-to-server' });
   });
 
+  it('keeps the accepted report and optional email hand-off when local acknowledgment storage fails', async () => {
+    mockApiPost.mockImplementationOnce(async () => {
+      mockFailNextStorageWrite = true;
+      return { success: true };
+    });
+
+    const { report, delivery } = await saveContentReport(makeParams({ sendEmail: true }));
+
+    expect(report.serverAcknowledged).toBe(true);
+    expect(delivery).toEqual({ kind: 'email-composer-opened' });
+    expect(openUrlSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('never throws out of saveContentReport when the server POST rejects', async () => {
     mockApiPost.mockRejectedValueOnce(new Error('boom'));
     await expect(saveContentReport(makeParams())).resolves.toBeDefined();
@@ -290,5 +309,13 @@ describe('openSupportEmail', () => {
 
     expect(openUrlSpy).not.toHaveBeenCalled();
     expect(getContentReports()[0]?.emailHandoffOpened).toBe(false);
+  });
+
+  it('reports that the mail client opened even when local hand-off metadata cannot be saved', async () => {
+    const { report } = await saveContentReport(makeParams({ sendEmail: false }));
+    mockFailNextStorageWrite = true;
+
+    await expect(openSupportEmail(report)).resolves.toBe(true);
+    expect(openUrlSpy).toHaveBeenCalledTimes(1);
   });
 });

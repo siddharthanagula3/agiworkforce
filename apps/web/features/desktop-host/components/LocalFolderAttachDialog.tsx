@@ -73,7 +73,7 @@ function groupTextMatches(
 const BUTTON_CLASS =
   'min-h-[32px] rounded-md border border-border/60 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
 const ENTRY_CLASS =
-  'flex w-full min-h-[36px] items-center gap-3 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
+  'flex w-full min-h-[36px] items-center gap-3 rounded-md px-3 py-2 text-start text-sm text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
 const ROW_ACTION_CLASS =
   'min-h-[32px] shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60';
 

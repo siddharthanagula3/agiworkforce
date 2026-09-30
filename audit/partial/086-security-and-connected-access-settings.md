@@ -10,16 +10,12 @@ nothing is left.
 
 - Done when: The user can see every way they can sign in (password, passkeys, social/SSO identities) and add or remove methods.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile Account Security still does not list passkeys or linked sign-in identities; left for after the Codex mobile release | ui |
-| cli | partial | agi auth-status and agi logout list and remove the CLI's own stored credentials (device-code sign-in, provider keys); the account's sign-in methods are not visible. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/settings/identities/route.ts:42-42`, `apps/cli/src/lib.rs:3957-3975`, `apps/cli/src/auth.rs:518-535`
 
 ## S86.03: Passkeys.
 
@@ -31,30 +27,6 @@ Code: `apps/web/app/api/settings/identities/route.ts:42-42`, `apps/cli/src/lib.r
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S86.04: Multifactor authentication.
-
-- Done when: The user can turn on a second factor that is then required when signing in, and turn it off.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | ui, handler |
-
-Code: `apps/mobile/src/features/settings/account-security/index.tsx:313-350`
-
-## S86.05: Recovery codes.
-
-- Done when: The user can view, download and regenerate recovery codes that let them back into the account if the second factor is lost.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | ui |
-
-Code: `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
-
 ## S86.06: Active sessions.
 
 - Done when: The user can see their signed-in sessions (device, place, last active) and end any of them.
@@ -65,9 +37,6 @@ Code: `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome can only end its own session through Log out; it cannot list or end other sessions. | ui |
-
-Code: `apps/extension/src/features/cloud-bridge/clerkAuth.ts:265-275`
 
 ## S86.10: Sign out all devices.
 
@@ -126,39 +95,3 @@ Code: `apps/extension/src/features/cloud-bridge/clerkAuth.ts:265-275`
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S86.23: Saved approvals.
-
-- Done when: The user can review the approvals they chose to remember (always-allow/deny) and remove any of them.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The only remembered approval is the approved-sites list; per-action decisions are never saved, and sensitive actions always ask. | ui |
-
-Code: `apps/extension/src/options.ts:1100-1150`, `apps/extension/src/features/computer-use/approvalPolicy.ts:209-247`
-
-## S86.25: Revoke all optional grants.
-
-- Done when: One action withdraws every optional permission granted to AGI (connectors, saved approvals, device grants, folders).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S86.26: Advanced/hardened account-security mode.
-
-- Done when: The user can turn on a hardened mode that tightens account and agent security beyond defaults.
-- Wave: 3
-- Already works on: mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Lockdown hardens the assistant only; a hardened account-security mode (passkey-only sign-in, stricter recovery) is not built | ui, handler |
-| desktop | partial | Lockdown hardens the assistant only; a hardened account-security mode (passkey-only sign-in, stricter recovery) is not built | ui, handler |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/account-security/service.ts:201-201`

@@ -352,6 +352,9 @@ pub struct DeviceCodeStart {
 pub enum DeviceCodePoll {
     Authorized(Box<crate::auth::AuthEntry>),
     Pending,
+    SlowDown,
+    TermsRequired(String),
+    Denied,
     Expired,
 }
 
@@ -416,14 +419,26 @@ pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<Devic
     };
 
     let status = response.status();
-    if status == reqwest::StatusCode::FORBIDDEN {
-        return Ok(DeviceCodePoll::Pending);
-    }
-    if status == reqwest::StatusCode::BAD_REQUEST {
-        return Ok(DeviceCodePoll::Expired);
-    }
     if !status.is_success() {
-        return Ok(DeviceCodePoll::Pending);
+        let body: serde_json::Value = response.json().await.unwrap_or_default();
+        let error = body
+            .get("error")
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        return Ok(match (status, error) {
+            (_, "slow_down") | (reqwest::StatusCode::TOO_MANY_REQUESTS, _) => {
+                DeviceCodePoll::SlowDown
+            }
+            (_, "terms_acceptance_required") => DeviceCodePoll::TermsRequired(
+                body.get("acceptance_url")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+            ),
+            (_, "access_denied") => DeviceCodePoll::Denied,
+            (_, "expired_token") | (_, "invalid_grant") => DeviceCodePoll::Expired,
+            _ => DeviceCodePoll::Pending,
+        });
     }
 
     let tokens: DeviceTokenResponse = response
@@ -442,6 +457,120 @@ pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<Devic
             expires,
         },
     )))
+}
+
+pub enum DeviceSessionRenewal {
+    Renewed(crate::auth::AuthEntry),
+    Refused(Option<String>),
+    /// The refresh credential is gone for good (invalid_grant): revoked on the
+    /// web, replaced, or ended by a security change. Kept, it would fail every
+    /// call while the account still looked signed in.
+    Revoked,
+    Unavailable,
+}
+
+pub async fn renew_device_session(api_base: &str, refresh: &str) -> DeviceSessionRenewal {
+    let response = reqwest::Client::new()
+        .post(format!("{api_base}/auth/device/refresh"))
+        .header(
+            "User-Agent",
+            format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")),
+        )
+        .json(&serde_json::json!({ "refresh_token": refresh }))
+        .send()
+        .await;
+    let Ok(response) = response else {
+        return DeviceSessionRenewal::Unavailable;
+    };
+    let status = response.status();
+    if status.is_success() {
+        let Ok(tokens) = response.json::<DeviceTokenResponse>().await else {
+            return DeviceSessionRenewal::Unavailable;
+        };
+        let expires = tokens
+            .expires_in
+            .map(|seconds| chrono::Utc::now().timestamp_millis() + (seconds as i64 * 1000))
+            .unwrap_or(0);
+        return DeviceSessionRenewal::Renewed(crate::auth::AuthEntry::OAuth {
+            refresh: tokens.refresh_token.unwrap_or_default(),
+            access: tokens.access_token,
+            expires,
+        });
+    }
+    if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        return DeviceSessionRenewal::Unavailable;
+    }
+    let body: serde_json::Value = response.json().await.unwrap_or_default();
+    renewal_refusal(status, &body)
+}
+
+/// A refusal is either final (invalid_grant: the credential is gone) or a
+/// condition the account can meet, whose sentence the server sends.
+fn renewal_refusal(status: reqwest::StatusCode, body: &serde_json::Value) -> DeviceSessionRenewal {
+    if status == reqwest::StatusCode::BAD_REQUEST
+        && body.get("error").and_then(|value| value.as_str()) == Some("invalid_grant")
+    {
+        return DeviceSessionRenewal::Revoked;
+    }
+    DeviceSessionRenewal::Refused(
+        body.get("error_description")
+            .and_then(|value| value.as_str())
+            .map(str::to_string),
+    )
+}
+
+#[cfg(test)]
+mod renewal_refusal_tests {
+    use super::{renewal_refusal, DeviceSessionRenewal};
+    use reqwest::StatusCode;
+
+    #[test]
+    fn an_invalid_grant_is_final() {
+        assert!(matches!(
+            renewal_refusal(
+                StatusCode::BAD_REQUEST,
+                &serde_json::json!({ "error": "invalid_grant" })
+            ),
+            DeviceSessionRenewal::Revoked
+        ));
+    }
+
+    #[test]
+    fn a_terms_or_account_refusal_carries_its_sentence() {
+        let refused = renewal_refusal(
+            StatusCode::FORBIDDEN,
+            &serde_json::json!({
+                "error": "terms_acceptance_required",
+                "error_description": "Accept the Terms of Service at https://agiworkforce.com/login/complete to keep using AGI Workforce on this device."
+            }),
+        );
+        assert!(matches!(
+            refused,
+            DeviceSessionRenewal::Refused(Some(reason)) if reason.contains("Terms of Service")
+        ));
+    }
+}
+
+pub async fn revoke_device_session(api_base: &str, access: &str, refresh: &str) -> bool {
+    let mut request = reqwest::Client::new()
+        .post(format!("{api_base}/auth/logout"))
+        .header("X-Requested-With", "XMLHttpRequest")
+        .header(
+            "User-Agent",
+            format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")),
+        );
+    if !access.is_empty() {
+        request = request.bearer_auth(access);
+    }
+    let body = if refresh.is_empty() {
+        serde_json::json!({})
+    } else {
+        serde_json::json!({ "refresh_token": refresh })
+    };
+    match request.json(&body).send().await {
+        Ok(response) => response.status().is_success(),
+        Err(_) => false,
+    }
 }
 
 /// Run the device code login flow for AGI Workforce in a terminal.
@@ -471,12 +600,31 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
     );
 
     let max_attempts = (device.expires_in_secs / device.interval_secs).max(1);
-    let interval = std::time::Duration::from_secs(device.interval_secs);
+    let mut interval = std::time::Duration::from_secs(device.interval_secs);
+    let mut terms_shown = false;
 
     for attempt in 1..=max_attempts {
         tokio::time::sleep(interval).await;
 
         match poll_device_code(api_base, &device.device_code).await? {
+            DeviceCodePoll::SlowDown => {
+                interval += std::time::Duration::from_secs(5);
+            }
+            DeviceCodePoll::TermsRequired(url) => {
+                if !terms_shown {
+                    terms_shown = true;
+                    eprintln!(
+                        "\n  {} Accept the updated terms to finish signing in:",
+                        ts::prompt("→")
+                    );
+                    if !url.is_empty() {
+                        eprintln!("     {}", ts::link(&url));
+                    }
+                }
+            }
+            DeviceCodePoll::Denied => {
+                anyhow::bail!("The sign-in was denied in the browser. Run /login to try again.")
+            }
             DeviceCodePoll::Authorized(entry) => {
                 eprintln!("\n  {} Authenticated with AGI!", ts::success_header("✓"));
                 return Ok(*entry);

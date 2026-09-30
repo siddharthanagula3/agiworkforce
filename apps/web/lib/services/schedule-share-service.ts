@@ -9,6 +9,10 @@ import {
   type ManagedCloudScheduleShareSnapshot,
 } from '@agiworkforce/cloud-contracts';
 import type { ScheduleTask } from './schedule-service';
+import {
+  UNATTENDED_RUN_DENIED_STATUSES,
+  ownerMayRunUnattendedSql,
+} from '@/lib/auth/account-lifecycle';
 
 const SHARED_METADATA_KEYS = ['productRecurrence', 'timeOfDay', 'daysOfWeek', 'dayOfMonth'];
 
@@ -90,8 +94,9 @@ export async function getSharedSchedule(
     `select token, snapshot, created_at
        from scheduled_task_shares
       where token = $1 and revoked_at is null
+        and ${ownerMayRunUnattendedSql('scheduled_task_shares.user_id', 2)}
       limit 1`,
-    [token],
+    [token, UNATTENDED_RUN_DENIED_STATUSES],
   );
   return row ? toShare(row) : null;
 }

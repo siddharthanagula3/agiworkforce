@@ -75,6 +75,9 @@ export function CliInstallCommand() {
     );
   }
 
+  const failed = release.state === 'error';
+  if (!failed) return null;
+
   return (
     <div role="status">
       <p className="agi-fl-section-lede">We could not check the CLI release channel.</p>

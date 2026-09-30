@@ -16,18 +16,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
-## S60.02: Task title.
-
-- Done when: Each work task shows a readable title in the task list, and the user can set or change it.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Cloud task rows are labelled by work mode and state, not by a task title; there is no way to name a task. | ui |
-
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts:78-86`, `apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts:101-105`
-
 ## S60.03: Objective.
 
 - Done when: The user states the objective of the task, and the objective is stored with the run and shown back.
@@ -58,24 +46,18 @@ Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunPresentation.ts:78
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The New task sheet offers only a project choice; files and connectors cannot be chosen for a task. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:172-180`, `apps/mobile/src/features/tasks/startWork.ts:38-68`
 
 ## S60.06: Tool selection.
 
 - Done when: The user can choose which tools the task may use before it runs.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | VS Code offers only permission modes (ask/auto/plan/bypass); it cannot enable or disable individual tools. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550-3554`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1037-1047`
 
 ## S60.07: Execution-location selection.
 
@@ -99,10 +81,7 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The New task sheet neither shows nor lets the user change the model; it silently uses the last cloud model picked in chat. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/startWork.ts:32-36`, `apps/mobile/src/features/tasks/startWork.ts:38-68`
 
 ## S60.09: Effort selection.
 
@@ -112,10 +91,7 @@ Code: `apps/mobile/src/features/tasks/startWork.ts:32-36`, `apps/mobile/src/feat
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Effort is set only in the chat model picker; the New task sheet neither shows nor changes it. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1725-1731`, `apps/mobile/src/features/tasks/startWork.ts:38-68`
 
 ## S60.10: Spend budget.
 
@@ -131,46 +107,27 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1725-1731`, `apps/mobile/sr
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S60.13: Reviewable task plan.
-
-- Done when: Before the agent acts, the user sees its plan and can approve, edit or reject it.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Research runs wait for Approve plan before starting; AGI Work plan steps appear only as Activity log lines, with no plan view and no approve, edit or reject. | ui, handler |
-| vscode | partial | VS Code shows a plan card and offers Plan mode, but has no approve/reject control for the plan. | ui |
-
-Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:262-270`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5576-5606`
-
 ## S60.17: Parallel-work indicator.
 
 - Done when: When the agent works on several things at once, the view shows the parallel work.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Subagents can run, but the TUI has no subagent or parallel indicator (TranscriptCellKind::Subagent is never used). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/subagent.rs:247-253`, `apps/cli/src/tui/transcript_cell.rs:19-25`
 
 ## S60.18: Clarification request.
 
 - Done when: The agent can pause a task to ask the user a clarifying question and continue with the answer.
 - Wave: 3
-- Already works on: web, desktop, cli, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows "Waiting for connector input" but cannot answer it ("answered where the task was started"); no clarifying questions. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265`
 
 ## S60.21: Pause.
 
@@ -236,29 +193,15 @@ Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:252-265
 
 - Done when: From a finished task the user can save its procedure as a reusable Skill.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Skills are only auto-generated from tool patterns repeated across 3+ sessions; the user cannot save the current task as a skill. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/chat.rs:1047-1057`
-
-## S60.30: Generated deliverables.
-
-- Done when: Files the task produced are listed and can be opened or downloaded.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Produced files appear only as an Activity line "Produced <name>" with no open or download. | ui |
-
-Code: `apps/mobile/src/features/tasks/runPresentation.ts:248-249`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`
 
 ## S60.31: Partial-outcome summary.
 

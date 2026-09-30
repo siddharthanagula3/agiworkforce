@@ -1,3 +1,8 @@
+import type {
+  DispatchTaskPendingStep,
+  DispatchTaskReplyError,
+  DispatchTaskStepReply,
+} from '@agiworkforce/types';
 import type { BrowserPairingState } from './browser-bridge';
 import type { ComputerUseStatus } from './computer-use';
 import type { DeveloperSessionEvent } from './developer-sessions';
@@ -102,6 +107,8 @@ export interface DispatchTaskReport {
   message?: string;
   result?: string;
   error?: string;
+  pending?: DispatchTaskPendingStep[];
+  replyError?: DispatchTaskReplyError;
 }
 
 export type DesktopRuntimeEvent =
@@ -122,5 +129,7 @@ export type DesktopRuntimeEvent =
   | { kind: 'update-ready'; version: string }
   | { kind: 'dispatch-task'; task: DispatchTaskAssignment }
   | { kind: 'dispatch-task-cancel'; requestId: string }
+  | { kind: 'dispatch-task-reply'; requestId: string; replies: DispatchTaskStepReply[] }
   | { kind: 'device-prompt-changed'; open: boolean }
-  | { kind: 'computer-use-handed-back' };
+  | { kind: 'computer-use-handed-back' }
+  | { kind: 'browser-sign-in-expired' };

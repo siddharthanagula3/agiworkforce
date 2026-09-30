@@ -1,9 +1,12 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  WorkspaceConnectorToolRuleSchema,
+  type WorkspaceConnectorToolRule,
+} from '@agiworkforce/cloud-contracts';
 
 import type { ResearchDomainPolicy } from '@/app/api/llm/v1/chat/completions/lib/research-sources';
-import { logger } from '@/lib/logger';
 import type { ConnectorAccessPolicy } from './connector-policy-evaluator';
 
 export interface OrganizationConnectorPolicy extends ConnectorAccessPolicy {
@@ -12,6 +15,7 @@ export interface OrganizationConnectorPolicy extends ConnectorAccessPolicy {
   allowedMcpHosts: string[];
   allowedWebDomains: string[];
   blockedWebDomains: string[];
+  toolRules: WorkspaceConnectorToolRule[];
   organizationId: string;
   updatedByUserId: string | null;
   updatedAt: string;
@@ -27,13 +31,22 @@ interface Row {
   allowed_mcp_hosts: string[] | null;
   allowed_web_domains: string[] | null;
   blocked_web_domains: string[] | null;
+  tool_rules: unknown;
   updated_by_user_id: string | null;
   updated_at: string | Date;
 }
 
 const COLUMNS = `organization_id, allowed_connectors, blocked_connectors,
   allow_custom_connectors, allowed_plugins, blocked_plugins, allowed_mcp_hosts,
-  allowed_web_domains, blocked_web_domains, updated_by_user_id, updated_at`;
+  allowed_web_domains, blocked_web_domains, tool_rules, updated_by_user_id, updated_at`;
+
+function toolRulesFrom(value: unknown): WorkspaceConnectorToolRule[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const parsed = WorkspaceConnectorToolRuleSchema.safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
 
 function format(row: Row): OrganizationConnectorPolicy {
   return {
@@ -46,6 +59,7 @@ function format(row: Row): OrganizationConnectorPolicy {
     allowedMcpHosts: [...(row.allowed_mcp_hosts ?? [])],
     allowedWebDomains: [...(row.allowed_web_domains ?? [])],
     blockedWebDomains: [...(row.blocked_web_domains ?? [])],
+    toolRules: toolRulesFrom(row.tool_rules),
     updatedByUserId: row.updated_by_user_id,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
   };
@@ -66,36 +80,12 @@ export async function readConnectorPolicy(
   return row ? format(row) : null;
 }
 
-/**
- * Reads the policy without letting a database fault stop a member working.
- *
- * Connector governance is a deployment control over which approved
- * integrations staff use, not a containment barrier, the tenancy layer is what
- * stops cross-workspace access, and that fails closed. Denying every connector
- * because the policy table blipped would break every member's tools for an
- * infrastructure reason no administrator chose.
- */
-export async function readConnectorPolicySafely(
-  db: DatabaseAdapter,
-  organizationId: string | null,
-): Promise<OrganizationConnectorPolicy | null> {
-  if (!organizationId) return null;
-  try {
-    return await readConnectorPolicy(db, organizationId);
-  } catch (error) {
-    logger.error(
-      { error, organizationId },
-      '[connector-policy] read failed; request treated as ungoverned',
-    );
-    return null;
-  }
-}
-
 export async function readWorkspaceWebDomainPolicy(
   db: DatabaseAdapter,
   organizationId: string | null,
 ): Promise<ResearchDomainPolicy | null> {
-  const policy = await readConnectorPolicySafely(db, organizationId);
+  if (!organizationId) return null;
+  const policy = await readConnectorPolicy(db, organizationId);
   if (!policy) return null;
   if (policy.allowedWebDomains.length === 0 && policy.blockedWebDomains.length === 0) return null;
   return { allow: policy.allowedWebDomains, deny: policy.blockedWebDomains };
@@ -110,6 +100,7 @@ export interface ConnectorPolicyInput {
   allowedMcpHosts: string[];
   allowedWebDomains: string[];
   blockedWebDomains: string[];
+  toolRules: WorkspaceConnectorToolRule[];
 }
 
 /** Whole-row write, for the reason the model policy gives: partial writes on interdependent lists silently carry or drop the fields nobody touched. */
@@ -123,9 +114,10 @@ export async function upsertConnectorPolicy(
     `insert into public.organization_connector_policies
        (organization_id, allowed_connectors, blocked_connectors,
         allow_custom_connectors, allowed_plugins, blocked_plugins,
-        allowed_mcp_hosts, allowed_web_domains, blocked_web_domains, updated_by_user_id)
+        allowed_mcp_hosts, allowed_web_domains, blocked_web_domains, tool_rules,
+        updated_by_user_id)
      values ($1, $2::text[], $3::text[], $4, $5::text[], $6::text[], $7::text[], $8::text[],
-             $9::text[], $10)
+             $9::text[], $10::jsonb, $11)
      on conflict (organization_id) do update set
        allowed_connectors      = excluded.allowed_connectors,
        blocked_connectors      = excluded.blocked_connectors,
@@ -135,6 +127,7 @@ export async function upsertConnectorPolicy(
        allowed_mcp_hosts       = excluded.allowed_mcp_hosts,
        allowed_web_domains     = excluded.allowed_web_domains,
        blocked_web_domains     = excluded.blocked_web_domains,
+       tool_rules              = excluded.tool_rules,
        updated_by_user_id      = excluded.updated_by_user_id
      returning ${COLUMNS}`,
     [
@@ -147,6 +140,7 @@ export async function upsertConnectorPolicy(
       input.allowedMcpHosts,
       input.allowedWebDomains,
       input.blockedWebDomains,
+      JSON.stringify(input.toolRules),
       updatedByUserId,
     ],
   );
@@ -170,6 +164,7 @@ export function diffConnectorPolicy(
     if (after.allowedMcpHosts.length > 0) changed.push('allowedMcpHosts');
     if (after.allowedWebDomains.length > 0) changed.push('allowedWebDomains');
     if (after.blockedWebDomains.length > 0) changed.push('blockedWebDomains');
+    if (after.toolRules.length > 0) changed.push('toolRules');
     return changed;
   }
   const same = (a: string[], b: string[]) =>
@@ -184,5 +179,12 @@ export function diffConnectorPolicy(
   if (!same(before.allowedMcpHosts, after.allowedMcpHosts)) changed.push('allowedMcpHosts');
   if (!same(before.allowedWebDomains, after.allowedWebDomains)) changed.push('allowedWebDomains');
   if (!same(before.blockedWebDomains, after.blockedWebDomains)) changed.push('blockedWebDomains');
+  if (!same(before.toolRules.map(toolRuleKey), after.toolRules.map(toolRuleKey))) {
+    changed.push('toolRules');
+  }
   return changed;
+}
+
+function toolRuleKey(rule: WorkspaceConnectorToolRule): string {
+  return `${rule.connectorId} ${rule.toolName} ${rule.level}`;
 }

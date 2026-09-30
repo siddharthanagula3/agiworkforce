@@ -68,6 +68,7 @@ const settingValueSchemas = {
   'composer.followUpBehavior': z.enum(['queue', 'steer']),
   contextLines: z.number().int().min(0).max(500),
   'editorContext.autoAttach': z.boolean(),
+  respectGitIgnore: z.boolean(),
   telemetryEnabled: z.boolean(),
   hoverEnabled: z.boolean(),
   codeLensEnabled: z.boolean(),

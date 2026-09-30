@@ -5,9 +5,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 
@@ -24,7 +22,7 @@ async function handleGetActions(request: NextRequest) {
   try {
     ({ db, userId } = await getUserScopedDb(request, AUDIT_SCOPE));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     throw createError.unauthorized('Authentication required');

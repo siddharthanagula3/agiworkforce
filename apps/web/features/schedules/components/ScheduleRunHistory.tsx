@@ -258,7 +258,7 @@ export function ScheduleRunHistory({
         >
           {state.loadingMore && (
             <Loader2
-              className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+              className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none"
               aria-hidden="true"
             />
           )}

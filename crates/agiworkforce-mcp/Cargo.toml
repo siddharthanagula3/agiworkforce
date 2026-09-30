@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "agiworkforce-mcp"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 description = "AGI Workforce shared MCP (Model Context Protocol) engine: stateless 2026-07-28 negotiation with a 2025-era fallback, stdio and Streamable HTTP transports, the MCP authorization flow, and the server-side envelope helpers. UI and persistence are injected by the host app."
 

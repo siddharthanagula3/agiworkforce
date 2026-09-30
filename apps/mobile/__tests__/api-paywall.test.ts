@@ -86,6 +86,9 @@ function makeResponse(status: number, body: unknown, contentType = 'application/
     headers: { get: (h: string) => (h === 'content-type' ? contentType : null) },
     text: jest.fn(async () => bodyText),
     json: jest.fn(async () => (typeof body === 'string' ? JSON.parse(body) : body)),
+    clone() {
+      return this;
+    },
   } as unknown as Response;
 }
 
@@ -195,6 +198,93 @@ describe('Cloud account request isolation', () => {
       }),
     ).rejects.toThrow('Refusing an insecure upload destination');
     expect(mockCreateUploadTask).not.toHaveBeenCalled();
+  });
+
+  it('ends the session when a refreshed attachment presign is still unauthorized', async () => {
+    mockRefreshAuthSession.mockResolvedValueOnce(true);
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(401, { error: 'expired' }))
+      .mockResolvedValueOnce(makeResponse(401, { error: 'expired' }));
+
+    await expect(
+      api.uploadFile({ name: 'attachment.txt', type: 'text/plain', uri: 'file:///attachment.txt' }),
+    ).rejects.toThrow('session expired');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
+    expect(mockCreateUploadTask).not.toHaveBeenCalled();
+    expect(mockInvalidateCloudAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes an expired session at attachment completion without uploading the file again', async () => {
+    mockGetAuthToken
+      .mockResolvedValueOnce('old-token')
+      .mockResolvedValueOnce('old-token')
+      .mockResolvedValueOnce('new-token');
+    mockRefreshAuthSession.mockResolvedValueOnce(true);
+    mockUploadAsync.mockResolvedValueOnce({ status: 200, body: '', headers: {} });
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        makeResponse(200, {
+          storageKey: 'users/account-a/attachment.txt',
+          uploadUrl: 'https://storage.example.test/upload',
+          uploadMethod: 'PUT',
+          uploadHeaders: { 'Content-Type': 'text/plain' },
+        }),
+      )
+      .mockResolvedValueOnce(makeResponse(401, { error: 'expired' }))
+      .mockResolvedValueOnce(
+        makeResponse(200, {
+          attachment: {
+            id: '128db2b5-2967-4e55-b99b-44822727c8ea',
+            url: '/api/files/128db2b5-2967-4e55-b99b-44822727c8ea',
+            mimeType: 'text/plain',
+            name: 'attachment.txt',
+            byteCount: 32,
+            type: 'file',
+          },
+        }),
+      );
+
+    await expect(
+      api.uploadFile({ name: 'attachment.txt', type: 'text/plain', uri: 'file:///attachment.txt' }),
+    ).resolves.toMatchObject({ name: 'attachment.txt' });
+
+    expect(mockUploadAsync).toHaveBeenCalledTimes(1);
+    expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[1]?.[1]?.headers).toMatchObject({
+      Authorization: 'Bearer old-token',
+    });
+    expect(fetchMock.mock.calls[2]?.[1]?.headers).toMatchObject({
+      Authorization: 'Bearer new-token',
+    });
+  });
+
+  it('clears a terminal session failure at attachment completion', async () => {
+    mockUploadAsync.mockResolvedValueOnce({ status: 200, body: '', headers: {} });
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        makeResponse(200, {
+          storageKey: 'users/account-a/attachment.txt',
+          uploadUrl: 'https://storage.example.test/upload',
+          uploadMethod: 'PUT',
+          uploadHeaders: { 'Content-Type': 'text/plain' },
+        }),
+      )
+      .mockResolvedValueOnce(makeResponse(401, { error: 'expired' }));
+
+    await expect(
+      api.uploadFile({ name: 'attachment.txt', type: 'text/plain', uri: 'file:///attachment.txt' }),
+    ).rejects.toThrow('session expired');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockUploadAsync).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateCloudAccount).toHaveBeenCalledTimes(1);
+    expect(mockClearLocalCloudAccountState).toHaveBeenCalledTimes(1);
   });
 });
 

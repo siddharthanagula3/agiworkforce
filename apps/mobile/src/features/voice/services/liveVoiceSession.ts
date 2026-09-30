@@ -5,14 +5,18 @@ import {
   mediaDevices,
 } from 'react-native-webrtc';
 import {
+  LIVE_VOICE_WORK_TASK_TOOL,
   LiveVoiceToolBridge,
   LiveVoiceToolCallResponseSchema,
+  liveVoiceFunctionCallOf,
+  liveVoiceWorkTaskGoal,
   liveVoiceToolCallPath,
   type LiveVoicePendingApproval,
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
   type LiveVoiceToolDecision,
 } from '@agiworkforce/cloud-contracts';
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { apiFetch } from '@/services/api';
 import { LIVE_VOICE_MESSAGE, liveVoiceUnavailableReason } from './liveVoiceAvailability';
@@ -25,6 +29,8 @@ const CLOSE_TIMEOUT_MS = 3_000;
 const DISCONNECT_GRACE_MS = 5_000;
 const ASSISTANT_SPEECH_HOLD_MS = 1_200;
 const CLIENT_EVENT_PREFIX = 'agi';
+const DEFAULT_TOOL_TIMEOUT_MS = 20_000;
+const UNKNOWN_TOOL_LABEL = 'Working on it';
 
 export type LiveTranscriptRole = 'user' | 'assistant';
 
@@ -48,17 +54,44 @@ export interface LiveSessionClosed {
   seconds: number | null;
 }
 
+export interface LiveVoiceToolDescriptor {
+  id: string;
+  label: string;
+  timeoutMs: number;
+  requiresApproval: boolean;
+}
+
+export type LiveVoiceToolState = Extract<LifecycleStatus, 'running'> | 'timed_out';
+
+export interface LiveVoiceToolActivity {
+  delegationId: string;
+  toolId: string;
+  label: string;
+  state: LiveVoiceToolState;
+  startedAt: number;
+}
+
+export interface LiveVoiceToolOutcome {
+  callId: string;
+  label: string;
+  output: string;
+  isError: boolean;
+}
+
 export interface LiveVoiceSessionCallbacks {
   onStarted: () => void;
   onAssistantSpeaking: (active: boolean) => void;
   onBackendBusy: (active: boolean) => void;
+  onToolActivity?: (activities: readonly LiveVoiceToolActivity[]) => void;
   onToolApprovals?: (approvals: readonly LiveVoicePendingApproval[]) => void;
+  onToolResult?: (outcome: LiveVoiceToolOutcome) => void;
   onTranscript: (turn: LiveTranscriptTurn) => void;
   onInterrupted: () => void;
   onUsage: (seconds: number) => void;
   onClosed: (closed: LiveSessionClosed) => void;
   onError: (message: string) => void;
   onConnectionLost?: (message: string) => void;
+  onStartWorkTask?: (goal: string) => boolean;
 }
 
 export interface LiveVoiceSessionOptions {
@@ -68,10 +101,14 @@ export interface LiveVoiceSessionOptions {
   callbacks: LiveVoiceSessionCallbacks;
 }
 
+const WORK_TASK_NOT_STARTED =
+  'The task did not start because the chat could not send it right now. Tell the user to type the request in the chat with Work mode on.';
+
 interface CreateSessionResponse {
   sessionId: string;
   sdp: string;
   settlement: LiveSessionSettlement;
+  tools?: LiveVoiceToolDescriptor[];
 }
 
 interface ServerEvent {
@@ -165,7 +202,9 @@ export class LiveVoiceSession {
   private clientEventSeq = 0;
   private userTurn: { id: string; text: string; lastDeltaAt: number } | null = null;
   private assistantTurn: { id: string; text: string; lastDeltaAt: number } | null = null;
-  private readonly pendingDelegations = new Set<string>();
+  private readonly pendingDelegations = new Map<string, LiveVoiceToolActivity>();
+  private readonly delegationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly toolDescriptors = new Map<string, LiveVoiceToolDescriptor>();
   private readonly toolBridge: LiveVoiceToolBridge;
   private closeResolve: (() => void) | null = null;
   private usageSeconds: number | null = null;
@@ -184,13 +223,22 @@ export class LiveVoiceSession {
     this.sessionId = created.sessionId;
     this.settlement = created.settlement;
     this.callbacks = callbacks;
+    for (const tool of created.tools ?? []) this.toolDescriptors.set(tool.id, tool);
     this.toolBridge = new LiveVoiceToolBridge({
       callTool: (request) => this.callTool(request),
       send: (event) => this.send(event),
       onApprovalsChanged: (approvals) => {
+        if (approvals.length > 0) this.holdDelegationTimers();
         this.callbacks.onToolApprovals?.(approvals);
-        this.publishBackendBusy();
+        this.publishToolActivity();
       },
+      onToolResult: (result) =>
+        this.callbacks.onToolResult?.({
+          callId: result.callId,
+          label: this.describeTool(result.name).label,
+          output: result.output,
+          isError: result.isError,
+        }),
     });
   }
 
@@ -237,6 +285,9 @@ export class LiveVoiceSession {
           conversationId: options.conversationId,
           ...(options.language ? { language: options.language } : {}),
           surface: 'mobile',
+          ...(options.callbacks.onStartWorkTask
+            ? { clientHandoffs: [LIVE_VOICE_WORK_TASK_TOOL] }
+            : {}),
         }),
       });
       if (!response.ok) throw await readErrorMessage(response);
@@ -270,20 +321,88 @@ export class LiveVoiceSession {
       body: JSON.stringify(request),
     });
     if (!response.ok) throw await readErrorMessage(response);
-    return LiveVoiceToolCallResponseSchema.parse(await response.json());
+    const parsed = LiveVoiceToolCallResponseSchema.parse(await response.json());
+    if (
+      request.name !== LIVE_VOICE_WORK_TASK_TOOL ||
+      parsed.status !== 'completed' ||
+      parsed.isError
+    ) {
+      return parsed;
+    }
+    const goal = liveVoiceWorkTaskGoal(request.arguments);
+    if (goal && this.callbacks.onStartWorkTask?.(goal)) return parsed;
+    return { status: 'completed', isError: true, output: WORK_TASK_NOT_STARTED };
   }
 
   cancelBackendWork(): void {
-    for (const delegationId of [...this.pendingDelegations]) {
+    for (const delegationId of [...this.pendingDelegations.keys()]) {
       this.send({ type: 'session.delegation.cancel', delegation_id: delegationId });
+      this.endDelegation(delegationId);
     }
-    this.pendingDelegations.clear();
     this.toolBridge.cancel();
-    this.publishBackendBusy();
+    this.publishToolActivity();
   }
 
-  private publishBackendBusy(): void {
+  private beginDelegation(delegationId: string, toolId: string | undefined): void {
+    const descriptor = this.describeTool(toolId);
+    this.pendingDelegations.set(delegationId, {
+      delegationId,
+      toolId: descriptor.id,
+      label: descriptor.label,
+      state: 'running',
+      startedAt: Date.now(),
+    });
+    const timer = setTimeout(() => {
+      this.delegationTimers.delete(delegationId);
+      const activity = this.pendingDelegations.get(delegationId);
+      if (!activity) return;
+      this.pendingDelegations.set(delegationId, { ...activity, state: 'timed_out' });
+      this.publishToolActivity();
+    }, descriptor.timeoutMs);
+    this.delegationTimers.set(delegationId, timer);
+  }
+
+  private holdDelegationTimers(): void {
+    for (const [delegationId, timer] of this.delegationTimers) {
+      clearTimeout(timer);
+      this.delegationTimers.delete(delegationId);
+      const activity = this.pendingDelegations.get(delegationId);
+      if (activity) this.pendingDelegations.set(delegationId, { ...activity, state: 'running' });
+    }
+  }
+
+  private nameDelegation(delegationId: string, toolId: string): void {
+    const activity = this.pendingDelegations.get(delegationId);
+    if (!activity || activity.toolId !== 'unknown') return;
+    const descriptor = this.describeTool(toolId);
+    this.pendingDelegations.set(delegationId, {
+      ...activity,
+      toolId: descriptor.id,
+      label: descriptor.label,
+    });
+  }
+
+  private endDelegation(delegationId: string): void {
+    const timer = this.delegationTimers.get(delegationId);
+    if (timer !== undefined) clearTimeout(timer);
+    this.delegationTimers.delete(delegationId);
+    this.pendingDelegations.delete(delegationId);
+  }
+
+  private describeTool(toolId: string | undefined): LiveVoiceToolDescriptor {
+    const known = toolId ? this.toolDescriptors.get(toolId) : undefined;
+    if (known) return known;
+    return {
+      id: toolId ?? 'unknown',
+      label: UNKNOWN_TOOL_LABEL,
+      timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
+      requiresApproval: false,
+    };
+  }
+
+  private publishToolActivity(): void {
     this.callbacks.onBackendBusy(this.pendingDelegations.size > 0 || this.toolBridge.busy);
+    this.callbacks.onToolActivity?.([...this.pendingDelegations.values()]);
   }
 
   setMuted(muted: boolean): void {
@@ -397,25 +516,28 @@ export class LiveVoiceSession {
         this.appendAssistant(String(parsed['delta'] ?? ''));
         return;
       case 'session.delegation.created': {
-        const delegation = parsed['delegation'] as { id?: string } | undefined;
-        if (delegation?.id) this.pendingDelegations.add(delegation.id);
-        this.publishBackendBusy();
+        const delegation = parsed['delegation'] as
+          { id?: string; tool?: string; type?: string } | undefined;
+        if (delegation?.id) this.beginDelegation(delegation.id, delegation.tool ?? delegation.type);
+        this.publishToolActivity();
         return;
       }
       case 'response.event': {
-        const nested = parsed['event'] as { type?: string } | undefined;
+        const nested = parsed['event'] as { type?: string; item?: { type?: string } } | undefined;
         const delegationId = parsed['delegation_id'];
+        const toolId = liveVoiceFunctionCallOf(nested)?.name ?? nested?.item?.type;
+        if (typeof delegationId === 'string' && toolId) this.nameDelegation(delegationId, toolId);
         this.toolBridge.observe(nested);
         if (nested?.type && DELEGATION_TERMINAL_EVENTS.has(nested.type)) {
           const succeeded = nested.type === 'response.completed';
           if (succeeded && this.toolBridge.busy) {
-            this.publishBackendBusy();
+            this.publishToolActivity();
             return;
           }
           if (!succeeded) this.toolBridge.cancel();
-          if (typeof delegationId === 'string') this.pendingDelegations.delete(delegationId);
-          else this.pendingDelegations.clear();
-          this.publishBackendBusy();
+          if (typeof delegationId === 'string') this.endDelegation(delegationId);
+          else for (const id of [...this.pendingDelegations.keys()]) this.endDelegation(id);
+          this.publishToolActivity();
         }
         return;
       }
@@ -532,6 +654,8 @@ export class LiveVoiceSession {
     if (this.speechTimer !== null) clearTimeout(this.speechTimer);
     this.speechTimer = null;
     this.clearDisconnectTimer();
+    for (const timer of this.delegationTimers.values()) clearTimeout(timer);
+    this.delegationTimers.clear();
   }
 }
 

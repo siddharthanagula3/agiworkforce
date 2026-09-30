@@ -247,7 +247,7 @@ const MarkdownTaskCheckbox = ({ checked, disabled }: { checked?: boolean; disabl
   return (
     <span
       className={cn(
-        'relative mr-2 inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center',
+        'relative me-2 inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center',
         'translate-y-[0.15em] rounded-compact border border-[var(--chat-text-muted)] align-top',
         checked
           ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)]'
@@ -287,7 +287,7 @@ const MarkdownUnorderedList = ({
   <ul
     className={cn(
       'mb-3',
-      hasClassToken(className, TASK_LIST_CLASS) ? 'list-none pl-0' : 'list-disc pl-6',
+      hasClassToken(className, TASK_LIST_CLASS) ? 'list-none ps-0' : 'list-disc ps-6',
     )}
   >
     {children}
@@ -301,7 +301,7 @@ const MarkdownOrderedList = ({
   children?: React.ReactNode;
   start?: number;
 }) => (
-  <ol className="mb-3 list-decimal pl-6" start={start}>
+  <ol className="mb-3 list-decimal ps-6" start={start}>
     {children}
   </ol>
 );
@@ -342,8 +342,8 @@ function markdownTableAlignmentClass(
 ): string {
   const value = align ?? textAlign;
   if (value === 'center') return 'text-center';
-  if (value === 'right') return 'text-right';
-  return 'text-left';
+  if (value === 'right') return 'text-end';
+  return 'text-start';
 }
 
 const MarkdownTableCell = ({
@@ -399,7 +399,7 @@ const markdownComponents: Components = {
   li: MarkdownListItem as Components['li'],
   input: MarkdownTaskCheckbox as Components['input'],
   blockquote: ({ children }) => (
-    <blockquote className="mb-3 border-l-2 border-border pl-4 text-muted-foreground [&>:last-child]:mb-0">
+    <blockquote className="mb-3 border-s-2 border-border ps-4 text-muted-foreground [&>:last-child]:mb-0">
       {children}
     </blockquote>
   ),
@@ -494,7 +494,7 @@ function MarkdownContentImpl({
           </Tooltip.Provider>
         </CitationsContext.Provider>
         {isStreaming && content.trim() && (
-          <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
+          <span className="ms-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
         )}
       </StreamTailContext.Provider>
     </TaskToggleContext.Provider>

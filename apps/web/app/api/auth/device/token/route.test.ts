@@ -25,6 +25,7 @@ vi.mock('@/lib/server/developer-token', () => ({
 vi.mock('@/lib/server/terms', () => ({
   CURRENT_TERMS_VERSION: '2026-09-01',
   hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
+  mustAcceptTerms: async (userId: string) => !(await mocks.hasAcceptedCurrentTerms(userId)),
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: (...args: unknown[]) => mocks.resolveActiveOrganizationId(...args),
@@ -77,6 +78,7 @@ describe('POST /api/auth/device/token', () => {
           user_email: 'user@example.com',
         },
       ])
+      .mockResolvedValueOnce([{ account_status: 'active' }])
       .mockResolvedValueOnce([{ status: 'consumed' }]);
 
     const response = await POST(
@@ -123,6 +125,7 @@ describe('POST /api/auth/device/token', () => {
           user_email: 'user@example.com',
         },
       ])
+      .mockResolvedValueOnce([{ account_status: 'active' }])
       .mockResolvedValueOnce([{ status: 'consumed' }]);
 
     const response = await POST(
@@ -293,5 +296,34 @@ describe('POST /api/auth/device/token', () => {
     expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('issues nothing to an account suspended between approval and the poll', async () => {
+    mocks.query
+      .mockReset()
+      .mockResolvedValueOnce([
+        {
+          device_id: '0a9ae561-8447-4ce4-afca-1c205d69bbad',
+          user_code: 'ABCD-2345',
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+          status: 'approved',
+          user_id: 'user-1',
+          user_email: 'user@example.com',
+        },
+      ])
+      .mockResolvedValueOnce([{ account_status: 'suspended' }]);
+
+    const response = await POST(
+      new NextRequest('https://agiworkforce.com/api/auth/device/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'https://tauri.localhost' },
+        body: JSON.stringify({ device_code: '0a9ae561-8447-4ce4-afca-1c205d69bbad' }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: 'account_unavailable' });
+    expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 });

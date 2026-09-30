@@ -53,10 +53,36 @@ export function isEnforcementFile(relPath) {
   return !NOT_ENFORCEMENT.some((prefix) => relPath.startsWith(prefix));
 }
 
-// The three shapes the server has for refusing on a workspace feature. A fourth
+// A top-level argument of the call opening at `open`, by position, or null.
+function callArgument(source, open, index) {
+  const args = [];
+  let depth = 0;
+  let start = open + 1;
+  for (let i = open + 1; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') {
+      if (depth === 0) {
+        args.push(source.slice(start, i));
+        break;
+      }
+      depth--;
+    } else if (ch === ',' && depth === 0) {
+      args.push(source.slice(start, i));
+      start = i + 1;
+    }
+  }
+  return args[index] ?? null;
+}
+
+// The four shapes the server has for refusing on a workspace feature. A fifth
 // mechanism reads as unenforced here until it is added, which is the safe way round.
 export function featuresEnforcedIn(source) {
   const found = new Set();
+  for (const match of source.matchAll(/evaluateManagedComputeAccess\(/g)) {
+    const feature = callArgument(source, match.index + match[0].length - 1, 5);
+    for (const literal of feature?.matchAll(/'([a-z_]+)'/g) ?? []) found.add(literal[1]);
+  }
   for (const match of source.matchAll(
     /buildWorkspaceFeatureGateResponse\(\s*[^,]+,\s*[^,]+,\s*'([a-z_]+)'/g,
   )) {

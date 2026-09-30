@@ -78,7 +78,10 @@ test('passes when every membership statement names its workspace', () => {
   const root = fixture();
   const { status, output } = run(root);
   assert.equal(status, 0, output);
-  assert.match(output, /5 statement\(s\) over 8 membership table\(s\)/);
+  assert.match(
+    output,
+    new RegExp(`5 statement\\(s\\) over ${MEMBERSHIP_TABLES.length} membership table\\(s\\)`),
+  );
 });
 
 test('fails on a membership statement with no workspace predicate', () => {

@@ -66,7 +66,7 @@ describe('projects tree', () => {
     try {
       const items = await provider.getChildren();
 
-      expect(client.listProjects).toHaveBeenCalledWith({ limit: 50, offset: 0 });
+      expect(client.listProjects).toHaveBeenCalledWith({ limit: 100, offset: 0 }, {});
       expect(items).toHaveLength(2);
       const [first] = items as ProjectTreeItem[];
       expect(first?.id).toBe('proj_1');

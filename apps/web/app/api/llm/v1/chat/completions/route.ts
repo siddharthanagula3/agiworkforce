@@ -13,7 +13,7 @@ import {
 } from '@/lib/cors';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
-import { addAttachmentTruncationHeader } from '@/lib/chat-attachment-truncation-notice';
+import { addAttachmentTruncationHeader } from '@agiworkforce/cloud-contracts';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import {
@@ -50,13 +50,9 @@ import {
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
 import { extractUserQuery, runResearchLoop } from './lib/research-loop';
-import { readResearchConnectorSources } from '@/lib/services/research-connector-source-service';
 import { searchResearchFileSources } from '@/lib/services/research-file-source-service';
-import {
-  saveResearchReport,
-  type PersistedResearchReport,
-} from '@/lib/services/research-report-service';
-import { notifyResearchReportSettled } from '@/lib/services/agent-notification-service';
+import { buildResearchRunOptions } from './lib/research-run-options';
+import type { PersistedResearchReport } from '@/lib/services/research-report-service';
 import { buildManagedAgentStream } from './lib/managed-agent-stream';
 import { buildApprovalCheckpointRequest } from './lib/approval-checkpoint-request';
 import { classifyToolLoopInputs } from './lib/tool-loop-routing';
@@ -108,8 +104,7 @@ import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-t
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   loadConnectorToolPermissions,
-  withDisabledConnectorIds,
-  withoutStandingApprovals,
+  scopeConnectorPermissionsToTurn,
 } from './lib/connector-tool-permissions';
 import { admitConversationTurn } from './lib/conversation-turn-admission';
 import { hostedToolRunsUnasked, loadTurnToolPermissions } from './lib/tool-approval-policy';
@@ -118,6 +113,7 @@ import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import type { StreamChunk } from '@agiworkforce/types';
 import { getModelMetadataById, isFreeBillingPlanTier } from '@agiworkforce/types';
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -127,7 +123,6 @@ import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import {
   findActiveCloudAgentRunForConversation,
   isCloudAgentRunCancellationRequested,
-  isCloudAgentRunPauseRequested,
   saveCloudAgentApprovalCheckpoint,
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
@@ -560,7 +555,7 @@ async function dispatchChatCompletions(
       const researchToolApprovalPolicy =
         processed.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
       const researchConnectorPermissions = await timePhase(CHAT_TURN_PHASE.toolPermissions, () =>
-        loadConnectorToolPermissions(requestDb, userId),
+        loadConnectorToolPermissions(requestDb, userId, processed.organizationId ?? null),
       );
       processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
         approvalRequired: !hostedToolRunsUnasked(
@@ -587,15 +582,89 @@ async function dispatchChatCompletions(
       // within the workspace's site rules; the loop applies it at ingestion. The
       // file search runs before the loop so a failing index degrades to a
       // web-only run rather than failing the turn.
-      const researchDomainPolicy = processed.webSearchDomainPolicy ?? null;
-      const researchConnectorIds = processed.researchSources?.connectors ?? [];
+      const requestedResearchConnectorIds = processed.researchSources?.connectors ?? [];
+      const researchConnectorIds =
+        requestedResearchConnectorIds.length > 0 &&
+        (await connectorsAllowedForTurn(request, userId, processed))
+          ? requestedResearchConnectorIds
+          : [];
       const researchFileSources = processed.researchSources?.files
         ? await searchResearchFileSources(runDb, {
             userId,
             organizationId: processed.organizationId ?? null,
             query: extractUserQuery(processed.llmRequest.messages),
+            conversationId: processed.conversationId ?? null,
+            googleUserDataRouted: processed.googleUserData === true,
           })
         : [];
+
+      const approvedResearchRun = (processed.researchResume?.approvedSteps.length ?? 0) > 0;
+      if (
+        approvedResearchRun &&
+        areDurableInitialTurnsEnabled() &&
+        !(await isDurableTransportCoolingDown())
+      ) {
+        try {
+          const workflow = await timePhase(CHAT_TURN_PHASE.durableStart, () =>
+            startCloudAgentWorkflowExecution({
+              db: runDb,
+              runId: run.id,
+              userId,
+              processed,
+              mcpTools: [],
+              approvalMode: 'auto',
+              toolApprovalPolicy: researchToolApprovalPolicy,
+              connectorPermissions: researchConnectorPermissions,
+              research: {
+                connectorIds: researchConnectorIds,
+                fileSources: researchFileSources,
+              },
+            }),
+          );
+          const live = await timePhase(CHAT_TURN_PHASE.durableFirstEvent, () =>
+            claimLiveDurableStream(workflow.readable),
+          );
+          if (!live) {
+            await workflow.cancel().catch(() => undefined);
+            throw new DurableStreamStalledError(false);
+          }
+          const durableResearchHeaders: Record<string, string> = {
+            ...SSE_RESPONSE_HEADERS,
+            'X-AGI-Research-Loop': 'active',
+            'X-AGI-Tool-Loop': 'durable',
+            'X-AGI-Workflow-Run-Id': workflow.workflowRunId,
+            ...getCorsHeaders(request),
+            ...getSecurityHeaders(),
+          };
+          addAgentRunHeaders(durableResearchHeaders, run);
+          if (processed.chatRequest.model) {
+            durableResearchHeaders['X-AGI-Resolved-Model'] = processed.chatRequest.model;
+          }
+          if (processed.quotaWarningHeader) {
+            durableResearchHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
+          }
+          const bounded = boundDurableTurnStream({
+            readable: live,
+            db: runDb,
+            userId,
+            runId: run.id,
+            workflowRunId: workflow.workflowRunId,
+            requestId: processed.requestId,
+          });
+          return new NextResponse(withSseHeartbeat(bounded), { headers: durableResearchHeaders });
+        } catch (error) {
+          const unreserved = error instanceof CloudAgentWorkflowBillingUnavailableError;
+          const details = { error, userId, requestId: processed.requestId, runId: run.id };
+          if (unreserved) {
+            logger.debug(details, 'Research run carries no reservation; running request-scoped');
+          } else {
+            logger.error(
+              details,
+              'Durable research run could not start; falling back to the request-scoped stream',
+            );
+          }
+        }
+      }
 
       // The report is the turn's durable half; holding the row the loop just
       // stored lets the assistant message carry the same activity rather than
@@ -606,101 +675,29 @@ async function dispatchChatCompletions(
         { userId, token },
         {
           usage: researchUsage,
-          // CAP-045 slice 1: durable report persistence. `runDb` is the same
-          // RLS-scoped adapter the run journal uses, so the row is tenant-
-          // isolated in the database. Persistence failures are swallowed by the
-          // loop (logged, never fatal) -- a storage outage must not destroy a
-          // report the user is already reading.
-          persistReport: async (report) => {
-            storedResearchReport = {
-              ...(await saveResearchReport(runDb, {
-                userId,
-                requestId: processed.requestId,
-                conversationId: processed.conversationId ?? null,
-                model: processed.chatRequest.model,
-                provider: processed.provider,
-                ...report,
-              })),
-              deliverable: report.deliverable,
-              sourceSelection: report.sourceSelection,
-            };
-            await notifyResearchReportSettled(runDb, {
-              userId,
-              reportId: storedResearchReport.id,
-              requestId: processed.requestId,
-              title: storedResearchReport.title || storedResearchReport.query,
-              status: storedResearchReport.status,
-              sourcesConsulted: storedResearchReport.sourcesConsulted,
-            });
-            return storedResearchReport;
-          },
-          // CAP-045 slice 4: retry carries the previous attempt's material.
-          // It arrives on the NORMAL request path, so this run reserved and
-          // metered exactly like a first attempt -- there is no bypass here.
-          ...(processed.researchResume
-            ? {
-                priorSources: processed.researchResume.sources.map((source) => ({
-                  url: source.url,
-                  title: source.title ?? source.url,
-                  ...(source.snippet ? { snippet: source.snippet } : {}),
-                  ...(source.retrieved_at ? { retrievedAt: source.retrieved_at } : {}),
-                })),
-                priorSteps: processed.researchResume.steps,
-                approvedPlan: processed.researchResume.approvedSteps,
-                deliverable: processed.researchResume.deliverable,
-                ...(processed.researchResume.guidance
-                  ? { guidance: processed.researchResume.guidance }
-                  : {}),
-              }
-            : {}),
-          // A first attempt shows its plan and waits for Start; the approved
-          // plan the client sends back IS that decision, so it searches at once.
-          requirePlanApproval: (processed.researchResume?.approvedSteps.length ?? 0) === 0,
-          domainPolicy: researchDomainPolicy,
-          sources: {
-            files: processed.researchSources?.files ?? false,
-            allowDomains: processed.researchSources?.allowDomains ?? [],
-            denyDomains: processed.researchSources?.denyDomains ?? [],
-            connectors: researchConnectorIds,
-          },
-          ...(researchConnectorIds.length > 0
-            ? {
-                readConnectorSources: (queries: readonly string[]) =>
-                  readResearchConnectorSources({
-                    userId,
-                    organizationId: processed.organizationId ?? null,
-                    planTier: processed.subscriptionTier ?? null,
-                    connectorIds: researchConnectorIds,
-                    queries,
-                    isToolDenied: researchConnectorPermissions.isConnectorToolDenied,
-                    signal: request.signal,
-                  }),
-              }
-            : {}),
-          fileSources: researchFileSources,
-          toolApprovalPolicy: researchToolApprovalPolicy,
-          connectorPermissions: processed.conversationIsTemporary
-            ? withoutStandingApprovals(researchConnectorPermissions)
-            : researchConnectorPermissions,
-          isCancellationRequested: () =>
-            isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
-          isPauseRequested: () => isCloudAgentRunPauseRequested(runDb, { userId, runId: run.id }),
-          takeSteerMessages: () =>
-            takeCloudAgentRunSteers(runDb, {
-              userId,
-              organizationId: processed.organizationId ?? null,
-              runId: run.id,
-            }),
-          // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
-          // request instead of billing a full research run nobody sees.
-          signal: request.signal,
-          failover: {
-            next: (error) => {
-              const attempt = researchFailover.next(error);
-              if (attempt) researchServing = attempt.processed;
-              return attempt;
+          ...buildResearchRunOptions({
+            processed,
+            userId,
+            runId: run.id,
+            db: runDb,
+            connectorIds: researchConnectorIds,
+            fileSources: researchFileSources,
+            connectorPermissions: researchConnectorPermissions,
+            toolApprovalPolicy: researchToolApprovalPolicy,
+            // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
+            // request instead of billing a full research run nobody sees.
+            signal: request.signal,
+            failover: {
+              next: (error) => {
+                const attempt = researchFailover.next(error);
+                if (attempt) researchServing = attempt.processed;
+                return attempt;
+              },
             },
-          },
+            onReportStored: (report) => {
+              storedResearchReport = report;
+            },
+          }),
         },
       );
       const researchStream = buildManagedAgentStream({
@@ -773,7 +770,9 @@ async function dispatchChatCompletions(
     // E2B paths already 4xx for tools:false; this closes the same gap for connectors/MCP.
     const modelSupportsTools =
       getModelMetadataById(processed.chatRequest.model)?.capabilities?.tools ?? true;
-    const userConnectorToolsEnabled = processed.chatRequest.connector_tools_enabled !== false;
+    const userConnectorToolsEnabled =
+      processed.chatRequest.connector_tools_enabled !== false &&
+      (await connectorsAllowedForTurn(request, userId, processed));
     const operatorTools = modelSupportsTools
       ? await timePhase(CHAT_TURN_PHASE.toolCatalog, () => loadMcpToolDefs())
       : [];
@@ -797,6 +796,7 @@ async function dispatchChatCompletions(
       connectorPermissionsRequired || toolApprovalPolicyRequired
         ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () => {
             return loadTurnToolPermissions(requestDb, userId, {
+              organizationId: processed.organizationId ?? null,
               modelSupportsTools,
               connectorPermissionsRequired,
               toolApprovalPolicyRequired,
@@ -813,12 +813,10 @@ async function dispatchChatCompletions(
     // for THIS turn only, layered on top of the user's standing allow/ask/deny
     // verdicts. Neither replaces the other -- a connector can be off for one
     // chat while its saved permission stays Allow everywhere else.
-    const turnConnectorPermissions = withDisabledConnectorIds(
-      processed.conversationIsTemporary
-        ? withoutStandingApprovals(connectorPermissions)
-        : connectorPermissions,
-      new Set(processed.chatRequest.disabled_connector_ids),
-    );
+    const turnConnectorPermissions = scopeConnectorPermissionsToTurn(connectorPermissions, {
+      temporary: processed.conversationIsTemporary === true,
+      disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
+    });
     // GOV-7: the connector-tool ceiling is now the caller's PLAN ceiling, not a
     // flat 32 for everybody, and the truncation it causes is reported back
     // rather than only logged, a "Connected" connector whose tools were
@@ -832,6 +830,8 @@ async function dispatchChatCompletions(
               planTier: processed.subscriptionTier,
               organizationId: processed.organizationId,
               isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
+              ...(processed.healthSpaceProjectId ? { healthSpace: true } : {}),
+              googleUserDataRouted: processed.googleUserData === true,
             }),
           )
         : { tools: [], dropped: [], limit: null };
@@ -1439,12 +1439,23 @@ async function admitAndDispatchTurn(request: NextRequest): Promise<NextResponse 
   const authResult = await timePhase(CHAT_TURN_PHASE.authGate, () => runAuthGate(request));
   if (!authResult.ok) return authResult.response;
 
-  return timePhase(CHAT_TURN_PHASE.turnSlot, () =>
+  const response = await timePhase(CHAT_TURN_PHASE.turnSlot, () =>
     withManagedTurnSlot(
       { userId: authResult.userId, planTier: authResult.subscription.plan_tier },
       () => dispatchChatCompletions(request, authResult),
     ),
   );
+  if (authResult.termsNotice) attachHeaders(response, authResult.termsNotice);
+  return response;
+}
+
+/** A response built from a fetch keeps immutable headers; the notice is advisory, so skip it there. */
+function attachHeaders(response: NextResponse | Response, headers: Record<string, string>): void {
+  try {
+    for (const [name, value] of Object.entries(headers)) response.headers.set(name, value);
+  } catch {
+    // Immutable headers: the turn itself is unaffected.
+  }
 }
 
 export const POST = withCorsRoute(

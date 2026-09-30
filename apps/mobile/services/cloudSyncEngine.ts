@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { api } from './api';
 import { managedCloudProjects } from './managedCloudProjects';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
@@ -15,7 +16,7 @@ import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStor
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useSettingsSyncStateStore } from '@/stores/settings/settingsSyncStateStore';
 import { toCloudSettings, applyCloudSettings, type CloudSettings } from './cloudSettingsMapping';
-import type { ChatMessage } from '@/types/chat';
+import type { ChatMessage, PendingToolInput, PendingToolInputCall } from '@/types/chat';
 import {
   assertCloudAccountEpochCurrent,
   captureCloudAccountEpoch,
@@ -23,6 +24,8 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
+  CONVERSATION_TITLE_MAX_LENGTH,
+  SYNC_PROTOCOL_VERSION,
   ChatSyncPullResponseSchema,
   ChatSyncPushResponseSchema,
   MemorySyncPullResponseSchema,
@@ -52,6 +55,7 @@ import {
   toMemoryPushItem,
   memorySyncContentMatches,
   mapProjectWireDelta,
+  bigintGreater,
   mergeCloudSafeSettings,
   rebaseCloudSafeSettings,
   shouldPushSettings,
@@ -87,17 +91,19 @@ const conversationPort: ConversationStorePort = {
     if (!c) return undefined;
     return {
       id: c.id,
-      title: c.title,
+      title: c.title.slice(0, CONVERSATION_TITLE_MAX_LENGTH),
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
       messageCount: c.messageCount,
       pinned: c.pinned,
+      ...(c.starred !== undefined ? { starred: c.starred } : {}),
       model: c.model,
       projectId: c.projectId,
       serverVersion: c.serverVersion,
     };
   },
   insert: (record) => {
+    if (record.archived === true) return;
     useChatCloudMessageStore.getState().addCloudConversation({
       id: record.id,
       title: record.title,
@@ -105,6 +111,7 @@ const conversationPort: ConversationStorePort = {
       updatedAt: record.updatedAt,
       messageCount: record.messageCount,
       pinned: record.pinned,
+      ...(record.starred !== undefined ? { starred: record.starred } : {}),
       model: record.model,
       projectId: record.projectId,
       ...(record.activeLeafMessageId !== undefined
@@ -114,6 +121,10 @@ const conversationPort: ConversationStorePort = {
     });
   },
   patch: (id, patch) => {
+    if (patch.archived === true) {
+      useChatCloudMessageStore.getState().removeCloudConversation(id);
+      return;
+    }
     useChatCloudMessageStore.getState().patchCloudConversation(id, patch);
   },
   remove: (id) => {
@@ -123,6 +134,63 @@ const conversationPort: ConversationStorePort = {
 
 function messageContentToString(content: unknown): string {
   return typeof content === 'string' ? content : JSON.stringify(content);
+}
+
+const PHONE_INPUT_TOOL_PREFIX = 'phone-input:';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function projectPendingToolInput(
+  existing: unknown,
+  pending: PendingToolInput | undefined,
+): Record<string, unknown>[] | undefined {
+  const kept = (Array.isArray(existing) ? existing : []).filter(
+    (entry): entry is Record<string, unknown> =>
+      isRecord(entry) &&
+      !(typeof entry['id'] === 'string' && entry['id'].startsWith(PHONE_INPUT_TOOL_PREFIX)) &&
+      !pending?.toolCalls.some((call) => call.toolCallId === entry['toolCallId']),
+  );
+  const paused = (pending?.toolCalls ?? []).map((call) => ({
+    id: `${PHONE_INPUT_TOOL_PREFIX}${call.toolCallId}`,
+    name: call.name,
+    status: 'awaiting_input',
+    toolCallId: call.toolCallId,
+    ...(call.connectorId ? { connectorId: call.connectorId } : {}),
+    inputRequests: call.inputRequests,
+  }));
+  const tools = [...kept, ...paused];
+  return tools.length > 0 ? tools : undefined;
+}
+
+export function pendingToolInputFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): PendingToolInput | undefined {
+  const run = ManagedCloudAgentRunReferenceSchema.safeParse(metadata?.['cloudAgentRun']);
+  const tools = metadata?.['tools'];
+  if (!run.success || !Array.isArray(tools)) return undefined;
+  const toolCalls: PendingToolInputCall[] = tools.flatMap((entry) =>
+    isRecord(entry) &&
+    entry['status'] === 'awaiting_input' &&
+    typeof entry['toolCallId'] === 'string' &&
+    entry['toolCallId'].length > 0 &&
+    typeof entry['name'] === 'string' &&
+    isRecord(entry['inputRequests'])
+      ? [
+          {
+            toolCallId: entry['toolCallId'],
+            name: entry['name'],
+            connectorId: typeof entry['connectorId'] === 'string' ? entry['connectorId'] : '',
+            round: 0,
+            inputRequests: entry['inputRequests'],
+          },
+        ]
+      : [],
+  );
+  return toolCalls.length > 0
+    ? { runId: run.data.runId, requestedAt: new Date(0).toISOString(), toolCalls }
+    : undefined;
 }
 
 function messageMetadataForSync(message: ChatMessage): Record<string, unknown> | null {
@@ -196,6 +264,10 @@ function messageMetadataForSync(message: ChatMessage): Record<string, unknown> |
   } else if (runReference.success || 'cloudApproval' in base) {
     base.cloudApproval = null;
   }
+
+  const tools = projectPendingToolInput(base['tools'], message.pendingToolInput);
+  if (tools) base['tools'] = tools;
+  else delete base['tools'];
 
   return Object.keys(base).length > 0 ? base : null;
 }
@@ -331,10 +403,12 @@ const messagePort: MessageStorePort = {
     );
     const chatMessages = records.map((record) => {
       const existing = existingById.get(record.id);
+      const { model: _model, provider: _provider, ...kept }: Partial<ChatMessage> = existing ?? {};
       const toolCalls = hydrateApprovalToolCalls(existing, record.metadata);
       const generatedImage = hydrateGeneratedImageFields(record.metadata);
+      const pendingToolInput = pendingToolInputFromMetadata(record.metadata);
       return {
-        ...(existing ?? {}),
+        ...kept,
         id: record.id,
         role: record.role,
         content: record.content,
@@ -346,6 +420,7 @@ const messagePort: MessageStorePort = {
         serverVersion: record.serverVersion,
         ...(toolCalls ? { toolCalls } : {}),
         ...generatedImage,
+        pendingToolInput,
       } as ChatMessage;
     });
     useChatCloudMessageStore.getState().setCloudMessages(conversationId, chatMessages);
@@ -535,6 +610,12 @@ async function pullMemory(account: CloudAccountEpoch): Promise<void> {
     const raw = await api.get<unknown>(`${MEMORY_SYNC_PATH}?since=${encodeURIComponent(cursor)}`);
     assertCloudAccountEpochCurrent(account);
     const res = MemorySyncPullResponseSchema.parse(raw);
+    if (res.memoryEnabled !== undefined) {
+      useMemorySyncStateStore.getState().setAccountMemoryEnabled(res.memoryEnabled);
+      if (!useCloudSettingsStore.getState().memoryPolicyInitialized) {
+        useCloudSettingsStore.setState({ memoryEnabled: res.memoryEnabled });
+      }
+    }
     const memories = res.memories;
     if (memories.length > 0) {
       const current: CloudMemoryEntry[] = useCloudMemoryStore.getState().entries;
@@ -548,6 +629,11 @@ async function pullMemory(account: CloudAccountEpoch): Promise<void> {
   }
 }
 
+const MEMORY_PUSH_BATCH_MAX = 1_000;
+
+const MEMORY_REFUSED_MESSAGE =
+  'Your account memory settings refused this memory, so it was not saved.';
+
 async function pushMemory(account: CloudAccountEpoch): Promise<void> {
   const { dirtyMemoryIds } = useMemorySyncStateStore.getState();
   if (dirtyMemoryIds.length === 0) return;
@@ -559,7 +645,7 @@ async function pushMemory(account: CloudAccountEpoch): Promise<void> {
   const deadIds: string[] = [];
   const payload = [] as ReturnType<typeof toMemoryPushItem>[];
 
-  for (const id of dirtyMemoryIds) {
+  for (const id of dirtyMemoryIds.slice(0, MEMORY_PUSH_BATCH_MAX)) {
     const entry = entryById.get(id);
     if (!entry) {
       deadIds.push(id);
@@ -573,7 +659,7 @@ async function pushMemory(account: CloudAccountEpoch): Promise<void> {
   const resolvedIds = new Set<string>();
   if (payload.length > 0) {
     const raw = await api.post<unknown>(MEMORY_SYNC_PATH, {
-      protocolVersion: 2,
+      protocolVersion: SYNC_PROTOCOL_VERSION,
       memories: payload,
     });
     assertCloudAccountEpochCurrent(account);
@@ -614,6 +700,17 @@ async function pushMemory(account: CloudAccountEpoch): Promise<void> {
         resolvedIds.add(conflict.id);
       }
     }
+    const refusals = new Set<string>();
+    for (const rejected of res.rejected ?? []) {
+      if (entryById.get(rejected.id)?.serverVersion === undefined) {
+        useCloudMemoryStore.getState().hardDeleteCloudMemory(rejected.id);
+      } else {
+        useMemorySyncStateStore.getState().setMemoryCursor('0');
+      }
+      resolvedIds.add(rejected.id);
+      refusals.add(rejected.message ?? MEMORY_REFUSED_MESSAGE);
+    }
+    if (refusals.size > 0) Alert.alert('Memory not saved', [...refusals].join('\n\n'));
   }
 
   for (const id of liveIds) {
@@ -634,14 +731,20 @@ async function pullProjects(account: CloudAccountEpoch): Promise<void> {
     assertCloudAccountEpochCurrent(account);
     const items = res.projects;
     if (items.length > 0) {
-      const deltas: CloudProject[] = items.map(mapProjectWireDelta);
+      const deltas = items.map(mapProjectWireDelta);
       const dirtyIds = new Set(useProjectSyncStateStore.getState().dirtyProjectIds);
       const preserved: CloudProject[] = [];
       const authoritative: CloudProject[] = [];
       for (const delta of deltas) {
         const local = useCloudProjectStore.getState().projects.find((p) => p.id === delta.id);
         if (dirtyIds.has(delta.id) && local && delta.deletedAt === null) {
-          preserved.push({ ...local, serverVersion: delta.serverVersion });
+          preserved.push({
+            ...local,
+            serverVersion:
+              local.serverVersion && bigintGreater(local.serverVersion, delta.serverVersion)
+                ? local.serverVersion
+                : delta.serverVersion,
+          });
         } else {
           authoritative.push(delta);
         }

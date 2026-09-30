@@ -59,7 +59,11 @@ vi.stubGlobal('chrome', {
     download: vi.fn(() => Promise.resolve(900)),
     search: vi.fn(() => Promise.resolve([])),
     show: vi.fn(),
-    onChanged: { addListener: vi.fn() },
+    onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
+    onCreated: { addListener: vi.fn(), removeListener: vi.fn() },
+    cancel: vi.fn(() => Promise.resolve()),
+    removeFile: vi.fn(() => Promise.resolve()),
+    erase: vi.fn(() => Promise.resolve([])),
   },
   debugger: {
     attach: vi.fn((_target: unknown, _version: string, callback: () => void) => {
@@ -91,8 +95,13 @@ vi.stubGlobal('chrome', {
 });
 
 const { authorizeBrowserToolTab } = await import('../src/features/browser-tools/tabAuthority');
-const { resolveDownloadUrl, startBrowserToolDownload, listSessionDownloads, revealDownload } =
-  await import('../src/features/browser-tools/downloads');
+const {
+  resolveDownloadUrl,
+  startBrowserToolDownload,
+  listSessionDownloads,
+  revealDownload,
+  watchDownloadsStartedBy,
+} = await import('../src/features/browser-tools/downloads');
 const { recordConsoleEvent, readConsoleEntries, clearConsoleEntries } =
   await import('../src/features/browser-tools/consoleCapture');
 const { recordNetworkEvent, readNetworkEntries, clearNetworkEntries, summarizeRequestUrl } =
@@ -214,6 +223,49 @@ describe('downloads', () => {
     await startBrowserToolDownload(TAB_ID, `${SITE}/files/report.pdf`);
     const ledger = await listSessionDownloads();
     expect(ledger.map((entry) => entry.origin)).toContain(SITE);
+  });
+
+  it('cancels and removes a download that redirected to a blocked site', async () => {
+    approveSite();
+    vi.mocked(chrome.downloads.search).mockResolvedValue([
+      { id: 900, finalUrl: 'https://blocked.example/payload.zip', state: 'in_progress' },
+    ] as never);
+
+    await startBrowserToolDownload(TAB_ID, `${SITE}/files/report.pdf`, {
+      allow: [],
+      deny: ['blocked.example'],
+    });
+
+    await vi.waitFor(() => expect(chrome.downloads.cancel).toHaveBeenCalledWith(900));
+    await vi.waitFor(() => expect(chrome.downloads.removeFile).toHaveBeenCalledWith(900));
+    vi.mocked(chrome.downloads.search).mockResolvedValue([]);
+  });
+
+  it('refuses a download from a blocked address before Chrome starts it', async () => {
+    approveSite();
+    vi.mocked(chrome.downloads.download).mockClear();
+
+    await expect(
+      startBrowserToolDownload(TAB_ID, `${SITE}/files/report.pdf`, {
+        allow: ['elsewhere.example'],
+        deny: [],
+      }),
+    ).rejects.toThrow(/does not allow/);
+    expect(chrome.downloads.download).not.toHaveBeenCalled();
+  });
+
+  it('holds a download a click started to the rules, and stops watching after', async () => {
+    vi.mocked(chrome.downloads.search).mockResolvedValue([
+      { id: 901, finalUrl: 'https://blocked.example/x.exe', state: 'in_progress' },
+    ] as never);
+    const stop = watchDownloadsStartedBy({ allow: [], deny: ['blocked.example'] });
+    const [onCreated] = vi.mocked(chrome.downloads.onCreated.addListener).mock.calls.at(-1) ?? [];
+    (onCreated as (item: { id: number }) => void)({ id: 901 });
+
+    await vi.waitFor(() => expect(chrome.downloads.cancel).toHaveBeenCalledWith(901));
+    stop();
+    expect(chrome.downloads.onCreated.removeListener).toHaveBeenCalledWith(onCreated);
+    vi.mocked(chrome.downloads.search).mockResolvedValue([]);
   });
 
   it('refuses to reveal a download AGI did not start', async () => {

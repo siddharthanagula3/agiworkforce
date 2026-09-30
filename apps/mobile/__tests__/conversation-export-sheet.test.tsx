@@ -1,6 +1,6 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('@/src/ui/theme', () => {
@@ -30,7 +30,15 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
-  return { FileText: Icon, File: Icon, Hash: Icon, Copy: Icon, CheckCircle2: Icon, X: Icon };
+  return {
+    FileText: Icon,
+    File: Icon,
+    Hash: Icon,
+    Copy: Icon,
+    CheckCircle2: Icon,
+    Printer: Icon,
+    X: Icon,
+  };
 });
 
 const mockExportConversationToPDF = jest.fn();
@@ -135,5 +143,28 @@ describe('ConversationExportSheet', () => {
     await waitFor(() => {
       expect(mockExportConversationToText).toHaveBeenCalledWith(messages, 'Renamed Test Chat');
     });
+  });
+
+  it('keeps the export menu open and hides file errors when sharing fails', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const onClose = jest.fn();
+    mockExportConversationToText.mockResolvedValue({ uri: 'file://export.txt' });
+    mockShareFile.mockRejectedValue(new Error('internal file path /private/export.txt'));
+    try {
+      const { getByLabelText } = render(
+        <ConversationExportSheet visible onClose={onClose} messages={messages} title="Test Chat" />,
+      );
+
+      fireEvent.press(getByLabelText('Export as Text'));
+
+      await waitFor(() => expect(alert).toHaveBeenCalled());
+      expect(alert).toHaveBeenCalledWith(
+        'Export Failed',
+        'Could not export or share this conversation. Try again.',
+      );
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
   });
 });

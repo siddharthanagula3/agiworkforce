@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { z } from 'zod';
 
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -9,13 +8,10 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { listStaffTickets } from '@/lib/support/tickets/service';
+import { SupportStaffTicketsQuerySchema } from '@agiworkforce/cloud-contracts/support';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const QuerySchema = z.object({
-  offset: z.coerce.number().int().min(0).max(100_000).default(0),
-});
 
 async function handleList(request: NextRequest) {
   const { userId } = await requirePlatformAdmin(request);
@@ -23,7 +19,7 @@ async function handleList(request: NextRequest) {
   const limited = await withRateLimit(request, 'admin-operator', `user:${userId}`);
   if (limited) return limited;
 
-  const parsed = QuerySchema.safeParse({
+  const parsed = SupportStaffTicketsQuerySchema.safeParse({
     offset: request.nextUrl.searchParams.get('offset') ?? undefined,
   });
   if (!parsed.success) {

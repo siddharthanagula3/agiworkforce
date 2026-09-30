@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -11,13 +10,10 @@ import {
   resolveHumanAvailability,
 } from '@/lib/support/handoff/presence-service';
 import { upsertAgentPresence } from '@/lib/support/handoff/store';
-import type { HandoffPresenceState } from '@/lib/support/handoff/types';
-
-const PresenceSchema = z.object({
-  status: z.enum(['online', 'offline']),
-  displayName: z.string().trim().min(1).max(60),
-  maxConcurrentSessions: z.number().int().min(0).max(50).optional(),
-});
+import {
+  type HandoffPresenceState,
+  SupportAgentPresenceRequestSchema,
+} from '@agiworkforce/cloud-contracts/support';
 
 async function handleSetPresence(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
@@ -28,7 +24,9 @@ async function handleSetPresence(request: NextRequest) {
 
   const { userId } = await requirePlatformAdmin(request);
 
-  const parsed = PresenceSchema.safeParse(await request.json().catch(() => null));
+  const parsed = SupportAgentPresenceRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) {
     throw createError.badRequest('Invalid presence payload', parsed.error.flatten());
   }

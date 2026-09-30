@@ -5,6 +5,11 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 
+jest.mock('@/stores/connectionStore', () => ({
+  useConnectionStore: (selector: (state: { status: string }) => unknown) =>
+    selector({ status: 'disconnected' }),
+}));
+
 jest.mock('@/components/ui/text', () => {
   const RN = require('react-native');
   const Text = (props: Record<string, unknown>) => <RN.Text {...props} />;

@@ -4,6 +4,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export function WorkModeSourceNotice({ onOpenConnectors }: { onOpenConnectors: () => void }) {
   const colors = useThemeColors();
@@ -25,11 +26,11 @@ export function WorkModeSourceNotice({ onOpenConnectors }: { onOpenConnectors: (
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <Plug size={17} color={colors.textSecondary} />
-        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '700' }}>
           Connected sources stay request-scoped
         </Text>
       </View>
-      <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption, lineHeight: 18 }}>
         Work mode uses connected services only after you ask. AGI does not scan repositories or
         accounts in the background to generate task suggestions.
       </Text>
@@ -47,7 +48,7 @@ export function WorkModeSourceNotice({ onOpenConnectors }: { onOpenConnectors: (
           opacity: pressed ? 0.75 : 1,
         })}
       >
-        <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '700' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.caption, fontWeight: '700' }}>
           Manage connected services
         </Text>
       </Pressable>

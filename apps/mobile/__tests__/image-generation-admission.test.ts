@@ -1,6 +1,7 @@
 import { getModelMetadataById } from '@agiworkforce/types';
 import {
   MANAGED_MEDIA_IMAGE_REF_MAX_BYTES,
+  MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
 import { getDefaultCloudModelIdForTier } from '../src/features/model-picker/service';
@@ -207,15 +208,27 @@ describe('resolveMobileImageGenerationRequest, reference image', () => {
     }
   });
 
-  it('refuses more than one reference image', () => {
+  it('uses extra images as guides for the edit, up to the contract limit', () => {
     if (!editCapableModelId) throw new Error('catalog exposes no edit-capable image model');
     useChatViewStore.setState({ selectedMediaModel: { image: editCapableModelId } });
+    const second = { ...photo, uri: 'file:///second.jpg', fileName: 'second.jpg' };
 
     expect(
-      resolveMobileImageGenerationRequest({
-        ...imageMode,
-        attachments: [photo, { ...photo, uri: 'file:///second.jpg', fileName: 'second.jpg' }],
-      }),
+      resolveMobileImageGenerationRequest({ ...imageMode, attachments: [photo, second] }),
+    ).toMatchObject({ status: 'ready', referenceImages: [second] });
+  });
+
+  it('refuses more reference images than the contract carries', () => {
+    if (!editCapableModelId) throw new Error('catalog exposes no edit-capable image model');
+    useChatViewStore.setState({ selectedMediaModel: { image: editCapableModelId } });
+    const extras = Array.from({ length: MANAGED_MEDIA_MAX_IMAGE_REFERENCES + 1 }, (_, index) => ({
+      ...photo,
+      uri: `file:///extra-${index}.jpg`,
+      fileName: `extra-${index}.jpg`,
+    }));
+
+    expect(
+      resolveMobileImageGenerationRequest({ ...imageMode, attachments: [photo, ...extras] }),
     ).toMatchObject({ status: 'blocked', code: 'reference_image_invalid' });
   });
 

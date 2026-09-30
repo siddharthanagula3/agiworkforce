@@ -13,6 +13,7 @@ import {
   type ModelAvailability,
   type ModelEnvironment,
   type ModelMetadata,
+  isFreeBillingPlanTier,
 } from '@agiworkforce/types';
 import {
   MODEL_PICKER_FILTER_CAPABILITIES,
@@ -239,7 +240,8 @@ function toCatalogueEntry(
     // picker can say "Free during event" instead of implying it is included.
     eventAccess: eventAllowed && !permanentlyAllowed,
     minimumPlanLabel: admitted || !minimumTier ? null : PLAN_LABEL[minimumTier],
-    minimumPlan: admitted || !minimumTier || minimumTier === 'free' ? null : minimumTier,
+    minimumPlan:
+      admitted || !minimumTier || isFreeBillingPlanTier(minimumTier) ? null : minimumTier,
     availability: getModelAvailability(model),
     requiresEnvironment: model.requiresEnvironment ?? null,
     deprecatedOn: model.deprecation_date ?? null,

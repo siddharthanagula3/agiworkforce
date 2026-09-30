@@ -16,6 +16,14 @@ interface DirectoryTargetFixture {
 }
 
 const mocks = vi.hoisted(() => ({
+  connectorPolicy: vi.fn(async (..._args: unknown[]) => ({
+    allowed: true,
+    code: 'ungoverned',
+    reason: '',
+    organizationId: null as string | null,
+  })),
+  activeOrganization: vi.fn(async (..._args: unknown[]): Promise<string | null> => null),
+  workspacePolicy: vi.fn(async (..._args: unknown[]): Promise<unknown> => null),
   query: vi.fn(),
   execute: vi.fn(),
   githubInstallations: vi.fn(),
@@ -45,6 +53,26 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/connector-policy-gate')>()),
+  evaluateConnectorPolicyForUser: (...args: unknown[]) => mocks.connectorPolicy(...args),
+}));
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  resolveActiveOrganizationId: (...args: unknown[]) => mocks.activeOrganization(...args),
+}));
+vi.mock('@/lib/services/connector-policy-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/connector-policy-service')>()),
+  readConnectorPolicy: (...args: unknown[]) => mocks.workspacePolicy(...args),
+}));
+vi.mock('@/lib/connectors/connector-capability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/connector-capability')>()),
+  connectorsAllowedWithoutRequest: vi.fn(async () => true),
+}));
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  resolveEntitledPlanTier: vi.fn(async () => 'pro'),
+}));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mocks.query(...args),
@@ -70,6 +98,7 @@ vi.mock('@/lib/user-connector-tools', () => ({
   evictCustomConnectorCaches: (...args: unknown[]) => mocks.evictCustomCaches(...args),
 }));
 vi.mock('@/lib/connectors/oauth-setup', () => ({
+  regionRequirement: vi.fn(() => null),
   describeConnectorSetup: (...args: unknown[]) => mocks.describeSetup(...args),
 }));
 vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
@@ -129,6 +158,9 @@ vi.mock('@/lib/connectors/oauth-access', () => ({
   resolveConnectorAccessToken: vi.fn(),
 }));
 vi.mock('@/lib/github-app', () => ({
+  GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
+  issueCommentPostedSince: vi.fn(() => false),
+  pullRequestReviewPostedSince: vi.fn(() => false),
   getGitHubAppInstallUrl: vi.fn(() => 'https://github.com/apps/agi/installations/new'),
   isGitHubAppConfigured: vi.fn(() => true),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
@@ -222,10 +254,36 @@ function resetMocks(): void {
   mocks.deleteCustom.mockResolvedValue([]);
   mocks.clearPermissions.mockResolvedValue(undefined);
   mocks.cacheToolNames.mockResolvedValue(undefined);
+  mocks.connectorPolicy.mockResolvedValue({
+    allowed: true,
+    code: 'ungoverned',
+    reason: 'allowed',
+    organizationId: null,
+  });
+  mocks.activeOrganization.mockResolvedValue(null);
+  mocks.workspacePolicy.mockResolvedValue(null);
 }
 
 describe('/api/connectors managed-cloud capability boundary', () => {
   beforeEach(resetMocks);
+
+  it('refuses a catalog connector before starting its connection when workspace policy blocks it', async () => {
+    mocks.connectorPolicy.mockResolvedValueOnce({
+      allowed: false,
+      code: 'connector_blocked',
+      reason: 'Blocked by workspace policy.',
+      organizationId: null,
+    });
+
+    const response = await POST(postRequest('slack'));
+
+    expect(response.status).toBe(403);
+    expect(mocks.connectorPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({ connectorId: 'slack', userId: 'user-1' }),
+    );
+    expect(mocks.probe).not.toHaveBeenCalled();
+    expect(mocks.insertCustom).not.toHaveBeenCalled();
+  });
 
   it('does not advertise or restore device-local connector rows in Cloud mode', async () => {
     mocks.query.mockResolvedValue([
@@ -581,6 +639,29 @@ describe('/api/connectors directory records', () => {
     );
   });
 
+  it('refuses a directory endpoint before discovery or probing when workspace policy blocks it', async () => {
+    mocks.connectorPolicy.mockResolvedValueOnce({
+      allowed: false,
+      code: 'custom_connectors_disabled',
+      reason: 'Custom connectors are disabled.',
+      organizationId: null,
+    });
+
+    const response = await POST(postRequest(OPEN_RECORD_ID));
+
+    expect(response.status).toBe(403);
+    expect(mocks.connectorPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectorId: OPEN_RECORD_ID,
+        isCustom: true,
+        url: 'https://tandem.ac/mcp',
+      }),
+    );
+    expect(mocks.directoryAuthMode).not.toHaveBeenCalled();
+    expect(mocks.probe).not.toHaveBeenCalled();
+    expect(mocks.insertCustom).not.toHaveBeenCalled();
+  });
+
   it('connects an open server in one click through the custom-connector path', async () => {
     const response = await POST(postRequest(OPEN_RECORD_ID));
     const body = (await response.json()) as {
@@ -609,6 +690,28 @@ describe('/api/connectors directory records', () => {
       }),
     );
     expect(mocks.cacheToolNames).toHaveBeenCalledWith(OPEN_RECORD_ID, ['search_docs', 'get_doc']);
+  });
+
+  it('asks the connection gate before connecting an open server, and stores nothing when refused', async () => {
+    mocks.connectorPolicy.mockResolvedValueOnce({
+      allowed: false,
+      code: 'connectors_unavailable',
+      reason: 'Connectors are unavailable right now.',
+      organizationId: null,
+    });
+
+    const response = await POST(postRequest(OPEN_RECORD_ID));
+
+    expect(response.status).toBe(403);
+    expect(mocks.connectorPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectorId: OPEN_RECORD_ID,
+        isCustom: true,
+        url: 'https://tandem.ac/mcp',
+      }),
+    );
+    expect(mocks.probe).not.toHaveBeenCalled();
+    expect(mocks.insertCustom).not.toHaveBeenCalled();
   });
 
   it('answers an open server that is already connected without probing again', async () => {
@@ -837,6 +940,95 @@ describe('/api/connectors directory records', () => {
     const response = await DELETE(deleteRequest('totally-made-up'));
 
     expect(response.status).toBe(400);
+  });
+});
+
+const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
+
+function workspaceConnectorPolicy(overrides: Record<string, unknown> = {}) {
+  return {
+    organizationId: WORKSPACE_ID,
+    allowedConnectors: [],
+    blockedConnectors: [],
+    allowCustomConnectors: true,
+    allowedPlugins: [],
+    blockedPlugins: [],
+    allowedMcpHosts: [],
+    allowedWebDomains: [],
+    blockedWebDomains: [],
+    toolRules: [],
+    updatedByUserId: null,
+    updatedAt: '2026-09-29T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function savedConnectorRow(sql: unknown): unknown[] {
+  if (!String(sql).includes('insert into user_connectors')) return [];
+  return [
+    {
+      id: 'row-9',
+      connector_id: 'slack',
+      auth_type: 'local',
+      connected_at: '2026-09-29T00:00:00.000Z',
+      updated_at: '2026-09-29T00:00:00.000Z',
+    },
+  ];
+}
+
+describe('POST /api/connectors for a member of a governed workspace', () => {
+  beforeEach(async () => {
+    resetMocks();
+    const gate = await vi.importActual<typeof import('@/lib/services/connector-policy-gate')>(
+      '@/lib/services/connector-policy-gate',
+    );
+    mocks.connectorPolicy.mockImplementation((...args: unknown[]) =>
+      gate.evaluateConnectorPolicyForUser(
+        args[0] as Parameters<typeof gate.evaluateConnectorPolicyForUser>[0],
+      ),
+    );
+    mocks.activeOrganization.mockResolvedValue(WORKSPACE_ID);
+    mocks.operatorIds = new Set(['slack']);
+    mocks.query.mockImplementation(async (sql: unknown) => savedConnectorRow(sql));
+    mocks.directoryTargets.set(
+      OPEN_RECORD_ID,
+      directoryTarget(OPEN_RECORD_ID, 'none', 'https://tandem.ac/mcp', 'Tandem Docs MCP'),
+    );
+  });
+
+  it('refuses a directory server when the workspace allows no custom connectors', async () => {
+    mocks.workspacePolicy.mockResolvedValue(
+      workspaceConnectorPolicy({ allowCustomConnectors: false }),
+    );
+
+    const response = await POST(postRequest(OPEN_RECORD_ID));
+
+    expect(response.status).toBe(403);
+    expect(mocks.workspacePolicy).toHaveBeenCalledWith(expect.anything(), WORKSPACE_ID);
+    expect(mocks.probe).not.toHaveBeenCalled();
+    expect(mocks.insertCustom).not.toHaveBeenCalled();
+  });
+
+  it('refuses to activate an operator connector the workspace has blocked', async () => {
+    mocks.workspacePolicy.mockResolvedValue(
+      workspaceConnectorPolicy({ blockedConnectors: ['slack'] }),
+    );
+
+    const response = await POST(postRequest('slack'));
+
+    expect(response.status).toBe(403);
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('insert into user_connectors')),
+    ).toBe(false);
+  });
+
+  it('activates the same operator connector once the workspace policy permits it', async () => {
+    mocks.workspacePolicy.mockResolvedValue(workspaceConnectorPolicy());
+
+    const response = await POST(postRequest('slack'));
+
+    expect(response.status).toBe(201);
+    expect(mocks.workspacePolicy).toHaveBeenCalledWith(expect.anything(), WORKSPACE_ID);
   });
 });
 

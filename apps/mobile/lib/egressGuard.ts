@@ -1,4 +1,5 @@
 import NetInfo from '@react-native-community/netinfo';
+import { TERMS_ACCEPTANCE_PATH } from '@agiworkforce/cloud-contracts';
 import {
   OUR_CLOUD_HOSTS as SHARED_OUR_CLOUD_HOSTS,
   isOurCloudHost as isSharedOurCloudHost,
@@ -83,6 +84,33 @@ function resolveAppMode(): 'local' | 'cloud' {
   }
 }
 
+interface GuardedFetchOptions extends SecureFetchOptions {
+  authControl?: boolean;
+}
+
+function isSignedInTermsRequest(input: RequestInfo | URL, init?: RequestInit): boolean {
+  try {
+    const target = new URL(
+      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
+    );
+    const cloud = new URL(API_URL);
+    const authorization =
+      init?.headers && !Array.isArray(init.headers)
+        ? Object.entries(init.headers).find(([name]) => name.toLowerCase() === 'authorization')?.[1]
+        : undefined;
+    return (
+      target.origin === cloud.origin &&
+      target.pathname === TERMS_ACCEPTANCE_PATH &&
+      target.search === '' &&
+      (init?.method === 'GET' || init?.method === 'POST') &&
+      typeof authorization === 'string' &&
+      /^Bearer \S+$/.test(authorization)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Guarded outbound fetch: the privacy chokepoint.
  *
@@ -101,16 +129,18 @@ function resolveAppMode(): 'local' | 'cloud' {
 export async function guardedFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
-  opts?: SecureFetchOptions,
+  opts?: GuardedFetchOptions,
 ): Promise<Response> {
   const mode = resolveAppMode();
   if (mode === 'local') {
     const host = hostnameOf(input);
-    if (isOurCloudHost(host)) {
+    if (isOurCloudHost(host) && !(opts?.authControl && isSignedInTermsRequest(input, init))) {
       throw new EgressBlockedError(host || '(unparseable)');
     }
   }
-  const response = await secureFetch(input, init, opts);
+  const response = opts?.stream
+    ? await secureFetch(input, init, { stream: true })
+    : await secureFetch(input, init);
   void NetInfo.refresh().catch(() => {});
   return response;
 }

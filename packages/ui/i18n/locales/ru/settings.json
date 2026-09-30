@@ -292,6 +292,14 @@
     "windowSeconds_few": "{{count}} секунды",
     "windowSeconds_many": "{{count}} секунд",
     "windowSeconds_one": "секунда",
-    "windowSeconds_other": "{{count}} секунды"
+    "windowSeconds_other": "{{count}} секунды",
+    "memoriesAdded_one": "Добавлено {{count}} воспоминание",
+    "memoriesAdded_few": "Добавлено {{count}} воспоминания",
+    "memoriesAdded_many": "Добавлено {{count}} воспоминаний",
+    "memoriesAdded_other": "Добавлено {{count}} воспоминания",
+    "factsFound_one": "Найден {{count}} факт из {{source}}.",
+    "factsFound_few": "Найдено {{count}} факта из {{source}}.",
+    "factsFound_many": "Найдено {{count}} фактов из {{source}}.",
+    "factsFound_other": "Найдено {{count}} факта из {{source}}."
   }
 }

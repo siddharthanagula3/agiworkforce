@@ -44,9 +44,14 @@ jest.mock('lucide-react-native', () => {
   };
 });
 
-const mockStorageSet = jest.fn();
-const mockStorageGet = jest.fn().mockReturnValue(undefined);
-const mockStorageDelete = jest.fn();
+const mockStoredValues = new Map<string, string>();
+const mockStorageSet = jest.fn((key: unknown, value: unknown) => {
+  mockStoredValues.set(String(key), String(value));
+});
+const mockStorageGet = jest.fn((key: unknown) => mockStoredValues.get(String(key)));
+const mockStorageDelete = jest.fn((key: unknown) => {
+  mockStoredValues.delete(String(key));
+});
 let mockModelPickerProps: { onSelect?: (modelId: string) => void } | null = null;
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -94,7 +99,16 @@ const mockComposeFirstRunDisclosure = jest.fn().mockReturnValue({
     { id: 'moonshot', displayName: 'Moonshot AI / Kimi (China)', defaultEnabled: false },
   ],
 });
-const mockRecordDisclosureAcceptance = jest.fn().mockResolvedValue(undefined);
+const mockRecordDisclosureAcceptance = jest.fn().mockImplementation(async (args) => {
+  args.ledger.write({
+    version: 1,
+    acceptedAt: new Date().toISOString(),
+    surface: args.surface,
+    disclosureCopyHash: 'fixture-disclosure-hash',
+    managedCloudAccepted: args.managedCloudAccepted,
+    chineseHqProvidersAccepted: [...args.chineseHqProvidersAccepted],
+  });
+});
 jest.mock('@agiworkforce/compliance', () => ({
   ...jest.requireActual('@agiworkforce/compliance'),
   composeFirstRunDisclosure: (...args: unknown[]) => mockComposeFirstRunDisclosure(...args),
@@ -180,15 +194,25 @@ jest.mock('expo-constants', () => ({
 }));
 
 import OnboardingScreen from '../app/(public)/onboarding';
+import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import {
   CLOUD_CHAT_POST_AUTH_INTENT,
   POST_AUTH_INTENT_PARAM,
 } from '../src/features/auth/services/postAuthIntent';
 
+async function skipAboutYou(getByTestId: (id: string) => unknown) {
+  await waitFor(() => expect(getByTestId('onboarding-about-you-screen')).toBeTruthy());
+  await act(async () => {
+    fireEvent.press(getByTestId('about-you-skip-btn') as never);
+    await Promise.resolve();
+  });
+}
+
 describe('Onboarding', () => {
   beforeEach(() => {
     jest.useRealTimers();
     jest.clearAllMocks();
+    mockStoredValues.clear();
     mockModelPickerProps = null;
     mockIsDisclosureSatisfied.mockReturnValue(false);
     mockGetInstalledModel.mockResolvedValue(null);
@@ -255,6 +279,7 @@ describe('Onboarding', () => {
         fireEvent.press(getByTestId('hero-start-chatting-btn'));
         await Promise.resolve();
       });
+      await skipAboutYou(getByTestId);
 
       await waitFor(() => expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy());
       await waitFor(() => expect(getByText('Continue')).toBeTruthy());
@@ -282,7 +307,7 @@ describe('Onboarding', () => {
       expect(getByTestId('disclosure-accept-btn')).toBeTruthy();
     });
 
-    it('accepting the disclosure advances to device-tier screen', async () => {
+    it('accepting the disclosure advances through about-you to the device-tier screen', async () => {
       mockIsDisclosureSatisfied.mockReturnValue(false);
       const { getByTestId } = render(<OnboardingScreen />);
       await act(async () => {
@@ -294,6 +319,7 @@ describe('Onboarding', () => {
         fireEvent.press(getByTestId('disclosure-accept-btn'));
         await Promise.resolve();
       });
+      await skipAboutYou(getByTestId);
       await waitFor(() => expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy());
     });
 
@@ -399,12 +425,60 @@ describe('Onboarding', () => {
 
     it('skips modal when disclosure is already satisfied', async () => {
       mockIsDisclosureSatisfied.mockReturnValue(true);
-      const { getByTestId } = render(<OnboardingScreen />);
+      const { getByTestId, queryByTestId } = render(<OnboardingScreen />);
       await act(async () => {
         fireEvent.press(getByTestId('hero-start-chatting-btn'));
         await Promise.resolve();
       });
+      expect(queryByTestId('disclosure-accept-btn')).toBeNull();
+      expect(getByTestId('onboarding-about-you-screen')).toBeTruthy();
+    });
+  });
+
+  describe('About-you step', () => {
+    const initialLocalSettings = useLocalSettingsStore.getState();
+
+    beforeEach(() => {
+      useLocalSettingsStore.setState(initialLocalSettings, true);
+    });
+
+    async function renderAtAboutYou() {
+      mockIsDisclosureSatisfied.mockReturnValue(true);
+      const utils = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      expect(utils.getByTestId('onboarding-about-you-screen')).toBeTruthy();
+      return utils;
+    }
+
+    it('saves the name and work typed here to personalization and moves on', async () => {
+      const { getByLabelText, getByTestId } = await renderAtAboutYou();
+
+      fireEvent.changeText(getByLabelText('Your name'), '  Sam  ');
+      fireEvent.changeText(getByLabelText('What best describes your work?'), 'product design');
+      await act(async () => {
+        fireEvent.press(getByTestId('about-you-continue-btn'));
+        await Promise.resolve();
+      });
+
+      expect(useLocalSettingsStore.getState().personalization).toEqual(
+        expect.objectContaining({ nickname: 'Sam', occupation: 'product design' }),
+      );
       expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy();
+    });
+
+    it('does not continue without a name', async () => {
+      const { getByTestId, queryByTestId } = await renderAtAboutYou();
+
+      await act(async () => {
+        fireEvent.press(getByTestId('about-you-continue-btn'));
+        await Promise.resolve();
+      });
+
+      expect(queryByTestId('onboarding-device-tier-screen')).toBeNull();
+      expect(getByTestId('onboarding-about-you-screen')).toBeTruthy();
     });
   });
 
@@ -416,6 +490,7 @@ describe('Onboarding', () => {
         fireEvent.press(utils.getByTestId('hero-start-chatting-btn'));
         await Promise.resolve();
       });
+      await skipAboutYou(utils.getByTestId);
       expect(utils.getByTestId('onboarding-device-tier-screen')).toBeTruthy();
       return utils;
     }

@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { BOTTOM_SEARCH_BAR_HEIGHT, BOTTOM_SEARCH_BAR_MARGIN } from './BottomSearchBar';
 
 export const FLOATING_PRIMARY_ACTION_HEIGHT = 48;
@@ -57,7 +58,9 @@ export function FloatingPrimaryAction({
       })}
     >
       <Icon size={18} color={colors.accentText} />
-      <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '700' }}>{label}</Text>
+      <Text style={{ color: colors.accentText, fontSize: typeScale.subhead, fontWeight: '700' }}>
+        {label}
+      </Text>
     </PressableBox>
   );
 }

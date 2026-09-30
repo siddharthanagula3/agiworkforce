@@ -190,7 +190,7 @@ function SessionItemBase({
   const rowAccessibleName = rowNameParts.length > 1 ? rowNameParts.join(', ') : undefined;
 
   const rowClassName = cn(
-    'flex h-[34px] min-w-0 flex-1 items-center overflow-hidden px-3 text-left pointer-coarse:h-11',
+    'flex h-[34px] min-w-0 flex-1 items-center overflow-hidden px-3 text-start pointer-coarse:h-11',
     ROW_FOCUS_RING,
   );
 
@@ -275,7 +275,7 @@ function SessionItemBase({
          * meant for the conversation row. `(hover: none)` is the correct query.
          * `pointer: coarse` also matches some hybrid laptops that DO hover.
          */}
-        <div className="flex items-center gap-0.5 pr-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+        <div className="flex items-center gap-0.5 pe-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
           {session.hasCustomInstructions && onOpenCustomInstructions && (
             <button
               type="button"

@@ -1,47 +1,29 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { CONNECTOR_DIRECTORY_PATH } from '@agiworkforce/cloud-contracts';
 
 const MOBILE_ROOT = path.resolve(__dirname, '..');
-const CANONICAL_MOBILE_CATALOG = 'src/features/settings/cloud-connectors/index.tsx';
-const WEB_CATALOG = path.resolve(MOBILE_ROOT, '../web/features/connectors/data/connectors.ts');
+const LIST_SCREEN = 'src/features/settings/cloud-connectors/index.tsx';
+const DETAIL_SCREEN = 'src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx';
+const CONNECTOR_SERVICE = 'services/connectors.ts';
 
-interface CatalogEntry {
-  id: string;
-  name: string;
+const CATALOG_DECLARATION = /\bconst\s+(?:CATALOG|CONNECTOR_[A-Z_]*(?:CATALOG|SEEDS))\b/;
+const FLAT_OBJECT_LITERAL = /\{[^{}]*\}/g;
+const STRING_ID_FIELD = /\bid:\s*(['"`])[^'"`]+\1/;
+const STRING_CATEGORY_FIELD = /\bcategory:\s*(['"`])[^'"`]+\1/;
+
+function catalogShapedEntries(source: string): string[] {
+  return (source.match(FLAT_OBJECT_LITERAL) ?? []).filter(
+    (literal) => STRING_ID_FIELD.test(literal) && STRING_CATEGORY_FIELD.test(literal),
+  );
 }
 
-function readCatalog(file: string, marker: string): CatalogEntry[] {
-  const source = fs.readFileSync(file, 'utf8');
-  const markerIndex = source.indexOf(marker);
-  if (markerIndex < 0) {
-    throw new Error(`${file}: could not find "${marker}", has the catalog been renamed or moved?`);
-  }
+function declaresConnectorCatalog(source: string): boolean {
+  return CATALOG_DECLARATION.test(source) || catalogShapedEntries(source).length > 0;
+}
 
-  const rest = source.slice(markerIndex);
-  const open = rest.indexOf('= [') + 2;
-  let depth = 0;
-  let close = -1;
-  for (let i = open; i < rest.length; i += 1) {
-    if (rest[i] === '[') depth += 1;
-    else if (rest[i] === ']') {
-      depth -= 1;
-      if (depth === 0) {
-        close = i;
-        break;
-      }
-    }
-  }
-  if (close < 0) throw new Error(`${file}: unterminated array after "${marker}"`);
-
-  return rest
-    .slice(open, close + 1)
-    .split('{')
-    .slice(1)
-    .map((entry) => ({
-      id: (entry.match(/id: '([^']+)'/) ?? [])[1],
-      name: (entry.match(/name: '([^']*)'/) ?? [])[1],
-    }))
-    .filter((entry): entry is CatalogEntry => Boolean(entry.id));
+function readMobile(relativePath: string): string {
+  return fs.readFileSync(path.join(MOBILE_ROOT, relativePath), 'utf8');
 }
 
 function mobileSourceFiles(): string[] {
@@ -50,10 +32,10 @@ function mobileSourceFiles(): string[] {
 
   const walk = (dir: string) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name === 'node_modules') continue;
+      if (entry.name === 'node_modules' || entry.name === '__tests__') continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (/\.tsx?$/.test(entry.name)) files.push(full);
+      else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) files.push(full);
     }
   };
 
@@ -64,54 +46,70 @@ function mobileSourceFiles(): string[] {
   return files;
 }
 
-describe('mobile connector catalog ownership', () => {
-  const catalog = readCatalog(
-    path.join(MOBILE_ROOT, CANONICAL_MOBILE_CATALOG),
-    'const CATALOG: ConnectorEntry[]',
-  );
+describe('mobile connector registry ownership', () => {
+  const files = mobileSourceFiles();
+  const relativeFiles = files.map((file) => path.relative(MOBILE_ROOT, file));
 
-  it('reads a non-empty catalog from the one API-backed screen', () => {
-    expect(catalog.length).toBeGreaterThan(10);
+  it('scans the real Mobile source tree, including every connector screen', () => {
+    expect(files.length).toBeGreaterThan(100);
+    expect(relativeFiles).toEqual(
+      expect.arrayContaining([
+        LIST_SCREEN,
+        DETAIL_SCREEN,
+        CONNECTOR_SERVICE,
+        'src/features/settings/cloud-connectors/ConnectorLogo.tsx',
+      ]),
+    );
   });
 
-  it('has exactly one Mobile file that enumerates connector ids', () => {
-    const ids = catalog.map((entry) => entry.id);
-    const enumerating = mobileSourceFiles().filter((file) => {
-      const source = fs.readFileSync(file, 'utf8');
-      return (
-        ids.filter((id) => source.includes(`'${id}'`) || source.includes(`"${id}"`)).length >= 3
-      );
-    });
+  it('flags a hand-coded catalog and leaves a logo lookup table alone', () => {
+    expect(
+      declaresConnectorCatalog(
+        "const CATALOG: ConnectorEntry[] = [{ id: 'notion', name: 'Notion', category: 'Productivity' }];",
+      ),
+    ).toBe(true);
+    expect(
+      declaresConnectorCatalog(
+        "export const entries = [\n  {\n    id: 'slack',\n    name: 'Slack',\n    category: 'Communication',\n  },\n];",
+      ),
+    ).toBe(true);
+    expect(
+      declaresConnectorCatalog(
+        "const SI: Record<string, { path: string; hex: string }> = { notion: { hex: '000000', path: 'M0 0' } };",
+      ),
+    ).toBe(false);
+  });
 
-    expect(enumerating.map((file) => path.relative(MOBILE_ROOT, file))).toEqual([
-      CANONICAL_MOBILE_CATALOG,
-    ]);
+  it('keeps every connector list on the registry instead of a hand-coded Mobile catalog', () => {
+    const declaring = files.filter((file) =>
+      declaresConnectorCatalog(fs.readFileSync(file, 'utf8')),
+    );
+
+    expect(declaring.map((file) => path.relative(MOBILE_ROOT, file))).toEqual([]);
+  });
+
+  it('browses connectors from the registry directory endpoint', () => {
+    const listScreen = readMobile(LIST_SCREEN);
+    const detailScreen = readMobile(DETAIL_SCREEN);
+    const service = readMobile(CONNECTOR_SERVICE);
+
+    expect(CONNECTOR_DIRECTORY_PATH).toBe('/api/connectors/directory');
+    expect(service).toMatch(/function listingHref[\s\S]*\$\{CONNECTOR_DIRECTORY_PATH\}\?/);
+    expect(service).toMatch(
+      /export async function browseConnectorListings[\s\S]*?api\.get<unknown>\(listingHref\(filter\)\)/,
+    );
+    expect(listScreen).toMatch(
+      /import \{[^}]*\bbrowseConnectorListings\b[^}]*\} from '@\/services\/connectors'/,
+    );
+    expect(listScreen).toMatch(/await browseConnectorListings\(\{/);
+    expect(detailScreen).toMatch(/fetchConnectorListing\(validConnectorId\)/);
   });
 
   it('keeps the chat-facing /(app)/connectors route a delegating wrapper', () => {
-    const wrapper = fs.readFileSync(
-      path.join(MOBILE_ROOT, 'app/(app)/connectors/index.tsx'),
-      'utf8',
-    );
+    const wrapper = readMobile('app/(app)/connectors/index.tsx');
 
     expect(wrapper).toContain("from '@/src/features/settings/cloud-connectors'");
     expect(wrapper).not.toMatch(/description:\s*'/);
     expect(wrapper).not.toMatch(/category:\s*'/);
-  });
-
-  it('matches the canonical web catalog on every id and display name', () => {
-    const canonical = new Map(
-      readCatalog(WEB_CATALOG, 'const CONNECTOR_SEEDS: ConnectorSeed[]').map((entry) => [
-        entry.id,
-        entry.name,
-      ]),
-    );
-    expect(canonical.size).toBeGreaterThan(catalog.length);
-
-    const drifted = catalog.filter(
-      (entry) => !canonical.has(entry.id) || canonical.get(entry.id) !== entry.name,
-    );
-
-    expect(drifted).toEqual([]);
   });
 });

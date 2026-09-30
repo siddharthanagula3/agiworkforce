@@ -102,15 +102,12 @@ nothing is left.
 
 - Done when: User supplies a reference image and the result is composed from it (subject, layout or style carried over).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Exactly one attached photo, only with an edit-capable model; no reference slots. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-381`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:235-243`, `apps/mobile/src/features/chat/actions/runImageGenerationTurn.ts:146-154`
 
 ## S45.31: Preserve-original action.
 

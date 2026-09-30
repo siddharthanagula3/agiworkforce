@@ -13,7 +13,7 @@ interface ErrorBoundaryProps {
   retry: () => void;
 }
 
-export default function AuthErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+export default function AuthErrorBoundary({ retry }: ErrorBoundaryProps) {
   const router = useRouter();
   const colors = useThemeColors();
 
@@ -31,19 +31,11 @@ export default function AuthErrorBoundary({ error, retry }: ErrorBoundaryProps) 
           Sign-in could not continue
         </Text>
         <Text
-          className="text-center text-sm mb-2 leading-5"
+          className="text-center text-sm mb-8 leading-5"
           style={{ color: colors.textSecondary }}
         >
           Sign-in did not finish. Try again, or go back.
         </Text>
-        <Text
-          className="text-center text-xs mb-8 leading-4"
-          style={{ color: colors.textMuted }}
-          numberOfLines={3}
-        >
-          {error?.message}
-        </Text>
-
         <Pressable
           onPress={retry}
           className="flex-row items-center gap-2 px-6 py-3 rounded-xl active:opacity-80 mb-3"

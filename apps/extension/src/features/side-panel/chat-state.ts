@@ -53,6 +53,8 @@ export interface SidePanelChatMessage {
   agiWorkPlanDeclined?: boolean;
   model?: string;
   provider?: string;
+  autoRouteReason?: string;
+  movedFromModel?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
@@ -88,6 +90,8 @@ export interface StoredSidePanelChatMessage {
   agiWorkPlanDeclined?: boolean;
   model?: string;
   provider?: string;
+  autoRouteReason?: string;
+  movedFromModel?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
@@ -177,6 +181,8 @@ export function hydrateStoredChatMessage(
     ...(message.agiWorkPlanDeclined ? { agiWorkPlanDeclined: true } : {}),
     ...(message.model ? { model: message.model } : {}),
     ...(message.provider ? { provider: message.provider } : {}),
+    ...(message.autoRouteReason ? { autoRouteReason: message.autoRouteReason } : {}),
+    ...(message.movedFromModel ? { movedFromModel: message.movedFromModel } : {}),
     ...(message.generatedFiles
       ? { generatedFiles: message.generatedFiles.map((file) => ({ ...file })) }
       : {}),

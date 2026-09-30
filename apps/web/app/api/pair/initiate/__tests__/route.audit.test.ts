@@ -1,11 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { createServer } from 'node:http';
 
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
   recordWorkspaceAuditEvent: vi.fn(),
   featureGate: vi.fn(),
+  execute: vi.fn(),
+  requestingDevice: vi.fn(async () => null as string | null),
+}));
+
+vi.mock('@/lib/device-steps/requesting-device', () => ({
+  readRequestingDevice: vi.fn(),
+  readRequestingDeviceId: mocks.requestingDevice,
 }));
 
 vi.mock('@/lib/managed-compute-gate', () => ({
@@ -14,13 +22,16 @@ vi.mock('@/lib/managed-compute-gate', () => ({
 
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })) }));
+vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
+  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
-    db: { query: vi.fn(), execute: vi.fn() },
+    db: { query: vi.fn(), execute: mocks.execute },
     userId: 'user-1',
     organizationId: null,
   })),
@@ -60,6 +71,86 @@ function signalingPayload() {
 }
 
 describe('POST /api/pair/initiate audit trail', () => {
+  it('does not follow a relay redirect to another listener', async () => {
+    let leakedRequests = 0;
+    let relayRequests = 0;
+    const destination = createServer((_request, response) => {
+      leakedRequests += 1;
+      response.end(JSON.stringify(signalingPayload()));
+    });
+    await new Promise<void>((resolve) => destination.listen(0, '127.0.0.1', resolve));
+    const destinationAddress = destination.address() as { port: number };
+    const relay = createServer((_request, response) => {
+      relayRequests += 1;
+      response.writeHead(307, { location: `http://127.0.0.1:${destinationAddress.port}/pairings` });
+      response.end();
+    });
+    await new Promise<void>((resolve) => relay.listen(0, '127.0.0.1', resolve));
+    try {
+      const nativeFetch = globalThis.fetch;
+      const mappedFetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        expect(input).toBe('https://signal.example.test/pairings');
+        return nativeFetch(
+          `http://127.0.0.1:${(relay.address() as { port: number }).port}/pairings`,
+          init,
+        );
+      });
+      vi.stubGlobal('fetch', mappedFetch);
+      const response = await POST(pairRequest({}));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'Signaling server unavailable' });
+      expect(relayRequests).toBe(1);
+      expect(mappedFetch).toHaveBeenCalledTimes(1);
+      expect(leakedRequests).toBe(0);
+      expect(mocks.execute).not.toHaveBeenCalled();
+    } finally {
+      relay.closeAllConnections();
+      destination.closeAllConnections();
+      await Promise.all([
+        new Promise<void>((resolve) => relay.close(() => resolve())),
+        new Promise<void>((resolve) => destination.close(() => resolve())),
+      ]);
+    }
+  });
+
+  it.each([
+    'ws://signal.example.test/ws',
+    'ws://localhost:4000/ws',
+    'wss://token@signal.example.test/ws',
+    'wss://signal.example.test/ws#token',
+  ])('refuses an unsafe returned relay %s before changing remote state', async (wsUrl) => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () => new Response(JSON.stringify({ ...signalingPayload(), wsUrl }), { status: 200 }),
+      ),
+    );
+    const response = await POST(pairRequest({}));
+    expect(response.status).toBe(502);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'http://signal.example.test',
+    'http://localhost:4000',
+    'https://token@signal.example.test',
+    'https://signal.example.test#token',
+    'https://signal.example.test?target=bad',
+  ])('refuses unsafe configured relay %s before sending the internal credential', async (url) => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('SIGNALING_HTTP_URL', url);
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify(signalingPayload()), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    expect((await POST(pairRequest({}))).status).toBe(503);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.featureGate.mockResolvedValue(null);
@@ -104,6 +195,46 @@ describe('POST /api/pair/initiate audit trail', () => {
     expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
   });
 
+  it.each(['desktop', 'mobile'] as const)(
+    'returns only the %s initiator token, without a peer credential in the QR',
+    async (initiator) => {
+      const fetchMock = vi.fn(
+        async (_input: RequestInfo | URL, _init?: RequestInit) =>
+          new Response(JSON.stringify(signalingPayload()), { status: 200 }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const response = await POST(pairRequest({ initiator }));
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(Object.keys(body.pairTokens)).toEqual([initiator]);
+      expect(body.qrData).toBe('agiw:ABC123');
+      expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string).initiator).toBe(initiator);
+    },
+  );
+
+  it('accepts the relay response with only the initiator credential', async () => {
+    const payload = { ...signalingPayload(), pairTokens: { desktop: 'desktop-token' } };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })),
+    );
+    const response = await POST(pairRequest({ initiator: 'desktop' }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).pairTokens).toEqual({ desktop: 'desktop-token' });
+  });
+
+  it('rejects a relay response that has only the other role credential', async () => {
+    const payload = { ...signalingPayload(), pairTokens: { mobile: 'mobile-token' } };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })),
+    );
+    const response = await POST(pairRequest({ initiator: 'desktop' }));
+    expect(response.status).toBe(502);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
+  });
+
   it('never reaches the signaling server when the workspace has turned Remote Control off', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -123,4 +254,27 @@ describe('POST /api/pair/initiate audit trail', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['desktop', 1],
+    ['mobile', 0],
+  ] as const)(
+    'turns remote work back on for the device only when the %s starts the pairing',
+    async (initiator, updates) => {
+      mocks.requestingDevice.mockResolvedValueOnce('device-1');
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(JSON.stringify(signalingPayload()), { status: 200 })),
+      );
+
+      const response = await POST(pairRequest({ desktopId: DESKTOP_ID, initiator }));
+
+      expect(response.status).toBe(200);
+      const enables = mocks.execute.mock.calls.filter(([sql]) =>
+        String(sql).includes('set remote_enabled = true'),
+      );
+      expect(enables).toHaveLength(updates);
+      if (updates) expect(enables[0]![1]).toEqual(['device-1', 'user-1']);
+    },
+  );
 });

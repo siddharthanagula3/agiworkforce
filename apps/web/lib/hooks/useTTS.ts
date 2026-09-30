@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettingsStore, VOICE_SPEED_RATES } from '@shared/stores/web-settings-store';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 
 const SPEECH_ENDPOINT = '/api/voice/speech';
 const SPEECH_CHUNK_CHARACTERS = 3_800;
@@ -34,7 +35,11 @@ async function fetchSpeech(
       headers: {
         'Content-Type': 'application/json',
         [CSRF_HEADER]: await getCsrfToken(),
-        'Idempotency-Key': `agi.speech.${globalThis.crypto.randomUUID()}`,
+        'Idempotency-Key': createManagedChatIdempotencyKey({
+          surface: 'web',
+          purpose: 'read-aloud',
+          operationId: globalThis.crypto.randomUUID(),
+        }),
       },
       body: JSON.stringify({ text, speed }),
       signal,

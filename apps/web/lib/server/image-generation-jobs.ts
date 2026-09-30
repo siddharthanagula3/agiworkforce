@@ -258,9 +258,13 @@ export async function createImageGenerationJob(input: {
        id, user_id, organization_id, conversation_id, idempotency_key, request_hash,
        billing_lease_token, provider, model, operation, prompt, plan,
        source_image_sha256, mask_image_sha256, image_count, source_surface,
-       estimated_cost_microusd, max_attempts
+       estimated_cost_microusd, max_attempts, temporary_chat
      ) values (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, $17, $18
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, $17, $18,
+       exists (
+         select 1 from public.web_conversations c
+          where c.id = $4::uuid and coalesce(c.is_temporary, false) and c.deleted_at is null
+       )
      )
      returning ${JOB_COLUMNS}`,
     [

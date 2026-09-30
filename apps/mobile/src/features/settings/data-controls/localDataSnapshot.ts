@@ -18,6 +18,7 @@ import { useMemoryStore } from '@/src/features/memory/store';
 import { DEFAULT_LOCAL_MODEL_ID } from '@/src/features/model-picker/service';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useProjectStore } from '@/src/features/projects/store';
+import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
@@ -180,6 +181,7 @@ export async function resetLocalInMemoryState(): Promise<void> {
     isSearching: false,
     chatMode: 'chat',
     chatStyle: 'concise',
+    chatStyleByConversation: {},
     features: {
       webSearch: true,
       imageGen: true,
@@ -227,7 +229,7 @@ export async function resetLocalInMemoryState(): Promise<void> {
     accentColor: 'neutral' as const,
     fontPreference: 'default' as const,
     notificationsEnabled: true,
-    speechLanguage: 'en',
+    speechLanguage: SPEECH_LANGUAGE_AUTO,
     autoListenEnabled: true,
     memoryEnabled: true,
     referencePastChats: true,

@@ -1,11 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, Pressable, Alert } from 'react-native';
+import { View, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Image } from 'expo-image';
 import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, zIndex } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { shareGeneratedImage } from '@/services/fileCreation';
 
@@ -46,11 +48,8 @@ export function GeneratedImage({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await shareGeneratedImage(imageUrl);
-    } catch (error) {
-      Alert.alert(
-        'Could not share image',
-        error instanceof Error ? error.message : 'Save the image and try again.',
-      );
+    } catch {
+      Alert.alert('Could not share image', 'Save the image and try again.');
     }
   }, [imageUrl]);
 
@@ -86,7 +85,7 @@ export function GeneratedImage({
         <ImageOff size={28} color={colors.textMuted} />
         <Text
           style={{
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             color: colors.textMuted,
           }}
         >
@@ -115,7 +114,7 @@ export function GeneratedImage({
 
   return (
     <View style={{ marginVertical: 6 }}>
-      <Pressable
+      <PressableBox
         onPress={onPress}
         onLongPress={handleLongPress}
         accessibilityLabel={revisedPrompt ?? 'Generated image'}
@@ -131,7 +130,7 @@ export function GeneratedImage({
               borderRadius: 12,
               overflow: 'hidden',
               position: 'absolute',
-              zIndex: 1,
+              zIndex: zIndex.content,
             }}
           >
             <Skeleton width={imageWidth} height={imageHeight} borderRadius={12} />
@@ -161,13 +160,13 @@ export function GeneratedImage({
             accessibilityLabel={revisedPrompt ?? 'Generated image'}
           />
         </View>
-      </Pressable>
+      </PressableBox>
 
       {/* Revised prompt text */}
       {revisedPrompt && loadState === 'loaded' ? (
         <Text
           style={{
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 17,
             color: colors.textMuted,
             marginTop: 6,

@@ -33,7 +33,7 @@ pub struct SessionSnapshot {
     pub messages: Vec<TurnMessage>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConversationPushItem {
     pub id: String,
@@ -43,7 +43,7 @@ pub struct ConversationPushItem {
     pub base_version: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MessagePushItem {
     pub id: String,
@@ -56,7 +56,7 @@ pub struct MessagePushItem {
     pub base_version: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatPushRequest {
     pub protocol_version: u8,
@@ -87,6 +87,8 @@ pub struct ConversationDelta {
     pub updated_at: String,
     #[serde(default)]
     pub deleted_at: Option<String>,
+    #[serde(default)]
+    pub archived: bool,
     pub server_version: String,
 }
 
@@ -251,7 +253,9 @@ pub fn build_push(snapshot: &SessionSnapshot, state: &SyncState) -> ChatPushRequ
 /// Applied rows record the version the server assigned. A conflict means the
 /// hosted row moved on without this device, so the hosted copy wins: its
 /// version is adopted so the next push is an update of the server's row rather
-/// than a losing re-insert, and nothing local is deleted.
+/// than a losing re-insert, and nothing local is deleted. The pull cursor is
+/// left alone: the push reply's cursor can pass rows another device wrote since
+/// the last pull, and only a pull may move it.
 pub fn apply_push_response(response: &ChatPushResponse, state: &mut SyncState) {
     for row in &response.applied.conversations {
         state.conversations.record(&row.id, &row.server_version);
@@ -271,7 +275,6 @@ pub fn apply_push_response(response: &ChatPushResponse, state: &mut SyncState) {
             state.messages.record(&conflict.id, &current.server_version);
         }
     }
-    state.conversations.advance(&response.cursor);
 }
 
 pub fn apply_pull_response(response: &ChatPullResponse, state: &mut SyncState) {
@@ -294,6 +297,7 @@ pub struct HostedConversation {
     pub model: Option<String>,
     pub project_id: Option<String>,
     pub updated_at: String,
+    pub archived: bool,
     pub messages: Vec<TurnMessage>,
 }
 
@@ -311,6 +315,7 @@ pub fn assemble(response: &ChatPullResponse) -> Vec<HostedConversation> {
             model: conversation.model.clone(),
             project_id: conversation.project_id.clone(),
             updated_at: conversation.updated_at.clone(),
+            archived: conversation.archived,
             messages: Vec::new(),
         })
         .collect();
@@ -512,7 +517,7 @@ mod tests {
             .messages
             .iter()
             .all(|message| message.base_version == "12"));
-        assert_eq!(state.conversations.cursor, "12");
+        assert_eq!(state.conversations.cursor, INITIAL_CURSOR);
     }
 
     #[test]
@@ -532,6 +537,7 @@ mod tests {
                         project_id: None,
                         updated_at: "2026-09-13T00:00:00Z".to_string(),
                         deleted_at: None,
+                        archived: false,
                         server_version: "99".to_string(),
                     }),
                 }],
@@ -573,6 +579,7 @@ mod tests {
                     project_id: None,
                     updated_at: "2026-09-12T00:00:00Z".to_string(),
                     deleted_at: None,
+                    archived: false,
                     server_version: "1".to_string(),
                 },
                 ConversationDelta {
@@ -582,6 +589,7 @@ mod tests {
                     project_id: None,
                     updated_at: "2026-09-13T00:00:00Z".to_string(),
                     deleted_at: None,
+                    archived: false,
                     server_version: "2".to_string(),
                 },
                 ConversationDelta {
@@ -591,6 +599,7 @@ mod tests {
                     project_id: None,
                     updated_at: "2026-09-13T00:00:00Z".to_string(),
                     deleted_at: Some("2026-09-13T01:00:00Z".to_string()),
+                    archived: false,
                     server_version: "3".to_string(),
                 },
             ],
@@ -657,6 +666,7 @@ mod tests {
                 project_id: None,
                 updated_at: "2026-09-13T00:00:00Z".to_string(),
                 deleted_at: None,
+                archived: false,
                 server_version: "8".to_string(),
             }],
             messages: vec![MessageDelta {

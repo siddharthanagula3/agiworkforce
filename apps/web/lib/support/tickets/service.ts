@@ -2,9 +2,33 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { redactSecrets } from '@/lib/support/handoff/transcript';
+import { redactTranscriptText } from '@/lib/support/handoff/transcript';
 import { resolveSupportPriority } from '@/lib/support/handoff/priority';
-import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
+import {
+  type SupportDiagnostics,
+  MAX_ESCALATION_SUMMARY_CHARS,
+  MAX_TICKETS_LISTED,
+  MAX_TICKET_MESSAGE_CHARS,
+  MAX_TICKET_SUBJECT_CHARS,
+  OPEN_TICKET_STATUSES,
+  STAFF_QUEUE_PAGE_SIZE,
+  STAFF_QUEUE_STATUSES,
+  canTransition,
+  pagesOnCall,
+  severityForPriority,
+  statusAfterStaffReply,
+  ticketFollowPath,
+  type EscalationTracker,
+  type OpenedSupportTicket,
+  type StaffSupportTicket,
+  type StaffTicketPage,
+  type StaffTicketThread,
+  type SupportTicket,
+  type SupportTicketReply,
+  type SupportTicketThread,
+  type TicketEscalation,
+  type TicketStatus,
+} from '@agiworkforce/cloud-contracts/support';
 
 import { notifyIncident } from '@/lib/server/incident/dispatch';
 import {
@@ -30,35 +54,13 @@ import {
   startTicketForStaff,
   updateTicketStatus,
 } from './store';
-import {
-  MAX_ESCALATION_SUMMARY_CHARS,
-  MAX_TICKETS_LISTED,
-  MAX_TICKET_MESSAGE_CHARS,
-  MAX_TICKET_SUBJECT_CHARS,
-  OPEN_TICKET_STATUSES,
-  STAFF_QUEUE_PAGE_SIZE,
-  STAFF_QUEUE_STATUSES,
-  canTransition,
-  pagesOnCall,
-  severityForPriority,
-  statusAfterStaffReply,
-  ticketFollowPath,
-  type EscalationTracker,
-  type StaffSupportTicket,
-  type StaffTicketPage,
-  type StaffTicketThread,
-  type SupportTicket,
-  type SupportTicketReply,
-  type TicketEscalation,
-  type TicketStatus,
-} from './types';
 
 export {
   MAX_ESCALATION_SUMMARY_CHARS,
   MAX_TICKETS_LISTED,
   MAX_TICKET_MESSAGE_CHARS,
   MAX_TICKET_SUBJECT_CHARS,
-} from './types';
+} from '@agiworkforce/cloud-contracts/support';
 
 export class TicketNotFoundError extends Error {
   constructor() {
@@ -89,7 +91,7 @@ export class InvalidTicketTransitionError extends Error {
 }
 
 function clamp(value: string, limit: number): string {
-  const redacted = redactSecrets(value.trim());
+  const redacted = redactTranscriptText(value.trim());
   return redacted.length <= limit ? redacted : `${redacted.slice(0, limit)}… [truncated]`;
 }
 
@@ -101,11 +103,6 @@ export interface OpenTicketInput {
   message: string;
   handoffSessionId?: string | null;
   diagnostics?: SupportDiagnostics | null;
-}
-
-export interface OpenedTicket {
-  ticket: SupportTicket;
-  staffNotified: boolean;
 }
 
 async function notifySupportTeam(ticket: SupportTicket, userId: string): Promise<boolean> {
@@ -157,7 +154,7 @@ async function emailStaffReply(ticket: StaffSupportTicket, reply: SupportTicketR
  * for a live escalation, so the two queues agree on who is waiting for what. A
  * ticket raised by someone with no contract is `normal`.
  */
-export async function openTicket(input: OpenTicketInput): Promise<OpenedTicket> {
+export async function openTicket(input: OpenTicketInput): Promise<OpenedSupportTicket> {
   const { priority, supportTier } = await resolveSupportPriority(getNeonDb(), input.userId);
 
   const ticket = await insertTicket({
@@ -187,12 +184,7 @@ export function listTickets(userId: string, limit = MAX_TICKETS_LISTED): Promise
   return listTicketsForUser(userId, Math.min(Math.max(limit, 1), MAX_TICKETS_LISTED));
 }
 
-export interface TicketThread {
-  ticket: SupportTicket;
-  replies: SupportTicketReply[];
-}
-
-export async function readTicket(ticketId: string, userId: string): Promise<TicketThread> {
+export async function readTicket(ticketId: string, userId: string): Promise<SupportTicketThread> {
   const ticket = await getTicketForUser(ticketId, userId);
   if (!ticket) throw new TicketNotFoundError();
   const replies = await listRepliesForTicket(ticketId, userId);
@@ -209,7 +201,7 @@ export async function replyToTicket(input: {
   userId: string;
   message: string;
   isStaff?: boolean;
-}): Promise<TicketThread> {
+}): Promise<SupportTicketThread> {
   const ticket = await getTicketForUser(input.ticketId, input.userId);
   if (!ticket) throw new TicketNotFoundError();
   if (!OPEN_TICKET_STATUSES.includes(ticket.status)) throw new TicketClosedError();

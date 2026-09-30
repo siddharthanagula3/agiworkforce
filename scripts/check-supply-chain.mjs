@@ -6,6 +6,7 @@
  * enumerated by check-security-gates against .github/security-gate-policy.json.
  */
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -16,8 +17,6 @@ const WORKFLOW_DIR = '.github/workflows';
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'target', 'coverage']);
 const MIN_REASON = 60;
 
-const WORKSPACE_INSTALL = /(?:^|[\s&|;(])(?:pnpm|npm|yarn)\s+(?:install|ci|i)(?=\s|$)/gm;
-const FROZEN = /--frozen-lockfile|--offline|\bnpm\s+ci\b|--immutable/;
 const PIPE_TO_SHELL = /\b(?:curl|wget)\b[^\n|]*\|[^\n]*\b(?:ba|z|d)?sh\b/;
 const DIGEST = /@sha256:[0-9a-f]{64}/;
 
@@ -34,7 +33,15 @@ function walk(root, relative, out) {
 }
 
 export function containerFiles(root) {
-  return walk(root, '.', []).filter(
+  const files = fs.existsSync(path.join(root, '.git'))
+    ? execFileSync('git', ['ls-files', '-c', '-o', '--exclude-standard', '-z'], {
+        cwd: root,
+        encoding: 'utf8',
+      })
+        .split('\0')
+        .filter(Boolean)
+    : walk(root, '.', []);
+  return files.filter(
     (relative) =>
       /(^|\/)Dockerfile[^/]*$/.test(relative) ||
       /(^|\/)(docker-)?compose[^/]*\.ya?ml$/.test(relative),
@@ -101,20 +108,232 @@ export function workflowSteps(root) {
  */
 export function workspaceInstalls(step) {
   const found = [];
-  WORKSPACE_INSTALL.lastIndex = 0;
-  let match;
-  while ((match = WORKSPACE_INSTALL.exec(step.body)) !== null) {
-    const start = match.index + match[0].length - match[0].trimStart().length;
-    const end = step.body.slice(start).search(/[\n;]|&&|\|\|/);
-    const command = (end === -1 ? step.body.slice(start) : step.body.slice(start, start + end))
-      .trim()
-      .replace(/\s+/g, ' ');
-    const argument = command.split(/\s+/).slice(2);
-    if (argument.some((token) => !token.startsWith('-'))) continue;
-    if (/\bexec\s+\S+\s*$/.test(step.body.slice(0, match.index + match[0].length))) continue;
-    found.push({ file: step.file, line: step.line, command });
+  for (const command of shellCommands(step.body)) {
+    const tokens = shellWords(command);
+    const shell = tokens.findIndex((token) => /^(?:.*\/)?(?:sh|bash|dash|zsh)$/.test(token));
+    if (
+      shell >= 0 &&
+      tokens[shell + 1] === '-c' &&
+      tokens
+        .slice(0, shell)
+        .every((token) => token === 'env' || /^[A-Za-z_][A-Za-z_0-9]*=/.test(token))
+    ) {
+      found.push(...workspaceInstalls({ ...step, body: tokens[shell + 2] ?? '' }));
+      continue;
+    }
+    const manager = tokens.findIndex((token) => /^(pnpm|npm|yarn)$/.test(token));
+    if (manager < 0) continue;
+    const unsupportedPrefix = tokens
+      .slice(0, manager)
+      .some(
+        (token) =>
+          !/^[A-Za-z_][A-Za-z_0-9]*=/.test(token) &&
+          !/^(env|sudo|exec|command|then|do|else|if|!|time)$/.test(token),
+      );
+    if (unsupportedPrefix && /^(echo|printf)$/.test(tokens[0] ?? '')) continue;
+    const args = tokens.slice(manager + 1);
+    const valueOptions = new Set([
+      '--filter',
+      '-F',
+      '--dir',
+      '-C',
+      '--prefix',
+      '--store-dir',
+      '--registry',
+      '--cache',
+      '--cache-dir',
+      '--lockfile-dir',
+    ]);
+    let operation = 0;
+    while (args[operation]?.startsWith('-')) {
+      operation += valueOptions.has(args[operation]) ? 2 : 1;
+    }
+    if (args.includes('--global') || args.includes('-g')) continue;
+    if (!/^(install|ci|i)$/.test(args[operation] ?? '')) {
+      if (args[0]?.startsWith('-') && args.some((token) => /^(install|ci|i)$/.test(token))) {
+        found.push({
+          file: step.file,
+          line: step.line,
+          command: command.trim(),
+          manager: tokens[manager],
+          operation: 'install',
+          flags: [],
+          verifiedSyntax: false,
+        });
+      }
+      continue;
+    }
+    const positional = [];
+    const flags = [];
+    const booleanOptions = new Set([
+      '--frozen-lockfile',
+      '--no-frozen-lockfile',
+      '--immutable',
+      '--offline',
+      '--prefer-offline',
+      '--prefer-frozen-lockfile',
+      '--ignore-scripts',
+      '--prod',
+      '--production',
+      '-P',
+      '--dev',
+      '-D',
+      '--no-optional',
+      '--silent',
+      '--recursive',
+      '-r',
+      '--workspace-root',
+      '-w',
+      '--ignore-pnpmfile',
+      '--lockfile-only',
+      '--no-save',
+      '--ignore-workspace',
+      '--shamefully-hoist',
+    ]);
+    let verifiedSyntax = !unsupportedPrefix;
+    for (let index = operation + 1; index < args.length; index++) {
+      const token = args[index];
+      if (valueOptions.has(token)) {
+        index++;
+        continue;
+      }
+      if (/^[0-9]*(?:>|>>|<)$/.test(token)) {
+        index++;
+        continue;
+      }
+      if (token.startsWith('-')) {
+        flags.push(token);
+        if (!booleanOptions.has(token) && !token.includes('=')) verifiedSyntax = false;
+      }
+      if (!token.startsWith('-') && !/^[0-9]*>/.test(token)) positional.push(token);
+    }
+    if (
+      positional.length > 0 &&
+      positional.every((token) => /^(?:@[^/]+\/)?[^@/]+@\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(token))
+    )
+      continue;
+    found.push({
+      file: step.file,
+      line: step.line,
+      command: command.trim(),
+      manager: tokens[manager],
+      operation: args[operation],
+      flags,
+      verifiedSyntax,
+    });
   }
   return found;
+}
+
+function shellCommands(source) {
+  const commands = [];
+  let command = '';
+  let quote = null;
+  let comment = false;
+  const text = source.replace(/\\\r?\n/g, ' ');
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (comment && char !== '\n') continue;
+    if (char === '\n') comment = false;
+    if (char === '\\' && quote !== "'") {
+      command += char + (text[++index] ?? '');
+      continue;
+    }
+    if (char === quote) quote = null;
+    else if ((char === '"' || char === "'") && quote === null) quote = char;
+    else if (char === '#' && quote === null && (command === '' || /\s$/.test(command))) {
+      comment = true;
+      continue;
+    }
+    if (quote === null && /[\n;&|()]/.test(char)) {
+      if (command.trim()) commands.push(command);
+      command = '';
+    } else command += char;
+  }
+  if (command.trim()) commands.push(command);
+  return commands;
+}
+
+function shellWords(command) {
+  const words = [];
+  let word = '';
+  let quote = null;
+  let started = false;
+  for (let index = 0; index < command.length; index++) {
+    const char = command[index];
+    if (char === '\\' && quote !== "'") {
+      word += command[++index] ?? '';
+      started = true;
+    } else if (char === quote) quote = null;
+    else if ((char === '"' || char === "'") && quote === null) {
+      quote = char;
+      started = true;
+    } else if (/\s/.test(char) && quote === null) {
+      if (started) words.push(word);
+      word = '';
+      started = false;
+    } else {
+      word += char;
+      started = true;
+    }
+  }
+  if (started) words.push(word);
+  return words;
+}
+
+export function installSteps(root) {
+  const steps = [...workflowSteps(root)];
+  for (const relative of containerFiles(root).filter((file) =>
+    /(^|\/)Dockerfile[^/.]*$/.test(file),
+  )) {
+    const lines = fs.readFileSync(path.join(root, relative), 'utf8').split('\n');
+    for (let index = 0; index < lines.length; index++) {
+      const match = /^\s*RUN\s+(.*)$/i.exec(lines[index]);
+      if (!match) continue;
+      const line = index + 1;
+      let body = match[1];
+      while (/\\\s*$/.test(body) && index + 1 < lines.length) body += '\n' + lines[++index];
+      body = body.replace(/^(?:--[\w-]+=\S+\s+)+/, '');
+      if (body.trimStart().startsWith('[')) {
+        const command = JSON.parse(body);
+        if (!Array.isArray(command) || command.some((word) => typeof word !== 'string'))
+          throw new Error(`${relative}:${line} has an invalid JSON RUN instruction`);
+        body = command.map((word) => JSON.stringify(word)).join(' ');
+      }
+      steps.push({ file: relative, line, body });
+    }
+  }
+  const files = fs.existsSync(path.join(root, '.git'))
+    ? execFileSync('git', ['ls-files', '-c', '-o', '--exclude-standard', '-z'], {
+        cwd: root,
+        encoding: 'utf8',
+      })
+        .split('\0')
+        .filter(Boolean)
+    : walk(root, '.', []);
+  for (const relative of files.filter((file) => path.basename(file) === 'vercel.json')) {
+    const config = JSON.parse(fs.readFileSync(path.join(root, relative), 'utf8'));
+    if (typeof config.installCommand === 'string')
+      steps.push({ file: relative, line: 1, body: config.installCommand });
+  }
+  return steps;
+}
+
+function frozenInstall(install) {
+  const flags = install.flags;
+  if (!install.verifiedSyntax) return false;
+  if (install.manager === 'npm') return install.operation === 'ci';
+  if (
+    flags.includes('--no-frozen-lockfile') ||
+    flags.includes('--frozen-lockfile=false') ||
+    flags.includes('--immutable=false')
+  )
+    return false;
+  return (
+    flags.includes('--frozen-lockfile') ||
+    flags.includes('--frozen-lockfile=true') ||
+    (install.manager === 'yarn' && flags.includes('--immutable'))
+  );
 }
 
 function loadBaseline(root) {
@@ -198,12 +417,12 @@ export function checkSupplyChain(root = REPO_ROOT) {
   }
 
   const steps = workflowSteps(root);
-  const installs = steps.flatMap((step) => workspaceInstalls(step));
-  if (installs.length === 0) {
+  const installs = installSteps(root).flatMap((step) => workspaceInstalls(step));
+  if (steps.flatMap((step) => workspaceInstalls(step)).length === 0) {
     failures.push(`no ${WORKFLOW_DIR} step installs; the walk would be empty`);
   }
   for (const install of installs) {
-    if (FROZEN.test(install.command)) continue;
+    if (frozenInstall(install)) continue;
     failures.push(
       `${install.file}:${install.line} runs '${install.command}' without a frozen lockfile, so CI can resolve a version the lockfile never saw`,
     );

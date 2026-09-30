@@ -6,6 +6,30 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S29.01: Workbook title and metadata.
+
+- Done when: A workbook carries a user-visible title and document metadata (author, description) that can be viewed and set.
+- Wave: 4
+- Build on: cli, vscode
+
+## S29.02: Sheet tabs.
+
+- Done when: A workbook shows its sheets as tabs the user can switch between.
+- Wave: 4
+- Build on: cli, vscode
+
+## S29.03: Add, rename, duplicate, and delete sheets.
+
+- Done when: The user can add, rename, duplicate and delete sheets in an open workbook.
+- Wave: 4
+- Build on: cli, vscode
+
+## S29.04: Grid selection.
+
+- Done when: The user can select cells and ranges in a spreadsheet grid with mouse and keyboard.
+- Wave: 4
+- Build on: cli, vscode, chrome
+
 ## S29.05: Cell editing.
 
 - Done when: The user can edit a cell value in place and the change is kept.
@@ -35,6 +59,18 @@ nothing is left.
 - Done when: A range can be turned into a structured table (header, banding, table name) in the workbook.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
+
+## S29.10: Sort and filter.
+
+- Done when: The user can sort and filter rows in a sheet by column.
+- Wave: 4
+- Build on: cli, vscode, chrome
+
+## S29.11: Freeze rows and columns.
+
+- Done when: The user can freeze chosen rows or columns so they stay visible while scrolling.
+- Wave: 4
+- Build on: cli, vscode, chrome
 
 ## S29.12: Row and column resizing.
 

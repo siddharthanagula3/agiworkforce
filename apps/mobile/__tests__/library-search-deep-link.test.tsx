@@ -212,7 +212,9 @@ describe('Library reads the account library, not the local transcript', () => {
     await waitFor(() => {
       expect(screen.queryByText('launch-plan.pdf')).toBeNull();
     });
-    expect(screen.getByText(/Nothing in documents matches/)).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText(/Nothing in documents matches/)).toBeTruthy();
+    });
 
     fireEvent.changeText(screen.getByLabelText('Search library'), 'launch');
     await waitFor(() => {

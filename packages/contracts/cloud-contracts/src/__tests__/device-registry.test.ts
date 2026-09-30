@@ -14,6 +14,9 @@ import {
   devicePresence,
   generatedDeviceName,
   isDeviceNameReset,
+  DESKTOP_HEARTBEAT_INTERVAL_MS,
+  DESKTOP_ONLINE_WINDOW_MS,
+  deviceHeartbeatIntervalMs,
 } from '../device-registry';
 
 const NOW = Date.parse('2026-09-17T12:00:00.000Z');
@@ -127,5 +130,20 @@ describe('renaming a device, and taking it back', () => {
       expect(deviceDisplayName(stored, device), JSON.stringify(stored)).toBe(generated);
     }
     expect(deviceDisplayName('Studio Mac', device)).toBe('Studio Mac');
+  });
+});
+
+describe('desktop presence', () => {
+  it('reads a quit desktop as away within two minutes', () => {
+    const NOW = Date.parse('2026-09-29T12:00:00.000Z');
+    const ago = (ms: number) => new Date(NOW - ms).toISOString();
+    expect(DESKTOP_ONLINE_WINDOW_MS).toBeLessThanOrEqual(120_000);
+    expect(devicePresence(ago(DESKTOP_HEARTBEAT_INTERVAL_MS + 10_000), NOW, 'desktop')).toBe(
+      'online',
+    );
+    expect(devicePresence(ago(DESKTOP_ONLINE_WINDOW_MS + 1), NOW, 'desktop')).toBe('sleeping');
+    expect(devicePresence(ago(DESKTOP_ONLINE_WINDOW_MS + 1), NOW, 'mobile')).toBe('online');
+    expect(deviceHeartbeatIntervalMs('desktop')).toBe(DESKTOP_HEARTBEAT_INTERVAL_MS);
+    expect(deviceHeartbeatIntervalMs('mobile')).toBe(DEVICE_HEARTBEAT_INTERVAL_MS);
   });
 });

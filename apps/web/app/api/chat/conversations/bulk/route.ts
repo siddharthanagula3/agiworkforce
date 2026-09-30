@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
+import { revokeSharesOfDeletedConversations } from '@/lib/services/shared-session-revocation';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
@@ -57,7 +58,11 @@ async function handleBulkConversationAction(request: NextRequest) {
   const bulkUpdateSql = isDelete
     ? `
         update web_conversations
-           set deleted_at = now(), updated_at = now()
+           set deleted_at = now(),
+               updated_at = now(),
+               compaction_summary = null,
+               compaction_summary_through_message_id = null,
+               compaction_summary_digest = null
          where user_id = $1
            and organization_id is not distinct from $2
            and deleted_at is null
@@ -66,7 +71,7 @@ async function handleBulkConversationAction(request: NextRequest) {
       `
     : `
         update web_conversations
-           set archived = true, updated_at = now()
+           set archived = true, pinned = false, updated_at = now()
          where user_id = $1
            and organization_id is not distinct from $2
            and deleted_at is null
@@ -90,7 +95,11 @@ async function handleBulkConversationAction(request: NextRequest) {
           userId,
           conversationIds: pending.map(({ id }) => id),
         });
-        return { deleted, revoked };
+        const revokedShares = await revokeSharesOfDeletedConversations(tx, {
+          userId,
+          organizationId,
+        });
+        return { deleted, revoked, revokedShares };
       });
       affected = outcome.deleted;
       if (outcome.revoked.length > 0) {

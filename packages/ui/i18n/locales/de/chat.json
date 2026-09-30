@@ -74,7 +74,15 @@
     "runtimeConsent": "Diese App möchte KI mit deinem Konto nutzen. Jede Anfrage zählt zur Nutzung deines Tarifs.",
     "runtimeConsentConnectors": "Diese App möchte KI mit deinem Konto nutzen und Daten in {{apps}} lesen oder ändern. Sie sieht, was diese Apps zurückgeben, und jede Anfrage zählt zur Nutzung deines Tarifs.",
     "runtimeAllow": "Zulassen",
-    "runtimeDecline": "Nicht zulassen"
+    "runtimeDecline": "Nicht zulassen",
+    "runtimeConnectorsLoading": "Deine verbundenen Apps werden geprüft",
+    "runtimeConnectorNotConnected": "Nicht verbunden. Verbinde die App unter Einstellungen, Connectors, um diesen Teil der App zu nutzen.",
+    "runtimeToolNeedsApproval": "Fragt vor jeder Nutzung nach, daher kann diese App sie nicht verwenden.",
+    "runtimeToolBlocked": "In deinen Einstellungen blockiert.",
+    "runtimeManageConnectors": "Verbundene Apps",
+    "saveCopy": "Eine Kopie in meinen Chats speichern",
+    "saveCopyBusy": "Wird kopiert…",
+    "saveCopyFailed": "Dieses Artefakt konnte nicht kopiert werden."
   },
   "sidebar": {
     "activeConversation": "Aktive Unterhaltung",
@@ -441,10 +449,22 @@
     "videoModeAttachments_other": "Die Videogenerierung nutzt nur Ihre Eingabeaufforderung. Angehängte Dateien werden nicht an das Videomodell gesendet. Verlassen Sie zuerst den Videomodus, wenn Sie diese Dateien an das Chat-Modell senden möchten.",
     "viewSources_one": "{{count}} Quelle ansehen",
     "viewSources_other": "{{count}} Quellen ansehen",
+    "folderFilesLeftOut_one": "{{count}} Datei in {{folder}} wurde nicht angehängt. Hängen Sie sie aus einem lokalen Ordner an.",
+    "folderFilesLeftOut_other": "{{count}} Dateien in {{folder}} wurden nicht angehängt. Hängen Sie sie aus einem lokalen Ordner an.",
     "savedMemoriesUsed_one": "{{count}} gespeicherte Erinnerung verwendet",
     "savedMemoriesUsed_other": "{{count}} gespeicherte Erinnerungen verwendet",
     "moreSavedMemories_one": "Und {{count}} weitere",
-    "moreSavedMemories_other": "Und {{count}} weitere"
+    "moreSavedMemories_other": "Und {{count}} weitere",
+    "filesCreated_one": "{{count}} Datei erstellt",
+    "filesCreated_other": "{{count}} Dateien erstellt",
+    "foundSources_one": "{{count}} Quelle gefunden",
+    "foundSources_other": "{{count}} Quellen gefunden",
+    "mapPreviewPlaces_one": "Kartenvorschau mit {{count}} Ort",
+    "mapPreviewPlaces_other": "Kartenvorschau mit {{count}} Orten",
+    "lines_one": "{{count}} Zeile",
+    "lines_other": "{{count}} Zeilen",
+    "words_one": "{{count}} Wort",
+    "words_other": "{{count}} Wörter"
   },
   "markdownTable": {
     "label": "Tabelle",
@@ -466,7 +486,9 @@
     "expand": "Code vergrößern",
     "close": "Vergrößerten Code schließen",
     "codeTitle": "{{language}}-Code",
-    "codeBlockLabel": "{{language}}-Codeblock"
+    "codeBlockLabel": "{{language}}-Codeblock",
+    "edit": "Bearbeiten",
+    "editLabel": "Diesen Code neben dem Chat bearbeiten"
   },
   "streaming": {
     "reconnecting": "Verbindung wird wiederhergestellt…",

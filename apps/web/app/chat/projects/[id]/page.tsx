@@ -11,6 +11,7 @@ import {
 } from '@agiworkforce/ui';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { MoreHorizontal, Settings2, Share2, Pin, PinOff, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -94,6 +95,7 @@ function formatChatDate(dateStr: string | undefined | null): string {
 }
 
 const MAX_CONVERSATIONS_WARN = 80;
+const HEALTH_RECORDS_HREF = '/settings/connections';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -146,6 +148,7 @@ export default function ProjectDetailPage() {
    * them are not rendered rather than left to fail.
    */
   const isSharedProject = Boolean(project?.isOrgShared);
+  const isHealthSpace = project?.space === 'health';
 
   /**
    * An editor grant (§20) reopens the content controls on a shared project: its
@@ -622,40 +625,43 @@ export default function ProjectDetailPage() {
                       zIndex: 'var(--z-popover)',
                     }}
                   >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-testid="project-detail-menu-share"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        setShareOpen(true);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 'var(--space-3)',
-                        width: '100%',
-                        padding: 'var(--space-3) var(--space-4)',
-                        background: 'transparent',
-                        border: 0,
-                        textAlign: 'start',
-                        fontSize: 13,
-                        color: 'hsl(var(--foreground))',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                      }}
-                    >
-                      <Share2
-                        style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
-                        aria-hidden="true"
-                      />
-                      Share
-                    </button>
+                    {isHealthSpace ? null : (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="project-detail-menu-share"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setShareOpen(true);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'var(--space-3)',
+                          width: '100%',
+                          padding: 'var(--space-3) var(--space-4)',
+                          background: 'transparent',
+                          border: 0,
+                          textAlign: 'start',
+                          fontSize: 13,
+                          color: 'hsl(var(--foreground))',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background =
+                            'var(--agi-bg-3)';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                        }}
+                      >
+                        <Share2
+                          style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                          aria-hidden="true"
+                        />
+                        Share
+                      </button>
+                    )}
 
                     {canEditProject ? (
                       <button
@@ -1043,6 +1049,32 @@ export default function ProjectDetailPage() {
                 memories here stay private to you.
               </p>
             ) : null}
+            {isHealthSpace ? (
+              <p
+                data-testid="project-health-explanation"
+                style={{
+                  margin: 'var(--space-2) 0 0',
+                  maxWidth: 540,
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  color: 'var(--agi-ink-2)',
+                }}
+              >
+                Your other chats never use anything from Health: its chats, files, connected health
+                records and memories stay out of them. Health chats only use models that keep your
+                chats out of training.{' '}
+                <Link
+                  href={HEALTH_RECORDS_HREF}
+                  style={{
+                    color: 'var(--agi-ink)',
+                    textDecoration: 'underline',
+                    textUnderlineOffset: 2,
+                  }}
+                >
+                  Connect health records
+                </Link>
+              </p>
+            ) : null}
 
             {/* Optional project description / instructions summary */}
             {headerPresentation && (
@@ -1117,7 +1149,7 @@ export default function ProjectDetailPage() {
                   background: 'transparent',
                   border: 'none',
                   borderBottom:
-                    tab === t ? '2px solid hsl(var(--primary))' : '2px solid transparent',
+                    tab === t ? '2px solid var(--color-primary)' : '2px solid transparent',
                   color: tab === t ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
                   fontSize: 13,
                   fontWeight: tab === t ? 600 : 400,

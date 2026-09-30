@@ -2,32 +2,34 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
-  Pressable,
   RefreshControl,
   ScrollView,
   SectionList,
   View,
   type AppStateStatus,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, BellOff, Bot, Cloud, Plus, RefreshCw } from 'lucide-react-native';
-import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
+import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { CloudRunCard } from './components/CloudRunCard';
 import { CloudRunDetailSheet } from './components/CloudRunDetailSheet';
 import { StartWorkSheet, type StartWorkSubmission } from './components/StartWorkSheet';
-import { startCloudWorkRun, START_WORK_ERROR } from './startWork';
+import { startCloudWorkRun, startWorkFailureMessage } from './startWork';
 import {
   cloudRunTitle,
   groupCloudRunsByRecency,
@@ -58,7 +60,7 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
         gap: 8,
       }}
     >
-      <Pressable
+      <PressableBox
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Go back"
@@ -66,12 +68,14 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
         style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
       >
         <ArrowLeft size={20} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
       <View style={{ flex: 1 }}>
         <Text variant="subheading" style={{ color: colors.textPrimary }}>
           {SCREEN_TITLE}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 11 }}>{SCREEN_SUBTITLE}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+          {SCREEN_SUBTITLE}
+        </Text>
       </View>
       <View
         style={{
@@ -87,10 +91,14 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
         }}
       >
         <Cloud size={13} color={colors.textSecondary} />
-        <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '600' }}>Cloud</Text>
+        <Text
+          style={{ color: colors.textSecondary, fontSize: typeScale.caption, fontWeight: '600' }}
+        >
+          Cloud
+        </Text>
       </View>
       {onStartWork ? (
-        <Pressable
+        <PressableBox
           onPress={onStartWork}
           accessibilityRole="button"
           accessibilityLabel="New task"
@@ -107,7 +115,7 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
           }}
         >
           <Plus size={20} color={colors.textPrimary} />
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -146,7 +154,7 @@ function CloudTasksGate({
           style={{
             marginTop: 20,
             color: colors.textPrimary,
-            fontSize: 21,
+            fontSize: typeScale.title3,
             fontWeight: '700',
             textAlign: 'center',
           }}
@@ -157,7 +165,7 @@ function CloudTasksGate({
           style={{
             marginTop: 9,
             color: colors.textSecondary,
-            fontSize: 14,
+            fontSize: typeScale.subhead,
             lineHeight: 21,
             textAlign: 'center',
           }}
@@ -191,20 +199,22 @@ function ScopeNote({ onOpenRemote }: { onOpenRemote: () => void }) {
         borderColor: colors.accentBorder,
       }}
     >
-      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
         {SCOPE_NOTE}
       </Text>
-      <Pressable
+      <PressableBox
         onPress={onOpenRemote}
         accessibilityRole="button"
         accessibilityLabel={`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
         hitSlop={6}
         style={{ minHeight: 32, justifyContent: 'center' }}
       >
-        <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '700' }}>
+        <Text
+          style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '700' }}
+        >
           {`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
         </Text>
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }
@@ -213,7 +223,7 @@ function BackgroundAlertsNote({ onOpenSettings }: { onOpenSettings: () => void }
   const colors = useThemeColors();
 
   return (
-    <Pressable
+    <PressableBox
       onPress={onOpenSettings}
       accessibilityRole="button"
       accessibilityLabel="Open notification settings"
@@ -230,10 +240,17 @@ function BackgroundAlertsNote({ onOpenSettings }: { onOpenSettings: () => void }
       }}
     >
       <BellOff size={16} color={colors.agentWarning} />
-      <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
+      <Text
+        style={{
+          flex: 1,
+          color: colors.textSecondary,
+          fontSize: typeScale.caption,
+          lineHeight: 18,
+        }}
+      >
         {BACKGROUND_ALERTS_OFF_NOTE}
       </Text>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -314,7 +331,7 @@ export function CloudTasksScreen() {
   const stopRun = useCloudTaskStore((state) => state.stopRun);
   const reset = useCloudTaskStore((state) => state.reset);
 
-  const tier = useTierStore((state) => state.tier);
+  const grantedCapabilities = useTierStore((state) => state.grantedCapabilities);
   const [startWorkVisible, setStartWorkVisible] = useState(false);
   const [startWorkSubmitting, setStartWorkSubmitting] = useState(false);
   const [startWorkError, setStartWorkError] = useState<string | null>(null);
@@ -367,7 +384,7 @@ export function CloudTasksScreen() {
 
   const handleActivateCloud = useCallback(() => {
     if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent('cloud-tasks'));
       return;
     }
     setAppMode('cloud');
@@ -406,9 +423,7 @@ export function CloudTasksScreen() {
         })
         .catch((error: unknown) => {
           setStartWorkSubmitting(false);
-          setStartWorkError(
-            error instanceof Error && error.message ? error.message : START_WORK_ERROR,
-          );
+          setStartWorkError(startWorkFailureMessage(error));
         });
     },
     [load, openRun],
@@ -434,7 +449,7 @@ export function CloudTasksScreen() {
     );
   }
 
-  const canStartWork = canUseBillingPlanCapability(tier, 'agi_work');
+  const canStartWork = grantedCapabilities.includes('canUseAgiWork');
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
@@ -448,7 +463,7 @@ export function CloudTasksScreen() {
         {CLOUD_RUN_FILTERS.map((item) => {
           const selected = item.key === filter;
           return (
-            <Pressable
+            <PressableBox
               key={item.key}
               onPress={() => setFilter(item.key)}
               accessibilityRole="button"
@@ -468,13 +483,13 @@ export function CloudTasksScreen() {
               <Text
                 style={{
                   color: selected ? colors.accentText : colors.textSecondary,
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   fontWeight: '600',
                 }}
               >
                 {item.label}
               </Text>
-            </Pressable>
+            </PressableBox>
           );
         })}
       </ScrollView>
@@ -509,7 +524,7 @@ export function CloudTasksScreen() {
             <Text
               style={{
                 color: colors.textMuted,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: '700',
                 textTransform: 'uppercase',
                 letterSpacing: 0.6,
@@ -532,7 +547,7 @@ export function CloudTasksScreen() {
           ListEmptyComponent={<EmptyState filtered={filter !== CLOUD_RUN_FILTERS[0].key} />}
           ListFooterComponent={
             nextCursor ? (
-              <Pressable
+              <PressableBox
                 onPress={() => void loadMore()}
                 disabled={loadingMore}
                 accessibilityRole="button"
@@ -544,7 +559,7 @@ export function CloudTasksScreen() {
                 ) : (
                   <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Load more</Text>
                 )}
-              </Pressable>
+              </PressableBox>
             ) : null
           }
           refreshControl={

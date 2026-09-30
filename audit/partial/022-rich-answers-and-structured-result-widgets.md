@@ -21,15 +21,12 @@ nothing is left.
 
 - Done when: Hovering/tapping a citation shows a preview card (title, site, snippet/date) before opening it.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The source list shows each result's title, site and snippet before it opens, and the citation chip preview shows title and site; the chip shows the snippet once post-codex/chat-gates-s22.02-mobile-citation-snippet.patch is applied (MessageBubble is held by Codex). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:192-192`, `apps/mobile/src/features/chat/components/CitationChip.tsx:39-39`
 
 ## S22.03: Search-result lists.
 
@@ -49,44 +46,38 @@ Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:192-192`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | an image results carousel in an answer needs image results from server-side search first. | handler |
-| desktop | partial | an image results carousel in an answer needs image results from server-side search first. | handler |
+| web | partial | owner (lead ruling 2026-09-28): choose an image-search provider and key; the carousel code follows the choice | handler |
+| desktop | partial | owner (lead ruling 2026-09-28): choose an image-search provider and key; the carousel code follows the choice | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:1513-1513`
+Code: `apps/web/lib/web-search/web-search-providers.json:4-4`
 
 ## S22.08: Interactive charts.
 
 - Done when: Charts in answers render interactively (hover/tap values, legend).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Charts drawn from an answer are now interactive (tap a category or slice for its values, legend). Chart artifacts still open as text in the full-screen viewer: the web chart spec parser lives in packages/ui/unified-chat and would have to move to a shared package before the Codex-held ArtifactFullScreen can draw them. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ReportChart.tsx:269-269`, `apps/mobile/src/features/chat/components/ReportChart.tsx:50-50`
 
 ## S22.09: Inspectable chart data.
 
 - Done when: The data behind a chart can be inspected (values on hover, source table/JSON view or download).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | An answer's chart shows its values on tap and its data as a selectable table (Show data). Chart artifacts in the full-screen viewer are still text, as in S22.08. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ReportChart.tsx:82-82`, `apps/mobile/src/features/chat/components/ReportChart.tsx:50-50`
 
 ## S22.10: Geographic maps.
 
@@ -96,12 +87,12 @@ Code: `apps/mobile/src/features/chat/components/ReportChart.tsx:82-82`, `apps/mo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | code complete; the map shows once production sets AGI_MAP_TILE_URL_TEMPLATE (owner setting). | config |
-| desktop | partial | code complete; the map shows once production sets AGI_MAP_TILE_URL_TEMPLATE (owner setting). | config |
+| web | partial | owner: choose a map tile provider and set AGI_MAP_TILE_URL_TEMPLATE (apps/web/lib/maps/map-tile-provider.ts:93); live-check a map renders on web and in Electron (CSP img-src allows the tile host) | config |
+| desktop | partial | owner: choose a map tile provider and set AGI_MAP_TILE_URL_TEMPLATE (apps/web/lib/maps/map-tile-provider.ts:93); live-check a map renders on web and in Electron (CSP img-src allows the tile host) | config |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/cards/MapSearchCard.tsx:34-34`, `apps/web/lib/maps/map-tile-provider.ts:5-5`
+Code: `apps/web/lib/maps/map-tile-provider.ts:93-93`
 
 ## S22.11: Place and business cards.
 
@@ -110,14 +101,14 @@ Code: `apps/web/features/chat/components/messages/cards/MapSearchCard.tsx:34-34`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | code complete; place details appear once production sets GOOGLE_PLACES_API_KEY (owner setting). | config |
-| desktop | partial | code complete; place details appear once production sets GOOGLE_PLACES_API_KEY (owner setting). | config |
+| web | partial | owner: create a Google Places API key with billing and set GOOGLE_PLACES_API_KEY (apps/web/lib/config/optional-features.ts:118); live-check a place query | config |
+| desktop | partial | owner: create a Google Places API key with billing and set GOOGLE_PLACES_API_KEY (apps/web/lib/config/optional-features.ts:118); live-check a place query | config |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/cards/map/PlaceDetailPopup.tsx:94-94`, `apps/web/lib/config/optional-features.ts:118-118`
+Code: `apps/web/lib/config/optional-features.ts:118-118`
 
 ## S22.17: Product comparison cards.
 

@@ -33,8 +33,13 @@ jest.mock('lucide-react-native', () => {
   return new Proxy({}, { get: () => Icon });
 });
 
+let mockAutonomyAllowed = true;
+
 jest.mock('@/services/preferences', () => ({
-  fetchPreferenceNamespace: (...args: unknown[]) => mockFetchNamespace(...args),
+  fetchToolApprovalNamespace: async (...args: unknown[]) => ({
+    settings: await mockFetchNamespace(...args),
+    autonomousToolApprovalsAllowed: mockAutonomyAllowed,
+  }),
   savePreferenceNamespace: (...args: unknown[]) => mockSaveNamespace(...args),
 }));
 
@@ -137,7 +142,34 @@ describe('Action approvals settings screen', () => {
       fireEvent.press(screen.getByLabelText(rowLabel(READ_ONLY)));
     });
 
-    await waitFor(() => expect(screen.getByText('Preference service unavailable')).toBeTruthy());
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Your approval default could not be saved. Check your connection and try again.',
+        ),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText('Preference service unavailable')).toBeNull();
     expect(useSettingsStore.getState().toolApprovalPolicy).toBe(DEFAULT_TOOL_APPROVAL_POLICY);
+  });
+
+  it('does not offer skipping approvals when the workspace forbids it', async () => {
+    mockAutonomyAllowed = false;
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkSignedIn: true });
+    mockFetchNamespace.mockResolvedValue({ defaultPolicy: 'autonomous' });
+
+    const screen = render(<AutoApproveScreen />);
+
+    await waitFor(() => expect(mockFetchNamespace).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByText(/Your workspace does not allow skipping approvals\./)).toBeTruthy(),
+    );
+    await act(async () => {
+      fireEvent.press(screen.getByText(AUTONOMOUS.label));
+    });
+
+    expect(mockSaveNamespace).not.toHaveBeenCalled();
+    mockAutonomyAllowed = true;
   });
 });

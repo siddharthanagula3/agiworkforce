@@ -231,6 +231,77 @@ describe('LiveVoiceSession', () => {
     expect(cb.onBackendBusy).toHaveBeenLastCalledWith(false);
   });
 
+  it('names the running tool, flags a slow one and reports what it returned', async () => {
+    mockApiFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        sessionId: 'live_1',
+        sdp: 'answer-sdp',
+        settlement: SETTLEMENT,
+        tools: [
+          {
+            id: 'calendar',
+            label: 'Checking your calendar',
+            timeoutMs: 5_000,
+            requiresApproval: false,
+          },
+        ],
+      }),
+    });
+    const cb = { ...callbacks(), onToolActivity: jest.fn(), onToolResult: jest.fn() };
+    await startSession(cb);
+    mockState.peer.channel.receive({ type: 'session.started' });
+
+    mockState.peer.channel.receive({
+      type: 'session.delegation.created',
+      delegation: { id: 'del_1', tool: 'calendar' },
+    });
+    expect(cb.onToolActivity).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        delegationId: 'del_1',
+        label: 'Checking your calendar',
+        state: 'running',
+      }),
+    ]);
+
+    jest.advanceTimersByTime(5_000);
+    expect(cb.onToolActivity).toHaveBeenLastCalledWith([
+      expect.objectContaining({ delegationId: 'del_1', state: 'timed_out' }),
+    ]);
+
+    mockApiFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'completed', output: 'Two meetings today', isError: false }),
+    });
+    mockState.peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'del_1',
+      event: {
+        type: 'response.output_item.done',
+        item: { type: 'function_call', call_id: 'call_1', name: 'calendar', arguments: '{}' },
+      },
+    });
+    await jest.runOnlyPendingTimersAsync();
+
+    expect(mockApiFetch).toHaveBeenLastCalledWith(
+      '/api/voice/live/sessions/live_1/tools',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(cb.onToolResult).toHaveBeenCalledWith({
+      callId: 'call_1',
+      label: 'Checking your calendar',
+      output: 'Two meetings today',
+      isError: false,
+    });
+
+    mockState.peer.channel.receive({
+      type: 'response.event',
+      delegation_id: 'del_1',
+      event: { type: 'response.completed' },
+    });
+    expect(cb.onToolActivity).toHaveBeenLastCalledWith([]);
+  });
+
   it('mutes the microphone track and tells the session', async () => {
     const { session } = await startSession();
     session.setMuted(true);

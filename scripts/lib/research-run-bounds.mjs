@@ -56,6 +56,11 @@ export function boundResolutions(repoRoot = REPO_ROOT) {
   return resolutions;
 }
 
+function runSignalReachesToolCalls(source) {
+  const helper = /function toolCallSignal\(\)[^{]*\{([\s\S]*?)\n  \}/.exec(source);
+  return helper !== null && /options\.signal/.test(helper[1]);
+}
+
 export function unsignalledNetworkCalls(repoRoot = REPO_ROOT) {
   const source = read(repoRoot, LOOP_PATH);
   const missing = [];
@@ -64,7 +69,10 @@ export function unsignalledNetworkCalls(repoRoot = REPO_ROOT) {
     let seen = 0;
     for (const match of source.matchAll(pattern)) {
       seen += 1;
-      if (!/options\.signal/.test(match[1])) {
+      const passesRunSignal = /options\.signal/.test(match[1]);
+      const passesHelperSignal =
+        /toolCallSignalOption\(\)/.test(match[1]) && runSignalReachesToolCalls(source);
+      if (!passesRunSignal && !passesHelperSignal) {
         missing.push({
           call: name,
           line: source.slice(0, match.index).split('\n').length,

@@ -5,7 +5,11 @@ import { Ban, Check, PlugZap, X } from 'lucide-react';
 import {
   CONNECTOR_POLICY_MCP_HOST_PATTERN,
   CONNECTOR_POLICY_PLUGIN_KEY_PATTERN,
+  connectorCategoryToolName,
   normalizeWebDomain,
+  type ConnectorToolCategory,
+  type ConnectorToolPermissionLevel,
+  type WorkspaceConnectorToolRule,
 } from '@agiworkforce/cloud-contracts';
 
 import {
@@ -99,7 +103,7 @@ function EntryList({
           {entries.map((entry) => (
             <li
               key={entry}
-              className="flex items-center gap-1 rounded-sm border py-0.5 pl-2 pr-0.5 text-xs"
+              className="flex items-center gap-1 rounded-sm border py-0.5 ps-2 pe-0.5 text-xs"
               style={{
                 borderColor: destructive ? 'currentColor' : 'var(--settings-border)',
                 color: destructive ? 'var(--settings-destructive-text)' : 'var(--text-1)',
@@ -196,7 +200,7 @@ function PluginPolicySection({
             className={smallButtonClass}
             style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
           >
-            <Check aria-hidden className="mr-1 inline h-3 w-3" />
+            <Check aria-hidden className="me-1 inline h-3 w-3" />
             Approve
           </button>
           <button
@@ -209,7 +213,7 @@ function PluginPolicySection({
               color: 'var(--settings-destructive-text)',
             }}
           >
-            <Ban aria-hidden className="mr-1 inline h-3 w-3" />
+            <Ban aria-hidden className="me-1 inline h-3 w-3" />
             Block
           </button>
         </form>
@@ -364,7 +368,7 @@ function WebDomainPolicySection({
             className={smallButtonClass}
             style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
           >
-            <Check aria-hidden className="mr-1 inline h-3 w-3" />
+            <Check aria-hidden className="me-1 inline h-3 w-3" />
             Allow site
           </button>
           <button
@@ -379,7 +383,7 @@ function WebDomainPolicySection({
               color: 'var(--settings-destructive-text)',
             }}
           >
-            <Ban aria-hidden className="mr-1 inline h-3 w-3" />
+            <Ban aria-hidden className="me-1 inline h-3 w-3" />
             Block site
           </button>
         </form>
@@ -407,6 +411,99 @@ function WebDomainPolicySection({
   );
 }
 
+const TOOL_CATEGORY_LABELS: Readonly<Record<ConnectorToolCategory, string>> = {
+  read_only: 'Read-only tools',
+  write: 'Write tools',
+};
+
+const TOOL_RULE_OPTIONS: ReadonlyArray<{
+  value: ConnectorToolPermissionLevel | '';
+  label: string;
+}> = [
+  { value: '', label: 'Member decides' },
+  { value: 'allow', label: 'Always allow' },
+  { value: 'ask', label: 'Needs approval' },
+  { value: 'deny', label: 'Blocked' },
+];
+
+function toolRuleLevel(
+  rules: readonly WorkspaceConnectorToolRule[],
+  connectorId: string,
+  toolName: string,
+): ConnectorToolPermissionLevel | '' {
+  const id = connectorId.toLowerCase();
+  return (
+    rules.find((rule) => rule.connectorId.toLowerCase() === id && rule.toolName === toolName)
+      ?.level ?? ''
+  );
+}
+
+function withToolRule(
+  rules: readonly WorkspaceConnectorToolRule[],
+  connectorId: string,
+  toolName: string,
+  level: ConnectorToolPermissionLevel | '',
+): WorkspaceConnectorToolRule[] {
+  const id = connectorId.toLowerCase();
+  const rest = rules.filter(
+    (rule) => !(rule.connectorId.toLowerCase() === id && rule.toolName === toolName),
+  );
+  return level === '' ? rest : [...rest, { connectorId: id, toolName, level }];
+}
+
+function ConnectorToolRules({
+  connectorId,
+  rules,
+  disabled,
+  onChange,
+}: {
+  connectorId: string;
+  rules: readonly WorkspaceConnectorToolRule[];
+  disabled: boolean;
+  onChange: (rules: WorkspaceConnectorToolRule[]) => void;
+}) {
+  const name = connectorId.replace(/[-_]/g, ' ');
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {(Object.keys(TOOL_CATEGORY_LABELS) as ConnectorToolCategory[]).map((category) => {
+        const toolName = connectorCategoryToolName(category);
+        return (
+          <label
+            key={category}
+            className="flex items-center gap-2 text-xs"
+            style={{ color: 'var(--text-3)' }}
+          >
+            {TOOL_CATEGORY_LABELS[category]}
+            <select
+              value={toolRuleLevel(rules, connectorId, toolName)}
+              disabled={disabled}
+              aria-label={`${TOOL_CATEGORY_LABELS[category]} for ${name}`}
+              onChange={(event) =>
+                onChange(
+                  withToolRule(
+                    rules,
+                    connectorId,
+                    toolName,
+                    event.target.value as ConnectorToolPermissionLevel | '',
+                  ),
+                )
+              }
+              className="rounded-md border bg-transparent px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 pointer-coarse:min-h-11"
+              style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+            >
+              {TOOL_RULE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function toggle(list: string[], value: string): string[] {
   const lower = value.toLowerCase();
   return list.some((entry) => entry.toLowerCase() === lower)
@@ -430,6 +527,7 @@ export function WorkspaceConnectorPolicy() {
       allowedMcpHosts: [...data.policy.allowedMcpHosts],
       allowedWebDomains: [...data.policy.allowedWebDomains],
       blockedWebDomains: [...data.policy.blockedWebDomains],
+      toolRules: [...data.policy.toolRules],
     });
   }, [data]);
 
@@ -446,6 +544,9 @@ export function WorkspaceConnectorPolicy() {
         h: sorted(l.allowedMcpHosts),
         w: sorted(l.allowedWebDomains),
         x: sorted(l.blockedWebDomains),
+        t: sorted(
+          (l.toolRules ?? []).map((rule) => `${rule.connectorId} ${rule.toolName} ${rule.level}`),
+        ),
       });
     return norm(data.policy) !== norm(draft);
   }, [data, draft]);
@@ -509,7 +610,8 @@ export function WorkspaceConnectorPolicy() {
       draft.blockedPlugins.length +
       draft.allowedMcpHosts.length +
       draft.allowedWebDomains.length +
-      draft.blockedWebDomains.length >
+      draft.blockedWebDomains.length +
+      (draft.toolRules?.length ?? 0) >
       0 || !draft.allowCustomConnectors;
 
   return (
@@ -562,7 +664,10 @@ export function WorkspaceConnectorPolicy() {
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
             The badge shows what a member will actually get after every rule resolves. Approving
-            none leaves them all available, restriction is something you state.
+            none leaves them all available, restriction is something you state. For each connector,
+            choose whether its read-only and write tools always run, need approval each time or are
+            blocked, for everyone in the workspace. A member can make a tool stricter for
+            themselves, never looser.
           </p>
         </div>
 
@@ -590,61 +695,75 @@ export function WorkspaceConnectorPolicy() {
               return (
                 <li
                   key={connectorId}
-                  className="flex items-center justify-between gap-3 px-5 py-3"
+                  className="flex flex-col gap-2 px-5 py-3"
                   style={{ borderColor: 'var(--settings-border)' }}
                 >
-                  <span className="truncate text-sm" style={{ color: 'var(--text-1)' }}>
-                    {connectorId.replace(/[-_]/g, ' ')}
-                  </span>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <EffectiveChip state={state} />
-                    <button
-                      type="button"
-                      disabled={!canEdit}
-                      aria-pressed={explicitlyAllowed}
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          allowedConnectors: toggle(draft.allowedConnectors, connectorId),
-                          blockedConnectors: draft.blockedConnectors.filter(
-                            (c) => c.toLowerCase() !== connectorId.toLowerCase(),
-                          ),
-                        })
-                      }
-                      className="rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                      style={{
-                        borderColor: explicitlyAllowed ? 'currentColor' : 'var(--settings-border)',
-                        color: explicitlyAllowed ? 'var(--text-1)' : 'var(--text-3)',
-                      }}
-                    >
-                      <Check aria-hidden className="mr-1 inline h-3 w-3" />
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!canEdit}
-                      aria-pressed={explicitlyBlocked}
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          blockedConnectors: toggle(draft.blockedConnectors, connectorId),
-                          allowedConnectors: draft.allowedConnectors.filter(
-                            (c) => c.toLowerCase() !== connectorId.toLowerCase(),
-                          ),
-                        })
-                      }
-                      className="rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                      style={{
-                        borderColor: explicitlyBlocked ? 'currentColor' : 'var(--settings-border)',
-                        color: explicitlyBlocked
-                          ? 'var(--settings-destructive-text)'
-                          : 'var(--text-3)',
-                      }}
-                    >
-                      <Ban aria-hidden className="mr-1 inline h-3 w-3" />
-                      Block
-                    </button>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm" style={{ color: 'var(--text-1)' }}>
+                      {connectorId.replace(/[-_]/g, ' ')}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <EffectiveChip state={state} />
+                      <button
+                        type="button"
+                        disabled={!canEdit}
+                        aria-pressed={explicitlyAllowed}
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            allowedConnectors: toggle(draft.allowedConnectors, connectorId),
+                            blockedConnectors: draft.blockedConnectors.filter(
+                              (c) => c.toLowerCase() !== connectorId.toLowerCase(),
+                            ),
+                          })
+                        }
+                        className="rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                        style={{
+                          borderColor: explicitlyAllowed
+                            ? 'currentColor'
+                            : 'var(--settings-border)',
+                          color: explicitlyAllowed ? 'var(--text-1)' : 'var(--text-3)',
+                        }}
+                      >
+                        <Check aria-hidden className="me-1 inline h-3 w-3" />
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canEdit}
+                        aria-pressed={explicitlyBlocked}
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            blockedConnectors: toggle(draft.blockedConnectors, connectorId),
+                            allowedConnectors: draft.allowedConnectors.filter(
+                              (c) => c.toLowerCase() !== connectorId.toLowerCase(),
+                            ),
+                          })
+                        }
+                        className="rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                        style={{
+                          borderColor: explicitlyBlocked
+                            ? 'currentColor'
+                            : 'var(--settings-border)',
+                          color: explicitlyBlocked
+                            ? 'var(--settings-destructive-text)'
+                            : 'var(--text-3)',
+                        }}
+                      >
+                        <Ban aria-hidden className="me-1 inline h-3 w-3" />
+                        Block
+                      </button>
+                    </div>
                   </div>
+                  {state === 'available' ? (
+                    <ConnectorToolRules
+                      connectorId={connectorId}
+                      rules={draft.toolRules ?? []}
+                      disabled={!canEdit}
+                      onChange={(toolRules) => setDraft({ ...draft, toolRules })}
+                    />
+                  ) : null}
                 </li>
               );
             })}

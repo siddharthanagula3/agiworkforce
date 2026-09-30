@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 
 What the owner registers with each vendor so that AGI Workforce connectors sign
 in the way Claude and ChatGPT connectors do. Most connectors need nothing from
@@ -125,15 +125,15 @@ One Google Cloud project and one OAuth client serve all four connectors.
    | Connector       | Scopes (all prefixed `https://www.googleapis.com/auth/` except OpenID) |
    | --------------- | ---------------------------------------------------------------------- |
    | all five        | `openid`, `profile`, `email`, `userinfo.email`, `userinfo.profile`     |
-   | Gmail           | `gmail.readonly`, `gmail.send`                                         |
+   | Gmail           | `gmail.readonly`, `gmail.compose`, `gmail.send`                        |
    | Google Calendar | `calendar.readonly`, `calendar.events`                                 |
-   | Google Drive    | `drive.file`, `drive.metadata.readonly`                                |
+   | Google Drive    | `drive.file`, `drive.readonly`                                         |
    | Google Contacts | `contacts.readonly`, `directory.readonly`                              |
    | BigQuery        | `bigquery.readonly`, `devstorage.read_only`                            |
 
    The console labels each scope non-sensitive, sensitive or restricted when
-   you add it; trust its label over this page. Expect `gmail.readonly` and
-   `drive.metadata.readonly` to be restricted, and the Calendar and
+   you add it; trust its label over this page. Expect `gmail.readonly`,
+   `gmail.compose` and `drive.readonly` to be restricted, and the Calendar and
    `gmail.send` scopes to be sensitive.
 
 6. **Create the OAuth client.** In Clients, create an OAuth client of type
@@ -151,6 +151,48 @@ One Google Cloud project and one OAuth client serve all four connectors.
    - a justification of each scope as the narrowest that works;
    - confirmation that the data never goes to advertising platforms, data
      brokers or resellers.
+     Answers for the verification form (edit only if a feature changes):
+   - **Data use:** the assistant reads, drafts and sends mail, reads and
+     creates calendar events, finds Drive files and contacts, and runs read-only
+     BigQuery queries, only when the signed-in user asks in a chat or a routine
+     they set up. Data is used only to answer that request, is not used to
+     train models, and is never sold or shared with advertisers, data brokers or
+     resellers. Tokens are encrypted at rest and revoked on disconnect.
+   - `gmail.readonly`: search and read the user's messages and attachments to
+     answer questions about their mail.
+   - `gmail.compose`: create drafts, with attachments, that the user reviews.
+   - `gmail.send`: send a draft after the user approves that specific send.
+   - `calendar.readonly`: read events and free/busy to answer scheduling
+     questions. `calendar.events`: create or change an event the user asked for.
+   - `drive.readonly`: search and read the user's Drive files to answer questions
+     about them, as Claude and ChatGPT do. `drive.file`: create or update files
+     the user asks for, and open files they pick.
+   - `contacts.readonly`, `directory.readonly`: look up a recipient's address.
+   - Leave the BigQuery scopes out of this submission. Google's hosted
+     BigQuery server accepts only the full `bigquery` scope, which our ceiling
+     refuses, so the `bigquery` connector stays off until that is decided (see
+     `docs/development/connectors-setup.md`, BigQuery).
+   - The privacy policy must state that Google user data is used under the
+     Google API Services User Data Policy, including the Limited Use
+     requirements, before you submit. It is published at `/privacy#s-google`.
+   - **Deploy step, after migration 0344 applies:** mark the conversations
+     that already hold Google user data. Dry run first, then apply; it walks
+     conversations in batches of 1,000, each its own short transaction, and a
+     second run changes nothing. If it stops, rerun with the `--after` id it
+     printed.
+
+     ```bash
+     NEON_DATABASE_URL=... node scripts/backfill-google-user-data-mark.mjs
+     NEON_DATABASE_URL=... node scripts/backfill-google-user-data-mark.mjs --apply
+     ```
+
+   - **Deploy step:** set `SOFT_DELETED_RESOURCE_PURGE_ENABLED=true` so deleted
+     chats and projects are purged 30 days after deletion, as `/privacy` states.
+   - **Demo video:** record it on the live site after the keys are deployed,
+     with the app in Testing and your account as a test user: the consent
+     screen with the client ID visible in the address bar, then one request per
+     connector that exercises each scope above, including a Gmail send approval.
+
 8. **Security assessment.** Restricted scopes (Gmail read, Drive metadata)
    also need Google's annual security assessment, run by an approved
    third-party assessor ([overview](https://support.google.com/cloud/answer/13465431)).
@@ -175,10 +217,10 @@ One Google Cloud project and one OAuth client serve all four connectors.
    5. Add the three variables in Vercel Production. Until all three are set and
       migration 0307 is applied, Gmail triggers stay unverified and show why.
 
-Decision to make: Claude and ChatGPT let users search their whole Drive, which
-needs the restricted `drive.readonly` scope. Our Drive connector asks only for
-files the user picks (`drive.file`) plus file metadata. Matching them means
-adding `drive.readonly`, which is covered by the same assessment as Gmail.
+Drive searches the whole Drive, as Claude and ChatGPT do, so it asks for the
+restricted `drive.readonly` scope with `drive.file`, the two scopes Google's
+Drive MCP server documents. Google may reassess when a restricted scope is added
+after an assessment, so add it before the first submission.
 
 ## 2. Microsoft 365
 

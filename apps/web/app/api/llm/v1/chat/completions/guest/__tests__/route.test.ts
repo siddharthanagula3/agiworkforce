@@ -12,6 +12,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({
+  generateCsrfToken: vi.fn(),
+  getSessionIdFromRequest: vi.fn(),
+  isBearerTokenValid: vi.fn(),
+  readCookie: vi.fn(),
+  resetCsrfCache: vi.fn(),
+  validateCsrfFromRequest: vi.fn(),
+  verifyCsrfToken: vi.fn(),
   getOrCreateAnonSession: vi.fn(async () => ({ id: 'anon-visitor' })),
   requireCsrfToken: vi.fn(async () => null),
 }));
@@ -19,20 +26,47 @@ vi.mock('@/lib/guest-chat/guest-chat-access', () => ({
   isGuestChatAvailable: (...args: unknown[]) => mocks.available(...args),
 }));
 vi.mock('@/lib/security/bot-challenge', () => ({
+  isPlatformBotProtectionAvailable: vi.fn(),
+  verifyBotChallenge: vi.fn(),
+  isBotChallengeEnforced: vi.fn(() => false),
   requireHumanCaller: (...args: unknown[]) => mocks.human(...args),
 }));
 vi.mock('@/lib/rate-limit', () => ({
+  REDIS_OUTAGE_POLICY_ENV: vi.fn(),
+  acquireManagedTurnSlot: vi.fn(),
+  getClientIpForRateLimit: vi.fn(),
+  isSharedStoreQuotaExhausted: vi.fn(),
+  rateLimitConfigs: vi.fn(),
+  readManagedTurnSlots: vi.fn(),
+  resolveTierRateLimit: vi.fn(),
+  withRateLimit: vi.fn(),
+  withRateLimitHandler: vi.fn(),
   checkRateLimit: (...args: unknown[]) => mocks.rateLimit(...args),
   clientIpRateLimitIdentifier: () => 'ip:203.0.113.9',
   resolveRedisOutagePolicy: () => 'fail-closed',
 }));
 vi.mock('@/lib/server/key-value', () => ({
+  getKeyValueProvider: vi.fn(),
+  getKeyValueRateLimiter: vi.fn(() => null),
   getKeyValueStore: () => ({ get: vi.fn(), increment: vi.fn(), expire: vi.fn() }),
 }));
 vi.mock('@/lib/moderation', () => ({
+  GENERATED_OUTPUT_REFUSAL: vi.fn(),
+  GeneratedMediaModeration: vi.fn(),
+  ImageStructureRejection: vi.fn(),
+  OutputModerationReason: vi.fn(),
+  PLATFORM_POLICY_REFUSAL: vi.fn(),
+  UPLOADED_IMAGE_REFUSAL: vi.fn(),
+  inspectImageBytes: vi.fn(),
+  matchDenylistedUpload: vi.fn(),
+  moderateGeneratedMedia: vi.fn(),
+  moderateUploadedImage: vi.fn(),
+  recordGeneratedMediaProviderRefusal: vi.fn(),
+  recordModerationEvent: vi.fn(),
   moderateManagedPrompt: (...args: unknown[]) => mocks.moderate(...args),
 }));
 vi.mock('@/lib/guest-chat/guest-chat-service', () => ({
+  guestSpendKey: vi.fn(),
   guestChatModel: () => ({
     modelKey: 'free-default',
     provider: 'openrouter',

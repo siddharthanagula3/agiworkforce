@@ -1,9 +1,9 @@
-
 import { describe, expect, it } from 'vitest';
 import {
   ToolStatusPayloadSchema,
   parseToolStatusDelta,
   parseToolApprovalRequestDelta,
+  parseToolInputRequestDelta,
   parseToolResultDelta,
   SearchResultSourceSchema,
   parseSearchResultsDelta,
@@ -154,5 +154,36 @@ describe('SearchResultSourceSchema / parseSearchResultsDelta', () => {
   it('SearchResultSourceSchema rejects a source missing url', () => {
     const { url: _omitted, ...rest } = webSearchDelta.content[0]!;
     expect(SearchResultSourceSchema.safeParse(rest).success).toBe(false);
+  });
+});
+
+describe('parseToolInputRequestDelta', () => {
+  it('accepts the x_tool_input_request payload the tool loop emits', () => {
+    const payload = {
+      tool_call_id: 'call_1',
+      name: 'mcp__github__create_issue',
+      connector_id: 'github',
+      input_requests: { confirm: { method: 'elicitation/create', params: {} } },
+      round: 2,
+    };
+    expect(parseToolInputRequestDelta(payload)).toEqual(payload);
+  });
+
+  it('accepts an empty connector id, which the tool loop sends for built-in tools', () => {
+    expect(
+      parseToolInputRequestDelta({
+        tool_call_id: 'call_1',
+        name: 'lookup',
+        connector_id: '',
+        input_requests: {},
+      }),
+    ).not.toBeNull();
+  });
+
+  it('rejects a payload without a tool call id or with non-object requests', () => {
+    expect(parseToolInputRequestDelta({ name: 'x', input_requests: {} })).toBeNull();
+    expect(
+      parseToolInputRequestDelta({ tool_call_id: 'call_1', name: 'x', input_requests: [] }),
+    ).toBeNull();
   });
 });

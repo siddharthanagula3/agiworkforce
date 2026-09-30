@@ -1,14 +1,14 @@
-import { MANAGED_OFFICE_FILE_TOOL_NAME } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_OUTPUT_FORMATS,
+  MANAGED_OFFICE_FILE_TOOL_NAME,
+  type ChatOutputFormat,
+} from '@agiworkforce/cloud-contracts';
 
-export const CHAT_OUTPUT_FORMATS = ['docx', 'pptx', 'xlsx'] as const;
-
-export type ChatOutputFormat = (typeof CHAT_OUTPUT_FORMATS)[number];
-
-export const CHAT_OUTPUT_FORMAT_LABEL: Readonly<Record<ChatOutputFormat, string>> = {
-  docx: 'Document',
-  pptx: 'Presentation',
-  xlsx: 'Spreadsheet',
-};
+export {
+  CHAT_OUTPUT_FORMAT_LABEL,
+  CHAT_OUTPUT_FORMATS,
+  type ChatOutputFormat,
+} from '@agiworkforce/cloud-contracts';
 
 const CHAT_OUTPUT_FORMAT_NOUN: Readonly<Record<ChatOutputFormat, string>> = {
   docx: 'a Word document',

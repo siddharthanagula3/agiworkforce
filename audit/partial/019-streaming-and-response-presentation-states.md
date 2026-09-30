@@ -16,43 +16,15 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S19.03: Preparing context.
-
-- Done when: Before the model answers, the surface shows it is preparing (reading context/attachments/memory).
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A turn with no text, tools or thinking yet reads 'Preparing' beside the spinner, as the web does; the indicator takes the label now (5799eb1bf8) and MessageBubble passes it in post-codex/chat-gates-s19.03-s19.19-mobile-turn-phases.patch. | ui |
-| cli | partial | The spinner says 'Thinking…' from the start; context preparation (memory, files) is not shown as its own state. | states |
-
-Code: `apps/mobile/src/features/chat/components/StreamingIndicator.tsx:22-22`, `apps/cli/src/tui/tui_app.rs:1272-1276`
-
 ## S19.08: Waiting for user input.
 
 - Done when: When the assistant needs information from the user mid-task, it shows a waiting-for-input state with a way to answer.
 - Wave: 3
-- Already works on: web, desktop, cli, chrome, api
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only Deep Research asks for plan confirmation mid-task (research card); other input requests are not shown. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`
-
-## S19.11: Streaming structured output.
-
-- Done when: Structured output (markdown lists, tables, code blocks) renders correctly while it is still streaming.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | While streaming, the TUI shows the raw text tail; markdown (tables, code) is rendered only after the turn ends. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:1588-1600`, `apps/cli/src/tui/tui_app.rs:1528-1531`
 
 ## S19.12: Building an artifact.
 
@@ -63,11 +35,7 @@ Code: `apps/cli/src/tui/tui_app.rs:1588-1600`, `apps/cli/src/tui/tui_app.rs:1528
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | A file being written shows only as a running write tool row; there is no artifact-building state. | ui |
-| vscode | partial | File writes show as running tool rows and then diff proposals; no artifact-building state in the transcript. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4880`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5643-5646`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5377-5383`
 
 ## S19.13: Generating media.
 
@@ -91,67 +59,22 @@ Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S19.17: Cancel requested.
-
-- Done when: After the user presses stop, the surface shows the stop is in progress until it takes effect.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Stopping a Cloud run now waits for the cancel to land and shows 'Stopping…' on the turn meanwhile; a failed cancel leaves the turn running with the error. In post-codex/chat-gates-s19.17-mobile-stopping-state.patch. | ui |
-| cli | partial | Esc/Ctrl-C cancels immediately and prints '⊘ Stopped'; there is no stopping-in-progress state. | states |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`, `apps/cli/src/tui/tui_app.rs:5240-5256`
-
-## S19.18: Cancelled.
-
-- Done when: A stopped turn ends in a clear cancelled/stopped state that keeps what arrived.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Same change as S17.39 in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch. | ui |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2876-2876`
-
 ## S19.19: Reconnecting.
 
 - Done when: When the connection drops mid-turn, the surface shows it is reconnecting and resumes when possible.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The stream already reconnects (onReconnecting) but nothing showed it; post-codex/chat-gates-s19.03-s19.19-mobile-turn-phases.patch records the reconnecting turn in the store and shows 'Reconnecting…' on it until the next delta. ChatGPT's iOS app says when it is waiting for a connection (help.openai.com 6825453, 2026-08-21). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/services/streaming.ts:114-114`, `apps/mobile/services/streaming.ts:478-478`
-
-## S19.20: Resuming existing work.
-
-- Done when: Work that was already running is picked up again (after reconnect/reopen) and shown as resuming rather than restarting.
-- Wave: 3
-- Already works on: web, desktop, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only Deep Research runs can be resumed from their card; other interrupted cloud turns are not re-attached. | ui |
-| cli | partial | /resume reopens a saved session so the conversation continues, but an interrupted turn is not re-run or re-attached. | states |
-| vscode | partial | Opening a session reloads its transcript (conversationLoaded); a turn that was running is not re-attached. | states |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:777-790`, `apps/mobile/src/features/chat/components/MessageList.tsx:101-102`, `apps/cli/src/tui/tui_app.rs:3550-3558`, `apps/cli/src/tui/tui_app.rs:2708-2712`
 
 ## S19.29: Background work continuing after UI closure.
 
 - Done when: Work keeps running after the UI is closed and its result is there (or resumes) when the user returns.
 - Wave: 3
-- Already works on: web, desktop, chrome, api
+- Already works on: web, desktop, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Turns run inside the TUI process and end when it exits; only cloud tasks keep running without it. | states |
-
-Code: `apps/cli/src/tui/tui_app.rs:5240-5246`

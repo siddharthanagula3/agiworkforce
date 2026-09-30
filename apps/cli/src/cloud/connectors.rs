@@ -1,10 +1,14 @@
 use std::cell::RefCell;
 use std::future::Future;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::{CloudClient, CloudError, Route};
+
 pub const TOOL_RESULT_EVENT: &str = "x_tool_result";
+const CONNECTORS_PATH: &str = "/api/connectors";
+const OAUTH_START_PATH: &str = "/api/connectors/oauth/start";
 const AUTHORIZATION_REQUIRED_KEY: &str = "agi_connector_authorization_required";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -87,4 +91,106 @@ fn absolute_url(url: &str) -> Option<String> {
         .unwrap_or_else(|_| crate::tier_cache::default_api_base().to_string());
     let base = crate::tier_cache::resolve_agi_api_base(&raw_base)?;
     Some(format!("{base}/{}", url.trim_start_matches('/')))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorConnection {
+    pub connector_id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    pub connected_at: String,
+    #[serde(default)]
+    pub needs_reauthorization: bool,
+    #[serde(default)]
+    pub health: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConnectorList {
+    pub connectors: Vec<ConnectorConnection>,
+    #[serde(default)]
+    pub available: Vec<String>,
+}
+
+pub async fn list(client: &CloudClient) -> Result<ConnectorList, CloudError> {
+    client.get(CONNECTORS_PATH, &[]).await
+}
+
+pub async fn disconnect(client: &CloudClient, connector_id: &str) -> Result<(), CloudError> {
+    let _: Value = client
+        .call(
+            &Route::delete(CONNECTORS_PATH),
+            &[("connectorId", connector_id.to_string())],
+            None,
+        )
+        .await?;
+    Ok(())
+}
+
+pub fn connect_url(connector_id: &str) -> Option<String> {
+    absolute_url(&format!(
+        "{OAUTH_START_PATH}?connectorId={}",
+        urlencoding::encode(connector_id)
+    ))
+}
+
+pub fn render_list(list: &ConnectorList) -> String {
+    let sanitize = |text: &str| crate::terminal_text::sanitize_terminal_text(text).into_owned();
+    let mut lines = vec!["Your account's connectors".to_string()];
+    if list.connectors.is_empty() {
+        lines.push("  None connected yet.".to_string());
+    }
+    for connection in &list.connectors {
+        let name = sanitize(
+            connection
+                .name
+                .as_deref()
+                .unwrap_or(&connection.connector_id),
+        );
+        let state = if connection.needs_reauthorization {
+            match connect_url(&connection.connector_id) {
+                Some(url) => format!("needs reconnecting: open {url}"),
+                None => "needs reconnecting".to_string(),
+            }
+        } else {
+            let since = sanitize(
+                connection
+                    .connected_at
+                    .get(..10)
+                    .unwrap_or(&connection.connected_at),
+            );
+            match connection.health.as_deref() {
+                Some(health) if health != "healthy" => {
+                    format!("connected since {since}, {}", sanitize(health))
+                }
+                _ => format!("connected since {since}"),
+            }
+        };
+        lines.push(format!("  {name:<20} {state}"));
+    }
+    let connected: std::collections::HashSet<&str> = list
+        .connectors
+        .iter()
+        .map(|connection| connection.connector_id.as_str())
+        .collect();
+    let available: Vec<String> = list
+        .available
+        .iter()
+        .filter(|connector_id| !connected.contains(connector_id.as_str()))
+        .map(|connector_id| sanitize(connector_id))
+        .collect();
+    if !available.is_empty() {
+        lines.push(String::new());
+        lines.push(format!("Available to connect: {}", available.join(", ")));
+        if let Some(url) = connect_url(&available[0]) {
+            lines.push(format!(
+                "  Connect one in your browser, for example {} at {url}",
+                available[0]
+            ));
+        }
+    }
+    lines
+        .push("  agi connectors disconnect <connector> removes one from your account.".to_string());
+    lines.join("\n")
 }

@@ -127,15 +127,16 @@ import { cancelMobileCloudAgentRun, streamChat } from '../services/streaming';
 import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getModelMetadataById, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
-import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import {
   SYNTHETIC_IMAGE_MODEL_ID,
   requireAutoMode,
   requireLocalModel,
+  requireFreeMobileCloudModel,
   requireMobileCloudModel,
 } from '../test-utils/modelFixtures';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
+import { useChatViewStore } from '../stores/chat/chatViewStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
@@ -242,7 +243,11 @@ function resetStore() {
 const CONV_ID = 'test-conv-123';
 const MODEL = 'fixture-model';
 const LOCAL_MODEL = requireLocalModel().id;
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const CLOUD_MODEL = requireFreeMobileCloudModel().id;
+const SEARCH_MODEL = requireMobileCloudModel(
+  (model) => getModelMetadataById(model.id)?.capabilities.search === true,
+  'search-capable Mobile Cloud model',
+).id;
 const SEARCH_UNSUPPORTED_MODEL = requireMobileCloudModel(
   (model) => getModelMetadataById(model.id)?.capabilities.search !== true,
   'Mobile Cloud model without search support',
@@ -315,7 +320,8 @@ describe('chatStore, streaming state', () => {
     it('sends selected chat mode and style context to the remote stream', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
-      useChatStore.setState({ chatMode: 'create', chatStyle: 'explanatory' });
+      useChatStore.setState({ chatMode: 'create' });
+      useChatViewStore.setState({ chatStyle: 'explanatory', styleConversationId: CONV_ID });
 
       mockStreamChat.mockImplementation(
         (body, callbacks) =>
@@ -353,7 +359,8 @@ describe('chatStore, streaming state', () => {
 
     it('automatically sends web_search:true when the Cloud route supports search', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
-      seedCloudConversation();
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
+      seedCloudConversation(SEARCH_MODEL);
       useChatStore.setState({
         features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
       });
@@ -371,7 +378,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'what is the weather today', CLOUD_MODEL);
+        await getState().sendMessage(CONV_ID, 'what is the weather today', SEARCH_MODEL);
       });
 
       expect(capturedBody?.web_search).toBe(true);
@@ -380,7 +387,8 @@ describe('chatStore, streaming state', () => {
 
     it('keeps ambient web search optional for an ordinary Cloud turn', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
-      seedCloudConversation();
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
+      seedCloudConversation(SEARCH_MODEL);
       useChatStore.setState({
         features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
       });
@@ -398,7 +406,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'help me outline a short note', CLOUD_MODEL);
+        await getState().sendMessage(CONV_ID, 'help me outline a short note', SEARCH_MODEL);
       });
 
       expect(capturedBody?.web_search).toBe(true);
@@ -513,7 +521,8 @@ describe('chatStore, streaming state', () => {
 
     it('still requests web search when no capability handshake has been received', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
-      seedCloudConversation();
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
+      seedCloudConversation(SEARCH_MODEL);
       useTierStore.setState({
         grantedCapabilities: [],
         capabilityHandshakeReceived: false,
@@ -529,7 +538,7 @@ describe('chatStore, streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'current news', CLOUD_MODEL);
+        await getState().sendMessage(CONV_ID, 'current news', SEARCH_MODEL);
       });
 
       expect(capturedBody?.web_search).toBe(true);
@@ -617,7 +626,11 @@ describe('chatStore, streaming state', () => {
     it('sends work_mode:agiwork only for the explicit Cloud work mode', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
-      useTierStore.setState({ tier: 'max' });
+      useTierStore.setState({
+        tier: 'max',
+        capabilityHandshakeReceived: true,
+        grantedCapabilities: ['canUseAgiWork'],
+      });
       useChatStore.setState({ workMode: 'agiwork' });
 
       mockStreamChat.mockImplementation(
@@ -1142,7 +1155,7 @@ describe('chatStore, streaming state', () => {
       mockRetrievePastChatContext.mockResolvedValue(null);
     });
 
-    it('injects saved memory and past-chat excerpts while memory is on', async () => {
+    it('leaves memory and past chats to the server on a Cloud turn', async () => {
       useCloudSettingsStore.setState({ memoryEnabled: true, referencePastChats: true });
       seedCloudConversation();
       const turn = captureCloudTurn();
@@ -1151,29 +1164,11 @@ describe('chatStore, streaming state', () => {
         await getState().sendMessage(CONV_ID, 'which language should I use', CLOUD_MODEL);
       });
 
-      expect(mockRetrieveMemoryContext).toHaveBeenCalled();
-      expect(mockRetrievePastChatContext).toHaveBeenCalled();
-      const systemContents = systemContentsOf(turn.read());
-      expect(systemContents.some((content) => content.includes(STORED_FACT))).toBe(true);
-      expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(true);
-    });
-
-    it('stops memory injection but keeps past-chat search when only Memory is off', async () => {
-      useCloudSettingsStore.setState({ memoryEnabled: false, referencePastChats: true });
-      seedCloudConversation();
-      const turn = captureCloudTurn();
-
-      await act(async () => {
-        await getState().sendMessage(CONV_ID, 'which language should I use', CLOUD_MODEL);
-      });
-
       expect(mockRetrieveMemoryContext).not.toHaveBeenCalled();
-      expect(mockRetrievePastChatContext).toHaveBeenCalledWith(
-        expect.objectContaining({ enabled: true }),
-      );
+      expect(mockRetrievePastChatContext).not.toHaveBeenCalled();
       const systemContents = systemContentsOf(turn.read());
       expect(systemContents.some((content) => content.includes(STORED_FACT))).toBe(false);
-      expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(true);
+      expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(false);
     });
 
     it('stops writing new Local memories when the master switch is off', async () => {
@@ -1368,6 +1363,11 @@ describe('chatStore, streaming state', () => {
 
     it('does not capture durable facts when the local turn is temporary', async () => {
       useSettingsStore.setState({ isTemporaryChat: true });
+      useChatStore.setState({
+        conversations: getState().conversations.map((conversation) =>
+          conversation.id === CONV_ID ? { ...conversation, temporary: true } : conversation,
+        ),
+      });
       mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
       mockListInstalledModels.mockResolvedValue([
         {
@@ -1444,7 +1444,8 @@ describe('chatStore, streaming state', () => {
     });
 
     it('sends selected chat mode and style context to local generation', async () => {
-      useChatStore.setState({ chatMode: 'research', chatStyle: 'concise' });
+      useChatStore.setState({ chatMode: 'research' });
+      useChatViewStore.setState({ chatStyle: 'concise', styleConversationId: CONV_ID });
       mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
       mockListInstalledModels.mockResolvedValue([
         {
@@ -1635,7 +1636,7 @@ describe('chatStore, streaming state', () => {
       );
     });
 
-    it('injects Cloud project custom instructions into the remote stream (regression: was local-only)', async () => {
+    it('leaves Cloud project instructions to the server, which loads them from the conversation', async () => {
       useChatStore.setState({
         conversations: [
           {
@@ -1690,7 +1691,7 @@ describe('chatStore, streaming state', () => {
       });
 
       const systemMessages = capturedBody?.messages?.filter((message) => message.role === 'system');
-      expect(systemMessages).toEqual(
+      expect(systemMessages ?? []).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({ content: 'Always answer in exactly one sentence.' }),
         ]),

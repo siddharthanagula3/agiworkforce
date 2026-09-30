@@ -28,6 +28,7 @@ describe('Mobile account security service', () => {
     await expect(fetchAccountSecurityStatus(controller.signal)).resolves.toEqual({
       twoFactorEnabled: true,
       backupCodesReady: true,
+      enrollmentAvailable: false,
     });
     expect(apiMock.get).toHaveBeenCalledWith('/api/settings/2fa', {
       signal: controller.signal,

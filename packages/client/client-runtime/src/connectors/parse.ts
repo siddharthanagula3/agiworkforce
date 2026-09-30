@@ -111,9 +111,9 @@ export function parseConnectorOAuthStart(connectorId: string, value: unknown): C
   if (!parsed.success || parsed.data.connectorId !== connectorId) {
     throw new ConnectorResponseError(INVALID_AUTHORIZATION);
   }
-  const { authorizeUrl } = parsed.data;
+  const { authorizeUrl, appReturn } = parsed.data;
   if (!isHttpsAuthorizeUrl(authorizeUrl)) throw new ConnectorResponseError(INVALID_AUTHORIZATION);
-  return { connectorId, authorizeUrl };
+  return { connectorId, authorizeUrl, appReturn: appReturn === true };
 }
 
 export function parseCustomConnector(value: unknown): CustomConnectorResult {

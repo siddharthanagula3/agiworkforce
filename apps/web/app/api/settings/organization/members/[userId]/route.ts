@@ -37,8 +37,9 @@ const PatchSchema = z.object({ role: z.enum(['owner', 'admin', 'member', 'viewer
 type RouteContext = { params: Promise<{ userId: string }> };
 
 async function readTargetUserId(context: RouteContext): Promise<string> {
+  // Next has already decoded the segment; decoding again breaks an id containing %.
   const { userId } = await context.params;
-  const decoded = decodeURIComponent(userId).trim();
+  const decoded = userId.trim();
   if (!decoded || decoded.length > 255) {
     throw createError.validation('userId is required');
   }

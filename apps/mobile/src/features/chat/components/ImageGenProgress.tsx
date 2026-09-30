@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ImagePlus, AlertCircle, Loader2, Square } from 'lucide-react-native';
 import Animated, {
   FadeInDown,
@@ -10,7 +11,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ImageGenProgressProps {
   prompt: string;
@@ -37,9 +39,9 @@ export function ImageGenProgress({
 
   useEffect(() => {
     if (status === 'pending') {
-      pulseOpacity.value = withRepeat(withTiming(0.4, { duration: 1000 }), -1, true);
+      pulseOpacity.value = withRepeat(withTiming(0.4, { duration: motion.pulse }), -1, true);
     } else {
-      pulseOpacity.value = withTiming(1, { duration: 200 });
+      pulseOpacity.value = withTiming(1, { duration: motion.quick });
     }
   }, [status, pulseOpacity]);
 
@@ -52,7 +54,7 @@ export function ImageGenProgress({
   useEffect(() => {
     if (typeof progress === 'number' && Number.isFinite(progress)) {
       barWidth.value = withTiming(Math.min(100, Math.max(0, progress)), {
-        duration: 400,
+        duration: motion.moved,
       });
     }
   }, [progress, barWidth]);
@@ -70,7 +72,7 @@ export function ImageGenProgress({
     : undefined;
 
   return (
-    <Animated.View entering={FadeInDown.duration(250).springify()}>
+    <Animated.View entering={FadeInDown.duration(motion.moved).springify()}>
       <View
         style={{
           backgroundColor: colors.surfaceElevated,
@@ -104,7 +106,7 @@ export function ImageGenProgress({
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                fontSize: 14,
+                fontSize: typeScale.subhead,
                 fontWeight: '600',
                 color: isFailed ? colors.agentError : colors.textPrimary,
               }}
@@ -120,7 +122,7 @@ export function ImageGenProgress({
         {/* Prompt preview */}
         <Text
           style={{
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 17,
             color: colors.textSecondary,
           }}
@@ -134,7 +136,7 @@ export function ImageGenProgress({
           <Animated.View style={pulseStyle}>
             <Text
               style={{
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 color: colors.textMuted,
               }}
             >
@@ -177,7 +179,7 @@ export function ImageGenProgress({
             >
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   color: colors.textMuted,
                 }}
               >
@@ -187,7 +189,7 @@ export function ImageGenProgress({
               {estimatedTime != null && estimatedTime > 0 ? (
                 <Text
                   style={{
-                    fontSize: 11,
+                    fontSize: typeScale.caption,
                     color: colors.textMuted,
                   }}
                 >
@@ -199,13 +201,13 @@ export function ImageGenProgress({
         )}
 
         {status === 'generating' && !hasDeterminateProgress ? (
-          <Text style={{ fontSize: 12, color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
             Generating securely in AGI Cloud…
           </Text>
         ) : null}
 
         {onStop && !isFailed ? (
-          <Pressable
+          <PressableBox
             testID="image-gen-stop"
             onPress={onStop}
             accessibilityRole="button"
@@ -224,10 +226,16 @@ export function ImageGenProgress({
             }}
           >
             <Square size={11} color={colors.textSecondary} />
-            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+            <Text
+              style={{
+                fontSize: typeScale.caption,
+                fontWeight: '600',
+                color: colors.textSecondary,
+              }}
+            >
               Stop generating
             </Text>
-          </Pressable>
+          </PressableBox>
         ) : null}
 
         {/* Failed state: error message + retry button */}
@@ -236,7 +244,7 @@ export function ImageGenProgress({
             {errorMessage ? (
               <Text
                 style={{
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   lineHeight: 17,
                   color: colors.agentError,
                 }}

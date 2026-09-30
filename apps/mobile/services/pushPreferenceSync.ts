@@ -1,12 +1,19 @@
-import { AppState, type AppStateStatus, type NativeEventSubscription } from 'react-native';
+import {
+  AppState,
+  Platform,
+  type AppStateStatus,
+  type NativeEventSubscription,
+} from 'react-native';
+import Constants from 'expo-constants';
 
 import { getDeviceId } from '@/lib/deviceId';
 import {
   deviceTimezone,
   getCategoryForType,
   useNotificationPrefsStore,
-  type NotificationCategory,
+  type PushPreferenceGroup,
 } from '@/stores/notificationPrefsStore';
+import { MOBILE_PUSH_TOKEN_PATH } from '@agiworkforce/cloud-contracts';
 import type { TimeFocusWeekday } from '@agiworkforce/types';
 
 import { api } from './api';
@@ -17,7 +24,7 @@ import {
 } from './notificationEventTypes';
 import type { PushNotificationAccountContext } from './notifications';
 
-export const PUSH_TOKEN_REGISTRATION_PATH = '/api/mobile/push-token';
+export const PUSH_TOKEN_REGISTRATION_PATH = MOBILE_PUSH_TOKEN_PATH;
 export const PUSH_DELIVERY_PREFERENCES_VERSION = 1;
 
 const PREFERENCE_SYNC_DEBOUNCE_MS = 800;
@@ -34,7 +41,7 @@ export interface PushDeliveryQuietHours {
 export interface PushDeliveryPreferences {
   version: number;
   timezone: string;
-  categories: Record<NotificationCategory, boolean>;
+  categories: Record<PushPreferenceGroup, boolean>;
   eventTypes: Record<NotificationEventType, boolean>;
   quietHours: PushDeliveryQuietHours;
   quietHoursExemptEventTypes: NotificationEventType[];
@@ -102,6 +109,8 @@ export async function postPushRegistration(
       {
         deviceId,
         pushToken: token,
+        ...(Platform.OS === 'ios' || Platform.OS === 'android' ? { platform: Platform.OS } : {}),
+        ...(Constants.deviceName ? { name: Constants.deviceName.slice(0, 120) } : {}),
         preferences: { ...preferences, updatedAt: new Date().toISOString() },
       },
       {

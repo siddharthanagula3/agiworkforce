@@ -5,11 +5,13 @@ import {
   ManagedCloudScheduleListResponseSchema,
   ManagedCloudScheduleResponseSchema,
   ManagedCloudScheduleRunApprovalResponseSchema,
+  ManagedCloudScheduleDeleteResponseSchema,
   ManagedCloudScheduleRunListResponseSchema,
   ManagedCloudScheduleRunResponseSchema,
   managedCloudSchedulePath,
   managedCloudScheduleRunApprovalPath,
   managedCloudScheduleRunsPath,
+  describeScheduleRunTiming,
   type ManagedCloudScheduleRun,
   type ManagedCloudScheduleRunApproval,
   type ManagedCloudScheduleTask,
@@ -94,7 +96,25 @@ function resultText(run: ManagedCloudScheduleRun): string | null {
   return run.result === null ? null : JSON.stringify(run.result);
 }
 
+function formatRunWhen(iso: string): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return iso;
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 function mapRun(run: ManagedCloudScheduleRun): ScheduleRun {
+  const error = run.error
+    ? run.status === 'timeout'
+      ? 'This run exceeded its time limit. Try again.'
+      : run.status === 'cancelled'
+        ? 'This run was canceled.'
+        : 'This run could not finish. Try again.'
+    : null;
   return {
     id: run.id,
     scheduleId: run.taskId,
@@ -102,8 +122,9 @@ function mapRun(run: ManagedCloudScheduleRun): ScheduleRun {
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     result: resultText(run),
-    error: run.error,
+    error,
     pendingApproval: run.pendingApproval ?? null,
+    timingNote: describeScheduleRunTiming(run, formatRunWhen)?.note ?? null,
   };
 }
 
@@ -149,7 +170,12 @@ export async function updateSchedule(
 
 export async function deleteSchedule(id: string): Promise<void> {
   assertSchedulesAvailable();
-  await api.delete(managedCloudSchedulePath(id));
+  const value = await api.delete<unknown>(managedCloudSchedulePath(id));
+  parseResponse(
+    ManagedCloudScheduleDeleteResponseSchema,
+    value,
+    'Schedule deletion returned an invalid response.',
+  );
 }
 
 export async function toggleSchedule(id: string, isActive: boolean): Promise<Schedule> {

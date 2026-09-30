@@ -43,7 +43,19 @@ const PREVENTION_LAYER_RESTRICTED_SYNTAX = [
     message:
       'Raw fetch() to an our-cloud URL (WEB_APP_URL/API_BASE_URL) bypasses the egress chokepoint and can leak a Local/BYOK session to our cloud. Use guardedFetch from @/lib/egressGuard so non-managed sessions fail closed. See apps/desktop/src/lib/egressGuard.ts.',
   },
+  {
+    selector:
+      'NewExpression[callee.name="Blob"] ObjectExpression Property[key.name="type"][value.value=/text\\/html/]',
+    message:
+      "Use 'text/plain' or 'application/octet-stream' for Blob; text/html in a Blob allows XSS via download attribute.",
+  },
 ];
+
+const MOBILE_TYPE_SCALE_RULE = {
+  selector: "Property[key.name='fontSize'] > Literal",
+  message:
+    'Literal font sizes bypass the mobile type scale. Use typeScale from @/src/ui/theme (caption 12 is the floor; footnote, subhead, body, callout, headline, title3, title2, title1, largeTitle, display).',
+};
 
 export default [
   {
@@ -649,6 +661,28 @@ export default [
 
   {
     files: [
+      'apps/mobile/app/**/*.tsx',
+      'apps/mobile/components/**/*.tsx',
+      'apps/mobile/src/**/*.tsx',
+    ],
+    ignores: [
+      'apps/mobile/src/features/**',
+      'apps/mobile/src/shared/**',
+      'apps/mobile/**/*.test.tsx',
+      'apps/mobile/**/__tests__/**',
+      'apps/mobile/**/__mocks__/**',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...PREVENTION_LAYER_RESTRICTED_SYNTAX,
+        MOBILE_TYPE_SCALE_RULE,
+      ],
+    },
+  },
+
+  {
+    files: [
       'apps/mobile/src/features/**/*.ts',
       'apps/mobile/src/features/**/*.tsx',
       'apps/mobile/src/shared/**/*.ts',
@@ -664,6 +698,7 @@ export default [
       'no-restricted-syntax': [
         'error',
         ...PREVENTION_LAYER_RESTRICTED_SYNTAX,
+        MOBILE_TYPE_SCALE_RULE,
         {
           selector:
             ':matches(Literal[value=/rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgba\\(\\s*0\\s*,\\s*0\\s*,\\s*0/], TemplateElement[value.raw=/rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgba\\(\\s*0\\s*,\\s*0\\s*,\\s*0/])',

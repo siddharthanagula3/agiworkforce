@@ -38,7 +38,7 @@ import {
   readTicket,
   replyToTicket,
 } from '../service';
-import { canTransition } from '../types';
+import { canTransition } from '@agiworkforce/cloud-contracts/support';
 
 function ticket(overrides: Record<string, unknown> = {}) {
   return {

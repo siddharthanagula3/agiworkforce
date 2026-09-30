@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a) }));
+vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
+  getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a),
+}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: async (...a: unknown[]) => {
     const { userId } = (await mocks.authUser(...a)) as { userId: string };
@@ -21,6 +24,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  markAppReturn: vi.fn(async () => true),
   getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
   listConnectorAccounts: (...a: unknown[]) => mocks.listAccounts(...a),
   ConnectorOAuthStoreUnavailableError: class extends Error {},

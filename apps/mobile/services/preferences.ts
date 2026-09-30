@@ -7,6 +7,20 @@ import { api } from '@/services/api';
 
 interface PreferenceReadResponse {
   settings?: unknown;
+  autonomousToolApprovalsAllowed?: unknown;
+}
+
+export async function fetchToolApprovalNamespace(
+  namespace: string,
+): Promise<{ settings: unknown; autonomousToolApprovalsAllowed: boolean }> {
+  const data = await api.get<PreferenceReadResponse>(
+    managedCloudPreferencesNamespacePath(namespace),
+  );
+  const settings = data?.settings;
+  return {
+    settings: settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {},
+    autonomousToolApprovalsAllowed: data?.autonomousToolApprovalsAllowed === true,
+  };
 }
 
 export async function fetchPreferenceNamespace(namespace: string): Promise<unknown> {
@@ -22,6 +36,13 @@ export async function savePreferenceNamespace<T extends object>(
   value: T,
 ): Promise<void> {
   await api.put(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, { namespace, value });
+}
+
+export async function patchPreferenceNamespace<T extends object>(
+  namespace: string,
+  patch: T,
+): Promise<void> {
+  await api.put(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, { namespace, patch });
 }
 
 export async function fetchAccountSettings(): Promise<Record<string, unknown>> {

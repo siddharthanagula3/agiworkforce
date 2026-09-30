@@ -243,8 +243,8 @@
       "label": "GDPR: data subject rights",
       "owner": "Legal/compliance",
       "reviewedOn": "2026-09-28",
-      "asOf": "2026-09-28",
-      "digest": "2d18a7586ef12be7",
+      "asOf": null,
+      "digest": "08c86b673b3966ed",
       "jurisdiction": "European Union, EEA and United Kingdom (GDPR and UK GDPR)",
       "scope": "Every account on the hosted service, wherever the account holder is",
       "implementation": [
@@ -644,24 +644,32 @@
       "label": "Database row-level isolation",
       "owner": "Security",
       "reviewedOn": "2026-09-28",
-      "asOf": "2026-09-28",
-      "digest": "82975c484473512c",
-      "implementation": ["apps/web/app/api"],
+      "asOf": null,
+      "digest": "c44e248279b97b4d",
+      "implementation": [
+        "apps/web/app/api",
+        "apps/web/lib/legal/published-counts.ts#measureRouteIsolation"
+      ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/trust/rls-coverage-claim.test.ts",
-          "name": "states the measured number of RLS-bound routes"
+          "name": "measures at build time exactly what this test measures from the tree"
         },
         {
           "kind": "test",
           "file": "apps/web/app/trust/rls-coverage-claim.test.ts",
-          "name": "states the measured number still on the owner connection"
+          "name": "renders the RLS-bound routes from that measurement"
         },
         {
           "kind": "test",
           "file": "apps/web/app/trust/rls-coverage-claim.test.ts",
-          "name": "states the measured number of routes excluded for touching no database"
+          "name": "renders the routes still on the owner connection from that measurement"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/rls-coverage-claim.test.ts",
+          "name": "renders the routes excluded for touching no database from that measurement"
         }
       ]
     },

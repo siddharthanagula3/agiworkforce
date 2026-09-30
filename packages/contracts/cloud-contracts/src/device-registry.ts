@@ -7,6 +7,19 @@ export const DEVICE_HEARTBEAT_INTERVAL_MS = 5 * 60_000;
 
 export const DEVICE_ONLINE_WINDOW_MS = 2 * DEVICE_HEARTBEAT_INTERVAL_MS + 60_000;
 
+/**
+ * The desktop takes remote work, so its presence has to be current: a quit
+ * desktop reads as online for at most two minutes, not eleven. It beats more
+ * often than a phone, whose battery the slower beat protects.
+ */
+export const DESKTOP_HEARTBEAT_INTERVAL_MS = 45_000;
+
+export const DESKTOP_ONLINE_WINDOW_MS = 2 * DESKTOP_HEARTBEAT_INTERVAL_MS + 30_000;
+
+export function deviceHeartbeatIntervalMs(surface: string | null | undefined): number {
+  return surface === 'desktop' ? DESKTOP_HEARTBEAT_INTERVAL_MS : DEVICE_HEARTBEAT_INTERVAL_MS;
+}
+
 export const DEVICE_SLEEPING_WINDOW_MS = 30 * 24 * 60 * 60_000;
 
 export const DEVICE_SURFACES = ['desktop', 'cli', 'vscode', 'chrome', 'mobile'] as const;
@@ -182,12 +195,17 @@ export function deviceDisplayName(
   return chosen.length === 0 ? generatedDeviceName(input) : chosen;
 }
 
-export function devicePresence(lastSeenAt: string | null, now = Date.now()): DevicePresence {
+export function devicePresence(
+  lastSeenAt: string | null,
+  now = Date.now(),
+  surface?: string | null,
+): DevicePresence {
   if (!lastSeenAt) return 'offline';
   const seen = Date.parse(lastSeenAt);
   if (!Number.isFinite(seen)) return 'offline';
   const age = now - seen;
-  if (age <= DEVICE_ONLINE_WINDOW_MS) return 'online';
+  const onlineWindow = surface === 'desktop' ? DESKTOP_ONLINE_WINDOW_MS : DEVICE_ONLINE_WINDOW_MS;
+  if (age <= onlineWindow) return 'online';
   if (age <= DEVICE_SLEEPING_WINDOW_MS) return 'sleeping';
   return 'offline';
 }

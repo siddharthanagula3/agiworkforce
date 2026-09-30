@@ -49,4 +49,14 @@ export type AppServerCapabilities = {
   savedPermissions?: boolean;
   mcpInspect?: boolean;
   pluginUpdates?: boolean;
+  permissionRules?: boolean;
+  trust?: boolean;
+  turnToolFilters?: boolean;
+  providerKeys?: boolean;
+  questions?: boolean;
+  /**
+   * `plan/decide` approves or rejects the plan a plan-mode turn proposed.
+   */
+  planDecisions?: boolean;
+  pullRequests?: boolean;
 };

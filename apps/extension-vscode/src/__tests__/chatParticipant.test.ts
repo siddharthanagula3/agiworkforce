@@ -1,5 +1,13 @@
+import { workspaceFileFixture } from './workspaceFileFixture';
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
+
+let contextFixture: Awaited<ReturnType<typeof workspaceFileFixture>> | undefined;
+afterEach(async () => {
+  await contextFixture?.dispose();
+  contextFixture = undefined;
+});
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import type { ThreadSummary } from '@agiworkforce/types';
 import {
   buildRuntimeTurnInput,
@@ -85,6 +93,7 @@ function mockConfiguredModel(model: string): void {
 function installAccountMemory(facts: Array<{ id: string; text: string; createdAt: string }>): void {
   setAccountMemoryStore({
     cachedFacts: () => facts,
+    turnFacts: () => facts,
   } as unknown as AccountMemoryStore);
 }
 
@@ -493,9 +502,11 @@ describe('chat participant approval lifecycle', () => {
   });
 
   it('passes the exact native file-selection reference to the local runtime', async () => {
+    contextFixture = await workspaceFileFixture(['src/reference.ts']);
+    const root = contextFixture.root;
     const listeners = new Set<(event: LocalRuntimeEvent) => void>();
     const runtime = {
-      startThread: vi.fn().mockResolvedValue(threadSummary()),
+      startThread: vi.fn().mockResolvedValue(threadSummary({ cwd: root })),
       startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
       interruptTurn: vi.fn().mockResolvedValue(undefined),
       onEvent: vi.fn((listener: (event: LocalRuntimeEvent) => void) => {
@@ -507,7 +518,7 @@ describe('chat participant approval lifecycle', () => {
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool;
     const context = new vscode.ExtensionContext();
-    const uri = vscode.Uri.file('/workspace/src/reference.ts');
+    const uri = vscode.Uri.file(path.join(root, 'src/reference.ts'));
     const range = new vscode.Range(2, 0, 3, 12);
     vi.mocked(vscode.workspace.fs.stat).mockResolvedValueOnce({
       type: vscode.FileType.File,

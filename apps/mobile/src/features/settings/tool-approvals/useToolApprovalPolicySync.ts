@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   CLOUD_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
+  DEFAULT_TOOL_APPROVAL_POLICY,
   TOOL_APPROVAL_PREFERENCE_NAMESPACE,
   isToolApprovalPolicy,
   type ToolApprovalPolicy,
   type ToolApprovalPreferences,
 } from '@agiworkforce/types';
 
-import { fetchPreferenceNamespace, savePreferenceNamespace } from '@/services/preferences';
+import { fetchToolApprovalNamespace, savePreferenceNamespace } from '@/services/preferences';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -16,6 +17,7 @@ export type ToolApprovalSyncStatus = 'local' | 'loading' | 'synced' | 'saving' |
 
 export interface ToolApprovalPolicySync {
   policy: ToolApprovalPolicy;
+  autonomyForbidden: boolean;
   status: ToolApprovalSyncStatus;
   error: string | null;
   select: (policy: ToolApprovalPolicy) => void;
@@ -39,6 +41,7 @@ export function useToolApprovalPolicySync(): ToolApprovalPolicySync {
   const isCloud = appMode === 'cloud' && isClerkSignedIn;
   const [status, setStatus] = useState<ToolApprovalSyncStatus>(isCloud ? 'loading' : 'local');
   const [error, setError] = useState<string | null>(null);
+  const [autonomyAllowed, setAutonomyAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!isCloud) {
@@ -53,16 +56,17 @@ export function useToolApprovalPolicySync(): ToolApprovalPolicySync {
 
     void (async () => {
       try {
-        const settings = await fetchPreferenceNamespace(TOOL_APPROVAL_PREFERENCE_NAMESPACE);
+        const { settings, autonomousToolApprovalsAllowed } = await fetchToolApprovalNamespace(
+          TOOL_APPROVAL_PREFERENCE_NAMESPACE,
+        );
         if (cancelled) return;
+        setAutonomyAllowed(autonomousToolApprovalsAllowed);
         setToolApprovalPolicy(storedPolicy({ [TOOL_APPROVAL_PREFERENCE_NAMESPACE]: settings }));
         setStatus('synced');
       } catch (caught) {
         if (cancelled) return;
         setStatus('error');
-        setError(
-          caught instanceof Error ? caught.message : 'Your approval default could not be loaded.',
-        );
+        setError('Your approval default could not be loaded. Check your connection and try again.');
       }
     })();
 
@@ -71,8 +75,11 @@ export function useToolApprovalPolicySync(): ToolApprovalPolicySync {
     };
   }, [isCloud, setToolApprovalPolicy]);
 
+  const autonomyForbidden = isCloud && autonomyAllowed === false;
+
   const select = useCallback(
     (next: ToolApprovalPolicy) => {
+      if (next === 'autonomous' && autonomyForbidden) return;
       const previous = useSettingsStore.getState().toolApprovalPolicy;
       setToolApprovalPolicy(next);
       if (!isCloud) return;
@@ -87,12 +94,15 @@ export function useToolApprovalPolicySync(): ToolApprovalPolicySync {
           setToolApprovalPolicy(previous);
           setStatus('error');
           setError(
-            caught instanceof Error ? caught.message : 'Your approval default could not be saved.',
+            'Your approval default could not be saved. Check your connection and try again.',
           );
         });
     },
-    [isCloud, setToolApprovalPolicy],
+    [autonomyForbidden, isCloud, setToolApprovalPolicy],
   );
 
-  return { policy, status, error, select };
+  const appliedPolicy =
+    autonomyForbidden && policy === 'autonomous' ? DEFAULT_TOOL_APPROVAL_POLICY : policy;
+
+  return { policy: appliedPolicy, autonomyForbidden, status, error, select };
 }

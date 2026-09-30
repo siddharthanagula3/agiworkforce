@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Copy, Download, Maximize2, X } from 'lucide-react';
+import { Check, Copy, Download, Maximize2, SquarePen, X } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -11,6 +11,7 @@ import {
 import { reportClientFailure } from '../../lib/client-failures';
 import { spreadsheetSafeExport } from '../../lib/tabular';
 import { cn } from '../../lib/utils';
+import { useCodeBlockEditor } from './codeBlockEditor';
 import { codeFileFor } from './codeFileName';
 import { downloadTextFile } from './downloadTextFile';
 import { HighlightedCode } from './HighlightedCode';
@@ -46,6 +47,7 @@ interface FencedCodeBlockProps {
 
 function FencedCodeBlock({ className, language, code, isStreamTail }: FencedCodeBlockProps) {
   const { t } = useUiTranslation('chat');
+  const openInEditor = useCodeBlockEditor();
   const [expanded, setExpanded] = useState(false);
   const [copyState, setCopyState] = useState<CopyState>('idle');
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,6 +96,7 @@ function FencedCodeBlock({ className, language, code, isStreamTail }: FencedCode
     fileName: codeFile.fileName,
   });
   const expandLabel = t('markdown.expand', 'Expand code');
+  const editLabel = t('markdown.editLabel', 'Edit this code beside the chat');
   const closeLabel = t('markdown.close', 'Close expanded code');
   const blockLabel = t('markdown.codeBlockLabel', '{{language}} code block', { language });
 
@@ -144,6 +147,19 @@ function FencedCodeBlock({ className, language, code, isStreamTail }: FencedCode
         <span className="code-block-lang-label">{language}</span>
         <div className="flex items-center gap-0.5">
           {copyButton}
+          {openInEditor && !isStreamTail ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => openInEditor(code)}
+              className={COPY_BUTTON_CLASS}
+              aria-label={editLabel}
+            >
+              <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('markdown.edit', 'Edit')}
+            </Button>
+          ) : null}
           {downloadButton}
           <Button
             type="button"

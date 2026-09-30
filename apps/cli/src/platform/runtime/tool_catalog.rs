@@ -48,11 +48,14 @@ pub fn capability_label(category: AgentEventToolCategory) -> String {
         .unwrap_or_default()
 }
 
-pub const BROWSER_TOOLS: [&str; 7] = [
+pub const BROWSER_TOOLS: [&str; 10] = [
     "browser_read_page",
+    "browser_find",
     "browser_click",
     "browser_type",
+    "browser_fill_form",
     "browser_navigate",
+    "browser_history",
     "browser_screenshot",
     "browser_console",
     "browser_network",
@@ -196,6 +199,15 @@ pub fn tool_status_line(
         "browser_click" => Some(format!("Click({})", value("selector").unwrap_or_default())),
         "browser_type" => Some(format!("Type({})", value("selector").unwrap_or_default())),
         "browser_navigate" => Some(format!("Open({})", value("url").unwrap_or_default())),
+        "browser_find" => Some(match value("query") {
+            Some(query) => format!("Find({query})"),
+            None => "List the page's controls".to_string(),
+        }),
+        "browser_fill_form" => Some("Fill in the form".to_string()),
+        "browser_history" => Some(match value("direction").as_deref() {
+            Some("forward") => "Go forward".to_string(),
+            _ => "Go back".to_string(),
+        }),
         "browser_console" => Some(match value("pattern") {
             Some(pattern) => format!("Read the console ({pattern})"),
             None => "Read the console".to_string(),
@@ -443,7 +455,11 @@ pub fn is_file_edit_tool(tool_name: &str) -> bool {
 pub fn reads_a_private_surface(tool_name: &str) -> bool {
     matches!(
         canonical_tool_name(tool_name),
-        "browser_read_page" | "browser_screenshot" | "browser_console" | "browser_network"
+        "browser_read_page"
+            | "browser_find"
+            | "browser_screenshot"
+            | "browser_console"
+            | "browser_network"
     )
 }
 
@@ -474,13 +490,14 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         def(
             "read_file",
-            "Read a file's contents (optionally a line range). Always read a file before editing or overwriting it, and before proposing changes to code you have not seen.",
+            "Read a file's contents (optionally a line range). PDF, Word (.docx), PowerPoint (.pptx) and spreadsheet (.xlsx, .xls, .ods) files return their text; long PDFs are read a page range at a time. Always read a file before editing or overwriting it, and before proposing changes to code you have not seen.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Absolute path to the file to read"},
                     "start_line": {"type": "integer", "description": "First line to read (1-based, inclusive). Omit to start from beginning."},
-                    "end_line": {"type": "integer", "description": "Last line to read (1-based, inclusive). Omit to read to the end."}
+                    "end_line": {"type": "integer", "description": "Last line to read (1-based, inclusive). Omit to read to the end."},
+                    "pages": {"type": "string", "description": "PDF only: page range such as \"3\" or \"11-20\", at most 20 pages. Omit to read the first 10 pages."}
                 },
                 "required": ["path"]
             }),
@@ -931,15 +948,6 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
             }),
         ).read_only().deferred(),
         def(
-            "lsp_diagnostics",
-            "Collect language-server diagnostics for <file> (errors, warnings, hints).",
-            serde_json::json!({
-                "type": "object",
-                "properties": {"file": {"type": "string"}},
-                "required": ["file"]
-            }),
-        ).read_only().deferred(),
-        def(
             "lsp_completion",
             "Get language-server completion suggestions at <file>:<line>:<character>.",
             serde_json::json!({
@@ -1035,6 +1043,18 @@ pub fn browser_tool_definitions() -> Vec<ToolDefinition> {
         .read_only()
         .with_size_cap(100_000),
         def(
+            "browser_find",
+            "List the buttons, links and fields on the page open in the user's own paired Chrome, each with its label and a CSS selector that browser_click, browser_type and browser_fill_form accept. Fields marked search are the site's own search box. Field values are never returned. Pass query to keep only the controls whose label contains it.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Only controls whose label, placeholder or role contains this text"}
+                }
+            }),
+        )
+        .read_only()
+        .with_size_cap(60_000),
+        def(
             "browser_click",
             "Click an element on the active tab of the user's own paired Chrome. The user is signed in there, so a click can submit a form, send a message or start a purchase. Read the page first and say what you are about to click.",
             serde_json::json!({
@@ -1056,6 +1076,40 @@ pub fn browser_tool_definitions() -> Vec<ToolDefinition> {
                     "clear": {"type": "boolean", "description": "Clear the field first"}
                 },
                 "required": ["selector", "text"]
+            }),
+        ),
+        def(
+            "browser_fill_form",
+            "Fill several fields on the active tab of the user's own paired Chrome in one step, using selectors from browser_find. Lists and checkboxes are set too; a checkbox is checked by true or yes. Nothing is submitted: click the submit button yourself after saying what you are sending. Password and payment fields are refused; the user fills those in.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "fields": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 50,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "selector": {"type": "string", "description": "CSS selector of the field, from browser_find"},
+                                "value": {"type": "string", "description": "Text to enter, the option to choose, or true/false for a checkbox"}
+                            },
+                            "required": ["selector", "value"]
+                        }
+                    }
+                },
+                "required": ["fields"]
+            }),
+        ),
+        def(
+            "browser_history",
+            "Go back or forward one page on the active tab of the user's own paired Chrome, as the browser's own buttons do.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "direction": {"type": "string", "enum": ["back", "forward"]}
+                },
+                "required": ["direction"]
             }),
         ),
         def(
@@ -1538,7 +1592,11 @@ mod tests {
         for definition in browser_tool_definitions() {
             let expects_read = matches!(
                 definition.name.as_str(),
-                "browser_read_page" | "browser_screenshot" | "browser_console" | "browser_network"
+                "browser_read_page"
+                    | "browser_find"
+                    | "browser_screenshot"
+                    | "browser_console"
+                    | "browser_network"
             );
             assert_eq!(
                 definition.is_read_only, expects_read,
@@ -1723,7 +1781,6 @@ mod tests {
                 "list_worktrees",
                 "lsp_definition",
                 "lsp_hover",
-                "lsp_diagnostics",
                 "lsp_completion",
                 "lsp_document_symbols",
                 "lsp_format",
@@ -2045,7 +2102,6 @@ mod tests {
                 "list_worktrees",
                 "lsp_completion",
                 "lsp_definition",
-                "lsp_diagnostics",
                 "lsp_document_symbols",
                 "lsp_format",
                 "lsp_hover",

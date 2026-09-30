@@ -82,7 +82,7 @@ export function ArtifactVersionHistory({
                 data-version-index={summary.index}
                 onClick={() => onOpen(summary.index)}
                 aria-current={isShown ? 'true' : undefined}
-                className="flex min-w-0 flex-1 flex-col items-start rounded-compact text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+                className="flex min-w-0 flex-1 flex-col items-start rounded-compact text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
               >
                 <span className="text-sm font-medium text-[var(--chat-text-primary)]">
                   Version {summary.index + 1}

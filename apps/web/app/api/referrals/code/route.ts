@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ReferralCodeResponse } from '@agiworkforce/cloud-contracts';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { getClientIpForRateLimit, withRateLimit } from '@/lib/rate-limit';
@@ -22,7 +23,8 @@ async function handleCreateReferralCode(request: NextRequest): Promise<NextRespo
     userId,
     referralNetworkHash(getClientIpForRateLimit(request)),
   );
-  return NextResponse.json({ code, link: referralLink(code) });
+  const created: ReferralCodeResponse = { code, link: referralLink(code) };
+  return NextResponse.json(created);
 }
 
 export const POST = withErrorHandler(handleCreateReferralCode);

@@ -44,4 +44,20 @@ describe('handleError message exposure', () => {
     expect(response.status).toBe(500);
     expect(JSON.stringify(await bodyOf(response))).not.toContain('secret_table');
   });
+
+  it('wraps an unauthenticated route response in the envelope checked by mobile release', async () => {
+    const handler = withErrorHandler(async (_request: Request) => {
+      throw createError.unauthorized();
+    });
+    const response = await handler(new Request('https://app.example.com/api/terms/accept'));
+    const body = (await response.json()) as {
+      error?: { code?: string };
+      requestId?: string;
+    };
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(typeof body.error?.code).toBe('string');
+    expect(typeof body.requestId).toBe('string');
+  });
 });

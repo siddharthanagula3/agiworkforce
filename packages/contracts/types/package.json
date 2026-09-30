@@ -8,12 +8,20 @@
   "exports": {
     ".": "./src/index.ts",
     "./capabilities": "./src/capabilities.ts",
+    "./encryption-key": "./src/encryption-key.ts",
+    "./live-voices": "./src/live-voices.ts",
     "./models.json": "./src/models.json",
     "./protocol": "./src/generated/protocol/index.ts",
     "./product-routes": "./src/product-routes.ts"
   },
   "typesVersions": {
     "*": {
+      "encryption-key": [
+        "./src/encryption-key.ts"
+      ],
+      "live-voices": [
+        "./src/live-voices.ts"
+      ],
       "protocol": [
         "./src/generated/protocol/index.ts"
       ],

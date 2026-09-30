@@ -61,4 +61,12 @@ describe('shared links service', () => {
     await revokeSharedLink('a/b c');
     expect(mockDelete).toHaveBeenCalledWith('/api/share/a%2Fb%20c');
   });
+
+  it('treats revoking a link that is already gone as done', async () => {
+    const { ApiHttpError } =
+      jest.requireActual<typeof import('@/services/apiErrors')>('@/services/apiErrors');
+    mockDelete.mockRejectedValueOnce(new ApiHttpError('Share not found', 404));
+
+    await expect(revokeSharedLink('gone')).resolves.toBeUndefined();
+  });
 });

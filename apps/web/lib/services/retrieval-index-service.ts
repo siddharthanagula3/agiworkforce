@@ -13,6 +13,7 @@ import {
 } from '@agiworkforce/data-layer/search';
 import { MAX_EMBEDDING_INPUTS } from '@agiworkforce/cloud-contracts';
 
+import { retrievalDocumentHoldsGoogleUserData } from '@/lib/connectors/google-user-data-runs';
 import { logger } from '@/lib/logger';
 import { anchorLocationAt, parseKnowledgeAnchors } from '@/lib/server/project-knowledge-anchors';
 import {
@@ -285,7 +286,7 @@ export function prepareChunks(source: RetrievalSourceText): PreparedChunk[] {
 
 export function contentDigest(title: string, chunks: readonly PreparedChunk[]): string {
   const hash = createHash('sha256').update(title);
-  for (const chunk of chunks) hash.update(' ').update(chunk.text);
+  for (const chunk of chunks) hash.update('\0').update(chunk.text);
   return hash.digest('hex');
 }
 
@@ -334,6 +335,7 @@ async function embedChunks(
 }> {
   const vectors: Array<number[] | null> = chunks.map(() => null);
   let model: string | null = null;
+  const googleUserData = await retrievalDocumentHoldsGoogleUserData(db, document);
   for (let offset = 0; offset < chunks.length; offset += MAX_EMBEDDING_INPUTS) {
     const batch = chunks.slice(offset, offset + MAX_EMBEDDING_INPUTS);
     try {
@@ -344,6 +346,7 @@ async function embedChunks(
         texts: batch.map((chunk) => chunk.text),
         purpose: 'document',
         operationKey: `${document.id}:${document.chunk_version + 1}:${offset}`,
+        forceNoTraining: googleUserData,
       });
       result.vectors.forEach((vector, index) => {
         vectors[offset + index] = vector;

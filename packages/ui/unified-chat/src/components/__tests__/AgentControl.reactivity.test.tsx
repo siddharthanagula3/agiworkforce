@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { EFFORT_LABEL } from '@agiworkforce/types';
 
 import { AgentControl } from '../AgentControl';
 import { useAgentControlStore } from '../../stores/agentControlStore';
@@ -55,13 +56,13 @@ describe('AgentControl reactive state', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reasoning effort' }));
     expect(
       screen.getByRole('slider', { name: 'Reasoning effort' }).getAttribute('aria-valuetext'),
-    ).toBe('Medium');
+    ).toBe(EFFORT_LABEL.medium);
 
     act(() => useAgentControlStore.getState().setEffort('conversation-1', 'high'));
 
     expect(
       screen.getByRole('slider', { name: 'Reasoning effort' }).getAttribute('aria-valuetext'),
-    ).toBe('High');
+    ).toBe(EFFORT_LABEL.high);
   });
 
   it('uses only the selected model’s catalog-supported effort levels', () => {
@@ -79,7 +80,7 @@ describe('AgentControl reactive state', () => {
     expect(slider.getAttribute('aria-valuemax')).toBe(
       String(constrainedEffortModel.reasoning!.supportedEfforts!.length - 1),
     );
-    expect(slider.getAttribute('aria-valuetext')).toBe('Medium');
+    expect(slider.getAttribute('aria-valuetext')).toBe(EFFORT_LABEL.medium);
   });
 
   it('requires explicit confirmation before bypassing tool permissions', () => {

@@ -211,7 +211,7 @@ export function CompareAnswersPage({ requestedModelIds }: CompareAnswersPageProp
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
       <Link
         href={MODELS_PATH}
-        className={`-ml-2 inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:min-h-11 ${FOCUS_RING_CLASS}`}
+        className={`-ms-2 inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:min-h-11 ${FOCUS_RING_CLASS}`}
       >
         <ChevronLeft className="h-4 w-4" aria-hidden />
         Models
@@ -298,7 +298,7 @@ export function CompareAnswersPage({ requestedModelIds }: CompareAnswersPageProp
               ) : null}
             </fieldset>
 
-            <div className="flex items-end gap-2 rounded-3xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-2 pl-4 pr-2 focus-within:ring-2 focus-within:ring-[var(--chat-focus-ring)]">
+            <div className="flex items-end gap-2 rounded-3xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-2 ps-4 pe-2 focus-within:ring-2 focus-within:ring-[var(--chat-focus-ring)]">
               <label htmlFor={promptId} className="sr-only">
                 Prompt
               </label>
@@ -453,7 +453,7 @@ function AnswerPanel({ answer, entry, resolvedName, queuedNote, onChatWith }: An
               {timing}
             </p>
           ) : null}
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ms-auto flex items-center gap-1">
             <button
               type="button"
               onClick={() => void copyAnswer()}

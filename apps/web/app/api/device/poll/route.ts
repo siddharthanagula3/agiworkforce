@@ -153,39 +153,80 @@ async function handleDevicePoll(request: NextRequest) {
     }
 
     if (data.status === 'approved' && data.user_id) {
-      const consumedRows = await db.query<ConsumedRow>(
-        `WITH locked AS (
-           SELECT status, expires_at, user_id, user_email, user_name
-             FROM device_authorization_codes
-            WHERE device_id = $1
-            FOR UPDATE
-         ),
-         updated AS (
-           UPDATE device_authorization_codes d
-              SET status      = 'consumed',
-                  consumed_at = NOW(),
-                  updated_at  = NOW()
-             FROM locked
-            WHERE d.device_id = $1
-              AND locked.status = 'approved'
-         )
-         SELECT
-           locked.status::text AS status,
-           locked.user_id      AS user_id,
-           locked.user_email   AS user_email,
-           locked.user_name    AS user_name
-           FROM locked`,
-        [device_id],
-      );
+      const organizationId = await resolveActiveOrganizationId(db, data.user_id);
+      const familyId = crypto.randomUUID();
+      const refreshCredential = createDeviceRefreshCredential();
+      const minted = await db.transaction(async (tx) => {
+        const consumedRows = await tx.query<ConsumedRow>(
+          `WITH locked AS (
+             SELECT status, expires_at, user_id, user_email, user_name
+               FROM device_authorization_codes
+              WHERE device_id = $1
+              FOR UPDATE
+           ),
+           updated AS (
+             UPDATE device_authorization_codes d
+                SET status      = 'consumed',
+                    consumed_at = NOW(),
+                    updated_at  = NOW()
+               FROM locked
+              WHERE d.device_id = $1
+                AND locked.status = 'approved'
+           )
+           SELECT
+             locked.status::text AS status,
+             locked.user_id      AS user_id,
+             locked.user_email   AS user_email,
+             locked.user_name    AS user_name
+             FROM locked`,
+          [device_id],
+        );
+        const consumed = consumedRows[0];
+        if (!consumed || consumed.status !== 'approved' || !consumed.user_id) {
+          return { consumed, credential: null };
+        }
 
-      if (!consumedRows.length) {
+        let credential: { accessToken: string; expiresIn: number };
+        try {
+          credential = issueDeveloperToken({
+            userId: consumed.user_id,
+            ...(consumed.user_email ? { email: consumed.user_email } : {}),
+            sessionFamilyId: familyId,
+          });
+        } catch (error) {
+          logger.error(
+            { error, deviceId: pseudonymizeIdentifier(device_id, 'device-id', 12) },
+            'Device poll: signing is not configured',
+          );
+          throw createError.internal('Token signing is not configured');
+        }
+
+        await tx.execute(
+          `INSERT INTO device_refresh_tokens
+             (family_id, user_id, user_email, token_hash, expires_at, device_id, device_name,
+              organization_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            familyId,
+            consumed.user_id,
+            consumed.user_email,
+            refreshCredential.tokenHash,
+            refreshCredential.expiresAt,
+            device_id,
+            consumed.user_name,
+            organizationId,
+          ],
+        );
+        return { consumed, credential };
+      });
+
+      const consumed = minted.consumed;
+      if (!consumed) {
         return NextResponse.json(
           { status: 'pending' },
           { headers: { 'Cache-Control': 'no-store' } },
         );
       }
-
-      const consumed = consumedRows[0]!;
 
       if (consumed.status === 'expired' || consumed.status === 'consumed') {
         return NextResponse.json(
@@ -201,59 +242,22 @@ async function handleDevicePoll(request: NextRequest) {
         );
       }
 
-      if (consumed.status !== 'approved') {
+      if (!minted.credential) {
+        if (consumed.status === 'approved') {
+          logger.warn(
+            {
+              deviceId: pseudonymizeIdentifier(device_id, 'device-id', 12),
+              status: consumed.status,
+            },
+            'Device code approved but carries no account after consumption',
+          );
+        }
         return NextResponse.json(
           { status: 'pending' },
           { headers: { 'Cache-Control': 'no-store' } },
         );
       }
-
-      if (!consumed.user_id) {
-        logger.warn(
-          { deviceId: pseudonymizeIdentifier(device_id, 'device-id', 12), status: consumed.status },
-          'Device code approved but carries no account after consumption',
-        );
-        return NextResponse.json({ status: 'pending' });
-      }
-
-      // The device credential is minted on consumption, matching
-      // /api/auth/device/token: a renewable access/refresh pair bound to a
-      // session family, rather than the caller's own browser session token.
-      const familyId = crypto.randomUUID();
-      const refreshCredential = createDeviceRefreshCredential();
-      let accessToken: string;
-      let expiresIn: number;
-      try {
-        ({ accessToken, expiresIn } = issueDeveloperToken({
-          userId: consumed.user_id,
-          ...(consumed.user_email ? { email: consumed.user_email } : {}),
-          sessionFamilyId: familyId,
-        }));
-      } catch (error) {
-        logger.error(
-          { error, deviceId: pseudonymizeIdentifier(device_id, 'device-id', 12) },
-          'Device poll: signing is not configured',
-        );
-        throw createError.internal('Token signing is not configured');
-      }
-
-      const organizationId = await resolveActiveOrganizationId(db, consumed.user_id);
-      await db.execute(
-        `INSERT INTO device_refresh_tokens
-           (family_id, user_id, user_email, token_hash, expires_at, device_id, device_name,
-            organization_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [
-          familyId,
-          consumed.user_id,
-          consumed.user_email,
-          refreshCredential.tokenHash,
-          refreshCredential.expiresAt,
-          device_id,
-          consumed.user_name,
-          organizationId,
-        ],
-      );
+      const { accessToken, expiresIn } = minted.credential;
 
       return NextResponse.json(
         {

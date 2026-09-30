@@ -236,6 +236,7 @@ export interface UpsertVideoMediaAssetParams {
   provider: string;
   model: string;
   sourceSurface: 'web' | 'mobile' | 'desktop';
+  conversationId: string | null;
   metadata: Record<string, unknown>;
 }
 
@@ -246,9 +247,14 @@ export async function upsertVideoMediaAsset(
   const rows = await db.query<{ id: string }>(
     `insert into public.media_assets (
        id, user_id, organization_id, kind, mime_type, byte_size, storage_url,
-       storage_pathname, prompt, provider, model, source_surface, metadata
+       storage_pathname, prompt, provider, model, source_surface, metadata,
+       conversation_id, temporary_chat
      ) values (
-       $1, $2, $3, 'video', $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb
+       $1, $2, $3, 'video', $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::uuid,
+       exists (
+         select 1 from public.web_conversations c
+          where c.id = $13::uuid and coalesce(c.is_temporary, false)
+       )
      )
      on conflict (id) do update
        set mime_type = excluded.mime_type,
@@ -278,6 +284,7 @@ export async function upsertVideoMediaAsset(
       p.model,
       p.sourceSurface,
       JSON.stringify(p.metadata),
+      p.conversationId,
     ],
   );
   const id = rows[0]?.id;
@@ -432,6 +439,7 @@ const DELETED_ORDER_CLAUSE = 'deleted_at desc';
 
 const ORDER_CLAUSE_BY_SORT: Readonly<Record<LibrarySort, string>> = {
   modified: 'updated_at desc',
+  oldest: 'created_at asc',
   name: "coalesce(metadata->>'filename', kind) asc",
   size: 'byte_size desc nulls last',
   type: "mime_type asc, coalesce(metadata->>'filename', kind) asc",

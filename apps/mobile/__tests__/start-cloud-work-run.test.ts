@@ -119,6 +119,18 @@ describe('starting an AGI Work run from mobile', () => {
     );
   });
 
+  it('keeps internal send diagnostics out of the start-work sheet', async () => {
+    const { startWorkFailureMessage, START_WORK_EMPTY_GOAL_ERROR, START_WORK_ERROR } =
+      await loadStartWork();
+
+    expect(startWorkFailureMessage(new Error('provider key at /internal/runs'))).toBe(
+      START_WORK_ERROR,
+    );
+    expect(startWorkFailureMessage(new Error(START_WORK_EMPTY_GOAL_ERROR))).toBe(
+      START_WORK_EMPTY_GOAL_ERROR,
+    );
+  });
+
   it('puts work_mode and agi_work_goal on the completions request', async () => {
     const { streamChat } = await loadStreamingService();
 

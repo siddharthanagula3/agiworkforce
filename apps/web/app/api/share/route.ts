@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
+import type {
+  ConversationShareCreated,
+  ConversationShareListResponse,
+} from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -40,8 +44,8 @@ const MAX_SHARE_SERIALIZED_CHARS = 1_000_000;
 const CreateShareSchema = z.object({
   conversation_id: z.string().uuid().optional(),
   title: z.string().min(1).max(200).default('Shared Session'),
-  model_id: z.string().optional(),
-  provider: z.string().optional(),
+  model_id: z.string().nullish(),
+  provider: z.string().nullish(),
   messages: z
     .array(z.record(z.string(), z.unknown()))
     .max(MAX_SHARE_MESSAGES)
@@ -104,6 +108,7 @@ function sanitizeMessages(messages: Array<Record<string, unknown>>): SanitizedMe
 }
 
 type SharedSessionRow = {
+  id: string;
   token: string;
   expires_at: string;
   total_messages: number;
@@ -215,9 +220,10 @@ async function handleCreateShare(request: NextRequest) {
 
   const [data] = await db.query<SharedSessionRow>(
     `insert into shared_sessions
-       (token, owner_id, title, model_id, provider, messages, total_messages, expires_at)
-     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
-     returning token, expires_at, total_messages, visibility`,
+       (token, owner_id, title, model_id, provider, messages, total_messages, conversation_id,
+        expires_at)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
+     returning id, token, expires_at, total_messages, visibility`,
     [
       token,
       userId,
@@ -226,6 +232,7 @@ async function handleCreateShare(request: NextRequest) {
       provider ?? null,
       JSON.stringify(sanitizedMessages),
       sanitizedMessages.length,
+      conversationId ?? null,
       expiresAt,
     ],
   );
@@ -247,7 +254,7 @@ async function handleCreateShare(request: NextRequest) {
       severity: 'info',
       detail: {
         resourceType: 'share',
-        resourceId: data.token,
+        resourceId: data.id,
         source: secretPatternNames.join(','),
         count: secretMatchCount,
         status: 'redacted',
@@ -257,20 +264,34 @@ async function handleCreateShare(request: NextRequest) {
     });
   }
 
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'share_link_created',
+    request,
+    outcome: 'success',
+    severity: 'info',
+    detail: {
+      resourceType: 'share_link',
+      resourceId: data.id,
+      ...(conversationId ? { conversationId } : {}),
+    },
+  }).catch((error) => {
+    logger.error({ error, userId }, 'Failed to record share-link audit event');
+  });
+
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
   const shareUrl = `${appUrl}/share/${data.token}`;
 
-  return NextResponse.json(
-    {
-      shareUrl,
-      token: data.token,
-      expiresAt: data.expires_at,
-      messageCount: data.total_messages,
-      visibility: toSharedSessionVisibility(data.visibility),
-      workspace: await describeWorkspaceAudience(db, organizationId),
-    },
-    { status: 201 },
-  );
+  const created: ConversationShareCreated = {
+    shareUrl,
+    token: data.token,
+    expiresAt: data.expires_at,
+    messageCount: data.total_messages,
+    visibility: toSharedSessionVisibility(data.visibility),
+    workspace: await describeWorkspaceAudience(db, organizationId),
+  };
+  return NextResponse.json(created, { status: 201 });
 }
 
 type SharedSessionListRow = {
@@ -316,7 +337,7 @@ async function handleListShares(request: NextRequest) {
   const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
   const now = Date.now();
 
-  return NextResponse.json({
+  const listed: ConversationShareListResponse = {
     shares: rows.map((row) => ({
       token: row.token,
       title: row.title ?? 'Shared Session',
@@ -329,7 +350,8 @@ async function handleListShares(request: NextRequest) {
       expiresAt: row.expires_at,
       expired: new Date(row.expires_at).getTime() <= now,
     })),
-  });
+  };
+  return NextResponse.json(listed);
 }
 
 export const POST = withErrorHandler(handleCreateShare);

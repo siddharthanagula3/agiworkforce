@@ -3,7 +3,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { AGENT_EVENT_SCHEMA_VERSION, MINIMUM_SUPPORTED_RUNTIME_VERSION } from '@agiworkforce/types';
 import {
   SYNTHETIC_LOCAL_MODEL_ID,
   SYNTHETIC_LOCAL_MODEL_ID_SECONDARY,
@@ -174,6 +174,7 @@ function fakeRuntime(
     exitOnShutdown?: boolean;
     shutdownResult?: unknown;
     malformedV8?: boolean;
+    mcpServers?: unknown;
     initializeExtra?: Record<string, unknown>;
     initializeError?: { code: number; message: string; data?: unknown };
     trustMode?: string;
@@ -297,7 +298,9 @@ function fakeRuntime(
                       : typeof method === 'string' && method in V8_RESULTS
                         ? options.malformedV8 === true
                           ? MALFORMED_V8_RESULT
-                          : V8_RESULTS[method as keyof typeof V8_RESULTS]
+                          : method === 'mcp/list' && options.mcpServers !== undefined
+                            ? options.mcpServers
+                            : V8_RESULTS[method as keyof typeof V8_RESULTS]
                         : { acknowledged: true };
       const reply =
         method === 'initialize' && options.initializeError !== undefined
@@ -332,6 +335,109 @@ function fakeRuntime(
 describe('LocalRuntimeClient', () => {
   afterEach(() => vi.useRealTimers());
 
+  it('passes bypass launch authority only from the trusted consent callback', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      bypassPermissionsAvailable: () => true,
+      spawn: runtime.spawn,
+    });
+    try {
+      await client.initialize();
+      expect(vi.mocked(runtime.spawn).mock.calls[0]?.slice(0, 2)).toEqual([
+        'agi',
+        ['--allow-dangerously-skip-permissions', 'app-server'],
+      ]);
+    } finally {
+      await client.dispose();
+    }
+  });
+
+  it('keeps launch authority off when the consent callback refuses it', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      bypassPermissionsAvailable: () => false,
+      spawn: runtime.spawn,
+    });
+    try {
+      await client.initialize();
+      expect(vi.mocked(runtime.spawn).mock.calls[0]?.[1]).toEqual(['app-server']);
+    } finally {
+      await client.dispose();
+    }
+  });
+
+  it('blocks new turns until a consent transition is explicitly restarted', async () => {
+    const runtime = fakeRuntime();
+    let consented = false;
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      bypassPermissionsAvailable: () => consented,
+      spawn: runtime.spawn,
+    });
+    const turn = {
+      threadId: 'thread-1',
+      input: [{ type: 'text' as const, text: 'Continue', text_elements: [] }],
+    };
+    try {
+      await client.initialize();
+      consented = true;
+      await expect(client.startTurn(turn)).rejects.toThrow('Restart Local Runtime');
+      expect(runtime.requests.map((request) => request.method)).toEqual(['initialize']);
+      await client.restart();
+      expect(vi.mocked(runtime.spawn).mock.calls[1]?.[1]).toEqual([
+        '--allow-dangerously-skip-permissions',
+        'app-server',
+      ]);
+      await expect(client.startTurn(turn)).resolves.toMatchObject({ status: 'running' });
+      consented = false;
+      await expect(client.startTurn(turn)).rejects.toThrow('Restart Local Runtime');
+      await client.restart();
+      expect(vi.mocked(runtime.spawn).mock.calls[2]?.[1]).toEqual(['app-server']);
+      await expect(client.startTurn(turn)).resolves.toMatchObject({ status: 'running' });
+    } finally {
+      await client.dispose();
+    }
+  });
+
+  it('keeps interruption and approvals available while a permission restart is deferred', async () => {
+    const runtime = fakeRuntime();
+    let consented = false;
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      bypassPermissionsAvailable: () => consented,
+      spawn: runtime.spawn,
+    });
+    try {
+      await client.initialize();
+      consented = true;
+      await client.interruptTurn({ threadId: 'thread-1', turnId: 'turn-1' });
+      await client.respondToApproval({
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        requestId: 'approval-1',
+        decision: 'denied',
+      });
+      expect(runtime.requests.map((request) => request.method)).toEqual([
+        'initialize',
+        'turn/interrupt',
+        'approval/respond',
+      ]);
+      expect(vi.mocked(runtime.spawn).mock.calls).toHaveLength(1);
+    } finally {
+      await client.dispose();
+    }
+  });
+
   it('rejects servers that can silently ignore security-sensitive turn controls', async () => {
     const runtime = fakeRuntime(4);
     const client = new LocalRuntimeClient({
@@ -360,7 +466,7 @@ describe('LocalRuntimeClient', () => {
     await client.dispose();
   });
 
-  it.each(['1.7.0', '1.7.1-beta.1', '0.1.0', 'not-semver'])(
+  it.each(['0.0.0', `${MINIMUM_SUPPORTED_RUNTIME_VERSION}-beta.1`, 'not-semver'])(
     'rejects an incompatible owning CLI version %s even when protocol 8 is claimed',
     async (serverVersion) => {
       const runtime = fakeRuntime(8, { serverVersion });
@@ -371,7 +477,9 @@ describe('LocalRuntimeClient', () => {
         spawn: runtime.spawn,
       });
 
-      await expect(client.initialize()).rejects.toThrow('version 1.7.1 or newer is required');
+      await expect(client.initialize()).rejects.toThrow(
+        `version ${MINIMUM_SUPPORTED_RUNTIME_VERSION} or newer is required`,
+      );
       await client.dispose();
     },
   );
@@ -1431,7 +1539,7 @@ describe('LocalRuntimeClient', () => {
 
     await expect(client.initialize()).rejects.toThrow(/AGI_CLI_NOT_FOUND/u);
     await expect(client.initialize()).rejects.toThrow(/agiWorkforce\.cliPath/u);
-    await expect(client.initialize()).rejects.toThrow(/1\.7\.1/u);
+    await expect(client.initialize()).rejects.toThrow(MINIMUM_SUPPORTED_RUNTIME_VERSION);
     await expect(client.initialize()).rejects.toThrow(/not on the PATH/u);
   });
 
@@ -1500,6 +1608,59 @@ describe('LocalRuntimeClient', () => {
     await expect(client.initialize()).rejects.toThrow(/AGI_CLI_NOT_EXECUTABLE/u);
     await expect(client.initialize()).rejects.toThrow(/execute permission/u);
   });
+  it('retains the workspace refusal in blocked MCP list responses', async () => {
+    const policyRefusal =
+      "MCP server 'blocked' was not started: your workspace administrator has turned MCP servers off";
+    const runtime = fakeRuntime(8, {
+      mcpServers: {
+        servers: [
+          {
+            name: 'blocked',
+            transport: 'http',
+            scope: 'user',
+            status: 'blocked',
+            policyRefusal,
+            url: 'https://mcp.example.test/mcp',
+          },
+        ],
+      },
+    });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    expect((await client.listMcpServers()).servers[0]).toMatchObject({
+      status: 'blocked',
+      policyRefusal,
+    });
+    await client.dispose();
+  });
+
+  it('refuses blocked MCP list responses without an explanation', async () => {
+    const runtime = fakeRuntime(8, {
+      mcpServers: {
+        servers: [
+          {
+            name: 'blocked',
+            transport: 'http',
+            scope: 'user',
+            status: 'blocked',
+          },
+        ],
+      },
+    });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    await expect(client.listMcpServers()).rejects.toThrow();
+    await client.dispose();
+  });
+
   it('validates every protocol 8 response against its schema before returning it', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({

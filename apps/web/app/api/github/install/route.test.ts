@@ -7,31 +7,41 @@ const mocks = vi.hoisted(() => ({
   cookieSet: vi.fn((_options: unknown) => undefined),
   generateState: vi.fn(() => 'a'.repeat(64)),
   getAuthorizationUrl: vi.fn(
-    (_state: string, _redirectUri: string) =>
+    (_state: string, _redirectUri: string, _challenge?: string) =>
       `https://github.com/login/oauth/authorize?client_id=Iv1.client-id&state=${'a'.repeat(64)}`,
   ),
   linkingAvailable: vi.fn(() => false),
+  recordAppInstallation: vi.fn(
+    async (..._args: unknown[]): Promise<{ oauthState: string; codeChallenge: string } | null> =>
+      null,
+  ),
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('next/headers', () => ({
+vi.mock('next/headers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/headers')>()),
   cookies: vi.fn(async () => ({
     get: (name: string) => mocks.cookieGet(name),
     set: (options: unknown) => mocks.cookieSet(options),
   })),
 }));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
   withRateLimit: vi.fn(async () => null),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'attacker-user' })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
   getNeonDb: vi.fn(() => ({
     execute: (...args: unknown[]) => mocks.execute(...args),
   })),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -39,11 +49,19 @@ vi.mock('@/lib/logger', () => ({
     warn: vi.fn(),
   },
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/github-app')>()),
   generateGitHubInstallState: () => mocks.generateState(),
-  getGitHubUserAuthorizationUrl: (state: string, redirectUri: string) =>
-    mocks.getAuthorizationUrl(state, redirectUri),
+  getGitHubUserAuthorizationUrl: (state: string, redirectUri: string, challenge?: string) =>
+    challenge === undefined
+      ? mocks.getAuthorizationUrl(state, redirectUri)
+      : mocks.getAuthorizationUrl(state, redirectUri, challenge),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
+}));
+
+vi.mock('@/lib/github-install-app-return', async (importActual) => ({
+  ...(await importActual<typeof import('@/lib/github-install-app-return')>()),
+  recordAppInstallation: (...args: unknown[]) => mocks.recordAppInstallation(...args),
 }));
 
 import { GET } from './route';
@@ -54,6 +72,7 @@ describe('GitHub installation callback ownership proof', () => {
     mocks.execute.mockResolvedValue(undefined);
     mocks.cookieGet.mockReturnValue({ value: 'c'.repeat(64) });
     mocks.linkingAvailable.mockReturnValue(false);
+    mocks.recordAppInstallation.mockResolvedValue(null);
   });
 
   it('does not let a valid CSRF state claim an unverified installation id', async () => {
@@ -129,5 +148,46 @@ describe('GitHub installation callback ownership proof', () => {
       'http://localhost:3000/connectors?github=invalid_state',
     );
     expect(mocks.getAuthorizationUrl).not.toHaveBeenCalled();
+  });
+
+  it('records an app install against its pending row without a cookie or web session', async () => {
+    mocks.linkingAvailable.mockReturnValue(true);
+    mocks.cookieGet.mockReturnValue(undefined as never);
+    mocks.recordAppInstallation.mockResolvedValue({
+      oauthState: 'd'.repeat(64),
+      codeChallenge: 'row-challenge',
+    });
+
+    const response = await GET(
+      new NextRequest(
+        `http://localhost:3000/api/github/install?installation_id=987654&state=${'e'.repeat(64)}`,
+      ),
+    );
+
+    expect(mocks.recordAppInstallation).toHaveBeenCalledWith('e'.repeat(64), 987654);
+    expect(response.status).toBe(307);
+    expect(mocks.getAuthorizationUrl).toHaveBeenCalledWith(
+      'd'.repeat(64),
+      'http://localhost:3000/api/github/oauth/callback',
+      'row-challenge',
+    );
+    expect(mocks.cookieSet).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('keeps the cookie flow when the state belongs to no app install', async () => {
+    mocks.linkingAvailable.mockReturnValue(true);
+
+    const response = await GET(
+      new NextRequest(
+        `http://localhost:3000/api/github/install?installation_id=987654&state=${'c'.repeat(64)}`,
+      ),
+    );
+
+    expect(mocks.recordAppInstallation).toHaveBeenCalledWith('c'.repeat(64), 987654);
+    expect(response.status).toBe(307);
+    expect(mocks.cookieSet).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'github_pending_installation_id', value: '987654' }),
+    );
   });
 });

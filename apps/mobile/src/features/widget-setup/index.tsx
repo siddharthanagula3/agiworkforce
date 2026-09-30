@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { View, ScrollView, Pressable, Platform } from 'react-native';
+import { View, ScrollView, Platform } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
@@ -143,14 +144,14 @@ export default function WidgetSetupScreen() {
         className="flex-row items-center px-3 h-12"
         style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
       >
-        <Pressable
+        <PressableBox
           onPress={handleBack}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
         <Text variant="subheading" className="ml-2">
           Quick Access
         </Text>
@@ -194,7 +195,7 @@ export default function WidgetSetupScreen() {
                 className="rounded-xl p-3 gap-2 mb-3"
                 style={{ backgroundColor: colors.surfaceElevated }}
               >
-                <Text className="text-[11px] text-fg-muted uppercase tracking-wider mb-1">
+                <Text className="text-xs text-fg-muted uppercase tracking-wider mb-1">
                   Example phrases
                 </Text>
                 {SIRI_EXAMPLES.map((example) => (
@@ -228,7 +229,7 @@ export default function WidgetSetupScreen() {
                 className="rounded-xl p-3 gap-2"
                 style={{ backgroundColor: colors.surfaceElevated }}
               >
-                <Text className="text-[11px] text-fg-muted uppercase tracking-wider mb-1">
+                <Text className="text-xs text-fg-muted uppercase tracking-wider mb-1">
                   How to share
                 </Text>
                 <Text className="text-xs text-fg-muted">
@@ -260,7 +261,7 @@ export default function WidgetSetupScreen() {
                 className="rounded-xl p-3 gap-2"
                 style={{ backgroundColor: colors.surfaceElevated }}
               >
-                <Text className="text-[11px] text-fg-muted uppercase tracking-wider mb-1">
+                <Text className="text-xs text-fg-muted uppercase tracking-wider mb-1">
                   How to share
                 </Text>
                 <Text className="text-xs text-fg-muted">

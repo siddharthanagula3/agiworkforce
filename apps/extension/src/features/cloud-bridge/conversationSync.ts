@@ -1,21 +1,38 @@
-import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_SYNC_CONVERSATIONS_SCOPE,
+  ChatSyncPullResponseSchema,
+  ManagedCloudChatHttpError,
+  chatSyncPullPath,
+  type ChatSyncPullResponse,
+} from '@agiworkforce/cloud-contracts';
+import {
+  applyConversationDeltas,
+  selectNextCursor,
+  type ConversationStorePort,
+  type SyncConversationRecord,
+} from '@agiworkforce/sync';
 import {
   blockCloudPersistence,
   claimCloudConversationBinding,
   cloudMessageSyncFingerprint,
+  conversationFlagsNeedSync,
   conversationProjectNeedsSync,
+  deleteConversation,
   getConversation,
   isCloudPersistenceEligible,
+  listConversations,
   listConversationsNeedingCloudSync,
   pendingCloudMessages,
   recordCloudMessagesSynced,
   recordCloudSyncState,
+  updateConversationEntry,
   type ConversationEntry,
   type HistoryMessage,
 } from '../background/conversation-history';
 import { logger } from '../../utils';
 import { readCloudMirroringEnabled } from '../privacy/cloudMirroring';
-import { getManagedCloudAuthContext } from './freeTrialClient';
+import { FREE_TRIAL_GATEWAY, getManagedCloudAuthContext } from './freeTrialClient';
+import { platformRequestHeaders } from '../../platformHeaders';
 import {
   buildExtensionCloudMessageMetadata,
   createExtensionCloudChatClient,
@@ -30,6 +47,9 @@ import {
 
 export const CLOUD_SYNC_TOMBSTONE_KEY = 'agi_cloud_sync_tombstones_v1';
 export const SYNC_SWEEP_ALARM = 'agi-conversation-sync-sweep';
+export const CONVERSATION_SYNC_CURSOR_KEY = 'agi_cloud_conversation_cursor_v1';
+
+const INITIAL_SYNC_CURSOR = '0';
 
 const SYNC_DEBOUNCE_MS = 2_500;
 const MAX_MESSAGES_PER_FLUSH = 25;
@@ -37,6 +57,7 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const RETRY_AFTER_RATE_LIMIT_MS = 60_000;
 const RETRY_AFTER_SERVER_ERROR_MS = 5 * 60_000;
 const MAX_TOMBSTONES = 100;
+const FLAG_PULL_MAX_PAGES = 20;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface CloudSyncTombstone {
@@ -53,8 +74,13 @@ interface ScheduledFlush {
   streaming: boolean;
 }
 
+interface InFlightFlush {
+  controller: AbortController;
+  done: Promise<void>;
+}
+
 const scheduledFlushes = new Map<string, ScheduledFlush>();
-const inFlightFlushes = new Map<string, AbortController>();
+const inFlightFlushes = new Map<string, InFlightFlush>();
 
 function flushKey(owner: ManagedCloudOwner, conversationId: string): string {
   return `${managedCloudOwnerKey(owner)}:${conversationId}`;
@@ -100,7 +126,7 @@ export async function sweepConversationSync(): Promise<boolean> {
 export function abortConversationSyncForOwnerChange(): void {
   for (const pending of scheduledFlushes.values()) clearTimeout(pending.timer);
   scheduledFlushes.clear();
-  for (const controller of inFlightFlushes.values()) {
+  for (const { controller } of inFlightFlushes.values()) {
     try {
       controller.abort();
     } catch {
@@ -110,24 +136,60 @@ export function abortConversationSyncForOwnerChange(): void {
   inFlightFlushes.clear();
 }
 
+export async function ensureCloudConversation(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+): Promise<string | null> {
+  const key = flushKey(owner, conversationId);
+  const scheduled = scheduledFlushes.get(key);
+  if (scheduled) {
+    clearTimeout(scheduled.timer);
+    scheduledFlushes.delete(key);
+  }
+  await flushConversation(owner, conversationId);
+  let entry = await getConversation(owner, conversationId);
+  if (entry?.cloudSync?.createAcknowledged !== true) {
+    await flushConversation(owner, conversationId);
+    entry = await getConversation(owner, conversationId);
+  }
+  const cloudConversationId = entry?.cloudSync?.conversationId;
+  return entry?.cloudSync?.createAcknowledged === true && cloudConversationId
+    ? cloudConversationId
+    : null;
+}
+
 function combineTimeoutSignal(controller: AbortController): AbortSignal {
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
   return controller.signal;
 }
 
-export async function flushConversation(
+export function flushConversation(
   owner: ManagedCloudOwner,
   conversationId: string,
   streaming = false,
 ): Promise<void> {
   const key = flushKey(owner, conversationId);
-  if (inFlightFlushes.has(key)) return;
-  if (!(await readCloudMirroringEnabled())) return;
+  const running = inFlightFlushes.get(key);
+  if (running) return running.done;
 
   const controller = new AbortController();
-  inFlightFlushes.set(key, controller);
+  const done = runConversationFlush(owner, conversationId, streaming, controller).finally(() => {
+    if (inFlightFlushes.get(key)?.controller === controller) inFlightFlushes.delete(key);
+    controller.abort();
+  });
+  inFlightFlushes.set(key, { controller, done });
+  return done;
+}
+
+async function runConversationFlush(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+  streaming: boolean,
+  controller: AbortController,
+): Promise<void> {
   try {
+    if (!(await readCloudMirroringEnabled())) return;
     const context = await getManagedCloudAuthContext();
     if (!context) {
       await recordCloudSyncState(owner, conversationId, {
@@ -159,9 +221,6 @@ export async function flushConversation(
     await flushEligibleConversation(owner, entry, streaming, combineTimeoutSignal(controller));
   } catch (error) {
     logger.debug('Conversation cloud sync failed', error);
-  } finally {
-    inFlightFlushes.delete(key);
-    controller.abort();
   }
 }
 
@@ -191,10 +250,12 @@ async function flushEligibleConversation(
     (candidate.cloudSync.organizationId === undefined ||
       candidate.cloudSync.createAcknowledged !== true);
   const needsProjectUpdate = conversationProjectNeedsSync(candidate);
+  const needsFlagUpdate = conversationFlagsNeedSync(candidate);
   if (
     selectFlushableMessages(candidate, streaming).length === 0 &&
     !needsTitleUpdate &&
     !needsProjectUpdate &&
+    !needsFlagUpdate &&
     !needsWorkspaceRecovery
   ) {
     return;
@@ -384,6 +445,21 @@ async function flushEligibleConversation(
       );
     } catch (error) {
       await handleFlushError(owner, conversationId, error);
+      return;
+    }
+  }
+
+  const latest = await getConversation(owner, conversationId);
+  if (latest && conversationFlagsNeedSync(latest)) {
+    const flags = { pinned: latest.pinned === true, archived: latest.archived === true };
+    try {
+      await client.updateConversation(cloudConversationId, flags, { signal, organizationId });
+      await recordCloudSyncState(owner, conversationId, {
+        syncedPinned: flags.pinned,
+        syncedArchived: flags.archived,
+      });
+    } catch (error) {
+      await handleFlushError(owner, conversationId, error);
     }
   }
 }
@@ -484,6 +560,126 @@ async function readTombstones(): Promise<CloudSyncTombstone[]> {
     logger.debug('Failed to read cloud sync tombstones', error);
     return [];
   }
+}
+
+async function readConversationCursor(owner: ManagedCloudOwner): Promise<string> {
+  const stored = await chrome.storage.local.get([CONVERSATION_SYNC_CURSOR_KEY]);
+  const cursors = stored[CONVERSATION_SYNC_CURSOR_KEY] as Record<string, unknown> | undefined;
+  const value = cursors?.[owner.accountId];
+  return typeof value === 'string' && /^\d+$/.test(value) ? value : INITIAL_SYNC_CURSOR;
+}
+
+async function writeConversationCursor(owner: ManagedCloudOwner, cursor: string): Promise<void> {
+  const stored = await chrome.storage.local.get([CONVERSATION_SYNC_CURSOR_KEY]);
+  const cursors =
+    (stored[CONVERSATION_SYNC_CURSOR_KEY] as Record<string, unknown> | undefined) ?? {};
+  await chrome.storage.local.set({
+    [CONVERSATION_SYNC_CURSOR_KEY]: { ...cursors, [owner.accountId]: cursor },
+  });
+}
+
+async function pullConversationDeltas(
+  owner: ManagedCloudOwner,
+  since: string,
+): Promise<ChatSyncPullResponse> {
+  const context = await getManagedCloudAuthContext();
+  if (!context) throw new ManagedCloudSignedOutError();
+  if (!sameManagedCloudOwner(context.owner, owner)) throw new ManagedCloudOwnerChangedError();
+  const response = await fetch(
+    `${FREE_TRIAL_GATEWAY}${chatSyncPullPath(since, CHAT_SYNC_CONVERSATIONS_SCOPE)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${context.token}`,
+        'X-Requested-With': 'XMLHttpRequest',
+        ...platformRequestHeaders(),
+      },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    },
+  );
+  if (!response.ok)
+    throw new Error(`Reading account chat changes failed (HTTP ${response.status}).`);
+  return ChatSyncPullResponseSchema.parse(await response.json());
+}
+
+function toSyncRecord(cloudId: string, entry: ConversationEntry): SyncConversationRecord {
+  const savedAt = new Date(entry.savedAt).toISOString();
+  return {
+    id: cloudId,
+    title: entry.customTitle ?? entry.title,
+    createdAt: savedAt,
+    updatedAt: savedAt,
+    messageCount: entry.messages.length,
+    pinned: entry.pinned === true,
+    archived: entry.archived === true,
+  };
+}
+
+export async function pullCloudConversationFlags(owner: ManagedCloudOwner): Promise<boolean> {
+  const bound = new Map<string, ConversationEntry>();
+  for (const entry of await listConversations(owner)) {
+    const cloudId = entry.cloudSync?.conversationId;
+    if (cloudId && entry.cloudSync?.createAcknowledged === true) bound.set(cloudId, entry);
+  }
+  const dirty = [...bound]
+    .filter(([, entry]) => conversationFlagsNeedSync(entry))
+    .map(([cloudId]) => cloudId);
+  const flags = new Map<string, { pinned: boolean; archived: boolean }>();
+  const deleted = new Set<string>();
+  const port: ConversationStorePort = {
+    get: (cloudId) => {
+      const entry = bound.get(cloudId);
+      return entry ? toSyncRecord(cloudId, entry) : undefined;
+    },
+    insert: () => {},
+    patch: (cloudId, record) => {
+      if (dirty.includes(cloudId)) return;
+      flags.set(cloudId, { pinned: record.pinned === true, archived: record.archived === true });
+    },
+    remove: (cloudId) => {
+      if (bound.has(cloudId)) deleted.add(cloudId);
+    },
+  };
+
+  let cursor = await readConversationCursor(owner);
+  for (let page = 0; page < FLAG_PULL_MAX_PAGES; page += 1) {
+    const result = await pullConversationDeltas(owner, cursor);
+    applyConversationDeltas(port, result.conversations, dirty);
+    const next = selectNextCursor(cursor, result.cursor);
+    const advanced = next !== cursor;
+    cursor = next;
+    if (!result.hasMore || !advanced) break;
+  }
+
+  let changed = false;
+  for (const cloudId of deleted) {
+    const entry = bound.get(cloudId);
+    if (!entry) continue;
+    await deleteConversation(owner, entry.id);
+    flags.delete(cloudId);
+    changed = true;
+  }
+  for (const [cloudId, conversation] of flags) {
+    const entry = bound.get(cloudId);
+    if (!entry) continue;
+    if (
+      (entry.pinned === true) !== conversation.pinned ||
+      (entry.archived === true) !== conversation.archived
+    ) {
+      await updateConversationEntry(owner, entry.id, conversation);
+      changed = true;
+    }
+    if (
+      entry.cloudSync?.syncedPinned !== conversation.pinned ||
+      entry.cloudSync?.syncedArchived !== conversation.archived
+    ) {
+      await recordCloudSyncState(owner, entry.id, {
+        syncedPinned: conversation.pinned,
+        syncedArchived: conversation.archived,
+      });
+    }
+  }
+  await writeConversationCursor(owner, cursor);
+  return changed;
 }
 
 export async function queueCloudConversationDeletion(

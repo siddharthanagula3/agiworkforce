@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Activity, Send, Square } from 'lucide-react-native';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 
 import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
 import { cancelDispatchTask, sendDispatchTask } from '@/services/companion';
 import { useDispatchTaskStore } from '@/stores/dispatchTaskStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { DispatchTaskReply } from './DispatchTaskReply';
 
 const TERMINAL_STATUSES = new Set([
   'ready_for_review',
@@ -34,6 +36,7 @@ export function DispatchTaskComposer() {
   const [prompt, setPrompt] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [expandedResult, setExpandedResult] = useState<string | null>(null);
   const tasks = useDispatchTaskStore((state) => state.tasks);
   const visibleTasks = useMemo(() => tasks.slice(0, 4), [tasks]);
   const canSend = !isSending && prompt.trim().length > 0 && prompt.trim().length <= 20_000;
@@ -76,8 +79,8 @@ export function DispatchTaskComposer() {
             editable={!isSending}
           />
           <View className="flex-row items-center justify-between pt-2">
-            <Text className="text-[10px] text-white/30">{prompt.trim().length}/20,000</Text>
-            <Pressable
+            <Text className="text-xs text-white/30">{prompt.trim().length}/20,000</Text>
+            <PressableBox
               onPress={() => void handleSend()}
               disabled={!canSend}
               className={`flex-row items-center gap-1.5 rounded-lg px-3 py-2 ${
@@ -100,7 +103,7 @@ export function DispatchTaskComposer() {
               >
                 {isSending ? 'Sending…' : 'Send'}
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
           {sendError ? (
             <Text
@@ -115,12 +118,14 @@ export function DispatchTaskComposer() {
 
         {visibleTasks.length > 0 && (
           <View className="mt-4 gap-2">
-            <Text className="text-[10px] uppercase tracking-wider text-white/40">
+            <Text className="text-xs uppercase tracking-wider text-white/40">
               Recent Dispatch tasks
             </Text>
             {visibleTasks.map((task) => {
               const isTerminal = TERMINAL_STATUSES.has(task.status);
               const isError = task.status === 'failed' || task.status === 'rejected';
+              const pending =
+                task.status === 'awaiting_input' && task.pending?.length ? task.pending : null;
               return (
                 <View
                   key={task.requestId}
@@ -135,28 +140,59 @@ export function DispatchTaskComposer() {
                     <Text className="flex-1 text-xs font-medium text-white" numberOfLines={1}>
                       {task.title}
                     </Text>
-                    <Text className="text-[10px] text-white/45">
+                    <Text className="text-xs text-white/45">
                       {STATUS_LABELS[task.status] ?? task.status}
                     </Text>
                     {!isTerminal && task.status !== 'sending' && (
-                      <Pressable
+                      <PressableBox
                         onPress={() => void cancelDispatchTask(task.requestId, task.taskId)}
                         className="rounded-md bg-red-500/10 p-1.5 active:bg-red-500/20"
                         accessibilityRole="button"
                         accessibilityLabel={`Cancel ${task.title}`}
                       >
                         <Square size={10} color={colors.agentError} />
-                      </Pressable>
+                      </PressableBox>
                     )}
                   </View>
-                  {(task.error || task.message) && (
+                  {pending ? (
+                    <DispatchTaskReply
+                      taskRequestId={task.requestId}
+                      steps={pending}
+                      {...(task.replyError ? { replyError: task.replyError } : {})}
+                    />
+                  ) : null}
+                  {!pending && (task.error || task.message) && (
                     <Text
-                      className={`mt-1 text-[10px] ${isError ? 'text-red-300' : 'text-white/40'}`}
+                      className={`mt-1 text-xs ${isError ? 'text-red-300' : 'text-white/40'}`}
                       numberOfLines={2}
                     >
                       {task.error ?? task.message}
                     </Text>
                   )}
+                  {task.result ? (
+                    <PressableBox
+                      onPress={() =>
+                        setExpandedResult((current) =>
+                          current === task.requestId ? null : task.requestId,
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        expandedResult === task.requestId
+                          ? 'Show less of the result'
+                          : 'Show the full result'
+                      }
+                      className="mt-2 rounded-md bg-white/[0.04] px-2 py-2"
+                    >
+                      <Text
+                        selectable
+                        className="text-xs leading-[18px] text-white/80"
+                        numberOfLines={expandedResult === task.requestId ? undefined : 4}
+                      >
+                        {task.result}
+                      </Text>
+                    </PressableBox>
+                  ) : null}
                 </View>
               );
             })}

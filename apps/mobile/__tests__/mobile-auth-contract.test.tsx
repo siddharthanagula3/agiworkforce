@@ -14,12 +14,14 @@ const WEBVIEW_IMPORT = /from 'react-native-webview'/;
 const WEBVIEW_SURFACES = [
   'src/features/chat/components/MathBlock.tsx',
   'src/features/chat/components/SafeArtifactPreview.tsx',
+  'src/features/chat/components/VideoPlayerModal.tsx',
 ];
 
 // Every keychain write names when the item may be read. Without it iOS
 // defaults to an item that survives to another device through a backup.
 const SECURE_WRITE = /SecureStore\.setItemAsync\s*\(/g;
-const KEYCHAIN_ACCESSIBLE = /keychainAccessible:\s*SecureStore\.WHEN_UNLOCKED_THIS_DEVICE_ONLY/;
+const KEYCHAIN_ACCESSIBLE =
+  /keychainAccessible:\s*SecureStore\.(WHEN_UNLOCKED|AFTER_FIRST_UNLOCK)_THIS_DEVICE_ONLY/;
 
 // Probing for su binaries, Cydia or a writable system partition is a heuristic
 // that fails open on the devices that matter and punishes ordinary users.

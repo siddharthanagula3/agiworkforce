@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, normalize, relative } from 'node:path';
-import { getColors } from '@/src/ui/theme/tokens';
+import { getColors, typeScale } from '@/src/ui/theme/tokens';
 import { getTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 import { drawerGestureOptions } from '@/src/features/shell/drawerGestures';
 
@@ -10,7 +10,7 @@ const APP_CONFIG = readFileSync(join(MOBILE_ROOT, 'app.config.js'), 'utf8');
 
 // iOS reads at 11pt and no smaller; anything under it was an outlier badge
 // rather than a tier of the scale.
-const MINIMUM_TYPE_SIZE = 10;
+const MINIMUM_TYPE_SIZE = typeScale.caption;
 const LARGEST_BODY_TYPE_SIZE = 34;
 // The three surfaces that are a single piece of display type: the onboarding
 // wordmark, the not-found numeral and the crash screen's mark.
@@ -19,7 +19,7 @@ const DISPLAY_TYPE_SURFACES = [
   'app/+not-found.tsx',
   'app/error.tsx',
 ];
-const FONT_SIZE = /\bfontSize:\s*(\d+)\b/g;
+const FONT_SIZE = /\bfontSize:\s*(?:(\d+)|typeScale\.(\w+))\b/g;
 
 const SAFE_AREA = /SafeAreaView|useSafeAreaInsets|SettingsScreenShell|useFullScreenChrome/;
 const REDIRECT_ONLY = /<Redirect\b/;
@@ -116,7 +116,7 @@ describe('type sizes sit in the band a phone can read', () => {
   const sizes = ALL_FILES.flatMap((file) =>
     Array.from(file.text.matchAll(FONT_SIZE), (match) => ({
       path: file.path,
-      value: Number(match[1]),
+      value: match[1] ? Number(match[1]) : typeScale[match[2] as keyof typeof typeScale],
     })),
   );
 

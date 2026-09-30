@@ -126,7 +126,216 @@ export interface DispatchTaskCancelRequest {
   sentAt: string;
 }
 
-export type DispatchTaskControlRequest = DispatchTaskCreateRequest | DispatchTaskCancelRequest;
+export const DISPATCH_TASK_REPLY_LIMITS = {
+  steps: 10,
+  fields: 8,
+  options: 20,
+  idLength: 128,
+  summaryLength: 1_000,
+  valueLength: 4_000,
+} as const;
+
+export const DISPATCH_TASK_FIELD_FORMATS = ['email', 'uri', 'date', 'date-time'] as const;
+export type DispatchTaskFieldFormat = (typeof DISPATCH_TASK_FIELD_FORMATS)[number];
+
+export interface DispatchTaskPendingField {
+  key: string;
+  title: string;
+  kind: 'text' | 'choice';
+  required: boolean;
+  format?: DispatchTaskFieldFormat;
+  minLength?: number;
+  maxLength?: number;
+  options?: Array<{ value: string; label: string }>;
+}
+
+export const DISPATCH_TASK_REPLY_ERROR_CODES = [
+  'required',
+  'not_an_option',
+  'too_short',
+  'too_long',
+  'bad_format',
+  'expired',
+] as const;
+
+export type DispatchTaskReplyErrorCode = (typeof DISPATCH_TASK_REPLY_ERROR_CODES)[number];
+
+export interface DispatchTaskReplyError {
+  toolCallId: string;
+  message: string;
+  fieldId?: string;
+  code?: DispatchTaskReplyErrorCode;
+}
+
+export type DispatchTaskPendingStep =
+  | { toolCallId: string; kind: 'approval'; summary: string }
+  | {
+      toolCallId: string;
+      kind: 'input';
+      inputKey: string;
+      message: string;
+      fields: DispatchTaskPendingField[];
+    };
+
+export type DispatchTaskStepReply =
+  | { toolCallId: string; kind: 'approval'; approved: boolean }
+  | { toolCallId: string; kind: 'input'; inputKey: string; values: Record<string, string> };
+
+export interface DispatchTaskReplyRequest {
+  action: 'dispatch.task.reply';
+  version: 1;
+  requestId: string;
+  taskRequestId: string;
+  replies: DispatchTaskStepReply[];
+  sentAt: string;
+}
+
+export type DispatchTaskControlRequest =
+  DispatchTaskCreateRequest | DispatchTaskCancelRequest | DispatchTaskReplyRequest;
+
+function replyRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function replyText(value: unknown, limit: number): string | null {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= limit
+    ? value
+    : null;
+}
+
+function replyList<T>(
+  value: unknown,
+  max: number,
+  parse: (entry: unknown) => T | null,
+): T[] | null {
+  if (!Array.isArray(value) || value.length > max) return null;
+  const parsed = value.map(parse);
+  return parsed.every((entry): entry is T => entry !== null) ? parsed : null;
+}
+
+function parsePendingField(value: unknown): DispatchTaskPendingField | null {
+  const field = replyRecord(value);
+  if (!field) return null;
+  const key = replyText(field['key'], DISPATCH_TASK_REPLY_LIMITS.idLength);
+  const title = replyText(field['title'], DISPATCH_TASK_REPLY_LIMITS.summaryLength);
+  const kind = field['kind'];
+  if (!key || !title || (kind !== 'text' && kind !== 'choice')) return null;
+  if (typeof field['required'] !== 'boolean') return null;
+  if (kind === 'text') {
+    const format = field['format'];
+    const minLength = field['minLength'];
+    const maxLength = field['maxLength'];
+    const length = (value: unknown) =>
+      value === undefined ||
+      (typeof value === 'number' &&
+        Number.isInteger(value) &&
+        value >= 0 &&
+        value <= DISPATCH_TASK_REPLY_LIMITS.valueLength);
+    if (
+      (format !== undefined &&
+        !(DISPATCH_TASK_FIELD_FORMATS as readonly unknown[]).includes(format)) ||
+      !length(minLength) ||
+      !length(maxLength)
+    ) {
+      return null;
+    }
+    return {
+      key,
+      title,
+      kind,
+      required: field['required'],
+      ...(format === undefined ? {} : { format: format as DispatchTaskFieldFormat }),
+      ...(minLength === undefined ? {} : { minLength: minLength as number }),
+      ...(maxLength === undefined ? {} : { maxLength: maxLength as number }),
+    };
+  }
+  const options = replyList(field['options'], DISPATCH_TASK_REPLY_LIMITS.options, (entry) => {
+    const option = replyRecord(entry);
+    const optionValue = option && replyText(option['value'], DISPATCH_TASK_REPLY_LIMITS.idLength);
+    const label = option && replyText(option['label'], DISPATCH_TASK_REPLY_LIMITS.summaryLength);
+    return optionValue && label ? { value: optionValue, label } : null;
+  });
+  return options && options.length > 0
+    ? { key, title, kind, required: field['required'], options }
+    : null;
+}
+
+export function parseDispatchTaskPendingSteps(value: unknown): DispatchTaskPendingStep[] | null {
+  return replyList(value, DISPATCH_TASK_REPLY_LIMITS.steps, (entry) => {
+    const step = replyRecord(entry);
+    if (!step) return null;
+    const toolCallId = replyText(step['toolCallId'], DISPATCH_TASK_REPLY_LIMITS.idLength);
+    if (!toolCallId) return null;
+    if (step['kind'] === 'approval') {
+      const summary = replyText(step['summary'], DISPATCH_TASK_REPLY_LIMITS.summaryLength);
+      return summary ? { toolCallId, kind: 'approval', summary } : null;
+    }
+    if (step['kind'] !== 'input') return null;
+    const inputKey = replyText(step['inputKey'], DISPATCH_TASK_REPLY_LIMITS.idLength);
+    const message = replyText(step['message'], DISPATCH_TASK_REPLY_LIMITS.summaryLength);
+    const fields = replyList(step['fields'], DISPATCH_TASK_REPLY_LIMITS.fields, parsePendingField);
+    return inputKey && message && fields && fields.length > 0
+      ? { toolCallId, kind: 'input', inputKey, message, fields }
+      : null;
+  });
+}
+
+export function parseDispatchTaskReplyError(value: unknown): DispatchTaskReplyError | null {
+  const record = replyRecord(value);
+  const toolCallId = record && replyText(record['toolCallId'], DISPATCH_TASK_REPLY_LIMITS.idLength);
+  const message = record && replyText(record['message'], DISPATCH_TASK_REPLY_LIMITS.summaryLength);
+  if (!record || !toolCallId || !message) return null;
+  const fieldId = replyText(record['fieldId'], DISPATCH_TASK_REPLY_LIMITS.idLength);
+  const code = record['code'];
+  return {
+    toolCallId,
+    message,
+    ...(fieldId ? { fieldId } : {}),
+    ...(typeof code === 'string' &&
+    (DISPATCH_TASK_REPLY_ERROR_CODES as readonly string[]).includes(code)
+      ? { code: code as DispatchTaskReplyErrorCode }
+      : {}),
+  };
+}
+
+export function parseDispatchTaskReplies(value: unknown): DispatchTaskStepReply[] | null {
+  const replies = replyList(value, DISPATCH_TASK_REPLY_LIMITS.steps, (entry) => {
+    const reply = replyRecord(entry);
+    if (!reply) return null;
+    const toolCallId = replyText(reply['toolCallId'], DISPATCH_TASK_REPLY_LIMITS.idLength);
+    if (!toolCallId) return null;
+    if (reply['kind'] === 'approval') {
+      return typeof reply['approved'] === 'boolean'
+        ? { toolCallId, kind: 'approval' as const, approved: reply['approved'] }
+        : null;
+    }
+    if (reply['kind'] !== 'input') return null;
+    const inputKey = replyText(reply['inputKey'], DISPATCH_TASK_REPLY_LIMITS.idLength);
+    const values = replyRecord(reply['values']);
+    if (!inputKey || !values) return null;
+    const entries = Object.entries(values);
+    if (
+      entries.length > DISPATCH_TASK_REPLY_LIMITS.fields ||
+      entries.some(
+        ([key, text]) =>
+          key.length > DISPATCH_TASK_REPLY_LIMITS.idLength ||
+          typeof text !== 'string' ||
+          text.length > DISPATCH_TASK_REPLY_LIMITS.valueLength,
+      )
+    ) {
+      return null;
+    }
+    return {
+      toolCallId,
+      kind: 'input' as const,
+      inputKey,
+      values: Object.fromEntries(entries) as Record<string, string>,
+    };
+  });
+  return replies && replies.length > 0 ? replies : null;
+}
 
 export type DispatchTaskLifecycleStatus =
   | 'accepted'
@@ -368,6 +577,8 @@ export interface DispatchTaskStatusEvent {
   message?: string;
   result?: string;
   error?: string;
+  pending?: DispatchTaskPendingStep[];
+  replyError?: DispatchTaskReplyError;
   updatedAt: string;
 }
 

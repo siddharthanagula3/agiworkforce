@@ -10,15 +10,12 @@ nothing is left.
 
 - Done when: Inside a notebook, a source list sits beside the conversation so the user can see what grounds the answers.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sources are a tab on the project screen, not beside the conversation. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-199`, `apps/mobile/src/features/projects/store.ts:137-137`
 
 ## S37.06: Add files.
 
@@ -38,13 +35,13 @@ Code: `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:199-19
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Google Drive and Slack tiles in Add sources only open the connectors page; nothing is imported from them into the project. | handler |
-| desktop | partial | The Google Drive and Slack tiles in Add sources only open the connectors page; nothing is imported from them into the project. | handler |
+| web | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
+| desktop | partial | owner: set GOOGLE_PICKER_API_KEY and GOOGLE_PICKER_APP_ID (same GCP project as the Drive client; apps/web/app/api/connectors/google-drive/picker/route.ts:17); then live-check the Picker, including inside Electron | config |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps/web/features/projects/components/AddSourcesModal.tsx:282-282`
+Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`
 
 ## S37.11: Add written note.
 
@@ -62,30 +59,12 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps
 
 - Done when: Chats in the notebook answer from its sources.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | L4: the code settles it. Mobile's completions payload (InitialStreamRequest) has no conversation_id, and the server loads project sources only inside the `chatRequest.conversation_id ?` leg, so project knowledge never reaches a mobile turn; only the locally prepended instructions apply. partial, miss [handler]; remaining: 'Mobile turns send no conversation_id, so the server never retrieves project knowledge; only the project's instructions (prepended locally) apply.' |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | L4: settle-able from code. managedTurnPersistencePayload adds conversation_id only once the conversation is bound server-side (cloudSync.conversationId); the first turn of a new chat is sent without it and is answered without project sources. The project binding travels with the synced conversation entry (projectId in the stored entry, synced by the background SYNC_CONVERSATION to /api/chat/conversations), so from the next turn the server finds the row and loadProjectContext runs. partial, miss [handler]; remaining: 'Project sources ground a chrome chat only from the turn after the conversation is first synced and bound; the first turn of a new chat is sent without conversation_id.' |  |
-
-## S37.16: Saved chat responses.
-
-- Done when: The user can save a chat response into the notebook (as a note or source) in one action.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S37.17: Notebook notes.
-
-- Done when: The notebook holds user notes that can be listed, opened and edited.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
 
 ## S37.19: Citation-linked navigation.
 
@@ -203,37 +182,3 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S37.35: Notebook export.
-
-- Done when: The user can export a notebook (sources, notes, chats) as a file.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S37.37: Notebook-to-main-chat context handoff.
-
-- Done when: From the main chat the user can bring a notebook's context into the conversation.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The chat project selector applies only the project's instructions (local system message); its sources are not brought in on mobile. | handler |
-| chrome | partial | Selecting a project binds the chat to it and project instructions and sources apply from the next turn, but the first turn of a new chat is sent before the binding and is answered without project context. | handler |
-
-Code: `apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx:38-38`, `apps/mobile/stores/chat/chatExecutionStore.ts:1348-1348`, `apps/extension/src/side_panel.ts:6421-6421`
-
-## S37.38: Cross-application notebook synchronization.
-
-- Done when: A notebook and its sources and notes are available in every app the user signs into.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | VS Code shows projects and their knowledge files read-only; nothing else from the notebook. | ui |
-| chrome | partial | The Chrome side panel lists projects and recent chat titles, but not their sources or notes. | ui |
-
-Code: `apps/extension-vscode/src/features/projects/projectsTree.ts:87-87`, `apps/extension-vscode/src/features/projects/projectActions.ts:133-133`, `apps/extension-vscode/src/features/projects/projectsClient.ts:48-48`, `apps/extension/src/features/side-panel/projectsDrawer.ts:489-489`

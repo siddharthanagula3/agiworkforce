@@ -7,6 +7,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { DimensionValue } from 'react-native';
 import { useThemeColors } from '@/src/ui/theme';
+import { motion } from '@/src/ui/theme/tokens';
 
 interface SkeletonProps {
   width?: DimensionValue;
@@ -20,7 +21,7 @@ export function Skeleton({ width, height = 16, borderRadius = 8, className = '' 
   const opacity = useSharedValue(0.3);
 
   useEffect(() => {
-    opacity.value = withRepeat(withTiming(0.7, { duration: 1000 }), -1, true);
+    opacity.value = withRepeat(withTiming(0.7, { duration: motion.pulse }), -1, true);
   }, [opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({

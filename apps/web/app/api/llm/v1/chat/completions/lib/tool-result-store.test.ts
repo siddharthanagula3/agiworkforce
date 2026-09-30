@@ -4,11 +4,17 @@ import { createMemoryKeyValueStore, type KeyValueStore } from '@agiworkforce/key
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
 const store = vi.hoisted(() => ({ value: null as KeyValueStore | null }));
 vi.mock('@/lib/server/key-value', () => ({
+  getKeyValueProvider: vi.fn(),
+  getKeyValueRateLimiter: vi.fn(),
   getKeyValueStore: () => store.value,
 }));
 

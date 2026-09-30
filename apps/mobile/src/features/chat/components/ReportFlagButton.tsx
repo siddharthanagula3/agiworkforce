@@ -19,15 +19,16 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Flag } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import {
   openSupportEmail,
   saveContentReport,
@@ -112,8 +113,8 @@ export function ReportFlagButton({
         sendEmail,
       });
       setSaved(result);
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Report could not be saved.');
+    } catch {
+      setErrorMessage('Report could not be saved on this device. Free up space and try again.');
     } finally {
       setLoading(false);
     }
@@ -132,7 +133,7 @@ export function ReportFlagButton({
 
   return (
     <>
-      <Pressable
+      <PressableBox
         testID="report-flag-button"
         onPress={handleOpen}
         accessibilityRole="button"
@@ -142,7 +143,7 @@ export function ReportFlagButton({
       >
         <Flag size={12} color={colors.textMuted} />
         <Text style={[styles.flagLabel, { color: colors.textMuted }]}>Report</Text>
-      </Pressable>
+      </PressableBox>
 
       <Modal
         visible={modalVisible}
@@ -155,7 +156,7 @@ export function ReportFlagButton({
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <Pressable
+          <PressableBox
             style={[styles.backdrop, { backgroundColor: colors.scrim }]}
             onPress={handleClose}
           />
@@ -170,7 +171,7 @@ export function ReportFlagButton({
                   {DELIVERY_BODY[saved.delivery.kind]}
                 </Text>
                 {saved.delivery.kind !== 'email-composer-opened' && (
-                  <Pressable
+                  <PressableBox
                     testID="report-email-handoff-btn"
                     onPress={() => void handleEmailHandoff()}
                     disabled={loading}
@@ -186,9 +187,9 @@ export function ReportFlagButton({
                         Email this report to support
                       </Text>
                     )}
-                  </Pressable>
+                  </PressableBox>
                 )}
-                <Pressable
+                <PressableBox
                   testID="report-close-btn"
                   onPress={handleClose}
                   accessibilityRole="button"
@@ -208,7 +209,7 @@ export function ReportFlagButton({
                   >
                     Done
                   </Text>
-                </Pressable>
+                </PressableBox>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -227,7 +228,7 @@ export function ReportFlagButton({
                 {/* Category picker */}
                 <View style={styles.categoryList}>
                   {CATEGORIES.map((cat) => (
-                    <Pressable
+                    <PressableBox
                       key={cat.id}
                       testID={`report-category-${cat.id}`}
                       onPress={() => setSelectedCategory(cat.id)}
@@ -258,7 +259,7 @@ export function ReportFlagButton({
                       <Text style={[styles.categoryLabel, { color: colors.textPrimary }]}>
                         {cat.label}
                       </Text>
-                    </Pressable>
+                    </PressableBox>
                   ))}
                 </View>
 
@@ -287,7 +288,7 @@ export function ReportFlagButton({
                 />
 
                 {/* Email hand-off opt-in, the only path off this device */}
-                <Pressable
+                <PressableBox
                   testID="report-email-toggle"
                   onPress={() => setSendEmail((v) => !v)}
                   accessibilityRole="button"
@@ -306,7 +307,13 @@ export function ReportFlagButton({
                     ]}
                   >
                     {sendEmail && (
-                      <Text style={{ color: colors.accentText, fontSize: 10, fontWeight: '700' }}>
+                      <Text
+                        style={{
+                          color: colors.accentText,
+                          fontSize: typeScale.caption,
+                          fontWeight: '700',
+                        }}
+                      >
                         ✓
                       </Text>
                     )}
@@ -319,7 +326,7 @@ export function ReportFlagButton({
                       Opens your mail app with the report filled in.
                     </Text>
                   </View>
-                </Pressable>
+                </PressableBox>
 
                 {errorMessage && (
                   <Text
@@ -327,7 +334,7 @@ export function ReportFlagButton({
                     accessibilityRole="alert"
                     style={{
                       color: colors.agentError,
-                      fontSize: 13,
+                      fontSize: typeScale.footnote,
                       lineHeight: 18,
                       marginBottom: 12,
                     }}
@@ -337,7 +344,7 @@ export function ReportFlagButton({
                 )}
 
                 {/* Save, "submit" would name a transmission that does not happen */}
-                <Pressable
+                <PressableBox
                   testID="report-submit-btn"
                   onPress={handleSubmit}
                   disabled={!selectedCategory || loading}
@@ -358,16 +365,16 @@ export function ReportFlagButton({
                       Save report
                     </Text>
                   )}
-                </Pressable>
+                </PressableBox>
 
-                <Pressable
+                <PressableBox
                   testID="report-cancel-btn"
                   onPress={handleClose}
                   accessibilityRole="button"
                   style={styles.cancelBtn}
                 >
                   <Text style={[styles.cancelBtnText, { color: colors.textMuted }]}>Cancel</Text>
-                </Pressable>
+                </PressableBox>
               </ScrollView>
             )}
           </View>
@@ -386,7 +393,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   flagLabel: {
-    fontSize: 11,
+    fontSize: typeScale.caption,
   },
   backdrop: {
     flex: 1,
@@ -394,17 +401,17 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 24,
+    padding: dialogPadding,
     paddingBottom: 40,
     maxHeight: '85%',
   },
   sheetTitle: {
-    fontSize: 18,
+    fontSize: typeScale.headline,
     fontWeight: '700',
     marginBottom: 6,
   },
   sheetSubtitle: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     lineHeight: 20,
     marginBottom: 20,
   },
@@ -427,18 +434,18 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   categoryLabel: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     flex: 1,
   },
   noteLabel: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     marginBottom: 8,
   },
   noteInput: {
     borderRadius: 10,
     borderWidth: 1,
     padding: 12,
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     lineHeight: 20,
     minHeight: 80,
     textAlignVertical: 'top',
@@ -463,10 +470,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   emailLabel: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
   emailCaption: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     lineHeight: 16,
   },
   submitBtn: {
@@ -477,21 +484,21 @@ const styles = StyleSheet.create({
   },
   submitBtnText: {
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: typeScale.callout,
   },
   cancelBtn: {
     paddingVertical: 12,
     alignItems: 'center',
   },
   cancelBtnText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
   resultContainer: {
     alignItems: 'center',
     paddingVertical: 16,
   },
   resultBody: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,

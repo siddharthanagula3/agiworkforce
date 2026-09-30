@@ -42,30 +42,12 @@ nothing is left.
 
 - Done when: User attaches one or more reference images in dedicated slots that guide the generation.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Exactly one reference photo, only with an edit-capable model; no slots. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:163-169`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:376-380`
-
-## S44.06: Prompt enhancement with user control.
-
-- Done when: User can have the product rewrite/enhance the image prompt and review or reject the rewrite before generating.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | partial | Shows a provider revisedPrompt under the image, but the user never sees or controls a rewrite before generating. | ui, handler |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/GeneratedImage.tsx:165-170`
 
 ## S44.07: Aspect-ratio selector.
 
@@ -81,27 +63,21 @@ Code: `apps/mobile/src/features/chat/components/GeneratedImage.tsx:165-170`
 
 - Done when: User asks for a transparent background on the generated image.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Route supports transparent_background on OpenAI edits; mobile never sends it. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/managed-media.ts:99-101`
 
 ## S44.18: Cancel generation.
 
 - Done when: User stops an image generation in progress and the job is cancelled (not billed further).
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Stop only marks the message stopped on the phone; it never calls the cancel route, so the server job continues. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatMessageStore.ts:885-893`, `apps/web/app/api/media/image/cancel/route.ts:26-30`
 
 ## S44.19: Retry generation.
 
@@ -149,14 +125,11 @@ Code: `apps/mobile/stores/chat/chatMessageStore.ts:885-893`, `apps/web/app/api/m
 
 - Done when: User can see the prompt and generation settings (model, ratio, size, quality) used for an image.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Prompt shows in the full-screen viewer and Library; model and settings are not shown for the image. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`
 
 ## S44.24: Reuse prompt.
 
@@ -173,14 +146,11 @@ Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:220-224`
 
 - Done when: User regenerates with the same settings (model, ratio) as an earlier image.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Model and ratio stay selected in the sheet, but an earlier image's settings cannot be restored. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`
 
 ## S44.27: Save to Library.
 
@@ -208,28 +178,22 @@ Code: `apps/mobile/src/features/chat/actions/mediaMode.ts:48-55`
 
 - Done when: User downloads the generated image at full quality.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only through the OS share sheet (which may offer Save Image); no direct Save to Photos. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`, `apps/mobile/services/fileCreation.ts:395-408`
 
 ## S44.30: Copy image.
 
 - Done when: User copies the image itself to the clipboard.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only via the OS share sheet; no Copy image action. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/services/fileCreation.ts:395-408`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx:175-183`
 
 ## S44.33: Edit image.
 

@@ -9,7 +9,7 @@ import { resolveGeneratedVideoUri } from './videoUri';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
 import type { ManagedMediaVideoGenerationRequest } from '@agiworkforce/cloud-contracts';
 
-export type VideoGenRequest = ManagedMediaVideoGenerationRequest;
+export type VideoGenRequest = ManagedMediaVideoGenerationRequest & { conversation_id?: string };
 
 export interface VideoGenStartResponse {
   success?: boolean;
@@ -42,12 +42,24 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export function supportedVideoDurationSecs(
+  model: string,
+  aspectRatio: string | undefined,
+  resolution: string | undefined,
+): number | undefined {
+  const quality = getVideoQualityOptionsForModel(model, aspectRatio).find(
+    (option) => option.id === resolution,
+  );
+  return getVideoDurationOptionsForModel(model, quality)[0];
+}
+
 export function withSupportedVideoDuration(request: VideoGenRequest): VideoGenRequest {
   if (request.duration_secs !== undefined || !request.model) return request;
-  const quality = getVideoQualityOptionsForModel(request.model, request.aspect_ratio).find(
-    (option) => option.id === request.resolution,
+  const durationSecs = supportedVideoDurationSecs(
+    request.model,
+    request.aspect_ratio,
+    request.resolution,
   );
-  const [durationSecs] = getVideoDurationOptionsForModel(request.model, quality);
   return durationSecs === undefined ? request : { ...request, duration_secs: durationSecs };
 }
 

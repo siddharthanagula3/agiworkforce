@@ -1,9 +1,13 @@
 import { isManagedMediaIdempotencyKey, parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 
 const mockPost = jest.fn();
+const mockGet = jest.fn();
 
 jest.mock('@/services/api', () => ({
-  api: { post: (...args: unknown[]) => mockPost(...args) },
+  api: {
+    post: (...args: unknown[]) => mockPost(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+  },
   ApiPaywallError: class extends Error {},
 }));
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { imageGen: true } }));
@@ -12,6 +16,7 @@ jest.mock('expo-crypto', () => ({
 }));
 
 import { generateImage } from '../src/features/image/services/imagegen';
+import { ApiHttpError } from '../services/apiErrors';
 
 function sentHeaders(): Record<string, string> {
   const options = mockPost.mock.calls[0]?.[2] as { headers?: Record<string, string> } | undefined;
@@ -62,14 +67,80 @@ describe('generateImage, idempotency', () => {
     expect(sentHeaders()['Idempotency-Key']).not.toBe(first);
   });
 
-  it('still posts the request body unchanged', async () => {
+  it('submits the request as a durable job', async () => {
     await generateImage({ prompt: 'an anime character' });
 
     expect(mockPost).toHaveBeenCalledWith(
       '/api/media/image/generate',
-      { prompt: 'an anime character' },
+      { prompt: 'an anime character', async: true },
       expect.objectContaining({ headers: expect.any(Object) }),
     );
+  });
+
+  it('follows a queued job until it completes', async () => {
+    jest.useFakeTimers();
+    const jobId = '0190a000-0000-4000-8000-000000000001';
+    mockPost.mockResolvedValue({ success: true, job_id: jobId, status: 'queued', images: [] });
+    mockGet
+      .mockResolvedValueOnce({ success: true, job_id: jobId, status: 'processing', images: [] })
+      .mockResolvedValueOnce({
+        success: true,
+        job_id: jobId,
+        status: 'completed',
+        images: [{ url: '/api/files/0190a000-0000-4000-8000-000000000002' }],
+      });
+
+    const pending = generateImage({ prompt: 'a lighthouse' });
+    for (let i = 0; i < 3; i += 1) {
+      await jest.advanceTimersByTimeAsync(2_000);
+    }
+    const result = await pending;
+
+    expect(mockGet).toHaveBeenCalledWith(`/api/media/image/status?job_id=${jobId}`);
+    expect(result.status).toBe('completed');
+    expect(result.images?.[0]?.url).toBe('/api/files/0190a000-0000-4000-8000-000000000002');
+    jest.useRealTimers();
+  });
+
+  it('falls back to a direct request where durable jobs are not deployed', async () => {
+    mockPost
+      .mockRejectedValueOnce(
+        new ApiHttpError(
+          'Durable image jobs are not available',
+          503,
+          'image_job_store_unavailable',
+        ),
+      )
+      .mockResolvedValueOnce({ success: true, images: [{ url: 'https://cdn.test/x.png' }] });
+
+    const result = await generateImage({ prompt: 'a lighthouse' });
+
+    expect(mockPost).toHaveBeenLastCalledWith(
+      '/api/media/image/generate',
+      { prompt: 'a lighthouse' },
+      expect.objectContaining({ headers: expect.any(Object) }),
+    );
+    expect(result.images?.[0]?.url).toBe('https://cdn.test/x.png');
+  });
+
+  it('keeps the fallback key stable across retries of the same turn', async () => {
+    const unavailable = () =>
+      new ApiHttpError('Durable image jobs are not available', 503, 'image_job_store_unavailable');
+    mockPost.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce({ success: true });
+    await generateImage({ prompt: 'a lighthouse' }, { operationId: 'turn-operation-1' });
+    const first = (mockPost.mock.calls[1]?.[2] as { headers: Record<string, string> }).headers[
+      'Idempotency-Key'
+    ];
+
+    mockPost.mockReset();
+    mockPost.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce({ success: true });
+    await generateImage({ prompt: 'a lighthouse' }, { operationId: 'turn-operation-1' });
+    const second = (mockPost.mock.calls[1]?.[2] as { headers: Record<string, string> }).headers[
+      'Idempotency-Key'
+    ];
+
+    expect(second).toBe(first);
+    expect(isManagedMediaIdempotencyKey(first!)).toBe(true);
   });
 
   it('rejects an empty prompt before spending a key', async () => {

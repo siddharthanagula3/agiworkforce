@@ -39,6 +39,23 @@ describe('mobile IAP deployment catalog', () => {
     });
   });
 
+  it('keeps registered products verifiable after new purchases are switched off', () => {
+    const topUp = MOBILE_IAP_PRODUCT_DEFINITIONS.find(
+      (definition) => definition.kind === 'top_up',
+    )!;
+    process.env['MOBILE_IAP_ENABLED'] = 'false';
+    process.env['MOBILE_IAP_APPLE_PRODUCT_IDS_JSON'] = JSON.stringify({
+      [topUp.key]: 'fixture.apple.previous-topup',
+    });
+
+    expect(getMobileIapCatalogState('ios')).toMatchObject({ enabled: false, products: [] });
+    expect(resolveMobileIapProduct('ios', 'fixture.apple.previous-topup')).toMatchObject({
+      key: topUp.key,
+      productId: 'fixture.apple.previous-topup',
+    });
+    expect(resolveMobileIapProduct('ios', 'fixture.apple.unregistered')).toBeNull();
+  });
+
   it('rejects unknown keys and duplicate store IDs', () => {
     process.env['MOBILE_IAP_ENABLED'] = '1';
     process.env['MOBILE_IAP_GOOGLE_PRODUCT_IDS_JSON'] = JSON.stringify({

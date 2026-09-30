@@ -52,6 +52,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+const mockRevokeSessionIntent = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/mobile-intent-tokens')>()),
+  revokeSessionMobileIntentTokens: (...args: unknown[]) => mockRevokeSessionIntent(...args),
+}));
 
 vi.mock('@/lib/services/identity-events', () => ({
   handleIdentitySecurityEvent: (...args: unknown[]) => mockIdentityEvent(...(args as [])),
@@ -90,6 +95,7 @@ describe('DELETE /api/settings/sessions/[sessionId]', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ message: 'Session revoked', isCurrent: true });
     expect(mockRevokeSession).toHaveBeenCalledWith('sess_current');
+    expect(mockRevokeSessionIntent).toHaveBeenCalledWith({}, 'user-1', 'sess_current');
   });
 
   it('does not disclose or revoke another user session', async () => {
@@ -103,6 +109,7 @@ describe('DELETE /api/settings/sessions/[sessionId]', () => {
 
     expect(response.status).toBe(404);
     expect(mockRevokeSession).not.toHaveBeenCalled();
+    expect(mockRevokeSessionIntent).not.toHaveBeenCalled();
   });
 
   it('rejects malformed session identifiers before calling Clerk', async () => {

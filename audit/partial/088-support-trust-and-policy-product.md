@@ -10,16 +10,12 @@ nothing is left.
 
 - Done when: Screens that need explaining link straight to the matching help or docs article for that feature.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | /docs and /help now honour ?topic= (permissions opens the tool approvals guide; ids, section headings and tags resolve). No help article covers CLI configuration (config.toml) or local custom instructions yet, so those two VS Code links land on the index with a notice; the CLI lane would write and claim-index those two guides. | content |
-| chrome | partial | Only the prompt-injection onboarding has a contextual "Learn more" (to /security); every other help entry is the generic help centre link. | ui |
-
-Code: `apps/web/lib/support/doc-topics.ts:7-7`, `apps/web/lib/support/doc-topics.ts:25-25`, `apps/web/app/docs/page.tsx:128-128`, `apps/web/app/docs/page.tsx:151-151`
 
 ## S88.02: Searchable help center.
 
@@ -41,55 +37,25 @@ Code: `apps/web/lib/support/doc-topics.ts:7-7`, `apps/web/lib/support/doc-topics
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S88.04: Report-a-bug flow.
-
-- Done when: A user can report a bug from the product, with enough context (build, platform) for support to act.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Sends bug reports to GitHub issues, not the ticket or email channel the support page names; whether that repository accepts public issues is unconfirmed. | handler |
-
-Code: `apps/cli/src/claude_parity.rs:129-131`
-
 ## S88.05: Product feedback.
 
 - Done when: Users can send general product feedback from inside the product and it is stored for the team.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/claude_parity.rs:129-131`
 
 ## S88.06: Feature request.
 
 - Done when: Users can submit a feature request from inside the product and it is stored for the team.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/claude_parity.rs:129-131`
-
-## S88.07: User-reviewable diagnostic bundle.
-
-- Done when: A user can produce a diagnostic bundle, see what it contains, and choose to share it with support.
-- Wave: 2
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The CLI has a redacted support-diagnostics builder, but nothing calls it; users only get the doctor report. | mount |
-
-Code: `apps/cli/src/diagnostics_bundle.rs:52-67`
 
 ## S88.10: Service-status integration.
 
@@ -162,11 +128,8 @@ Code: `apps/cli/src/diagnostics_bundle.rs:52-67`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile imports memory from an exported file only; no guided migration of other data or settings. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
 
 ## S88.16: Privacy-rights request portal.
 
@@ -194,11 +157,10 @@ Code: `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
 
 - Done when: When a response is refused for safety reasons, the user can appeal or report the refusal from that notice.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The searches covered appeal vocabulary only. The criterion is "appeal or report the refusal from that notice". Mobile renders no safety-refusal notice (the only refusal token is a finish-reason enum in agentActivityState.ts:40), but every finished assistant turn, including a refusal, carries the Report flag with a category modal that posts to /api/mobile/content-report, so a user can report the refusal from where it appears. No appeal category and no refusal-specific notice. Suggested cell: partial, miss [ui], remaining "Show a safety-refusal notice and offer an appeal from it; today only the generic per-message Report flag exists." |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -237,7 +199,7 @@ Code: `apps/mobile/app/(app)/settings/memory-import.tsx:5-8`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: no SOC 2 report, ISO 27001 certificate or penetration test report exists to publish. What the trust page honestly offers is in place: a dated posture ledger, the documents behind each row, the audit-report row saying none exists, and questionnaires answered on request (enterprise security guide) | owner |
-| desktop | partial | Owner: no SOC 2 report, ISO 27001 certificate or penetration test report exists to publish. What the trust page honestly offers is in place: a dated posture ledger, the documents behind each row, the audit-report row saying none exists, and questionnaires answered on request (enterprise security guide) | owner |
+| web | partial | owner: commission SOC 2, ISO 27001 and a third-party penetration test and publish the reports on the trust page | owner |
+| desktop | partial | owner: commission SOC 2, ISO 27001 and a third-party penetration test and publish the reports on the trust page | owner |
 
 Code: `apps/web/app/trust/page.tsx:79-79`, `apps/web/app/trust/page.tsx:42-42`, `apps/web/content/support/enterprise-security.md:21-21`

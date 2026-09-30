@@ -27,13 +27,11 @@
  *   - `surface`, `getPlatformCapabilities(surface)`, the existing PLATFORM
  *     capability matrix (`../capabilities.ts`), not a parallel vocabulary.
  *   - `settings`, the operator kill switches resolved by the caller from
- *     `lib/feature-flags/capability-gate`, and nothing else. No per-capability
- *     USER-settings store exists for web today (checked:
- *     `profiles.routing_preferences` is a routing/geo preference, not a
- *     capability toggle; `useChatStream`'s `webSearchEnabled` is a per-turn
- *     composer choice, not a persisted account setting), so with no switch
- *     thrown this layer still imposes no restriction rather than fabricating
- *     a denial with no backing data. See the module-level TODO below.
+ *     `lib/feature-flags/capability-gate`, and the capabilities the account
+ *     turned off itself (the Capabilities settings' cloud code execution
+ *     toggle, read by `resolveCloudCodeExecutionPolicy`), and the workspace
+ *     features an administrator turned off for the member (Deep Research, AGI
+ *     Work, skills, plugins), each denied with its own reason.
  *
  * Every layer starts from "grant everything" (`ALL_PLATFORM_CAPABILITIES`)
  * and SUBTRACTS only the specific ids it has real evidence to restrict. This
@@ -42,9 +40,6 @@
  * this codebase, and defaulting them to denied would be a capability-honesty
  * violation in the other direction (falsely claiming a restriction that does
  * not exist), free users obviously can chat.
- *
- * TODO(web-settings): once a real per-capability user-settings store exists,
- * `buildSettingsLayerGrant` should subtract it as well as the kill switches.
  */
 import 'server-only';
 
@@ -57,6 +52,7 @@ import {
   isCapabilityDocumentStale,
   modelsCatalog,
   surfaceCapabilityGrant,
+  type CapabilityDenialReason,
   type CapabilityDocumentRef,
   type CapabilityLayerGrant,
   type CapabilityLimit,
@@ -75,7 +71,7 @@ import {
 
 type CatalogModelCapabilityKey = Extract<
   keyof ModelCapabilities,
-  'search' | 'research' | 'codeExecution'
+  'search' | 'research' | 'codeExecution' | 'agentic' | 'videoGen'
 >;
 
 function catalogHasModelWithCapability(key: CatalogModelCapabilityKey): boolean {
@@ -93,6 +89,8 @@ function buildModelLayerGrant(cloudExecutionDeploymentEnabled: boolean): Capabil
   }
   if (!catalogHasModelWithCapability('search')) granted.delete('canUseWebSearch');
   if (!catalogHasModelWithCapability('research')) granted.delete('canUseDeepResearch');
+  if (!catalogHasModelWithCapability('agentic')) granted.delete('canUseAgiWork');
+  if (!catalogHasModelWithCapability('videoGen')) granted.delete('canUseVideoGeneration');
   return { layer: 'model', sourceId: `models.json@${modelsCatalog.version}`, granted };
 }
 
@@ -103,7 +101,11 @@ function buildTierLayerGrant(tier: string | null | undefined): CapabilityLayerGr
   if (!policy.allowVoice) granted.delete('canUseVoice');
   if (!policy.allowMCP) granted.delete('canUseConnectors');
   if (!canUseBillingPlanCapability(tier, 'deep_research')) granted.delete('canUseDeepResearch');
+  if (!canUseBillingPlanCapability(tier, 'agi_work')) granted.delete('canUseAgiWork');
   if (!canUseBillingPlanCapability(tier, 'image_generation')) granted.delete('canUseImages');
+  if (!canUseBillingPlanCapability(tier, 'video_generation')) {
+    granted.delete('canUseVideoGeneration');
+  }
   return { layer: 'tier', sourceId: `tier:${policy.tier}`, granted };
 }
 
@@ -121,18 +123,38 @@ function buildSurfaceLayerGrant(surface: SyncedAppSurface): CapabilityLayerGrant
  */
 function buildSettingsLayerGrant(
   closedCapabilities: readonly PlatformCapability[],
+  userDisabledCapabilities: readonly PlatformCapability[],
+  workspaceDisabledCapabilities: readonly PlatformCapability[],
 ): CapabilityLayerGrant {
   const granted = allCapabilities();
+  const denialReasons: Partial<Record<PlatformCapability, CapabilityDenialReason>> = {};
+  for (const capability of userDisabledCapabilities) {
+    granted.delete(capability);
+    denialReasons[capability] = 'disabled_by_user';
+  }
+  for (const capability of workspaceDisabledCapabilities) {
+    granted.delete(capability);
+    denialReasons[capability] = 'disabled_by_workspace';
+  }
   for (const capability of closedCapabilities) granted.delete(capability);
-  if (closedCapabilities.length === 0) {
+  for (const capability of closedCapabilities) {
+    denialReasons[capability] = 'temporarily_unavailable';
+  }
+  const sources = [
+    ...(closedCapabilities.length > 0
+      ? [`kill-switch:${[...closedCapabilities].sort().join(',')}`]
+      : []),
+    ...(userDisabledCapabilities.length > 0
+      ? [`user:${[...userDisabledCapabilities].sort().join(',')}`]
+      : []),
+    ...(workspaceDisabledCapabilities.length > 0
+      ? [`workspace:${[...workspaceDisabledCapabilities].sort().join(',')}`]
+      : []),
+  ];
+  if (sources.length === 0) {
     return { layer: 'settings', sourceId: 'settings:none-configured', granted };
   }
-  return {
-    layer: 'settings',
-    sourceId: `kill-switch:${[...closedCapabilities].sort().join(',')}`,
-    granted,
-    denialReason: 'temporarily_unavailable',
-  };
+  return { layer: 'settings', sourceId: sources.join(';'), granted, denialReasons };
 }
 
 export interface CapabilityLimitResets {
@@ -240,7 +262,7 @@ function buildLimits(
   ) {
     limits.push({
       id: 'video_seconds_per_month',
-      capabilityId: null,
+      capabilityId: 'canUseVideoGeneration',
       limit: policy.videoSecondsPerMonth,
       unit: 'video_seconds',
       window: 'month',
@@ -271,6 +293,10 @@ export interface BuildMeCapabilityHandshakeInput {
   cloudExecutionDeploymentEnabled: boolean;
   /** Capabilities an operator has switched off, from the kill-switch gate. */
   closedCapabilities?: readonly PlatformCapability[];
+  /** Capabilities the account turned off in its own settings. */
+  userDisabledCapabilities?: readonly PlatformCapability[];
+  /** Capabilities the active workspace's feature access turns off for this member. */
+  workspaceDisabledCapabilities?: readonly PlatformCapability[];
   resets?: CapabilityLimitResets;
   computedAt?: string;
 }
@@ -284,7 +310,11 @@ export function buildMeCapabilityHandshake(
     model: buildModelLayerGrant(input.cloudExecutionDeploymentEnabled),
     tier: buildTierLayerGrant(input.tier),
     surface: buildSurfaceLayerGrant(input.surface),
-    settings: buildSettingsLayerGrant(input.closedCapabilities ?? []),
+    settings: buildSettingsLayerGrant(
+      input.closedCapabilities ?? [],
+      input.userDisabledCapabilities ?? [],
+      input.workspaceDisabledCapabilities ?? [],
+    ),
   };
   const limits = buildLimits(
     input.tier,

@@ -12,6 +12,8 @@ const MEMORY_WIRE = 'packages/contracts/types/src/memory-wire.ts';
 const MEMORY_RS = 'apps/cli/src/cloud/memory.rs';
 const PROJECTS_RS = 'apps/cli/src/cloud/projects.rs';
 const CLOUD_RS = 'apps/cli/src/cloud/mod.rs';
+const ARTIFACT_INDEX = 'packages/contracts/cloud-contracts/src/artifact-index.ts';
+const ARTIFACTS_RS = 'apps/cli/src/cloud/artifacts.rs';
 const CONSTANT_SOURCES = [SYNC, PROJECTS, MEMORY_WIRE];
 
 /**
@@ -143,6 +145,20 @@ export const STRUCT_PAIRS = [
     struct: 'ProjectConflict',
     ts: SYNC,
     shape: 'ProjectSyncConflictSchema',
+    direction: 'reads',
+  },
+  {
+    rust: ARTIFACTS_RS,
+    struct: 'ArtifactIndexEntry',
+    ts: ARTIFACT_INDEX,
+    shape: 'ManagedCloudArtifactIndexEntrySchema',
+    direction: 'reads',
+  },
+  {
+    rust: ARTIFACTS_RS,
+    struct: 'PublishedArtifact',
+    ts: ARTIFACT_INDEX,
+    shape: 'ManagedCloudPublishedArtifactSchema',
     direction: 'reads',
   },
 ];

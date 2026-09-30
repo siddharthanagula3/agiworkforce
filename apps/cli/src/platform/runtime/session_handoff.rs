@@ -73,6 +73,7 @@ pub fn file_change_record(change: &ManagedSessionFileChange) -> DeveloperSession
         kind: match change.kind {
             ManagedSessionFileChangeKind::Created => DeveloperFileChangeKind::Created,
             ManagedSessionFileChangeKind::Modified => DeveloperFileChangeKind::Modified,
+            ManagedSessionFileChangeKind::Deleted => DeveloperFileChangeKind::Deleted,
         },
         tool: change.tool.clone(),
         tool_call_id: change.tool_call_id.clone(),

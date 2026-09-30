@@ -35,7 +35,7 @@ import type {
   HandoffNextStep,
   HandoffQueueEntry,
   HandoffStatusResponse,
-} from './types';
+} from '@agiworkforce/cloud-contracts/support';
 
 export interface EscalateInput extends HandoffCreateRequest {
   ownerDb: DatabaseAdapter | null;

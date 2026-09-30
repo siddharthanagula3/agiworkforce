@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { MODEL_SAFE_FACT_KEYS, toModelSafeAccountFacts } from '../model-safe-facts';
-import type { SupportAccountContext } from '../types';
+import type { SupportAccountContext } from '@agiworkforce/cloud-contracts/support';
 
 function context(overrides: Partial<SupportAccountContext> = {}): SupportAccountContext {
   return {

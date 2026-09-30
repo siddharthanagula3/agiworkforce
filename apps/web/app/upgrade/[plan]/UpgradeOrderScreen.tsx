@@ -74,7 +74,7 @@ export function UpgradeOrderScreen({ plan }: { plan: SelfServeIndividualPlanTier
                 type="button"
                 aria-pressed={selected === capacity}
                 onClick={() => setSelected(capacity)}
-                className={`rounded-2xl border p-4 text-left text-sm transition-colors ${
+                className={`rounded-2xl border p-4 text-start text-sm transition-colors ${
                   selected === capacity
                     ? 'border-primary bg-primary/10'
                     : 'border-border bg-card hover:border-foreground/20'

@@ -16,6 +16,7 @@ import { DISCLOSURE_LEDGER_KEY, type DisclosureRecord } from '@agiworkforce/comp
 import {
   clearNamedProviderConsent,
   mmkvConsentLedger,
+  mmkvRoutingConsentLedger,
   mmkvDisclosureLedger,
   recordNamedProviderConsent,
 } from '../services/complianceLedger';
@@ -53,6 +54,7 @@ describe('mobile compliance ledger', () => {
   });
 
   it('persists named-provider consent by canonical provider id', () => {
+    mmkvDisclosureLedger.write(disclosureRecord());
     recordNamedProviderConsent({
       providerId: 'DeepSeek',
       accepted: true,
@@ -67,6 +69,24 @@ describe('mobile compliance ledger', () => {
       acceptedAt: '2026-05-20T12:01:00.000Z',
       disclosureVersion: 'hash-v1',
       surface: 'mobile',
+    });
+  });
+
+  it('rejects consent without an accepted matching disclosure', () => {
+    recordNamedProviderConsent({
+      providerId: 'qwen',
+      accepted: true,
+      acceptedAt: '2026-05-20T12:01:00.000Z',
+      disclosureVersion: 'unrecorded',
+      surface: 'mobile',
+    });
+    expect(mmkvRoutingConsentLedger.getNamedProviderConsent('qwen')).toBeNull();
+    mmkvDisclosureLedger.write(disclosureRecord());
+    expect(mmkvRoutingConsentLedger.getNamedProviderConsent('qwen')).toBeNull();
+    expect(mmkvConsentLedger.getNamedProviderConsent('qwen')).toMatchObject({
+      providerId: 'qwen',
+      accepted: true,
+      disclosureVersion: 'unrecorded',
     });
   });
 

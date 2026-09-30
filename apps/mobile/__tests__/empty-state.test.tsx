@@ -82,6 +82,7 @@ import { ChatEmptyState } from '../src/features/chat/components/ChatEmptyState';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
 
 const defaultPersonalization = {
   fullName: '',
@@ -101,6 +102,10 @@ function resetSettingsStore() {
   useChatAppModeStore.setState({ appMode: 'local' });
 }
 
+function greeting(name?: string): string {
+  return resolveGreetingHeadline(new Date(), name);
+}
+
 describe('ChatEmptyState', () => {
   beforeEach(() => {
     resetSettingsStore();
@@ -112,7 +117,7 @@ describe('ChatEmptyState', () => {
   describe('headline', () => {
     it('shows "Ask anything" when no display name is set', () => {
       const { getByText } = render(<ChatEmptyState />);
-      expect(getByText('Ask anything')).toBeTruthy();
+      expect(getByText(greeting())).toBeTruthy();
     });
 
     it('shows personalized greeting when nickname is set', () => {
@@ -131,7 +136,7 @@ describe('ChatEmptyState', () => {
       });
 
       const { getByText } = render(<ChatEmptyState />);
-      expect(getByText('Hi, Alex')).toBeTruthy();
+      expect(getByText(greeting('Alex'))).toBeTruthy();
     });
 
     it('uses first name from fullName when nickname is empty', () => {
@@ -150,7 +155,7 @@ describe('ChatEmptyState', () => {
       });
 
       const { getByText } = render(<ChatEmptyState />);
-      expect(getByText('Hi, Jane')).toBeTruthy();
+      expect(getByText(greeting('Jane'))).toBeTruthy();
     });
 
     it('uses the loaded Clerk identity immediately in Cloud before settings sync finishes', () => {
@@ -163,7 +168,7 @@ describe('ChatEmptyState', () => {
 
       const { getByText } = render(<ChatEmptyState />);
 
-      expect(getByText('Hi, Ada')).toBeTruthy();
+      expect(getByText(greeting('Ada'))).toBeTruthy();
     });
   });
 
@@ -218,7 +223,7 @@ describe('ChatEmptyState', () => {
       mockStorageGetString.mockReturnValue(undefined);
 
       const { getByText } = render(<ChatEmptyState showPairingBanner />);
-      expect(getByText('Ask anything')).toBeTruthy();
+      expect(getByText(greeting())).toBeTruthy();
     });
 
     it('shows the pairing banner while Desktop companion is available', () => {

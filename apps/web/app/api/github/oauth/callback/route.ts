@@ -3,9 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import {
   exchangeGitHubOAuthCode,
   findGitHubInstallationForUser,
@@ -14,7 +12,11 @@ import {
 import { logger } from '@/lib/logger';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  appInstallOwner,
+  appInstallReturnUrl,
+  linkVerifiedGitHubInstallation,
+} from '@/lib/github-install-app-return';
 
 const OAUTH_COOKIE_PATH = '/api/github/oauth/callback';
 const GITHUB_STATE_PATTERN = /^[a-f0-9]{64}$/i;
@@ -23,11 +25,24 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
+  const appState = new URL(request.url).searchParams.get('state');
+  if (appState && GITHUB_STATE_PATTERN.test(appState) && (await appInstallOwner(appState))) {
+    const params = new URL(request.url).searchParams;
+    const code = params.get('code');
+    return NextResponse.redirect(
+      appInstallReturnUrl({
+        state: appState,
+        code: code && code.length <= 512 ? code : null,
+        error: params.get('error') ? 'denied' : null,
+      }),
+    );
+  }
+
   let userId: string;
   try {
     ({ userId } = await getClerkAuthUser(request));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     const loginUrl = new URL('/login', request.url);
@@ -101,39 +116,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       return NextResponse.redirect(new URL('/connectors?github=ownership_failed', request.url));
     }
 
-    const db = getNeonDb();
-    const rows = await db.query<{ id: string }>(
-      `insert into github_installations (
-         user_id,
-         installation_id,
-         account_login,
-         account_type,
-         verified_repositories,
-         ownership_verified_at
-       )
-       values ($1, $2, $3, $4, $5, now())
-       on conflict (installation_id)
-       do update set
-         user_id = excluded.user_id,
-         account_login = excluded.account_login,
-         account_type = excluded.account_type,
-         verified_repositories = excluded.verified_repositories,
-         ownership_verified_at = now(),
-         access_token_enc = null,
-         access_token_expires_at = null
-       where github_installations.ownership_verified_at is null
-          or github_installations.user_id = excluded.user_id
-       returning id`,
-      [
-        userId,
-        verifiedInstallation.installationId,
-        verifiedInstallation.accountLogin,
-        verifiedInstallation.accountType,
-        verifiedInstallation.verifiedRepositories,
-      ],
-    );
-
-    if (rows.length === 0) {
+    const linked = await linkVerifiedGitHubInstallation(userId, verifiedInstallation);
+    if (!linked) {
       return NextResponse.redirect(new URL('/connectors?github=already_linked', request.url));
     }
   } catch (error) {

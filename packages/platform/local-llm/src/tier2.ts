@@ -76,6 +76,10 @@ let _loadedPresetVision = false;
 let _loadPromise: Promise<void> | null = null;
 let _loadGeneration = 0;
 
+export function tier2LoadedPresetName(): string | null {
+  return _instance ? _loadedPresetName : null;
+}
+
 export function tier2IsVisionReady(): boolean {
   return _instance !== null && _loadedPresetVision;
 }

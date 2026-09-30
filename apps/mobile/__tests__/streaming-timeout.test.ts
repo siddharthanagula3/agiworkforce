@@ -1,9 +1,12 @@
-
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { getProviderOfferings } from '@agiworkforce/types';
 
 const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
 const MODEL_ID = requireMobileCloudModel().id;
+const FREE_QWEN_ID = Object.entries(getProviderOfferings()).find(
+  ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
+)?.[0];
 
 const TEST_TIMEOUT_MS = 100;
 const TEST_STALL_MS = 600;
@@ -58,6 +61,17 @@ function makeCallbacks() {
       onDone: jest.fn(),
       onError: jest.fn(),
     },
+  };
+}
+
+function freeQuotaRequest() {
+  if (!FREE_QWEN_ID) throw new Error('Expected a Qwen chat offering in the shared catalog.');
+  return {
+    model: FREE_QWEN_ID,
+    conversation_id: '0190a000-0000-7000-8000-000000000024',
+    assistant_message_id: '0190a000-0000-7000-8000-000000000025',
+    messages: [{ role: 'user' as const, content: 'hi' }],
+    operationId: '0190a000-0000-7000-8000-000000000025',
   };
 }
 
@@ -183,6 +197,94 @@ describe('completions stream response timeout', () => {
     expect(callbacks.onError).toHaveBeenCalledTimes(1);
     const errArg = callbacks.onError.mock.calls[0][0] as Error;
     expect(errArg.message).toMatch(/timed out/i);
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+  });
+
+  it('keeps a provider-funded Qwen stream alive beyond the initial timeout when data arrives', async () => {
+    const { streamChat } = await loadStreamingService();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { ReadableStream } = require('node:stream/web');
+    const enc = new TextEncoder();
+
+    guardedFetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      const signal = init.signal;
+      const body = new ReadableStream({
+        start(c: {
+          enqueue: (u: Uint8Array) => void;
+          close: () => void;
+          error: (e: Error) => void;
+        }) {
+          c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"hello "}}]}\n\n'));
+          const t = setTimeout(() => {
+            c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"world"}}]}\n\n'));
+            c.enqueue(enc.encode('data: [DONE]\n\n'));
+            c.close();
+          }, TEST_TIMEOUT_MS * 3);
+          signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(t);
+              c.error(makeAbortError());
+            },
+            { once: true },
+          );
+        },
+      });
+      return Promise.resolve({ ok: true, status: 200, body } as unknown as Response);
+    });
+
+    const { deltas, callbacks } = makeCallbacks();
+    await streamChat(freeQuotaRequest(), callbacks);
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(deltas.join('')).toBe('hello world');
+    expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a provider-funded Qwen request timeout before any response arrives', async () => {
+    const { streamChat } = await loadStreamingService();
+    guardedFetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init.signal;
+        if (signal?.aborted) {
+          reject(makeAbortError());
+          return;
+        }
+        signal?.addEventListener('abort', () => reject(makeAbortError()), { once: true });
+      });
+    });
+
+    const { callbacks } = makeCallbacks();
+    await streamChat(freeQuotaRequest(), callbacks);
+
+    expect(callbacks.onError).toHaveBeenCalledTimes(1);
+    expect((callbacks.onError.mock.calls[0][0] as Error).message).toMatch(/timed out/i);
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+  });
+
+  it('reports a provider-funded Qwen stall as a timeout', async () => {
+    const { streamChat } = await loadStreamingService();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { ReadableStream } = require('node:stream/web');
+    const enc = new TextEncoder();
+
+    guardedFetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      const signal = init.signal;
+      const body = new ReadableStream({
+        start(c: { enqueue: (u: Uint8Array) => void; error: (e: Error) => void }) {
+          c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'));
+          signal?.addEventListener('abort', () => c.error(makeAbortError()), { once: true });
+        },
+      });
+      return Promise.resolve({ ok: true, status: 200, body } as unknown as Response);
+    });
+
+    const { deltas, callbacks } = makeCallbacks();
+    await streamChat(freeQuotaRequest(), callbacks);
+
+    expect(deltas.join('')).toBe('partial');
+    expect(callbacks.onError).toHaveBeenCalledTimes(1);
+    expect((callbacks.onError.mock.calls[0][0] as Error).message).toMatch(/timed out/i);
     expect(callbacks.onDone).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import { CODE_HOME_DEEP_LINK_ID } from '@agiworkforce/local-runtime-contract';
 import { SETTINGS_NAV, type SettingsNavKey } from '@agiworkforce/ui';
 import { productLinkUrl, type ProductLinkTarget } from '@agiworkforce/types';
 import { WEB_APP_URL } from '../api/config';
@@ -36,6 +37,12 @@ function openOnWeb(target: ProductLinkTarget, id: string): boolean {
   return true;
 }
 
+function openCodeOnWeb(id: string): boolean {
+  const path = id === CODE_HOME_DEEP_LINK_ID ? '/code' : `/code/${encodeURIComponent(id)}`;
+  void openExternalUrl(new URL(path, WEB_APP_URL).toString());
+  return true;
+}
+
 function openSettingsTab(id: string): boolean {
   const tab = id as SettingsTab;
   const canonical = (LEGACY_TAB_MAP[tab] ?? tab) as SettingsNavKey;
@@ -60,6 +67,8 @@ export function routeDesktopDeepLink(url: string): boolean {
       return openProject(link.id);
     case 'settings':
       return openSettingsTab(link.id);
+    case 'code':
+      return openCodeOnWeb(link.id);
     default:
       return openOnWeb(link.target, link.id);
   }

@@ -68,7 +68,6 @@ export function ProjectSettingsDialog({
     setUsesAccountStyle(project.usesAccountStyle !== false);
     setDefaultModelId(project.defaultModelId ?? null);
   }, [
-    project.id,
     project.name,
     project.description,
     project.instructions,
@@ -188,10 +187,13 @@ export function ProjectSettingsDialog({
     }
   };
 
+  const isHealthSpace = project.space === 'health';
   const requestDelete = () =>
     confirm({
-      title: 'Delete project?',
-      description: `“${project.name}” and its knowledge files will be permanently deleted, including the uploaded file contents. Conversations in this project will be moved to “All Chats”. This action cannot be undone.`,
+      title: isHealthSpace ? 'Delete Health?' : 'Delete project?',
+      description: isHealthSpace
+        ? 'Health, its chats, its files and its memories will be permanently deleted, including the uploaded file contents. Connected health records stay connected until you disconnect them. This action cannot be undone.'
+        : `“${project.name}” and its knowledge files will be permanently deleted, including the uploaded file contents. Conversations in this project will be moved to “All Chats”. This action cannot be undone.`,
       confirmLabel: 'Delete',
       onConfirm: handleDelete,
     });
@@ -221,7 +223,7 @@ export function ProjectSettingsDialog({
               <div className="relative">
                 <span
                   aria-hidden="true"
-                  className="absolute left-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground"
+                  className="absolute start-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground"
                 >
                   {project.iconEmoji ? (
                     <span className="text-base leading-none">{project.iconEmoji}</span>
@@ -237,7 +239,7 @@ export function ProjectSettingsDialog({
                   placeholder="Project name"
                   autoComplete="off"
                   maxLength={100}
-                  className="h-11 rounded-xl bg-muted/40 pl-10"
+                  className="h-11 rounded-xl bg-muted/40 ps-10"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void handleSave();
                   }}
@@ -388,8 +390,8 @@ export function ProjectSettingsDialog({
               className="order-3 col-span-2 w-full justify-center text-danger hover:bg-destructive/10 hover:text-danger sm:order-none sm:w-auto"
               onClick={requestDelete}
             >
-              <Trash2 className="mr-1.5 h-4 w-4" />
-              Delete project
+              <Trash2 className="me-1.5 h-4 w-4" />
+              {isHealthSpace ? 'Delete Health' : 'Delete project'}
             </Button>
 
             {/*
@@ -398,17 +400,19 @@ export function ProjectSettingsDialog({
               bitten by, a capability that exists and no user can reach.
             */}
             <div className="order-2 col-span-2 grid grid-cols-2 gap-2 sm:order-none sm:flex sm:items-center">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="w-full sm:w-auto"
-                disabled={isDuplicating}
-                onClick={() => void handleDuplicate()}
-              >
-                <Copy className="mr-1.5 h-4 w-4" />
-                {isDuplicating ? 'Duplicating…' : 'Duplicate'}
-              </Button>
+              {isHealthSpace ? null : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  disabled={isDuplicating}
+                  onClick={() => void handleDuplicate()}
+                >
+                  <Copy className="me-1.5 h-4 w-4" />
+                  {isDuplicating ? 'Duplicating…' : 'Duplicate'}
+                </Button>
+              )}
               {/*
                 This is intentionally a document link, not App Router
                 navigation: the route returns Content-Disposition: attachment,
@@ -416,7 +420,7 @@ export function ProjectSettingsDialog({
               */}
               <Button asChild variant="ghost" size="sm" className="w-full sm:w-auto">
                 <a href={`/api/projects/${project.id}/export`} download>
-                  <Download className="mr-1.5 h-4 w-4" />
+                  <Download className="me-1.5 h-4 w-4" />
                   Export
                 </a>
               </Button>

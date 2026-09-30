@@ -15,11 +15,21 @@ const ENTITLED = {
   subscriptionTier: 'max_15x',
   isClerkSignedIn: true,
   ownerId: 'user_123',
-  grantedCapabilities: ['canUseImages'],
+  grantedCapabilities: ['canUseImages', 'canUseVideoGeneration'],
   isOnline: true,
 };
 
 describe('resolveMobileVideoGenerationRequest', () => {
+  it('asks for the plan when only the image capability is granted', () => {
+    const decision = resolveMobileVideoGenerationRequest({
+      ...ENTITLED,
+      grantedCapabilities: ['canUseImages'],
+      text: 'a cat surfing',
+    });
+
+    expect(decision).toMatchObject({ status: 'blocked', code: 'plan_required' });
+  });
+
   it('admits a video-mode send on an entitled cloud account', () => {
     const decision = resolveMobileVideoGenerationRequest({ ...ENTITLED, text: 'a cat surfing' });
 

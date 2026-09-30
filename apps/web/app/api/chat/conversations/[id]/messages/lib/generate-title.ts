@@ -44,6 +44,7 @@ import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
+import { conversationKeepsOutOfTraining } from '@/lib/services/health-space-service';
 
 /** ~6 words at temperature 0; generous headroom over the sanitizer's own cap. */
 const MAX_OUTPUT_TOKENS = 24;
@@ -150,13 +151,24 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
   // user-facing chat turn, so it must not ride the user's paid model access.
   // Same selection primitive lib/support/agent/answer/model-route.ts uses for
   // its own bounded utility call; no model id is hardcoded here.
-  const routing = await sideCallRoutingRequest(input.db, input.userId, {
-    selection: 'auto',
-    taskType: 'simple_chat',
-    subscriptionTier: 'free',
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-  });
+  const routing = await sideCallRoutingRequest(
+    input.db,
+    input.userId,
+    {
+      selection: 'auto',
+      taskType: 'simple_chat',
+      subscriptionTier: 'free',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+    },
+    {
+      forceNoTraining: await conversationKeepsOutOfTraining(
+        input.db,
+        input.userId,
+        input.conversationId,
+      ),
+    },
+  );
   if (!routing) return;
   const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {

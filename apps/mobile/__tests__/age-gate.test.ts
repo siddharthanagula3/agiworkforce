@@ -123,14 +123,14 @@ describe('getAgeThreshold', () => {
     expect(getAgeThreshold()).toBe(18);
   });
 
-  it('returns 16 for EU timezone', () => {
+  it('returns the 18 account minimum in the EU, above its 16 consent age', () => {
     setTimezone('Europe/Berlin');
-    expect(getAgeThreshold()).toBe(16);
+    expect(getAgeThreshold()).toBe(18);
   });
 
-  it('returns 13 for default', () => {
+  it('returns the 18 account minimum where the regional consent age is 13', () => {
     setTimezone('America/New_York');
-    expect(getAgeThreshold()).toBe(13);
+    expect(getAgeThreshold()).toBe(18);
   });
 });
 
@@ -144,7 +144,7 @@ describe('confirmAgeGate', () => {
     const record = confirmAgeGate(20);
     expect(record.confirmed).toBe(true);
     expect(record.isMinor).toBe(false);
-    expect(record.threshold).toBe(13);
+    expect(record.threshold).toBe(18);
     expect(record.regionCode).toBe('DEFAULT');
     expect(isAgeGateConfirmed()).toBe(true);
     expect(isMinorMode()).toBe(false);
@@ -155,6 +155,14 @@ describe('confirmAgeGate', () => {
     expect(record.confirmed).toBe(true);
     expect(record.isMinor).toBe(true);
     expect(isMinorMode()).toBe(true);
+    expect(isAgeGateConfirmed()).toBe(false);
+  });
+
+  it('refuses a 17 year old where the regional consent age is 13', () => {
+    const record = confirmAgeGate(17);
+    expect(record.isMinor).toBe(true);
+    expect(record.threshold).toBe(18);
+    expect(isAgeGateConfirmed()).toBe(false);
   });
 
   it('marks adult for India threshold (18), age 18', () => {
@@ -175,13 +183,14 @@ describe('confirmAgeGate', () => {
     const record = confirmAgeGate(15);
     expect(record.isMinor).toBe(true);
     expect(record.regionCode).toBe('DE');
-    expect(record.threshold).toBe(16);
+    expect(record.threshold).toBe(18);
   });
 
-  it('marks adult for EU threshold (16), age 16', () => {
+  it('refuses a 16 year old in the EU, since an account needs 18', () => {
     setTimezone('Europe/Berlin');
     const record = confirmAgeGate(16);
-    expect(record.isMinor).toBe(false);
+    expect(record.isMinor).toBe(true);
+    expect(isAgeGateConfirmed()).toBe(false);
   });
 
   it('stores a valid ISO timestamp in confirmedAt', () => {
@@ -202,9 +211,16 @@ describe('isAgeGateConfirmed', () => {
     confirmAgeGate(20);
     expect(isAgeGateConfirmed()).toBe(true);
   });
+
+  it('returns false for a device refused an account', () => {
+    confirmAgeGate(15);
+    expect(isAgeGateConfirmed()).toBe(false);
+  });
 });
 
 describe('clearAgeGate', () => {
+  beforeEach(() => mockStorage.clear());
+
   it('removes the stored record', () => {
     confirmAgeGate(25);
     expect(isAgeGateConfirmed()).toBe(true);

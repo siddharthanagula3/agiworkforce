@@ -38,6 +38,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('../services/conversation-data-service', () => ({
+  listPublishedArtifactVersions: vi.fn(async () => []),
+  republishArtifactVersion: vi.fn(async () => undefined),
   listArchivedConversations: (...args: unknown[]) => mocks.listArchived(...args),
   restoreArchivedConversation: (...args: unknown[]) => mocks.restoreArchived(...args),
   listDeletedConversations: (...args: unknown[]) => mocks.listDeleted(...args),

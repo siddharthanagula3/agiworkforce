@@ -2,7 +2,7 @@
   "name": "agi-workforce",
   "displayName": "AGI Workforce",
   "description": "Multi-provider AI coding assistant for VS Code",
-  "version": "0.3.0",
+  "version": "0.0.1",
   "publisher": "agiworkforce",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
@@ -211,8 +211,23 @@
       },
       {
         "command": "agi-workforce.showSavedApprovals",
-        "title": "AGI Workforce: Saved Approvals",
+        "title": "AGI Workforce: Permissions",
         "icon": "$(shield)"
+      },
+      {
+        "command": "agi-workforce.chooseSessionTools",
+        "title": "AGI Workforce: Choose Tools for This Session",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "agi-workforce.manageProviderKeys",
+        "title": "AGI Workforce: Provider API Keys",
+        "icon": "$(key)"
+      },
+      {
+        "command": "agi-workforce.createPullRequest",
+        "title": "AGI Workforce: Create Pull Request",
+        "icon": "$(git-pull-request-create)"
       },
       {
         "command": "agi-workforce.showArchivedSessions",
@@ -722,6 +737,21 @@
         "icon": "$(lightbulb)"
       },
       {
+        "command": "agi-workforce.newSessionInWorktree",
+        "title": "AGI Workforce: New Session in a Worktree",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "agi-workforce.manageWorktrees",
+        "title": "AGI Workforce: Session Worktrees",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "agi-workforce.rememberForRepository",
+        "title": "AGI Workforce: Remember for This Repository",
+        "icon": "$(bookmark)"
+      },
+      {
         "command": "agi-workforce.showPlugins",
         "title": "AGI Workforce: Show Plugins",
         "icon": "$(extensions)"
@@ -1158,11 +1188,17 @@
           "scope": "resource",
           "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send."
         },
+        "agiWorkforce.respectGitIgnore": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Leave files that git ignores out of `@` file search, and send only the path of an ignored file that is open in the editor. Takes effect while `#search.useIgnoreFiles#` is also on."
+        },
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
           "default": false,
           "scope": "machine",
-          "description": "Send anonymous usage telemetry to help improve AGI Workforce"
+          "markdownDescription": "Send product usage events, such as stopping a response or accepting a suggested edit, to your AGI Workforce account when its [product analytics choice](https://agiworkforce.com/settings/privacy?from=vscode-extension) allows them, and scrubbed crash reports. Also subject to VS Code's telemetry setting."
         },
         "agiWorkforce.memory.enabled": {
           "type": "boolean",
@@ -1248,7 +1284,7 @@
           "type": "string",
           "default": "https://telemetry.agiworkforce.com/v1/events",
           "scope": "machine",
-          "description": "Endpoint URL for sending anonymous telemetry events"
+          "description": "Endpoint URL for scrubbed crash reports"
         },
         "agiWorkforce.currentTier": {
           "type": "string",
@@ -1364,10 +1400,12 @@
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
+    "@agiworkforce/i18n": "workspace:*",
     "@agiworkforce/ide-runtime": "workspace:*",
     "@agiworkforce/local-runtime-contract": "workspace:*",
     "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
+    "@agiworkforce/sync": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.4.15",

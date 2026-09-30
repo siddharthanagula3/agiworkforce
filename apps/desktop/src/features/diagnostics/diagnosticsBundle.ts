@@ -2,7 +2,7 @@ import { CLOUD_API_BASE_URL, cloudFetch, getAuthHeaders } from '../../api/cloudA
 import { invoke } from '../../utils/ipc';
 
 /**
- * Shape of apps/web/lib/support/diagnostics/types.ts. The server validates and
+ * Shape of supportDiagnosticsSchema in packages/contracts/cloud-contracts/src/support.ts. The server validates and
  * redacts it, so this build never writes a file the server has not cleaned.
  */
 export interface DesktopDiagnosticsBundle {

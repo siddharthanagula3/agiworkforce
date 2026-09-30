@@ -177,6 +177,16 @@ describe('GET /api/library', () => {
     expect((mockQuery.mock.calls[0] as [string])[0]).toContain('order by updated_at desc');
 
     mockQuery.mockClear();
+    await GET(makeRequest('?sort=oldest'));
+    expect((mockQuery.mock.calls[0] as [string])[0]).toContain('order by created_at asc');
+
+    mockQuery.mockClear();
+    await GET(makeRequest('?sort=type'));
+    expect((mockQuery.mock.calls[0] as [string])[0]).toContain(
+      "order by mime_type asc, coalesce(metadata->>'filename', kind) asc",
+    );
+
+    mockQuery.mockClear();
     await GET(makeRequest('?sort=name'));
     expect((mockQuery.mock.calls[0] as [string])[0]).toContain(
       "order by coalesce(metadata->>'filename', kind) asc",

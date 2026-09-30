@@ -1,15 +1,17 @@
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { collectDiagnostics } from '@/lib/support/diagnostics/collect';
 import { DIAGNOSTICS_EXPORT_PATH, type DiagnosticsExport } from '@/lib/support/diagnostics/export';
-import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
-import type { SupportTicket, SupportTicketReply, TicketStatus } from '@/lib/support/tickets/types';
-
-const TICKETS_PATH = '/api/support/tickets';
-
-export interface SupportTicketThread {
-  ticket: SupportTicket;
-  replies: SupportTicketReply[];
-}
+import {
+  type SupportDiagnostics,
+  type OpenedSupportTicket,
+  type SupportTicket,
+  type SupportTicketReply,
+  type SupportTicketThread,
+  type TicketStatus,
+  SUPPORT_APPEAL_PATH,
+  SUPPORT_TICKETS_PATH,
+  supportTicketPath,
+} from '@agiworkforce/cloud-contracts/support';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -58,10 +60,6 @@ async function mutate(
   return request(path, { method, headers, body: JSON.stringify(body) }, fallback);
 }
 
-function ticketPath(ticketId: string): string {
-  return `${TICKETS_PATH}/${encodeURIComponent(ticketId)}`;
-}
-
 function asThread(payload: Record<string, unknown>): SupportTicketThread {
   return {
     ticket: payload['ticket'] as SupportTicket,
@@ -71,7 +69,7 @@ function asThread(payload: Record<string, unknown>): SupportTicketThread {
 
 export async function listSupportTickets(): Promise<SupportTicket[]> {
   const payload = await request(
-    TICKETS_PATH,
+    SUPPORT_TICKETS_PATH,
     { method: 'GET', headers: { Accept: 'application/json' } },
     'Your tickets could not be loaded.',
   );
@@ -80,16 +78,11 @@ export async function listSupportTickets(): Promise<SupportTicket[]> {
 
 export async function readSupportTicket(ticketId: string): Promise<SupportTicketThread> {
   const payload = await request(
-    ticketPath(ticketId),
+    supportTicketPath(ticketId),
     { method: 'GET', headers: { Accept: 'application/json' } },
     'That ticket could not be opened.',
   );
   return asThread(payload);
-}
-
-export interface OpenedSupportTicket {
-  ticket: SupportTicket;
-  staffNotified: boolean;
 }
 
 export async function reviewSupportDiagnostics(): Promise<DiagnosticsExport> {
@@ -120,7 +113,7 @@ export async function openSupportTicket(input: {
     ? (input.reviewedDiagnostics ?? collectDiagnostics({ surface: 'web' }))
     : null;
   const payload = await mutate(
-    TICKETS_PATH,
+    SUPPORT_TICKETS_PATH,
     'POST',
     { subject: input.subject, message: input.message, ...(diagnostics ? { diagnostics } : {}) },
     'That ticket was not raised.',
@@ -136,7 +129,7 @@ export async function replyToSupportTicket(
   reply: string,
 ): Promise<SupportTicketThread> {
   const payload = await mutate(
-    ticketPath(ticketId),
+    supportTicketPath(ticketId),
     'PATCH',
     { reply },
     'That reply was not added.',
@@ -149,15 +142,13 @@ export async function moveSupportTicket(
   status: TicketStatus,
 ): Promise<SupportTicket> {
   const payload = await mutate(
-    ticketPath(ticketId),
+    supportTicketPath(ticketId),
     'PATCH',
     { status },
     'That ticket did not change.',
   );
   return payload['ticket'] as SupportTicket;
 }
-
-const APPEAL_PATH = '/api/support/appeal';
 
 function asAppeal(payload: Record<string, unknown>): SupportTicketThread | null {
   const appeal = payload['appeal'];
@@ -166,7 +157,7 @@ function asAppeal(payload: Record<string, unknown>): SupportTicketThread | null 
 
 export async function readSuspensionAppeal(): Promise<SupportTicketThread | null> {
   const payload = await request(
-    APPEAL_PATH,
+    SUPPORT_APPEAL_PATH,
     { method: 'GET', headers: { Accept: 'application/json' } },
     'Your appeal could not be loaded.',
   );
@@ -177,6 +168,6 @@ export async function submitSuspensionAppeal(input: {
   message: string;
   email?: string;
 }): Promise<SupportTicketThread | null> {
-  const payload = await mutate(APPEAL_PATH, 'POST', input, 'Your appeal was not sent.');
+  const payload = await mutate(SUPPORT_APPEAL_PATH, 'POST', input, 'Your appeal was not sent.');
   return asAppeal(payload);
 }

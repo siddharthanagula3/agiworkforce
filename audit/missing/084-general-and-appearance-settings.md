@@ -47,3 +47,9 @@ nothing is left.
 - Done when: The user can reset panel sizes and layout to defaults.
 - Wave: 5
 - Build on: web, desktop
+
+## S84.25: Experimental-feature enrollment.
+
+- Done when: The user can opt into experimental or preview features from settings.
+- Wave: 5
+- Build on: web, desktop, mobile, vscode, chrome

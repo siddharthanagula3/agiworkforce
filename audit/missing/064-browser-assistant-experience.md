@@ -36,6 +36,12 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
+## S64.13: Organize tabs.
+
+- Done when: The assistant groups, sorts or tidies the user's open tabs.
+- Wave: 4
+- Build on: desktop, cli, vscode
+
 ## S64.23: Take over.
 
 - Done when: The user takes over the browser mid-task without ending the assistant's run.

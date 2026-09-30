@@ -1,5 +1,6 @@
 import {
   isResearchStep,
+  type AgentEventSource,
   normalizeResearchDeliverable,
   type ResearchRunConfig,
   type ResearchStep,
@@ -112,7 +113,8 @@ function isAbsoluteWebUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
 
-type ResumeSource = { url: string; title?: string; snippet?: string; retrievedAt?: string };
+type ResumeSource = Omit<AgentEventSource, 'title'> &
+  Partial<Pick<AgentEventSource, 'title'>> & { retrievedAt?: string };
 
 export function researchResumeSources(
   sourcesForRetry: ResumeSource[] | undefined,

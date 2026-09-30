@@ -34,7 +34,7 @@ export type AgentRunNotificationEvent =
  */
 const MOBILE_NOTIFICATION_TYPE: Record<AgentRunNotificationEvent, string> = {
   approval_required: 'agent_approval_needed',
-  input_required: 'agent_paused',
+  input_required: 'agent_approval_needed',
   completed: 'task_completed',
   failed: 'agent_failed',
 };
@@ -48,12 +48,7 @@ const MOBILE_PRIORITY: Record<AgentRunNotificationEvent, string> = {
 };
 
 /** Routes mobile's `isAllowedRoute` accepts; anything else the client drops. */
-const MOBILE_ROUTE: Record<AgentRunNotificationEvent, string> = {
-  approval_required: '/(app)/companion',
-  input_required: '/(app)/agents',
-  completed: '/(app)/agents',
-  failed: '/(app)/agents',
-};
+const MOBILE_RUN_ROUTE = '/(app)/tasks';
 
 const FEED_SEVERITY: Record<AgentRunNotificationEvent, NotificationSeverity> = {
   approval_required: 'warning',
@@ -167,7 +162,7 @@ export async function notifyAgentRunEvent(
         data: {
           type: MOBILE_NOTIFICATION_TYPE[notice.event],
           priority: MOBILE_PRIORITY[notice.event],
-          route: MOBILE_ROUTE[notice.event],
+          route: MOBILE_RUN_ROUTE,
           runId: notice.runId,
         },
       },

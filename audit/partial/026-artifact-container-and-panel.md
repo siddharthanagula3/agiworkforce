@@ -16,24 +16,17 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Only files a managed agent run creates get a 'Created <name>' step with an Open or download link; documents and code that a reply produces get no card in the side-panel chat. | ui |
-
-Code: `apps/extension/src/features/side-panel/bubbles.ts:434-456`, `apps/extension/src/features/side-panel/bubbles.ts:391-391`
 
 ## S26.04: Artifact status.
 
 - Done when: The artifact shows its lifecycle state: being written, finished, stopped before it finished, or failed.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only generated-file cards show a status label (e.g. running, completed); code and document artifacts appear only after the reply finishes and never show writing, stopped or failed. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Agent-created files show a finished 'Created <name>' step, but nothing shows a document or code artifact being written, stopped or failed, and the drawer rows carry no state. | states |
-
-Code: `apps/mobile/src/features/chat/components/InlineArtifactCard.tsx:236-239`, `apps/extension/src/features/side-panel/bubbles.ts:381-385`, `apps/extension/src/features/side-panel/bubbles.ts:391-391`
 
 ## S26.08: Docked side panel.
 
@@ -55,18 +48,6 @@ Code: `apps/mobile/src/features/chat/components/InlineArtifactCard.tsx:236-239`,
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S26.12: Multiple-artifact switching.
-
-- Done when: When a conversation has several artifacts, the user can switch between them without leaving the viewer.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Each card opens its own full-screen viewer with no switcher inside it; to change artifact the reader closes the viewer and taps another card or opens the Artifacts gallery. | ui |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1022-1032`, `apps/mobile/src/features/artifacts/index.tsx:206-217`
-
 ## S26.13: Artifact tabs.
 
 - Done when: The open artifacts of a conversation are shown as tabs in the viewer, one per artifact, including one being written.
@@ -76,18 +57,6 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1022-1032`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-
-## S26.14: Source/preview toggle.
-
-- Done when: For a renderable artifact the user can switch between the rendered preview and its source.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Source prints in the terminal, but a rendered preview exists only by opening the published page in the browser; for an unpublished artifact `agi artifacts open` opens its conversation instead. | surface-only |
-
-Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 ## S26.15: Direct-edit mode.
 
@@ -105,43 +74,34 @@ Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 - Done when: The viewer shows which version of the artifact is displayed and lets the user pick any other version directly.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The 'vN/M' chip appears only when there are two or more versions and steps one at a time; no list of versions to jump to. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:519-556`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:147-152`
 
 ## S26.21: Previous/next version.
 
 - Done when: The user can step to the previous and next version of an artifact and see which version is shown.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The chip and its controls appear only when one artifact has two versions, and the phone app never makes a second one: artifacts are re-derived per message and a retry becomes a new message, so in practice there is nothing to step through. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:536-568`, `apps/mobile/src/features/artifacts/store.ts:47-49`
 
 ## S26.23: Restore version.
 
 - Done when: The user can restore an earlier version so it becomes the current one, without losing the versions in between.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Restore works in the store (appends), but the chip and its controls appear only when one artifact has two versions, and the phone app never makes a second one: artifacts are re-derived per message and a retry becomes a new message, so in practice there is nothing to step through. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:279-285`, `apps/mobile/src/features/artifacts/store.ts:153-162`
 
 ## S26.24: Duplicate artifact.
 
@@ -176,10 +136,7 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:279-285`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No command attaches an artifact to a project; `agi artifacts list --project` only filters by the project its conversation already sits in. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 
 ## S26.28: Continue from another chat.
 
@@ -192,43 +149,6 @@ Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S26.29: Export menu.
-
-- Done when: The artifact viewer offers a menu of export formats and each choice saves a file in that format.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/p-slack-s26.29-mobile-artifact-download-formats.patch: Download in the artifact viewer opens a Download as sheet with the formats the artifact supports: Markdown, PDF and plain text for prose, and the raw source file for code. The export options, the raw source export and the sheet are new free files in the patch; the viewer that opens them, ArtifactFullScreen.tsx, is held by Codex. The viewer hunk passes git apply --check on the Codex working copy, the free files on integration, and it composes in either order with no-yearly-s32-34-mobile-show-changes.patch; the edit was typechecked against this branch. | ui |
-| cli | partial | `agi artifacts show <id> --out <path>` writes only the raw source; there is no choice of export format. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:228-252`, `apps/cli/src/lib.rs:1034-1041`, `apps/cli/src/lib.rs:1944-1948`
-
-## S26.32: Public/private state.
-
-- Done when: Wherever an artifact is shown, the user can see whether it is private, published to anyone, or shared with the workspace.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The public link appears only right after publishing in the open viewer (component state); reopening shows no published state and the audience is never shown. | states |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:139-143`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:265-271`
-
-## S26.35: Runtime error panel.
-
-- Done when: When an artifact fails while rendering or running, the viewer replaces it with an error panel that explains the failure and offers source/retry.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only a failed Mermaid diagram shows a message ("Could not render this diagram."); there is no error panel with View source or Retry. | states |
-
-Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`, `apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx:30-36`
 
 ## S26.36: Dependency-loading state.
 
@@ -250,15 +170,3 @@ Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`,
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S26.39: Live updates from ongoing work.
-
-- Done when: While a reply or run is still producing an artifact, the artifact view updates live as content arrives.
-- Wave: 3
-- Already works on: web, desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Artifacts are derived only when the turn finishes, so the card and viewer appear after completion; while streaming the code only shows as message text. | states |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1951-1973`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:336-341`

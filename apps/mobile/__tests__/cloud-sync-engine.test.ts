@@ -305,6 +305,50 @@ describe('syncNow, pull', () => {
     expect(cloud.messages.c1?.[0]?.parentId).toBe('m0');
   });
 
+  it('drops an answer label the server row no longer carries', async () => {
+    seedConversation('c1');
+    seedMessage('c1', {
+      id: 'm1',
+      role: 'assistant',
+      model: 'fixture-model',
+      provider: 'openai',
+    });
+    mockGet.mockResolvedValueOnce({
+      conversations: [convDelta('c1', '5')],
+      messages: [msgDelta('m1', 'c1', '6', { role: 'assistant' })],
+      artifacts: [],
+      cursor: '6',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    const message = useChatCloudMessageStore.getState().messages.c1?.[0];
+    expect(message).toMatchObject({ id: 'm1', serverVersion: '6' });
+    expect(message).not.toHaveProperty('model');
+    expect(message).not.toHaveProperty('provider');
+  });
+
+  it('keeps the model a question was asked with when the server row has none', async () => {
+    seedConversation('c1');
+    seedMessage('c1', { id: 'm1', role: 'user', model: 'fixture-model', provider: 'openai' });
+    mockGet.mockResolvedValueOnce({
+      conversations: [convDelta('c1', '5')],
+      messages: [msgDelta('m1', 'c1', '6')],
+      artifacts: [],
+      cursor: '6',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    expect(useChatCloudMessageStore.getState().messages.c1?.[0]).toMatchObject({
+      serverVersion: '6',
+      model: 'fixture-model',
+      provider: 'openai',
+    });
+  });
+
   it('hydrates a pending approval projection from synced metadata after a cold device pull', async () => {
     const runId = '018f6f2a-0000-7000-8000-000000000099';
     mockGet.mockResolvedValueOnce({
@@ -511,6 +555,8 @@ describe('syncNow, push', () => {
       content: 'hi there',
       baseVersion: '0',
     });
+    expect(body.messages[0]).not.toHaveProperty('model');
+    expect(body.messages[0]).not.toHaveProperty('provider');
 
     const sync = useCloudSyncStateStore.getState();
     expect(sync.dirtyConversationIds).toEqual([]);
@@ -659,6 +705,121 @@ describe('syncNow, push', () => {
     expect(body.messages[0].metadata).toMatchObject({
       cloudAgentRun: { runId },
       cloudApproval: null,
+    });
+  });
+
+  it('projects a phone-started input pause into the tools web reads, and clears it after', async () => {
+    const runId = '018f6f2a-0000-7000-8000-000000000099';
+    const inputRequests = { confirm: { method: 'elicitation/create', params: {} } };
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', {
+      id: 'm1',
+      role: 'assistant',
+      content: 'Need a detail',
+      serverVersion: '8',
+      metadata: {
+        cloudAgentRun: {
+          runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+          lastSequence: 8,
+        },
+        tools: [{ id: 'web-tool', name: 'search', status: 'completed', toolCallId: 'call-0' }],
+      },
+      pendingToolInput: {
+        runId,
+        requestedAt: '2026-09-29T10:00:00.000Z',
+        toolCalls: [
+          {
+            toolCallId: 'call-1',
+            name: 'mcp__github__create_issue',
+            connectorId: 'github',
+            round: 0,
+            inputRequests,
+          },
+        ],
+      },
+    });
+    markMessageForSync('c1', 'm1');
+
+    await syncNow();
+
+    const [, body] = mockPost.mock.calls[0] as [string, { messages: MessagePushItem[] }];
+    expect(body.messages[0].metadata?.['tools']).toEqual([
+      { id: 'web-tool', name: 'search', status: 'completed', toolCallId: 'call-0' },
+      {
+        id: 'phone-input:call-1',
+        name: 'mcp__github__create_issue',
+        status: 'awaiting_input',
+        toolCallId: 'call-1',
+        connectorId: 'github',
+        inputRequests,
+      },
+    ]);
+
+    mockPost.mockClear();
+    const [message] = useChatCloudMessageStore.getState().messages.c1 ?? [];
+    useChatCloudMessageStore.getState().setCloudMessages('c1', [
+      {
+        ...message!,
+        pendingToolInput: undefined,
+        metadata: { ...message!.metadata, tools: body.messages[0].metadata?.['tools'] },
+      },
+    ]);
+    markMessageForSync('c1', 'm1');
+
+    await syncNow();
+
+    const [, cleared] = mockPost.mock.calls[0] as [string, { messages: MessagePushItem[] }];
+    expect(cleared.messages[0].metadata?.['tools']).toEqual([
+      { id: 'web-tool', name: 'search', status: 'completed', toolCallId: 'call-0' },
+    ]);
+  });
+
+  it('lets the phone answer an input pause started on the web', async () => {
+    const runId = '018f6f2a-0000-7000-8000-000000000099';
+    const inputRequests = { confirm: { method: 'elicitation/create', params: {} } };
+    mockGet.mockResolvedValueOnce({
+      conversations: [convDelta('c1', '5')],
+      messages: [
+        msgDelta('m1', 'c1', '6', {
+          role: 'assistant',
+          metadata: {
+            cloudAgentRun: {
+              runId,
+              runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+              lastSequence: 3,
+            },
+            tools: [
+              {
+                id: 'web-1',
+                name: 'mcp__github__create_issue',
+                status: 'awaiting_input',
+                toolCallId: 'call-1',
+                connectorId: 'github',
+                inputRequests,
+              },
+              { id: 'web-2', name: 'search', status: 'completed', toolCallId: 'call-0' },
+            ],
+          },
+        }),
+      ],
+      artifacts: [],
+      cursor: '6',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    expect(useChatCloudMessageStore.getState().messages.c1?.[0]?.pendingToolInput).toMatchObject({
+      runId,
+      toolCalls: [
+        {
+          toolCallId: 'call-1',
+          name: 'mcp__github__create_issue',
+          connectorId: 'github',
+          inputRequests,
+        },
+      ],
     });
   });
 

@@ -41,6 +41,14 @@ export function inferenceFamilies(repoRoot = REPO_ROOT) {
     .map(([name, concept]) => ({ name, file: concept.module, symbol: concept.symbol }));
 }
 
+/** Shape concepts whose field set a client may not declare again without the contract. */
+export function inferenceShapes(repoRoot = REPO_ROOT) {
+  const registry = loadOwnershipRegistry(repoRoot);
+  return Object.entries(registry.concepts)
+    .filter(([, concept]) => concept.kind === 'shape' && concept.scan !== false)
+    .map(([name, concept]) => ({ name, file: concept.module, symbol: concept.symbol }));
+}
+
 export const BASELINE_PATH = 'scripts/check-client-inference.baseline.json';
 
 /** Restating this many members of one vocabulary is a private copy of it. */
@@ -78,6 +86,108 @@ export function readVocabulary({ repoRoot = REPO_ROOT, file, symbol }) {
   if (block === undefined) return null;
   const members = [...block.matchAll(/'([^']+)'/g)].map((match) => match[1]);
   return members.length === 0 ? null : [...new Set(members)];
+}
+
+const TYPE_ATOM =
+  '(?:string|number|boolean|null|undefined|unknown|never|[A-Z][\\w.]*(?:<[^<>]*>)?|\'[^\']*\'|"[^"]*")(?:\\[\\])*';
+const TYPE_MEMBER = new RegExp(
+  `^(?:readonly\\s+)?([A-Za-z_$][\\w$]*)\\??\\s*:\\s*${TYPE_ATOM}(?:\\s*\\|\\s*${TYPE_ATOM})*$`,
+);
+
+function stripComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
+
+/** The member names of a flat object type, or null when any entry is not a type member. */
+export function typeLiteralMembers(body) {
+  const entries = stripComments(body)
+    .split(/[;,\n]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (entries.length === 0) return null;
+  const members = [];
+  for (const entry of entries) {
+    const member = TYPE_MEMBER.exec(entry);
+    if (!member) return null;
+    members.push(member[1]);
+  }
+  return members;
+}
+
+function shapeDeclaration(repoRoot, file, symbol, depth = 0) {
+  const source = readSource(repoRoot, file);
+  if (source === null || depth > 4) return null;
+  const declaration = new RegExp(
+    `export\\s+(?:type\\s+${symbol}\\s*=\\s*|interface\\s+${symbol}\\s*)\\{([^{}]*)\\}`,
+  ).exec(source);
+  if (declaration) return declaration[1];
+  const named = [
+    ...source.matchAll(/(?:import|export)\s+(?:type\s+)?\{([^}]*)\}\s+from\s+['"](\.[^'"]+)['"]/g),
+  ]
+    .filter((match) => new RegExp(`\\b${symbol}\\b`).test(match[1]))
+    .map((match) => match[2]);
+  const starred = [...source.matchAll(/export\s+\*\s+from\s+['"](\.[^'"]+)['"]/g)].map(
+    (match) => match[1],
+  );
+  for (const specifier of [...named, ...starred]) {
+    const base = path.posix.join(path.posix.dirname(file), specifier);
+    for (const candidate of [`${base}.ts`, `${base}/index.ts`, base]) {
+      if (!candidate.endsWith('.ts')) continue;
+      const found = shapeDeclaration(repoRoot, candidate, symbol, depth + 1);
+      if (found !== null) return found;
+    }
+  }
+  return null;
+}
+
+/** The fields of an exported object type or interface, followed through re-exports. */
+export function readShape({ repoRoot = REPO_ROOT, file, symbol }) {
+  const body = shapeDeclaration(repoRoot, file, symbol);
+  if (body === null) return null;
+  const members = [
+    ...stripComments(body).matchAll(/(?:^|[;,\n{])\s*(?:readonly\s+)?([A-Za-z_$][\w$]*)\??\s*:/g),
+  ].map((match) => match[1]);
+  return members.length === 0 ? null : [...new Set(members)];
+}
+
+/** A client file that declares every field of a shared shape, and never names the contract type. */
+export function findLocalShapes({ repoRoot = REPO_ROOT, files, shapes }) {
+  const readable = shapes.map((shape) => ({
+    ...shape,
+    members: readShape({ repoRoot, ...shape }),
+  }));
+  const unreadable = readable.filter((shape) => shape.members === null);
+  const violations = [];
+
+  for (const relativePath of files) {
+    if (!CLIENT_ROOTS.some((root) => relativePath.startsWith(`${root}/`))) continue;
+    if (!SOURCE_EXTENSIONS.has(path.extname(relativePath))) continue;
+    if (isNonProductionPath(relativePath)) continue;
+    const source = readSource(repoRoot, relativePath);
+    if (source === null) continue;
+    const blocks = [...source.matchAll(/\{([^{}]*)\}/g)]
+      .map((match) => typeLiteralMembers(match[1]))
+      .filter((members) => members !== null);
+    if (blocks.length === 0) continue;
+
+    for (const shape of readable) {
+      if (shape.members === null) continue;
+      if (new RegExp(`\\b${shape.symbol}\\b`).test(source)) continue;
+      const restated = blocks.find((members) =>
+        shape.members.every((member) => members.includes(member)),
+      );
+      if (!restated) continue;
+      violations.push({
+        file: relativePath,
+        family: shape.name,
+        symbol: shape.symbol,
+        contract: shape.file,
+        restated: shape.members.slice(0, 6),
+      });
+    }
+  }
+
+  return { violations, unreadable };
 }
 
 /** A concept the registry names has to be exported by the module it names. */
@@ -251,10 +361,12 @@ export function checkClientInference(repoRoot = REPO_ROOT) {
   );
   const registry = loadOwnershipRegistry(repoRoot);
   const families = inferenceFamilies(repoRoot);
-  const { violations, unreadable } = findLocalVocabularies({ repoRoot, files, families });
-  const errors = unreadable.map(
+  const vocabularies = findLocalVocabularies({ repoRoot, files, families });
+  const shapes = findLocalShapes({ repoRoot, files, shapes: inferenceShapes(repoRoot) });
+  const violations = [...vocabularies.violations, ...shapes.violations];
+  const errors = [...vocabularies.unreadable, ...shapes.unreadable].map(
     (family) =>
-      `${family.file}: no longer exports ${family.symbol}. The ${family.name} check is reading nothing; point it at the vocabulary that replaced it.`,
+      `${family.file}: no longer exports ${family.symbol}. The ${family.name} check is reading nothing; point it at the contract that replaced it.`,
   );
   checkOwnership({ repoRoot, registry, errors });
   const baseline = applyBaseline({ violations, baseline: loadBaseline(repoRoot) });

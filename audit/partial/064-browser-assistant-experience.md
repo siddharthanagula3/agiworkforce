@@ -6,56 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S64.01: Current-page context.
-
-- Done when: The assistant reads the page open in the user's browser and answers with it as context.
-- Wave: 3
-- Already works on: desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Sharing a page from the phone browser sends only its address or shared text; the app never reads the page itself. | surface-only |
-
-Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
-
-## S64.02: Selected-text context.
-
-- Done when: Text the user highlights on a web page reaches the assistant as context for a question.
-- Wave: 3
-- Already works on: desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Works only through the phone's share sheet; there is no selection action inside a browser and the source page is not attached. | surface-only |
-
-Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
-
-## S64.05: Page summary.
-
-- Done when: One action summarizes the page the user is viewing.
-- Wave: 3
-- Already works on: desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only shared text or an address arrives through the share sheet; there is no summarize-this-page action. | surface-only |
-| cli | partial | No summarize command: the user has to ask in chat and the agent calls browser_read_page. | ui |
-| vscode | partial | No summarize command: the user asks in chat and the local CLI runtime reads the page. | ui |
-
-Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`, `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`
-
-## S64.06: Question about page.
-
-- Done when: The user asks a free-form question and the answer uses the current page's content.
-- Wave: 3
-- Already works on: desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only shared text or an address reaches the chat; the app cannot read the page to answer about it. | surface-only |
-
-Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
-
 ## S64.07: Question about video/transcript.
 
 - Done when: The assistant answers questions about a video on the page using its transcript.
@@ -79,63 +29,40 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 
-## S64.13: Organize tabs.
-
-- Done when: The assistant groups, sorts or tidies the user's open tabs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
 ## S64.14: Website search.
 
 - Done when: The assistant runs a search on a website and reads the results back.
 - Wave: 3
-- Already works on: chrome
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No site-search action: the agent must type into the site's search box by guessed CSS selector, because browser_read_page returns text without element selectors. | handler |
-| vscode | partial | Same as the CLI runtime it drives: search only by typing into a guessed CSS selector. | handler |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.15: Form filling.
 
 - Done when: The assistant fills in a web form on the user's behalf.
 - Wave: 3
-- Already works on: desktop, chrome
+- Already works on: desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | browser_type fills one field per call by CSS selector, but the agent never receives the form's fields or selectors, so it must guess them. | handler |
-| vscode | partial | Same limit as the CLI runtime: one guessed CSS selector per field. | handler |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.16: Multi-step website task.
 
 - Done when: The user gives a goal and the assistant carries it out over several steps on websites.
 - Wave: 3
-- Already works on: chrome
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can chain read, click, type, navigate and screenshot, but has no element selectors, back/forward or tab control, so many sites cannot be completed. | handler |
-| vscode | partial | Same limits as the CLI runtime it drives. | handler |
-
-Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.17: Structured site-tool invocation.
 
@@ -215,17 +142,13 @@ Code: `apps/cli/src/platform/runtime/tool_catalog.rs:961-970`, `apps/cli/src/fea
 
 - Done when: The user can pause or stop the assistant's browser task at any moment.
 - Wave: 3
-- Already works on: chrome
+- Already works on: vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Interrupting the turn stops further browser calls, but there is no pause that keeps the task to resume. | ui |
-| vscode | partial | Stopping the turn in the runtime ends browser calls; there is no pause. | ui |
-
-Code: `apps/cli/src/features/exec/tools/mod.rs:1236-1248`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1266-1272`
 
 ## S64.26: Download review.
 

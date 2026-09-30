@@ -6,57 +6,27 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S76.04: Multiple-image input.
-
-- Done when: The registry records whether (and how many) images a model accepts in one request, and requests are checked against it.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The client-side check is written as the post-codex patch chat-gates-s76.04-mobile-image-limit.patch (applies after chat-gates-s79.05-mobile-speed-first.patch): after cloud dispatch resolves the model, chatExecutionStore refuses a send with more images than that model reads in one message (model override, else its default managed route's harness limit), naming the model, the limit and how many to remove, before anything uploads. ChatInput.tsx itself could not be patched: the three-way merge of integration and Codex's copy conflicts. Mobile still gets the server's 400 until the patch lands. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4058-4058`
-
-## S76.06: Native PDF/document input.
-
-- Done when: The registry records native PDF input per model and PDFs go natively to models that accept them.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | CLI reads the pdf modality into supports_pdf but only a reserved, unwired detail view shows it and nothing gates on it. | ui, handler |
-
-Code: `apps/cli/src/provider.rs:19-22`, `apps/cli/src/model_catalog.rs:938-938`
-
 ## S76.07: Audio understanding.
 
 - Done when: The registry records audio input per model and the product uses it to show or gate audio understanding.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | CLI loads supports_audio_input but only a reserved, unwired detail view shows it; nothing gates on it. | ui, handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/provider.rs:16-19`
 
 ## S76.08: Audio transcription.
 
 - Done when: The registry names the transcription model(s) and dictation/transcription requests use that registry choice.
-- Wave: 2
-- Already works on: web, desktop, api
+- Wave: 3
+- Already works on: web, desktop, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:354-354`
 
 ## S76.09: Realtime audio input.
 
@@ -74,17 +44,14 @@ Code: `apps/cli/src/voice.rs:354-354`
 
 - Done when: The registry records which models produce speech and spoken output uses a registry-chosen model.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Read-aloud uses expo-speech (OS voices); registry TTS models unused. Live voice speaks through the registry voice_live model. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/voice/components/LiveVoiceComposer.tsx:33-36`, `apps/mobile/src/features/voice/services/liveVoiceSession.ts:11-11`, `apps/mobile/src/features/voice/services/tts.ts:1-1`
 
 ## S76.11: Realtime speech-to-speech.
 
@@ -144,27 +111,3 @@ Code: `apps/mobile/src/features/voice/components/LiveVoiceComposer.tsx:33-36`, `
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S76.28: Context-window limit.
-
-- Done when: The registry records each model context window; the product shows it and trims or refuses over-long requests accordingly.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The criterion says the product shows the context window and trims by it. The cited chrome ui lines (side_panel.ts renderModelDropdown) only render picker options built from name, provider, capability and bestFor (managedModelPicker.ts:53-62); no context window is shown anywhere in the extension. Server trimming (context-window.ts:170) still applies, so partial with miss ui; remaining: show the model context window in the picker. |  |
-
-Code: `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `apps/web/app/api/llm/v1/chat/completions/lib/context-window.ts:170-186`, `packages/ai/routing/src/auto.ts:1354-1359`
-
-## S76.29: Output-token limit.
-
-- Done when: The registry records each model output-token limit; requests are capped by it and it is shown.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Output-token limit is never shown in the extension (picker options carry no maxOutput); the server cap (request-processor.ts:4034) applies. Partial with miss ui; remaining: show the output ceiling. |  |
-
-Code: `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4034-4036`

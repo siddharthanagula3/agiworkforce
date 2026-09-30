@@ -136,12 +136,12 @@ const SETTINGS_SECTION_SKILLS = 'skills';
 const SETTINGS_SECTION_PLUGINS = 'plugins';
 const CONNECTORS_EMPTY_COPY = 'No connectors connected yet.';
 const SUBMENU_ROW_CLASS =
-  'flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm transition-colors hover:bg-muted/60';
+  'flex w-full items-center gap-3 rounded-lg py-2 ps-8 pe-3 text-start text-sm transition-colors hover:bg-muted/60';
 const NESTED_ROW_CLASS =
-  'flex w-full items-center gap-3 rounded-lg py-2 pl-12 pr-3 text-left text-sm transition-colors hover:bg-muted/60';
-const SUBMENU_EMPTY_CLASS = 'px-3 py-2 pl-8 text-caption text-muted-foreground';
+  'flex w-full items-center gap-3 rounded-lg py-2 ps-12 pe-3 text-start text-sm transition-colors hover:bg-muted/60';
+const SUBMENU_EMPTY_CLASS = 'px-3 py-2 ps-8 text-caption text-muted-foreground';
 const SUBMENU_MANAGE_CLASS =
-  'flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60';
+  'flex w-full items-center gap-3 rounded-lg py-2 ps-8 pe-3 text-start text-sm text-muted-foreground transition-colors hover:bg-muted/60';
 const BADGE_CHECKING = 'Checking';
 const BADGE_RETRY = 'Retry';
 const BADGE_UNAVAILABLE = 'Unavailable';
@@ -158,6 +158,7 @@ const VIDEO_ENTITLEMENT_HINT = `Video generation is available on ${new Intl.List
   BILLING_PLAN_CAPABILITY_TIERS.video_generation.map((plan) => getBillingPlanPricing(plan).label),
 )}.`;
 const FOLDER_UNSUPPORTED_TITLE = 'Folder access is not supported in this browser';
+const CLEAR_FOLDER_LABEL = 'Clear working folder';
 
 const ROW_CLASS = 'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors';
 const ROW_HOVER_CLASS = 'hover:bg-muted/60';
@@ -168,7 +169,7 @@ const BADGE_BASE_CLASS =
 const BADGE_MUTED_CLASS = 'bg-muted text-muted-foreground';
 const BADGE_UPGRADE_CLASS = 'bg-primary/10 text-primary';
 const DIVIDER_CLASS = 'my-1 border-t border-border/30';
-const TEMPORARY_EXPLANATION_CLASS = 'px-3 pb-1 pl-10 text-caption text-muted-foreground';
+const TEMPORARY_EXPLANATION_CLASS = 'px-3 pb-1 ps-10 text-caption text-muted-foreground';
 const SECTION_HEADING_CLASS =
   'px-3 pb-1 pt-2 text-caption font-semibold uppercase tracking-wide text-muted-foreground';
 const SEARCH_DOCK_CLASS =
@@ -344,7 +345,7 @@ function MenuToggleRow({
       className={cn(ROW_CLASS, disabled ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
     >
       <Icon className="h-4 w-4 text-muted-foreground" />
-      <span className="flex-1 text-left">{label}</span>
+      <span className="flex-1 text-start">{label}</span>
       {checked && <Check className="h-4 w-4 text-foreground" />}
     </button>
   );
@@ -413,7 +414,7 @@ function TemporaryChatRows({
           className={cn(ROW_CLASS, ROW_HOVER_CLASS, 'text-muted-foreground')}
         >
           <X className={GLYPH_CLASS} />
-          <span className="flex-1 text-left">{TEMPORARY_CHAT_END_LABEL}</span>
+          <span className="flex-1 text-start">{TEMPORARY_CHAT_END_LABEL}</span>
         </button>
       )}
     </>
@@ -450,7 +451,7 @@ function PaletteConnectorRow({
       aria-checked={checked}
       data-testid={`composer-palette-connector-${connector.id}`}
       onClick={onToggle}
-      className={cn(ROW_CLASS, ROW_HOVER_CLASS, 'items-start text-left')}
+      className={cn(ROW_CLASS, ROW_HOVER_CLASS, 'items-start text-start')}
     >
       <OfficialConnectorLogo
         connector={connector}
@@ -486,7 +487,7 @@ function PaletteCatalogRow({
       type="button"
       role="menuitem"
       onClick={onSelect}
-      className={cn(ROW_CLASS, ROW_HOVER_CLASS, 'items-start text-left')}
+      className={cn(ROW_CLASS, ROW_HOVER_CLASS, 'items-start text-start')}
     >
       <Icon className={cn(GLYPH_CLASS, 'mt-0.5 text-muted-foreground')} />
       <span className="flex min-w-0 flex-1 flex-col">
@@ -650,7 +651,7 @@ function ImageRow({ props, role }: { props: ComposerPlusMenuProps; role?: string
       <ImagePlus
         className={cn(GLYPH_CLASS, props.imageMode ? 'text-primary' : 'text-muted-foreground')}
       />
-      <span className="flex-1 text-left">{ROW_LABEL_IMAGE}</span>
+      <span className="flex-1 text-start">{ROW_LABEL_IMAGE}</span>
       {badge && <RowBadge badge={badge} />}
     </button>
   );
@@ -678,7 +679,7 @@ function VideoRow({ props, role }: { props: ComposerPlusMenuProps; role?: string
       <Video
         className={cn(GLYPH_CLASS, props.videoMode ? 'text-primary' : 'text-muted-foreground')}
       />
-      <span className="flex-1 text-left">{ROW_LABEL_VIDEO}</span>
+      <span className="flex-1 text-start">{ROW_LABEL_VIDEO}</span>
       {badge && <RowBadge badge={badge} />}
     </button>
   );
@@ -708,7 +709,7 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
       className={cn(ROW_CLASS, props.attachmentsUnavailable ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
     >
       <Paperclip className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-      <span className="flex-1 text-left">{ROW_LABEL_ATTACH}</span>
+      <span className="flex-1 text-start">{ROW_LABEL_ATTACH}</span>
       {props.attachmentsUnavailable && (
         <RowBadge
           badge={{
@@ -749,7 +750,7 @@ function OutputRows({ props, role }: { props: ComposerPlusMenuProps; role?: stri
         )}
       >
         <FileText className={cn(GLYPH_CLASS, active ? 'text-primary' : 'text-muted-foreground')} />
-        <span className="flex-1 text-left">
+        <span className="flex-1 text-start">
           {active ? `${ROW_LABEL_OUTPUT}: ${CHAT_OUTPUT_FORMAT_LABEL[active]}` : ROW_LABEL_OUTPUT}
         </span>
         <ChevronRight
@@ -771,7 +772,7 @@ function OutputRows({ props, role }: { props: ComposerPlusMenuProps; role?: stri
                 className={SUBMENU_ROW_CLASS}
               >
                 <Glyph className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-                <span className="flex-1 text-left">{CHAT_OUTPUT_FORMAT_LABEL[format]}</span>
+                <span className="flex-1 text-start">{CHAT_OUTPUT_FORMAT_LABEL[format]}</span>
                 {checked && <Check className="h-4 w-4 text-foreground" aria-hidden="true" />}
               </button>
             );
@@ -814,7 +815,7 @@ function LibraryRows({ props }: { props: ComposerPlusMenuProps }) {
         className={cn(ROW_CLASS, unavailable ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
       >
         <LibraryBig className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-        <span className="flex-1 text-left">{ROW_LABEL_LIBRARY}</span>
+        <span className="flex-1 text-start">{ROW_LABEL_LIBRARY}</span>
         <ChevronRight
           className={cn(
             'h-4 w-4 text-muted-foreground transition-transform',
@@ -831,7 +832,7 @@ function LibraryRows({ props }: { props: ComposerPlusMenuProps }) {
         >
           {error ? <p className={cn(SUBMENU_EMPTY_CLASS, 'text-danger-text')}>{error}</p> : null}
           {library.loading && library.items.length === 0 ? (
-            <div className="flex items-center gap-2 py-2 pl-8 pr-3">
+            <div className="flex items-center gap-2 py-2 ps-8 pe-3">
               <Spinner size="sm" aria-label={COMPOSER_FILES_LOADING_LABEL} />
               <span className="text-caption text-muted-foreground">
                 {COMPOSER_FILES_LOADING_LABEL}
@@ -886,7 +887,7 @@ function ScreenshotRow({ props, role }: { props: ComposerPlusMenuProps; role?: s
       className={cn(ROW_CLASS, props.isCapturingScreenshot ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
     >
       <Camera className={GLYPH_CLASS} />
-      <span className="flex-1 text-left">
+      <span className="flex-1 text-start">
         {props.isCapturingScreenshot ? ROW_LABEL_SCREENSHOT_BUSY : ROW_LABEL_SCREENSHOT}
       </span>
     </button>
@@ -903,7 +904,7 @@ function LocalFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?: 
       className={cn(ROW_CLASS, props.attachmentsUnavailable ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
     >
       <FolderOpen className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-      <span className="flex-1 text-left">{ROW_LABEL_LOCAL_FOLDER}</span>
+      <span className="flex-1 text-start">{ROW_LABEL_LOCAL_FOLDER}</span>
       {props.attachmentsUnavailable && (
         <RowBadge badge={{ label: BADGE_NOT_USED_HERE, upgrade: false }} />
       )}
@@ -925,7 +926,7 @@ function ClipboardRow({ props, role }: { props: ComposerPlusMenuProps; role?: st
       )}
     >
       <Copy className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-      <span className="flex-1 text-left">
+      <span className="flex-1 text-start">
         {props.isReadingClipboard ? ROW_LABEL_CLIPBOARD_BUSY : ROW_LABEL_CLIPBOARD}
       </span>
       {unavailable && <RowBadge badge={{ label: BADGE_NOT_USED_HERE, upgrade: false }} />}
@@ -942,7 +943,7 @@ function LocalCommandRow({ props, role }: { props: ComposerPlusMenuProps; role?:
       className={cn(ROW_CLASS, ROW_HOVER_CLASS)}
     >
       <Terminal className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-      <span className="flex-1 text-left">{ROW_LABEL_LOCAL_COMMAND}</span>
+      <span className="flex-1 text-start">{ROW_LABEL_LOCAL_COMMAND}</span>
     </button>
   );
 }
@@ -956,55 +957,67 @@ function BrowserRow({ props, role }: { props: ComposerPlusMenuProps; role?: stri
       className={cn(ROW_CLASS, ROW_HOVER_CLASS)}
     >
       <Globe className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-      <span className="flex-1 text-left">{ROW_LABEL_BROWSER}</span>
+      <span className="flex-1 text-start">{ROW_LABEL_BROWSER}</span>
     </button>
   );
 }
 
 function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
   const { folderName, canPickFolder } = props;
+  const pickerRef = useRef<HTMLButtonElement>(null);
   return (
-    <button
-      type="button"
-      role={role}
-      disabled={!canPickFolder}
-      title={
-        canPickFolder
-          ? folderName
-            ? `Working folder: ${folderName}`
-            : undefined
-          : FOLDER_UNSUPPORTED_TITLE
-      }
-      onClick={props.onPickFolder}
-      className={cn(
-        ROW_CLASS,
-        !canPickFolder && ROW_DISABLED_CLASS,
-        canPickFolder && folderName ? cn('text-primary', ROW_HOVER_CLASS) : ROW_HOVER_CLASS,
-      )}
-    >
-      {folderName ? (
-        <FolderOpen className={cn(GLYPH_CLASS, 'text-primary')} />
-      ) : (
-        <Folder className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-      )}
-      <span className="flex-1 text-left">{folderName ? folderName : ROW_LABEL_FOLDER}</span>
+    <div role={role ? 'none' : undefined} className="flex items-center gap-1">
+      <button
+        ref={pickerRef}
+        type="button"
+        role={role}
+        disabled={!canPickFolder}
+        title={
+          canPickFolder
+            ? folderName
+              ? `Working folder: ${folderName}`
+              : undefined
+            : FOLDER_UNSUPPORTED_TITLE
+        }
+        onClick={props.onPickFolder}
+        className={cn(
+          ROW_CLASS,
+          'min-w-0 flex-1',
+          !canPickFolder && ROW_DISABLED_CLASS,
+          canPickFolder && folderName ? cn('text-primary', ROW_HOVER_CLASS) : ROW_HOVER_CLASS,
+        )}
+      >
+        {folderName ? (
+          <FolderOpen className={cn(GLYPH_CLASS, 'text-primary')} />
+        ) : (
+          <Folder className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+        )}
+        <span className="flex-1 truncate text-start">
+          {folderName ? folderName : ROW_LABEL_FOLDER}
+        </span>
+        {!canPickFolder && (
+          <span className="text-caption text-muted-foreground">{BADGE_NOT_SUPPORTED}</span>
+        )}
+      </button>
       {folderName && (
         <button
           type="button"
-          onClick={(event) => {
-            event.stopPropagation();
+          role={role}
+          onClick={() => {
             props.onClearFolder();
+            pickerRef.current?.focus();
           }}
-          className="shrink-0 rounded-compact p-0.5 text-muted-foreground hover:text-foreground"
-          aria-label="Clear working folder"
+          className={cn(
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-11',
+            ROW_HOVER_CLASS,
+          )}
+          aria-label={CLEAR_FOLDER_LABEL}
+          title={CLEAR_FOLDER_LABEL}
         >
-          <X className="h-4 w-4" />
+          <X aria-hidden className="h-4 w-4" />
         </button>
       )}
-      {!canPickFolder && (
-        <span className="text-caption text-muted-foreground">{BADGE_NOT_SUPPORTED}</span>
-      )}
-    </button>
+    </div>
   );
 }
 
@@ -1106,7 +1119,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
             props.selectedSkillName ? 'text-primary' : 'text-muted-foreground',
           )}
         />
-        <span className="flex-1 text-left">{props.selectedSkillName ?? ROW_LABEL_SKILLS}</span>
+        <span className="flex-1 text-start">{props.selectedSkillName ?? ROW_LABEL_SKILLS}</span>
         <ChevronRight
           className={cn(
             'h-4 w-4 text-muted-foreground transition-transform',
@@ -1154,7 +1167,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
         className={cn(ROW_CLASS, ROW_HOVER_CLASS)}
       >
         <ConnectorsGlyph className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-        <span className="flex-1 text-left">{ROW_LABEL_CONNECTORS}</span>
+        <span className="flex-1 text-start">{ROW_LABEL_CONNECTORS}</span>
         <ChevronRight
           className={cn(
             'h-4 w-4 text-muted-foreground transition-transform',
@@ -1165,7 +1178,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
       {props.connectorsSubmenuOpen && (
         <div role="group" aria-label={ROW_LABEL_CONNECTORS} className="space-y-0.5 pb-1">
           {props.connectors.length === 0 ? (
-            <p className="px-3 py-2 pl-8 text-caption text-muted-foreground">
+            <p className="px-3 py-2 ps-8 text-caption text-muted-foreground">
               {CONNECTORS_EMPTY_COPY}
             </p>
           ) : (
@@ -1211,7 +1224,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
         className={cn(ROW_CLASS, ROW_HOVER_CLASS)}
       >
         <PluginsGlyph className={GLYPH_CLASS} />
-        <span className="flex-1 text-left">{ROW_LABEL_PLUGINS}</span>
+        <span className="flex-1 text-start">{ROW_LABEL_PLUGINS}</span>
         <ChevronRight
           className={cn(
             'h-4 w-4 text-muted-foreground transition-transform',
@@ -1527,7 +1540,7 @@ function WorkPalette(props: ComposerPlusMenuProps) {
         className={cn(ROW_CLASS, ROW_HOVER_CLASS, 'text-muted-foreground')}
       >
         <ConnectorsGlyph className={GLYPH_CLASS} />
-        <span className="flex-1 text-left">{ROW_LABEL_MANAGE_CONNECTORS}</span>
+        <span className="flex-1 text-start">{ROW_LABEL_MANAGE_CONNECTORS}</span>
       </button>
 
       {skillHits.length > 0 && (

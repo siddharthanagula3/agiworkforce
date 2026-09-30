@@ -9,6 +9,7 @@ export type ReviewDecision =
   | 'approved'
   | { approved_execpolicy_amendment: { proposed_execpolicy_amendment: ExecPolicyAmendment } }
   | 'approved_for_session'
+  | 'always_allow'
   | { network_policy_amendment: { network_policy_amendment: NetworkPolicyAmendment } }
   | 'denied'
   | 'timed_out'

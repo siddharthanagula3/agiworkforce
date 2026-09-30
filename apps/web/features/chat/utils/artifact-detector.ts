@@ -1,4 +1,5 @@
 import {
+  computeDerivedArtifactId,
   deriveArtifacts,
   removeArtifactBlocks as removeArtifactBlocksShared,
   hasArtifacts as hasArtifactsShared,
@@ -50,6 +51,29 @@ export function extractArtifacts(
     blocks,
   };
   return deriveArtifacts(markdown, opts).map(toArtifactData);
+}
+
+export function codeBlockEditorArtifact(
+  markdown: string,
+  context: ExtractArtifactsContext,
+  blocks: DerivedCodeBlock[],
+  ordinal: number,
+): ArtifactData | null {
+  const [artifact] = deriveArtifacts(markdown, {
+    conversationId: context.conversationId,
+    messageId: context.messageId,
+    include: (block) => block.ordinal === ordinal,
+    blocks,
+  });
+  if (!artifact) return null;
+  return {
+    ...toArtifactData(artifact),
+    id: computeDerivedArtifactId(
+      context.conversationId,
+      `${context.messageId ?? ''}:editor`,
+      ordinal,
+    ),
+  };
 }
 
 export function removeArtifactBlocks(

@@ -42,6 +42,12 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, chrome
 
+## S27.16: Rewrite selection.
+
+- Done when: The user can select text in a document and ask for that selection to be rewritten in place.
+- Wave: 4
+- Build on: web, desktop, mobile, chrome
+
 ## S27.17: Shorten selection.
 
 - Done when: The user can ask for a selected passage to be made shorter.
@@ -125,3 +131,15 @@ nothing is left.
 - Done when: The user can save a document straight into a connected document service (e.g. Google Docs, Notion, Drive).
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
+
+## S27.39: Email draft presentation.
+
+- Done when: An email the assistant drafts is presented as an email (subject, recipients, body) rather than plain text.
+- Wave: 4
+- Build on: cli, vscode
+
+## S27.40: Recipient, subject, and attachment fields.
+
+- Done when: An email draft has editable recipient, subject and attachment fields.
+- Wave: 4
+- Build on: cli, vscode

@@ -77,27 +77,27 @@ export function AccountMenuItems({
       <WorkspaceMenuItems onManage={onManageWorkspace} />
       {/* CRIT-008: open in place; /settings/general only bounces to /chat. */}
       <DropdownMenuItem onClick={onOpenSettings}>
-        <Settings className="mr-2 h-4 w-4" />
+        <Settings className="me-2 h-4 w-4" />
         {t('common:settings')}
       </DropdownMenuItem>
       <DropdownMenuItem onClick={onOpenHelp}>
-        <HelpCircle className="mr-2 h-4 w-4" />
+        <HelpCircle className="me-2 h-4 w-4" />
         {t('common:navGetHelp')}
       </DropdownMenuItem>
       <DropdownMenuItem asChild>
         <a href={contactMailto()}>
-          <Mail className="mr-2 h-4 w-4" />
+          <Mail className="me-2 h-4 w-4" />
           {t('common:navEmailSupport')}
         </a>
       </DropdownMenuItem>
       <DropdownMenuItem onClick={onOpenFeedback}>
-        <MessageSquareText className="mr-2 h-4 w-4" />
+        <MessageSquareText className="me-2 h-4 w-4" />
         {t('common:navSendFeedback')}
       </DropdownMenuItem>
       <DropdownMenuItem onClick={onOpenKeyboardShortcuts}>
-        <Keyboard className="mr-2 h-4 w-4" />
+        <Keyboard className="me-2 h-4 w-4" />
         {t('common:navKeyboardShortcuts')}
-        <span className="ml-auto text-caption text-muted-foreground">{shortcutLabel('/')}</span>
+        <span className="ms-auto text-caption text-muted-foreground">{shortcutLabel('/')}</span>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       {/* Hidden once there is nothing left to buy: this menu offered
@@ -105,42 +105,42 @@ export function AccountMenuItems({
           to the plan badge in the same sidebar. */}
       {showUpgrade ? (
         <DropdownMenuItem onClick={onUpgrade}>
-          <CreditCard className="mr-2 h-4 w-4" />
+          <CreditCard className="me-2 h-4 w-4" />
           {t('common:navUpgrade')}
         </DropdownMenuItem>
       ) : null}
       <DropdownMenuItem onClick={onDownloadApps}>
-        <Download className="mr-2 h-4 w-4" />
+        <Download className="me-2 h-4 w-4" />
         {t('common:navGetApps')}
       </DropdownMenuItem>
       <DropdownMenuItem asChild>
         <Link href="/developers">
-          <Code2 className="mr-2 h-4 w-4" />
+          <Code2 className="me-2 h-4 w-4" />
           {t('common:navDeveloperConsole')}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem asChild>
         <Link href={CANONICAL_POLICY_ROUTES.dataUse} target="_blank" rel="noopener noreferrer">
-          <ShieldCheck className="mr-2 h-4 w-4" />
+          <ShieldCheck className="me-2 h-4 w-4" />
           {t('common:navDataUse')}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuItem asChild>
         <Link href={CANONICAL_POLICY_ROUTES.dataRights} target="_blank" rel="noopener noreferrer">
-          <FileText className="mr-2 h-4 w-4" />
+          <FileText className="me-2 h-4 w-4" />
           {t('common:navDataRights')}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuItem asChild>
         <Link href={CANONICAL_POLICY_ROUTES.legalIndex} target="_blank" rel="noopener noreferrer">
-          <Scale className="mr-2 h-4 w-4" />
+          <Scale className="me-2 h-4 w-4" />
           {t('common:navTermsPolicies')}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem onClick={onLogout} className="text-danger focus:text-danger">
-        <LogOut className="mr-2 h-4 w-4" />
+        <LogOut className="me-2 h-4 w-4" />
         {t('common:navLogOut')}
       </DropdownMenuItem>
     </>

@@ -237,7 +237,7 @@ export default function OperatorCostsPanel() {
         ) : (
           <div className={TABLE_WRAP_CLASS}>
             <table className="w-full min-w-[860px] text-sm">
-              <thead className="bg-card text-left">
+              <thead className="bg-card text-start">
                 <tr>
                   <th className="p-3 font-medium capitalize">{dimension}</th>
                   <th className="p-3 font-medium">Requests</th>

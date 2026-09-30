@@ -103,6 +103,8 @@ pub struct AsMetadata {
     #[serde(default)]
     pub registration_endpoint: Option<String>,
     #[serde(default)]
+    pub revocation_endpoint: Option<String>,
+    #[serde(default)]
     pub code_challenge_methods_supported: Vec<String>,
     #[serde(default)]
     pub client_id_metadata_document_supported: bool,
@@ -706,6 +708,85 @@ pub async fn refresh_token(
     Ok(refreshed)
 }
 
+fn revocation_endpoint_allowed(issuer: &str, endpoint: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(endpoint) else {
+        return false;
+    };
+    parsed.scheme() == "https"
+        && security::enforce_same_origin(issuer, endpoint, "revocation endpoint").is_ok()
+}
+
+pub async fn revoke_token(
+    token: &OAuthToken,
+    oauth_cfg: &OAuthConfig,
+    server_url: &str,
+) -> Result<bool> {
+    let issuer = match token.issuer.clone() {
+        Some(issuer) => issuer,
+        None => {
+            let (_, prm) = discover_protected_resource(server_url, None).await?;
+            prm.authorization_servers
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("no authorization_servers in protected-resource metadata"))?
+        }
+    };
+    let metadata = discover_authorization_server(&issuer, server_url).await?;
+    let Some(revocation_url) = metadata.revocation_endpoint.as_deref() else {
+        return Ok(false);
+    };
+    if !revocation_endpoint_allowed(&issuer, revocation_url) {
+        bail!(
+            "the advertised revocation endpoint is not an https address on the authorization server's own origin, so the token was not sent there"
+        );
+    }
+    let client_id = token
+        .client_id
+        .as_deref()
+        .or(oauth_cfg.client_id.as_deref())
+        .ok_or_else(|| anyhow!("no client_id cached and none in config"))?;
+    let client_secret = confidential_client_secret(oauth_cfg, revocation_url)?;
+    let anchor = token
+        .auth_server_metadata_url
+        .as_deref()
+        .unwrap_or(issuer.as_str());
+    let endpoint = checked_endpoint(revocation_url, "revocation endpoint", anchor).await?;
+    let client = pinned_client(&endpoint, "revocation")?;
+
+    let mut credentials: Vec<(&str, &str)> = Vec::new();
+    if let Some(refresh) = token.refresh_token.as_deref() {
+        credentials.push((refresh, "refresh_token"));
+    }
+    credentials.push((token.access_token.as_str(), "access_token"));
+
+    let mut revoked = false;
+    for (value, hint) in credentials {
+        let mut form: Vec<(&str, &str)> = vec![
+            ("token", value),
+            ("token_type_hint", hint),
+            ("client_id", client_id),
+        ];
+        if let Some(secret) = client_secret {
+            form.push(("client_secret", secret));
+        }
+        let resp = client
+            .post(endpoint.url.clone())
+            .header("Accept", "application/json")
+            .form(&form)
+            .send()
+            .await
+            .with_context(|| format!("revocation POST {revocation_url}"))?;
+        if resp.status().is_success() {
+            revoked = true;
+        } else {
+            let status = resp.status();
+            let body = failure_detail(resp, "token revocation").await;
+            bail!("token revocation at {revocation_url} returned {status}, {body}");
+        }
+    }
+    Ok(revoked)
+}
+
 #[derive(Debug, Deserialize)]
 struct TokenResponseRaw {
     access_token: String,
@@ -1219,12 +1300,31 @@ mod tests {
         token_from(REMOTE_SERVER, token_url)
     }
 
+    #[test]
+    fn revocation_goes_only_to_the_issuers_own_https_origin() {
+        let issuer = "https://as.example.com";
+        assert!(revocation_endpoint_allowed(
+            issuer,
+            "https://as.example.com/revoke"
+        ));
+        assert!(!revocation_endpoint_allowed(
+            issuer,
+            "http://as.example.com/revoke"
+        ));
+        assert!(!revocation_endpoint_allowed(
+            issuer,
+            "https://collector.evil.test/revoke"
+        ));
+        assert!(!revocation_endpoint_allowed(issuer, "not a url"));
+    }
+
     fn as_meta_with(authorization_endpoint: &str, token_endpoint: &str) -> AsMetadata {
         AsMetadata {
             issuer: "https://as.example.com".into(),
             authorization_endpoint: authorization_endpoint.into(),
             token_endpoint: token_endpoint.into(),
             registration_endpoint: None,
+            revocation_endpoint: None,
             code_challenge_methods_supported: vec!["S256".into()],
             client_id_metadata_document_supported: false,
             authorization_response_iss_parameter_supported: false,

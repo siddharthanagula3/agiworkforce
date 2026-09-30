@@ -67,16 +67,12 @@ nothing is left.
 
 - Done when: Changed lines in a code suggestion are visually highlighted (added/removed).
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | added and removed lines are coloured only in diff, patch and udiff blocks; the n/a call was not taken because ChatGPT canvas shows code changes and help.openai.com (403) could not confirm otherwise. | ui |
-| desktop | partial | added and removed lines are coloured only in diff, patch and udiff blocks; the n/a call was not taken because ChatGPT canvas shows code changes and help.openai.com (403) could not confirm otherwise. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx:133-133`, `packages/ui/unified-chat/src/components/markdown/shikiHighlighter.ts:11-11`
 
 ## S21.10: Diff formatting.
 
@@ -126,15 +122,11 @@ Code: `packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx:133-133`, 
 
 - Done when: Standard error is shown separately (and visibly distinguished) from stdout.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Only a single preview line is shown; stderr is not shown separately. | ui |
-| vscode | partial | Command output is shown as one body; stderr is not separated or styled differently. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:206-206`, `apps/cli/src/tui/tui_app.rs:1530-1530`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5788-5788`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5787-5787`
 
 ## S21.17: Execution-duration display.
 
@@ -153,14 +145,11 @@ Code: `apps/cli/src/tui/tui_app.rs:206-206`, `apps/cli/src/tui/tui_app.rs:1530-1
 
 - Done when: Each execution shows its outcome/exit status (success, failure with code).
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | A pass/fail glyph (✔/✗) is shown but not the exit code. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:176-176`, `apps/cli/src/tui/tui_app.rs:1530-1530`
 
 ## S21.20: Plot output.
 
@@ -179,17 +168,17 @@ Code: `apps/cli/src/tui/tui_app.rs:176-176`, `apps/cli/src/tui/tui_app.rs:1530-1
 
 - Done when: A failed or finished execution can be re-run in place.
 - Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | ChatGPT runs a code block in place; a Run control needs a server sandbox execution route first. | handler |
-| desktop | partial | ChatGPT runs a code block in place; a Run control needs a server sandbox execution route first. | handler |
-| mobile | partial | Matches web: Regenerate re-runs the whole answer; ChatGPT runs a code block in place, and a Run control needs a server sandbox execution route first. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
+| mobile | partial | Switch-on: AGI_E2B_EXECUTION=1 and E2B_API_KEY in production (same as web). | switch |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Web and desktop are partial because Regenerate re-runs the whole answer; VS Code has the same class of control, a Retry button on a failed turn that resends lastSendPayload, and was scored missing. Same evidence, same status. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1180-1180`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/mobile/src/features/chat/components/CodeRunAgain.tsx:30-31`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:279-279`
 
 ## S21.22: Stop execution.
 
@@ -199,12 +188,11 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Stop halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed (help.openai.com 403), so the cell stays partial. | ui |
-| desktop | partial | Stop halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed (help.openai.com 403), so the cell stays partial. | ui |
-| mobile | partial | Matches web: Stop generating halts the whole reply and there is no stop on the running execution itself; neither leader's per-execution control could be confirmed from official pages. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2768-2768`, `apps/web/features/chat/components/messages/MessageBubble.tsx:2204-2204`, `apps/mobile/src/features/chat/components/SendButton.tsx:90-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S21.23: Reset runtime.
 
@@ -238,17 +226,14 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2768-2768`
 
 - Done when: A code block can be opened in an editable canvas/editor next to the chat.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | only artifacts open in the editable panel; ChatGPT canvas edits code beside the chat, so an ordinary code block needs a path into the editor. | ui |
-| desktop | partial | only artifacts open in the editable panel; ChatGPT canvas edits code beside the chat, so an ordinary code block needs a path into the editor. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:668-668`
 
 ## S21.26: Open in coding workspace.
 

@@ -168,7 +168,7 @@ function EndpointEditor({
               Cancel
             </Button>
             <Button type="submit" disabled={!canSave} aria-busy={pending}>
-              {pending ? <Spinner size="sm" className="mr-2" aria-hidden="true" /> : null}
+              {pending ? <Spinner size="sm" className="me-2" aria-hidden="true" /> : null}
               {initial ? 'Save' : 'Add endpoint'}
             </Button>
           </DialogFooter>

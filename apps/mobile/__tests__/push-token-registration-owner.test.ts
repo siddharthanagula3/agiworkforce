@@ -75,16 +75,17 @@ describe('push-token registration ownership', () => {
 
     expect(mockApiPost).toHaveBeenCalledWith(
       '/api/mobile/push-token',
-      {
+      expect.objectContaining({
         deviceId: 'device-1',
         pushToken: 'expo-token-a',
+        platform: 'ios',
         preferences: expect.objectContaining({
           categories: expect.any(Object),
           eventTypes: expect.any(Object),
           quietHours: expect.any(Object),
           timezone: expect.any(String),
         }),
-      },
+      }),
       {
         headers: { Authorization: 'Bearer jwt-a' },
         signal: controller.signal,

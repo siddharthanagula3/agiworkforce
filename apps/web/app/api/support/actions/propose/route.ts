@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { z } from 'zod';
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -10,17 +9,7 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { proposeSupportAction } from '@/lib/support/actions/service';
 import { SupportActionRefusal } from '@/lib/support/actions/types';
-
-const ProposeSchema = z
-  .object({
-    actionId: z.string().min(1).max(64),
-    params: z.record(z.string(), z.unknown()).optional(),
-    surface: z.enum(['web', 'marketing']).optional(),
-    conversationRef: z.string().max(128).optional(),
-  })
-  // Unknown keys are STRIPPED, not merged: a body that also carries `userId`
-  // contributes nothing.
-  .strip();
+import { SupportActionProposeRequestSchema } from '@agiworkforce/cloud-contracts/support';
 
 function refusalResponse(error: SupportActionRefusal): NextResponse {
   return NextResponse.json(
@@ -44,7 +33,7 @@ async function handlePost(request: NextRequest) {
   if (rateLimited) return rateLimited;
 
   const body = await request.json().catch(() => ({}));
-  const parsed = ProposeSchema.safeParse(body);
+  const parsed = SupportActionProposeRequestSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }

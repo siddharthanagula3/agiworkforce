@@ -782,6 +782,7 @@ export async function stopBrowserBridge(): Promise<void> {
 export function sendBrowserCommand(
   command: BrowserCommand,
   args: Record<string, unknown>,
+  siteRules?: { allow: string[]; deny: string[] },
 ): Promise<unknown> {
   const pairing = readPairing();
   if (!pairing) {
@@ -798,6 +799,7 @@ export function sendBrowserCommand(
     id: randomUUID(),
     command,
     args,
+    ...(siteRules ? { siteRules } : {}),
   };
 
   return new Promise<unknown>((resolve, reject) => {

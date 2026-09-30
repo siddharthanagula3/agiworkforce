@@ -4,8 +4,10 @@ import {
   type ManagedCloudAgentRunReference,
 } from './managed-cloud-agent-run-reference';
 
+export const TOOL_CALL_ID_MAX_LENGTH = 256;
+
 export const ToolApprovalDecisionSchema = z.object({
-  tool_call_id: z.string().min(1).max(128),
+  tool_call_id: z.string().min(1).max(TOOL_CALL_ID_MAX_LENGTH),
   decision: z.enum(['approved', 'rejected']),
 });
 export type ToolApprovalDecisionWire = z.infer<typeof ToolApprovalDecisionSchema>;
@@ -16,6 +18,7 @@ export const ToolApprovalResumeRequestSchema = z.object({
   run_id: z.string().uuid(),
   tool_approvals: z.array(ToolApprovalDecisionSchema).min(1).max(32),
   guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
+  detached: z.boolean().optional(),
 });
 export type ToolApprovalResumeRequest = z.infer<typeof ToolApprovalResumeRequestSchema>;
 
@@ -32,7 +35,7 @@ export const MAX_TOOL_INPUT_RESPONSES_SERIALIZED_LENGTH = 16_000;
 // pause. The values are echoed verbatim to the remote server on resume, so the
 // host bounds their serialized size before accepting them.
 export const ToolInputResponseSchema = z.object({
-  tool_call_id: z.string().min(1).max(128),
+  tool_call_id: z.string().min(1).max(TOOL_CALL_ID_MAX_LENGTH),
   input_responses: z
     .record(z.string(), z.unknown())
     .refine(
@@ -46,6 +49,7 @@ export const ToolInputResumeRequestSchema = z.object({
   run_id: z.string().uuid(),
   tool_inputs: z.array(ToolInputResponseSchema).min(1).max(32),
   guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
+  detached: z.boolean().optional(),
 });
 export type ToolInputResumeRequest = z.infer<typeof ToolInputResumeRequestSchema>;
 
@@ -55,7 +59,7 @@ export const CloudToolApprovalProjectionSchema = z.object({
   calls: z
     .array(
       z.object({
-        toolCallId: z.string().min(1).max(128),
+        toolCallId: z.string().min(1).max(TOOL_CALL_ID_MAX_LENGTH),
         name: z.string().min(1).max(200),
         input: z.string().max(100_000).optional(),
         approvalDecision: z.enum(['approved', 'rejected']).optional(),

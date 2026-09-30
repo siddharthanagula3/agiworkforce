@@ -30,8 +30,8 @@ export async function loadSchedulePreferences(
         ? (row.notifications as Record<string, unknown>)
         : {};
     return {
-      push: preferences[SCHEDULE_PUSH_PREFERENCE_KEY] === true,
-      email: preferences[SCHEDULE_EMAIL_PREFERENCE_KEY] === true,
+      push: preferences[SCHEDULE_PUSH_PREFERENCE_KEY] !== false,
+      email: preferences[SCHEDULE_EMAIL_PREFERENCE_KEY] !== false,
       email_address: typeof row?.email === 'string' ? row.email : null,
     };
   } catch (error) {

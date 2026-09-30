@@ -56,4 +56,50 @@ describe('a gateway refusal before the stream opens', () => {
     );
     expect(error?.message).not.toMatch(/\d/);
   });
+
+  it('names the terms refusal and keeps the acceptance link from the gateway sentence', async () => {
+    const sentence =
+      'The Terms of Service were updated. Accept the updated terms at https://agiworkforce.com/login/complete?redirectTo=%2Fchat to keep using AGI Workforce, then try again.';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        refusal(
+          403,
+          JSON.stringify({
+            error: {
+              message: sentence,
+              type: 'invalid_request_error',
+              code: 'terms_acceptance_required',
+            },
+          }),
+        ),
+      ),
+    );
+    const chunks = await collect(streamFreeChat([{ role: 'user', content: 'hi' }], 'a-token'));
+    const error = chunks.find((c) => c.type === 'error');
+    expect(error?.code).toBe('terms_required');
+    expect(error?.message).toBe(sentence);
+  });
+
+  it('reads the chat gateway lower-case account refusal as a suspension', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        refusal(
+          403,
+          JSON.stringify({
+            error: {
+              message: 'This account is suspended.',
+              type: 'invalid_request_error',
+              code: 'account_unavailable',
+            },
+          }),
+        ),
+      ),
+    );
+    const chunks = await collect(streamFreeChat([{ role: 'user', content: 'hi' }], 'a-token'));
+    const error = chunks.find((c) => c.type === 'error');
+    expect(error?.code).toBe('account_suspended');
+    expect(error?.message).toBe('This account is suspended.');
+  });
 });

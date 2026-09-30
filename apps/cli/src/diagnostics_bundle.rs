@@ -1,8 +1,9 @@
 //! The `agi doctor` report in the shape every surface posts to
 //! `/api/support/diagnostics`.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
+use crate::cloud::{CloudClient, CloudError};
 use crate::doctor::{DoctorReport, DoctorStatus};
 use crate::secret_redaction::redact_tool_output;
 
@@ -45,6 +46,32 @@ fn locale() -> Option<String> {
         }
     }
     None
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DiagnosticsExport {
+    pub diagnostics: serde_json::Value,
+    pub summary: String,
+    pub filename: String,
+}
+
+pub async fn export(report: &DoctorReport) -> Result<DiagnosticsExport, CloudError> {
+    let client = CloudClient::connect_managed()?;
+    let mut exported: DiagnosticsExport = client
+        .post(
+            DIAGNOSTICS_PATH,
+            &serde_json::json!({ "diagnostics": diagnostics_from_report(report) }),
+        )
+        .await?;
+    exported.filename = std::path::Path::new(&exported.filename)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| name.ends_with(".json"))
+        .map(str::to_string)
+        .ok_or_else(|| {
+            CloudError::Decode("the diagnostics file name was not a JSON file name".to_string())
+        })?;
+    Ok(exported)
 }
 
 /// Only the checks that did not pass, newest last. A passing check says nothing

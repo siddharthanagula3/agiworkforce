@@ -135,6 +135,7 @@ function dbStub({
   shares = [] as ShareFixture[],
   discoveryThrows = false,
   unshareThrows = false,
+  otherMembership = false,
 } = {}) {
   const statements: string[] = [];
   /** Share rows still in the table, mutated by the unshare DELETE below. */
@@ -159,6 +160,9 @@ function dbStub({
     if (/user_settings/.test(text)) {
       if (settingsThrows) throw new Error('settings table unavailable');
       return [{ organization_id: activeWorkspace }];
+    }
+    if (/organization_members/.test(text)) {
+      return otherMembership ? [{ organization_id: OTHER_ORG }] : [];
     }
     if (/device_refresh_tokens/.test(text)) {
       if (deviceThrows) throw new Error('device table unavailable');
@@ -197,7 +201,20 @@ function dbStub({
     }
     return [];
   });
-  return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query, statements, live };
+  const execute = vi.fn(async (sql: string, _params: unknown[] = []) => {
+    statements.push(String(sql));
+  });
+  const intentCalls = () =>
+    [...query.mock.calls, ...execute.mock.calls].filter(([sql]) =>
+      /mobile_intent_tokens/.test(String(sql)),
+    );
+  return {
+    db: { query, execute } as unknown as DatabaseAdapter,
+    query,
+    statements,
+    live,
+    intentCalls,
+  };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -219,6 +236,37 @@ describe('deprovisionMember', () => {
     expect(identity.revoked).toEqual(['sess_1', 'sess_2']);
   });
 
+  it('revokes only the Ask from Siri tokens issued in the workspace being left', async () => {
+    const db = dbStub({ activeWorkspace: OTHER_ORG, otherMembership: true });
+
+    await deprovisionMember(db.db, identityStub().identity, { userId: USER, organizationId: ORG });
+
+    const calls = db.intentCalls();
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0]![0])).toMatch(/user_id = \$1 and organization_id = \$2/);
+    expect(calls[0]![1]).toEqual([USER, ORG]);
+  });
+
+  it('revokes every Ask from Siri token when the sessions end and no other workspace remains', async () => {
+    const db = dbStub();
+
+    await deprovisionMember(db.db, identityStub().identity, { userId: USER, organizationId: ORG });
+
+    const calls = db.intentCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![1]).toEqual([USER, null]);
+  });
+
+  it('keeps personal Ask from Siri tokens when the sessions end but another workspace remains', async () => {
+    const db = dbStub({ otherMembership: true });
+
+    await deprovisionMember(db.db, identityStub().identity, { userId: USER, organizationId: ORG });
+
+    const calls = db.intentCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![1]).toEqual([USER, ORG]);
+  });
+
   describe('credentials outside the workspace being left', () => {
     /**
      * WEB-SEC-SCAN-2026-09-09-F21. The authorization proved before this call is
@@ -230,7 +278,7 @@ describe('deprovisionMember', () => {
      */
     it('leaves the member’s personal and other-tenant credentials live', async () => {
       const identity = identityStub();
-      const db = dbStub();
+      const db = dbStub({ otherMembership: true });
 
       const result = await deprovisionMember(db.db, identity.identity, {
         userId: USER,
@@ -349,7 +397,7 @@ describe('deprovisionMember', () => {
 
   it('only touches credentials that are still live', async () => {
     const identity = identityStub();
-    const db = dbStub();
+    const db = dbStub({ otherMembership: true });
     await deprovisionMember(db.db, identity.identity, { userId: USER, organizationId: ORG });
 
     // Scoped to the credential-revocation writes this policed from the start.
@@ -357,7 +405,7 @@ describe('deprovisionMember', () => {
     // column and are asserted by behaviour in the cases below; re-revoking an
     // already-revoked token is what this one exists to catch.
     const revocations = db.statements.filter((sql) => /^\s*update/i.test(sql));
-    expect(revocations).toHaveLength(2);
+    expect(revocations).toHaveLength(3);
     for (const sql of revocations) {
       expect(sql).toMatch(/revoked_at is null/);
       expect(sql).toMatch(/user_id = \$1/);

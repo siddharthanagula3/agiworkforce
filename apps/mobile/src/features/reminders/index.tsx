@@ -16,12 +16,14 @@ import { ArrowLeft, Bell, CalendarDays, Clock3, ShieldCheck } from 'lucide-react
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   createIOSReminder,
   MAX_REMINDER_TITLE_LENGTH,
   parseReminderDueInputs,
   reminderDueInputsFromISO,
   ReminderCreationError,
+  reminderCreationErrorMessage,
 } from './service';
 
 export default function ReminderReviewScreen() {
@@ -57,9 +59,10 @@ export default function ReminderReviewScreen() {
       );
     } catch (cause) {
       if (cause instanceof ReminderCreationError) {
-        setError(cause.message);
+        const message = reminderCreationErrorMessage(cause.code);
+        setError(message);
         if (cause.code === 'permission-denied') {
-          Alert.alert('Reminders Access Needed', cause.message, [
+          Alert.alert('Reminders Access Needed', message, [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Open Settings', onPress: () => void Linking.openSettings() },
           ]);
@@ -131,10 +134,14 @@ export default function ReminderReviewScreen() {
             >
               <Bell size={24} color={colors.teal} />
             </View>
-            <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}>
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.title3, fontWeight: '700' }}
+            >
               Create an Apple Reminder
             </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>
+            <Text
+              style={{ color: colors.textMuted, fontSize: typeScale.footnote, textAlign: 'center' }}
+            >
               Nothing is created until you review these details and tap Create Reminder.
             </Text>
           </View>
@@ -193,19 +200,19 @@ export default function ReminderReviewScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <CalendarDays size={16} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
                 A date without a time creates an all-day reminder.
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Clock3 size={16} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
                 Leave both fields blank to create an undated reminder.
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <ShieldCheck size={16} color={colors.teal} />
-              <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 13 }}>
+              <Text style={{ flex: 1, color: colors.textSecondary, fontSize: typeScale.footnote }}>
                 This action writes only this reminder and does not send it to a model.
               </Text>
             </View>
@@ -222,7 +229,9 @@ export default function ReminderReviewScreen() {
                 borderColor: `${colors.agentError}40`,
               }}
             >
-              <Text style={{ color: colors.agentError, fontSize: 13 }}>{error}</Text>
+              <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
+                {error}
+              </Text>
             </View>
           ) : null}
 
@@ -248,7 +257,9 @@ export default function ReminderReviewScreen() {
             ) : (
               <Bell size={18} color={colors.surfaceBase} />
             )}
-            <Text style={{ color: colors.surfaceBase, fontSize: 15, fontWeight: '700' }}>
+            <Text
+              style={{ color: colors.surfaceBase, fontSize: typeScale.body, fontWeight: '700' }}
+            >
               {creating ? 'Creating…' : 'Create Reminder'}
             </Text>
           </Pressable>

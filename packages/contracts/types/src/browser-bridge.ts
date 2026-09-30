@@ -224,6 +224,7 @@ export const BROWSER_COMMAND_POLL_WINDOW_MS = 20_000;
 export const BROWSER_COMMAND_TIMEOUT_MS = 45_000;
 
 export const BROWSER_COMMANDS = [
+  'browser_list_tabs',
   'browser_read_page',
   'browser_click',
   'browser_type',
@@ -232,6 +233,9 @@ export const BROWSER_COMMANDS = [
   'browser_console',
   'browser_network',
   'browser_download',
+  'browser_find',
+  'browser_fill_form',
+  'browser_history',
 ] as const;
 
 export type BrowserCommand = (typeof BROWSER_COMMANDS)[number];
@@ -251,6 +255,12 @@ export interface BrowserCommandRequest {
   id: string;
   command: BrowserCommand;
   args: Record<string, unknown>;
+  /**
+   * The account's workspace website rules. The extension holds the tab the
+   * command acts on, before and after, and any download's final address to
+   * them, and answers with the tab's address so the desktop can check again.
+   */
+  siteRules?: { allow: string[]; deny: string[] };
 }
 
 export interface BrowserCommandResult {
@@ -291,3 +301,12 @@ export interface BrowserPageSummary {
   title: string;
   text: string;
 }
+
+export interface BrowserTabSummary {
+  tabId: number;
+  title: string;
+  url: string;
+  active: boolean;
+}
+
+export const MAX_LISTED_BROWSER_TABS = 50;

@@ -43,9 +43,10 @@ import { e2bChatTemplate } from '@/lib/e2b/chat-template';
 import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execution';
 import {
   DEVICE_HOST_HEADER,
+  declarationForHost,
   parseDesktopHostDeclaration,
-  type DesktopCapability,
   type DesktopHostDeclaration,
+  type DeviceStepCapability,
 } from '@agiworkforce/local-runtime-contract';
 import { deviceStepToolDefs } from '@/lib/device-steps/device-tools';
 import { URL_FETCH_TOOL, urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
@@ -123,7 +124,7 @@ import {
   memoryCommandTurnNote,
 } from '@/lib/services/memory-commands';
 import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
-import { fileSearchToolDefinition, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { fileSearchToolDefinitions, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import {
   asksForSchedule,
@@ -200,11 +201,15 @@ import {
   isAutoModeModelId,
   WORKSPACE_FEATURE_LABELS,
   type Effort,
+  type ModelMetadata,
   getSlotForModel,
   isFlagshipRoutingSlot,
   normalizeModelId,
+  BILLING_PLAN_CAPABILITY_TIERS,
+  billingPlanCapabilityPlanLabels,
   canUseBillingPlanCapability,
   isFreeBillingPlanTier,
+  normalizeBillingPlanTier,
   isValidIanaTimeZone,
   resolveMaxOutputTokens,
   resolvePromptCachePrivacyClass,
@@ -212,6 +217,7 @@ import {
   getDefaultAutoRoutingProfile,
   autoAliasForRoutingProfile,
   ROUTING_PROFILE_CHOICES,
+  getTierPolicy,
 } from '@agiworkforce/types';
 import type {
   ChatResponseFormat,
@@ -305,6 +311,7 @@ import {
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageRequest,
   resolveManagedQuotaRecovery,
+  usageCreditsEnabled,
   type ManagedQuotaRecovery,
   type ManagedUsageLimitContext,
   type ManagedUsageRequestReservation,
@@ -326,6 +333,17 @@ import {
   noTrainingChatModelFor,
   readProviderTrainingOptOut,
 } from '@/lib/server/provider-training-opt-out';
+import { conversationHealthSpaceId } from '@/lib/services/health-space-service';
+import {
+  GOOGLE_USER_DATA_CONNECTED_MODEL_MAY_TRAIN_MESSAGE,
+  GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE,
+  GOOGLE_USER_DATA_NO_MODEL_MESSAGE,
+  markConversationGoogleUserData,
+  mcpContextConnectorIds,
+  connectorIdsReadGoogleUserData,
+  resolveGoogleUserDataTurn,
+  type GoogleUserDataTurnReason,
+} from '@/lib/connectors/google-user-data';
 import {
   createResearchDomainPolicy,
   MAX_RESEARCH_CONNECTOR_SOURCES,
@@ -408,8 +426,9 @@ import {
 import { loadSelectedMcpContext, McpContextError } from '@/lib/connectors/mcp-context-service';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { timePhase } from '@/lib/observability/phase-timer';
-import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
+import { assertCapabilityAvailable, readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
+import { WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
 import { CHAT_TURN_PHASE } from './turn-phases';
 
 export const ChatCompletionRequestSchema = z
@@ -626,6 +645,7 @@ export const ChatCompletionRequestSchema = z
       })
       .optional(),
     effort: z.string().optional(),
+    speed: z.enum(['standard', 'fast']).optional(),
     use_prompt_cache: z.boolean().optional(),
     client_timezone: z
       .string()
@@ -883,7 +903,7 @@ export function applyFileSearchToolCapability(
   }
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isFileSearchTool(tool.function.name)),
-    fileSearchToolDefinition(),
+    ...fileSearchToolDefinitions(),
   ];
 }
 
@@ -1133,11 +1153,39 @@ export function getWorkModeEntitlementError(
   workMode: ChatCompletionRequest['work_mode'],
   planTier: string | null | undefined,
 ): WorkModeEntitlementError | null {
-  if (workMode !== 'agiwork' || canUseBillingPlanCapability(planTier, 'agi_work')) return null;
+  if (
+    workMode !== 'agiwork' ||
+    canUseBillingPlanCapability(normalizeBillingPlanTier(planTier), 'agi_work')
+  ) {
+    return null;
+  }
   return {
     code: 'agi_work_plan_required',
     message: 'AGI Work requires Pro or higher.',
     requiredTier: 'pro',
+  };
+}
+
+export function getResearchPlanRefusal(
+  research: ChatCompletionRequest['research'],
+  planTier: string | null | undefined,
+): ProcessFailure | null {
+  const plan = normalizeBillingPlanTier(planTier);
+  if (research !== true || canUseBillingPlanCapability(plan, 'deep_research')) return null;
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message: `Deep Research is available on ${billingPlanCapabilityPlanLabels('deep_research')} plans. Upgrade your plan to use it.`,
+          type: 'invalid_request_error',
+          code: 'plan_upgrade_required',
+          current_plan: plan,
+          required_plans: [...BILLING_PLAN_CAPABILITY_TIERS.deep_research],
+        },
+      },
+      { status: 403 },
+    ),
   };
 }
 
@@ -1167,6 +1215,8 @@ export type ProcessedRequest = {
   callerToolFields?: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'>;
   conversationId: string | undefined;
   conversationIsTemporary?: boolean;
+  healthSpaceProjectId?: string | null;
+  googleUserData?: boolean;
   /**
    * The project passages this turn was given, with the page or heading each
    * came from. Built once by the context load and carried so the response
@@ -1301,6 +1351,8 @@ export type ProcessedRequest = {
   };
   /** §24: the sources and site restriction this research run was given. */
   webSearchDomainPolicy?: ResearchDomainPolicy;
+  /** The workspace's website rules, for the pages a paired device browser opens. */
+  deviceWebDomainPolicy?: ResearchDomainPolicy;
   researchSources?: {
     files: boolean;
     allowDomains: string[];
@@ -1335,6 +1387,8 @@ export type ProcessedRequest = {
     thinking_mode?: boolean;
     thinking?: { type: string; budget_tokens?: number };
     effort?: string;
+    /** Only ever set for a first-party Anthropic model with a fast tier. */
+    speed?: 'fast';
     usePromptCache?: boolean;
     responseFormat?: ChatResponseFormat;
     requestParameters?: RequestedParameters;
@@ -1415,6 +1469,47 @@ const EFFORT_ORDER: readonly Effort[] = [
 function effortExceeds(effort: Effort | undefined, maximum: Effort | undefined): boolean {
   if (!effort || !maximum) return false;
   return EFFORT_ORDER.indexOf(effort) > EFFORT_ORDER.indexOf(maximum);
+}
+
+/** Fast mode is Anthropic's first-party tier; a gateway or cloud route does not offer it. */
+export function fastTierFor(
+  provider: string,
+  model: string,
+): NonNullable<ModelMetadata['fastTier']> | null {
+  if (provider !== 'anthropic') return null;
+  return getModelMetadataById(model)?.fastTier ?? null;
+}
+
+/**
+ * Fast mode follows Claude's rules: a model that offers it, a paid plan (never a
+ * free trial, the free lane or a promotion), and on a workspace only once an
+ * administrator has turned it on. It is billed to usage credits.
+ */
+export function fastModeRefusal(input: {
+  model: string;
+  modelOffersFast: boolean;
+  paidPlan: boolean;
+  workspaceAllowsFast: boolean;
+}): { message: string; status: 403 | 422 } | null {
+  if (!input.modelOffersFast) {
+    return {
+      message: `Fast mode is not available for ${input.model}. Turn it off or choose a model that offers it.`,
+      status: 422,
+    };
+  }
+  if (!input.paidPlan) {
+    return {
+      message: 'Fast mode is available on paid plans and is billed to usage credits.',
+      status: 403,
+    };
+  }
+  if (!input.workspaceAllowsFast) {
+    return {
+      message: 'Fast mode has been disabled by your organization.',
+      status: 403,
+    };
+  }
+  return null;
 }
 
 export function buildThinkingConfig({
@@ -2581,13 +2676,17 @@ function unsupportedParameterResponse(param: string, message: string): ProcessFa
   };
 }
 
-function noTrainingModelUnavailable(): ProcessFailure {
+function noTrainingModelUnavailable(
+  googleUserData: GoogleUserDataTurnReason = null,
+): ProcessFailure {
   return {
     ok: false,
     response: NextResponse.json(
       {
         error: {
-          message: 'No model on your plan keeps your chats out of training right now.',
+          message: googleUserData
+            ? GOOGLE_USER_DATA_NO_MODEL_MESSAGE
+            : 'No model on your plan keeps your chats out of training right now.',
           type: 'invalid_request_error',
           code: 'no_training_model_available',
         },
@@ -2595,6 +2694,19 @@ function noTrainingModelUnavailable(): ProcessFailure {
       { status: 403 },
     ),
   };
+}
+
+async function modelMayTrainMessage(
+  healthSpace: Promise<string | null>,
+  googleUserData: Promise<GoogleUserDataTurnReason>,
+): Promise<string> {
+  if ((await healthSpace) !== null) {
+    return "This model's provider may train on what you send, and Health only uses models that keep your chats out of training. Choose another model.";
+  }
+  const google = await googleUserData;
+  if (google === 'conversation') return GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE;
+  if (google === 'connectors') return GOOGLE_USER_DATA_CONNECTED_MODEL_MAY_TRAIN_MESSAGE;
+  return "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.";
 }
 
 // The free plan has no Auto. A client that still sends it is served the plan's
@@ -2607,12 +2719,23 @@ export function applyFreePlanDefaultModel(
   chatRequest.model = getDefaultModelFor(planTier, 'chat');
 }
 
+export function declaredDeviceHost(
+  header: string | null,
+  surface: CloudChatSurface,
+): DesktopHostDeclaration | null {
+  const kind = surface === 'desktop' ? 'desktop' : surface === 'mobile' ? 'phone' : null;
+  const declaration = kind ? parseDesktopHostDeclaration(header) : null;
+  if (!kind || !declaration) return null;
+  const scoped = declarationForHost(declaration, kind);
+  return scoped.capabilities.length > 0 ? scoped : null;
+}
+
 export function withoutWorkspaceDisabledDeviceCapabilities(
   deviceHost: DesktopHostDeclaration | null,
   controls: ResolvedWorkspaceControls | null,
 ): DesktopHostDeclaration | null {
   if (!deviceHost || !controls) return deviceHost;
-  const withheld = new Set<DesktopCapability>([
+  const withheld = new Set<DeviceStepCapability>([
     ...(controls.featureAccess.computer_use ? [] : ['computer.use' as const]),
     ...(controls.featureAccess.browser ? [] : ['browser.site' as const, 'browser.cdp' as const]),
   ]);
@@ -2766,15 +2889,60 @@ export async function processRequest(
     options.scopedDbPromise ?? getUserScopedDb(request, { apiKeyScope: 'inference:write' });
   scopedDbPromise.catch(() => {});
 
-  const trainingOptOutPromise = scopedDbPromise
-    .then((scoped) => readProviderTrainingOptOut(scoped.db, userId))
-    .catch((error: unknown) => {
+  const conversationIdForHealthSpace = chatRequest.conversation_id;
+  const healthSpacePromise: Promise<string | null> = conversationIdForHealthSpace
+    ? scopedDbPromise.then((scoped) =>
+        conversationHealthSpaceId(scoped.db, userId, conversationIdForHealthSpace),
+      )
+    : Promise.resolve(null);
+  healthSpacePromise.catch(() => {});
+
+  const explicitModelCallsTools =
+    isAutoModeModelId(chatRequest.model) ||
+    getModelMetadataById(chatRequest.model)?.capabilities?.tools !== false;
+  const googleUserDataPromise: Promise<GoogleUserDataTurnReason> = scopedDbPromise
+    .then((scoped) =>
+      resolveGoogleUserDataTurn(scoped.db, userId, {
+        conversationId: chatRequest.conversation_id,
+        organizationId: scoped.organizationId,
+        messages: chatRequest.messages,
+        connectorToolsEnabled:
+          chatRequest.connector_tools_enabled !== false &&
+          explicitModelCallsTools &&
+          Boolean(getTierPolicy(subscription.plan_tier).allowMCP),
+        disabledConnectorIds: chatRequest.disabled_connector_ids,
+        researchConnectorIds: chatRequest.research_sources?.connectors,
+        contextConnectorIds: chatRequest.mcp_context
+          ? mcpContextConnectorIds(chatRequest.mcp_context)
+          : undefined,
+      }),
+    )
+    .catch((error: unknown): GoogleUserDataTurnReason => {
       logger.warn(
         { error, userId },
-        'Provider training opt-out unreadable; routing only to models that keep inputs out of training',
+        'Google user data state unreadable; routing only to models that keep inputs out of training',
       );
-      return true;
+      return 'conversation';
     });
+  googleUserDataPromise.catch(() => {});
+
+  const trainingOptOutPromise = Promise.all([
+    scopedDbPromise
+      .then((scoped) => readProviderTrainingOptOut(scoped.db, userId))
+      .catch((error: unknown) => {
+        logger.warn(
+          { error, userId },
+          'Provider training opt-out unreadable; routing only to models that keep inputs out of training',
+        );
+        return true;
+      }),
+    healthSpacePromise,
+    googleUserDataPromise,
+  ]).then(
+    ([optedOut, healthSpaceProjectId, googleUserData]) =>
+      optedOut || healthSpaceProjectId !== null || googleUserData !== null,
+  );
+  trainingOptOutPromise.catch(() => {});
 
   const routingProfileAlias =
     chatRequest.model === getDefaultAutoRoutingProfile().id
@@ -2790,7 +2958,7 @@ export async function processRequest(
     (await trainingOptOutPromise)
   ) {
     const noTrainingModel = noTrainingChatModelFor(subscription.plan_tier);
-    if (!noTrainingModel) return noTrainingModelUnavailable();
+    if (!noTrainingModel) return noTrainingModelUnavailable(await googleUserDataPromise);
     chatRequest.model = noTrainingModel;
   }
   const requestedModel = chatRequest.model;
@@ -2808,14 +2976,13 @@ export async function processRequest(
   creditBalancePromise?.catch(() => {});
 
   const chatSurface = resolveAuthenticatedSurface(request, auth);
-  // A declaration is a claim about the caller's own machine, never an
+  // A declaration is a claim about the caller's own device, never an
   // authorization: it decides which device tools are offered, and the device
-  // refuses or prompts for every step it produces. Only the desktop surface is
-  // believed, so a browser tab cannot obtain the tools by sending the header.
+  // refuses or prompts for every step it produces. Only the desktop and mobile
+  // surfaces are believed, each for its own steps, so a browser tab cannot
+  // obtain the tools by sending the header and a phone cannot claim a desktop's.
   const deviceHost = withoutWorkspaceDisabledDeviceCapabilities(
-    chatSurface === 'desktop'
-      ? parseDesktopHostDeclaration(request.headers.get(DEVICE_HOST_HEADER))
-      : null,
+    declaredDeviceHost(request.headers.get(DEVICE_HOST_HEADER), chatSurface),
     workspaceControls,
   );
   const disabledFeature = workspaceControls
@@ -2846,10 +3013,9 @@ export async function processRequest(
       return new Map<string, boolean>();
     });
   skillInstallOverridesPromise.catch(() => {});
+  const pluginsAllowed = !workspaceControls || workspaceControls.featureAccess.plugins;
   const loadEnabledPluginIds = memoizeAsync(async () =>
-    workspaceControls && !workspaceControls.featureAccess.plugins
-      ? new Set<string>()
-      : listEnabledPluginIds((await scopedDbPromise).db, userId),
+    pluginsAllowed ? listEnabledPluginIds((await scopedDbPromise).db, userId) : new Set<string>(),
   );
 
   // safety legs so both keep seeing the caller's own words.
@@ -3275,6 +3441,19 @@ export async function processRequest(
 
   if (chatRequest.mcp_context) {
     try {
+      if (chatRequest.conversation_id) {
+        const scoped = await scopedDbPromise;
+        if (
+          await connectorIdsReadGoogleUserData(
+            scoped.db,
+            userId,
+            scoped.organizationId,
+            mcpContextConnectorIds(chatRequest.mcp_context),
+          )
+        ) {
+          await markConversationGoogleUserData(scoped.db, userId, chatRequest.conversation_id);
+        }
+      }
       const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context);
       if (context) {
         chatRequest.messages.unshift({ role: 'system', content: context });
@@ -3673,7 +3852,9 @@ export async function processRequest(
   const availableProviderIds = trainingOptOut
     ? new Set([...managedProviderIds].filter(providerKeepsInputsOutOfTraining))
     : managedProviderIds;
-  if (trainingOptOut && availableProviderIds.size === 0) return noTrainingModelUnavailable();
+  if (trainingOptOut && availableProviderIds.size === 0) {
+    return noTrainingModelUnavailable(await googleUserDataPromise);
+  }
   const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
   // Only a workspace pinned AWAY from the region this deployment processes in
@@ -4127,19 +4308,51 @@ export async function processRequest(
     );
   }
 
-  if (chatRequest.research === true) {
-    const { organizationId: researchWorkspaceId } = await scopedDbPromise;
-    await assertCapabilityAvailable(
-      buildFlagSubject(request, {
-        userId,
-        workspaceId: researchWorkspaceId,
-        role: null,
-        plan: subscription.plan_tier,
-        surface: chatSurface,
-      }),
-      'canUseDeepResearch',
-      'Deep Research',
-    );
+  const researchPlanRefusal = getResearchPlanRefusal(chatRequest.research, subscription.plan_tier);
+  if (researchPlanRefusal) return researchPlanRefusal;
+  let cloudExecutionSwitchedOff = false;
+  let imagesSwitchedOff = false;
+  let webSearchSwitchedOff = false;
+  const webSearchAsked = chatRequest.web_search === true || chatRequest.web_fetch === true;
+  const imageCardsAsked =
+    chatRequest.x_interactive_cards?.supported.includes(IMAGE_CARD_KIND) === true;
+  if (
+    chatRequest.research === true ||
+    chatRequest.work_mode === 'agiwork' ||
+    chatRequest.code_execution === true ||
+    webSearchAsked ||
+    imageCardsAsked
+  ) {
+    const { organizationId: gatedWorkspaceId } = await scopedDbPromise;
+    const gatedSubject = buildFlagSubject(request, {
+      userId,
+      workspaceId: gatedWorkspaceId,
+      role: null,
+      plan: subscription.plan_tier,
+      surface: chatSurface,
+    });
+    if (chatRequest.work_mode === 'agiwork') {
+      await assertCapabilityAvailable(gatedSubject, WORK_CAPABILITY, 'AGI Work');
+    }
+    if (chatRequest.research === true) {
+      await assertCapabilityAvailable(gatedSubject, 'canUseDeepResearch', 'Deep Research');
+    }
+    if (
+      chatRequest.research === true ||
+      (webSearchRequestedByCaller && chatRequest.work_mode !== 'agiwork')
+    ) {
+      await assertCapabilityAvailable(gatedSubject, 'canUseWebSearch', 'Web search');
+    }
+    const gate = await readKillSwitchGate(gatedSubject).catch((gateError: unknown) => {
+      logger.error(
+        { error: gateError, userId },
+        'Kill-switch gate unreadable; switchable turn tools are withheld',
+      );
+      return null;
+    });
+    cloudExecutionSwitchedOff = gate?.capabilityAllowed('canUseCloudExecution') !== true;
+    imagesSwitchedOff = gate?.capabilityAllowed('canUseImages') !== true;
+    webSearchSwitchedOff = gate?.capabilityAllowed('canUseWebSearch') !== true;
   }
   const researchMode = researchModeAllowed(
     chatRequest,
@@ -4149,8 +4362,16 @@ export async function processRequest(
   if (researchMode) {
     applyResearchMode(chatRequest, dynamicSystemMessageRefs, rolloutInputs.promptVariants);
   }
+  if (webSearchSwitchedOff) {
+    chatRequest.web_search = false;
+    chatRequest.web_fetch = false;
+  }
+  // The paired browser on a desktop is bound by the same website rules as
+  // web search and fetch, so a turn that may drive it reads them too.
+  const drivesDeviceBrowser =
+    deviceHost?.capabilities.some((capability) => capability.startsWith('browser.')) === true;
   const workspaceWebDomainPolicy =
-    chatRequest.web_search || chatRequest.web_fetch || researchMode
+    chatRequest.web_search || chatRequest.web_fetch || researchMode || drivesDeviceBrowser
       ? await scopedDbPromise.then((scoped) =>
           readWorkspaceWebDomainPolicy(scoped.db, scoped.organizationId),
         )
@@ -4246,8 +4467,7 @@ export async function processRequest(
       response: NextResponse.json(
         {
           error: {
-            message:
-              "This model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy.",
+            message: await modelMayTrainMessage(healthSpacePromise, googleUserDataPromise),
             type: 'invalid_request_error',
             code: 'model_may_train',
           },
@@ -4269,6 +4489,7 @@ export async function processRequest(
       userId,
       loadEnabledPluginIds,
       loadInstallOverrides: loadSkillInstallOverrides,
+      pluginsAllowed,
       ...options,
     });
   if (chatRequest.skill_name) {
@@ -4677,6 +4898,55 @@ export async function processRequest(
     };
   }
 
+  const fastRefusal =
+    chatRequest.speed === 'fast'
+      ? fastModeRefusal({
+          model: chatRequest.model,
+          modelOffersFast: fastTierFor(providerLower, chatRequest.model) !== null,
+          paidPlan: !isFreePlanTier(subscription.plan_tier) && !freeTrialEnabled && !freeLanePlan,
+          workspaceAllowsFast: workspaceControls
+            ? workspaceControls.featureAccess.fast_mode === true
+            : true,
+        })
+      : null;
+  if (fastRefusal) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: fastRefusal.message,
+            type: 'invalid_request_error',
+            code: 'fast_mode_unavailable',
+            param: 'speed',
+          },
+        },
+        { status: fastRefusal.status },
+      ),
+    };
+  }
+  if (
+    chatRequest.speed === 'fast' &&
+    !(await usageCreditsEnabled((await scopedDbPromise).db, userId))
+  ) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: 'Fast mode is billed to usage credits. Turn them on in Settings > Billing.',
+            type: 'invalid_request_error',
+            code: 'extra_usage_required',
+            param: 'speed',
+          },
+        },
+        { status: 402 },
+      ),
+    };
+  }
+  let fastTier =
+    chatRequest.speed === 'fast' ? fastTierFor(providerLower, chatRequest.model) : null;
+
   const effectiveEffort = clampReasoningEffort(
     resolveRequestEffort(
       providerLower,
@@ -4772,6 +5042,9 @@ export async function processRequest(
       estimatedPromptTokens,
       maxTokens,
     );
+  if (fastTier) {
+    estimatedCostMicrousd = Math.ceil(estimatedCostMicrousd * fastTier.priceMultiplier);
+  }
   const turnCodeExecutionInput = {
     provider: providerLower,
     stream: chatRequest.stream,
@@ -4781,9 +5054,10 @@ export async function processRequest(
     codeExecutionCapable:
       resolvedModelCaps?.codeExecution === true && nativeToolPermitted(EXECUTE_CODE_TOOL),
   };
-  const codeExecutionHoldMicrousd = chatRequest.code_execution
-    ? hostedCodeExecutionReserveMicrousd(turnCodeExecutionInput)
-    : 0;
+  const codeExecutionHoldMicrousd =
+    chatRequest.code_execution && !cloudExecutionSwitchedOff
+      ? hostedCodeExecutionReserveMicrousd(turnCodeExecutionInput)
+      : 0;
   let freeTrial: FreeTrialReservation | undefined;
   let managedUsage: ManagedUsageRequestReservation | undefined;
 
@@ -4935,6 +5209,7 @@ export async function processRequest(
           chatRequest.model = fallbackModel.model;
           provider = fallbackProvider;
           estimatedCostMicrousd = fallbackCostMicrousd;
+          fastTier = null;
         } else {
           return monthlyLimitRefusal();
         }
@@ -4980,6 +5255,7 @@ export async function processRequest(
           leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
           planTier: subscription.plan_tier,
           isFlagship: isFlagshipRequest,
+          ...(fastTier ? { funding: 'extra_usage' as const } : {}),
           quotaFeature,
           attribution: {
             workload: resolveChatWorkload({
@@ -5110,11 +5386,13 @@ export async function processRequest(
     resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
   }
 
-  const imageTools = imageToolsForTurn(chatRequest, {
-    surface: chatSurface,
-    toolsCapable: resolvedModelCaps?.tools ?? true,
-    planTier: subscription.plan_tier,
-  });
+  const imageTools = imagesSwitchedOff
+    ? []
+    : imageToolsForTurn(chatRequest, {
+        surface: chatSurface,
+        toolsCapable: resolvedModelCaps?.tools ?? true,
+        planTier: subscription.plan_tier,
+      });
   if (imageTools.length > 0) {
     resolvedTools = [...(resolvedTools ?? []), ...imageTools];
   }
@@ -5186,7 +5464,9 @@ export async function processRequest(
   }
 
   let codeExecutionUnavailable = false;
-  if (chatRequest.code_execution) {
+  if (chatRequest.code_execution && cloudExecutionSwitchedOff) {
+    codeExecutionUnavailable = true;
+  } else if (chatRequest.code_execution) {
     const turnCodeExecution = resolveTurnCodeExecutionTools(turnCodeExecutionInput);
     if (turnCodeExecution.tools.length > 0) {
       resolvedTools = [...(resolvedTools ?? []), ...turnCodeExecution.tools];
@@ -5328,6 +5608,7 @@ export async function processRequest(
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,
+    ...(fastTier ? { speed: 'fast' as const } : {}),
     ...(responseFormat ? { responseFormat } : {}),
     ...(Object.keys(requestParameters).length > 0 ? { requestParameters } : {}),
     ...resolveTurnPromptCache({
@@ -5441,6 +5722,9 @@ export async function processRequest(
     requestId,
     chatSurface,
     ...(deviceHost ? { deviceHost } : {}),
+    ...(deviceHost && workspaceWebDomainPolicy
+      ? { deviceWebDomainPolicy: workspaceWebDomainPolicy }
+      : {}),
     organizationId,
     zeroDataRetentionOnly,
     decisionScope,
@@ -5449,6 +5733,8 @@ export async function processRequest(
     callerToolFields,
     conversationId: chatRequest.conversation_id,
     conversationIsTemporary,
+    healthSpaceProjectId: await healthSpacePromise,
+    googleUserData: (await googleUserDataPromise) !== null,
     ...(ownership.ok && ownership.projectSources?.length
       ? { projectSources: ownership.projectSources }
       : {}),

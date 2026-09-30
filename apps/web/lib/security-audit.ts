@@ -339,6 +339,16 @@ export type AuditEventType =
   | 'developer_webhook_configured'
   | 'developer_webhook_deleted'
   | 'developer_project_created'
+  | 'account_security_enabled'
+  | 'account_security_disabled'
+  | 'account_security_credential_added'
+  | 'account_security_credential_removed'
+  | 'account_security_recovery_keys_replaced'
+  | 'account_security_recovery_started'
+  | 'account_security_recovery_cancelled'
+  | 'account_security_recovery_completed'
+  | 'account_security_session_verified'
+  | 'account_security_verification_failed'
   | 'sso_jit_membership_granted'
   | 'sso_jit_membership_refused'
   | 'retention_policy_changed'
@@ -350,6 +360,8 @@ export type AuditEventType =
   | 'privacy_request_submitted'
   | 'organization_share_granted'
   | 'organization_share_revoked'
+  | 'share_link_created'
+  | 'share_link_revoked'
   | 'support_action_proposed'
   | 'support_action_confirmed'
   | 'device_renamed'
@@ -426,6 +438,9 @@ export interface AuditEventDetail {
   isCurrent?: boolean;
   deleted?: number;
   held?: number;
+  routineRunsDeleted?: number;
+  googleUserDataWithheld?: number;
+  purpose?: string;
   dryRun?: boolean;
   scope?: string;
   enabled?: boolean;
@@ -525,6 +540,9 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'ipAllowListAfter',
   'deleted',
   'held',
+  'routineRunsDeleted',
+  'googleUserDataWithheld',
+  'purpose',
   'dryRun',
   'scope',
   'count',
@@ -837,6 +855,9 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'organization_share_granted':
     case 'organization_share_revoked':
       return 'organization_share';
+    case 'share_link_created':
+    case 'share_link_revoked':
+      return 'share_link';
     case 'support_action_proposed':
     case 'support_action_confirmed':
       return 'support_action';
@@ -885,6 +906,17 @@ function inferResourceType(eventType: AuditEventType): string {
       return 'developer_webhook';
     case 'developer_project_created':
       return 'developer_project';
+    case 'account_security_enabled':
+    case 'account_security_disabled':
+    case 'account_security_credential_added':
+    case 'account_security_credential_removed':
+    case 'account_security_recovery_keys_replaced':
+    case 'account_security_recovery_started':
+    case 'account_security_recovery_cancelled':
+    case 'account_security_recovery_completed':
+    case 'account_security_session_verified':
+    case 'account_security_verification_failed':
+      return 'account_security';
     case 'sso_jit_membership_granted':
     case 'sso_jit_membership_refused':
       return 'organization_member';

@@ -130,7 +130,7 @@ pub fn title_for(task: &str) -> String {
     format!("{}…", title.trim_end())
 }
 
-fn git(args: &[&str]) -> Result<String, String> {
+pub(crate) fn git(args: &[&str]) -> Result<String, String> {
     let output = Command::new("git")
         .args(args)
         .env("GIT_OPTIONAL_LOCKS", "0")
@@ -178,7 +178,7 @@ pub fn github_full_name(url: &str) -> Option<String> {
     (valid(owner) && valid(name)).then(|| format!("{owner}/{name}"))
 }
 
-fn working_tree_changes() -> Result<(Vec<String>, Vec<String>), String> {
+pub(crate) fn working_tree_changes() -> Result<(Vec<String>, Vec<String>), String> {
     let status = git(&[
         "-c",
         "core.fsmonitor=false",

@@ -19,6 +19,9 @@ vi.mock('@/lib/logger', () => ({
 const mockIsGitHubAppConfigured = vi.fn();
 const mockIsGitHubInstallationLinkingAvailable = vi.fn();
 vi.mock('@/lib/github-app', () => ({
+  GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
+  issueCommentPostedSince: vi.fn(() => false),
+  pullRequestReviewPostedSince: vi.fn(() => false),
   getInstallationAccessToken: vi.fn(),
   getPrDiff: vi.fn(),
   isGitHubAppConfigured: () => mockIsGitHubAppConfigured(),

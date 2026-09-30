@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { CloudCodeChangesReply, CloudCodeDiscardReply } from '@agiworkforce/cloud-contracts';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -78,9 +79,13 @@ async function handleChanges(request: NextRequest, context: RouteContext) {
 
   const planTier = entitlement.plan;
   try {
-    return NextResponse.json(
-      await readCloudCodeSessionChanges(db, { userId, organizationId }, sessionId, planTier),
+    const changes: CloudCodeChangesReply = await readCloudCodeSessionChanges(
+      db,
+      { userId, organizationId },
+      sessionId,
+      planTier,
     );
+    return NextResponse.json(changes);
   } catch (error) {
     rethrowCloudCodeError(error);
   }
@@ -131,15 +136,14 @@ async function handleDiscard(request: NextRequest, context: RouteContext) {
   if (accessGateResponse) return accessGateResponse;
 
   try {
-    return NextResponse.json(
-      await discardCloudCodeSessionChanges(
-        db,
-        { userId, organizationId },
-        sessionId,
-        entitlement.plan,
-        body['discard'],
-      ),
+    const discarded: CloudCodeDiscardReply = await discardCloudCodeSessionChanges(
+      db,
+      { userId, organizationId },
+      sessionId,
+      entitlement.plan,
+      body['discard'],
     );
+    return NextResponse.json(discarded);
   } catch (error) {
     rethrowCloudCodeError(error);
   }

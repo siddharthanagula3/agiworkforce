@@ -26,12 +26,17 @@
     "privacy": {
       "route": "/privacy",
       "slug": "privacy",
-      "current": "2026-09-27",
+      "current": "2026-09-29",
       "versions": [
+        {
+          "date": "2026-09-29",
+          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements. Product analytics now also covers usage events from the AGI apps recorded against your account, so a consent given under an earlier version covers page views only.",
+          "status": "current"
+        },
         {
           "date": "2026-09-27",
           "summary": "Adds the checks the referral program runs and their lawful basis, and states how many user-scoped tables account erasure covers.",
-          "status": "current"
+          "status": "archived"
         },
         {
           "date": "2026-09-22",
@@ -135,6 +140,23 @@
         },
         {
           "date": "2026-08-05",
+          "summary": null,
+          "status": "archived"
+        }
+      ]
+    },
+    "mobile": {
+      "route": "/mobile/legal",
+      "slug": "mobile-legal",
+      "current": "2026-09-29",
+      "versions": [
+        {
+          "date": "2026-09-29",
+          "summary": "Adds product usage events, sent only in managed-cloud mode and only after you allow product analytics, as a data category, and removes the statement that no usage event leaves your device.",
+          "status": "current"
+        },
+        {
+          "date": "2026-09-21",
           "summary": null,
           "status": "archived"
         }

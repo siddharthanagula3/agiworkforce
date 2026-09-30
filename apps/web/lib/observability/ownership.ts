@@ -98,7 +98,7 @@ export const OPERATIONAL_DOMAINS: readonly OperationalDomain[] = [
     dashboardId: 'job-health',
     runbook: CONTINUITY_RUNBOOK,
     dependencies: ['database', 'key_value'],
-    killSwitch: capabilityKillSwitchKey('work'),
+    killSwitch: capabilityKillSwitchKey('canUseAgiWork'),
   },
   {
     sloId: 'research',

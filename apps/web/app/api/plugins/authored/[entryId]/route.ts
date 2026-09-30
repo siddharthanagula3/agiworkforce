@@ -19,7 +19,7 @@ import {
 import {
   AUTHORED_PLUGIN_INVALID_CODE,
   AUTHORED_PLUGIN_INVALID_MESSAGE,
-  AuthoredPluginBodySchema,
+  AuthoredPluginEditBodySchema,
   authoredSkillIssues,
   authoredSkillPath,
 } from '@/features/plugins/server/directory/authored-plugin';
@@ -63,7 +63,7 @@ async function handlePut(request: NextRequest, context: RouteContext): Promise<N
   const params = ParamsSchema.safeParse(await context.params);
   if (!params.success) return notFound();
 
-  const parsed = AuthoredPluginBodySchema.safeParse(await readJsonBody(request));
+  const parsed = AuthoredPluginEditBodySchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: AUTHORED_PLUGIN_INVALID_CODE, message: AUTHORED_PLUGIN_INVALID_MESSAGE } },

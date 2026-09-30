@@ -1,6 +1,6 @@
 'use client';
 
-import type { SupportTurn } from '../lib/contract';
+import type { SupportTurn } from '@agiworkforce/cloud-contracts/support';
 import type { SupportActionFlow } from '../hooks/useSupportSession';
 import { SupportAbstentionCard } from './SupportAbstentionCard';
 import { SupportActionConfirm } from './SupportActionConfirm';

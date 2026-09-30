@@ -17,9 +17,11 @@ import {
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/src/ui/theme';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { typeScale } from '@/src/ui/theme/tokens';
+import { getBillingPlanPricing, isOrganizationAdminRole } from '@agiworkforce/types';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { CloudAccountRequired, CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import {
@@ -27,7 +29,6 @@ import {
   fetchWorkspaceMembers,
   fetchWorkspaceOverview,
   removeWorkspaceMember,
-  setActiveWorkspace,
   transferWorkspaceOwnership,
   updateWorkspaceMemberRole,
   type WorkspaceMember,
@@ -36,7 +37,8 @@ import {
 } from '@/src/features/team';
 import { RolePickerModal } from '@/src/features/team/RolePickerModal';
 import { WorkspaceAdministration } from '@/src/features/team/WorkspaceAdministration';
-import { useChatStore } from '@/stores/chatStore';
+import { switchWorkspace } from '@/src/features/team/switchWorkspace';
+import { translatePlural } from '@/src/i18n/plural';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 
@@ -79,11 +81,11 @@ export default function WorkspaceScreen() {
         : [];
       if (signal?.aborted) return;
       setState({ kind: 'ready', overview, members });
-    } catch (error) {
+    } catch {
       if (signal?.aborted) return;
       setState({
         kind: 'error',
-        message: error instanceof Error ? error.message : 'Could not load your workspace.',
+        message: 'Could not load your workspace. Retry.',
       });
     }
   }, []);
@@ -114,14 +116,7 @@ export default function WorkspaceScreen() {
       setSwitchingWorkspace(true);
       void (async () => {
         try {
-          await setActiveWorkspace(organizationId);
-          await useChatStore.getState().loadConversations();
-          await load();
-        } catch (error) {
-          Alert.alert(
-            'Could not switch workspace',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
+          if (await switchWorkspace(organizationId)) await load();
         } finally {
           setSwitchingWorkspace(false);
         }
@@ -137,11 +132,8 @@ export default function WorkspaceScreen() {
         try {
           await updateWorkspaceMemberRole(member.id, role);
           await load();
-        } catch (error) {
-          Alert.alert(
-            'Could not change role',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
+        } catch {
+          Alert.alert('Could not change role', 'The member’s role was not changed. Retry.');
         } finally {
           setBusyMemberId(null);
         }
@@ -163,10 +155,7 @@ export default function WorkspaceScreen() {
           await load();
         } catch (error) {
           if (isStepUpCancelled(error)) return;
-          Alert.alert(
-            'Could not transfer ownership',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
+          Alert.alert('Could not transfer ownership', 'Ownership was not transferred. Retry.');
         } finally {
           setBusyMemberId(null);
         }
@@ -207,11 +196,8 @@ export default function WorkspaceScreen() {
               try {
                 await removeWorkspaceMember(member.id);
                 await load();
-              } catch (error) {
-                Alert.alert(
-                  'Could not remove member',
-                  error instanceof Error ? error.message : 'Please try again.',
-                );
+              } catch {
+                Alert.alert('Could not remove member', 'Check the member list before retrying.');
               } finally {
                 setBusyMemberId(null);
               }
@@ -242,7 +228,13 @@ export default function WorkspaceScreen() {
         <ArrowLeft size={22} color={c.textPrimary} />
       </Pressable>
       <Text
-        style={{ flex: 1, color: c.textPrimary, fontSize: 20, fontWeight: '700', marginLeft: 4 }}
+        style={{
+          flex: 1,
+          color: c.textPrimary,
+          fontSize: typeScale.title3,
+          fontWeight: '700',
+          marginLeft: 4,
+        }}
       >
         Workspace
       </Text>
@@ -257,7 +249,7 @@ export default function WorkspaceScreen() {
         <View className="flex-1 px-4">
           <CloudAccountRequired
             isLoading={!isClerkLoaded}
-            onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+            onSignIn={() => router.push(beginCloudPostAuthIntent('cloud-workspace'))}
           />
         </View>
       </SafeAreaView>
@@ -267,6 +259,8 @@ export default function WorkspaceScreen() {
   const overview = state.kind === 'ready' ? state.overview : null;
   const workspace = overview?.workspace ?? null;
   const canManage = overview?.access.canManageTeam ?? false;
+  const canManageMembers =
+    canManage && workspace !== null && isOrganizationAdminRole(workspace.currentUserRole);
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
@@ -296,7 +290,9 @@ export default function WorkspaceScreen() {
         ) : null}
 
         {state.kind === 'loading' && appMode === 'cloud' && (
-          <Text style={{ color: c.textSecondary, fontSize: 13, paddingVertical: 24 }}>
+          <Text
+            style={{ color: c.textSecondary, fontSize: typeScale.footnote, paddingVertical: 24 }}
+          >
             Loading your workspace…
           </Text>
         )}
@@ -315,11 +311,13 @@ export default function WorkspaceScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <AlertCircle size={14} color={c.agentWarning} />
-              <Text style={{ color: c.agentWarning, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{ color: c.agentWarning, fontSize: typeScale.footnote, fontWeight: '600' }}
+              >
                 Could not load your workspace
               </Text>
             </View>
-            <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
+            <Text style={{ color: c.textSecondary, fontSize: typeScale.caption, lineHeight: 17 }}>
               {state.message}
             </Text>
             <Pressable
@@ -328,7 +326,9 @@ export default function WorkspaceScreen() {
               accessibilityLabel="Retry loading your workspace"
               style={{ marginTop: 10, alignSelf: 'flex-start' }}
             >
-              <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>Retry</Text>
+              <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
+                Retry
+              </Text>
             </Pressable>
           </View>
         )}
@@ -337,7 +337,7 @@ export default function WorkspaceScreen() {
           <View style={{ marginBottom: 18 }}>
             <Text
               style={{
-                fontSize: 11,
+                fontSize: typeScale.caption,
                 fontWeight: '700',
                 letterSpacing: 1,
                 color: c.textMuted,
@@ -378,7 +378,10 @@ export default function WorkspaceScreen() {
                     }}
                   >
                     <row.Icon size={16} color={c.textSecondary} />
-                    <Text style={{ flex: 1, color: c.textPrimary, fontSize: 15 }} numberOfLines={1}>
+                    <Text
+                      style={{ flex: 1, color: c.textPrimary, fontSize: typeScale.body }}
+                      numberOfLines={1}
+                    >
                       {row.name}
                     </Text>
                     {selected && <Check size={16} color={c.teal} />}
@@ -406,12 +409,14 @@ export default function WorkspaceScreen() {
               >
                 <Users size={26} color={c.teal} strokeWidth={1.5} />
               </View>
-              <Text style={{ fontSize: 17, fontWeight: '600', color: c.textPrimary }}>
+              <Text
+                style={{ fontSize: typeScale.headline, fontWeight: '600', color: c.textPrimary }}
+              >
                 Workspace administration
               </Text>
               <Text
                 style={{
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   color: c.textSecondary,
                   textAlign: 'center',
                   lineHeight: 18,
@@ -429,12 +434,14 @@ export default function WorkspaceScreen() {
         {state.kind === 'ready' && canManage && !workspace && (
           <Card>
             <View className="items-center py-8 gap-3">
-              <Text style={{ fontSize: 17, fontWeight: '600', color: c.textPrimary }}>
+              <Text
+                style={{ fontSize: typeScale.headline, fontWeight: '600', color: c.textPrimary }}
+              >
                 No workspace yet
               </Text>
               <Text
                 style={{
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   color: c.textSecondary,
                   textAlign: 'center',
                   lineHeight: 18,
@@ -448,7 +455,7 @@ export default function WorkspaceScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Create a workspace on the web"
               >
-                <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+                <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
                   Create on web
                 </Text>
               </Pressable>
@@ -460,17 +467,26 @@ export default function WorkspaceScreen() {
           <>
             <Card>
               <View style={{ padding: 16, gap: 4 }}>
-                <Text style={{ fontSize: 18, fontWeight: '700', color: c.textPrimary }}>
+                <Text
+                  style={{ fontSize: typeScale.headline, fontWeight: '700', color: c.textPrimary }}
+                >
                   {workspace.name}
                 </Text>
-                <Text style={{ fontSize: 12, color: c.textMuted }}>{workspace.slug}</Text>
-                <Text style={{ fontSize: 13, color: c.textSecondary, marginTop: 6 }}>
+                <Text style={{ fontSize: typeScale.caption, color: c.textMuted }}>
+                  {workspace.slug}
+                </Text>
+                <Text
+                  style={{ fontSize: typeScale.footnote, color: c.textSecondary, marginTop: 6 }}
+                >
                   {planLabel(workspace.plan)} ·{' '}
                   {workspace.maxMembers === null
-                    ? `${workspace.memberCount} member${workspace.memberCount === 1 ? '' : 's'}`
+                    ? translatePlural('settings', 'counts.members', workspace.memberCount, {
+                        one: '{{count}} member',
+                        other: '{{count}} members',
+                      })
                     : `${workspace.memberCount} of ${workspace.maxMembers} seats used`}
                 </Text>
-                <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 2 }}>
+                <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginTop: 2 }}>
                   You are {titleCase(workspace.currentUserRole)}
                 </Text>
               </View>
@@ -485,29 +501,36 @@ export default function WorkspaceScreen() {
                 marginBottom: 8,
               }}
             >
-              <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>Members</Text>
+              <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: c.textPrimary }}>
+                Members
+              </Text>
             </View>
 
             {state.members.map((member) => (
               <Card key={member.id}>
                 <View style={{ padding: 14, gap: 6 }}>
                   <Text
-                    style={{ color: c.textPrimary, fontSize: 15, fontWeight: '600' }}
+                    style={{ color: c.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
                     numberOfLines={1}
                   >
                     {member.name}
                     {member.isCurrentUser ? ' (you)' : ''}
                   </Text>
                   {member.email ? (
-                    <Text style={{ color: c.textSecondary, fontSize: 12 }} numberOfLines={1}>
+                    <Text
+                      style={{ color: c.textSecondary, fontSize: typeScale.caption }}
+                      numberOfLines={1}
+                    >
                       {member.email}
                     </Text>
                   ) : null}
-                  <Text style={{ color: c.textMuted, fontSize: 12 }}>{titleCase(member.role)}</Text>
+                  <Text style={{ color: c.textMuted, fontSize: typeScale.caption }}>
+                    {titleCase(member.role)}
+                  </Text>
 
                   {/* The server refuses self-removal and blocks admins from
                       removing owners, so those controls are not offered. */}
-                  {canManage && !member.isCurrentUser && (
+                  {canManageMembers && !member.isCurrentUser && (
                     <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
                       <Pressable
                         onPress={() => handleChangeRole(member)}
@@ -515,7 +538,9 @@ export default function WorkspaceScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={`Change role for ${member.name}`}
                       >
-                        <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+                        <Text
+                          style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                        >
                           {busyMemberId === member.id ? 'Working…' : 'Change role'}
                         </Text>
                       </Pressable>
@@ -528,7 +553,13 @@ export default function WorkspaceScreen() {
                           style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
                         >
                           <Trash2 size={13} color={c.agentError} />
-                          <Text style={{ color: c.agentError, fontSize: 13, fontWeight: '600' }}>
+                          <Text
+                            style={{
+                              color: c.agentError,
+                              fontSize: typeScale.footnote,
+                              fontWeight: '600',
+                            }}
+                          >
                             Remove
                           </Text>
                         </Pressable>
@@ -551,7 +582,7 @@ export default function WorkspaceScreen() {
               accessibilityLabel="Open workspace settings on the web"
               style={{ alignSelf: 'center', paddingVertical: 16 }}
             >
-              <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+              <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
                 Rename or delete this workspace on the web
               </Text>
             </Pressable>

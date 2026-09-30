@@ -93,7 +93,7 @@ export function ProductComparisonCard({ body }: ProductComparisonCardProps) {
               <p className="text-base font-semibold tabular-nums text-[color:var(--chat-text-primary)]">
                 {formatPrice(product.price)}
                 {product.merchant ? (
-                  <span className="ml-1.5 text-xs font-normal text-[color:var(--chat-text-secondary)]">
+                  <span className="ms-1.5 text-xs font-normal text-[color:var(--chat-text-secondary)]">
                     at {product.merchant}
                   </span>
                 ) : null}
@@ -125,7 +125,7 @@ export function ProductComparisonCard({ body }: ProductComparisonCardProps) {
           tabIndex={0}
           className="overflow-x-auto border-t border-[var(--chat-border-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--chat-focus-ring)]"
         >
-          <table data-testid="product-comparison-specs" className="w-full text-left text-sm">
+          <table data-testid="product-comparison-specs" className="w-full text-start text-sm">
             <thead>
               <tr className="border-b border-[var(--chat-border-subtle)]">
                 <th

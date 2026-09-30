@@ -16,6 +16,21 @@ function apiErrorMessage(body: unknown, fallback: string): string {
   return typeof message === 'string' && message ? message : fallback;
 }
 
+export async function isUpgradeWaitlistRequired(): Promise<boolean> {
+  try {
+    const response = await fetch('/api/waitlist', { cache: 'no-store' });
+    if (!response.ok) return true;
+    const body: unknown = await response.json();
+    return (
+      !body ||
+      typeof body !== 'object' ||
+      (body as { upgradeGateEnabled?: unknown }).upgradeGateEnabled !== false
+    );
+  } catch {
+    return true;
+  }
+}
+
 export async function joinUpgradeWaitlist(request: UpgradeWaitlistRequest): Promise<void> {
   const response = await fetch('/api/waitlist', {
     method: 'POST',

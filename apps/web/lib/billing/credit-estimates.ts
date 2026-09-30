@@ -1,12 +1,11 @@
 import { ManagedMediaVideoGenerationRequestSchema } from '@agiworkforce/cloud-contracts';
 import {
-  MICROUSD_PER_CENT,
-  calculateCatalogVideoCostCents,
   chargeCreditsForMicrousd,
   customerChargeMicrousd,
   formatCreditsPerMillionTokens,
   getModelMetadataById,
   resolveEffectiveModelPricingForInputTokens,
+  videoGenerationCostMicrousd,
   type ModelMetadata,
 } from '@agiworkforce/types';
 
@@ -89,26 +88,6 @@ export function estimateResearchCredits(
 
 export function defaultVideoDurationSecs(): number {
   return ManagedMediaVideoGenerationRequestSchema.shape.duration_secs.parse(undefined);
-}
-
-export function videoGenerationCostMicrousd(input: {
-  model: ModelMetadata;
-  resolution: string;
-  aspectRatio: string;
-  durationSecs: number;
-  generateAudio: boolean;
-}): number | null {
-  const { model, resolution, durationSecs } = input;
-  if (model.videoGeneration?.pricing) {
-    const cents = calculateCatalogVideoCostCents(input);
-    return cents === null ? null : cents * MICROUSD_PER_CENT;
-  }
-  const byResolution = model.videoPerSecondCostByResolution;
-  const perSecond = byResolution
-    ? byResolution[resolution as keyof typeof byResolution]
-    : model.videoPerSecondCost;
-  if (perSecond === undefined || !Number.isFinite(perSecond)) return null;
-  return Math.ceil(Number((perSecond * durationSecs * 100).toFixed(8))) * MICROUSD_PER_CENT;
 }
 
 export function estimateVideoCredits(input: {

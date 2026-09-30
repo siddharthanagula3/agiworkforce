@@ -5,7 +5,8 @@ vi.mock('@/lib/cors', () => ({ getSecurityHeaders: () => ({}) }));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/rate-limit', () => ({ acquireManagedTurnSlot: vi.fn() }));
 
-import { managedTurnSlotExhaustedResponse } from './turn-slot';
+import { acquireManagedTurnSlot } from '@/lib/rate-limit';
+import { managedTurnSlotExhaustedResponse, withManagedTurnSlot } from './turn-slot';
 import type { ManagedTurnSlotResult } from '@/lib/rate-limit';
 
 function denial(overrides: Partial<ManagedTurnSlotResult> = {}): ManagedTurnSlotResult {
@@ -53,5 +54,49 @@ describe('the concurrent-turn ceiling explains itself', () => {
     expect(body.error.code).toBe('concurrency_limiter_unavailable');
     expect(response.headers.get('Retry-After')).toBe('30');
     expect(response.headers.get('X-AGI-Concurrent-Turn-Limit')).toBeNull();
+  });
+});
+
+describe('a detached resume keeps its slot until the server finishes it', () => {
+  it('refuses a second detached resume over the ceiling while the first is still draining', async () => {
+    let active = 0;
+    const limit = 1;
+    vi.mocked(acquireManagedTurnSlot).mockImplementation(async () => {
+      if (active >= limit) return { admitted: false, limit, active, slot: null };
+      active += 1;
+      return {
+        admitted: true,
+        limit,
+        active,
+        slot: {
+          release: async () => {
+            active -= 1;
+          },
+        },
+      } as unknown as ManagedTurnSlotResult;
+    });
+    const caller = { userId: 'user-1', planTier: 'pro' };
+    let finishDrain: () => void = () => undefined;
+    const drain = new Promise<void>((resolve) => {
+      finishDrain = resolve;
+    });
+    const detached = () =>
+      withManagedTurnSlot(caller, async (hold) => {
+        hold.holdUntil(drain);
+        return new Response(new ReadableStream(), {
+          headers: { 'content-type': 'text/event-stream' },
+        });
+      });
+
+    const first = await detached();
+    await first.body?.cancel();
+    const second = await detached();
+    expect(second.status).toBe(429);
+
+    finishDrain();
+    await drain;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const third = await detached();
+    expect(third.status).toBe(200);
   });
 });

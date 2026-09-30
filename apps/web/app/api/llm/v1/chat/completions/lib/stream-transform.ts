@@ -9,7 +9,7 @@ import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
 import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
-import { addAttachmentTruncationHeader } from '@/lib/chat-attachment-truncation-notice';
+import { addAttachmentTruncationHeader } from '@agiworkforce/cloud-contracts';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import {
@@ -48,7 +48,7 @@ import {
   priceServerToolUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import { offersDynamicFilteringWebTool } from '@/lib/web-search/native-search-pricing';
-import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
+import { createUsageAccumulator, ingestUsageChunk, type UsageAccumulator } from './adapter-usage';
 import { compactionUsageFields } from './context-window';
 import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from './sse-heartbeat';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
@@ -74,6 +74,25 @@ interface StreamBillingUsage {
   codeExecutionRequests?: number;
   codeExecutionContainerIds?: string[];
   providerElapsedMs?: number;
+  speed?: 'standard' | 'fast';
+}
+
+function streamBillingUsage(usage: UsageAccumulator, streamStartedAt: number): StreamBillingUsage {
+  return {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    reasoningOutputTokens: usage.reasoningOutputTokens,
+    cacheReadInputTokens: usage.cacheReadInputTokens,
+    cacheCreationInputTokens: usage.cacheCreationInputTokens,
+    cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+    providerReportedCostUsd: usage.providerReportedCostUsd,
+    webSearchRequests: usage.webSearchRequests,
+    webFetchRequests: usage.webFetchRequests,
+    codeExecutionRequests: usage.codeExecutionRequests,
+    codeExecutionContainerIds: usage.codeExecutionContainerIds,
+    providerElapsedMs: Date.now() - streamStartedAt,
+    speed: usage.speed,
+  };
 }
 
 /**
@@ -185,6 +204,7 @@ async function settleStreamBilling(input: {
       cacheReadInputTokens: usage.cacheReadInputTokens,
       cacheCreationInputTokens: usage.cacheCreationInputTokens,
       cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+      speed: usage.speed,
     };
     await settleFreeTrialRequest({
       reservation: processed.freeTrial,
@@ -231,6 +251,7 @@ async function settleStreamBilling(input: {
       cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
       cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
       cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
+      speed: usage.speed,
     };
     const estimateCostMicrousd = LLMCostCalculator.calculateCostMicrousd(
       provider,
@@ -276,6 +297,7 @@ async function settleStreamBilling(input: {
         cacheReadTokens: usage.cacheReadInputTokens,
         cacheWriteTokens: usage.cacheCreationInputTokens,
         cacheWrite1hTokens: usage.cacheCreation1hInputTokens,
+        ...(usage.speed === 'fast' ? { speed: 'fast' as const } : {}),
         ...(usage.webSearchRequests ? { webSearchRequests: usage.webSearchRequests } : {}),
         ...(usage.webFetchRequests ? { webFetchRequests: usage.webFetchRequests } : {}),
         ...(hostedCodeExecution ? { hostedCodeExecution } : {}),
@@ -1088,20 +1110,7 @@ export async function buildAdapterStreamResponse(
             userId,
             provider: providerUsed,
             model: modelUsed,
-            usage: {
-              inputTokens: usage.inputTokens,
-              outputTokens: usage.outputTokens,
-              reasoningOutputTokens: usage.reasoningOutputTokens,
-              cacheReadInputTokens: usage.cacheReadInputTokens,
-              cacheCreationInputTokens: usage.cacheCreationInputTokens,
-              cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
-              providerReportedCostUsd: usage.providerReportedCostUsd,
-              webSearchRequests: usage.webSearchRequests,
-              webFetchRequests: usage.webFetchRequests,
-              codeExecutionRequests: usage.codeExecutionRequests,
-              codeExecutionContainerIds: usage.codeExecutionContainerIds,
-              providerElapsedMs: Date.now() - streamStartedAt,
-            },
+            usage: streamBillingUsage(usage, streamStartedAt),
             outcome: 'failed',
             errorClass: classifyError(streamError).category,
             ...(request.signal.aborted ? { cancelled: true } : {}),
@@ -1124,6 +1133,7 @@ export async function buildAdapterStreamResponse(
             organizationId: processed.organizationId ?? null,
             refs: [...generatedFileRefs.values()],
             model: modelUsed,
+            conversationId: processed.conversationId,
           });
           if (files.length > 0) {
             // This frame is built here rather than by the assembler, so it is
@@ -1201,20 +1211,7 @@ export async function buildAdapterStreamResponse(
           userId,
           provider: providerUsed,
           model: modelUsed,
-          usage: {
-            inputTokens: usage.inputTokens,
-            outputTokens: usage.outputTokens,
-            reasoningOutputTokens: usage.reasoningOutputTokens,
-            cacheReadInputTokens: usage.cacheReadInputTokens,
-            cacheCreationInputTokens: usage.cacheCreationInputTokens,
-            cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
-            providerReportedCostUsd: usage.providerReportedCostUsd,
-            webSearchRequests: usage.webSearchRequests,
-            webFetchRequests: usage.webFetchRequests,
-            codeExecutionRequests: usage.codeExecutionRequests,
-            codeExecutionContainerIds: usage.codeExecutionContainerIds,
-            providerElapsedMs: Date.now() - streamStartedAt,
-          },
+          usage: streamBillingUsage(usage, streamStartedAt),
           outcome: assembler.lastError === null ? 'completed' : 'failed',
           errorClass: lastErrorCode,
           ...(firstTokenTimestampMs !== null ? { latencyMs: firstTokenTimestampMs } : {}),
@@ -1321,20 +1318,7 @@ export async function buildAdapterStreamResponse(
           userId,
           provider: providerUsed,
           model: modelUsed,
-          usage: {
-            inputTokens: usage.inputTokens,
-            outputTokens: usage.outputTokens,
-            reasoningOutputTokens: usage.reasoningOutputTokens,
-            cacheReadInputTokens: usage.cacheReadInputTokens,
-            cacheCreationInputTokens: usage.cacheCreationInputTokens,
-            cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
-            providerReportedCostUsd: usage.providerReportedCostUsd,
-            webSearchRequests: usage.webSearchRequests,
-            webFetchRequests: usage.webFetchRequests,
-            codeExecutionRequests: usage.codeExecutionRequests,
-            codeExecutionContainerIds: usage.codeExecutionContainerIds,
-            providerElapsedMs: Date.now() - streamStartedAt,
-          },
+          usage: streamBillingUsage(usage, streamStartedAt),
           outcome: 'failed',
           cancelled: true,
         });

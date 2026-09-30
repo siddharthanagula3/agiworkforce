@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
+import { PRODUCT_ANALYTICS_CONSENT_PURPOSE, coversProductAnalytics } from '@agiworkforce/types';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { ConsentPurpose } from '@/lib/consent-purposes';
@@ -159,6 +160,11 @@ export function ConsentCentre({ optedOutBySignal: signalledByRequest }: ConsentC
     const record = byPurpose.get(purpose.id);
     const isPending = pendingPurpose === purpose.id;
     const overriddenBySignal = optedOutBySignal && isNonEssentialConsentPurpose(purpose.id);
+    const predatesNotice =
+      record?.granted === true &&
+      purpose.id === PRODUCT_ANALYTICS_CONSENT_PURPOSE &&
+      !coversProductAnalytics(record.noticeVersion);
+    const granted = record?.granted === true && !predatesNotice;
     return {
       label: purpose.label,
       value: (
@@ -168,6 +174,11 @@ export function ConsentCentre({ optedOutBySignal: signalledByRequest }: ConsentC
           {record === undefined ? (
             <span className="agi-ds-muted">
               Never asked. No decision is on record, which is not the same as a refusal.
+            </span>
+          ) : predatesNotice ? (
+            <span className="agi-ds-muted">
+              Not given; confirm to turn on. The grant on {formatInstant(record.recordedAt)},
+              against notice revision {record.noticeVersion}, predates the current analytics notice.
             </span>
           ) : (
             <span className="agi-ds-muted">
@@ -190,10 +201,10 @@ export function ConsentCentre({ optedOutBySignal: signalledByRequest }: ConsentC
             className="agi-ds-btn"
             data-variant="secondary"
             style={{ marginTop: 'var(--space-2)' }}
-            disabled={isPending || (overriddenBySignal && !record?.granted)}
-            onClick={() => void decide(purpose.id, !record?.granted, data.noticeVersion)}
+            disabled={isPending || (overriddenBySignal && !granted)}
+            onClick={() => void decide(purpose.id, !granted, data.noticeVersion)}
           >
-            {isPending ? 'Recording…' : record?.granted ? 'Withdraw consent' : 'Give consent'}
+            {isPending ? 'Recording…' : granted ? 'Withdraw consent' : 'Give consent'}
           </button>
         </>
       ),

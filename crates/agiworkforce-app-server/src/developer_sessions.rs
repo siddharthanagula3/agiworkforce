@@ -4,21 +4,24 @@ use agiworkforce_protocol::developer_session::{
     AccountStatusParams, AccountStatusResponse, AccountTokenResponse, AcknowledgedResponse,
     AppServerCapabilities, AppServerClientInfo, AppServerNotification, AppServerRequest,
     AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
-    ContextInstructionsResponse, DeveloperSessionHandoff, HandoffAdmission, HookAddParams,
-    HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
+    ContextInstructionsResponse, DeveloperSessionHandoff, GitPullRequestParams,
+    GitPullRequestPlanParams, GitPullRequestPlanResponse, GitPullRequestResponse, HandoffAdmission,
+    HookAddParams, HookListResponse, HookRemoveParams, InitializeParams, InitializeResponse,
     LocalModelListResponse, McpAddParams, McpLoginParams, McpLoginResponse,
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
     McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
-    PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams, PluginListResponse,
+    PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
+    PermissionsRemoveParams, PlanDecideParams, PluginInstallParams, PluginListResponse,
     PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
-    ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams,
-    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
-    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams,
+    ProtocolVersionUnsupportedData, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
+    ThreadSearchResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
+    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnInterruptParams,
     TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary, WorktreeCreateParams,
     WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
     LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
@@ -424,6 +427,69 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: PermissionsRemoveParams,
     ) -> Result<PermissionsListResponse, DeveloperSessionHostError> {
         Err(unsupported(method::PERMISSIONS_REMOVE))
+    }
+
+    async fn list_permission_rules(
+        &self,
+    ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PERMISSIONS_RULES))
+    }
+
+    async fn add_permission(
+        &self,
+        _params: PermissionsAddParams,
+    ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PERMISSIONS_ADD))
+    }
+
+    async fn decide_plan(
+        &self,
+        _params: PlanDecideParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::PLAN_DECIDE))
+    }
+
+    async fn list_provider_keys(&self) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PROVIDERS_LIST))
+    }
+
+    async fn set_provider_key(
+        &self,
+        _params: ProviderSetKeyParams,
+    ) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PROVIDERS_SET_KEY))
+    }
+
+    async fn remove_provider_key(
+        &self,
+        _params: ProviderParams,
+    ) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::PROVIDERS_REMOVE_KEY))
+    }
+
+    async fn list_trusted_folders(&self) -> Result<TrustListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::TRUST_LIST))
+    }
+
+    async fn revoke_trusted_folder(
+        &self,
+        _params: TrustRevokeParams,
+    ) -> Result<TrustListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::TRUST_REVOKE))
+    }
+
+    async fn plan_pull_request(
+        &self,
+        _params: GitPullRequestPlanParams,
+    ) -> Result<GitPullRequestPlanResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::GIT_PULL_REQUEST_PLAN))
+    }
+
+    async fn create_pull_request(
+        &self,
+        _params: GitPullRequestParams,
+    ) -> Result<GitPullRequestResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::GIT_PULL_REQUEST))
     }
 
     /// Stop accepting work, cancel every active host operation, and wait until
@@ -1130,6 +1196,138 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .remove_permission(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PERMISSIONS_RULES => {
+                if let Err(response) = parse_optional_params::<NoParams>(&request) {
+                    return *response;
+                }
+                self.host
+                    .list_permission_rules()
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PERMISSIONS_ADD => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "permissions/add is refused on this connection: save a rule only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
+                let params = match parse_params::<PermissionsAddParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .add_permission(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::GIT_PULL_REQUEST_PLAN => {
+                let params = match parse_optional_params::<GitPullRequestPlanParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .plan_pull_request(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::GIT_PULL_REQUEST => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "git/pullRequest is refused on this connection: push and open a pull request only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
+                let params = match parse_params::<GitPullRequestParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .create_pull_request(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PLAN_DECIDE => {
+                let params = match parse_params::<PlanDecideParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .decide_plan(params)
+                    .await
+                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
+            }
+            method::PROVIDERS_LIST => {
+                if let Err(response) = parse_optional_params::<NoParams>(&request) {
+                    return *response;
+                }
+                self.host
+                    .list_provider_keys()
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PROVIDERS_SET_KEY => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "providers/setKey is refused on this connection: save a key only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
+                let params = match parse_params::<ProviderSetKeyParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .set_provider_key(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::PROVIDERS_REMOVE_KEY => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "providers/removeKey is refused on this connection: remove a key only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
+                let params = match parse_params::<ProviderParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .remove_provider_key(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::TRUST_LIST => {
+                if let Err(response) = parse_optional_params::<NoParams>(&request) {
+                    return *response;
+                }
+                self.host
+                    .list_trusted_folders()
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::TRUST_REVOKE => {
+                if self.trust != DeveloperConnectionTrust::LoopbackOwner {
+                    return AppServerResponse::failure(
+                        request.id,
+                        -32006,
+                        "trust/revoke is refused on this connection: revoke a folder only over process stdio or a WebSocket whose upgrade carried the app-server token in a header",
+                    );
+                }
+                let params = match parse_params::<TrustRevokeParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .revoke_trusted_folder(params)
                     .await
                     .map(serde_json::to_value)
             }

@@ -8,9 +8,11 @@ import { ArrowLeft, Link2, Trash2, AlertCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import { fetchSharedLinks, revokeSharedLink, type SharedLink } from '@/src/features/shared-links';
+import { translatePlural } from '@/src/i18n/plural';
 
 type LoadState =
   | { kind: 'loading' }
@@ -132,7 +134,13 @@ export default function SharedLinksScreen() {
           <ArrowLeft size={22} color={c.textPrimary} />
         </Pressable>
         <Text
-          style={{ flex: 1, color: c.textPrimary, fontSize: 20, fontWeight: '700', marginLeft: 4 }}
+          style={{
+            flex: 1,
+            color: c.textPrimary,
+            fontSize: typeScale.title3,
+            fontWeight: '700',
+            marginLeft: 4,
+          }}
         >
           Shared Links
         </Text>
@@ -151,7 +159,9 @@ export default function SharedLinksScreen() {
         )}
 
         {state.kind === 'loading' && (
-          <Text style={{ color: c.textSecondary, fontSize: 13, paddingVertical: 24 }}>
+          <Text
+            style={{ color: c.textSecondary, fontSize: typeScale.footnote, paddingVertical: 24 }}
+          >
             Loading your shared links…
           </Text>
         )}
@@ -170,11 +180,13 @@ export default function SharedLinksScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <AlertCircle size={14} color={c.agentWarning} />
-              <Text style={{ color: c.agentWarning, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{ color: c.agentWarning, fontSize: typeScale.footnote, fontWeight: '600' }}
+              >
                 Could not load shared links
               </Text>
             </View>
-            <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
+            <Text style={{ color: c.textSecondary, fontSize: typeScale.caption, lineHeight: 17 }}>
               {LOAD_FAILED_MESSAGE}
             </Text>
             <Pressable
@@ -183,7 +195,9 @@ export default function SharedLinksScreen() {
               accessibilityLabel="Retry loading shared links"
               style={{ marginTop: 10, alignSelf: 'flex-start' }}
             >
-              <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>Retry</Text>
+              <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
+                Retry
+              </Text>
             </Pressable>
           </View>
         )}
@@ -205,7 +219,7 @@ export default function SharedLinksScreen() {
               </View>
               <Text
                 style={{
-                  fontSize: 17,
+                  fontSize: typeScale.headline,
                   fontWeight: '600',
                   color: c.textPrimary,
                   textAlign: 'center',
@@ -215,7 +229,7 @@ export default function SharedLinksScreen() {
               </Text>
               <Text
                 style={{
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   color: c.textSecondary,
                   textAlign: 'center',
                   lineHeight: 18,
@@ -234,17 +248,23 @@ export default function SharedLinksScreen() {
             <Card key={link.token}>
               <View style={{ padding: 14, gap: 8 }}>
                 <Text
-                  style={{ color: c.textPrimary, fontSize: 15, fontWeight: '600' }}
+                  style={{ color: c.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
                   numberOfLines={2}
                 >
                   {link.title}
                 </Text>
-                <Text style={{ color: c.textSecondary, fontSize: 12 }}>
-                  {link.messageCount} message{link.messageCount === 1 ? '' : 's'}
+                <Text style={{ color: c.textSecondary, fontSize: typeScale.caption }}>
+                  {translatePlural('common', 'counts.messages', link.messageCount, {
+                    one: '{{count}} message',
+                    other: '{{count}} messages',
+                  })}
                   {formatDate(link.createdAt) ? ` · shared ${formatDate(link.createdAt)}` : ''}
                 </Text>
                 <Text
-                  style={{ color: link.expired ? c.agentWarning : c.textMuted, fontSize: 12 }}
+                  style={{
+                    color: link.expired ? c.agentWarning : c.textMuted,
+                    fontSize: typeScale.caption,
+                  }}
                   accessibilityLabel={
                     link.expired ? 'This link has expired' : `Expires ${formatDate(link.expiresAt)}`
                   }
@@ -263,7 +283,9 @@ export default function SharedLinksScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`Share link to ${link.title}`}
                     >
-                      <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+                      <Text
+                        style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                      >
                         Share link
                       </Text>
                     </Pressable>
@@ -276,7 +298,13 @@ export default function SharedLinksScreen() {
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
                   >
                     <Trash2 size={13} color={c.agentError} />
-                    <Text style={{ color: c.agentError, fontSize: 13, fontWeight: '600' }}>
+                    <Text
+                      style={{
+                        color: c.agentError,
+                        fontSize: typeScale.footnote,
+                        fontWeight: '600',
+                      }}
+                    >
                       {revoking === link.token ? 'Revoking…' : 'Revoke'}
                     </Text>
                   </Pressable>

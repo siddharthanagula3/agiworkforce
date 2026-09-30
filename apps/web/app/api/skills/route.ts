@@ -42,6 +42,7 @@ import {
 } from '@/lib/services/user-skill-service';
 import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import { workspaceAllowsPlugins } from '@/lib/services/workspace-plugin-access';
 import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
 import { loadSkillOrigins } from '@/lib/services/skill-origin-service';
 import { refuseUnsafeUpload } from '@/lib/security/upload-scan';
@@ -121,9 +122,12 @@ async function handleListSkills(request: NextRequest) {
   if (rateLimit) return rateLimit;
   const { db, userId } = await getUserScopedDb(request);
   const wholeCatalog = new URL(request.url).searchParams.get(CATALOG_PARAM) === CATALOG_ALL;
+  const pluginsAllowed = await workspaceAllowsPlugins(db, userId);
   let skills;
   try {
-    const enabledPluginIds = await listEnabledPluginIds(db, userId);
+    const enabledPluginIds = pluginsAllowed
+      ? await listEnabledPluginIds(db, userId)
+      : new Set<string>();
     const directory = await getManagedSkillDirectoryForPlugins(enabledPluginIds);
     skills = wholeCatalog ? directory : await resolveInstalledManagedSkills(db, userId, directory);
   } catch (error) {
@@ -134,7 +138,7 @@ async function handleListSkills(request: NextRequest) {
   }
   const canAuthorSkills = userSkillAuthoringEnabled();
   const userSkills = canAuthorSkills ? await listUserSkills(db, userId) : [];
-  const directorySkills = await listInstalledDirectorySkills(db, userId);
+  const directorySkills = pluginsAllowed ? await listInstalledDirectorySkills(db, userId) : [];
   const listed = dedupeByFirstClaimedName([...skills, ...directorySkills]);
   const originOf = await loadSkillOrigins(db, userId, listed);
   let body;

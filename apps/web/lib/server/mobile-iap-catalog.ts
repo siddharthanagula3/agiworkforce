@@ -59,6 +59,14 @@ function parseProductIdMap(platform: MobileIapPlatform): Map<MobileIapProductKey
   return configured;
 }
 
+function configuredProducts(platform: MobileIapPlatform): MobileIapCatalogProduct[] {
+  const configured = parseProductIdMap(platform);
+  return MOBILE_IAP_PRODUCT_DEFINITIONS.flatMap((definition) => {
+    const productId = configured.get(definition.key);
+    return productId ? [{ ...definition, productId }] : [];
+  });
+}
+
 export function getMobileIapCatalogState(platform: MobileIapPlatform): MobileIapCatalogState {
   if (!deploymentEnablesMobileIap()) {
     return {
@@ -68,11 +76,7 @@ export function getMobileIapCatalogState(platform: MobileIapPlatform): MobileIap
     };
   }
 
-  const configured = parseProductIdMap(platform);
-  const products = MOBILE_IAP_PRODUCT_DEFINITIONS.flatMap((definition) => {
-    const productId = configured.get(definition.key);
-    return productId ? [{ ...definition, productId }] : [];
-  });
+  const products = configuredProducts(platform);
 
   if (products.length === 0) {
     return {
@@ -92,11 +96,7 @@ export function resolveMobileIapProduct(
   platform: MobileIapPlatform,
   productId: string,
 ): MobileIapCatalogProduct | null {
-  return (
-    getMobileIapCatalogState(platform).products.find(
-      (product) => product.productId === productId,
-    ) ?? null
-  );
+  return configuredProducts(platform).find((product) => product.productId === productId) ?? null;
 }
 
 export function mobileIapCatalogStorageIsRequired(): boolean {

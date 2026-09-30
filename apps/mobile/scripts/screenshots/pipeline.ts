@@ -134,11 +134,46 @@ export function resolveAndroidAvd(available: readonly string[], avdName: string)
   );
 }
 
+export function newlyBootedDetoxCloneIds(
+  before: SimctlDeviceListing,
+  after: SimctlDeviceListing,
+  simulatorName: string,
+): string[] {
+  const cloneName = `${simulatorName}-Detox`;
+  const booted = (listing: SimctlDeviceListing) =>
+    Object.values(listing.devices)
+      .flat()
+      .filter((device) => device.name === cloneName && device.state === 'Booted')
+      .map((device) => device.udid);
+  const existing = new Set(booted(before));
+  return booted(after)
+    .filter((udid) => !existing.has(udid))
+    .sort();
+}
+
+export function selectScreenshots(shotId: string | undefined, verifyOnly: boolean): Screenshot[] {
+  if (verifyOnly) {
+    if (shotId !== undefined) {
+      throw new Error('A screenshot ID cannot be selected during capture verification.');
+    }
+    return [VERIFY_SCREENSHOT];
+  }
+  if (shotId === undefined) return SCREENSHOTS;
+  const selected = SCREENSHOTS.filter((shot) => shot.id === shotId);
+  if (selected.length === 0) {
+    throw new Error(
+      `Unknown screenshot ID "${shotId}". Known IDs: ${SCREENSHOTS.map((shot) => shot.id).join(', ')}`,
+    );
+  }
+  return selected;
+}
+
 function listAvailableSimulators(): SimctlDeviceListing {
   let raw: string;
   try {
     raw = execFileSync('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], {
       encoding: 'utf8',
+      timeout: 30000,
     });
   } catch (error) {
     throw new Error(
@@ -152,6 +187,26 @@ function listAvailableSimulators(): SimctlDeviceListing {
     throw new Error(
       '"xcrun simctl list devices available --json" did not return JSON. ' +
         'Check that xcode-select points at a full Xcode install, then re-run.',
+    );
+  }
+}
+
+function shutdownSimulatorIfBooted(udid: string) {
+  const booted = Object.values(listAvailableSimulators().devices)
+    .flat()
+    .some((device) => device.udid === udid && device.state === 'Booted');
+  if (!booted) return;
+  const result = spawnSync('xcrun', ['simctl', 'shutdown', udid], {
+    encoding: 'utf8',
+    timeout: 30000,
+  });
+  if (result.status === 0) return;
+  const stillBooted = Object.values(listAvailableSimulators().devices)
+    .flat()
+    .some((device) => device.udid === udid && device.state === 'Booted');
+  if (stillBooted) {
+    throw new Error(
+      `Could not shut down screenshot simulator ${udid}: ${result.stderr || result.error}`,
     );
   }
 }
@@ -273,21 +328,35 @@ function runDetoxSpec(
     ...(udid ? { [DETOX_IOS_UDID_ENV]: udid } : {}),
     ...(device.platform === 'android' ? { [DETOX_ANDROID_AVD_ENV]: device.simulator } : {}),
   };
-  execFileSync(
-    'pnpm',
-    [
-      'exec',
-      'detox',
-      'test',
-      '--configuration',
-      detoxConfig,
-      '--reuse',
-      '--artifacts-location',
-      `${artifactsDir}/`,
-      specPath,
-    ],
-    { stdio: 'inherit', env, cwd: ROOT },
-  );
+  const bootedBefore = device.platform === 'ios' ? listAvailableSimulators() : null;
+  try {
+    execFileSync(
+      'pnpm',
+      [
+        'exec',
+        'detox',
+        'test',
+        '--configuration',
+        detoxConfig,
+        '--reuse',
+        ...(device.platform === 'ios' ? ['--cleanup'] : []),
+        '--artifacts-location',
+        `${artifactsDir}/`,
+        specPath,
+      ],
+      { stdio: 'inherit', env, cwd: ROOT },
+    );
+  } finally {
+    if (bootedBefore) {
+      for (const cloneId of newlyBootedDetoxCloneIds(
+        bootedBefore,
+        listAvailableSimulators(),
+        device.simulator,
+      )) {
+        shutdownSimulatorIfBooted(cloneId);
+      }
+    }
+  }
   const producedPng = findCapturedPng(artifactsDir, basename(rawOut));
   if (!producedPng) {
     throw new Error(`Detox did not produce a screenshot under ${artifactsDir}`);
@@ -333,21 +402,25 @@ function captureForDevice(
   console.log(`  ${device.storeSlot ?? 'not an uploadable store size, internal use only'}`);
   ensureAppBuilt(device.platform, variant);
   const udid = bootSimulator(device);
-  installApp(device, udid, variant);
-  const classDir = join(OUT, device.platform, device.className);
-  ensureDir(join(classDir, verifyOnly ? VERIFY_DIR : 'raw'));
-  if (!verifyOnly) ensureDir(join(classDir, 'final'));
+  try {
+    installApp(device, udid, variant);
+    const classDir = join(OUT, device.platform, device.className);
+    ensureDir(join(classDir, verifyOnly ? VERIFY_DIR : 'raw'));
+    if (!verifyOnly) ensureDir(join(classDir, 'final'));
 
-  for (const shot of shots) {
-    const fileName = `${shot.id}-${shot.name}.png`;
-    const rawOut = join(classDir, verifyOnly ? VERIFY_DIR : 'raw', fileName);
-    console.log(`  -> ${fileName} (${shot.spec})`);
-    runDetoxSpec(device, shot, rawOut, udid, variant);
-    if (verifyOnly) {
-      console.log(`  capture wiring OK: ${rawOut}`);
-      continue;
+    for (const shot of shots) {
+      const fileName = `${shot.id}-${shot.name}.png`;
+      const rawOut = join(classDir, verifyOnly ? VERIFY_DIR : 'raw', fileName);
+      console.log(`  -> ${fileName} (${shot.spec})`);
+      runDetoxSpec(device, shot, rawOut, udid, variant);
+      if (verifyOnly) {
+        console.log(`  capture wiring OK: ${rawOut}`);
+        continue;
+      }
+      composite(rawOut, join(classDir, 'final', fileName), shot, device);
     }
-    composite(rawOut, join(classDir, 'final', fileName), shot, device);
+  } finally {
+    if (udid) shutdownSimulatorIfBooted(udid);
   }
 }
 
@@ -357,7 +430,8 @@ function main() {
   const target = argv.find((a) => !a.startsWith('--')) ?? 'all';
   const variant: Variant = flags.has('--debug') ? 'debug' : 'release';
   const verifyOnly = flags.has('--verify');
-  const shots = verifyOnly ? [VERIFY_SCREENSHOT] : SCREENSHOTS;
+  const shotId = argv.find((arg) => arg.startsWith('--shot='))?.slice('--shot='.length);
+  const shots = selectScreenshots(shotId, verifyOnly);
 
   ensureDetoxInstalled();
   ensureDir(OUT);

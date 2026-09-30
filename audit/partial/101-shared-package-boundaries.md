@@ -13,20 +13,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/mcp-web df03cba4d: the connectors family is done. All fifteen /api/connectors routes type their bodies with cloud-contracts schemas (connections, connect and conflict bodies, custom connectors, accounts, capability catalog, credentials, MCP operations, call log, call health, tool permissions, Drive picker, OAuth start and callback outcomes, directory list, entry, query and icon), the MCP, permissions, credentials and directory routes parse input with them, and the web callers parse with them; the family left the baseline (247 to 232 before merge). Still owed for the cell: the other baselined families, and the desktop connectors client (apps/desktop/src/api/cloudConnectors.ts) and client-runtime connector parsers still read these bodies by hand. | surface-only |
+| platform | partial | partials/platform-final 49567fe099, 5b37bb05e9, d2e43f39d6: device authorization (code, token, refresh, approve; client-runtime and the approval page parse with it), notification feed (web and mobile), routing preferences (web and mobile) and waitlist/public (stale) leave the baseline: 171 to 164. The ownership guard's module list now covers the five modules it was failing on. Left: 164 baselined routes (settings 50, admin 30 and smaller families); check-route-shared-contracts still fails on connectors/bank-accounts/exchange and /link (m-features Plaid files). | surface-only |
 
-Code: `packages/contracts/cloud-contracts/src/connectors.ts:89-89`, `packages/contracts/cloud-contracts/src/connectors.ts:125-125`, `packages/contracts/cloud-contracts/src/connectors.ts:270-270`, `packages/contracts/cloud-contracts/src/connectors.ts:436-436`
-
-## S101.03: Shared content-block schemas.
-
-- Done when: Message content blocks come from one vocabulary that every client renders or degrades explicitly.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | partials/platform 39c899a7b6, c889e57aec: one exhaustive mapping from every AgentEvent type to its MESSAGE_KINDS block, with no wire change. check:content-blocks fails a client module that decides blocks from three or more event types without messageKindForAgentEvent. Twelve modules are recorded as pending with owners: web useChatStream and use-local-session, mobile streaming and runPresentation, Chrome chat-state, cloudRunsPanel and side_panel, VS Code cloudRunPresentation and localRuntimeClient, desktop CloudRuntime, developerSessionService and localInferenceService. Done when that list is empty | surface-only |
-
-Code: `packages/contracts/types/src/message-block-kinds.ts:6-6`, `packages/contracts/types/src/message-block-kinds.ts:37-37`, `scripts/check-content-blocks.mjs:65-65`, `scripts/check-content-blocks.mjs:138-138`
+Code: `packages/contracts/cloud-contracts/src/web-search-allowance.ts:1-1`, `packages/contracts/cloud-contracts/src/service-notices.ts:1-1`, `packages/contracts/cloud-contracts/src/managed-media.ts:220-220`
 
 ## S101.06: Shared model metadata.
 
@@ -35,42 +24,9 @@ Code: `packages/contracts/types/src/message-block-kinds.ts:6-6`, `packages/contr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | The registry compiles to TS and Rust with a CI check and a repo-wide model-id literal scan, but RouteEconomicsPanel restates capability sources and 4 web/mobile files restate provider identity (baselined in check-client-inference). | surface-only |
+| platform | partial | partials/platform-final 7eba315679: the web marketing marquee, route diagram and admin route economics panel read the catalogue (PROVIDERS_IN_ORDER, COMPAT_CAPABILITY_SOURCES); three web entries left the check-client-inference baseline. Left: the Tauri renderer's types/provider.ts (its union carries mistral, together, fireworks, cerebras, deepinfra, cohere, ai21, sambanova, azure, llamacpp, vllm, which the shared Provider lacks), types/media.ts and OnboardingWizard key-prefix detection, and mobile providerStreamClient.ts. | surface-only |
 
-Code: `crates/agiworkforce-model-registry/src/generated/model_registry.rs:2-2`, `scripts/check-no-hardcoded-model-ids.mjs:497-503`, `scripts/check-client-inference.baseline.json:592-595`
-
-## S101.07: Shared capability resolution.
-
-- Done when: Capabilities are resolved once on the server and every client reads that decision instead of deciding locally.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The cli gap is closed (034deed768: capability_handshake read and cached with the tier, check-capability-consumption records cli as a reader); Chrome and VS Code remain recorded gaps | handler |
-
-Code: `scripts/check-capability-consumption.mjs:69-69`, `apps/cli/src/tier_cache.rs:384-384`
-
-## S101.09: Shared policy contracts.
-
-- Done when: Workspace policy keys are declared once and every declared key is enforced by the server.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | allowMcpServers and allowedMcpServers have no server path to guard. The cloud Code agent loop offers no MCP tools and the sandbox configures no MCP servers, while the effective policy route already serves the code controls to clients. Either the CLI, VS Code and desktop local sessions honour them when they start MCP servers (then the baseline moves to servedToClients), or the two controls come out of the console. Product call sent to the lead | handler |
-
-Code: `scripts/config/workspace-policy-enforcement-baseline.json:3-3`, `apps/web/lib/services/organization-policy-code-gate.ts:53-53`
-
-## S101.10: Shared authentication client.
-
-- Done when: One authentication client (sign-in, device flow, token refresh) is shared by every client surface.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Device authorization is shared only by VS Code (and the internal Tauri app); web, mobile, Chrome and CLI each carry their own sign-in client. | surface-only |
-
-Code: `packages/client/client-runtime/src/deviceAuthorization.ts:13-15`, `apps/extension-vscode/src/features/account-auth/deviceAuth.ts:57-60`
+Code: `apps/web/features/marketing/components/RouteFlow.tsx:6-6`, `apps/web/features/marketing/components/LandingSections.tsx:3-3`, `apps/web/features/admin/components/RouteEconomicsPanel.tsx:85-85`
 
 ## S101.11: Shared API client.
 
@@ -79,20 +35,9 @@ Code: `packages/client/client-runtime/src/deviceAuthorization.ts:13-15`, `apps/e
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Shared managed-cloud clients cover chat, projects, knowledge, attachments, settings, schedules and agent runs; Electron uses none, CLI is Rust, and idempotency keys are recorded gaps on VS Code and Chrome. | surface-only |
+| platform | partial | Idempotency keys are no longer a gap on VS Code or Chrome (check-idempotency passes; both send keys on chat, schedules, cloud runs). Left: the Electron main process uses no shared managed-cloud client and the CLI is Rust. | desktop, cli |
 
-Code: `packages/contracts/cloud-contracts/src/managed-cloud-chat-client.ts:223-227`, `scripts/config/client-sdk-contract.json:89-92`, `scripts/check-client-sdk-usage.mjs:3-7`
-
-## S101.12: Shared streaming client.
-
-- Done when: One streaming client (SSE reading, reconnect, event parsing) is shared by every client.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | partials/platform f853f758d0, 2d9751cdd2: client-runtime carries the one bounded, spec-following SSE decoder (Chrome's, with event and id kept) and readServerSentEvents, and the web guest chat reads through it. check:sse-readers fails a client that frames SSE by hand. Pending with owners: web useChatStream, mobile streaming, Chrome boundedSseDecoder, VS Code utils/api and desktop cloudApi. Retry and reconnect logic is still per client | surface-only |
-
-Code: `packages/client/client-runtime/src/sse.ts:18-18`, `packages/client/client-runtime/src/sse.ts:145-145`, `apps/web/features/chat/guest/guest-chat-stream.ts:94-94`, `scripts/check-sse-readers.mjs:54-54`
+Code: `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:144-144`, `apps/extension/src/features/computer-use/cloudAgentClient.ts:373-373`
 
 ## S101.13: Shared conversation-state logic.
 
@@ -101,7 +46,7 @@ Code: `packages/client/client-runtime/src/sse.ts:18-18`, `packages/client/client
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | The agent-activity reducer and send queue are shared by web, mobile and Chrome; VS Code and CLI keep their own state logic, and 66 client files restate lifecycle state names (baselined). | surface-only |
+| platform | partial | partials/platform-final 7075a2d2d3: VS Code follow-ups now wait in the shared client-runtime message queue (volatile, cap 20, payloads beside it by id); FIFO, cap, cancel and epoch tests pass unchanged. The lifecycle-names baseline holds no VS Code files (53 lifecycle entries in check-client-inference.baseline.json, not 66). Left: VS Code local-runtime tool progress is posted straight to the webview rather than through applyAgentActivityEvent (needs a runtime-event to envelope adapter and a new webview message); the CLI keeps its own state logic (c-cli). | surface-only |
 
 Code: `packages/client/client-runtime/src/index.ts:29-38`, `apps/extension/src/features/side-panel/chat-state.ts:1-2`
 
@@ -112,20 +57,9 @@ Code: `packages/client/client-runtime/src/index.ts:29-38`, `apps/extension/src/f
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform f503558796: the chat pull and conflict projection now carry starred and archived, and the shared sync package copies them onto the stored record. Still open: Chrome, VS Code and the CLI sync with their own code, and mobile's conversation store has no starred or archived field to receive the state | surface-only |
+| platform | partial | partials/platform-final 833c5fc654: mobile's conversation store now receives starred (shown as a star on the chat row, as on web) and drops archived chats, with a sync test. Left: Chrome, VS Code and the CLI keep their own sync code. | surface-only |
 
 Code: `packages/contracts/cloud-contracts/src/sync.ts:110-110`, `apps/web/app/api/chat/sync/route.ts:89-89`, `apps/web/app/api/chat/sync/route.ts:597-597`, `packages/client/sync/src/conversations.ts:66-66`
-
-## S101.17: Shared artifact models.
-
-- Done when: Artifacts share one model across server and clients.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | @agiworkforce/artifacts is used by web, mobile and VS Code; Chrome has no artifact model import and the CLI hand-writes ArtifactIndexEntry. | surface-only |
-
-Code: `apps/cli/src/cloud/artifacts.rs:50-58`
 
 ## S101.18: Shared source/citation models.
 
@@ -134,20 +68,9 @@ Code: `apps/cli/src/cloud/artifacts.rs:50-58`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Web and mobile read sources as the protocol's AgentEventSource (97a8ff4744); the Chrome (SidePanelSource, ManagedChatSourceWire, bubbles.ts) and VS Code (sourceList payload) adoption patches are with p-chrome and p-sessions. | surface-only |
+| platform | partial | partials/platform df36f1085b: the last web source-record copies extend AgentEventSource; web and mobile are done. Left: Chrome and VS Code adoption patches (surface phases). | chrome, vscode |
 
-Code: `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:17-17`, `apps/mobile/types/chat.ts:115-115`
-
-## S101.19: Shared Memory contracts.
-
-- Done when: Memory records and controls share one contract across server and clients.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Web routes and clients share memory-wire.ts and one 20,000-character limit, and the CLI's Rust memory structs are held to the contract by check-cli-wire-parity; the Chrome memory client adoption patch (scratch/p-privacy/adoption/chrome-s101-19-memory-contract.patch) is with p-chrome and VS Code's MemorySyncRejectionSchema adoption with p-sessions. | surface-only |
-
-Code: `packages/contracts/types/src/memory-wire.ts:1-1`, `packages/contracts/cloud-contracts/src/sync.ts:278-278`, `scripts/check-cli-wire-parity.mjs:31-31`
+Code: `apps/web/shared/types/common.ts:203-203`, `apps/web/features/chat/utils/research-plan.ts:116-116`
 
 ## S101.20: Shared tool definitions.
 
@@ -156,31 +79,9 @@ Code: `packages/contracts/types/src/memory-wire.ts:1-1`, `packages/contracts/clo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | ToolDefinition is Rust-owned and generated, but web tools are described in a separate tool-metadata module and search_places, ask_clarifying_questions, 13 device-step and the browser tools remain undeclared (baselined). | handler |
+| platform | partial | partials/platform-final 25b9a0802f, 064c76deea: search_places, ask_clarifying_questions and the eight paired-Chrome commands are declared (undeclared baseline 11 to 1). Left: run_command stays with the Cloud Code agent loop's own definitions and approval store, and web tool metadata is still a TS table beside the Rust-generated ToolDefinition wire shape. | handler |
 
-Code: `packages/contracts/types/src/tool-primitive.ts:4-7`, `scripts/check-tool-registry.mjs:50-60`
-
-## S101.21: Shared approval contracts.
-
-- Done when: Approval requests, decisions and resume share one contract across server and clients.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Approval policy and resume contracts are used by web and mobile; Chrome and VS Code import neither. | surface-only |
-
-Code: `packages/contracts/cloud-contracts/src/tool-events.ts:18-24`
-
-## S101.23: Shared Skill/Plugin manifests.
-
-- Done when: Skill and plugin manifests are parsed by one shared implementation everywhere.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | @agiworkforce/skills parses manifests for web only; the CLI scans SKILL.md files with its own Rust code. | surface-only |
-
-Code: `apps/cli/src/ecosystem.rs:1155-1159`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:142-142`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:546-546`, `scripts/check-tool-registry.mjs:44-44`
 
 ## S101.24: Shared agent/task models.
 
@@ -189,20 +90,9 @@ Code: `apps/cli/src/ecosystem.rs:1155-1159`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Cloud agent-run schemas are shared by web, mobile, Chrome and VS Code, but 29 shipped web, mobile and Chrome files still restate lifecycle state names (baselined in check-client-inference). | surface-only |
+| platform | partial | partials/platform-final 7eba315679: Chrome scheduled-run cancellation reads the shared task board stages (it also missed partial and timed_out as terminal). Left: Chrome schedulesSection.ts switches on the schedule-run status contract-typed from cloud-contracts, which the guard reads as lifecycle names; 42 Tauri renderer files under apps/desktop/src; mobile baseline files. | mobile, chrome |
 
-Code: `packages/contracts/cloud-contracts/src/managed-cloud-agent-runs-client.ts:281-285`, `scripts/check-client-inference.baseline.json:3-8`
-
-## S101.27: Shared notifications.
-
-- Done when: Notifications use one shared category and target vocabulary on server and clients.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Web uses the shared NOTIFICATION_CATEGORIES; mobile defines its own four categories (approvals, task_updates, errors, status) that do not match. | surface-only |
-
-Code: `packages/contracts/types/src/notifications.ts:11-21`, `apps/mobile/stores/notificationPrefsStore.ts:16-17`
+Code: `apps/extension/src/features/background/scheduled-task-cancellation.ts:136-136`
 
 ## S101.28: Shared localization.
 
@@ -244,31 +134,9 @@ Code: `packages/ui/ui/package.json:2-5`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | partials/platform 861d417184, 533e89d0cd: check:mobile-primitives fails a mobile module that imports Text, Pressable or a Touchable from react-native outside components/ui. 129 existing modules are recorded in a baseline that only shrinks, and moving them is mobile work (post-codex) | states |
+| platform | partial | partials/platform-final 77f4a0ae51: 117 modules moved from raw Pressable to PressableBox (full mobile jest 4600/4600, tsc clean); baseline 126 to 10. Left: 10 modules that also draw raw Text (the Text primitive adds NativeWind classes, so a visual check is needed), alias the import, or pass Pressable as a value (SendButton, VoiceInputButton). | states |
 
 Code: `scripts/check-mobile-primitives.mjs:20-20`, `scripts/check-mobile-primitives.mjs:84-84`, `scripts/config/mobile-primitives-baseline.json:1-2`, `package.json:134-134`
-
-## S101.32: Shared Markdown/content transformations.
-
-- Done when: Markdown and content transformations run through one shared implementation on every surface.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | normalizeMarkdownSource is shared by unified-chat, mobile and Chrome; the VS Code webview renders markdown without it. | surface-only |
-
-Code: `packages/platform/utils/src/markdownSource.ts:125-127`, `apps/extension/src/features/side-panel/markdown.ts:2-3`
-
-## S101.33: Platform-specific renderers.
-
-- Done when: Each surface has a renderer for the shared content model that declares which block kinds it renders and degrades the rest.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Each surface has its own renderer, but none publishes its renderable MESSAGE_KINDS, so unknown blocks are not degraded consistently. | surface-only |
-
-Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:16-19`, `packages/contracts/types/src/client-capability-manifest.ts:229-233`
 
 ## S101.34: Shared telemetry conventions.
 
@@ -281,17 +149,6 @@ Code: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx:16-19
 
 Code: `packages/contracts/types/src/product-analytics.ts:7-15`, `apps/extension-vscode/src/core/errorReporting.ts:2-3`
 
-## S101.35: Shared test data and schema conformance fixtures.
-
-- Done when: Wire contracts have shared golden fixtures that every implementation (server, TS clients, Rust) is tested against.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Golden fixtures exist for me, sync, projects and media and drive the TS contract tests, but the CLI Rust client and most contracts have none. | surface-only |
-
-Code: `scripts/check-cloud-contract-ownership.mjs:51-57`
-
 ## S101.36: Shared configuration validation.
 
 - Done when: Configuration for every surface is validated through one shared registry and validator.
@@ -302,25 +159,3 @@ Code: `scripts/check-cloud-contract-ownership.mjs:51-57`
 | platform | partial | Validation covers only the web server (validate-env.ts plus the config-keys guard over apps/web); mobile, Chrome, VS Code, Electron and CLI validate config ad hoc. | surface-only |
 
 Code: `scripts/check-config-keys.mjs:19-20`
-
-## S101.37: Shared security-sensitive utility code.
-
-- Done when: Security-sensitive helpers (crypto, redaction, path containment) live in one shared place that every surface uses.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Crypto envelopes live inside the web app, not a package; VS Code keeps its own redactSecrets beside the shared one; the no-AAD ratchet still admits two legacy call sites. | surface-only |
-
-Code: `apps/extension-vscode/src/core/telemetry.ts:44-48`, `packages/platform/utils/src/logger.ts:239-243`, `scripts/check-crypto-context-binding.mjs:32-39`
-
-## S101.38: Explicit browser-only, server-only, and native-only exports.
-
-- Done when: Shared packages declare browser-only, server-only and native-only entry points explicitly.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | No package declares browser, node or react-native export conditions or imports server-only; runtime splits are ad hoc subpaths (identity ./browser, client-runtime ./node). | surface-only |
-
-Code: `packages/platform/identity/package.json:9-12`, `packages/client/client-runtime/package.json:9-12`

@@ -49,7 +49,7 @@ describe('createManagedCloudProjectsClient', () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(response({ projects: [project] }))
-      .mockResolvedValueOnce(response({ project }))
+      .mockResolvedValueOnce(response({ project: { ...project, serverVersion: '42' } }))
       .mockResolvedValueOnce(response({ project }, 201))
       .mockResolvedValueOnce(response({ project: { ...project, name: 'Renamed' } }))
       .mockResolvedValueOnce(response({ success: true }));
@@ -62,7 +62,7 @@ describe('createManagedCloudProjectsClient', () => {
     });
 
     await client.listProjects({ limit: 100, offset: 0 });
-    await client.getProject('project/with spaces');
+    expect((await client.getProject('project/with spaces')).serverVersion).toBe('42');
     await client.createProject({ name: 'Launch plan' });
     await client.updateProject(project.id, { name: 'Renamed' });
     await client.deleteProject(project.id);

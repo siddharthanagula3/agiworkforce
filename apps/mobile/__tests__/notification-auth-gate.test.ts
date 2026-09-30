@@ -273,6 +273,20 @@ describe('handleNotificationResponse, no dead-end deep links', () => {
     });
   }
 
+  it('opens the chat a finished video notice names', () => {
+    signIn();
+    fireNotification({
+      type: 'chat_message',
+      route: '/(app)/(tabs)/chat',
+      conversationId: '0190a000-0000-7000-8000-000000000123',
+      videoJobId: 'job-1',
+    });
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/(app)/chat/[id]',
+      params: { id: '0190a000-0000-7000-8000-000000000123' },
+    });
+  });
+
   it('routes agent lifecycle notifications to /(app)/tasks even without an agentId', () => {
     signIn();
     fireNotification({ type: 'agent_failed' });
@@ -311,6 +325,17 @@ describe('handleNotificationResponse, no dead-end deep links', () => {
     fireNotification({ type: 'agent_approval_needed' });
     expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/companion' });
   });
+
+  for (const type of ['agent_approval_needed', 'task_completed', 'agent_failed']) {
+    it(`opens the cloud run a ${type} push names, where it can be answered`, () => {
+      signIn();
+      fireNotification({ type, priority: 'high', route: '/(app)/tasks', runId: 'run-1' });
+      expect(mockRouterPush).toHaveBeenCalledWith({
+        pathname: '/(app)/tasks',
+        params: { runId: 'run-1' },
+      });
+    });
+  }
 
   it('routes the schedule_run push the web backend actually sends to /(app)/schedules', () => {
     signIn();

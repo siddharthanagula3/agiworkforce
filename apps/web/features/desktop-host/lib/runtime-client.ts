@@ -47,7 +47,7 @@ import {
   type WorkspaceRoot,
   type WorkspaceRootKind,
 } from '@agiworkforce/local-runtime-contract';
-import type { BrowserPageSummary } from '@agiworkforce/types';
+import type { BrowserPageSummary, BrowserTabSummary } from '@agiworkforce/types';
 import type { MemoryAddResponse, PluginSummary, SkillSummary } from '@agiworkforce/types/protocol';
 
 const NO_HOST_MESSAGE = 'Local access is only available in the AGI Cloud desktop app.';
@@ -375,8 +375,15 @@ export function unpairBrowser(): Promise<BrowserPairingState> {
   return invoke<BrowserPairingState>('browser_pairing_unpair');
 }
 
-export function readPairedPage(): Promise<BrowserPageSummary> {
-  return invoke<BrowserPageSummary>('browser_read_page');
+export function listPairedTabs(): Promise<BrowserTabSummary[]> {
+  return invoke<BrowserTabSummary[]>('browser_list_tabs');
+}
+
+export function readPairedPage(tabId?: number): Promise<BrowserPageSummary> {
+  return invoke<BrowserPageSummary>(
+    'browser_read_page',
+    tabId === undefined ? undefined : { tabId },
+  );
 }
 
 export function clickInPairedBrowser(selector: string): Promise<{ clicked: boolean }> {

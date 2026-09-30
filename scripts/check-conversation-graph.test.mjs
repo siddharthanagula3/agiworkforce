@@ -68,6 +68,7 @@ const CONTRACT = `export const ManagedCloudConversationWireSchema = z.object({
   id: z.string().min(1),
   title: z.string().nullable(),
   work_mode: CloudAgentWorkModeSchema.nullable().optional(),
+  needs_you: z.boolean().optional(),
   active_leaf_message_id: z.string().uuid().nullable().optional(),
   created_at: z.string().min(1),
   updated_at: z.string().min(1),

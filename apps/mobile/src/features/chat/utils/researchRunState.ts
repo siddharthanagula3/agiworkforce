@@ -6,6 +6,7 @@ import {
 } from '@agiworkforce/types';
 import type { StreamDelta } from '@/services/streaming';
 import type { ToolSearchResult } from '@/types/chat';
+import { translatePlural } from '@/src/i18n/plural';
 
 export type ResearchPhase =
   | 'planning'
@@ -293,6 +294,13 @@ export function researchCountsSummary(research: ResearchRunState): string[] {
     );
   }
   const sources = research.sources ?? 0;
-  if (sources > 0) counts.push(`${sources} source${sources === 1 ? '' : 's'}`);
+  if (sources > 0) {
+    counts.push(
+      translatePlural('chat', 'counts.sources', sources, {
+        one: '{{count}} source',
+        other: '{{count}} sources',
+      }),
+    );
+  }
   return counts;
 }

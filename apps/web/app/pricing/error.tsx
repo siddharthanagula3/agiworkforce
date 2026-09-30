@@ -40,14 +40,14 @@ export default function PricingError({
           onClick={reset}
           className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
-          <RefreshCw aria-hidden="true" className="h-4 w-4 mr-2" />
+          <RefreshCw aria-hidden="true" className="h-4 w-4 me-2" />
           Try Again
         </button>
         <Link
           href="/"
           className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-medium hover:bg-muted transition-colors text-foreground"
         >
-          <Home aria-hidden="true" className="h-4 w-4 mr-2" />
+          <Home aria-hidden="true" className="h-4 w-4 me-2" />
           Go Home
         </Link>
       </div>

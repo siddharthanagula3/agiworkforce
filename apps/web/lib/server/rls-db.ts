@@ -15,6 +15,7 @@ import { RLS_POOL_TUNING } from '@/lib/server/db-pool-tuning';
 import { reportDatabaseConnectionError } from '@/lib/server/db-connection-error';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { subjectSessionPassesAccountSecurity } from '@/lib/server/account-security/gate';
 
 let rlsDb: DatabaseAdapter | null = null;
 
@@ -42,6 +43,7 @@ export interface UserScopedDbOptions {
   apiKeyScope?: ApiKeyScope;
   mfaGateExemptForOwner?: boolean;
   mfaEnrollment?: boolean;
+  accountSecurityVerification?: boolean;
   resolveOrganization?: boolean;
 }
 
@@ -147,8 +149,9 @@ export async function getCurrentUserRlsDb(): Promise<CurrentUserRlsDb | null> {
     // signed out.
     return null;
   }
-  const { subject: userId, getToken } = session;
+  const { subject: userId, sessionId, getToken } = session;
   if (!userId) return null;
+  if (!(await subjectSessionPassesAccountSecurity(userId, sessionId))) return null;
   const token = await getToken();
   if (!token) return null;
   setTenantScope({ userId });

@@ -297,3 +297,177 @@ Claude lists memory as topics and shows no generated profile summary of the
 person (support.claude.com/en/articles/11817273, checked 2026-09-28), and the
 web and desktop apps show none either, so the mobile app does not add one
 (S39.07 mobile).
+
+## D-2026-09-28-18 Artifact engines follow the leaders
+
+Code artifacts get a code editor and document templates get direct editing,
+because Gemini and Claude's template documents edit in place
+(support.google.com/gemini/answer/16047321, support.claude.com/en/articles/17153992),
+and images get a select-an-area edit as ChatGPT offers
+(learn.chatgpt.com/docs/image-generation). A spreadsheet grid editor (S104.05)
+is not built: both leaders only download or regenerate tables
+(support.claude.com/en/articles/12111783, learn.chatgpt.com/docs/artifacts-viewer).
+Video editing (S104.08) is not built: neither leader documents one. An
+integrated terminal on the web (S104.T09) is not built: ChatGPT offers it only
+in its desktop app and Claude Code on the web has no terminal input. Checked
+2026-09-28.
+
+## D-2026-09-28-19 Profile updates and legal holds stay out of the public API
+
+Neither leader's public API changes a user's profile: OpenAI's Admin API
+updates roles only and Anthropic's Update User changes the organization role
+only. Neither leader's compliance API places or releases a legal hold; both
+export records that the customer holds with its own tools. So the public API
+keeps GET /api/me and read access to held records and preservation status,
+while profile edits stay a signed-in client action and holds stay an admin
+console action (S85.01 api, S87.37 api). Checked 2026-09-28.
+
+## D-2026-09-28-20 No device-only conversations on the web
+
+ChatGPT and Claude on the web keep every saved conversation in the account and
+answer privacy with temporary chat and incognito, which are never saved. Neither
+offers a durable conversation kept only in the browser, so the web and desktop
+apps keep local-model chats temporary rather than storing them on the device
+(S41.14 web and desktop). The mobile, CLI, VS Code and Chrome apps already keep
+local conversations on the device.
+
+## D-2026-09-28-21 Only cloud coding sessions are shared
+
+Claude shares Claude Code sessions that run in the cloud, from the session list
+at claude.ai/code, and offers no share link for a session running on the
+person's own machine (code.claude.com/docs/en/claude-code-on-the-web, section
+Share sessions). The desktop app shares cloud sessions through the hosted Code
+page, and local sessions stay unshareable (S66.40 desktop). Checked 2026-09-28.
+
+## D-2026-09-28-22 A cloud session's result comes local through the CLI and VS Code
+
+Claude brings a cloud session into a local checkout with the CLI's
+`claude --teleport`, which checks out the session's branch and loads its
+history, and with Open in > Terminal on claude.ai/code, which copies that
+command; the desktop app does not pull a cloud result into a repository itself
+(code.claude.com/docs/en/claude-code-on-the-web, section From cloud to
+terminal). The desktop app therefore hands a cloud session to VS Code or the
+terminal and adds no native pull and review of its own (S110.23 desktop).
+Checked 2026-09-28.
+
+## D-2026-09-28-24 A reconnected connector does not resume the interrupted turn
+
+When a connected app's sign-in expires mid-answer, ChatGPT and Claude show a
+reconnect prompt and the person sends the request again once the app is
+connected; neither resumes the interrupted turn on its own. The web and
+desktop apps do the same: the chat card offers Reconnect and Retry, and
+Settings offers Connect on an expired connection, with no automatic resume
+(S110.27 web and desktop).
+
+## D-2026-09-28-23 The Chrome extension stays at Claude in Chrome's scope
+
+Claude in Chrome is the reference for the extension. Its pages
+(support.claude.com/en/articles/12012173, claude.com/chrome,
+code.claude.com/docs/en/chrome, support.claude.com/en/articles/12902428) and
+Gemini in Chrome's (support.google.com/chrome/answer/16283624), checked
+2026-09-28, document none of the following, so the side panel does not add
+them: a library or file browser, a model catalog, in-panel billing management,
+recents grouped by project, back and forward history, artifact or source split
+views, downloads of uploaded originals, partial copy from an artifact, artifact
+cards and states for inline replies, a floating selection toolbar or in-place
+rewrite, chart image export, choosing project sources, a research progress
+view, source-type icons, project notes, retry of a failed dictation, an account
+or workspace switcher, context and output limits in the picker, model-dependent
+media settings, regional-restriction and runtime notices, unavailable-model
+states, connect-account explanations, routing profiles and a switch offer,
+routing-policy versions, promotional credits, a display-language choice,
+per-category notifications, clearing local storage, an active-sessions list,
+Office, Google Workspace and Teams host integrations, a toolbar quick-action
+list, reconnect-and-resume for integrations, and pull request diff review
+(Claude in Chrome reads the page; the CLI, VS Code and cloud Code review pull
+requests). Claude in Chrome works in Google apps by using the page, without API
+setup. Cells: S4.23, S4.38, S4.40, S5.11, S5.25, S7.04, S7.05, S9.13, S25.26,
+S25.28, S26.01, S26.04, S27.15, S29.36, S34.19, S35.09, S36.07, S37.38, S49.06,
+S67.21, S67.23, S74.20, S76.28, S76.29, S78.06, S78.11, S78.15, S78.16, S78.20,
+S79.05, S79.06, S79.08, S79.21, S79.28, S81.19, S84.01, S84.18, S85.23, S86.06,
+S106.01, S106.02, S106.03, S106.04, S106.05, S106.06, S106.07, S106.08,
+S106.12, S106.15, S109.03, S109.08, S110.27 (chrome).
+
+## D-2026-09-28-25 The VS Code extension stays at Claude Code in VS Code's scope
+
+Claude Code in VS Code is the reference for the VS Code extension. Its pages
+(code.claude.com/docs/en/vs-code, code.claude.com/docs/en/checkpointing,
+code.claude.com/docs/en/claude-code-on-the-web), checked 2026-09-28, either
+leave out or rule out the following, so the extension does not add them: type
+icons in mixed lists, plain multi-choice checkboxes, a branch picker, a setup
+wizard that collects choices, an approve-this-transfer prompt, task-category
+chips, typed project mentions, artifact-building rows, a separate stderr panel,
+in-place prose rewrite of a selection, a no-results state for web search,
+notebook sources, a proactive-feature history, connector detail pages and
+provider labels on tool rows, a page-summary command, goal-bounded loops, host
+capability reporting beyond the heartbeat, regional-restriction and
+unavailable-model notices, an overage toggle and a pre-run cost estimate. A
+local session sent to the cloud starts a new cloud session from the pushed
+branch with a new task, as `claude --cloud` does; history comes back only when
+a cloud session is pulled local. Cells (vscode): S5.16, S8.14, S9.08, S9.23,
+S10.39, S12.05, S13.25, S19.12, S21.16, S27.16, S34.32, S37.38, S42.25, S55.04,
+S55.29, S64.05, S67.36, S68.21, S78.11, S78.16, S81.21, S82.22; S110.22 is met
+at parity once cloud sessions are switched on.
+
+## D-2026-09-28-27 Mobile sends web-billed plan management to the web
+
+The lead's ruling of 2026-09-28. A plan billed on the web is managed on the
+web: the mobile app links out to web billing for the card, billing address,
+tax identifier, a failed-payment retry, cancelling, coupon and promotion
+codes and billing discrepancy reports, and has no in-app form for any of
+them. This matches the App Store and Google Play rules for purchases made
+outside the store and how the ChatGPT and Claude apps send web subscribers
+to the web. A pre-run cost estimate and a global command palette are not
+built on mobile. A connection-status indicator, in-place rename, a saved
+default effort, a profile photo, a guided import and first-run name, use
+case, personalization and memory steps are built on mobile only where the
+web has them, and are otherwise not applicable. Cells (mobile): S83.09,
+S83.10, S83.11, S83.12, S83.15, S83.21, S81.18, S81.19, S83.07, S82.33 (link
+out); S82.22, S5.26 (declined); S5.32, S5.21, S84.11, S85.01, S88.15, S3.21,
+S3.23, S3.24, S3.25 (built where the web has them).
+
+## D-2026-09-28-28 The mobile app matches the leaders' phone apps in voice, connectors, tasks and routines
+
+Checked 2026-09-28 against Claude's help pages (support.claude.com/en/articles/10065434,
+11101966, 11869619, 13854387, 13947068, 14328846 and claude.com/blog/cowork-web-mobile) and
+ChatGPT's (help.openai.com pages refused the fetch; its September 2026 voice update is
+reported at techcrunch.com/2026/09/23). Where a leader offers the feature on its phone app, the
+mobile app builds it: a speech input language setting that defaults to automatic detection,
+reading and creating iOS calendar events and reminders behind the system permission prompt,
+opening the files a task produced, tool results and approvals on screen during voice, and a
+task's questions reaching the phone. Where the leaders are silent, the mobile app does what our
+web app does: a skill directory with install, bank linking, the clarify card and the AGI Work
+plan review are built because the web has them; attaching an image during voice, audio-file
+upload and a per-task model picker are not, because the web has none. Neither leader documents
+the rest on its phone app, or both document the opposite, so they are not built: pausing a
+spoken reply, choosing the microphone or speaker and Android audio routing, a skill permission
+summary, a connector read-only switch or provider badge, an in-chat missing-scope request, a
+warehouse preset, reading or sending native messages (the app drafts and hands off to the
+system composer, as Claude does), tool schemas and a receipt log, a connection test button, a
+read-only agent mode, choosing sources or effort for a task, the desktop agent roster with its
+presence, pause and history, per-agent usage in Compare, a routine description or cron and
+interval recurrence, and reading a host app's live selection or handing a session back to it.
+Cells (mobile): declined S48.11, S48.18, S48.19, S48.20, S48.29, S49.08, S49.19, S53.36,
+S55.26, S55.29, S55.30, S56.37, S56.44, S57.30, S57.37, S58.07, S59.09, S60.05, S60.08,
+S60.09, S61.01, S61.11, S61.19, S61.22, S62.08, S63.04, S63.14, S106.08, S106.25.
+
+## D-2026-09-28-29 The terminal agent stays at Claude Code's and Codex CLI's scope
+
+Claude Code (code.claude.com/docs) and the Codex CLI (learn.chatgpt.com/docs),
+read 2026-09-28, offer none of the following in the terminal, so the CLI does
+not add them: task shortcut tiles, a connector recommendation registry, answer
+cards and widgets, artifact cards, building states, previews, source toggles,
+editors, export menus and project attachment, user file create, delete and
+search commands, a Python analysis panel, design and site publishing and
+export, a briefing template, a routine history view beyond listing runs, an
+agent preview chat, agent export, a skill instruction editor, recorded skills,
+plugin customize, an MCP traffic inspector, a subagent handoff-mode choice,
+routine webhook token creation, a page summary command, a browser pause-and-keep
+control, a pull request tool beyond the shell's gh, a pre-task cost estimate,
+an output style derived from a sample, a design-to-code handoff, a user symbol
+search and a diagnostics panel. The sources for each are in the w-desktop
+parity table (partials/scratch/w-desktop/cli-parity.tsv). Cells (cli): S10.25,
+S12.05, S12.09, S17.09, S17.13, S19.12, S26.14, S26.27, S26.29, S28.01, S28.03,
+S28.08, S28.10, S28.11, S29.27, S32.33, S33.04, S42.01, S42.25, S52.05, S52.39,
+S53.09, S53.27, S54.27, S58.26, S62.15, S63.17, S64.05, S64.25, S67.31, S82.22,
+S85.04, S110.12, S66.10, S66.14.

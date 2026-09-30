@@ -98,13 +98,16 @@ describe('/privacy discloses the workspace retention sweep it used to deny', () 
 describe('/privacy states the erasure table count the code enumerates', () => {
   it('publishes USER_SCOPED_TABLES.length, not a remembered figure', async () => {
     const { USER_SCOPED_TABLES } = await import('@/lib/server/account-erasure');
-    const count = USER_SCOPED_TABLES.length;
-    expect(count).toBeGreaterThan(0);
+    const { ERASED_TABLE_COUNT } = await import('@/lib/legal/published-counts');
+    expect(USER_SCOPED_TABLES.length).toBeGreaterThan(0);
+    expect(ERASED_TABLE_COUNT).toBe(USER_SCOPED_TABLES.length);
 
+    const copy = flat('privacy');
     expect(
-      flat('privacy'),
-      `/privacy must state the real erasure table count (${count}). Update the copy in the same change as the constant.`,
-    ).toContain(`${count} user-scoped tables`);
+      copy,
+      '/privacy must render the erasure count from the erasure list, not type it.',
+    ).toContain('{ERASED_TABLE_COUNT} user-scoped tables');
+    expect(copy).not.toMatch(/\b\d+ user-scoped tables/u);
   });
 
   it('does not restate a count the list does not have', async () => {

@@ -3,15 +3,18 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { isRelayPairingCode, normalizePairingCode } from '@agiworkforce/types';
+import {
+  isRelayPairingCode,
+  normalizePairingCode,
+  isSecureRelayUrl,
+  isSecureRelayHttpUrl,
+} from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import { remoteControlRefusal } from '@/lib/feature-flags/remote-control-gate';
@@ -27,7 +30,9 @@ const signalingClaimSchema = z.object({
   role: z.literal('mobile'),
   pairToken: z.string().min(1),
   expiresAt: z.number(),
-  wsUrl: z.string(),
+  wsUrl: z
+    .string()
+    .refine((url) => isSecureRelayUrl(url, process.env['NODE_ENV'] === 'development')),
 });
 
 /**
@@ -49,7 +54,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     ({ db, userId } = await getUserScopedDb(request));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -71,7 +76,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const signalingUrl = process.env['SIGNALING_HTTP_URL'];
   const signalingSecret = process.env['SIGNALING_INTERNAL_SECRET'];
-  if (!signalingUrl || !signalingSecret) {
+  if (
+    !isSecureRelayHttpUrl(signalingUrl, process.env['NODE_ENV'] === 'development') ||
+    !signalingSecret
+  ) {
     logger.error(
       { hasUrl: Boolean(signalingUrl), hasSecret: Boolean(signalingSecret) },
       'Pairing is unconfigured: SIGNALING_HTTP_URL and SIGNALING_INTERNAL_SECRET are both required',
@@ -104,6 +112,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       `${signalingUrl.replace(/\/+$/, '')}/pairings/${encodeURIComponent(code)}/claim`,
       {
         method: 'POST',
+        redirect: 'error',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${signalingSecret}`,

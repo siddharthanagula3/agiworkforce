@@ -41,6 +41,11 @@ const appendCloudAgentEvents = vi.fn(
 const transitionCloudAgentRun = vi.fn(async (_db: unknown, input: { state: string }) => ({
   state: input.state,
 }));
+const readCloudAgentRunAssistantText = vi.fn(async (_db: unknown, _input: unknown) => ({
+  text: '',
+  lastSequence: -1,
+  interactiveCards: [],
+}));
 const recordCloudAgentRunSettledUsage = vi.fn(async (_db: unknown, _input: unknown) => {
   events.push('usage-recorded');
   return null;
@@ -80,6 +85,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 }));
 
 vi.mock('@/lib/services/free-trial-service', () => ({
+  FREE_BUDGET_REACHED_ERROR_CLASS: 'free_trial_token_budget_reached',
   isEventPromotedRequest: () => false,
   settleFreeTrialRequest: (input: unknown) => settleFreeTrialRequest(input),
   FREE_TRIAL_MODEL: 'fixture-free-trial-model',
@@ -102,6 +108,8 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
     transitionCloudAgentRun(db, input as { state: string }),
   recordCloudAgentRunSettledUsage: (db: unknown, input: unknown) =>
     recordCloudAgentRunSettledUsage(db, input),
+  readCloudAgentRunAssistantText: (db: unknown, input: unknown) =>
+    readCloudAgentRunAssistantText(db, input),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -699,6 +707,44 @@ describe('managed agent stream', () => {
     const params = call?.[1] as unknown[] | undefined;
     const metadata = JSON.parse(String(params?.[7])) as Record<string, unknown>;
     expect(metadata['interactiveCards']).toHaveLength(INTERACTIVE_CARDS_MAX_PER_MESSAGE);
+  });
+
+  it('persists the text of the earlier legs before this leg when an inline turn continues a run', async () => {
+    persistenceMocks.execute.mockClear();
+    readCloudAgentRunAssistantText.mockResolvedValueOnce({
+      text: 'Before the approval. ',
+      lastSequence: 4,
+      interactiveCards: [],
+    });
+    const persistable = {
+      ...processed,
+      requestId: 'request-continuation-fixture',
+      conversationId: '0190a000-0000-7000-8000-000000000011',
+      assistantMessageId: '0190a000-0000-7000-8000-000000000012',
+      conversationIsTemporary: false,
+    } as ProcessedRequest;
+
+    await readAll(
+      buildManagedAgentStream({
+        generator: completedGenerator(),
+        processed: persistable,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_resume_completed',
+        cancellationReason: 'client_cancelled_tool_loop_resume',
+        userId: 'user-fixture',
+        runJournal: { db: {} as never, userId: 'user-fixture', runId: 'run-continued' },
+        persistsRunContinuation: true,
+      }),
+    );
+
+    expect(readCloudAgentRunAssistantText).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user-fixture',
+      runId: 'run-continued',
+    });
+    const call = persistenceMocks.execute.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_messages'),
+    );
+    expect((call?.[1] as unknown[] | undefined)?.[2]).toBe('Before the approval. hello');
   });
 
   it('persists a research turn as canonical text with the sources it cited', async () => {

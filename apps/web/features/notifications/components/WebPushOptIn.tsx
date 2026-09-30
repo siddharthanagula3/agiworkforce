@@ -86,21 +86,21 @@ export function WebPushOptIn() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-[var(--z-panel)] w-[min(22rem,calc(100vw-2rem))]"
+      className="fixed bottom-4 end-4 z-[var(--z-panel)] w-[min(22rem,calc(100vw-2rem))]"
       role="region"
       aria-label="Run notifications"
     >
       <div className="relative rounded-lg border bg-card p-4 shadow-e4">
         <button
           onClick={dismiss}
-          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted"
+          className="absolute end-2 top-2 flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted"
           aria-label="Dismiss"
         >
           <X className="h-4 w-4" />
         </button>
         <div className="flex items-start gap-3">
           <Bell className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-          <div className="flex flex-col gap-3 pr-6">
+          <div className="flex flex-col gap-3 pe-6">
             <div>
               <p className="text-sm font-medium">Know when a run finishes</p>
               <p className="text-sm text-muted-foreground">

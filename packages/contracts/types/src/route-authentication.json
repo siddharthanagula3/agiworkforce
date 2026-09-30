@@ -1,6 +1,9 @@
 {
   "$comment": "Which API routes do not reach the account and tenant gate, and why. scripts/check-route-account-gate.mjs resolves every route's authentication through the import graph and fails on an entry that no longer matches, on an undeclared route that skips the gate, and on any route that authenticates a user without it.",
   "public": {
+    "apps/web/app/api/account-security/enrollment/undo/route.ts": "the owner who opens the link emailed when Advanced Account Security was turned on may have no session left; the unguessable 48-hour token is the capability, and it can only turn the mode off and sign every session out",
+    "apps/web/app/api/account-security/handoff/options/route.ts": "the browser a desktop or mobile app opened to confirm a sign-in holds no session; the unguessable handoff token is the capability, and the answer is only a WebAuthn challenge for that token's account",
+    "apps/web/app/api/account-security/handoff/verification/route.ts": "the same signed-out browser proves possession of the account's passkey or security key; a valid assertion arms a one-time code that only the app holding the matching PKCE verifier and the original session can redeem",
     "apps/web/app/api/agents/execute/route.ts": "a retired managed-execution endpoint that answers every caller the same way",
     "apps/web/app/api/completion/route.ts": "a retired managed-execution endpoint that answers every caller the same way",
     "apps/web/app/api/connectors/directory/icon/route.ts": "the connector directory is the same catalogue for every caller",
@@ -78,6 +81,7 @@
     "apps/web/app/api/media/video/openrouter-webhook/route.ts": "the provider callback signature is the principal for an asynchronous media job",
     "apps/web/app/api/mobile/iap/apple-notifications/route.ts": "an App Store server notification signed by Apple is the principal",
     "apps/web/app/api/mobile/iap/google-notifications/route.ts": "a Google Play Pub/Sub push identity token is the principal",
+    "apps/web/app/api/mobile/intent/ask/route.ts": "a hashed per-install Ask from Siri token is the principal; the route reads the owner's account status, terms, plan and kill switch before answering",
     "apps/web/app/api/scim/v2/Groups/[groupId]/route.ts": "a workspace SCIM bearer token is the principal, and it refuses a locked-down workspace at authentication",
     "apps/web/app/api/scim/v2/Groups/route.ts": "a workspace SCIM bearer token is the principal, and it refuses a locked-down workspace at authentication",
     "apps/web/app/api/scim/v2/ResourceTypes/route.ts": "a workspace SCIM bearer token is the principal, and it refuses a locked-down workspace at authentication",

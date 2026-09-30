@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import type { SupportSurface } from '../lib/contract';
+import type { SupportSurface } from '@agiworkforce/cloud-contracts/support';
 import { useSupportAccountContext } from '../hooks/useSupportAccountContext';
 import { useSupportPresence } from '../hooks/useSupportPresence';
 import { handoffReasonForReply, useSupportSession } from '../hooks/useSupportSession';

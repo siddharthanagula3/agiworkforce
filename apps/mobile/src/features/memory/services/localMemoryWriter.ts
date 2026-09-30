@@ -1,17 +1,19 @@
 import * as Crypto from 'expo-crypto';
 import { memoryConflictTopic, normalizeMemoryKey } from '@agiworkforce/agent-core';
+import { prohibitedMemoryCategory, type ProhibitedMemoryCategory } from '@agiworkforce/context';
 import { insertMemoryFact, listMemoryFacts, supersedeMemoryFacts } from '@/storage/memory';
 import type { MemoryFact, MemoryFactSource } from '@/storage/types';
 import { memoryFactChangedAt, memoryFactRank } from './memoryOrigin';
 
 const MAX_KNOWN_FACTS = 5_000;
 
-export type LocalMemoryWriteOutcome = 'inserted' | 'already_known' | 'kept_existing';
+export type LocalMemoryWriteOutcome = 'inserted' | 'already_known' | 'kept_existing' | 'refused';
 
 export interface LocalMemoryWriteResult {
   outcome: LocalMemoryWriteOutcome;
   fact: MemoryFact | null;
   replacedIds: string[];
+  refusedCategory?: ProhibitedMemoryCategory;
 }
 
 export async function writeLocalMemoryFact(input: {
@@ -20,6 +22,8 @@ export async function writeLocalMemoryFact(input: {
   conversationId?: string | null;
   known?: readonly MemoryFact[];
 }): Promise<LocalMemoryWriteResult> {
+  const refusedCategory = prohibitedMemoryCategory(input.fact);
+  if (refusedCategory) return { outcome: 'refused', fact: null, replacedIds: [], refusedCategory };
   const known = input.known ?? (await listMemoryFacts({ limit: MAX_KNOWN_FACTS }));
   const key = normalizeMemoryKey(input.fact);
   if (!key || known.some((entry) => normalizeMemoryKey(entry.fact) === key)) {

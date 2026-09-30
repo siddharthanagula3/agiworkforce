@@ -14,14 +14,14 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   MAX_TICKET_MESSAGE_CHARS,
   MAX_TICKET_SUBJECT_CHARS,
   TICKET_STATUS_LABEL,
-  listSupportTickets,
-  openSupportTicket,
-  type SupportTicket,
-} from './service';
+} from '@agiworkforce/cloud-contracts/support';
+import { listSupportTickets, openSupportTicket, type SupportTicketView } from './service';
+import { toUserMessage } from '@/services/userMessage';
 
 const SUPPORT_EMAIL = 'contact@agiworkforce.com';
 
@@ -38,7 +38,7 @@ export function SupportTicketsScreen() {
   const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const appMode = useChatAppModeStore((state) => state.appMode);
-  const [tickets, setTickets] = useState<SupportTicket[] | null>(null);
+  const [tickets, setTickets] = useState<SupportTicketView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [subject, setSubject] = useState('');
@@ -52,7 +52,7 @@ export function SupportTicketsScreen() {
       setTickets(await listSupportTickets(signal));
     } catch (error) {
       if (signal?.aborted) return;
-      setLoadError(error instanceof Error ? error.message : 'Your tickets could not be loaded.');
+      setLoadError(toUserMessage(error, 'Your tickets could not be loaded.'));
     }
   }, []);
 
@@ -89,10 +89,7 @@ export function SupportTicketsScreen() {
             : `The ticket is saved, but the email that tells the support team about it was not sent. If this is urgent, also write to ${SUPPORT_EMAIL}.`,
         );
       } catch (error) {
-        Alert.alert(
-          'That ticket was not raised',
-          error instanceof Error ? error.message : 'Please try again.',
-        );
+        Alert.alert('That ticket was not raised', toUserMessage(error, 'Please try again.'));
       } finally {
         setSubmitting(false);
       }
@@ -215,10 +212,16 @@ export function SupportTicketsScreen() {
 
 const styles = StyleSheet.create({
   form: { borderRadius: 14, padding: 14, gap: 8, marginBottom: 24 },
-  label: { fontSize: 13 },
-  input: { minHeight: 44, borderRadius: 8, paddingHorizontal: 12, borderWidth: 1, fontSize: 15 },
+  label: { fontSize: typeScale.footnote },
+  input: {
+    minHeight: 44,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    fontSize: typeScale.body,
+  },
   multiline: { minHeight: 120, paddingTop: 10 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
-  toggleText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  toggleText: { flex: 1, fontSize: typeScale.footnote, lineHeight: 18 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
 });

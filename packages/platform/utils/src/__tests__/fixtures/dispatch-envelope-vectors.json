@@ -1,0 +1,46 @@
+{
+  "pairingCode": "ABCDEFGHJKLM",
+  "sessionSalt": "c2FsdC1mb3ItdGVzdHM=",
+  "pairingSecret": "0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef",
+  "key": "f6b2d861c8d257f655e3e887925a469a73768011d71923799f93a1ba32c8205d",
+  "cases": [
+    {
+      "name": "nested keys, unicode and escapes",
+      "type": "code.session.steer",
+      "ts": 1790650000123,
+      "nonce": "AAECAwQFBgcICQoLDA0ODw==",
+      "payload": {
+        "zeta": 1,
+        "action": "code.session.steer",
+        "text": "Fix the naïve café test 🚀 and the \"quoted\" path C:\\tmp\n\tthen stop",
+        "nested": {
+          "b": [
+            true,
+            null,
+            3,
+            {
+              "y": "ü",
+              "x": -2
+            }
+          ],
+          "a": "\u0007\u001f"
+        },
+        "version": 1,
+        "requestId": "req-1",
+        "émoji": "😀",
+        "Upper": "sorted before lower"
+      },
+      "signingInput": "{\"nonce\":\"AAECAwQFBgcICQoLDA0ODw==\",\"payload\":{\"Upper\":\"sorted before lower\",\"action\":\"code.session.steer\",\"nested\":{\"a\":\"\\u0007\\u001f\",\"b\":[true,null,3,{\"x\":-2,\"y\":\"ü\"}]},\"requestId\":\"req-1\",\"text\":\"Fix the naïve café test 🚀 and the \\\"quoted\\\" path C:\\\\tmp\\n\\tthen stop\",\"version\":1,\"zeta\":1,\"émoji\":\"😀\"},\"ts\":1790650000123,\"type\":\"code.session.steer\",\"v\":3}",
+      "hmac": "0995f670701528433fbe991072a68198718d91b7322ee7c888ac9c551ed4ad45"
+    },
+    {
+      "name": "empty payload",
+      "type": "code.sessions.list",
+      "ts": 1790650000999,
+      "nonce": "////////////////////AA==",
+      "payload": {},
+      "signingInput": "{\"nonce\":\"////////////////////AA==\",\"payload\":{},\"ts\":1790650000999,\"type\":\"code.sessions.list\",\"v\":3}",
+      "hmac": "a2debc0b83cdbad9df5932c2666f67c47778e6e6bd53f04d612166c90df33335"
+    }
+  ]
+}

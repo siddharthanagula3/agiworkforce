@@ -5,8 +5,6 @@ export const FEATURES = {
 
   billing: false,
 
-  usageDashboard: true,
-
   auth: true,
 
   cloudTasks: true,
@@ -26,8 +24,6 @@ export const FEATURES = {
   research: true,
 
   imageGen: true,
-
-  crossDeviceSync: false,
 
   codeExecution: true,
 } as const;

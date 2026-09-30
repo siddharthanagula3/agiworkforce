@@ -453,6 +453,7 @@ export function isPermanentFailureSurfaceState(state: SurfaceState): boolean {
 const ERROR_CODE_SURFACE_STATES: Readonly<Partial<Record<ClassifiedErrorCode, SurfaceState>>> = {
   [ErrorCode.UNAUTHORIZED]: 'permission_denied',
   [ErrorCode.FORBIDDEN]: 'permission_denied',
+  [ErrorCode.ACCOUNT_UNAVAILABLE]: 'permission_denied',
   [ErrorCode.MFA_REQUIRED]: 'policy_blocked',
   [ErrorCode.IP_NOT_ALLOWED]: 'policy_blocked',
   [ErrorCode.PAYMENT_REQUIRED]: 'entitlement_blocked',

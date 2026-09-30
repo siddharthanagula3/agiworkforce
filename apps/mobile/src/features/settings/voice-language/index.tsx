@@ -2,13 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Check, Play, Volume2 } from 'lucide-react-native';
+import { LIVE_DEFAULT_VOICE, LIVE_VOICES } from '@agiworkforce/types/live-voices';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useAuthStore } from '@/src/features/auth/store';
+import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
+import { deviceSpeechLocale } from '@/src/features/voice/services/speechSettings';
+import { chosenSpeechLanguage } from '@/src/features/voice/speechLanguage';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import * as TTS from '@/src/features/voice/services/tts';
 import { VOICE_PRESETS, findVoiceForPreset } from '@/src/features/voice/voicePresets';
 import type { VoiceInfo } from '@/src/features/voice/services/tts';
@@ -19,6 +25,7 @@ function PresetRow({
   description,
   selected,
   isLast,
+  accessibilityLabel,
   onSelect,
 }: {
   id: string;
@@ -26,6 +33,7 @@ function PresetRow({
   description: string;
   selected: boolean;
   isLast?: boolean;
+  accessibilityLabel: string;
   onSelect: (id: string) => void;
 }) {
   const colors = useThemeColors();
@@ -35,7 +43,7 @@ function PresetRow({
       onPress={() => onSelect(id)}
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      accessibilityLabel={`${name} voice preset`}
+      accessibilityLabel={accessibilityLabel}
       style={{
         minHeight: 60,
         paddingHorizontal: 14,
@@ -48,8 +56,12 @@ function PresetRow({
       }}
     >
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>{name}</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>{description}</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
+          {name}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}>
+          {description}
+        </Text>
       </View>
       {selected ? <Check size={18} color={colors.teal} /> : null}
     </Pressable>
@@ -89,10 +101,10 @@ function SystemVoiceRow({
       }}
     >
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
           {voice.name}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}>
           {voice.quality} · {voice.language}
         </Text>
       </View>
@@ -146,10 +158,10 @@ function SystemDefaultRow({
       }}
     >
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
           System default
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}>
           Use the default voice on this device
         </Text>
       </View>
@@ -172,10 +184,21 @@ export default function VoiceLanguageScreen() {
   const setSpeechPitch = useSettingsStore((s) => s.setSpeechPitch);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
   const setSelectedPresetId = useSettingsStore((s) => s.setSelectedPresetId);
+  const liveVoice = useSettingsStore((s) => s.liveVoice);
+  const setLiveVoice = useSettingsStore((s) => s.setLiveVoice);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const liveVoiceAvailable =
+    liveVoiceModeUnavailableReason({
+      executionMode: isCloud ? 'cloud' : 'local',
+      signedIn: isClerkSignedIn,
+    }) === null;
 
   const localSpeechLanguage = useLocalSettingsStore((s) => s.speechLanguage);
   const cloudSpeechLanguage = useCloudSettingsStore((s) => s.speechLanguage);
-  const speechLanguage = isCloud ? cloudSpeechLanguage : localSpeechLanguage;
+  const speechLanguage =
+    chosenSpeechLanguage(isCloud ? cloudSpeechLanguage : localSpeechLanguage) ??
+    deviceSpeechLocale().split('-')[0] ??
+    '';
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +260,30 @@ export default function VoiceLanguageScreen() {
 
   return (
     <SettingsScreenShell title="Voice & Language" backHref="/(app)/settings/voice">
+      {liveVoiceAvailable ? (
+        <>
+          <SettingsInfo
+            title="Voice mode"
+            body="The voice AGI speaks with in live voice conversations."
+            icon={Volume2}
+          />
+          <SettingsGroup>
+            {LIVE_VOICES.map((voice, index) => (
+              <PresetRow
+                key={voice.voiceURI}
+                id={voice.voiceURI}
+                name={voice.name}
+                description={voice.lang}
+                selected={(liveVoice ?? LIVE_DEFAULT_VOICE) === voice.voiceURI}
+                isLast={index === LIVE_VOICES.length - 1}
+                accessibilityLabel={`${voice.name} voice for voice mode`}
+                onSelect={setLiveVoice}
+              />
+            ))}
+          </SettingsGroup>
+        </>
+      ) : null}
+
       <SettingsInfo
         title="Speaking style"
         body="Choose an AGI voice preset or a system voice installed on this device."
@@ -252,6 +299,7 @@ export default function VoiceLanguageScreen() {
             description={preset.description}
             selected={selectedPresetId === preset.id}
             isLast={index === VOICE_PRESETS.length - 1}
+            accessibilityLabel={`${preset.name} voice preset`}
             onSelect={handleSelectPreset}
           />
         ))}
@@ -260,7 +308,7 @@ export default function VoiceLanguageScreen() {
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 13,
+          fontSize: typeScale.footnote,
           fontWeight: '700',
           marginBottom: 8,
           paddingHorizontal: 2,
@@ -296,10 +344,19 @@ export default function VoiceLanguageScreen() {
               borderTopColor: colors.border,
             }}
           >
-            <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+            >
               No installed voices returned
             </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16, marginTop: 3 }}>
+            <Text
+              style={{
+                color: colors.textMuted,
+                fontSize: typeScale.caption,
+                lineHeight: 16,
+                marginTop: 3,
+              }}
+            >
               AGI will keep using the device default.
             </Text>
           </View>
@@ -317,7 +374,7 @@ export default function VoiceLanguageScreen() {
         )}
       </SettingsGroup>
 
-      <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 17 }}>
         Speed {speechRate.toFixed(2)}x · Pitch {speechPitch.toFixed(2)}x
       </Text>
     </SettingsScreenShell>

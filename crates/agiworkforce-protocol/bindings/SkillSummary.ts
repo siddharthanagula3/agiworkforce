@@ -16,4 +16,8 @@ export type SkillSummary = {
    * plugin skills carry no consent gate and report `true`.
    */
   consented: boolean;
+  requiredTools: Array<string>;
+  requiredEnvVars: Array<string>;
+  missingTools: Array<string>;
+  missingEnvVars: Array<string>;
 };

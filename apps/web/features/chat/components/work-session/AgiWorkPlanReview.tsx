@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, RotateCcw, X } from 'lucide-react';
+import { AGIWORK_PLAN_MAX_STEPS, MAX_AGIWORK_PLAN_STEP_CHARS } from '@agiworkforce/cloud-contracts';
 import type { AgiWorkPlanStep } from '@/features/chat/utils/agiwork-plan';
-
-const MAX_PLAN_STEPS = 6;
-const MAX_STEP_CHARS = 300;
 
 const LABEL = {
   heading: 'Plan',
@@ -101,7 +99,7 @@ export function AgiWorkPlanReview({
             <textarea
               value={description}
               rows={2}
-              maxLength={MAX_STEP_CHARS}
+              maxLength={MAX_AGIWORK_PLAN_STEP_CHARS}
               aria-label={`Step ${index + 1}`}
               disabled={busy}
               onChange={(event) =>
@@ -127,7 +125,7 @@ export function AgiWorkPlanReview({
           </li>
         ))}
       </ol>
-      {draft.length < MAX_PLAN_STEPS ? (
+      {draft.length < AGIWORK_PLAN_MAX_STEPS ? (
         <button
           type="button"
           disabled={busy}

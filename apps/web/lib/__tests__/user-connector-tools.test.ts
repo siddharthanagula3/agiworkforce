@@ -23,6 +23,9 @@ const mockPostPrReview = vi.fn();
 const mockIsGitHubAppConfigured = vi.fn();
 const mockIsGitHubInstallationLinkingAvailable = vi.fn();
 vi.mock('@/lib/github-app', () => ({
+  GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
+  issueCommentPostedSince: vi.fn(() => false),
+  pullRequestReviewPostedSince: vi.fn(() => false),
   getInstallationAccessToken: (...a: unknown[]) => mockGetInstallationAccessToken(...a),
   getPrDiff: (...a: unknown[]) => mockGetPrDiff(...a),
   isGitHubAppConfigured: () => mockIsGitHubAppConfigured(),
@@ -81,6 +84,32 @@ beforeEach(() => {
 });
 
 describe('loadUserConnectorToolDefs, github built-in gate', () => {
+  it('withholds installed connector tools when the workspace policy cannot be read', async () => {
+    mockNeonQuery.mockImplementation((sql: string) => {
+      if (sql.includes('organization_members')) {
+        return Promise.resolve([{ organization_id: ORGANIZATION_ID }]);
+      }
+      if (sql.includes('github_installations')) {
+        return Promise.resolve([{ installation_id: 42, account_login: 'acme' }]);
+      }
+      if (sql.includes('organization_connector_policies')) {
+        return Promise.reject(new Error('policy unavailable'));
+      }
+      return Promise.resolve([]);
+    });
+
+    const defs = await loadUserConnectorToolDefs('user-1', {
+      organizationId: ORGANIZATION_ID,
+    });
+
+    expect(defs).toEqual([]);
+    expect(
+      mockNeonQuery.mock.calls.some(([sql]) =>
+        String(sql).includes('organization_connector_policies'),
+      ),
+    ).toBe(true);
+  });
+
   it('offers github tools only when the user has a usable installation', async () => {
     stubDb({ installations: [{ installation_id: 42, account_login: 'acme' }] });
     const defs = await loadUserConnectorToolDefs('user-1');
@@ -317,6 +346,36 @@ describe('catalog discovery carries the SSRF egress policy', () => {
 });
 
 describe('workspace MCP host allowlist', () => {
+  it('does not dial a custom endpoint when its workspace policy is unavailable', async () => {
+    mockIsGitHubAppConfigured.mockReturnValue(false);
+    mockNeonQuery.mockImplementation((sql: string) => {
+      if (sql.includes('from public.organization_members')) {
+        return Promise.resolve([{ organization_id: ORGANIZATION_ID }]);
+      }
+      if (sql.includes('from public.organization_connector_policies')) {
+        return Promise.reject(new Error('policy unavailable'));
+      }
+      if (sql.includes('from user_custom_connectors')) {
+        return Promise.resolve([
+          {
+            id: 'row-1',
+            short_id: 'aaaaaaaaaa',
+            name: 'Internal tools',
+            url: 'https://tools.example.com/mcp',
+            transport: 'streamable-http',
+            auth_header_enc: null,
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    await expect(
+      loadUserConnectorToolDefs('user-host-policy', { organizationId: ORGANIZATION_ID }),
+    ).resolves.toEqual([]);
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+  });
+
   it('does not dial a custom connector on a host the workspace has not approved', async () => {
     mockIsGitHubAppConfigured.mockReturnValue(false);
     mockNeonQuery.mockImplementation((sql: string) => {
@@ -378,15 +437,14 @@ describe('organization workspace scope', () => {
     mockIsGitHubAppConfigured.mockReturnValue(false);
     mockNeonQuery.mockResolvedValue([]);
 
-    const defs = await loadUserConnectorToolDefs('user-1', {
-      organizationId: ORGANIZATION_ID,
-    });
-
-    expect(defs).toEqual([]);
+    await expect(
+      loadUserConnectorToolDefs('user-1', { organizationId: ORGANIZATION_ID }),
+    ).resolves.toEqual([]);
     expect(
       mockNeonQuery.mock.calls.some(
         ([sql, params]) =>
           String(sql).includes('from public.organization_members') &&
+          String(sql).includes("status = 'active'") &&
           JSON.stringify(params) === JSON.stringify([ORGANIZATION_ID, 'user-1']),
       ),
     ).toBe(true);
@@ -395,6 +453,27 @@ describe('organization workspace scope', () => {
         String(sql).includes('from public.organization_shared_connectors'),
       ),
     ).toBe(false);
+  });
+
+  it('does not downgrade a captured workspace to personal when membership cannot be checked', async () => {
+    mockNeonQuery.mockImplementation((sql: string) => {
+      if (sql.includes('from public.organization_members')) {
+        return Promise.reject(
+          Object.assign(new Error('relation does not exist'), { code: '42P01' }),
+        );
+      }
+      return Promise.resolve([]);
+    });
+
+    await expect(
+      loadUserConnectorToolDefs('user-1', { organizationId: ORGANIZATION_ID }),
+    ).resolves.toEqual([]);
+    expect(
+      mockNeonQuery.mock.calls.some(([sql]) =>
+        String(sql).includes('from public.organization_shared_connectors'),
+      ),
+    ).toBe(false);
+    expect(mockConnectMcpServer).not.toHaveBeenCalled();
   });
 
   it('re-verifies captured workspace membership before privileged execution', async () => {

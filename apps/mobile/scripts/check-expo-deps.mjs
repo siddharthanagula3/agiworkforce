@@ -16,6 +16,7 @@ const mobilePackage = readJson(new URL('../package.json', import.meta.url));
 const localLlmPackage = readJson(
   new URL('../../../packages/platform/local-llm/package.json', import.meta.url),
 );
+const workspacePackage = readJson(new URL('../../../package.json', import.meta.url));
 const expoBundledVersions = requireFromMobile('expo/bundledNativeModules.json');
 
 const declaredReactNative = mobilePackage.dependencies?.['react-native'];
@@ -46,12 +47,19 @@ if (installedReactNative !== localLlmInstalledReactNative) {
   throw new Error('Mobile and @agiworkforce/local-llm resolve different React Native runtimes');
 }
 
+const declaredReactTypes = mobilePackage.devDependencies?.['@types/react'];
+const workspaceReactTypes = workspacePackage.pnpm?.overrides?.['@types/react'];
+const installedReactTypes = requireFromMobile('@types/react/package.json').version;
+if (declaredReactTypes !== workspaceReactTypes || installedReactTypes !== declaredReactTypes) {
+  throw new Error('Mobile React types must match the workspace override and installed version');
+}
+
 if (mobilePackage.dependencies?.react !== mobilePackage.devDependencies?.['react-test-renderer']) {
   throw new Error('react-test-renderer must use the same patch version as React');
 }
 
 const excluded = new Set(mobilePackage.expo?.install?.exclude ?? []);
-for (const intentionalException of ['react', 'react-native']) {
+for (const intentionalException of ['react', 'react-native', '@types/react']) {
   if (!excluded.has(intentionalException)) {
     throw new Error(
       `Expo dependency validation must document ${intentionalException} as an exception`,

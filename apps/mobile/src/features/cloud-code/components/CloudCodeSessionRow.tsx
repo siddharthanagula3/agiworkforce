@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   CLOUD_CODE_SESSION_STATE_LABELS,
   CLOUD_CODE_SESSION_STATUS_FILTER_LABELS,
@@ -8,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Text } from '@/components/ui/text';
 import { formatRelativeTime } from '@/src/lib/time';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { CLOUD_CODE_STATE_BADGE_COLORS, cloudCodeWorkspaceLabel } from '../presentation';
 
 export function CloudCodeSessionRow({
@@ -27,7 +29,7 @@ export function CloudCodeSessionRow({
     .join(' · ');
 
   return (
-    <Pressable
+    <PressableBox
       onPress={() => onOpen(session.id)}
       accessibilityRole="button"
       accessibilityLabel={`${session.title}. ${stateLabel}. ${detail}`}
@@ -45,11 +47,11 @@ export function CloudCodeSessionRow({
       <View style={{ flex: 1, gap: 3 }}>
         <Text
           numberOfLines={1}
-          style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+          style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
         >
           {session.title}
         </Text>
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13 }}>
+        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
           {detail}
         </Text>
       </View>
@@ -57,6 +59,6 @@ export function CloudCodeSessionRow({
         label={stateLabel}
         color={archived ? 'gray' : CLOUD_CODE_STATE_BADGE_COLORS[session.state]}
       />
-    </Pressable>
+    </PressableBox>
   );
 }

@@ -10,6 +10,10 @@ import { managedCloudChat } from '../services/managedCloudChat';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { syncLocalConversationsToCloud } from '../src/features/settings/data-controls/localCloudSyncService';
 import type { ChatMessage, ConversationSummary } from '../types/chat';
+import {
+  activateCloudAccount,
+  __resetCloudAccountSessionForTests,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
 const mockCreateConversation = managedCloudChat.createConversation as jest.MockedFunction<
@@ -62,6 +66,8 @@ function cloudConversationFixture(id: string) {
 
 describe('syncLocalConversationsToCloud', () => {
   beforeEach(() => {
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('account-a');
     mockPost.mockReset();
     mockCreateConversation.mockReset();
     mockCreateConversation.mockResolvedValue(cloudConversationFixture(SERVER_CONVERSATION_ID));
@@ -116,5 +122,50 @@ describe('syncLocalConversationsToCloud', () => {
     expect(result.messagesSynced).toBe(0);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]).toMatch(/1\/2 messages/);
+  });
+
+  it('hides unexpected server diagnostics from the partial-sync report', async () => {
+    mockPost.mockRejectedValueOnce(new Error('private storage bucket and provider token'));
+
+    const result = await syncLocalConversationsToCloud();
+
+    expect(result.errors).toEqual([
+      'Could not sync "Local chat": Check your connection and try again.',
+    ]);
+  });
+
+  it('stops before uploading messages if the Cloud account changes after chat creation', async () => {
+    let resolveConversation!: (value: ReturnType<typeof cloudConversationFixture>) => void;
+    mockCreateConversation.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveConversation = resolve;
+        }),
+    );
+
+    const pending = syncLocalConversationsToCloud();
+    activateCloudAccount('account-b');
+    resolveConversation(cloudConversationFixture(SERVER_CONVERSATION_ID));
+
+    await expect(pending).rejects.toThrow('Cloud account changed');
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('does not report an old-account sync as complete if the account changes during upload', async () => {
+    let resolveUpload!: (value: { saved: number }) => void;
+    mockPost.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveUpload = resolve;
+        }),
+    );
+
+    const pending = syncLocalConversationsToCloud();
+    await Promise.resolve();
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    activateCloudAccount('account-b');
+    resolveUpload({ saved: 2 });
+
+    await expect(pending).rejects.toThrow('Cloud account changed');
   });
 });

@@ -33,21 +33,42 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   getUserScopedDb: mockGetUserScopedDb,
 }));
 vi.mock('@/lib/server/product-analytics', () => ({
+  DERIVED_MILESTONE_EVENTS: vi.fn(),
+  DERIVED_PRODUCT_ANALYTICS_EVENTS: vi.fn(),
+  isProductAnalyticsAllowed: vi.fn(),
+  recordProductAnalyticsEvents: vi.fn(),
+  trackAuditedProductEvent: vi.fn(),
+  trackMeteredCapability: vi.fn(),
   resolveProductAnalyticsSurface: () => 'web',
   trackProductAnalyticsEvent: vi.fn(),
 }));
 vi.mock('@/lib/server/chat-attachment-completion', () => ({
+  isOwnedChatAttachmentUploadKey: vi.fn(),
+  purgeChatAttachmentUpload: vi.fn(),
   completeChatAttachmentUpload: mockCompleteChatAttachmentUpload,
   findCompletedChatAttachment: vi.fn().mockResolvedValue(null),
   resolveTemporaryChatUpload: vi.fn().mockResolvedValue(false),
   resolveUploadSourceSurface: () => 'web',
 }));
 vi.mock('@/lib/server/project-knowledge-files', () => ({
+  findOwnedProjectKnowledgeFile: vi.fn(),
+  isSchemaNotReady: vi.fn(),
+  projectKnowledgeResponse: vi.fn(),
+  readIndexStates: vi.fn(),
   checkProjectKnowledgeCapacity: vi.fn(),
   findProjectKnowledgeFileByChecksum: vi.fn().mockResolvedValue(null),
   registerProjectKnowledgeFile: vi.fn(),
 }));
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+  assertUploadMatchesAuthorization: vi.fn(),
+  createLocalProjectKnowledgeUploadUrl: vi.fn(),
+  createProjectKnowledgeUploadAuthorization: vi.fn(),
+  getProjectKnowledgeObject: vi.fn(),
+  isProjectKnowledgeObjectStorageConfigured: vi.fn(),
+  isSealedProjectKnowledgeKey: vi.fn(),
+  sealedProjectKnowledgeKey: vi.fn(),
+  storeLocalProjectKnowledgeUpload: vi.fn(),
+  verifyProjectKnowledgeUploadAuthorization: vi.fn(),
   deleteProjectKnowledgeObject: vi.fn().mockResolvedValue(undefined),
   sealProjectKnowledgeObject: vi.fn(),
 }));

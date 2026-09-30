@@ -11,6 +11,7 @@ import { readScimBody, withScim } from '@/lib/server/scim/scim-route';
 import {
   createScimGroup,
   getScimGroupMembers,
+  getScimGroupMembersBatch,
   listScimGroups,
   parseScimGroupResource,
   serializeScimGroup,
@@ -27,10 +28,13 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     const { rows, total } = await listScimGroups(context.db, context, filter, pagination);
 
-    const resources = await Promise.all(
-      rows.map(async (row) =>
-        serializeScimGroup(row, await getScimGroupMembers(context.db, context, row.id), baseUrl),
-      ),
+    const membersByGroup = await getScimGroupMembersBatch(
+      context.db,
+      context,
+      rows.map((row) => row.id),
+    );
+    const resources = rows.map((row) =>
+      serializeScimGroup(row, membersByGroup.get(row.id) ?? [], baseUrl),
     );
 
     return scimResponse(scimListResponse(resources, total, pagination));

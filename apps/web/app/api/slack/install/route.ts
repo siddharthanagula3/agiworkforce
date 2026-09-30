@@ -6,9 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
@@ -33,7 +31,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   try {
     ({ userId } = await getClerkAuthUser(request));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     const loginUrl = new URL('/login', request.url);

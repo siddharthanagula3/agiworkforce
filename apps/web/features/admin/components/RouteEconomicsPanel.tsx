@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { COMPAT_CAPABILITY_SOURCES } from '@agiworkforce/types';
 import { Spinner } from '@agiworkforce/ui';
 import type { RouteBreakerState } from '@agiworkforce/routing';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -81,29 +82,30 @@ type ModalityFilter = (typeof MODALITY_FILTERS)[number]['value'];
 
 const MODALITY_PREDICATE: Record<ModalityFilter, (modality: RouteModality) => boolean> = {
   text: (modality) => modality.textInput === true,
-  vision: (modality) => modality.imageInput === true,
+  vision: (modality) => modality[COMPAT_CAPABILITY_SOURCES.vision] === true,
   audio: (modality) => modality.audioInput === true || modality.audioOutput === true,
-  video: (modality) => modality.videoInput === true || modality.videoOutput === true,
-  'image-out': (modality) => modality.imageOutput === true,
+  video: (modality) =>
+    modality.videoInput === true || modality[COMPAT_CAPABILITY_SOURCES.videoGen] === true,
+  'image-out': (modality) => modality[COMPAT_CAPABILITY_SOURCES.imageGen] === true,
 };
 
 const MODALITY_INPUTS = [
   { key: 'textInput', label: 'Text' },
-  { key: 'imageInput', label: 'Image' },
+  { key: COMPAT_CAPABILITY_SOURCES.vision, label: 'Image' },
   { key: 'audioInput', label: 'Audio' },
   { key: 'videoInput', label: 'Video' },
 ] as const;
 
 const MODALITY_OUTPUTS = [
   { key: 'textOutput', label: 'Text' },
-  { key: 'imageOutput', label: 'Image' },
+  { key: COMPAT_CAPABILITY_SOURCES.imageGen, label: 'Image' },
   { key: 'audioOutput', label: 'Audio' },
-  { key: 'videoOutput', label: 'Video' },
+  { key: COMPAT_CAPABILITY_SOURCES.videoGen, label: 'Video' },
 ] as const;
 
 const TOGGLES = [
   { key: 'openWeight', label: 'Open weight' },
-  { key: 'reasoning', label: 'Reasoning' },
+  { key: COMPAT_CAPABILITY_SOURCES.thinking, label: 'Reasoning' },
   { key: 'tools', label: 'Tools' },
   { key: 'freeEligible', label: 'Free eligible' },
   { key: 'productionEligible', label: 'Production eligible' },
@@ -115,8 +117,8 @@ type ToggleKey = (typeof TOGGLES)[number]['key'];
 
 const TOGGLE_PREDICATE: Record<ToggleKey, (row: RouteEconomicsRow) => boolean> = {
   openWeight: (row) => row.openWeight === true,
-  reasoning: (row) => row.reasoning === true,
-  tools: (row) => row.functionCalling === true,
+  [COMPAT_CAPABILITY_SOURCES.thinking]: (row) => row[COMPAT_CAPABILITY_SOURCES.thinking] === true,
+  tools: (row) => row[COMPAT_CAPABILITY_SOURCES.tools] === true,
   freeEligible: (row) => row.free.status === FREE_ELIGIBLE,
   productionEligible: (row) => PRODUCTION_COMMERCIAL_STATUSES.has(row.commercialStatus),
   zeroRetention: (row) =>
@@ -488,7 +490,7 @@ export default function RouteEconomicsPanel() {
                 <caption className="sr-only">
                   Provider route economics, filtered and sorted by the controls above
                 </caption>
-                <thead className="bg-card text-left">
+                <thead className="bg-card text-start">
                   <tr>
                     <th scope="col" className={HEADER_CELL_CLASS}>
                       Model

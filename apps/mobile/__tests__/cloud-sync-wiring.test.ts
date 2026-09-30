@@ -79,11 +79,11 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatStore } from '../stores/chatStore';
 import type { ChatMessage } from '../types/chat';
-import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import {
   requireLocalModel,
   requireAutoMode,
   requireMediaSlotModel,
+  requireFreeMobileCloudModel,
   requireMobileCloudModel,
 } from '../test-utils/modelFixtures';
 import { syncNow } from '../services/cloudSyncEngine';
@@ -109,7 +109,7 @@ function jsonResponse(body: unknown): Response {
 }
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000001';
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const CLOUD_MODEL = requireFreeMobileCloudModel().id;
 const LOCAL_MODEL = requireLocalModel().id;
 const IMAGE_MODEL = requireMediaSlotModel('image').id;
 const AUTO_MODEL = requireAutoMode().id;

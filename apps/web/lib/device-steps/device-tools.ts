@@ -1,4 +1,10 @@
 import {
+  MAX_PHONE_STEP_LOCATION_LENGTH,
+  MAX_PHONE_STEP_NOTES_LENGTH,
+  MAX_PHONE_STEP_RANGE_DAYS,
+  MAX_PHONE_STEP_TITLE_LENGTH,
+} from '@agiworkforce/types';
+import {
   DEVICE_STEP_DEFINITIONS,
   MAX_DEVICE_CLICK_COUNT,
   MAX_DEVICE_COORDINATE,
@@ -8,10 +14,12 @@ import {
   MAX_DEVICE_SEARCH_LENGTH,
   MAX_DEVICE_TYPE_LENGTH,
   MAX_DEVICE_WAIT_MS,
+  DEVICE_BROWSER_CONSOLE_LEVELS,
   DEVICE_KEY_MODIFIERS,
   DEVICE_MOUSE_BUTTONS,
   DEVICE_NAMED_KEYS,
   offeredDeviceStepTools,
+  deviceStepScope,
   type DesktopHostDeclaration,
   type DeviceStepTool,
 } from '@agiworkforce/local-runtime-contract';
@@ -19,11 +27,12 @@ import {
 /**
  * The device tools offered to the model for one request.
  *
- * Offering is decided entirely by what the desktop shell declared it holds: a
+ * Offering is decided entirely by what the host declared it holds: a
  * capability the user has not granted produces no tool, and a caller with no
- * desktop host produces none at all. A browser tab, the mobile app, the CLI and
- * the extensions therefore never see one, because none of them sends a
- * declaration and none of them could carry a step out if they did.
+ * host produces none at all. A browser tab, the CLI and the extensions therefore
+ * never see one, because none of them sends a declaration and none of them could
+ * carry a step out if they did. The mobile app declares only the phone steps it
+ * can run, and a desktop shell only the desktop ones.
  */
 
 function rootChoices(declaration: DesktopHostDeclaration): {
@@ -46,6 +55,17 @@ const REVIEW = {
   description:
     'Set this when the step pays or buys something, sends a message or a post, submits personal or account details, deletes something, changes a security or privacy setting, or enters a password: one short sentence saying what it will do. The user is asked before the step runs.',
 } as const;
+
+function phoneTime(what: string): Record<string, unknown> {
+  return {
+    type: 'string',
+    description: `${what}, as a wall-clock time on the phone like 2026-10-02T15:00.`,
+  };
+}
+
+function phoneText(maxLength: number, description: string): Record<string, unknown> {
+  return { type: 'string', maxLength, description };
+}
 
 function coordinate(axis: 'x' | 'y', what: string): Record<string, unknown> {
   return {
@@ -340,6 +360,37 @@ function parametersFor(
     case 'device_browser_read_page':
     case 'device_browser_screenshot':
       return { type: 'object', properties: {}, required: [] };
+    case 'device_browser_console':
+      return {
+        type: 'object',
+        properties: {
+          level: {
+            type: 'string',
+            enum: [...DEVICE_BROWSER_CONSOLE_LEVELS],
+            description: 'Only messages of this level. Omit to read every level.',
+          },
+          pattern: {
+            type: 'string',
+            description: 'Only messages matching this regular expression, ignoring case.',
+          },
+        },
+        required: [],
+      };
+    case 'device_browser_network':
+      return {
+        type: 'object',
+        properties: {
+          failedOnly: {
+            type: 'boolean',
+            description: 'Only requests that failed or returned an error status.',
+          },
+          pattern: {
+            type: 'string',
+            description: 'Only requests whose address matches this regular expression.',
+          },
+        },
+        required: [],
+      };
     case 'device_browser_navigate':
     case 'device_browser_download':
       return {
@@ -388,6 +439,41 @@ function parametersFor(
         },
         required: ['selector', 'text'],
       };
+    case 'device_calendar_events':
+    case 'device_calendar_availability':
+      return {
+        type: 'object',
+        properties: {
+          start: phoneTime('Start of the range'),
+          end: phoneTime(
+            `End of the range, at most ${MAX_PHONE_STEP_RANGE_DAYS} days after the start`,
+          ),
+        },
+        required: ['start', 'end'],
+      };
+    case 'device_calendar_create_event':
+      return {
+        type: 'object',
+        properties: {
+          title: phoneText(MAX_PHONE_STEP_TITLE_LENGTH, 'What the event is called.'),
+          start: phoneTime('When the event starts; for an all-day event a date like 2026-10-02'),
+          end: phoneTime('When the event ends. Required unless allDay is set'),
+          allDay: { type: 'boolean', description: 'Make it an all-day event on the start date.' },
+          location: phoneText(MAX_PHONE_STEP_LOCATION_LENGTH, 'Where it takes place.'),
+          notes: phoneText(MAX_PHONE_STEP_NOTES_LENGTH, 'Notes to save with the event.'),
+        },
+        required: ['title', 'start'],
+      };
+    case 'device_reminder_create':
+      return {
+        type: 'object',
+        properties: {
+          title: phoneText(MAX_PHONE_STEP_TITLE_LENGTH, 'What to be reminded of.'),
+          due: phoneTime('When the reminder is due. Omit for a reminder with no time'),
+          notes: phoneText(MAX_PHONE_STEP_NOTES_LENGTH, 'Notes to save with the reminder.'),
+        },
+        required: ['title'],
+      };
     case 'device_wait':
       return {
         type: 'object',
@@ -417,7 +503,9 @@ export function deviceStepToolDefs(declaration: DesktopHostDeclaration): DeviceT
     type: 'function' as const,
     function: {
       name: tool,
-      description: `${DEVICE_STEP_DEFINITIONS[tool].description} Runs on the user's own machine (${declaration.deviceName}); the turn waits while it does.`,
+      description: `${DEVICE_STEP_DEFINITIONS[tool].description} Runs on the user's ${
+        deviceStepScope(tool) === 'phone' ? 'phone' : 'own machine'
+      } (${declaration.deviceName}); the turn waits while it does.`,
       parameters: parametersFor(tool, roots),
     },
   }));

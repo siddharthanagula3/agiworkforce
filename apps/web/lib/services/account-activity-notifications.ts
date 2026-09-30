@@ -56,6 +56,22 @@ export async function notifyIdentitySecurityEvent(
 
 export const SECURITY_EMAIL_PREFERENCE_KEY = 'emailSecurityAlerts';
 
+async function securityAlertsRequired(db: DatabaseAdapter, userId: string): Promise<boolean> {
+  try {
+    const [row] = await db.query<{ enrolled: boolean }>(
+      `select exists (
+                select 1 from public.account_security_enrollments
+                 where user_id = $1 and enrolled_at is not null
+              ) as enrolled`,
+      [userId],
+    );
+    return row?.enrolled === true;
+  } catch (error) {
+    logger.warn({ error, userId }, '[notifications] advanced account security state unreadable');
+    return false;
+  }
+}
+
 async function securityAlertEmailAddress(
   db: DatabaseAdapter,
   userId: string,
@@ -70,7 +86,9 @@ async function securityAlertEmailAddress(
         limit 1`,
       [userId, SECURITY_EMAIL_PREFERENCE_KEY],
     );
-    return row && !row.opted_out && row.email ? row.email : null;
+    if (!row?.email) return null;
+    if (!row.opted_out) return row.email;
+    return (await securityAlertsRequired(db, userId)) ? row.email : null;
   } catch (error) {
     logger.warn({ error, userId }, '[notifications] security alert preference unreadable');
     return null;

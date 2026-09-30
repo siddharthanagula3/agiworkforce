@@ -3,14 +3,13 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { isSecureRelayUrl, isSecureRelayHttpUrl } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import { remoteControlRefusal } from '@/lib/feature-flags/remote-control-gate';
@@ -32,12 +31,16 @@ const signalingResponseSchema = z.object({
   code: z.string(),
   expiresAt: z.number(),
   expiresIn: z.number(),
-  httpUrl: z.string(),
-  wsUrl: z.string(),
+  httpUrl: z
+    .string()
+    .refine((url) => isSecureRelayHttpUrl(url, process.env['NODE_ENV'] === 'development')),
+  wsUrl: z
+    .string()
+    .refine((url) => isSecureRelayUrl(url, process.env['NODE_ENV'] === 'development')),
   qrData: z.string(),
   pairTokens: z.object({
-    desktop: z.string(),
-    mobile: z.string(),
+    desktop: z.string().min(1).optional(),
+    mobile: z.string().min(1).optional(),
   }),
 });
 
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     ({ db, userId } = await getUserScopedDb(request));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -72,7 +75,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const signalingUrl = process.env['SIGNALING_HTTP_URL'];
   const signalingSecret = process.env['SIGNALING_INTERNAL_SECRET'];
-  if (!signalingUrl || !signalingSecret) {
+  if (
+    !isSecureRelayHttpUrl(signalingUrl, process.env['NODE_ENV'] === 'development') ||
+    !signalingSecret
+  ) {
     logger.error(
       { hasUrl: Boolean(signalingUrl), hasSecret: Boolean(signalingSecret) },
       'Pairing is unconfigured: SIGNALING_HTTP_URL and SIGNALING_INTERNAL_SECRET are both required',
@@ -98,11 +104,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     signalingResponse = await fetch(`${signalingUrl.replace(/\/+$/, '')}/pairings`, {
       method: 'POST',
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${signalingSecret}`,
       },
       body: JSON.stringify({
+        initiator,
         ttlSeconds: ttlSeconds ?? DEFAULT_TTL_SECONDS,
         metadata: { userId, desktopId: desktopId ?? null, initiator },
         ...(deviceId ? { device: { role: initiator, id: deviceId } } : {}),
@@ -131,8 +139,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { code, expiresAt, expiresIn, httpUrl, wsUrl, pairTokens } = payload.data;
+  const initiatorToken = pairTokens[initiator];
+  if (!initiatorToken) {
+    logger.error('Signaling server omitted the initiator credential');
+    return NextResponse.json({ error: 'Invalid response from signaling server' }, { status: 502 });
+  }
 
-  const peerToken = initiator === 'desktop' ? pairTokens.mobile : pairTokens.desktop;
+  // The desktop starting a pairing is the user taking remote work back on for
+  // this device after a "Stop remote work"; nothing else re-enables it.
+  if (deviceId && initiator === 'desktop') {
+    await db.execute(
+      `update device_registrations
+          set remote_enabled = true, updated_at = now()
+        where id = $1 and user_id = $2 and not remote_enabled`,
+      [deviceId, userId],
+    );
+  }
 
   await recordWorkspaceAuditEvent(db, request, {
     userId,
@@ -148,8 +170,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     code,
     expiresAt,
     expiresIn,
-    qrData: `agiw:${code}:${peerToken}`,
+    qrData: `agiw:${code}`,
     signaling: { httpUrl, wsUrl },
-    pairTokens,
+    pairTokens: { [initiator]: initiatorToken },
   });
 }

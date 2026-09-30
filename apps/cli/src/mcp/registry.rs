@@ -244,6 +244,7 @@ pub fn validate_server_name(name: &str) -> Result<&str> {
     if trimmed != name {
         bail!("MCP server name must not have leading or trailing whitespace");
     }
+    ensure_no_rule_separator(name)?;
     for ch in name.chars() {
         let ok = ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | ':');
         if !ok {
@@ -254,6 +255,16 @@ pub fn validate_server_name(name: &str) -> Result<&str> {
         }
     }
     Ok(name)
+}
+
+pub fn ensure_no_rule_separator(name: &str) -> Result<()> {
+    if name.contains("__") {
+        bail!(
+            "MCP server name '{name}' must not contain '__', which separates the server from \
+             the tool in permission rules"
+        );
+    }
+    Ok(())
 }
 
 /// Validate a remote (http/sse) server URL. Must be a syntactically valid
@@ -444,6 +455,8 @@ mod tests {
         assert!(validate_server_name("bad name").is_err());
         assert!(validate_server_name("bad/name").is_err());
         assert!(validate_server_name("claude:stripe").is_ok());
+        assert!(validate_server_name("foo__bar").is_err());
+        assert!(validate_server_name("foo_bar").is_ok());
 
         assert!(validate_stdio_command("").is_err());
         assert!(validate_stdio_command("--rm").is_err());

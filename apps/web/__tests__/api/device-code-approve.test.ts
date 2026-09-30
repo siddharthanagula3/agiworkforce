@@ -13,7 +13,7 @@ vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn(() => null),
 }));
 
-const mockHasAcceptedCurrentTerms = vi.hoisted(() => vi.fn(async () => true));
+const mockHasAcceptedCurrentTerms = vi.hoisted(() => vi.fn(async (_userId: string) => true));
 // Policy has its own suite (lib/server/__tests__/device-signin-policy.test.ts).
 // Mocked here so this file keeps testing the approval flow rather than also
 // simulating a settings read.
@@ -22,6 +22,7 @@ vi.mock('@/lib/server/device-signin-policy', () => ({
 }));
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: mockHasAcceptedCurrentTerms,
+  mustAcceptTerms: async (userId: string) => !(await mockHasAcceptedCurrentTerms(userId)),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -45,6 +46,7 @@ const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
   getNeonDb: vi.fn(() => ({
     query: (sql: string, params: unknown[]) => mockQuery(sql, params),
     execute: (...args: unknown[]) => mockExecute(...args),

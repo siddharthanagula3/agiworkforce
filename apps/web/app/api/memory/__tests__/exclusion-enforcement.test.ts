@@ -27,6 +27,7 @@ import { POST as createMemory } from '@/app/api/memory/route';
 import { PUT as updateMemory } from '@/app/api/memory/[id]/route';
 import { POST as importMemory } from '@/app/api/memory/import/route';
 import { POST as pushMemorySync } from '@/app/api/memory/sync/route';
+import { excludedMemoryMessage } from '@/lib/services/memory-write-service';
 
 const EXCLUDED_TERM = 'home address';
 const EXCLUDED_CONTENT = 'The user home address is 12 Elm Street';
@@ -189,7 +190,9 @@ describe('cross-device memory sync push', () => {
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.rejected).toEqual([{ id: MEMORY_ID, term: EXCLUDED_TERM }]);
+    expect(body.rejected).toEqual([
+      { id: MEMORY_ID, term: EXCLUDED_TERM, message: excludedMemoryMessage(EXCLUDED_TERM) },
+    ]);
     expect(body.applied).toEqual([{ id: OTHER_MEMORY_ID, server_version: '7' }]);
 
     const push = sqlCalls('applied_rows')[0];

@@ -6,10 +6,13 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S95.12: Preview generator.
+## S95.06: Malware/quarantine pipeline.
 
-- Done when: Previews are generated for non-image files.
-- Wave: 3
+- Done when: Uploads are malware-scanned and unsafe files are quarantined or rejected.
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
+| platform | partial | done once the scanner is deployed and the two Vercel env vars are set; rejected files are deleted, not quarantined, as before | flag-off |
+
+Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`

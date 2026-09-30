@@ -41,6 +41,10 @@
     "auto_reload_settings": {
       "scope": "account",
       "why": "auto-reload charges the payer's own saved card for their own purchased credits, so it follows the person on every surface"
+    },
+    "organization_plugin_group_settings": {
+      "scope": "workspace",
+      "why": "a group's plugin install preference narrows the tenant's workspace-wide one for that group's members, most permissive group first"
     }
   },
   "unscopedTables": []

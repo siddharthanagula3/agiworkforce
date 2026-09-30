@@ -6,43 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S7.01: Centered new-chat layout.
-
-- Done when: An empty new chat shows its start view (greeting, prompt entry or suggestions) centred in the available area rather than an empty transcript.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The TUI shows a welcome block, but it is drawn top-left in the transcript area; centre it in the empty chat area. | ui |
-
-Code: `apps/cli/src/tui/tui_app.rs:1460-1463`, `apps/cli/src/tui/tui_app.rs:1448-1448`
-
-## S7.03: Full-width data-analysis layout.
-
-- Done when: Data work (tables, charts, spreadsheets) can be viewed in a layout that uses the full window width instead of the reading column.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Artifacts, including tables, open in a full-screen modal on the phone, but there is no wide data layout for tablets or for tables inside answers. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`
-
-## S7.04: Conversation plus artifact split view.
-
-- Done when: An artifact opens in its own pane beside the conversation so both are visible and usable at once.
-- Wave: 3
-- Already works on: web, desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Artifacts open as a full-screen modal over the conversation; even on tablets there is no side-by-side artifact pane. | ui |
-| chrome | partial | The side panel lists artifacts in its drawer and can show their source, but not beside the transcript; preview hands off to the web conversation. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:5-5`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:19-19`
-
 ## S7.05: Conversation plus source-inspector split view.
 
 - Done when: Sources behind an answer open in an inspector pane beside the conversation, so the reader can check a source without leaving the transcript.
@@ -51,12 +14,8 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:313-316`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Sources appear as a collapsible list under each answer and inside a full-screen report view; there is no inspector beside the conversation, even on tablets. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Sources render inline as an activity list inside the assistant bubble; there is no inspector pane beside the transcript. | ui |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `apps/mobile/src/features/chat/components/CollapsibleSources.tsx:34-34`, `apps/extension/src/features/side-panel/bubbles.ts:406-410`
 
 ## S7.06: Conversation plus browser split view.
 
@@ -70,19 +29,6 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `a
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S7.07: Conversation plus code workspace.
-
-- Done when: A coding session shows the conversation alongside the code workspace (changes, diffs, terminal or editor) in one view.
-- Wave: 3
-- Already works on: web, desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Remote code sessions show a follow-up input, file changes and diffs stacked in one column and require a paired desktop running a local session; there is no side-by-side workspace. | ui |
-| cli | partial | The TUI runs inside the workspace but shows no code pane; changes are reviewed in a diff overlay drawn over the transcript. | ui |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336`, `apps/mobile/app/(app)/companion/code/[threadId].tsx:28-28`, `apps/cli/src/tui/widgets/diff_review.rs:1-4`, `apps/cli/src/tui/tui_app.rs:4022-4022`
 
 ## S7.13: Dockable panels.
 
@@ -107,15 +53,6 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S7.19: Compact companion mode.
-
-- Done when: A compact companion mode shows a reduced chat UI (no sidebar or side panels) sized for quick questions.
-- Wave: 3
-- Already works on: desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
 ## S7.24: Sticky table headers.
 
 - Done when: Table headers stay pinned while a long table scrolls.
@@ -127,15 +64,3 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S7.32: Print-specific layouts.
-
-- Done when: Printing a conversation or report produces a print-specific layout: no app chrome, the whole content, paper-friendly colours and sensible page breaks.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Conversations export to a paper-styled PDF (dark text on white) that can be printed from the share sheet, but there is no Print action and no page-break rules. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx:35-36`, `apps/mobile/services/fileCreation.ts:197-198`

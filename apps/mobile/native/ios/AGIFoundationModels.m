@@ -7,6 +7,9 @@
 RCT_EXTERN_METHOD(getCapabilities:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(memoryFootprintMB:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(generate:(NSString *)prompt
                   systemPrompt:(NSString *)systemPrompt
                   messages:(NSArray<NSDictionary *> *)messages

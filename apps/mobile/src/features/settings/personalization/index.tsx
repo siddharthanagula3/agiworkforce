@@ -24,6 +24,8 @@ import {
 } from './constants';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
+import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
+import { toUserMessage } from '@/services/userMessage';
 
 const MAX_ABOUT_YOU_CHARS = 1500;
 
@@ -155,13 +157,13 @@ function StyleSlider({
         style={{ height: 36 }}
       />
       <View className="flex-row justify-between px-0.5">
-        <Text className="text-[11px]" style={{ color: c.textMuted }}>
+        <Text className="text-xs" style={{ color: c.textMuted }}>
           {config.leftLabel}
         </Text>
-        <Text className="text-[11px]" style={{ color: c.textMuted }}>
+        <Text className="text-xs" style={{ color: c.textMuted }}>
           Default
         </Text>
-        <Text className="text-[11px]" style={{ color: c.textMuted }}>
+        <Text className="text-xs" style={{ color: c.textMuted }}>
           {config.rightLabel}
         </Text>
       </View>
@@ -318,10 +320,7 @@ export default function PersonalizationScreen() {
 
   const handleBack = useCallback(() => {
     if (hasChanges) {
-      Alert.alert('Discard changes?', 'You have unsaved changes.', [
-        { text: 'Discard', style: 'destructive', onPress: goBack },
-        { text: 'Keep Editing', style: 'cancel' },
-      ]);
+      confirmDiscardChanges(goBack);
     } else {
       goBack();
     }
@@ -334,13 +333,14 @@ export default function PersonalizationScreen() {
       api.patch('/api/me', { display_name: trimmedName }).catch((error: unknown) => {
         Alert.alert(
           'Name not saved to your account',
-          error instanceof Error ? error.message : 'Try again from Personalization.',
+          toUserMessage(error, 'Try again from Personalization.'),
         );
       });
     }
     setPersonalization({
       fullName: fullName.trim(),
       nickname: nickname.trim(),
+      nameOptedOut: nickname.trim() === '',
       occupation: occupation.trim(),
       aboutYou: aboutYou.trim(),
       instructions: instructions.trim(),
@@ -514,7 +514,7 @@ export default function PersonalizationScreen() {
         {/* Response Style dials */}
         <View>
           <Text
-            className="text-[11px] uppercase tracking-wider font-semibold mb-3 px-1"
+            className="text-xs uppercase tracking-wider font-semibold mb-3 px-1"
             style={{ color: c.textMuted }}
           >
             Response Style
@@ -553,7 +553,7 @@ export default function PersonalizationScreen() {
             borderColor: c.border,
           }}
         >
-          <Text className="text-[11px] leading-4" style={{ color: c.textMuted }}>
+          <Text className="text-xs leading-4" style={{ color: c.textMuted }}>
             Preferences apply to all conversations. Your name and instructions are included as
             context when chatting with AGI.
           </Text>

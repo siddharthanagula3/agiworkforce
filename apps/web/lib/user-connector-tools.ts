@@ -23,8 +23,12 @@ import { inspectOutboundContent } from '@/lib/security/outbound-content-inspecti
 import { recordConnectorCall } from '@/lib/services/infrastructure-cost';
 import { recordConnectorCallOutcome } from '@/lib/services/connector-call-log-service';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
-import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import {
+  resolveActiveOrganizationId,
+  resolveOrganizationMembershipId,
+} from '@/lib/services/active-workspace-service';
 import { logger } from '@/lib/logger';
+import { createError } from '@/lib/errors';
 import {
   evaluateMcpHostAccess,
   type ConnectorAccessPolicy,
@@ -69,6 +73,7 @@ import {
   isSensitiveDataToolOffered,
   sensitiveDataConnector,
 } from '@/lib/connectors/sensitive-data-connectors';
+import { isHealthSpaceConnector } from '@/lib/services/health-space-service';
 import {
   bankAccountsToolDefs,
   executeBankAccountsTool,
@@ -92,7 +97,7 @@ import {
   serializeConnectorAuthorizationRequired,
   type ConnectorAuthorizationReason,
 } from '@/lib/connectors/connect-required';
-import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import { CONNECTOR_RECONNECT_TOOL_NAME, type WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   GMAIL_CONNECTOR_ID,
   executeGmailAction,
@@ -100,6 +105,13 @@ import {
   isGmailActionTool,
 } from '@/lib/connectors/gmail-actions';
 import { resolveToolMetadata } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
+import {
+  CUSTOM_SERVER_PREFIX,
+  customServerId,
+  ORG_SHARED_SERVER_PREFIX,
+  orgSharedServerId,
+} from '@/lib/connectors/custom-server-ids';
+import { isGoogleApiUrl, isGoogleUserDataConnector } from '@/lib/connectors/google-user-data';
 import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
 
 export const MAX_CONNECTOR_TOOLS_PER_USER = 32;
@@ -150,8 +162,6 @@ function resolveConnectorToolLimit(planTier: string | null | undefined): number 
 }
 
 const GITHUB_SERVER_ID = 'github';
-
-const CUSTOM_SERVER_PREFIX = 'custom-';
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
@@ -786,15 +796,31 @@ function catalogToConnectorToolDefs(
   catalog: McpToolCatalog,
   serverLabel?: string,
 ): WebMcpToolDef[] {
-  return catalog.tools.map((t) => ({
-    qualifiedName: `mcp__${t.serverName}__${t.toolName}`,
-    serverId: t.serverName,
-    toolName: t.toolName,
-    description: t.description ?? t.fallbackDescription,
-    origin: 'connector',
-    ...(serverLabel ? { serverLabel } : {}),
-    inputSchema: t.inputSchema,
-  }));
+  return catalog.tools
+    .filter((t) => t.toolName !== CONNECTOR_RECONNECT_TOOL_NAME)
+    .map((t) => ({
+      qualifiedName: `mcp__${t.serverName}__${t.toolName}`,
+      serverId: t.serverName,
+      toolName: t.toolName,
+      description: t.description ?? t.fallbackDescription,
+      origin: 'connector',
+      ...(serverLabel ? { serverLabel } : {}),
+      inputSchema: t.inputSchema,
+    }));
+}
+
+function reconnectToolDefs(serverId: string, label: string): WebMcpToolDef[] {
+  return [
+    {
+      qualifiedName: `mcp__${serverId}__${CONNECTOR_RECONNECT_TOOL_NAME}`,
+      serverId,
+      toolName: CONNECTOR_RECONNECT_TOOL_NAME,
+      description: `${label} is connected to this account, but its authorization has expired or was revoked, so none of its tools can run. Call this when the user asks for anything from ${label}; it shows them a button to reconnect it.`,
+      origin: 'connector',
+      serverLabel: label,
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+  ];
 }
 
 async function executeRemoteConnectorTool(
@@ -865,10 +891,6 @@ interface CustomConnectorRow {
   url: string;
   transport: string;
   auth_header_enc: string | null;
-}
-
-function customServerId(shortId: string): string {
-  return `${CUSTOM_SERVER_PREFIX}${shortId}`;
 }
 
 function customShortIdFromServerId(serverId: string): string | null {
@@ -1597,14 +1619,9 @@ async function executeOAuthConnectorTool(
   }
 }
 
-const ORG_SHARED_SERVER_PREFIX = 'orgmcp-';
 // A member's shared connector (0086) or a workspace-published server (0250),
 // which carries a leading 'p' so the two never share a short id.
 const ORG_SHORT_ID_RE = /^p?[0-9a-f]{10}$/;
-
-function orgSharedServerId(orgShortId: string): string {
-  return `${ORG_SHARED_SERVER_PREFIX}${orgShortId}`;
-}
 
 function orgShortIdFromServerId(serverId: string): string | null {
   if (!serverId.startsWith(ORG_SHARED_SERVER_PREFIX)) return null;
@@ -1622,23 +1639,11 @@ async function resolveConnectorOrganizationId(
   admittedOrganizationId?: string | null,
 ): Promise<string | null> {
   const db = connectorOwnerDb(userId);
-  try {
-    if (admittedOrganizationId === undefined) {
-      return await resolveActiveOrganizationId(db, userId);
-    }
-    if (admittedOrganizationId === null) return null;
-    const [membership] = await db.query<{ organization_id: string }>(
-      `select organization_id
-         from public.organization_members
-        where organization_id = $1 and user_id = $2
-        limit 1`,
-      [admittedOrganizationId, userId],
-    );
-    return membership?.organization_id ?? null;
-  } catch (error) {
-    if (isUndefinedTable(error)) return null;
-    throw error;
-  }
+  if (admittedOrganizationId === undefined) return resolveActiveOrganizationId(db, userId);
+  if (admittedOrganizationId === null) return null;
+  const membershipId = await resolveOrganizationMembershipId(db, userId, admittedOrganizationId);
+  if (!membershipId) throw createError.forbidden('You are not an active member of this workspace.');
+  return membershipId;
 }
 
 async function getOrgSharedConnectorRows(
@@ -1779,7 +1784,17 @@ async function executeOrgSharedConnectorTool(
   args: Record<string, unknown>,
   options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
-  const organizationId = await resolveConnectorOrganizationId(userId, admittedOrganizationId);
+  let organizationId: string | null;
+  try {
+    organizationId = await resolveConnectorOrganizationId(userId, admittedOrganizationId);
+  } catch (error) {
+    logger.warn({ userId, error }, '[user-connector] shared workspace membership unavailable');
+    return {
+      handled: true,
+      content: 'This shared connector is not available for this account.',
+      isError: true,
+    };
+  }
   if (!organizationId) {
     return {
       handled: true,
@@ -1877,6 +1892,13 @@ export interface LoadUserConnectorToolOptions {
   organizationId?: string | null;
   planTier?: string | null;
   isToolDenied?: (connectorId: string, toolName: string) => boolean;
+  healthSpace?: boolean;
+  /**
+   * The caller serves this catalog only to models that keep inputs out of
+   * training. Without it, a custom, shared or directory server on a Google API
+   * host is not dialled.
+   */
+  googleUserDataRouted?: boolean;
 }
 
 /**
@@ -1886,11 +1908,8 @@ export interface LoadUserConnectorToolOptions {
  * model is never told about cannot be called, and every caller, chat,
  * scheduled tasks, cloud agent runs, loads its catalog through here.
  *
- * Ungoverned on a read failure, deliberately. Connector governance decides
- * which approved integrations staff use; it is not the barrier that stops
- * cross-workspace access, which is the tenancy layer and fails closed. Denying
- * every connector because the policy table blipped would break every member's
- * tools for a reason no administrator chose.
+ * A policy read failure removes the offered tools so an unavailable policy
+ * cannot override an administrator's connector restrictions.
  */
 async function applyConnectorPolicy(
   defs: WebMcpToolDef[],
@@ -1900,16 +1919,16 @@ async function applyConnectorPolicy(
 ): Promise<WebMcpToolDef[]> {
   if (!organizationId || defs.length === 0) return defs;
 
-  const { readConnectorPolicySafely } = await import('@/lib/services/connector-policy-service');
+  const { readConnectorPolicy } = await import('@/lib/services/connector-policy-service');
   const { evaluateConnectorAccess } = await import('@/lib/services/connector-policy-evaluator');
   const { getNeonDb } = await import('@/lib/server/neon-db');
 
   let policy;
   try {
-    policy = await readConnectorPolicySafely(getNeonDb(), organizationId);
+    policy = await readConnectorPolicy(getNeonDb(), organizationId);
   } catch (error) {
-    logger.error({ error, organizationId }, '[connector-policy] unavailable; catalog ungoverned');
-    return defs;
+    logger.error({ error, organizationId }, '[connector-policy] unavailable; catalog withheld');
+    return [];
   }
   if (!policy) return defs;
 
@@ -1930,20 +1949,23 @@ async function applyConnectorPolicy(
   return kept;
 }
 
-async function readCustomHostPolicy(organizationId: string): Promise<ConnectorAccessPolicy | null> {
+async function readCustomHostPolicy(
+  organizationId: string,
+): Promise<ConnectorAccessPolicy | null | false> {
   try {
-    const { readConnectorPolicySafely } = await import('@/lib/services/connector-policy-service');
-    return await readConnectorPolicySafely(getNeonDb(), organizationId);
+    const { readConnectorPolicy } = await import('@/lib/services/connector-policy-service');
+    return await readConnectorPolicy(getNeonDb(), organizationId);
   } catch (error) {
     logger.error(
       { error, organizationId },
       '[connector-policy] unavailable while dialling custom connectors',
     );
-    return null;
+    return false;
   }
 }
 
-function mcpHostPermitted(policy: ConnectorAccessPolicy | null, url: string): boolean {
+function mcpHostPermitted(policy: ConnectorAccessPolicy | null | false, url: string): boolean {
+  if (policy === false) return false;
   return evaluateMcpHostAccess(policy, url).allowed;
 }
 
@@ -1955,9 +1977,9 @@ async function connectorPolicyAllows(
 ): Promise<boolean> {
   if (!organizationId) return true;
   try {
-    const { readConnectorPolicySafely } = await import('@/lib/services/connector-policy-service');
+    const { readConnectorPolicy } = await import('@/lib/services/connector-policy-service');
     const { evaluateConnectorAccess } = await import('@/lib/services/connector-policy-evaluator');
-    const policy = await readConnectorPolicySafely(getNeonDb(), organizationId);
+    const policy = await readConnectorPolicy(getNeonDb(), organizationId);
     return policy
       ? evaluateConnectorAccess(policy, { connectorId, isCustom, ...(url ? { url } : {}) }).allowed
       : true;
@@ -1966,7 +1988,7 @@ async function connectorPolicyAllows(
       { error, organizationId, connectorId },
       '[connector-policy] unavailable while loading connector capabilities',
     );
-    return true;
+    return false;
   }
 }
 
@@ -2397,20 +2419,44 @@ export async function loadUserConnectorToolCatalog(
       : [];
 
     const dials: Array<{ member: boolean; load: () => Promise<WebMcpToolDef[]> }> = [];
+    const googleHosted = (
+      url: string,
+      load: () => Promise<WebMcpToolDef[]>,
+    ): Promise<WebMcpToolDef[]> => {
+      if (!isGoogleApiUrl(url)) return load();
+      if (options.googleUserDataRouted !== true) {
+        logger.info(
+          { userId },
+          '[user-connector] Google-hosted connector withheld from a turn that may train',
+        );
+        return Promise.resolve([]);
+      }
+      return load().then((defs) => defs.map((def) => ({ ...def, googleUserData: true as const })));
+    };
 
+    const offersHealthSpaceConnectors = options.healthSpace === true;
     for (const entry of map.values()) {
       if (!activeIds.has(entry.connectorId)) continue;
+      if (isHealthSpaceConnector(entry.connectorId) && !offersHealthSpaceConnectors) continue;
       dials.push({
         member: false,
-        load: async () => {
-          const catalog = await buildRemoteConnectorCatalog(entry);
-          return catalog ? catalogToConnectorToolDefs(catalog) : [];
-        },
+        load:
+          isGoogleUserDataConnector(entry.connectorId) || !isGoogleApiUrl(entry.url)
+            ? async () => {
+                const catalog = await buildRemoteConnectorCatalog(entry);
+                return catalog ? catalogToConnectorToolDefs(catalog) : [];
+              }
+            : () =>
+                googleHosted(entry.url, async () => {
+                  const catalog = await buildRemoteConnectorCatalog(entry);
+                  return catalog ? catalogToConnectorToolDefs(catalog) : [];
+                }),
       });
     }
 
     for (const connectorId of usableOAuthIds) {
       if (!grantedOAuthIds.has(connectorId)) continue;
+      if (isHealthSpaceConnector(connectorId) && !offersHealthSpaceConnectors) continue;
       if (isGraphAdapterConnector(connectorId)) {
         defs.push(
           ...graphToolDefs(
@@ -2426,10 +2472,13 @@ export async function loadUserConnectorToolCatalog(
           const target = resolveConnectorMcpTarget(connectorId);
           if (!target) return [];
           const access = await resolveConnectorAccessToken(userId, connectorId);
+          const label = target.displayName ?? connectorId;
+          if (access.status === 'reauthorization-required') {
+            return reconnectToolDefs(target.serverId, label);
+          }
           if (access.status !== 'ready') return [];
           const catalog = await buildOAuthConnectorCatalog(userId, target, access);
           if (!catalog) return [];
-          const label = target.displayName ?? connectorId;
           return connectorId === GMAIL_CONNECTOR_ID
             ? [...catalogToConnectorToolDefs(catalog, label), ...gmailActionToolDefs(label)]
             : catalogToConnectorToolDefs(catalog, label).filter((def) =>
@@ -2448,12 +2497,17 @@ export async function loadUserConnectorToolCatalog(
           const directory = await resolveDirectoryTarget(grant.connectorId);
           if (!directory) return [];
           const target = directoryMcpTarget(directory);
-          const access = await resolveConnectorAccessToken(userId, target.connectorId, {
-            discovered: true,
+          return googleHosted(target.mcpUrl, async () => {
+            const access = await resolveConnectorAccessToken(userId, target.connectorId, {
+              discovered: true,
+            });
+            if (access.status === 'reauthorization-required') {
+              return reconnectToolDefs(target.serverId, target.displayName ?? target.connectorId);
+            }
+            if (access.status !== 'ready') return [];
+            const catalog = await buildOAuthConnectorCatalog(userId, target, access);
+            return catalog ? catalogToConnectorToolDefs(catalog, target.displayName) : [];
           });
-          if (access.status !== 'ready') return [];
-          const catalog = await buildOAuthConnectorCatalog(userId, target, access);
-          return catalog ? catalogToConnectorToolDefs(catalog, target.displayName) : [];
         },
       });
     }
@@ -2472,8 +2526,10 @@ export async function loadUserConnectorToolCatalog(
             );
             return [];
           }
-          const catalog = await buildCustomConnectorCatalog(userId, row);
-          return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
+          return googleHosted(row.url, async () => {
+            const catalog = await buildCustomConnectorCatalog(userId, row);
+            return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
+          });
         },
       });
     }
@@ -2483,8 +2539,10 @@ export async function loadUserConnectorToolCatalog(
         member: true,
         load: async () => {
           if (!mcpHostPermitted(await customHostPolicy, row.url)) return [];
-          const catalog = await buildOrgSharedConnectorCatalog(row);
-          return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
+          return googleHosted(row.url, async () => {
+            const catalog = await buildOrgSharedConnectorCatalog(row);
+            return catalog ? catalogToConnectorToolDefs(catalog, row.name) : [];
+          });
         },
       });
     }
@@ -2515,9 +2573,12 @@ export async function loadUserConnectorToolCatalog(
     }
 
     const isToolDenied = options.isToolDenied;
+    const inSpace = offersHealthSpaceConnectors
+      ? inspected.allowed
+      : inspected.allowed.filter((def) => !isHealthSpaceConnector(def.serverId));
     const allowed = isToolDenied
-      ? inspected.allowed.filter((def) => !isToolDenied(def.serverId, def.toolName))
-      : inspected.allowed;
+      ? inSpace.filter((def) => !isToolDenied(def.serverId, def.toolName))
+      : inSpace;
     if (isToolDenied && allowed.length !== inspected.allowed.length) {
       logger.info(
         { userId, blocked: defs.length - allowed.length },

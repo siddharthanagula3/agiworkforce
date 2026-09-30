@@ -93,6 +93,7 @@ describe('backgroundFetch agent-status polling', () => {
       { content: { body: string; data: Record<string, unknown> } },
     ];
     expect(request.content.data['approvalId']).toBe('checkpoint-1');
+    expect(request.content.data['runId']).toBe('0190a000-0000-7000-8000-000000000001');
     expect(request.content.body).toBe('1 agent action is waiting on you');
   });
 
@@ -105,8 +106,9 @@ describe('backgroundFetch agent-status polling', () => {
     await mockDefinedTask!();
 
     const [request] = mockScheduleNotificationAsync.mock.calls[0] as [
-      { content: { body: string } },
+      { content: { body: string; data: Record<string, unknown> } },
     ];
     expect(request.content.body).toBe('2 agent actions are waiting on you');
+    expect(request.content.data['runId']).toBeUndefined();
   });
 });

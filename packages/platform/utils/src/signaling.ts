@@ -4,6 +4,7 @@ import type {
   SignalingClientOptions,
   SignalKind,
 } from '@agiworkforce/types';
+import { isSecureRelayUrl } from '@agiworkforce/types';
 
 export type { SignalingRole, SignalingEvent, SignalingClientOptions, SignalKind };
 
@@ -123,6 +124,9 @@ export class SignalingClient {
   }
 
   private connect() {
+    if (!isSecureRelayUrl(this.options.wsUrl, this.options.allowInsecureLoopback)) {
+      throw new Error('The relay address must use a secure WebSocket connection.');
+    }
     const socket = this.options.createSocket
       ? this.options.createSocket(this.options.wsUrl)
       : new WebSocket(this.options.wsUrl);
@@ -188,8 +192,16 @@ export class SignalingClient {
     const type = message['type'];
     switch (type) {
       case 'registered': {
+        const pairToken = message['pairToken'];
+        if (typeof pairToken !== 'string' || !/^[a-f0-9]{64}$/.test(pairToken)) {
+          this.options.onEvent({ type: 'error', error: 'invalid_pair_credential' });
+          this.close();
+          return;
+        }
+        this.options.pairToken = pairToken;
         this.options.onEvent({
           type: 'registered',
+          pairToken,
           expiresAt: safeToNumber(message['expiresAt'], 0),
           peerConnected: Boolean(message['peerConnected']),
         });

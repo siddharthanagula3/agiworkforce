@@ -1,8 +1,8 @@
 import { getExtensionTokensCssAuto } from './tokens';
 import {
-  clearAuthToken,
   FREE_TRIAL_GATEWAY,
   getAuthToken,
+  signOutOfAccount,
 } from './features/cloud-bridge/freeTrialClient';
 import { createApprovalHistorySection } from './features/options/approval-history-section';
 import { platformRequestHeaders } from './platformHeaders';
@@ -19,7 +19,11 @@ import { createAppearanceSection } from './features/options/appearance-section';
 import { exportExtensionDiagnostics } from './features/diagnostics';
 import { SITE_ALLOWLIST_STORAGE_KEY } from './background/policy';
 import { loadSitePolicyInput } from './features/site-policy/store';
-import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types';
+import {
+  PRODUCT_ANALYTICS_CHOICES_PATH,
+  evaluateSitePolicy,
+  sitePolicyDenialMessage,
+} from '@agiworkforce/types';
 import {
   BROWSER_CONTROL_CONSENT_BODY,
   BROWSER_CONTROL_CONSENT_HEADLINE,
@@ -34,7 +38,6 @@ import {
   clearAutofillProfile,
 } from './features/content/autofill/profile-storage';
 
-const API_KEY_STORAGE_KEY = 'agi_api_key';
 const DEV_BEARER_KEY = 'agi_dev_bearer_token';
 
 function injectStyles(): void {
@@ -1434,10 +1437,13 @@ function buildPage(): void {
   page.appendChild(permSection);
 
   page.appendChild(
-    createDataHandlingSection({
-      get: (key) => chrome.storage.local.get(key),
-      set: (items) => chrome.storage.local.set(items),
-    }).element,
+    createDataHandlingSection(
+      {
+        get: (key) => chrome.storage.local.get(key),
+        set: (items) => chrome.storage.local.set(items),
+      },
+      `${FREE_TRIAL_GATEWAY}${PRODUCT_ANALYTICS_CHOICES_PATH}?from=chrome-extension`,
+    ).element,
   );
 
   const accountSection = el('section', { class: 'opt-section', id: 'opt-account' });
@@ -1445,7 +1451,10 @@ function buildPage(): void {
   accountHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Account'));
   accountSection.appendChild(accountHeader);
 
+  const accountStatus = el('div', { class: 'opt-row-hint', role: 'status', 'aria-live': 'polite' });
+  accountSection.appendChild(accountStatus);
   const renderAccountRow = (signedIn: boolean, unavailable = false, loading = false): void => {
+    if (signedIn) accountStatus.textContent = '';
     accountSection.querySelector('.opt-row')?.remove();
     const accountRow = el('div', { class: 'opt-row' });
     const accountLeft = el('div');
@@ -1522,14 +1531,11 @@ function buildPage(): void {
       logoutBtn.textContent = 'Logging out…';
       logoutBtn.disabled = true;
       try {
-        await clearAuthToken();
-        await chrome.storage.local.remove([
-          API_KEY_STORAGE_KEY,
-          'agi_user_id',
-          'agi_user_tier',
-          'agi_session',
-        ]);
+        const { webSessionEnded } = await signOutOfAccount();
         renderAccountRow(false);
+        if (!webSessionEnded) {
+          accountStatus.textContent = 'Signed out here. The web session could not be ended.';
+        }
       } catch {
         logoutBtn.textContent = 'Error';
         logoutBtn.disabled = false;

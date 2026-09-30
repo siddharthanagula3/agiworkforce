@@ -23,7 +23,7 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
@@ -172,7 +172,9 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
   }, []);
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(300).springify()}>
+    <Animated.View
+      entering={reducedMotion ? undefined : FadeInDown.duration(motion.moved).springify()}
+    >
       <View
         className="rounded-xl overflow-hidden my-1"
         style={{
@@ -190,7 +192,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
 
           <View className="flex-1">
             <Text
-              className="text-[10px] uppercase tracking-wider font-medium"
+              className="text-xs uppercase tracking-wider font-medium"
               style={{ color: colors.textMuted }}
             >
               Approval Required
@@ -208,7 +210,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
             className="px-2 py-0.5 rounded-full"
             style={{ backgroundColor: colors.neutralSurface }}
           >
-            <Text variant="caption" className="text-[10px]" style={{ color: colors.textMuted }}>
+            <Text variant="caption" className="text-xs" style={{ color: colors.textMuted }}>
               {approval.toolName}
             </Text>
           </View>
@@ -225,7 +227,7 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
         {countdown != null && countdown > 0 && isPending ? (
           <View className="px-3 pb-2">
             <View className="flex-row items-center gap-2 mb-1">
-              <Text variant="caption" className="text-[10px]" style={{ color: colors.textMuted }}>
+              <Text variant="caption" className="text-xs" style={{ color: colors.textMuted }}>
                 Auto-approving in {countdown}s
               </Text>
             </View>
@@ -285,7 +287,11 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                     color: colors.textPrimary,
                   }}
                 />
-                <View className="flex-row gap-2">
+                <View
+                  className="flex-row gap-2"
+                  role="group"
+                  accessibilityLabel="Confirm or cancel the rejection"
+                >
                   <Pressable
                     onPress={handleRejectPress}
                     className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg active:opacity-80"
@@ -322,7 +328,11 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                 </View>
               </View>
             ) : (
-              <View className="flex-row gap-2">
+              <View
+                className="flex-row gap-2"
+                role="group"
+                accessibilityLabel={`Approve or reject ${approval.toolName}`}
+              >
                 <Pressable
                   onPress={handleApprove}
                   className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl active:opacity-80"

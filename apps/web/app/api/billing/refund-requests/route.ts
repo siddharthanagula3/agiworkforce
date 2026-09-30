@@ -4,15 +4,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { REFUND_REQUEST_REASONS } from '@/lib/billing/refund-requests';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { BILLING_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { logger } from '@/lib/logger';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { readBillingOwnerRow, resolveBillingCustomerId } from '@/lib/server/billing-owner-row';
@@ -40,7 +38,7 @@ async function authorize(request: NextRequest): Promise<UserScopedDb | NextRespo
   try {
     return await getUserScopedDb(request, { resolveOrganization: false });
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     throw createError.unauthorized('Authentication required');

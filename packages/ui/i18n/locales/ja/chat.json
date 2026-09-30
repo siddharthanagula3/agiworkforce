@@ -74,7 +74,15 @@
     "runtimeConsent": "このアプリがあなたのアカウントで AI を使おうとしています。各リクエストはプランの使用量に含まれます。",
     "runtimeConsentConnectors": "このアプリがあなたのアカウントで AI を使い、{{apps}} のデータを読み取ったり変更したりしようとしています。アプリはそれらのアプリが返す内容を見ることができ、各リクエストはプランの使用量に含まれます。",
     "runtimeAllow": "許可",
-    "runtimeDecline": "許可しない"
+    "runtimeDecline": "許可しない",
+    "runtimeConnectorsLoading": "接続済みのアプリを確認しています",
+    "runtimeConnectorNotConnected": "未接続です。このアプリのこの部分を使うには、設定の「コネクタ」で接続してください。",
+    "runtimeToolNeedsApproval": "使うたびに確認が必要なため、このアプリでは使えません。",
+    "runtimeToolBlocked": "設定でブロックされています。",
+    "runtimeManageConnectors": "接続済みのアプリ",
+    "saveCopy": "コピーを自分のチャットに保存",
+    "saveCopyBusy": "コピー中…",
+    "saveCopyFailed": "このアーティファクトをコピーできませんでした。"
   },
   "sidebar": {
     "activeConversation": "アクティブな会話",
@@ -441,10 +449,22 @@
     "videoModeAttachments_other": "動画生成はプロンプトのみを使用します。添付されたファイルは動画モデルには送信されません。このファイルをチャットモデルに送信する場合は、先に動画モードを終了してください。",
     "viewSources_one": "{{count}} 件のソースを表示",
     "viewSources_other": "{{count}} 件のソースを表示",
+    "folderFilesLeftOut_one": "{{folder}} の {{count}} 件のファイルは添付されませんでした。ローカルフォルダーから添付してください。",
+    "folderFilesLeftOut_other": "{{folder}} の {{count}} 件のファイルは添付されませんでした。ローカルフォルダーから添付してください。",
     "savedMemoriesUsed_one": "保存されたメモリを {{count}} 件使用",
     "savedMemoriesUsed_other": "保存されたメモリを {{count}} 件使用",
     "moreSavedMemories_one": "ほか {{count}} 件",
-    "moreSavedMemories_other": "ほか {{count}} 件"
+    "moreSavedMemories_other": "ほか {{count}} 件",
+    "filesCreated_other": "{{count}} 個のファイルを作成",
+    "foundSources_other": "{{count}} 件のソースが見つかりました",
+    "mapPreviewPlaces_other": "{{count}} か所の地図プレビュー",
+    "filesCreated_one": "{{count}} 個のファイルを作成",
+    "foundSources_one": "{{count}} 件のソースが見つかりました",
+    "mapPreviewPlaces_one": "{{count}} か所の地図プレビュー",
+    "lines_one": "{{count}} 行",
+    "lines_other": "{{count}} 行",
+    "words_one": "{{count}} 語",
+    "words_other": "{{count}} 語"
   },
   "markdownTable": {
     "label": "表",
@@ -466,7 +486,9 @@
     "expand": "コードを拡大",
     "close": "拡大したコードを閉じる",
     "codeTitle": "{{language}} のコード",
-    "codeBlockLabel": "{{language}} のコードブロック"
+    "codeBlockLabel": "{{language}} のコードブロック",
+    "edit": "編集",
+    "editLabel": "このコードをチャットの横で編集"
   },
   "streaming": {
     "reconnecting": "再接続中…",

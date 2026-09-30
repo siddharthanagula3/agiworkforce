@@ -227,6 +227,17 @@ pub(super) fn build_assistant_message(text: &str, tool_calls: &[ToolCallResponse
 }
 
 pub(crate) fn close_orphaned_tool_calls(messages: &mut Vec<Message>) {
+    close_open_tool_calls(messages, "[Tool call was aborted, no output produced]");
+}
+
+pub(crate) fn mark_interrupted_tool_calls(messages: &mut Vec<Message>) -> usize {
+    close_open_tool_calls(
+        messages,
+        "[The session ended before this tool call finished, so its result is unknown. Check what it changed before relying on it or running it again.]",
+    )
+}
+
+fn close_open_tool_calls(messages: &mut Vec<Message>, note: &str) -> usize {
     let mut pending_call_ids: Vec<String> = Vec::new();
     let mut result_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
 
@@ -240,7 +251,10 @@ pub(crate) fn close_orphaned_tool_calls(messages: &mut Vec<Message>) {
                     ContentBlock::ToolResult { tool_use_id, .. } => {
                         result_ids.insert(tool_use_id.clone());
                     }
-                    ContentBlock::Text { .. } | ContentBlock::Image { .. } => {}
+                    ContentBlock::Text { .. }
+                    | ContentBlock::Image { .. }
+                    | ContentBlock::Document { .. }
+                    | ContentBlock::Unknown => {}
                 }
             }
         }
@@ -250,15 +264,17 @@ pub(crate) fn close_orphaned_tool_calls(messages: &mut Vec<Message>) {
         .into_iter()
         .filter(|id| !result_ids.contains(id))
         .collect();
+    let count = orphans.len();
 
     for orphan_id in orphans {
         messages.push(Message::blocks(
             "user",
             vec![ContentBlock::ToolResult {
                 tool_use_id: orphan_id,
-                content: "[Tool call was aborted, no output produced]".to_string(),
+                content: note.to_string(),
                 is_error: true,
             }],
         ));
     }
+    count
 }

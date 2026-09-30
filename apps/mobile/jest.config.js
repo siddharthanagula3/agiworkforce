@@ -1,10 +1,6 @@
 module.exports = {
   preset: 'jest-expo',
-  testPathIgnorePatterns: [
-    '/node_modules/',
-    'scripts/screenshots/specs/',
-    '__tests__/auth-401\\.test\\.ts$',
-  ],
+  testPathIgnorePatterns: ['/node_modules/', 'scripts/screenshots/specs/'],
   setupFiles: ['./jest.setup.js'],
   setupFilesAfterEnv: ['./jest.after-setup.js'],
   transformIgnorePatterns: [
@@ -21,6 +17,7 @@ module.exports = {
     '^@agiworkforce/sync$': '<rootDir>/../../packages/client/sync/src/index',
     '^@agiworkforce/trust-boundaries$':
       '<rootDir>/../../packages/contracts/trust-boundaries/src/index',
+    '^expo-audio$': '<rootDir>/__mocks__/expo-audio.js',
     '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.js',
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',
     '^@react-native-community/netinfo$': '<rootDir>/__mocks__/netinfo.js',

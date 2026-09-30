@@ -13,13 +13,11 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { isDeviceCodeSignInEnabled } from '@/lib/server/device-signin-policy';
-import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
+import { mustAcceptTerms } from '@/lib/server/terms';
 import { QrLinkCodeSchema } from '@/lib/validations/device';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 
 const DeviceApproveRequestSchema = z.object({
   code: QrLinkCodeSchema,
@@ -45,7 +43,7 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
   try {
     ({ userId } = await getClerkAuthUser(request));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     throw createError.unauthorized('Please sign in to continue');
@@ -153,7 +151,7 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       );
     }
 
-    if (!(await hasAcceptedCurrentTerms(userId))) {
+    if (await mustAcceptTerms(userId, 'device-verify')) {
       const returnTo = `/verify?${new URLSearchParams({ code }).toString()}`;
       return NextResponse.json(
         {

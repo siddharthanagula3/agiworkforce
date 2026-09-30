@@ -11,13 +11,18 @@ import type {
   LiveVoiceToolDecision,
 } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { StatusStep } from '@/src/features/chat/components/StatusStep';
 import { VoiceOrb } from './VoiceOrb';
 import { AudioRoutePicker } from './AudioRoutePicker';
 import type { LiveVoiceStatus } from '@/src/features/voice/hooks/useLiveVoiceSession';
-import type { LiveTranscriptTurn } from '@/src/features/voice/services/liveVoiceSession';
+import type {
+  LiveTranscriptTurn,
+  LiveVoiceToolActivity,
+  LiveVoiceToolOutcome,
+} from '@/src/features/voice/services/liveVoiceSession';
 
 export interface LiveVoiceBarProps {
   visible: boolean;
@@ -30,6 +35,8 @@ export interface LiveVoiceBarProps {
   turns: LiveTranscriptTurn[];
   error: string | null;
   approvals: readonly LiveVoicePendingApproval[];
+  toolActivity: readonly LiveVoiceToolActivity[];
+  toolOutcomes: readonly LiveVoiceToolOutcome[];
   onDecideApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   onToggleMute: () => void;
   onStopTask: () => void;
@@ -40,6 +47,15 @@ export interface LiveVoiceBarProps {
 
 const TRANSCRIPT_MAX_HEIGHT = 180;
 const APPROVAL_TITLE = 'Waiting for your approval';
+const BACKEND_BUSY_LABEL = 'Working on your request';
+const SLOW_TOOL_SUFFIX = 'is taking longer than usual';
+const TOOL_RESULTS_TITLE = 'What the actions returned';
+const TOOL_FAILED_LABEL = 'Did not complete';
+const TOOL_OUTPUT_LINES = 3;
+
+function activityMessage(activity: LiveVoiceToolActivity): string {
+  return activity.state === 'timed_out' ? `${activity.label} ${SLOW_TOOL_SUFFIX}` : activity.label;
+}
 
 function statusLabel(
   status: LiveVoiceStatus,
@@ -68,6 +84,8 @@ export function LiveVoiceBar({
   turns,
   error,
   approvals,
+  toolActivity,
+  toolOutcomes,
   onDecideApproval,
   onToggleMute,
   onStopTask,
@@ -110,8 +128,8 @@ export function LiveVoiceBar({
   return (
     <Animated.View
       testID="live-voice-bar"
-      entering={FadeIn.duration(180)}
-      exiting={FadeOut.duration(140)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 12 }}
       accessibilityLiveRegion="polite"
     >
@@ -121,7 +139,12 @@ export function LiveVoiceBar({
 
       <Text
         testID="live-voice-status"
-        style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 8 }}
+        style={{
+          color: colors.textSecondary,
+          fontSize: typeScale.footnote,
+          textAlign: 'center',
+          marginBottom: 8,
+        }}
       >
         {statusLabel(status, muted, assistantSpeaking, interrupted, reconnecting)}
       </Text>
@@ -139,7 +162,7 @@ export function LiveVoiceBar({
             gap: 10,
           }}
         >
-          <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{error}</Text>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>{error}</Text>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <Pressable
               onPress={tap(onRetry)}
@@ -157,7 +180,9 @@ export function LiveVoiceBar({
               }}
             >
               <RotateCcw size={16} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Try again</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+                Try again
+              </Text>
             </Pressable>
             <Pressable
               onPress={tap(onSwitchToText)}
@@ -174,7 +199,9 @@ export function LiveVoiceBar({
               }}
             >
               <Keyboard size={16} color={colors.textSecondary} />
-              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Use the keyboard</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+                Use the keyboard
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -189,15 +216,61 @@ export function LiveVoiceBar({
         >
           {turns.map((turn) => (
             <View key={turn.turnId} style={{ gap: 2 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 11, letterSpacing: 0.6 }}>
+              <Text
+                style={{ color: colors.textMuted, fontSize: typeScale.caption, letterSpacing: 0.6 }}
+              >
                 {turn.role === 'user' ? 'YOU' : 'AGI'}
               </Text>
-              <Text style={{ color: colors.textPrimary, fontSize: 15, lineHeight: 21 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, lineHeight: 21 }}>
                 {turn.text}
               </Text>
             </View>
           ))}
         </ScrollView>
+      ) : null}
+
+      {toolOutcomes.length > 0 ? (
+        <View testID="live-voice-tool-results" style={{ marginBottom: 12, gap: 8 }}>
+          <Text
+            style={{ color: colors.textSecondary, fontSize: typeScale.footnote, fontWeight: '600' }}
+          >
+            {TOOL_RESULTS_TITLE}
+          </Text>
+          {toolOutcomes.map((outcome) => (
+            <View
+              key={outcome.callId}
+              testID="live-voice-tool-result"
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: outcome.isError ? colors.dangerBorder : colors.border,
+                backgroundColor: colors.inputSurface,
+                padding: 10,
+                gap: 4,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                }}
+              >
+                {outcome.isError ? `${outcome.label} · ${TOOL_FAILED_LABEL}` : outcome.label}
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 18,
+                }}
+                numberOfLines={TOOL_OUTPUT_LINES}
+              >
+                {outcome.output}
+              </Text>
+            </View>
+          ))}
+        </View>
       ) : null}
 
       {approvals.map((approval) => (
@@ -217,17 +290,21 @@ export function LiveVoiceBar({
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <ShieldQuestion size={16} color={colors.agentWarning} />
-            <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
+            >
               {APPROVAL_TITLE}
             </Text>
           </View>
-          <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{approval.summary}</Text>
-          <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>
+            {approval.summary}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }} numberOfLines={1}>
             {approval.name}
           </Text>
           {approval.input ? (
             <Text
-              style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17 }}
+              style={{ color: colors.textSecondary, fontSize: typeScale.caption, lineHeight: 17 }}
               numberOfLines={6}
             >
               {approval.input}
@@ -258,7 +335,9 @@ export function LiveVoiceBar({
               ) : (
                 <Check size={16} color={colors.accentText} />
               )}
-              <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{ color: colors.accentText, fontSize: typeScale.subhead, fontWeight: '600' }}
+              >
                 {TOOL_APPROVAL_ACTION_LABELS.approve}
               </Text>
             </Pressable>
@@ -283,7 +362,9 @@ export function LiveVoiceBar({
               }}
             >
               <X size={16} color={colors.agentError} />
-              <Text style={{ color: colors.agentError, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{ color: colors.agentError, fontSize: typeScale.subhead, fontWeight: '600' }}
+              >
                 {TOOL_APPROVAL_ACTION_LABELS.deny}
               </Text>
             </Pressable>
@@ -293,14 +374,28 @@ export function LiveVoiceBar({
 
       {backendBusy ? (
         <View testID="live-voice-activity" style={{ marginBottom: 12 }}>
-          <StatusStep
-            step={{
-              id: 'live-voice-backend',
-              icon: 'thinking',
-              message: 'Working on your request',
-              status: 'running',
-            }}
-          />
+          {toolActivity.length > 0 ? (
+            toolActivity.map((activity) => (
+              <StatusStep
+                key={activity.delegationId}
+                step={{
+                  id: activity.delegationId,
+                  icon: 'thinking',
+                  message: activityMessage(activity),
+                  status: 'running',
+                }}
+              />
+            ))
+          ) : (
+            <StatusStep
+              step={{
+                id: 'live-voice-backend',
+                icon: 'thinking',
+                message: BACKEND_BUSY_LABEL,
+                status: 'running',
+              }}
+            />
+          )}
           <Pressable
             onPress={tap(onStopTask)}
             accessibilityRole="button"
@@ -317,7 +412,13 @@ export function LiveVoiceBar({
               borderColor: colors.border,
             }}
           >
-            <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: typeScale.subhead,
+                fontWeight: '600',
+              }}
+            >
               Stop the task
             </Text>
           </Pressable>
@@ -342,7 +443,7 @@ export function LiveVoiceBar({
           }}
         >
           <Keyboard size={20} color={colors.textSecondary} />
-          <Text style={{ color: colors.textMuted, fontSize: 16 }}>Type instead</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.callout }}>Type instead</Text>
         </Pressable>
 
         <AudioRoutePicker compact />

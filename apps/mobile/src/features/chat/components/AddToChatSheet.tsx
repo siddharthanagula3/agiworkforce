@@ -1,5 +1,6 @@
 import { useCallback, forwardRef, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, View, Pressable, ScrollView } from 'react-native';
+import { ActivityIndicator, View, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import {
@@ -22,17 +23,25 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
+  MICROUSD_PER_USD,
   canUseBillingPlanCapability,
+  chargeCreditsForMicrousd,
+  formatCredits,
   getImageAspectOptionsForModel,
   getModelMetadataById,
   getVideoAspectOptionsForModel,
   getVideoQualityOptionsForModel,
+  providerLabels,
+  videoGenerationCostMicrousd,
+  type ModelMetadata,
 } from '@agiworkforce/types';
 import {
   CHAT_OUTPUT_FORMATS,
   CHAT_OUTPUT_FORMAT_LABEL,
+  ManagedMediaVideoGenerationRequestSchema,
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
+import { supportedVideoDurationSecs } from '@/src/features/video/services/videogen';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
@@ -53,9 +62,10 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
-import { collectSearchableMobileFiles } from '@/src/features/search/mobileGlobalSearch';
+import { recentMobileFiles } from '@/src/features/search/mobileGlobalSearch';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import { useCapability } from '@/src/lib/capabilities';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
@@ -129,8 +139,12 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const videoResolution = useChatViewStore((s) => s.videoResolution);
   const setVideoAspectRatio = useChatViewStore((s) => s.setVideoAspectRatio);
   const setVideoResolution = useChatViewStore((s) => s.setVideoResolution);
+  const videoDurationSecs = useChatViewStore((s) => s.videoDurationSecs);
+  const setVideoDurationSecs = useChatViewStore((s) => s.setVideoDurationSecs);
   const imageAspectRatio = useChatViewStore((s) => s.imageAspectRatio);
   const setImageAspectRatio = useChatViewStore((s) => s.setImageAspectRatio);
+  const imageTransparentBackground = useChatViewStore((s) => s.imageTransparentBackground);
+  const setImageTransparentBackground = useChatViewStore((s) => s.setImageTransparentBackground);
 
   const appMode = useChatAppModeStore((s) => s.appMode);
   const tier = useTierStore((s) => s.tier);
@@ -154,9 +168,16 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [videoModelId],
   );
   const videoOutputSelection = useMemo(
-    () => resolveVideoOutputSelection(videoModelId, videoAspectRatio, videoResolution),
-    [videoModelId, videoAspectRatio, videoResolution],
+    () =>
+      resolveVideoOutputSelection(
+        videoModelId,
+        videoAspectRatio,
+        videoResolution,
+        videoDurationSecs,
+      ),
+    [videoModelId, videoAspectRatio, videoResolution, videoDurationSecs],
   );
+  const videoDurationOptions = videoOutputSelection.durationOptions;
   const effectiveVideoAspectRatio = videoOutputSelection.aspectRatio;
   const effectiveVideoResolution = videoOutputSelection.resolution;
   const imageAspectOptions = useMemo(
@@ -171,6 +192,31 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     () => getVideoQualityOptionsForModel(videoModelId ?? undefined, effectiveVideoAspectRatio),
     [videoModelId, effectiveVideoAspectRatio],
   );
+  const videoEstimate = useMemo(() => {
+    const model = videoModelId ? getModelMetadataById(videoModelId) : undefined;
+    if (!videoModelId || !model) return null;
+    const durationSecs =
+      videoOutputSelection.durationSecs ??
+      supportedVideoDurationSecs(
+        videoModelId,
+        effectiveVideoAspectRatio,
+        effectiveVideoResolution,
+      ) ??
+      ManagedMediaVideoGenerationRequestSchema.shape.duration_secs.parse(undefined);
+    const microusd = videoGenerationCostMicrousd({
+      model,
+      resolution: effectiveVideoResolution,
+      aspectRatio: effectiveVideoAspectRatio,
+      durationSecs,
+      generateAudio: model.videoGeneration?.supportsAudio ?? false,
+    });
+    return microusd === null ? null : { credits: chargeCreditsForMicrousd(microusd), durationSecs };
+  }, [
+    videoModelId,
+    effectiveVideoAspectRatio,
+    effectiveVideoResolution,
+    videoOutputSelection.durationSecs,
+  ]);
   useEffect(() => {
     clearInvalidMediaModelSelections();
   }, [selectedMediaModel]);
@@ -183,7 +229,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const showVideoOption =
     appMode === 'cloud' &&
     videoModelId !== null &&
-    grantedCapabilities.includes('canUseImages') &&
+    grantedCapabilities.includes('canUseVideoGeneration') &&
     canUseBillingPlanCapability(tier, 'video_generation');
   const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
   const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
@@ -214,7 +260,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     const conversations = localConversations.filter(
       (conversation) => executionModeForConversation(conversation) === 'local',
     );
-    return collectSearchableMobileFiles(conversations, localMessages)
+    return recentMobileFiles(conversations, localMessages)
       .filter((file) => !file.mimeType.startsWith('image/'))
       .map((file) => ({
         id: file.id,
@@ -424,14 +470,14 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           <View style={{ width: 28 }} />
           <Text
             style={{
-              fontSize: 16,
+              fontSize: typeScale.callout,
               fontWeight: '600',
               color: themeColors.textPrimary,
             }}
           >
             Add to Chat
           </Text>
-          <Pressable
+          <PressableBox
             onPress={closeSheet}
             testID="add-to-chat-close"
             accessible
@@ -441,7 +487,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             hitSlop={8}
           >
             <X size={20} color={themeColors.textMuted} />
-          </Pressable>
+          </PressableBox>
         </View>
 
         {/* Section 1: Attachment Row */}
@@ -486,7 +532,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               paddingHorizontal: 20,
               marginTop: -8,
               paddingBottom: 16,
-              fontSize: 12,
+              fontSize: typeScale.caption,
               lineHeight: 17,
               color: themeColors.textMuted,
             }}
@@ -503,7 +549,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               style={{
                 paddingHorizontal: 20,
                 paddingBottom: 9,
-                fontSize: 11,
+                fontSize: typeScale.caption,
                 fontWeight: '600',
                 color: themeColors.textMuted,
                 textTransform: 'uppercase',
@@ -522,7 +568,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 accessibilityLiveRegion="polite"
               >
                 <ActivityIndicator size="small" color={themeColors.textMuted} />
-                <Text style={{ fontSize: 13, color: themeColors.textMuted }}>
+                <Text style={{ fontSize: typeScale.footnote, color: themeColors.textMuted }}>
                   Loading your Library
                 </Text>
               </View>
@@ -535,19 +581,31 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                   paddingHorizontal: 20,
                 }}
               >
-                <Text style={{ flex: 1, fontSize: 13, color: themeColors.textSecondary }}>
+                <Text
+                  style={{
+                    flex: 1,
+                    fontSize: typeScale.footnote,
+                    color: themeColors.textSecondary,
+                  }}
+                >
                   Your Library could not load.
                 </Text>
-                <Pressable
+                <PressableBox
                   onPress={loadCloudLibrary}
                   accessibilityRole="button"
                   accessibilityLabel="Try loading your Library again"
                   style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: themeColors.teal }}>
+                  <Text
+                    style={{
+                      fontSize: typeScale.footnote,
+                      fontWeight: '600',
+                      color: themeColors.teal,
+                    }}
+                  >
                     Try again
                   </Text>
-                </Pressable>
+                </PressableBox>
               </View>
             ) : (
               <ScrollView
@@ -557,7 +615,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
               >
                 {libraryPicks.map((pick) => (
-                  <Pressable
+                  <PressableBox
                     key={pick.id}
                     onPress={() => handleAttachFromLibrary(pick)}
                     accessibilityRole="button"
@@ -594,18 +652,26 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text
                         numberOfLines={2}
-                        style={{ color: themeColors.textPrimary, fontSize: 13, fontWeight: '600' }}
+                        style={{
+                          color: themeColors.textPrimary,
+                          fontSize: typeScale.footnote,
+                          fontWeight: '600',
+                        }}
                       >
                         {pick.fileName}
                       </Text>
                       <Text
                         numberOfLines={1}
-                        style={{ color: themeColors.textMuted, fontSize: 11, marginTop: 3 }}
+                        style={{
+                          color: themeColors.textMuted,
+                          fontSize: typeScale.caption,
+                          marginTop: 3,
+                        }}
                       >
                         {pick.subtitle}
                       </Text>
                     </View>
-                  </Pressable>
+                  </PressableBox>
                 ))}
               </ScrollView>
             )}
@@ -650,7 +716,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   fontWeight: '600',
                   color: themeColors.textMuted,
                   letterSpacing: 0,
@@ -703,7 +769,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 <View style={{ paddingTop: 4, paddingBottom: 2 }}>
                   <Text
                     style={{
-                      fontSize: 11,
+                      fontSize: typeScale.caption,
                       fontWeight: '600',
                       color: themeColors.textMuted,
                       textTransform: 'uppercase',
@@ -734,14 +800,14 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <Text
                       testID="image-reference-hint"
                       style={{
-                        fontSize: 11,
+                        fontSize: typeScale.caption,
                         color: themeColors.textMuted,
                         paddingHorizontal: 4,
                         marginTop: 6,
                       }}
                     >
                       {imageModelSupportsReference
-                        ? 'Attach one photo above to edit it with your prompt instead of generating from text.'
+                        ? 'Attach up to 4 photos above: the first is edited with your prompt and the others guide it.'
                         : 'This model generates from text only. Attach a photo and pick an editing model to edit it.'}
                     </Text>
                   ) : null}
@@ -754,7 +820,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <>
                       <Text
                         style={{
-                          fontSize: 11,
+                          fontSize: typeScale.caption,
                           fontWeight: '600',
                           color: themeColors.textMuted,
                           textTransform: 'uppercase',
@@ -782,6 +848,21 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     </>
                   ) : null}
 
+                  {mediaMode === 'image' && imageModelSupportsReference ? (
+                    <MediaOptionRow
+                      label="Transparent background"
+                      hint="Return the image without a background"
+                      selected={imageTransparentBackground}
+                      onPress={() => {
+                        haptic();
+                        setImageTransparentBackground(!imageTransparentBackground);
+                      }}
+                      textColor={themeColors.textPrimary}
+                      mutedColor={themeColors.textMuted}
+                      activeColor={themeColors.teal}
+                    />
+                  ) : null}
+
                   {/* Video output shape. Options come from the shared model
                       catalog, so a model without a published 4k tuple never
                       offers 4k here, and quality is scoped BY aspect because
@@ -791,7 +872,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <>
                       <Text
                         style={{
-                          fontSize: 11,
+                          fontSize: typeScale.caption,
                           fontWeight: '600',
                           color: themeColors.textMuted,
                           textTransform: 'uppercase',
@@ -823,7 +904,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     <>
                       <Text
                         style={{
-                          fontSize: 11,
+                          fontSize: typeScale.caption,
                           fontWeight: '600',
                           color: themeColors.textMuted,
                           textTransform: 'uppercase',
@@ -855,18 +936,69 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                       ))}
                     </>
                   ) : null}
+
+                  {mediaMode === 'video' && videoDurationOptions.length > 1 ? (
+                    <>
+                      <Text
+                        style={{
+                          fontSize: typeScale.caption,
+                          fontWeight: '600',
+                          color: themeColors.textMuted,
+                          textTransform: 'uppercase',
+                          paddingHorizontal: 4,
+                          marginTop: 10,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Length
+                      </Text>
+                      {videoDurationOptions.map((secs) => (
+                        <MediaOptionRow
+                          key={secs}
+                          label={`${secs} seconds`}
+                          selected={secs === videoOutputSelection.durationSecs}
+                          onPress={() => {
+                            haptic();
+                            setVideoDurationSecs(secs);
+                          }}
+                          textColor={themeColors.textPrimary}
+                          mutedColor={themeColors.textMuted}
+                          activeColor={themeColors.teal}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+
+                  {mediaMode === 'video' && videoEstimate ? (
+                    <Text
+                      testID="video-cost-estimate"
+                      accessibilityRole="text"
+                      style={{
+                        fontSize: typeScale.caption,
+                        color: themeColors.textMuted,
+                        paddingHorizontal: 4,
+                        marginTop: 8,
+                      }}
+                    >
+                      {`About ${formatCredits(videoEstimate.credits, {
+                        maximumFractionDigits: videoEstimate.credits < 10 ? 1 : 0,
+                      })} for a ${videoEstimate.durationSecs}-second clip. The final cost settles when it is delivered, and a failed video costs nothing.`}
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
 
               {mediaMode !== 'text' ? (
-                <Pressable
+                <PressableBox
                   onPress={handleBackToText}
                   accessibilityRole="button"
                   accessibilityLabel="Back to text chat"
                   style={{ paddingVertical: 10, paddingHorizontal: 4 }}
                 >
-                  <Text style={{ fontSize: 13, color: themeColors.teal }}>Back to text chat</Text>
-                </Pressable>
+                  <Text style={{ fontSize: typeScale.footnote, color: themeColors.teal }}>
+                    Back to text chat
+                  </Text>
+                </PressableBox>
               ) : null}
             </View>
 
@@ -880,7 +1012,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   fontWeight: '600',
                   color: themeColors.textMuted,
                   textTransform: 'uppercase',
@@ -992,7 +1124,7 @@ function AttachmentCard({
   textColor: string;
 }) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessible
       style={{
@@ -1008,8 +1140,10 @@ function AttachmentCard({
       accessibilityRole="button"
     >
       {icon}
-      <Text style={{ fontSize: 12, fontWeight: '500', color: textColor }}>{label}</Text>
-    </Pressable>
+      <Text style={{ fontSize: typeScale.caption, fontWeight: '500', color: textColor }}>
+        {label}
+      </Text>
+    </PressableBox>
   );
 }
 
@@ -1033,7 +1167,7 @@ function MediaModeRow({
   activeColor: string;
 }) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessible
       accessibilityRole="button"
@@ -1052,15 +1186,40 @@ function MediaModeRow({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
         {icon}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 15, color: active ? activeColor : textColor }}>{label}</Text>
-          <Text style={{ fontSize: 12, color: mutedColor, marginTop: 1 }} numberOfLines={2}>
+          <Text style={{ fontSize: typeScale.body, color: active ? activeColor : textColor }}>
+            {label}
+          </Text>
+          <Text
+            style={{ fontSize: typeScale.caption, color: mutedColor, marginTop: 1 }}
+            numberOfLines={2}
+          >
             {description}
           </Text>
         </View>
       </View>
       {active ? <Check size={18} color={activeColor} /> : null}
-    </Pressable>
+    </PressableBox>
   );
+}
+
+function unitCredits(usd: number): string {
+  const credits = chargeCreditsForMicrousd(Math.ceil(usd * MICROUSD_PER_USD));
+  return formatCredits(credits, { maximumFractionDigits: credits < 10 ? 1 : 0 });
+}
+
+function mediaCreditPrice(meta: ModelMetadata): string | null {
+  const byResolution = Object.values(meta.videoPerSecondCostByResolution ?? {}).filter(
+    (rate): rate is number => typeof rate === 'number' && Number.isFinite(rate),
+  );
+  const perSecond = byResolution.length > 0 ? Math.min(...byResolution) : meta.videoPerSecondCost;
+  if (perSecond !== undefined) {
+    const from = new Set(byResolution).size > 1 ? 'From ' : '';
+    return `${from}${unitCredits(perSecond)} per second`;
+  }
+  if (meta.imagePerImageCost !== undefined) {
+    return `${unitCredits(meta.imagePerImageCost)} per image`;
+  }
+  return null;
 }
 
 function MediaModelRow({
@@ -1079,17 +1238,12 @@ function MediaModelRow({
   activeColor: string;
 }) {
   const meta = getModelMetadataById(modelId);
-  const perSecond = meta?.videoPerSecondCost;
-  const perImage = meta?.imagePerImageCost;
-  const price =
-    perSecond !== undefined
-      ? `$${perSecond}/sec`
-      : perImage !== undefined
-        ? `$${perImage}/image`
-        : (meta?.provider ?? '');
+  const price = meta
+    ? (mediaCreditPrice(meta) ?? providerLabels[meta.provider] ?? meta.provider)
+    : '';
 
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessible
       accessibilityRole="button"
@@ -1106,15 +1260,17 @@ function MediaModelRow({
       }}
     >
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 14, color: selected ? activeColor : textColor }}>
+        <Text style={{ fontSize: typeScale.subhead, color: selected ? activeColor : textColor }}>
           {meta?.name ?? modelId}
         </Text>
         {price ? (
-          <Text style={{ fontSize: 11, color: mutedColor, marginTop: 1 }}>{price}</Text>
+          <Text style={{ fontSize: typeScale.caption, color: mutedColor, marginTop: 1 }}>
+            {price}
+          </Text>
         ) : null}
       </View>
       {selected ? <Check size={16} color={activeColor} /> : null}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -1158,10 +1314,13 @@ function CapabilityRow(props: CapabilityRowProps) {
       {icon}
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <Text style={{ fontSize: 15, color: textColor }}>{label}</Text>
+          <Text style={{ fontSize: typeScale.body, color: textColor }}>{label}</Text>
           {badge && <StatusPill label={badge} tone="danger" />}
         </View>
-        <Text style={{ fontSize: 12, color: mutedColor, marginTop: 1 }} numberOfLines={2}>
+        <Text
+          style={{ fontSize: typeScale.caption, color: mutedColor, marginTop: 1 }}
+          numberOfLines={2}
+        >
           {description}
         </Text>
       </View>
@@ -1193,7 +1352,7 @@ function CapabilityRow(props: CapabilityRowProps) {
     );
 
     return (
-      <Pressable
+      <PressableBox
         onPress={props.onStatusPress}
         disabled={!props.onStatusPress}
         accessible
@@ -1203,7 +1362,7 @@ function CapabilityRow(props: CapabilityRowProps) {
         accessibilityHint={props.onStatusPress ? 'Opens availability details' : undefined}
       >
         {rowContent}
-      </Pressable>
+      </PressableBox>
     );
   }
 
@@ -1247,7 +1406,9 @@ function StatusPill({
         borderRadius: 5,
       }}
     >
-      <Text style={{ fontSize: 10, fontWeight: '600', color: palette.fg }}>{label}</Text>
+      <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: palette.fg }}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -1272,7 +1433,7 @@ function ConfigLink({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessible
       style={{
@@ -1288,7 +1449,7 @@ function ConfigLink({
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         {icon}
-        <Text style={{ fontSize: 15, color: textColor }}>{label}</Text>
+        <Text style={{ fontSize: typeScale.body, color: textColor }}>{label}</Text>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         {pending ? (
@@ -1301,7 +1462,7 @@ function ConfigLink({
           <>
             {value &&
               (statusTone === 'neutral' ? (
-                <Text style={{ fontSize: 13, color: mutedColor }}>{value}</Text>
+                <Text style={{ fontSize: typeScale.footnote, color: mutedColor }}>{value}</Text>
               ) : (
                 <StatusPill label={value} tone={statusTone} />
               ))}
@@ -1309,7 +1470,7 @@ function ConfigLink({
           </>
         )}
       </View>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -1331,7 +1492,7 @@ function MediaOptionRow({
   activeColor: string;
 }) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessible
       accessibilityRole="button"
@@ -1348,12 +1509,16 @@ function MediaOptionRow({
       }}
     >
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 14, color: selected ? activeColor : textColor }}>{label}</Text>
+        <Text style={{ fontSize: typeScale.subhead, color: selected ? activeColor : textColor }}>
+          {label}
+        </Text>
         {hint ? (
-          <Text style={{ fontSize: 11, color: mutedColor, marginTop: 1 }}>{hint}</Text>
+          <Text style={{ fontSize: typeScale.caption, color: mutedColor, marginTop: 1 }}>
+            {hint}
+          </Text>
         ) : null}
       </View>
       {selected ? <Check size={16} color={activeColor} /> : null}
-    </Pressable>
+    </PressableBox>
   );
 }

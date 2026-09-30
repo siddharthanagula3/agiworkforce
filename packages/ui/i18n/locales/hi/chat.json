@@ -74,7 +74,15 @@
     "runtimeConsent": "यह ऐप आपके खाते से AI का उपयोग करना चाहता है। हर अनुरोध आपके प्लान के उपयोग में गिना जाता है।",
     "runtimeConsentConnectors": "यह ऐप आपके खाते से AI का उपयोग करना और {{apps}} में डेटा पढ़ना या बदलना चाहता है। यह देखता है कि वे ऐप क्या लौटाते हैं, और हर अनुरोध आपके प्लान के उपयोग में गिना जाता है।",
     "runtimeAllow": "अनुमति दें",
-    "runtimeDecline": "अनुमति न दें"
+    "runtimeDecline": "अनुमति न दें",
+    "runtimeConnectorsLoading": "आपके कनेक्टेड ऐप्स जाँचे जा रहे हैं",
+    "runtimeConnectorNotConnected": "कनेक्ट नहीं है। ऐप के इस हिस्से का उपयोग करने के लिए इसे सेटिंग्स, कनेक्टर्स में कनेक्ट करें।",
+    "runtimeToolNeedsApproval": "हर उपयोग से पहले पूछता है, इसलिए यह ऐप इसका उपयोग नहीं कर सकता।",
+    "runtimeToolBlocked": "आपकी सेटिंग्स में ब्लॉक है।",
+    "runtimeManageConnectors": "कनेक्टेड ऐप्स",
+    "saveCopy": "मेरी चैट में एक प्रति सहेजें",
+    "saveCopyBusy": "कॉपी हो रहा है…",
+    "saveCopyFailed": "यह आर्टिफ़ैक्ट कॉपी नहीं किया जा सका।"
   },
   "sidebar": {
     "activeConversation": "सक्रिय बातचीत",
@@ -441,10 +449,22 @@
     "videoModeAttachments_other": "वीडियो जनरेशन केवल आपके प्रॉम्प्ट से काम करता है। अटैच की गई फ़ाइलें वीडियो मॉडल को नहीं भेजी जातीं। अगर आप ये फ़ाइलें चैट मॉडल को भेजना चाहते हैं, तो पहले वीडियो मोड से बाहर निकलें।",
     "viewSources_one": "{{count}} स्रोत देखें",
     "viewSources_other": "{{count}} स्रोत देखें",
+    "folderFilesLeftOut_one": "{{folder}} की {{count}} फ़ाइल संलग्न नहीं की गई। इसे किसी स्थानीय फ़ोल्डर से संलग्न करें।",
+    "folderFilesLeftOut_other": "{{folder}} की {{count}} फ़ाइलें संलग्न नहीं की गईं। उन्हें किसी स्थानीय फ़ोल्डर से संलग्न करें।",
     "savedMemoriesUsed_one": "{{count}} सहेजी गई मेमोरी का उपयोग किया",
     "savedMemoriesUsed_other": "{{count}} सहेजी गई मेमोरी का उपयोग किया",
     "moreSavedMemories_one": "{{count}} और",
-    "moreSavedMemories_other": "{{count}} और"
+    "moreSavedMemories_other": "{{count}} और",
+    "filesCreated_one": "{{count}} फ़ाइल बनाई गई",
+    "filesCreated_other": "{{count}} फ़ाइलें बनाई गईं",
+    "foundSources_one": "{{count}} स्रोत मिला",
+    "foundSources_other": "{{count}} स्रोत मिले",
+    "mapPreviewPlaces_one": "{{count}} स्थान के साथ मानचित्र पूर्वावलोकन",
+    "mapPreviewPlaces_other": "{{count}} स्थानों के साथ मानचित्र पूर्वावलोकन",
+    "lines_one": "{{count}} पंक्ति",
+    "lines_other": "{{count}} पंक्तियाँ",
+    "words_one": "{{count}} शब्द",
+    "words_other": "{{count}} शब्द"
   },
   "markdownTable": {
     "label": "तालिका",
@@ -466,7 +486,9 @@
     "expand": "कोड बड़ा करें",
     "close": "बड़ा कोड बंद करें",
     "codeTitle": "{{language}} कोड",
-    "codeBlockLabel": "{{language}} कोड ब्लॉक"
+    "codeBlockLabel": "{{language}} कोड ब्लॉक",
+    "edit": "संपादित करें",
+    "editLabel": "इस कोड को चैट के बगल में संपादित करें"
   },
   "streaming": {
     "reconnecting": "पुनः कनेक्ट हो रहा है…",

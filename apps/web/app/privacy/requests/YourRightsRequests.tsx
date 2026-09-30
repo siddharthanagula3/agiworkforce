@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Spinner } from '@agiworkforce/ui';
 
 type RequestStatus = 'received' | 'in_progress' | 'resolved' | 'rejected';
 
@@ -39,7 +40,7 @@ function formatDate(value: string | null): string {
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'signed-out' }
-  | { kind: 'failed' }
+  | { kind: 'loadError' }
   | { kind: 'ready'; requests: OwnRequest[] };
 
 export function YourRightsRequests({ refreshKey }: { refreshKey: number }) {
@@ -55,26 +56,34 @@ export function YourRightsRequests({ refreshKey }: { refreshKey: number }) {
           return;
         }
         if (!response.ok) {
-          setState({ kind: 'failed' });
+          setState({ kind: 'loadError' });
           return;
         }
         const body = (await response.json()) as { requests?: OwnRequest[] };
         if (!cancelled) setState({ kind: 'ready', requests: body.requests ?? [] });
       })
       .catch(() => {
-        if (!cancelled) setState({ kind: 'failed' });
+        if (!cancelled) setState({ kind: 'loadError' });
       });
     return () => {
       cancelled = true;
     };
   }, [refreshKey]);
 
-  if (state.kind === 'loading' || state.kind === 'signed-out') return null;
+  if (state.kind === 'signed-out') return null;
+  if (state.kind === 'loading') {
+    return (
+      <p className="agi-ds-prose flex items-center gap-2" data-size="sm" role="status">
+        <Spinner size="sm" />
+        <span>Loading your requests</span>
+      </p>
+    );
+  }
 
   return (
     <div className="agi-ds-stack" data-gap="tight">
       <h3 className="agi-ds-h3">Your requests</h3>
-      {state.kind === 'failed' ? (
+      {state.kind === 'loadError' ? (
         <p className="agi-ds-prose" data-size="sm" role="alert">
           Your requests could not be loaded. Reload the page to try again.
         </p>

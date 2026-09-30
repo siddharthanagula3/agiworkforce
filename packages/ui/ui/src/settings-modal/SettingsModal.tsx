@@ -152,9 +152,29 @@ function ConnectorStatusCell({
   if (connection) {
     if (connection.status === 'warning') {
       return (
-        <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-          <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-          {connection.warningLabel ?? 'Connection issue'}
+        <span className="flex items-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+            <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            {connection.warningLabel ?? 'Connection issue'}
+          </span>
+          {connection.needsReauthorization && canConnect ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onConnect();
+              }}
+              disabled={mutating}
+              aria-busy={mutating || undefined}
+              aria-label={`Reconnect ${connector.name}`}
+              className={cn(
+                'rounded-lg border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50',
+                FOCUS_RING,
+              )}
+            >
+              {mutating ? 'Connecting…' : 'Reconnect'}
+            </button>
+          ) : null}
         </span>
       );
     }
@@ -1141,7 +1161,7 @@ function ConnectorsPanel({
                     )}
                   >
                     {t(`connectors.tab.${tab.key}`, tab.label)}
-                    <span className="ml-1 font-normal">{tabCounts[tab.key]}</span>
+                    <span className="ms-1 font-normal">{tabCounts[tab.key]}</span>
                   </button>
                 ))}
               </div>
@@ -1218,7 +1238,7 @@ function ConnectorsPanel({
             )
           ) : (
             <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
-              <table className="w-full table-fixed border-collapse text-left">
+              <table className="w-full table-fixed border-collapse text-start">
                 <thead>
                   <tr className="border-b border-border/60 text-caption uppercase tracking-wider text-muted-foreground">
                     <th scope="col" className="w-[62%] px-3 py-2 font-semibold sm:w-[46%]">
@@ -1395,7 +1415,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         </p>
       ) : (
         <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
-          <table className="w-full table-fixed border-collapse text-left">
+          <table className="w-full table-fixed border-collapse text-start">
             <thead>
               <tr className="border-b border-border/60 text-caption uppercase tracking-wider text-muted-foreground">
                 <th
@@ -1430,7 +1450,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                   Status
                 </th>
                 {hasActions && (
-                  <th scope="col" className="w-[24%] px-3 py-2 text-right font-semibold sm:w-[20%]">
+                  <th scope="col" className="w-[24%] px-3 py-2 text-end font-semibold sm:w-[20%]">
                     Actions
                   </th>
                 )}
@@ -1508,7 +1528,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         </div>
                       ) : null}
                       {skill.error ? (
-                        <p role="alert" className="mt-1 text-right text-caption text-danger">
+                        <p role="alert" className="mt-1 text-end text-caption text-danger">
                           {skill.error}
                         </p>
                       ) : null}
@@ -1645,7 +1665,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         </div>
       ) : (
         <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
-          <table className="w-full table-fixed border-collapse text-left">
+          <table className="w-full table-fixed border-collapse text-start">
             <thead>
               <tr className="border-b border-border/60 text-caption uppercase tracking-wider text-muted-foreground">
                 <th
@@ -1673,7 +1693,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                   </th>
                 )}
                 {hasActions && (
-                  <th scope="col" className="w-[40%] px-3 py-2 text-right font-semibold sm:w-[20%]">
+                  <th scope="col" className="w-[40%] px-3 py-2 text-end font-semibold sm:w-[20%]">
                     Actions
                   </th>
                 )}
@@ -1765,7 +1785,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         ) : null}
                       </div>
                       {plugin.error ? (
-                        <p role="alert" className="mt-1 text-right text-caption text-danger">
+                        <p role="alert" className="mt-1 text-end text-caption text-danger">
                           {plugin.error}
                         </p>
                       ) : null}
@@ -1855,7 +1875,7 @@ function NavButton({
       type="button"
       onClick={() => onClick(itemKey)}
       className={cn(
-        'flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm transition-colors md:w-full md:whitespace-normal',
+        'flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-start text-sm transition-colors md:w-full md:whitespace-normal',
         FOCUS_RING,
         isActive
           ? 'bg-accent text-accent-foreground font-medium'
@@ -1869,7 +1889,7 @@ function NavButton({
       {badge && badge.count > 0 && (
         <span
           className={cn(
-            'ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5',
+            'ms-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5',
             'bg-destructive text-caption font-semibold leading-none text-destructive-foreground',
           )}
           // The count alone ("2") tells a screen-reader user nothing about what
@@ -2157,10 +2177,10 @@ export function SettingsModal({
       >
         <nav
           aria-label={t('modal.navigation', 'Settings navigation')}
-          className="relative flex w-full shrink-0 flex-col border-b border-border/60 py-3 md:w-[220px] md:border-b-0 md:border-r md:pb-5 md:pt-7"
+          className="relative flex w-full shrink-0 flex-col border-b border-border/60 py-3 md:w-[220px] md:border-b-0 md:border-e md:pb-5 md:pt-7"
         >
           {/* Title */}
-          <DialogTitle className="mb-3 px-4 pr-12 text-base font-semibold text-foreground md:pr-4">
+          <DialogTitle className="mb-3 px-4 pe-12 text-base font-semibold text-foreground md:pe-4">
             {title ?? t('modal.title', 'Settings')}
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -2186,7 +2206,7 @@ export function SettingsModal({
               aria-hidden="true"
               data-testid="settings-nav-scroll-fade-top"
               className={cn(
-                'pointer-events-none sticky left-0 top-0 z-[var(--z-control)] -mb-6 hidden h-6 w-full bg-gradient-to-b from-background to-transparent transition-opacity md:block',
+                'pointer-events-none sticky start-0 top-0 z-[var(--z-control)] -mb-6 hidden h-6 w-full bg-gradient-to-b from-background to-transparent transition-opacity md:block',
                 canScrollUp ? 'opacity-100' : 'opacity-0',
               )}
             />
@@ -2245,7 +2265,7 @@ export function SettingsModal({
               aria-hidden="true"
               data-testid="settings-nav-scroll-fade-bottom"
               className={cn(
-                'pointer-events-none sticky bottom-0 left-0 z-[var(--z-control)] -mt-6 hidden h-6 w-full bg-gradient-to-t from-background to-transparent transition-opacity md:block',
+                'pointer-events-none sticky bottom-0 start-0 z-[var(--z-control)] -mt-6 hidden h-6 w-full bg-gradient-to-t from-background to-transparent transition-opacity md:block',
                 canScrollDown ? 'opacity-100' : 'opacity-0',
               )}
             />

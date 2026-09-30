@@ -151,6 +151,12 @@ pub async fn run_voice_mode(
         eprintln!("  {}", "Voice mode requires a working microphone.".dimmed());
         return Ok(());
     }
+    if !accept_recording_notice(&backend)? {
+        output::print_info(
+            "Voice mode needs your agreement before it records. Nothing was recorded.",
+        );
+        return Ok(());
+    }
 
     eprintln!();
     eprintln!(
@@ -193,28 +199,33 @@ pub async fn run_voice_mode(
             }
         };
 
-        // Transcribe
-        let spinner = output::create_spinner("Transcribing...");
-        let transcript = transcribe(
-            &backend,
-            &recording,
-            voice_lang,
-            &privacy_mode,
-            voice_cloud_opt_in,
-        )
-        .await;
-        spinner.finish_and_clear();
-
-        let text = match transcript {
-            Ok(t) if t.trim().is_empty() => {
-                eprintln!("  {}", "(no speech detected)".dimmed());
-                continue;
+        let text = loop {
+            let spinner = output::create_spinner("Transcribing...");
+            let transcript = transcribe(
+                &backend,
+                &recording,
+                voice_lang,
+                &privacy_mode,
+                voice_cloud_opt_in,
+            )
+            .await;
+            spinner.finish_and_clear();
+            match transcript {
+                Ok(t) if t.trim().is_empty() => {
+                    eprintln!("  {}", "(no speech detected)".dimmed());
+                    break None;
+                }
+                Ok(t) => break Some(t),
+                Err(e) => {
+                    output::print_error(&format!("Transcription failed: {:#}", e));
+                    if !offer_transcription_retry()? {
+                        break None;
+                    }
+                }
             }
-            Ok(t) => t,
-            Err(e) => {
-                output::print_error(&format!("Transcription failed: {:#}", e));
-                continue;
-            }
+        };
+        let Some(text) = text else {
+            continue;
         };
 
         // Show transcribed text and ask for confirmation
@@ -311,6 +322,9 @@ pub async fn dictate(session: &AgentSession, voice_lang: &str) -> Result<Option<
         );
     }
     check_audio_device()?;
+    if !accept_recording_notice(&backend)? {
+        return Ok(None);
+    }
     eprintln!(
         "  {} Press {} to dictate into the composer, {} to cancel.",
         ts::accent_header("dictate:"),
@@ -324,10 +338,72 @@ pub async fn dictate(session: &AgentSession, voice_lang: &str) -> Result<Option<
     let Some(recording) = record_audio()? else {
         return Ok(None);
     };
-    let spinner = output::create_spinner("Transcribing...");
-    let transcript = transcribe(&backend, &recording, voice_lang, &privacy_mode, opt_in).await;
-    spinner.finish_and_clear();
-    Ok(Some(transcript?.trim().to_string()).filter(|text| !text.is_empty()))
+    loop {
+        let spinner = output::create_spinner("Transcribing...");
+        let transcript = transcribe(&backend, &recording, voice_lang, &privacy_mode, opt_in).await;
+        spinner.finish_and_clear();
+        match transcript {
+            Ok(text) => return Ok(Some(text.trim().to_string()).filter(|text| !text.is_empty())),
+            Err(error) => {
+                output::print_error(&format!("Transcription failed: {error:#}"));
+                if !offer_transcription_retry()? {
+                    return Ok(None);
+                }
+            }
+        }
+    }
+}
+
+fn offer_transcription_retry() -> Result<bool> {
+    eprintln!(
+        "  {}",
+        "[R to retry this recording, any other key to drop it]".dimmed()
+    );
+    terminal::enable_raw_mode().context("Failed to enable raw terminal mode")?;
+    let retry = loop {
+        if event::poll(Duration::from_millis(100))? {
+            if let Event::Key(key_event) = event::read()? {
+                if key_event.kind != KeyEventKind::Press {
+                    continue;
+                }
+                break matches!(key_event.code, KeyCode::Char('r') | KeyCode::Char('R'));
+            }
+        }
+    };
+    terminal::disable_raw_mode().context("Failed to disable raw terminal mode")?;
+    Ok(retry)
+}
+
+const RECORDING_NOTICE_FILE: &str = "voice-recording-notice";
+
+fn accept_recording_notice(backend: &TranscriptionBackend) -> Result<bool> {
+    let destination = match backend {
+        TranscriptionBackend::Managed(_) => "your AGI Workforce account, which turns it into text",
+        TranscriptionBackend::OpenAiApi => "OpenAI's Whisper API with your OPENAI_API_KEY",
+        TranscriptionBackend::LocalBinary(_) => {
+            "the whisper program on this computer; it does not leave this computer"
+        }
+        TranscriptionBackend::None => return Ok(false),
+    };
+    let marker = crate::config::CliConfig::config_dir()?.join(RECORDING_NOTICE_FILE);
+    if std::fs::read_to_string(&marker).is_ok_and(|accepted| accepted.trim() == destination) {
+        return Ok(true);
+    }
+    eprintln!(
+        "  {} The microphone records only after you press SPACE, until you let go or press ESC. \
+         Each recording is sent to {destination}, and the text is shown to you before \
+         anything is sent to the assistant.",
+        ts::accent_header("voice:")
+    );
+    eprintln!("  {}", "[ENTER to agree, ESC to cancel]".dimmed());
+    let agreed = matches!(wait_for_confirmation()?, Confirmation::Send);
+    if agreed {
+        if let Some(parent) = marker.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&marker, destination)?;
+    }
+    Ok(agreed)
 }
 
 // ---------------------------------------------------------------------------
@@ -878,7 +954,13 @@ async fn transcribe(
 
     let result = match backend {
         TranscriptionBackend::Managed(token) => {
-            transcribe_managed(&wav_path, language, token).await
+            match crate::tier_cache::capability_refusal(
+                crate::tier_cache::VOICE_CAPABILITY,
+                "Voice input",
+            ) {
+                Some(refusal) => Err(anyhow::anyhow!(refusal)),
+                None => transcribe_managed(&wav_path, language, token).await,
+            }
         }
         TranscriptionBackend::OpenAiApi => transcribe_openai_api(&wav_path, language).await,
         TranscriptionBackend::LocalBinary(binary_path) => {

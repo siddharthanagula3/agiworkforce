@@ -90,7 +90,7 @@ export function ApprovalHistoryPanel() {
               </div>
               <time
                 dateTime={entry.createdAt}
-                className="shrink-0 text-right text-xs text-muted-foreground"
+                className="shrink-0 text-end text-xs text-muted-foreground"
               >
                 {formatTimestamp(entry.createdAt)}
               </time>

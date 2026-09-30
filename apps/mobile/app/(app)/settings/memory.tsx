@@ -40,7 +40,9 @@ import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
+import { useThemeColors, type ColorScheme, elevation, zIndex, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { fetchWorkspaceOverview } from '@/src/features/team/service';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -66,6 +68,10 @@ function formatCount(n: number): string {
   return `${n} memories`;
 }
 
+const CAPABILITIES_NAMESPACE = 'capabilities';
+
+type AccountMemoryCapability = 'memory' | 'searchPastChats' | 'generateFromHistory';
+
 export default function MemoryScreen() {
   const router = useRouter();
   const colors = useThemeColors();
@@ -90,13 +96,70 @@ export default function MemoryScreen() {
   const memoryEnabled = currentIsCloud ? cloudMemoryEnabled : localMemoryEnabled;
   const referencePastChats = currentIsCloud ? cloudReferencePastChats : localReferencePastChats;
   const generateMemoryFromHistory = currentIsCloud ? cloudGenerateMemory : localGenerateMemory;
-  const setMemoryEnabled = currentIsCloud ? setCloudMemoryEnabled : setLocalMemoryEnabled;
+  const saveAccountCapability = useCallback(
+    (
+      key: AccountMemoryCapability,
+      value: boolean,
+      previous: boolean,
+      apply: (enabled: boolean) => void,
+    ) => {
+      apply(value);
+      patchPreferenceNamespace(CAPABILITIES_NAMESPACE, { [key]: value }).catch(() => {
+        apply(previous);
+        Alert.alert(
+          'Not saved',
+          'This memory setting could not be saved to your account. Check your connection and try again.',
+        );
+      });
+    },
+    [],
+  );
+  const setMemoryEnabled = currentIsCloud
+    ? (value: boolean) =>
+        saveAccountCapability('memory', value, cloudMemoryEnabled, setCloudMemoryEnabled)
+    : setLocalMemoryEnabled;
   const setReferencePastChats = currentIsCloud
-    ? setCloudReferencePastChats
+    ? (value: boolean) =>
+        saveAccountCapability(
+          'searchPastChats',
+          value,
+          cloudReferencePastChats,
+          setCloudReferencePastChats,
+        )
     : setLocalReferencePastChats;
   const setGenerateMemoryFromHistory = currentIsCloud
-    ? setCloudGenerateMemory
+    ? (value: boolean) =>
+        saveAccountCapability(
+          'generateFromHistory',
+          value,
+          cloudGenerateMemory,
+          setCloudGenerateMemory,
+        )
     : setLocalGenerateMemory;
+
+  useEffect(() => {
+    if (!currentIsCloud || !clerkUserId) return;
+    let cancelled = false;
+    fetchPreferenceNamespace(CAPABILITIES_NAMESPACE)
+      .then((settings) => {
+        if (cancelled) return;
+        const stored = settings as Partial<Record<AccountMemoryCapability, unknown>>;
+        const cloud = useCloudSettingsStore.getState();
+        if (typeof stored.memory === 'boolean') cloud.setMemoryEnabled(stored.memory);
+        else if (!cloud.memoryPolicyInitialized)
+          useCloudSettingsStore.setState({ memoryEnabled: false });
+        if (typeof stored.searchPastChats === 'boolean') {
+          cloud.setReferencePastChats(stored.searchPastChats);
+        }
+        if (typeof stored.generateFromHistory === 'boolean') {
+          cloud.setGenerateMemoryFromHistory(stored.generateFromHistory);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [clerkUserId, currentIsCloud]);
 
   const [searchText, setSearchText] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('All');
@@ -384,7 +447,7 @@ export default function MemoryScreen() {
         accessibilityRole="header"
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           fontWeight: '700',
           textTransform: 'uppercase',
           paddingTop: 8,
@@ -471,17 +534,17 @@ export default function MemoryScreen() {
 
       {/* Count subtitle */}
       <View className="px-4 mb-2 gap-0.5">
-        <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
           {loading ? 'Loading…' : formatCount(entries.length)}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
           {describeMemoryScope(currentIsCloud, workspaceName)}
         </Text>
       </View>
 
       {/* Error banner */}
       {error && (
-        <Animated.View entering={FadeIn.duration(200)} className="mx-4 mb-2">
+        <Animated.View entering={FadeIn.duration(motion.quick)} className="mx-4 mb-2">
           <View
             className="rounded-lg px-3 py-2"
             style={{
@@ -490,7 +553,7 @@ export default function MemoryScreen() {
               borderColor: colors.dangerBorder,
             }}
           >
-            <Text style={{ color: colors.agentError, fontSize: 12 }}>{error}</Text>
+            <Text style={{ color: colors.agentError, fontSize: typeScale.caption }}>{error}</Text>
           </View>
         </Animated.View>
       )}
@@ -519,7 +582,7 @@ export default function MemoryScreen() {
           <Search size={16} color={colors.textMuted} />
           <TextInput
             className="flex-1 py-0"
-            style={{ color: colors.textPrimary, fontSize: 14, letterSpacing: 0 }}
+            style={{ color: colors.textPrimary, fontSize: typeScale.subhead, letterSpacing: 0 }}
             placeholder="Search memories..."
             placeholderTextColor={colors.textMuted}
             value={searchText}
@@ -567,7 +630,7 @@ export default function MemoryScreen() {
                   <Text
                     style={{
                       color: isActive ? colors.textPrimary : colors.textSecondary,
-                      fontSize: 12,
+                      fontSize: typeScale.caption,
                       fontWeight: '500',
                     }}
                   >
@@ -625,7 +688,7 @@ export default function MemoryScreen() {
 
       {/* Floating action button */}
       {!addSheetOpen ? (
-        <View style={{ position: 'absolute', right: 24, bottom: 24, zIndex: 10 }}>
+        <View style={{ position: 'absolute', right: 24, bottom: 24, zIndex: zIndex.control }}>
           <Pressable
             onPress={handleAddPress}
             accessibilityRole="button"
@@ -639,11 +702,7 @@ export default function MemoryScreen() {
               backgroundColor: colors.black,
               borderWidth: 1,
               borderColor: colors.border,
-              shadowColor: colors.black,
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.18,
-              shadowRadius: 16,
-              elevation: 6,
+              ...elevation.e3,
             }}
           >
             <Plus size={24} color={colors.white} />
@@ -719,7 +778,10 @@ function EmptyState({
       >
         {hasSearch ? 'No results found' : isPinnedFilter ? 'No pinned memories' : 'No memories yet'}
       </Text>
-      <Text className="text-center leading-5" style={{ color: colors.textMuted, fontSize: 14 }}>
+      <Text
+        className="text-center leading-5"
+        style={{ color: colors.textMuted, fontSize: typeScale.subhead }}
+      >
         {hasSearch
           ? 'Try a different search term'
           : isPinnedFilter

@@ -130,7 +130,7 @@ export function WorkspaceDataRegion() {
       {lookup.isLoading ? <Spinner size="sm" aria-label="Loading the data region" /> : null}
       {lookup.error ? (
         <p role="alert" className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
-          {lookup.error.message}
+          {toUserMessage(lookup.error, 'The data region could not be loaded.')}
         </p>
       ) : null}
       {lookup.data?.kind === 'refused' ? (
@@ -205,7 +205,7 @@ export function WorkspaceDataRegion() {
 
       {change.error ? (
         <p role="alert" className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
-          {change.error.message}
+          {toUserMessage(change.error, 'The data region could not be changed.')}
         </p>
       ) : null}
     </section>

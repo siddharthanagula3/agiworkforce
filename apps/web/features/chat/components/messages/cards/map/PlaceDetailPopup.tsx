@@ -96,7 +96,7 @@ export function PlaceDetailPopup({
           type="button"
           onClick={onClose}
           aria-label="Close place details"
-          className="-mr-1 -mt-1 grid size-7 shrink-0 place-items-center rounded-md text-[color:var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+          className="-me-1 -mt-1 grid size-7 shrink-0 place-items-center rounded-md text-[color:var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
         >
           <X className="size-4" aria-hidden="true" />
         </button>

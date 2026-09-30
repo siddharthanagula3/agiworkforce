@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Check, Monitor, Moon, Sun } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -6,6 +7,7 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import type { ThemeMode } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 
 const OPTIONS: Array<{ mode: ThemeMode; label: string; description: string; icon: typeof Sun }> = [
@@ -37,7 +39,7 @@ export default function AppearanceScreen() {
         {OPTIONS.map(({ mode, label, description, icon: Icon }, index) => {
           const selected = themeMode === mode;
           return (
-            <Pressable
+            <PressableBox
               key={mode}
               onPress={() => setThemeMode(mode)}
               accessibilityRole="button"
@@ -55,15 +57,19 @@ export default function AppearanceScreen() {
             >
               <Icon size={19} color={selected ? colors.teal : colors.textSecondary} />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+                <Text
+                  style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+                >
                   {label}
                 </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+                <Text
+                  style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+                >
                   {description}
                 </Text>
               </View>
               {selected ? <Check size={18} color={colors.teal} /> : null}
-            </Pressable>
+            </PressableBox>
           );
         })}
       </SettingsGroup>

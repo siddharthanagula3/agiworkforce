@@ -16,14 +16,3 @@ nothing is left.
 | platform | partial | Named agents exist only as local files in the CLI (.agi/agents); the hosted platform has no agent definition store, and the legacy /api/agents/execute route answers "retired". | persistence |
 
 Code: `apps/cli/src/agents.rs:331-335`, `apps/web/app/api/agents/execute/route.ts:8-9`
-
-## S92.24: Subagent coordinator.
-
-- Done when: A coordinator spawns subagents for sub-tasks, bounds their depth and fan-out, and merges their results.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Subagents run only in the CLI runtime (task tool, subagent_v2); the hosted loop has depth/fan-out budget constants but no subagent spawning. | handler |
-
-Code: `apps/cli/src/agent/chat.rs:1710-1718`, `apps/web/lib/services/cloud-agent-budget.ts:20-21`

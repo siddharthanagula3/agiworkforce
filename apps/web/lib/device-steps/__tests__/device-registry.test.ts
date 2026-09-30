@@ -4,7 +4,11 @@ vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { DesktopHostDeclaration } from '@agiworkforce/local-runtime-contract';
-import { DEVICE_STEP_TOOLS, deviceStepCapability } from '@agiworkforce/local-runtime-contract';
+import {
+  DEVICE_STEP_TOOLS,
+  deviceStepCapability,
+  deviceStepScope,
+} from '@agiworkforce/local-runtime-contract';
 import {
   STEP_CAPABILITY_ADVERTISEMENTS,
   clearDeviceForRemoteSteps,
@@ -187,6 +191,33 @@ describe('clearing a device for remote steps', () => {
     ).toBe('withdrawn');
   });
 
+  it('clears a phone for its own calendar steps without remote work switched on', () => {
+    const phone = {
+      ...declaration(['calendar.read', 'calendar.write']),
+      platform: 'ios',
+      roots: [],
+    };
+    const device = registration({
+      surface: 'mobile',
+      remoteEnabled: false,
+      capabilities: {
+        browser: false,
+        computerUse: false,
+        localModels: false,
+        localMcp: false,
+        remoteControl: false,
+      },
+    });
+
+    expect(clearDeviceForRemoteSteps(phone, device).decision).toBe('ready');
+    expect(clearDeviceForRemoteSteps(phone, { ...device, presence: 'sleeping' }).decision).toBe(
+      'wait',
+    );
+    expect(clearDeviceForRemoteSteps(phone, { ...device, authenticated: false }).decision).toBe(
+      'withdrawn',
+    );
+  });
+
   it('withdraws a screen step from a device that no longer reports computer use', () => {
     const device = registration({
       capabilities: {
@@ -265,8 +296,14 @@ describe('clearing a device for remote steps', () => {
     });
   });
 
-  it('names an advertisement for every permission a device step can require', () => {
-    const required = [...new Set(DEVICE_STEP_TOOLS.map((tool) => deviceStepCapability(tool)))];
+  it('names an advertisement for every permission a desktop step can require', () => {
+    const required = [
+      ...new Set(
+        DEVICE_STEP_TOOLS.filter((tool) => deviceStepScope(tool) !== 'phone').map((tool) =>
+          deviceStepCapability(tool),
+        ),
+      ),
+    ];
     const unmapped = required.filter(
       (capability) => STEP_CAPABILITY_ADVERTISEMENTS[capability] === undefined,
     );
@@ -368,5 +405,66 @@ describe('stopping remote work on one device', () => {
     expect(clearDeviceForRemoteSteps(declaration(), stopped)).toMatchObject({
       decision: 'withdrawn',
     });
+  });
+});
+
+describe('carrying an unlink to the signaling relay', () => {
+  it('queues the relay revoke for retry when the relay cannot be reached', async () => {
+    vi.resetModules();
+    const enqueueJob = vi.fn(async () => ({ id: 'job-1', status: 'queued', created: true }));
+    vi.doMock('@/lib/jobs/job-service', () => ({ enqueueJob }));
+    vi.stubEnv('SIGNALING_HTTP_URL', 'https://relay.test');
+    vi.stubEnv('SIGNALING_INTERNAL_SECRET', 'secret');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('relay down');
+      }),
+    );
+    const { propagateDeviceRevocation } = await import('../device-registry');
+    const db = { query: vi.fn(async () => []), execute: vi.fn(async () => 1) };
+
+    const delivery = await propagateDeviceRevocation(db as unknown as DatabaseAdapter, {
+      userId: 'user-1',
+      deviceId: DEVICE_ID,
+      reason: 'unlinked',
+    });
+
+    expect(delivery.signalingReachable).toBe(false);
+    expect(enqueueJob).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        kind: 'webhooks.signaling-device-revoke',
+        userId: 'user-1',
+        payload: expect.objectContaining({ deviceId: DEVICE_ID, reason: 'unlinked' }),
+        idempotencyKey: expect.stringMatching(/^device-revoke:.+:unlinked:\d{4}-/),
+      }),
+    );
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.doUnmock('@/lib/jobs/job-service');
+  });
+});
+
+describe('a queued relay revoke that outlived its device', () => {
+  it('is stale once remote work is back on, or an unlinked device reports in again', async () => {
+    const { revocationIsStale } = await import('../device-registry');
+    const at = '2026-09-29T10:00:00.000Z';
+    expect(revocationIsStale('unlinked', at, null)).toBe(false);
+    expect(revocationIsStale('unlinked', at, { remote_enabled: true, last_seen_at: null })).toBe(
+      true,
+    );
+    expect(
+      revocationIsStale('unlinked', at, {
+        remote_enabled: false,
+        last_seen_at: '2026-09-29T10:05:00.000Z',
+      }),
+    ).toBe(true);
+    expect(
+      revocationIsStale('remote_work_stopped', at, {
+        remote_enabled: false,
+        last_seen_at: '2026-09-29T10:05:00.000Z',
+      }),
+    ).toBe(false);
   });
 });

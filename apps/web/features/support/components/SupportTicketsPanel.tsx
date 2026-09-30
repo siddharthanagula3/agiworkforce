@@ -9,9 +9,12 @@ import {
   MAX_TICKET_MESSAGE_CHARS,
   MAX_TICKET_SUBJECT_CHARS,
   TICKET_STATUS_LABEL,
+  TICKET_STATUS_MEANING,
+  type OpenedSupportTicket,
   type SupportTicket,
+  type SupportTicketThread,
   type TicketStatus,
-} from '@/lib/support/tickets/types';
+} from '@agiworkforce/cloud-contracts/support';
 import type { DiagnosticsExport } from '@/lib/support/diagnostics/export';
 import {
   listSupportTickets,
@@ -20,8 +23,6 @@ import {
   readSupportTicket,
   replyToSupportTicket,
   reviewSupportDiagnostics,
-  type OpenedSupportTicket,
-  type SupportTicketThread,
 } from '../lib/ticket-client';
 
 const CARD_CLASS = 'rounded-lg border border-border bg-background p-3';
@@ -31,13 +32,6 @@ const PRIMARY_BUTTON_CLASS =
   'inline-flex min-h-9 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50';
 const GHOST_BUTTON_CLASS =
   'inline-flex min-h-9 items-center justify-center rounded-md border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50';
-
-const STATUS_MEANING: Record<TicketStatus, string> = {
-  open: 'Raised. Nobody on the support team has replied yet.',
-  in_progress: 'The support team has picked this up.',
-  resolved: 'Answered. Replying here reopens it if it is not actually fixed.',
-  closed: 'Finished. Raise a new ticket and reference this one to carry on.',
-};
 
 const STATUS_CLASS: Record<TicketStatus, string> = {
   open: 'text-info-text',
@@ -184,7 +178,7 @@ function NewTicketForm({
             disabled={reviewing}
             onClick={() => void reviewDiagnostics()}
           >
-            {reviewing ? <Spinner size="sm" className="mr-2" /> : null}
+            {reviewing ? <Spinner size="sm" className="me-2" /> : null}
             {diagnostics ? 'Refresh diagnostics' : 'Review diagnostics'}
           </button>
           {diagnostics ? (
@@ -292,7 +286,7 @@ function TicketThreadView({
           <h3 className="text-h5 text-foreground">{ticket.subject}</h3>
           <StatusChip status={ticket.status} />
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">{STATUS_MEANING[ticket.status]}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{TICKET_STATUS_MEANING[ticket.status]}</p>
         <p className="mt-2 whitespace-pre-wrap text-[13px] text-foreground">{ticket.message}</p>
         <p className="mt-2 text-xs text-muted-foreground">
           Raised {formatDateTime(ticket.createdAt)} · priority {ticket.priority}
@@ -506,7 +500,7 @@ export function SupportTicketsPanel() {
                   <button
                     type="button"
                     onClick={() => void open(ticket.id)}
-                    className={`${CARD_CLASS} w-full text-left transition-colors hover:bg-muted`}
+                    className={`${CARD_CLASS} w-full text-start transition-colors hover:bg-muted`}
                   >
                     <span className="flex flex-wrap items-baseline justify-between gap-2">
                       <span className="text-[13px] font-medium text-foreground">

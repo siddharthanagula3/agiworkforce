@@ -1,4 +1,7 @@
 import { api } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
+
+const SHARED_LINK_TITLE_MAX_LENGTH = 200;
 
 export interface SharedLink {
   token: string;
@@ -48,5 +51,38 @@ export async function fetchSharedLinks(): Promise<SharedLink[]> {
 }
 
 export async function revokeSharedLink(token: string): Promise<void> {
-  await api.delete(`/api/share/${encodeURIComponent(token)}`);
+  try {
+    await api.delete(`/api/share/${encodeURIComponent(token)}`);
+  } catch (error) {
+    if (error instanceof ApiHttpError && error.status === 404) return;
+    throw error;
+  }
+}
+
+export interface SharedLinkMessage {
+  role: string;
+  content: string;
+  createdAt?: string;
+}
+
+export async function createSharedLink(input: {
+  conversationId: string;
+  title: string;
+  modelId: string | null;
+  messages: SharedLinkMessage[];
+}): Promise<SharedLink> {
+  const created = toSharedLink(
+    await api.post<unknown>('/api/share', {
+      conversation_id: input.conversationId,
+      title: (input.title.trim() || 'Shared Session').slice(0, SHARED_LINK_TITLE_MAX_LENGTH),
+      ...(input.modelId ? { model_id: input.modelId } : {}),
+      messages: input.messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+        ...(message.createdAt ? { created_at: message.createdAt } : {}),
+      })),
+    }),
+  );
+  if (!created) throw new Error('The share link could not be read. Try again.');
+  return created;
 }

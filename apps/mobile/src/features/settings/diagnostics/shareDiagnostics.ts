@@ -6,11 +6,30 @@ import {
   makeDirectoryAsync,
   writeAsStringAsync,
 } from 'expo-file-system/legacy';
+import { Alert } from 'react-native';
 import * as Sharing from 'expo-sharing';
 
 import { exportMobileDiagnostics, type DiagnosticEvent } from './diagnosticsBundle';
 
 const DIAGNOSTICS_DIR = `${cacheDirectory}diagnostics/`;
+
+const CONSENT_TITLE = 'Share diagnostics?';
+const CONSENT_BODY =
+  'The file lists this app version, your device and OS version, language, time zone, screen size, the screen you are on and recent app events such as errors. It holds no messages, files or passwords. It is sent to AGI Workforce to remove personal details, then you choose where to share it.';
+
+export function confirmMobileDiagnosticsShare(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      CONSENT_TITLE,
+      CONSENT_BODY,
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Continue', onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
+  });
+}
 
 export async function shareMobileDiagnostics(
   input: {

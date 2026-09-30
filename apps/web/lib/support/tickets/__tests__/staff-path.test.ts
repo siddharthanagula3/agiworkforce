@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
+  PINO_LEVELS: vi.fn(),
+  loggerOptions: vi.fn(),
+  resolveLogLevel: vi.fn(),
+  shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -164,6 +168,7 @@ function run(sql: string, params: unknown[]): Row[] {
 }
 
 vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
   getNeonDb: () => ({ query: async (sql: string, params: unknown[] = []) => run(sql, params) }),
 }));
 
@@ -186,7 +191,7 @@ import {
   replyToTicket,
   replyToTicketAsStaff,
 } from '../service';
-import { STAFF_QUEUE_PAGE_SIZE, STAFF_QUEUE_STATUSES } from '../types';
+import { STAFF_QUEUE_PAGE_SIZE, STAFF_QUEUE_STATUSES } from '@agiworkforce/cloud-contracts/support';
 
 const CUSTOMER = 'user_customer';
 const OPERATOR = 'user_operator';

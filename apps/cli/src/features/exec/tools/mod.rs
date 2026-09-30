@@ -80,6 +80,7 @@ impl ToolResult {
         let output = self.output.trim_start();
         output.starts_with("<web_fetch_result untrusted=\"true\"")
             || output.starts_with("<skill_result untrusted=\"true\"")
+            || output.starts_with("<document_result untrusted=\"true\"")
     }
 
     /// This result expressed as the cross-surface tool primitive (decision
@@ -308,6 +309,7 @@ pub struct ToolExecOptions {
     /// This is carried per invocation for the same reason as `privacy_mode`:
     /// the app-server can host a workspace that is not the process cwd.
     pub workspace_root: Option<std::path::PathBuf>,
+    pub additional_workspace_roots: Vec<std::path::PathBuf>,
     /// The session's connected MCP tools, for `tool_search` to load a schema
     /// the initial list deferred. Per invocation, like the two fields above:
     /// concurrent sessions connect to different servers.
@@ -446,6 +448,7 @@ pub fn build_read_only_registry() -> registry::ToolRegistry {
 #[allow(dead_code)]
 pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result<ToolResult> {
     let opts = ToolExecOptions {
+        additional_workspace_roots: Vec::new(),
         mcp_tool_definitions: None,
         require_confirmation,
         auto_approve_safe: false,
@@ -459,8 +462,108 @@ pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result
     execute_tool_with_opts(call, &opts).await
 }
 
+async fn file_mutation_targets(
+    tool: &str,
+    args: &HashMap<String, String>,
+    workspace_root: Option<&std::path::Path>,
+) -> std::result::Result<Vec<(std::path::PathBuf, std::path::PathBuf)>, String> {
+    if !crate::platform::runtime::tool_catalog::is_file_edit_tool(tool) || tool == "lsp_format" {
+        return Ok(Vec::new());
+    }
+    let cwd = std::env::current_dir().map_err(|reason| reason.to_string())?;
+    let root = workspace_root.unwrap_or(&cwd);
+    let root = if tool == "resolve_conflict" {
+        crate::project_scope::resolve_project_scope(root)
+    } else {
+        root.to_path_buf()
+    };
+    let raw = if tool == "apply_patch" {
+        let patch = args.get("patch").ok_or("Missing: patch")?;
+        file_ops::patch_target_paths_with_cwd(patch, &root).await?;
+        crate::apply_patch::parsed_patch_targets(patch)
+            .await
+            .map_err(|reason| reason.to_string())?
+    } else {
+        let path = args.get("path").ok_or("Missing required argument: path")?;
+        let path = std::path::PathBuf::from(crate::path_security::expand_home(path));
+        if tool == "resolve_conflict" && path.is_absolute() {
+            return Err("path must be relative to the repository root".into());
+        }
+        vec![path]
+    };
+    raw.into_iter()
+        .map(|path| {
+            let requested = root.join(path);
+            let text = requested.to_str().ok_or("Non-UTF-8 file path")?;
+            let resolved =
+                crate::path_security::validate_workspace_write_path_with_cwd(text, &root)?;
+            Ok((requested, resolved))
+        })
+        .collect()
+}
+
 pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
+    let permissions = crate::permissions::PermissionStore::load()?;
+    execute_tool_with_opts_and_permissions(call, opts, &permissions).await
+}
+
+fn saved_permission_commands(tool_name: &str, args: &HashMap<String, String>) -> Vec<String> {
+    match tool_name {
+        "run_command" => args.get("command").cloned().into_iter().collect(),
+        "powershell" => args
+            .get("command")
+            .map(|command| {
+                vec![
+                    command.clone(),
+                    format!("powershell -NoProfile -NonInteractive -Command {command}"),
+                ]
+            })
+            .unwrap_or_default(),
+        "command_output" => Vec::new(),
+        "enter_worktree" | "exit_worktree" => git::worktree_permission_command(tool_name, args)
+            .into_iter()
+            .collect(),
+        _ if crate::runtime::git_tools::git_tool_spec(tool_name).is_some() => {
+            vec![crate::runtime::git_tools::git_tool_target(tool_name, args)]
+        }
+        _ => Vec::new(),
+    }
+}
+
+async fn execute_tool_with_opts_and_permissions(
+    call: &ToolCall,
+    opts: &ToolExecOptions,
+    permissions: &crate::permissions::PermissionStore,
+) -> Result<ToolResult> {
+    crate::path_security::scope_workspace_paths(
+        opts.workspace_root.clone(),
+        opts.additional_workspace_roots.clone(),
+        execute_tool_with_scoped_permissions(call, opts, permissions),
+    )
+    .await
+}
+
+async fn execute_tool_with_scoped_permissions(
+    call: &ToolCall,
+    opts: &ToolExecOptions,
+    permissions: &crate::permissions::PermissionStore,
+) -> Result<ToolResult> {
     let canonical_name = canonical_tool_name(&call.name);
+    let mut scoped_call = call.clone();
+    if matches!(
+        canonical_name,
+        "write_file" | "edit_file" | "multiedit" | "notebook_edit"
+    ) {
+        if let (Some(root), Some(path)) = (opts.workspace_root.as_deref(), call.args.get("path")) {
+            let expanded = std::path::PathBuf::from(crate::path_security::expand_home(path));
+            if !expanded.is_absolute() {
+                scoped_call
+                    .args
+                    .insert("path".into(), root.join(expanded).display().to_string());
+            }
+        }
+    }
+    let call = &scoped_call;
 
     // Network-capable built-ins are a trust-boundary operation, even when
     // their catalog classification is read-only. Local means no hidden API or
@@ -481,12 +584,58 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         });
     }
 
+    let pending_input = if canonical_name == "command_output" {
+        match (
+            call.args.get("input").filter(|input| !input.is_empty()),
+            call.args
+                .get("id")
+                .and_then(|id| crate::terminals::find(id.trim())),
+        ) {
+            (Some(input), Some(command))
+                if command.state() == crate::terminals::CommandState::Running =>
+            {
+                match crate::terminals::prepare_input(command, input).await {
+                    Ok(input) => Some(input),
+                    Err(error) => {
+                        return Ok(ToolResult {
+                            tool_name: canonical_name.into(),
+                            success: false,
+                            output: error.to_string(),
+                        })
+                    }
+                }
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
+
     let pre_approved = (opts.auto_approve_safe
         && is_catalog_read_only_tool(canonical_name)
         && !crate::platform::runtime::tool_catalog::reads_a_private_surface(canonical_name))
         || (opts.auto_approve_edits
             && crate::platform::runtime::tool_catalog::is_file_edit_tool(canonical_name));
     let mut require_confirm = opts.require_confirmation && !pre_approved;
+    let permission_commands = pending_input
+        .as_ref()
+        .map(|input| vec![input.cumulative_input().to_string()])
+        .unwrap_or_else(|| saved_permission_commands(canonical_name, &call.args));
+    if opts.require_confirmation
+        && permission_commands.iter().any(|command| {
+            if canonical_name == "powershell" {
+                permissions.denies_powershell_command(command)
+            } else {
+                permissions.check_command(command) == Some(false)
+            }
+        })
+    {
+        return Ok(ToolResult {
+            tool_name: canonical_name.into(),
+            success: false,
+            output: "Command is denied by saved permissions and did not run.".into(),
+        });
+    }
     // Set when the user approved this exact call under the policy prompt, so the
     // trust gate below does not ask a second time for one command.
     let mut approved_this_call = false;
@@ -494,8 +643,23 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         let policy = crate::platform::policy::PolicyEngine::load_layered(workspace_root)?;
         if policy.has_rules() {
             let primary_argument = policy_primary_argument(canonical_name, &call.args);
+            let resolution = policy.resolve(canonical_name, &primary_argument);
+            let denied_by = match resolution.layer {
+                Some(crate::platform::policy::PolicyLayer::Managed) => {
+                    "your organization's managed policy".to_string()
+                }
+                Some(crate::platform::policy::PolicyLayer::User) => {
+                    "the policy rules in your user config".to_string()
+                }
+                _ => format!("{}/.agiworkforce/policy.toml", workspace_root.display()),
+            };
+            let reason = resolution
+                .reason
+                .as_deref()
+                .map(|reason| format!(" {reason}"))
+                .unwrap_or_default();
             let decision = effective_workspace_policy_decision(
-                policy.resolve(canonical_name, &primary_argument),
+                resolution,
                 workspace_policy_is_trusted(workspace_root),
             );
             match decision {
@@ -504,8 +668,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
                         tool_name: canonical_name.to_string(),
                         success: false,
                         output: format!(
-                            "Tool `{canonical_name}` is denied by {}/.agiworkforce/policy.toml and was not run.",
-                            workspace_root.display()
+                            "Tool `{canonical_name}` is denied by {denied_by} and was not run.{reason}"
                         ),
                     });
                 }
@@ -513,17 +676,24 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
                     require_confirm = false;
                 }
                 crate::platform::policy::PolicyDecision::Ask => {
+                    let approval_argument = if canonical_name == "command_output" {
+                        call.args.get("id").cloned().unwrap_or_default()
+                    } else {
+                        primary_argument.clone()
+                    };
                     let request = ApprovalRequest::new(
                         ApprovalRequestKind::WorkspacePolicy {
                             tool_name: canonical_name.to_string(),
-                            primary_argument: primary_argument.clone(),
+                            primary_argument: approval_argument.clone(),
                         },
                         format!("Workspace policy requires approval for `{canonical_name}`"),
                         vec![
                             format!("workspace: {}", workspace_root.display()),
-                            format!("argument: {primary_argument}"),
+                            format!("argument: {approval_argument}"),
                         ],
-                    );
+                    )
+                    .with_tool_subject(canonical_name, serde_json::to_value(&call.args)?)
+                    .requiring_explicit_decision();
                     let allowed = if let Some(decision) =
                         request_approval(opts.approval_callback.as_ref(), request).await
                     {
@@ -556,6 +726,65 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         }
     }
 
+    if opts.require_confirmation
+        && !approved_this_call
+        && (pending_input.is_some()
+            || permission_commands.iter().any(|command| {
+                if canonical_name == "powershell" {
+                    permissions.asks_before_powershell(command)
+                } else {
+                    permissions.asks_before(command)
+                }
+            }))
+    {
+        let summary = if pending_input.is_some() {
+            "Allow sending input to this running command?".into()
+        } else {
+            format!("Saved permissions require approval for `{canonical_name}`")
+        };
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: if pending_input.is_some() {
+                    format!(
+                        "Input to {}",
+                        call.args.get("id").map(String::as_str).unwrap_or("command")
+                    )
+                } else {
+                    permission_commands.join("\n")
+                },
+            },
+            summary.clone(),
+            if pending_input.is_some() {
+                vec!["Send the input in this tool call to the running command".into()]
+            } else {
+                permission_commands
+                    .iter()
+                    .map(|command| describe_command(command))
+                    .collect()
+            },
+        )
+        .with_tool_subject(canonical_name, serde_json::to_value(&call.args)?)
+        .requiring_explicit_decision();
+        let allowed = match request_approval(opts.approval_callback.as_ref(), request).await {
+            Some(decision) => approval_allows(decision),
+            None if !std::io::stdin().is_terminal() => false,
+            None => Confirm::new()
+                .with_prompt(summary)
+                .default(false)
+                .interact()
+                .unwrap_or(false),
+        };
+        if !allowed {
+            return Ok(ToolResult {
+                tool_name: canonical_name.into(),
+                success: false,
+                output: "Command was not approved under its saved Ask rule and did not run.".into(),
+            });
+        }
+        require_confirm = false;
+        approved_this_call = true;
+    }
+
     if let Some(workspace_root) = opts.workspace_root.as_deref() {
         if let Some(refusal) = untrusted_shell_refusal(
             canonical_name,
@@ -567,6 +796,119 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         .await
         {
             return Ok(refusal);
+        }
+    }
+
+    let targets =
+        match file_mutation_targets(canonical_name, &call.args, opts.workspace_root.as_deref())
+            .await
+        {
+            Ok(targets) => targets,
+            Err(output) => {
+                return Ok(ToolResult {
+                    tool_name: canonical_name.into(),
+                    success: false,
+                    output,
+                })
+            }
+        };
+    if matches!(
+        canonical_name,
+        "write_file" | "edit_file" | "multiedit" | "notebook_edit"
+    ) {
+        if let Some((_, resolved)) = targets.first() {
+            scoped_call
+                .args
+                .insert("path".into(), resolved.display().to_string());
+        }
+    }
+    let call = &scoped_call;
+    if opts.require_confirmation {
+        let protected: Vec<_> = targets
+            .iter()
+            .filter(|(requested, resolved)| {
+                crate::path_security::is_protected_path(requested)
+                    || crate::path_security::is_protected_path(resolved)
+            })
+            .collect();
+        if !protected.is_empty() {
+            let operation = match canonical_name {
+                "write_file" => crate::permissions::FilePermissionOperation::Write,
+                "multiedit" => crate::permissions::FilePermissionOperation::MultiEdit,
+                "apply_patch" => crate::permissions::FilePermissionOperation::Patch,
+                _ => crate::permissions::FilePermissionOperation::Edit,
+            };
+            let permissions = crate::permissions::PermissionStore::load()?;
+            if targets
+                .iter()
+                .any(|(_, path)| permissions.check_file(operation, path) == Some(false))
+            {
+                return Ok(ToolResult {
+                    tool_name: canonical_name.into(),
+                    success: false,
+                    output: "Protected file change is denied by saved permissions.".into(),
+                });
+            }
+            let mut paths: Vec<_> = targets
+                .iter()
+                .flat_map(|(requested, path)| [requested.clone(), path.clone()])
+                .collect();
+            paths.sort();
+            paths.dedup();
+            let mut details: Vec<_> = targets
+                .iter()
+                .map(|(requested, path)| {
+                    let protected = crate::path_security::is_protected_path(requested)
+                        || crate::path_security::is_protected_path(path);
+                    format!(
+                        "{} (resolved: {}, protected: {protected})",
+                        requested.display(),
+                        path.display()
+                    )
+                })
+                .collect();
+            let summary = format!(
+                "Allow `{canonical_name}` to change protected paths: {}?",
+                protected
+                    .iter()
+                    .map(|(requested, _)| requested.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            details.push(format!(
+                "Proposed changes:\n{}",
+                serde_json::to_string_pretty(&call.args)?
+            ));
+            let preview =
+                crate::terminal_text::sanitize_terminal_text(&details.join("\n")).to_string();
+            let request = ApprovalRequest::new(
+                ApprovalRequestKind::Patch { files: paths },
+                summary.clone(),
+                details,
+            )
+            .with_tool_subject(canonical_name, serde_json::to_value(&call.args)?);
+            let allowed = match request_approval(opts.approval_callback.as_ref(), request).await {
+                Some(decision) => approval_allows(decision),
+                None if !std::io::stdin().is_terminal() => false,
+                None => {
+                    eprintln!("{preview}");
+                    Confirm::new()
+                        .with_prompt(
+                            crate::terminal_text::sanitize_terminal_text(&summary).as_ref(),
+                        )
+                        .default(false)
+                        .interact()
+                        .unwrap_or(false)
+                }
+            };
+            if !allowed {
+                return Ok(ToolResult {
+                    tool_name: canonical_name.into(),
+                    success: false,
+                    output: "Protected file change was not approved and did not run.".into(),
+                });
+            }
+            require_confirm = false;
         }
     }
 
@@ -588,13 +930,46 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             output: reason,
         });
     }
+    // The workspace's website rules bind the signed-in browser as they bind
+    // web_fetch; web_fetch and web_search apply them where they run.
+    if canonical_name == "browser_navigate" {
+        if let Some(reason) = match call.args.get("url") {
+            Some(url) => web::workspace_site_refusal(url).await,
+            None => None,
+        } {
+            return Ok(ToolResult {
+                tool_name: canonical_name.to_string(),
+                success: false,
+                output: reason,
+            });
+        }
+    }
+
+    let pinned_browser_args;
+    let browser_args: &HashMap<String, String> = if canonical_name == "browser_fill_form" {
+        match pin_active_browser_tab(&call.args).await {
+            Ok(args) => {
+                pinned_browser_args = args;
+                &pinned_browser_args
+            }
+            Err(output) => {
+                return Ok(ToolResult {
+                    tool_name: canonical_name.to_string(),
+                    success: false,
+                    output,
+                });
+            }
+        }
+    } else {
+        &call.args
+    };
 
     let boundary_gated = match canonical_name {
         "web_fetch" => opts.require_confirmation,
         _ => require_confirm,
     };
     if boundary_gated {
-        if let Some(request) = trust_boundary_approval(canonical_name, &call.args) {
+        if let Some(request) = trust_boundary_approval(canonical_name, browser_args) {
             let allowed =
                 match request_approval(opts.approval_callback.as_ref(), request.clone()).await {
                     Some(decision) => approval_allows(decision),
@@ -622,8 +997,14 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             execute_run_command(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
         "command_output" => {
-            execute_command_output(&call.args, require_confirm, opts.approval_callback.as_ref())
-                .await
+            execute_command_output(
+                &call.args,
+                pending_input,
+                require_confirm,
+                approved_this_call,
+                opts.approval_callback.as_ref(),
+            )
+            .await
         }
         "command_stop" => execute_command_stop(&call.args).await,
         // read_file / search_files / list_directory / glob / grep_files are
@@ -637,13 +1018,19 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             .await
         }
         browser if crate::platform::runtime::tool_catalog::is_browser_tool(browser) => {
-            execute_browser_command(browser, &call.args).await
+            execute_browser_command(browser, browser_args).await
         }
         "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
         "generate_image" => execute_generate_image(&call.args, opts).await,
         "apply_patch" => {
-            execute_apply_patch(&call.args, require_confirm, opts.approval_callback.as_ref()).await
+            execute_apply_patch(
+                &call.args,
+                require_confirm,
+                opts.approval_callback.as_ref(),
+                opts.workspace_root.as_deref(),
+            )
+            .await
         }
         "resolve_conflict" => {
             execute_resolve_conflict(
@@ -691,7 +1078,13 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             execute_multiedit(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
         "powershell" => {
-            execute_powershell(&call.args, require_confirm, opts.approval_callback.as_ref()).await
+            execute_powershell(
+                &call.args,
+                require_confirm,
+                opts.approval_callback.as_ref(),
+                opts.workspace_root.as_deref(),
+            )
+            .await
         }
         "notebook_edit" => execute_notebook_edit(&call.args, require_confirm).await,
         "todo_read" => execute_todo_read(opts.workspace_root.as_deref()).await,
@@ -721,12 +1114,18 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             )
             .await
         }
-        "lsp_definition" => execute_lsp_definition(&call.args).await,
-        "lsp_hover" => execute_lsp_hover(&call.args).await,
+        "lsp_definition" => {
+            execute_lsp_definition(&call.args, opts.workspace_root.as_deref()).await
+        }
+        "lsp_hover" => execute_lsp_hover(&call.args, opts.workspace_root.as_deref()).await,
         "lsp_diagnostics" => execute_lsp_diagnostics(&call.args).await,
-        "lsp_completion" => execute_lsp_completion(&call.args).await,
-        "lsp_document_symbols" => execute_lsp_document_symbols(&call.args).await,
-        "lsp_format" => execute_lsp_format(&call.args).await,
+        "lsp_completion" => {
+            execute_lsp_completion(&call.args, opts.workspace_root.as_deref()).await
+        }
+        "lsp_document_symbols" => {
+            execute_lsp_document_symbols(&call.args, opts.workspace_root.as_deref()).await
+        }
+        "lsp_format" => execute_lsp_format(&call.args, opts.workspace_root.as_deref()).await,
         // The typed Git API: one tool per operation, dispatched from the same
         // spec table the catalog is built from, so a tool cannot be advertised
         // without reaching an operation.
@@ -833,6 +1232,86 @@ fn domain_rule_refusal(tool_name: &str, args: &HashMap<String, String>) -> Optio
     }
 }
 
+const MAX_APPROVAL_FIELD_VALUE_CHARS: usize = 300;
+
+fn fill_form_fields(args: &HashMap<String, String>) -> Vec<(String, String)> {
+    let Some(Value::Array(fields)) = args
+        .get("fields")
+        .and_then(|fields| serde_json::from_str::<Value>(fields).ok())
+    else {
+        return Vec::new();
+    };
+    fields
+        .iter()
+        .map(|field| {
+            let text = |key: &str| {
+                field
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            let value = text("value");
+            let shown = if value.chars().count() > MAX_APPROVAL_FIELD_VALUE_CHARS {
+                format!(
+                    "{}…",
+                    value
+                        .chars()
+                        .take(MAX_APPROVAL_FIELD_VALUE_CHARS)
+                        .collect::<String>()
+                )
+            } else {
+                value
+            };
+            (text("selector"), shown)
+        })
+        .collect()
+}
+
+async fn pin_active_browser_tab(
+    args: &HashMap<String, String>,
+) -> std::result::Result<HashMap<String, String>, String> {
+    let identity =
+        crate::browser_bridge::ClientIdentity::for_cli(std::env::current_dir().ok(), None);
+    let tabs = crate::browser_bridge::run_command(
+        "browser_list_tabs",
+        Value::Object(serde_json::Map::new()),
+        identity,
+    )
+    .await
+    .map_err(|failure| failure.user_message())?;
+    let active = tabs
+        .as_array()
+        .and_then(|tabs| {
+            tabs.iter()
+                .find(|tab| tab.get("active").and_then(Value::as_bool) == Some(true))
+        })
+        .ok_or_else(|| {
+            "No active tab is open in the paired Chrome, so no fields were filled.".to_string()
+        })?;
+    let tab_id = active
+        .get("tabId")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "The paired Chrome did not name its active tab.".to_string())?;
+    let text = |key: &str| {
+        active
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    if let Some(reason) = crate::permissions::url_blocked_by_domain_rule(&text("url")) {
+        return Err(format!(
+            "The active tab is on a blocked site, so no fields were filled. {reason}"
+        ));
+    }
+    let mut pinned = args.clone();
+    pinned.insert("tabId".to_string(), tab_id.to_string());
+    pinned.insert("tabTitle".to_string(), text("title"));
+    pinned.insert("tabUrl".to_string(), text("url"));
+    Ok(pinned)
+}
+
 fn trust_boundary_approval(
     tool_name: &str,
     args: &HashMap<String, String>,
@@ -872,6 +1351,34 @@ fn trust_boundary_approval(
         "browser_navigate" => computer_use(
             argument("url").unwrap_or_default(),
             "The agent wants to open an address in your signed-in Chrome.",
+        ),
+        "browser_find" => computer_use(
+            "active tab".to_string(),
+            "The agent wants to list the buttons, links and fields of the page open in your signed-in Chrome.",
+        ),
+        "browser_fill_form" => {
+            let tab = argument("tabUrl").unwrap_or_else(|| "active tab".to_string());
+            let mut detail = vec![format!(
+                "tab: {} ({tab})",
+                argument("tabTitle").unwrap_or_default()
+            )];
+            detail.extend(
+                fill_form_fields(args)
+                    .into_iter()
+                    .map(|(selector, value)| format!("{selector}: {value}")),
+            );
+            Some(ApprovalRequest::new(
+                ApprovalRequestKind::ComputerUse {
+                    action: tool_name.to_string(),
+                    target: tab,
+                },
+                "The agent wants to fill in these fields in your signed-in Chrome.",
+                detail,
+            ))
+        }
+        "browser_history" => computer_use(
+            argument("direction").unwrap_or_default(),
+            "The agent wants to go back or forward in your signed-in Chrome.",
         ),
         "browser_console" => computer_use(
             "active tab".to_string(),
@@ -1075,6 +1582,12 @@ fn policy_primary_argument(tool_name: &str, args: &HashMap<String, String>) -> S
         "write_file" | "edit_file" | "notebook_edit" | "read_file" | "resolve_conflict" => {
             &["path", "file_path"]
         }
+        "lsp_definition"
+        | "lsp_hover"
+        | "lsp_diagnostics"
+        | "lsp_completion"
+        | "lsp_document_symbols"
+        | "lsp_format" => &["file"],
         "web_fetch" => &["url"],
         "web_search" | "search_files" | "grep_files" => &["query", "pattern"],
         "advisor" | "ask_user" => &["question"],
@@ -1091,7 +1604,7 @@ pub(crate) fn workspace_policy_is_trusted(workspace_root: &std::path::Path) -> b
     crate::trust::is_trusted(workspace_root)
 }
 
-fn effective_workspace_policy_decision(
+pub(crate) fn effective_workspace_policy_decision(
     resolution: crate::platform::policy::PolicyResolution,
     workspace_is_trusted: bool,
 ) -> crate::platform::policy::PolicyDecision {
@@ -1122,6 +1635,18 @@ async fn untrusted_shell_refusal(
     let command = match canonical_name {
         "run_command" | "powershell" => args.get("command").cloned().unwrap_or_default(),
         "command_output" => args.get("input").filter(|input| !input.is_empty())?.clone(),
+        "lsp_definition"
+        | "lsp_hover"
+        | "lsp_completion"
+        | "lsp_document_symbols"
+        | "lsp_format" => {
+            format!(
+                "Start a language server for {}",
+                args.get("file")
+                    .map(String::as_str)
+                    .unwrap_or("the requested file")
+            )
+        }
         _ => return None,
     };
     let status = crate::trust::status_for(workspace_root);
@@ -1170,7 +1695,7 @@ pub(crate) async fn request_approval(
             crate::terminal_style::warning("Denied by PermissionRequest hook:"),
             crate::terminal_text::sanitize_terminal_text(&reason)
         );
-        let (tool_name, arguments) = approval_subject(&request);
+        let (tool_name, arguments) = approval_audit_subject(&request);
         crate::approval_audit::record_approval(
             tool_name,
             arguments.to_string(),
@@ -1181,7 +1706,7 @@ pub(crate) async fn request_approval(
         return Some(ApprovalDecision::Deny);
     }
     let callback = approval_callback?;
-    let (tool_name, arguments) = approval_subject(&request);
+    let (tool_name, arguments) = approval_audit_subject(&request);
     let decision = callback(request).await;
     let (recorded, reason) = match decision {
         ApprovalDecision::AllowOnce => (crate::approval_audit::ApprovalDecision::Approved, None),
@@ -1286,7 +1811,34 @@ fn approval_request_tool(kind: &ApprovalRequestKind) -> (&'static str, serde_jso
     }
 }
 
+fn approval_audit_subject(request: &ApprovalRequest) -> (String, serde_json::Value) {
+    if approval_subject(request).0 == "command_output" {
+        return (
+            "command_output".into(),
+            serde_json::json!({ "id": request.tool_subject.as_ref().and_then(|(_, args)| args.get("id")) }),
+        );
+    }
+
+    let (fallback_name, targets) = approval_request_tool(&request.kind);
+    let name = request
+        .tool_subject
+        .as_ref()
+        .map(|(name, _)| name.clone())
+        .unwrap_or_else(|| approval_subject(request).0);
+    (
+        if name.is_empty() {
+            fallback_name.into()
+        } else {
+            name
+        },
+        targets,
+    )
+}
+
 fn approval_subject(request: &ApprovalRequest) -> (String, serde_json::Value) {
+    if let Some(subject) = &request.tool_subject {
+        return subject.clone();
+    }
     let (fallback_name, tool_args) = approval_request_tool(&request.kind);
     let tool_name = match &request.kind {
         ApprovalRequestKind::WorkspacePolicy { tool_name, .. } => tool_name.clone(),
@@ -1461,6 +2013,23 @@ fn browser_command_args(
             }
         }
         "browser_navigate" => copy_string("url"),
+        "browser_find" => copy_string("query"),
+        "browser_history" => copy_string("direction"),
+        "browser_fill_form" => {
+            if let Some(tab_id) = args
+                .get("tabId")
+                .and_then(|value| value.trim().parse::<i64>().ok())
+            {
+                out.insert("tabId".to_string(), Value::from(tab_id));
+            }
+            if let Some(fields) = args.get("fields") {
+                out.insert(
+                    "fields".to_string(),
+                    serde_json::from_str::<Value>(fields)
+                        .unwrap_or_else(|_| Value::String(fields.clone())),
+                );
+            }
+        }
         "browser_console" => {
             copy_string("pattern");
             copy_string("level");
@@ -1522,6 +2091,22 @@ async fn execute_browser_command(
                     success: false,
                     output: format!("The active tab is on a blocked site, so its content was not read. {reason}"),
                 });
+            }
+            // The page a command ends on, after any redirect or navigation the
+            // click or load caused, is held to the workspace's website rules too.
+            for landed in ["url", "origin"]
+                .into_iter()
+                .filter_map(|key| value.get(key).and_then(Value::as_str))
+            {
+                if let Some(reason) = web::workspace_site_refusal(landed).await {
+                    return Ok(ToolResult {
+                        tool_name: command.to_string(),
+                        success: false,
+                        output: format!(
+                            "The active tab is on a site your workspace does not allow, so its content was not read. {reason}"
+                        ),
+                    });
+                }
             }
             let mut output = match &value {
                 Value::String(text) => text.clone(),
@@ -1653,10 +2238,25 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
     })
 }
 
+fn powershell_command_safety(
+    command: &str,
+    permission_command: &str,
+) -> crate::safety::CommandSafety {
+    use crate::safety::{classify_command, CommandSafety};
+    if classify_command(command) == CommandSafety::Dangerous
+        || classify_command(permission_command) == CommandSafety::Dangerous
+    {
+        CommandSafety::Dangerous
+    } else {
+        CommandSafety::Unknown
+    }
+}
+
 async fn execute_powershell(
     args: &HashMap<String, String>,
     require_confirmation: bool,
     approval_callback: Option<&ApprovalCallback>,
+    workspace_root: Option<&std::path::Path>,
 ) -> Result<ToolResult> {
     let command = match args.get("command") {
         Some(command) => command.clone(),
@@ -1671,7 +2271,13 @@ async fn execute_powershell(
 
     // The same containment run_command has: a directory inside the workspace,
     // checked before anything is asked or run.
-    let working_dir = match bash::command_working_dir(args) {
+    let workspace = workspace_root
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or(std::env::current_dir()?);
+    let working_dir = match crate::powershell_tool::working_directory(
+        args.get("working_dir").map(String::as_str),
+        &workspace,
+    ) {
         Ok(dir) => dir,
         Err(reason) => {
             return Ok(ToolResult {
@@ -1701,7 +2307,11 @@ async fn execute_powershell(
 
     if require_confirmation {
         let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
-        match perms.check_command(&permission_command) {
+        match bash::saved_command_decision(
+            &perms,
+            &permission_command,
+            powershell_command_safety(&command, &permission_command),
+        ) {
             Some(true) => {}
             Some(false) => {
                 return Ok(ToolResult {
@@ -1770,12 +2380,12 @@ async fn execute_powershell(
 
     let request = crate::powershell_tool::PowerShellRequest {
         command,
-        working_dir: working_dir.map(|dir| dir.display().to_string()),
+        working_dir: Some(working_dir.display().to_string()),
         timeout_sec,
         safe_mode,
     };
 
-    match crate::powershell_tool::execute(&request).await {
+    match crate::powershell_tool::execute_for_workspace(&request, &workspace).await {
         Ok(output) => {
             let mut combined = String::new();
             if !output.stdout.is_empty() {
@@ -1978,7 +2588,7 @@ mod tests {
             outside.path().display().to_string(),
         );
 
-        let result = execute_powershell(&args, true, None)
+        let result = execute_powershell(&args, true, None, None)
             .await
             .expect("tool result");
 
@@ -2012,6 +2622,7 @@ mod tests {
 
     fn byok_options(callback: ApprovalCallback, auto_approve_safe: bool) -> ToolExecOptions {
         ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: true,
             auto_approve_safe,
@@ -2021,6 +2632,34 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Byok,
             workspace_root: None,
         }
+    }
+
+    #[tokio::test]
+    async fn file_dispatch_uses_only_the_calling_sessions_directory_grants() {
+        let workspace = tempfile::tempdir().unwrap();
+        let extra = tempfile::tempdir().unwrap();
+        let file = extra.path().join("ordinary.txt");
+        std::fs::write(&file, "controlled private fixture").unwrap();
+        let call = ToolCall {
+            name: "read_file".to_string(),
+            args: HashMap::from([("path".to_string(), file.display().to_string())]),
+        };
+        let (callback, _) = recording_callback(ApprovalDecision::AllowOnce);
+        let mut first = byok_options(callback, true);
+        first.workspace_root = Some(workspace.path().to_path_buf());
+        first.additional_workspace_roots = vec![extra.path().canonicalize().unwrap()];
+        let permissions = crate::permissions::PermissionStore::default();
+        let permitted = execute_tool_with_opts_and_permissions(&call, &first, &permissions)
+            .await
+            .unwrap();
+        assert!(permitted.success, "{}", permitted.output);
+        assert!(permitted.output.contains("controlled private fixture"));
+        first.additional_workspace_roots.clear();
+        let refused = execute_tool_with_opts_and_permissions(&call, &first, &permissions)
+            .await
+            .unwrap();
+        assert!(!refused.success);
+        assert!(!refused.output.contains("controlled private fixture"));
     }
 
     #[tokio::test]
@@ -2111,6 +2750,31 @@ mod tests {
     }
 
     #[test]
+    fn a_fill_form_approval_names_the_tab_and_every_field_it_will_write() {
+        let args: HashMap<String, String> = [
+            (
+                "fields",
+                r##"[{"selector":"#city","value":"Paris"},{"selector":"#zip","value":"75001"}]"##,
+            ),
+            ("tabId", "7"),
+            ("tabTitle", "Checkout"),
+            ("tabUrl", "https://shop.example/"),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
+
+        let request =
+            trust_boundary_approval("browser_fill_form", &args).expect("filling asks first");
+        assert_eq!(request.detail[0], "tab: Checkout (https://shop.example/)");
+        assert_eq!(&request.detail[1..], ["#city: Paris", "#zip: 75001"]);
+
+        let sent = browser_command_args("browser_fill_form", &args);
+        assert_eq!(sent.get("tabId"), Some(&Value::from(7)));
+        assert!(sent.get("tabTitle").is_none());
+    }
+
+    #[test]
     fn only_trust_boundary_tools_carry_a_boundary_approval() {
         assert!(trust_boundary_approval("read_file", &HashMap::new()).is_none());
         assert!(trust_boundary_approval("run_command", &HashMap::new()).is_none());
@@ -2150,6 +2814,7 @@ mod tests {
     #[tokio::test]
     async fn local_mode_blocks_builtin_network_tools_before_dispatch() {
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2202,6 +2867,7 @@ reason = "regression test"
             args: HashMap::from([("command".to_string(), "printf policy-denied".to_string())]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2253,6 +2919,7 @@ decision = "ask"
             )]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2309,6 +2976,7 @@ decision = "ask"
             args: HashMap::from([("path".to_string(), notes.display().to_string())]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2347,6 +3015,548 @@ decision = "ask"
     /// Every tool the catalog classes as a file edit is pointed at a file
     /// outside the workspace with approval already granted, so the only thing
     /// left to stop it is the workspace boundary.
+    #[tokio::test]
+    async fn protected_writes_require_named_approval_despite_automatic_or_saved_allows() {
+        for (policy_allow, saved_allow) in [(false, false), (true, false), (false, true)] {
+            let workspace = tempfile::Builder::new()
+                .prefix("protected-write")
+                .tempdir_in(std::env::current_dir().unwrap())
+                .unwrap();
+            let path = workspace.path().join(".vscode/tasks.json");
+            if policy_allow {
+                std::fs::create_dir_all(workspace.path().join(".agiworkforce")).unwrap();
+                std::fs::write(
+                    workspace.path().join(".agiworkforce/policy.toml"),
+                    "[[rules]]\ntool = \"write_file\"\ndecision = \"allow\"\n",
+                )
+                .unwrap();
+            }
+            if saved_allow {
+                let mut permissions = crate::permissions::PermissionStore::default();
+                permissions.allow_file_session_for_process(
+                    crate::permissions::FilePermissionOperation::Write,
+                    &path,
+                );
+            }
+            let (deny_callback, seen) = recording_callback(ApprovalDecision::Deny);
+            let callback: ApprovalCallback = std::sync::Arc::new(move |request| {
+                let deny_callback = deny_callback.clone();
+                Box::pin(async move {
+                    if matches!(request.kind, ApprovalRequestKind::WorkspacePolicy { .. }) {
+                        ApprovalDecision::AllowOnce
+                    } else {
+                        deny_callback(request).await
+                    }
+                })
+            });
+            let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
+                require_confirmation: true,
+                auto_approve_safe: true,
+                auto_approve_edits: !policy_allow && !saved_allow,
+                quiet: true,
+                approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Byok,
+                workspace_root: Some(workspace.path().to_path_buf()),
+                mcp_tool_definitions: None,
+            };
+            let call = ToolCall {
+                name: "write_file".into(),
+                args: HashMap::from([
+                    ("path".into(), path.display().to_string()),
+                    ("content".into(), "{}\n".into()),
+                ]),
+            };
+            let result = execute_tool_with_opts(&call, &opts).await.unwrap();
+            assert!(
+                !result.success,
+                "policy_allow={policy_allow}: {}",
+                result.output
+            );
+            assert!(!path.exists());
+            let requests = seen.lock().unwrap();
+            assert!(
+                requests.iter().any(|request| matches!(request,
+                ApprovalRequestKind::Patch { files } if files.contains(&path))),
+                "{requests:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_file_editors_and_batch_cannot_skip_named_approval() {
+        let workspace = tempfile::Builder::new()
+            .prefix("protected-tools")
+            .tempdir_in(std::env::current_dir().unwrap())
+            .unwrap();
+        let path = workspace.path().join(".vscode/settings.txt");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "old\n").unwrap();
+        crate::file_state::record_file_read(&path, "old\n");
+        let notebook = workspace.path().join(".vscode/analysis.ipynb");
+        let body = r#"{"cells":[{"cell_type":"code","id":"a","metadata":{},"source":["x = 1"],"outputs":[],"execution_count":null}],"metadata":{},"nbformat":4,"nbformat_minor":5}"#;
+        std::fs::write(&notebook, body).unwrap();
+        crate::file_state::record_file_read(&notebook, body);
+        for tool in [
+            "write_file",
+            "edit_file",
+            "multiedit",
+            "apply_patch",
+            "notebook_edit",
+            "batch",
+        ] {
+            let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+            let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
+                require_confirmation: true,
+                auto_approve_safe: true,
+                auto_approve_edits: true,
+                quiet: true,
+                approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Byok,
+                workspace_root: Some(workspace.path().to_path_buf()),
+                mcp_tool_definitions: None,
+            };
+            let args = match tool {
+                "write_file" => HashMap::from([("path".into(), path.display().to_string()), ("content".into(), "new\n".into())]),
+                "edit_file" => HashMap::from([("path".into(), path.display().to_string()), ("old_string".into(), "old".into()), ("new_string".into(), "new".into())]),
+                "multiedit" => HashMap::from([("path".into(), path.display().to_string()), ("edits".into(), r#"[{"old_string":"old","new_string":"new"}]"#.into())]),
+                "apply_patch" => HashMap::from([("patch".into(), "--- a/.vscode/settings.txt\n+++ b/.vscode/settings.txt\n@@ -1 +1 @@\n-old\n+new\n".into())]),
+                "notebook_edit" => HashMap::from([("path".into(), notebook.display().to_string()), ("mode".into(), "replace".into()), ("cell_id".into(), "a".into()), ("content".into(), "x = 2".into())]),
+                "batch" => HashMap::from([("calls".into(), serde_json::json!([{"name":"write_file","args":{"path":path,"content":"new\n"}}]).to_string())]),
+                _ => unreachable!(),
+            };
+            let result = execute_tool_with_opts(
+                &ToolCall {
+                    name: tool.into(),
+                    args,
+                },
+                &opts,
+            )
+            .await
+            .unwrap();
+            assert!(!result.success, "{tool}: {}", result.output);
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "old\n");
+            assert_eq!(std::fs::read_to_string(&notebook).unwrap(), body);
+            let requests = seen.lock().unwrap();
+            assert!(requests.iter().any(|request| matches!(request,
+                ApprovalRequestKind::Patch { files } if files.contains(if tool == "notebook_edit" { &notebook } else { &path }))), "{tool}: {requests:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_approval_uses_the_nested_workspace_and_bypass_is_the_only_exception() {
+        for bypass in [false, true] {
+            let workspace = tempfile::Builder::new()
+                .prefix("protected-scope")
+                .tempdir_in(std::env::current_dir().unwrap())
+                .unwrap();
+            let path = workspace.path().join(".vscode/tasks.json");
+            let (callback, seen) = recording_callback(if bypass {
+                ApprovalDecision::Deny
+            } else {
+                ApprovalDecision::AllowOnce
+            });
+            let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
+                require_confirmation: !bypass,
+                auto_approve_safe: true,
+                auto_approve_edits: true,
+                quiet: true,
+                approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Byok,
+                workspace_root: Some(workspace.path().to_path_buf()),
+                mcp_tool_definitions: None,
+            };
+            let call = ToolCall {
+                name: "write_file".into(),
+                args: HashMap::from([
+                    ("path".into(), ".vscode/tasks.json".into()),
+                    ("content".into(), "{}\n".into()),
+                ]),
+            };
+            let result = execute_tool_with_opts(&call, &opts).await.unwrap();
+            assert!(result.success, "{}", result.output);
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "{}\n");
+            let requests = seen.lock().unwrap();
+            assert_eq!(requests.len(), usize::from(!bypass));
+            if !bypass {
+                assert!(
+                    matches!(&requests[0], ApprovalRequestKind::Patch { files } if files.contains(&path))
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn saved_command_asks_cannot_be_waived_by_automatic_or_saved_allows() {
+        if std::env::var_os("AGI_SAVED_ASK_REGRESSION_CHILD").is_none() {
+            let config = tempfile::tempdir().unwrap();
+            let output = tokio::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "features::exec::tools::tests::saved_command_asks_cannot_be_waived_by_automatic_or_saved_allows", "--test-threads=1"])
+                .env("AGIWORKFORCE_HOME", config.path())
+                .env("AGI_SAVED_ASK_REGRESSION_CHILD", "1")
+                .output().await.unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let workspace = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(workspace.path().join(".agiworkforce")).unwrap();
+        std::fs::write(
+            workspace.path().join(".agiworkforce/policy.toml"),
+            ["run_command", "powershell", "git_status"]
+                .map(|tool| format!("[[rules]]\ntool = \"{tool}\"\ndecision = \"allow\"\n"))
+                .join("\n"),
+        )
+        .unwrap();
+        assert!(crate::trust::grant(workspace.path())
+            .unwrap()
+            .state
+            .is_trusted());
+        let mut failures = Vec::new();
+        for (tool, command, rule) in [
+            ("run_command", "printf saved-ask-must-stop", "printf"),
+            ("powershell", "Get-Date", "Get-Date"),
+            ("powershell", "get-date", "Get-Date"),
+            ("git_status", "", "git status"),
+        ] {
+            let mut permissions = crate::permissions::PermissionStore::default();
+            permissions.ask_always(rule);
+            permissions.allow_always(rule);
+            permissions.allow_always("powershell");
+            let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+            let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
+                require_confirmation: true,
+                auto_approve_safe: true,
+                auto_approve_edits: true,
+                quiet: true,
+                approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Byok,
+                workspace_root: Some(workspace.path().to_path_buf()),
+                mcp_tool_definitions: None,
+            };
+            let result = execute_tool_with_opts_and_permissions(
+                &ToolCall {
+                    name: tool.into(),
+                    args: HashMap::from([("command".into(), command.into())]),
+                },
+                &opts,
+                &permissions,
+            )
+            .await
+            .unwrap();
+            if seen.lock().unwrap().is_empty() {
+                failures.push(format!("{tool} skipped its saved Ask rule"));
+            }
+            if result.success {
+                failures.push(format!("{tool} executed despite denial"));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:?}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn background_input_cannot_hide_denied_commands_with_erasure_or_split_calls() {
+        let workspace = tempfile::tempdir().unwrap();
+        let mut failures = Vec::new();
+        for mode in [0, 1, 2] {
+            let split = mode == 1;
+            let marker = workspace.path().join(format!("input-marker-{mode}"));
+            let background = crate::terminals::start("interactive test shell", |_| {
+                let mut command = std::process::Command::new("/bin/sh");
+                command.args(["-c", "stty -echo; exec /bin/sh -i"]);
+                Ok(command)
+            })
+            .unwrap();
+            let (callback, _) = recording_callback(ApprovalDecision::AllowOnce);
+            let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
+                require_confirmation: true,
+                auto_approve_safe: true,
+                auto_approve_edits: true,
+                quiet: true,
+                approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Byok,
+                workspace_root: None,
+                mcp_tool_definitions: None,
+            };
+            let mut permissions = crate::permissions::PermissionStore::default();
+            permissions.deny_always("printf protected");
+            if split {
+                let result = execute_tool_with_opts_and_permissions(
+                    &ToolCall {
+                        name: "command_output".into(),
+                        args: HashMap::from([
+                            ("id".into(), background.id.clone()),
+                            ("input".into(), "pri".into()),
+                            ("wait_seconds".into(), "0".into()),
+                        ]),
+                    },
+                    &opts,
+                    &permissions,
+                )
+                .await
+                .unwrap();
+                assert!(result.success, "partial input should be accepted");
+            }
+            let input = if mode == 2 {
+                format!("pri\\\rntf protected > '{}'\r", marker.display())
+            } else if split {
+                format!("ntf protected > '{}'\n", marker.display())
+            } else {
+                format!("printf protectX\u{7f}ed > '{}'\n", marker.display())
+            };
+            let result = execute_tool_with_opts_and_permissions(
+                &ToolCall {
+                    name: "command_output".into(),
+                    args: HashMap::from([
+                        ("id".into(), background.id.clone()),
+                        ("input".into(), input),
+                        ("wait_seconds".into(), "0".into()),
+                    ]),
+                },
+                &opts,
+                &permissions,
+            )
+            .await
+            .unwrap();
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(300);
+            while result.success && !marker.exists() && tokio::time::Instant::now() < deadline {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            crate::terminals::stop(&background).await;
+            if result.success {
+                failures.push(format!("mode={mode}: input was accepted"));
+            }
+            if marker.exists() {
+                failures.push(format!("mode={mode}: denied command executed"));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:?}");
+    }
+
+    #[tokio::test]
+    async fn protected_write_approval_preserves_the_permission_hook_subject() {
+        let workspace = tempfile::Builder::new()
+            .prefix("protected-hook")
+            .tempdir_in(std::env::current_dir().unwrap())
+            .unwrap();
+        let seen = Arc::new(tokio::sync::Mutex::new(None));
+        let recorded = seen.clone();
+        let callback: ApprovalCallback = Arc::new(move |request| {
+            let recorded = recorded.clone();
+            Box::pin(async move {
+                *recorded.lock().await = Some(request);
+                ApprovalDecision::Deny
+            })
+        });
+        let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
+            require_confirmation: true,
+            auto_approve_safe: false,
+            auto_approve_edits: false,
+            quiet: true,
+            approval_callback: Some(callback),
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            workspace_root: Some(workspace.path().to_path_buf()),
+            mcp_tool_definitions: None,
+        };
+        execute_tool_with_opts(
+            &ToolCall {
+                name: "write_file".into(),
+                args: HashMap::from([
+                    ("path".into(), ".vscode/tasks.json".into()),
+                    ("content".into(), "{}\n".into()),
+                ]),
+            },
+            &opts,
+        )
+        .await
+        .unwrap();
+        let request = seen.lock().await.clone().expect("approval");
+        let config = crate::hooks::HooksConfig {
+            hooks: HashMap::from([(
+                "PermissionRequest".into(),
+                vec![crate::hooks::Hook {
+                    command: "printf '%s' '{\"decision\":\"block\",\"reason\":\"protected write blocked\"}'".into(),
+                    args: Vec::new(),
+                    timeout: 5,
+                    blocking: true,
+                    matcher: Some("^write_file$".into()),
+                    if_condition: None,
+                    source: crate::hooks::HookSource::User,
+                }],
+            )]),
+        };
+        assert_eq!(
+            permission_request_hook_denial(&config, &request).await,
+            Some(vec!["protected write blocked".into()])
+        );
+        let (name, args) = approval_subject(&request);
+        assert_eq!(name, "write_file");
+        assert_eq!(
+            args["path"],
+            workspace
+                .path()
+                .join(".vscode/tasks.json")
+                .display()
+                .to_string()
+        );
+        assert_eq!(args["content"], "{}\n");
+    }
+
+    #[test]
+    fn protected_approval_audits_exclude_change_bodies_for_each_outcome() {
+        let workspace = tempfile::tempdir().unwrap();
+        let path = workspace.path().join(".vscode/tasks.json");
+        let sentinel = "private-file-content-must-not-be-logged";
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::Patch {
+                files: vec![path.clone()],
+            },
+            "Protected write",
+            vec![sentinel.into()],
+        )
+        .with_tool_subject(
+            "write_file",
+            serde_json::json!({"path": path, "content": sentinel}),
+        );
+        let log = workspace.path().join("approvals.jsonl");
+        for decision in [
+            crate::approval_audit::ApprovalDecision::Approved,
+            crate::approval_audit::ApprovalDecision::BlockedByRule,
+        ] {
+            let (name, targets) = approval_audit_subject(&request);
+            let entry = crate::approval_audit::ApprovalAuditEntry::new(
+                name,
+                targets.to_string(),
+                decision,
+                None,
+                None,
+            );
+            crate::approval_audit::append_entry_at(&log, &entry).unwrap();
+        }
+        let contents = std::fs::read_to_string(log).unwrap();
+        assert!(!contents.contains(sentinel));
+        let entries: Vec<crate::approval_audit::ApprovalAuditEntry> = contents
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(entries.len(), 2);
+        for entry in entries {
+            assert_eq!(entry.tool_name, "write_file");
+            assert!(entry.target.contains("tasks.json"));
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_mixed_patch_approval_describes_every_target_and_the_changes() {
+        let workspace = tempfile::Builder::new()
+            .prefix("protected-mixed")
+            .tempdir_in(std::env::current_dir().unwrap())
+            .unwrap();
+        let seen = Arc::new(tokio::sync::Mutex::new(None));
+        let recorded = seen.clone();
+        let callback: ApprovalCallback = Arc::new(move |request| {
+            let recorded = recorded.clone();
+            Box::pin(async move {
+                *recorded.lock().await = Some(request);
+                ApprovalDecision::Deny
+            })
+        });
+        let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
+            require_confirmation: true,
+            auto_approve_safe: false,
+            auto_approve_edits: false,
+            quiet: true,
+            approval_callback: Some(callback),
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            workspace_root: Some(workspace.path().to_path_buf()),
+            mcp_tool_definitions: None,
+        };
+        let patch = "--- /dev/null\n+++ b/.vscode/tasks.json\n@@ -0,0 +1 @@\n+{}\n--- /dev/null\n+++ b/notes.txt\n@@ -0,0 +1 @@\n+all changes visible\n";
+        execute_tool_with_opts(
+            &ToolCall {
+                name: "apply_patch".into(),
+                args: HashMap::from([("patch".into(), patch.into())]),
+            },
+            &opts,
+        )
+        .await
+        .unwrap();
+        let request = seen.lock().await.clone().expect("approval");
+        assert!(
+            matches!(request.kind, ApprovalRequestKind::Patch { ref files }
+            if files.contains(&workspace.path().join("notes.txt")) && files.contains(&workspace.path().join(".vscode/tasks.json")))
+        );
+        assert!(request.detail.join("\n").contains("all changes visible"));
+        assert!(!request.saves_always_allow);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_protected_alias_cannot_change_its_target_while_approval_is_pending() {
+        let workspace = tempfile::Builder::new()
+            .prefix("protected-alias")
+            .tempdir_in(std::env::current_dir().unwrap())
+            .unwrap();
+        let first = workspace.path().join("first.txt");
+        let second = workspace.path().join("second.txt");
+        std::fs::write(&first, "old\n").unwrap();
+        std::fs::write(&second, "old\n").unwrap();
+        crate::file_state::record_file_read(&first, "old\n");
+        crate::file_state::record_file_read(&second, "old\n");
+        let alias = workspace.path().join(".vscode/tasks.json");
+        std::fs::create_dir_all(alias.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&first, &alias).unwrap();
+        let swapped = alias.clone();
+        let other = second.clone();
+        let callback: ApprovalCallback = Arc::new(move |request| {
+            let swapped = swapped.clone();
+            let other = other.clone();
+            Box::pin(async move {
+                assert!(request.summary.contains(".vscode/tasks.json"));
+                std::fs::remove_file(&swapped).unwrap();
+                std::os::unix::fs::symlink(other, swapped).unwrap();
+                ApprovalDecision::AllowOnce
+            })
+        });
+        let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
+            require_confirmation: true,
+            auto_approve_safe: true,
+            auto_approve_edits: true,
+            quiet: true,
+            approval_callback: Some(callback),
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            workspace_root: Some(workspace.path().to_path_buf()),
+            mcp_tool_definitions: None,
+        };
+        let result = execute_tool_with_opts(
+            &ToolCall {
+                name: "write_file".into(),
+                args: HashMap::from([
+                    ("path".into(), alias.display().to_string()),
+                    ("content".into(), "new\n".into()),
+                ]),
+            },
+            &opts,
+        )
+        .await
+        .unwrap();
+        assert!(result.success, "{}", result.output);
+        assert_eq!(std::fs::read_to_string(first).unwrap(), "new\n");
+        assert_eq!(std::fs::read_to_string(second).unwrap(), "old\n");
+    }
+
     #[tokio::test]
     async fn no_file_editing_tool_changes_a_file_outside_the_workspace() {
         let outside = tempfile::tempdir().expect("outside dir");
@@ -2419,6 +3629,7 @@ decision = "ask"
                     .collect(),
             };
             let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: false,
                 auto_approve_safe: true,
@@ -2472,6 +3683,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf unsafe".to_string())]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2586,6 +3798,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf untrusted".to_string())]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2636,6 +3849,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf untrusted".to_string())]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2686,6 +3900,7 @@ decision = "deny"
         let catalog_names: BTreeSet<String> =
             crate::runtime::tool_catalog::all_builtin_tool_definitions()
                 .into_iter()
+                .chain(crate::runtime::tool_catalog::image_tool_definitions(None))
                 .map(|tool| tool.name)
                 .collect();
         let mut dispatched_names = dispatched_tool_names_from_source();
@@ -2702,7 +3917,9 @@ decision = "deny"
         );
         let agent_runtime_tools = BTreeSet::from(["task".to_string(), "update_plan".to_string()]);
 
-        for dispatched_name in &dispatched_names {
+        let retired_with_refusal = BTreeSet::from(["lsp_diagnostics".to_string()]);
+
+        for dispatched_name in dispatched_names.difference(&retired_with_refusal) {
             assert!(
                 catalog_names.contains(dispatched_name),
                 "{dispatched_name} has a runtime dispatcher but no tool catalog entry"
@@ -2725,6 +3942,7 @@ decision = "deny"
     async fn every_git_tool_in_the_catalog_reaches_the_git_executor() {
         let workspace = tempfile::tempdir().expect("workspace");
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: false,
@@ -2799,6 +4017,7 @@ decision = "deny"
             read_only_browser_tools,
             vec![
                 "browser_read_page",
+                "browser_find",
                 "browser_screenshot",
                 "browser_console",
                 "browser_network"
@@ -2866,6 +4085,7 @@ decision = "deny"
             args,
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -3580,5 +4800,34 @@ mod private_ip_classifier_tests {
         assert!(reg.get("write_file").is_none());
         assert!(reg.get("run_command").is_none());
         assert!(reg.get("edit_file").is_none());
+    }
+}
+
+#[cfg(test)]
+mod powershell_permission_tests {
+    #[test]
+    fn a_saved_powershell_allow_does_not_skip_the_prompt_for_a_dangerous_command() {
+        let mut perms = crate::permissions::PermissionStore::default();
+        perms.allow_always("powershell -NoProfile -NonInteractive -Command");
+        let wrap =
+            |command: &str| format!("powershell -NoProfile -NonInteractive -Command {command}");
+        let dangerous = "rm -rf build";
+        assert_eq!(
+            super::bash::saved_command_decision(
+                &perms,
+                &wrap(dangerous),
+                super::powershell_command_safety(dangerous, &wrap(dangerous)),
+            ),
+            None
+        );
+        let routine = "Get-ChildItem";
+        assert_eq!(
+            super::bash::saved_command_decision(
+                &perms,
+                &wrap(routine),
+                super::powershell_command_safety(routine, &wrap(routine)),
+            ),
+            Some(true)
+        );
     }
 }

@@ -25,6 +25,12 @@ import {
   readRunnableArtifact,
   selectArtifactRuntimeRoute,
 } from '@/lib/services/artifact-runtime-service';
+import {
+  connectorIdsReachGoogleUserData,
+  publishedArtifactSourceHoldsGoogleUserData,
+} from '@/lib/connectors/google-user-data-runs';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { artifactConnectorsGateResponse } from '@/lib/services/artifact-connector-gate';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   buildManagedComputeAccessGateResponse,
@@ -112,6 +118,15 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   );
   const accessGate = buildManagedComputeAccessGateResponse(access, NO_STORE);
   if (accessGate) return accessGate;
+  if (connectors.length > 0) {
+    const connectorGate = await artifactConnectorsGateResponse(
+      scoped.userId,
+      request,
+      entitlement.plan,
+      NO_STORE,
+    );
+    if (connectorGate) return connectorGate;
+  }
 
   const retention = await resolveZeroDataRetentionPolicy(scoped.db, scoped.userId);
   if (retention.required) {
@@ -148,10 +163,19 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
   }
   const prompt = secrets.texts[0] ?? parsed.data.prompt;
 
+  // Decided per run: a Google connector the run can call, or an app made in a
+  // chat that holds Google user data, keeps the whole run off models that may
+  // train. The source chat belongs to the app's owner, not the viewer, so it is
+  // read on the service connection; unreadable counts as marked.
+  const googleUserData =
+    connectorIdsReachGoogleUserData(connectors) ||
+    (await publishedArtifactSourceHoldsGoogleUserData(getNeonDb(), artifact.publishedArtifactId));
+
   let route;
   try {
     route = await selectArtifactRuntimeRoute(scoped.db, scoped.userId, prompt, entitlement.plan, {
       needsTools: connectors.length > 0,
+      googleUserData,
     });
   } catch (error) {
     if (error instanceof ArtifactRuntimeRouteUnavailableError) {
@@ -189,6 +213,8 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
           planTier: entitlement.plan,
           modelKey: route.modelKey,
           connectors,
+          allowedTools: parsed.data.allowedTools,
+          request,
         })
       : null;
   if (connectors.length > 0 && !plan) {
@@ -217,12 +243,16 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
       planTier: entitlement.plan,
       signal: request.signal,
       plan,
+      idempotencyKey: request.headers.get('idempotency-key'),
     });
     const body: ArtifactRuntimeCompleteResponse = { text };
     return NextResponse.json(body, { headers: NO_STORE });
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
       return refusal(error.status, error.code, error.message);
+    }
+    if (error instanceof ArtifactRuntimeRouteUnavailableError) {
+      return refusal(503, 'model_unavailable', error.message);
     }
     throw error;
   }

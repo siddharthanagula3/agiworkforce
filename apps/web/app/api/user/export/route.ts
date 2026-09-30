@@ -177,6 +177,16 @@ const desktopDeviceExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const mobileIntentTokenExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  install_id: z.string(),
+  capability: z.string(),
+  created_at: timestampSchema,
+  last_used_at: timestampSchema.nullable(),
+  revoked_at: timestampSchema.nullable(),
+});
+
 const deviceRegistrationExportSchema = z.object({
   id: z.string(),
   organization_id: z.string().nullable(),
@@ -700,6 +710,24 @@ const developerProjectExportSchema = z.object({
   archived_at: nullableTimestampSchema,
   created_at: timestampSchema,
   updated_at: timestampSchema,
+});
+
+const accountSecurityEnrollmentExportSchema = z.object({
+  enrolled_at: nullableTimestampSchema,
+  recovery_started_at: nullableTimestampSchema,
+  recovery_unlocks_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const accountSecurityCredentialExportSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  device_type: z.string(),
+  backed_up: z.boolean(),
+  transports: z.array(z.string()),
+  created_at: timestampSchema,
+  last_used_at: nullableTimestampSchema,
 });
 
 const securityAuditLogExportSchema = z.object({
@@ -1453,6 +1481,25 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
   // Two roles, two sections. Each one carries what this person supplied or was
   // given, and never the other party's account id.
   {
+    section: 'account_security',
+    table: 'account_security_enrollments',
+    sql: `select enrolled_at, recovery_started_at, recovery_unlocks_at, created_at, updated_at
+          from account_security_enrollments
+          where user_id = $1`,
+    schema: accountSecurityEnrollmentExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'account_security_sign_in_methods',
+    table: 'account_security_credentials',
+    sql: `select id, name, device_type, backed_up, transports, created_at, last_used_at
+          from account_security_credentials
+          where user_id = $1
+          order by created_at asc`,
+    schema: accountSecurityCredentialExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
     section: 'developer_webhook_deliveries',
     table: 'developer_webhook_deliveries',
     sql: `select id, endpoint_id, event_id, event_type, payload, status, attempts, response_status,
@@ -2019,10 +2066,16 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     "Per-turn cost accounting: estimated and actual cost, reservation and settlement state, and a usage blob carrying each provider observation's own cost. Exporting it would hand every requester this product's provider economics. The subject's own managed usage is exported as the managed usage summary.",
   user_two_factor:
     'Holds the live second factor. This download is a file handed to whoever ends up with it, and a credential in it stays valid.',
+  bank_account_items:
+    'Holds the live Plaid access token of each linked bank. Which banks are linked is visible in the finance view; the balances and transactions are read from the bank, not stored here.',
   connector_oauth_grants:
     'Holds the live tokens a connector authenticates with. The connection itself is exported as user_connectors.',
   connector_oauth_authorizations:
     'In-flight authorization codes and verifiers for a connector handshake; a live credential, not subject content.',
+  github_install_authorizations:
+    'In-flight GitHub App install states and a sealed PKCE verifier, kept for ten minutes; a live credential, not subject content. The linked installation is exported with github_installations.',
+  desktop_sign_in_grants:
+    'One-time desktop sign-in handoffs, stored as hashes and redeemable for about a minute; sign-in plumbing, not subject content. The signed-in computers are exported as desktop_devices.',
   account_sessions:
     'Session state, not subject content. The devices that hold those sessions are exported as desktop_devices and mobile_devices.',
   account_lockout_attempts:
@@ -2286,6 +2339,18 @@ async function collectUserData(
     ledger,
   });
   if (registeredDeviceRows.length > 0) exportData['device_registrations'] = registeredDeviceRows;
+
+  const intentTokenRows = await queryExportRows({
+    db,
+    sql: `select id, organization_id, install_id, capability, created_at, last_used_at, revoked_at
+          from mobile_intent_tokens where user_id = $1`,
+    values: [user.id],
+    schema: mobileIntentTokenExportSchema,
+    section: 'mobile_intent_tokens',
+    userId: user.id,
+    ledger,
+  });
+  if (intentTokenRows.length > 0) exportData['mobile_intent_tokens'] = intentTokenRows;
 
   const installationRows = await queryExportRows({
     db,

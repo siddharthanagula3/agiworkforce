@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/text';
 import { api } from '@/services/api';
 import { SettingsGroup } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const HISTORY_LIMIT = 50;
 
@@ -57,7 +58,12 @@ export function ApprovalHistory() {
     <View style={{ marginBottom: 18 }}>
       <Text
         accessibilityRole="header"
-        style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 8 }}
+        style={{
+          color: colors.textSecondary,
+          fontSize: typeScale.footnote,
+          fontWeight: '600',
+          marginBottom: 8,
+        }}
       >
         Approval history
       </Text>
@@ -72,12 +78,14 @@ export function ApprovalHistory() {
           accessibilityLabel="Approval history could not load. Try again"
           style={{ minHeight: 44, justifyContent: 'center' }}
         >
-          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
             Approval history could not load. Tap to try again.
           </Text>
         </Pressable>
       ) : state.approvals.length === 0 ? (
-        <Text style={{ color: colors.textMuted, fontSize: 13 }}>No tool approvals yet.</Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+          No tool approvals yet.
+        </Text>
       ) : (
         <SettingsGroup>
           {state.approvals.map((entry, index) => {
@@ -111,10 +119,17 @@ export function ApprovalHistory() {
                   borderBottomColor: colors.border,
                 }}
               >
-                <Text numberOfLines={1} style={{ color: colors.textPrimary, fontSize: 15 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ color: colors.textPrimary, fontSize: typeScale.body }}
+                >
                   <Text style={{ fontWeight: '600' }}>{verdict}</Text> {tool}
                 </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>{when}</Text>
+                <Text
+                  style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+                >
+                  {when}
+                </Text>
               </Pressable>
             );
           })}

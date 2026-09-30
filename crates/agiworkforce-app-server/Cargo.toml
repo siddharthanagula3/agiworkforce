@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "agiworkforce-app-server"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 authors = ["AGI Automation LLC"]
 description = "JSON-RPC stdio + WebSocket transport exposing AGI Workforce tools to programmatic clients"

@@ -29,6 +29,7 @@ vi.mock('@/lib/services/account-activity-notifications', () => ({
 }));
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
+  mustAcceptTerms: async (userId: string) => !(await mocks.hasAcceptedCurrentTerms(userId)),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({

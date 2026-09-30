@@ -114,6 +114,16 @@ pub mod method {
     pub const WORKTREE_REMOVE: &str = "worktree/remove";
     pub const PERMISSIONS_LIST: &str = "permissions/list";
     pub const PERMISSIONS_REMOVE: &str = "permissions/remove";
+    pub const PERMISSIONS_RULES: &str = "permissions/rules";
+    pub const PERMISSIONS_ADD: &str = "permissions/add";
+    pub const TRUST_LIST: &str = "trust/list";
+    pub const TRUST_REVOKE: &str = "trust/revoke";
+    pub const PROVIDERS_LIST: &str = "providers/list";
+    pub const PROVIDERS_SET_KEY: &str = "providers/setKey";
+    pub const PROVIDERS_REMOVE_KEY: &str = "providers/removeKey";
+    pub const PLAN_DECIDE: &str = "plan/decide";
+    pub const GIT_PULL_REQUEST_PLAN: &str = "git/pullRequest/plan";
+    pub const GIT_PULL_REQUEST: &str = "git/pullRequest";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -384,6 +394,21 @@ pub struct AppServerCapabilities {
     pub mcp_inspect: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub plugin_updates: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub permission_rules: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub trust: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub turn_tool_filters: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub provider_keys: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub questions: bool,
+    /// `plan/decide` approves or rejects the plan a plan-mode turn proposed.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub plan_decisions: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pull_requests: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -477,6 +502,19 @@ pub struct ThreadSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub writer: Option<DeveloperSessionWriter>,
+    /// Where the thread runs. Absent for a thread on this machine; `cloud`
+    /// for a cloud Code session listed beside the local ones.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub location: Option<ThreadLocation>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum ThreadLocation {
+    Local,
+    Cloud,
 }
 
 /// A time-bounded claim on the right to append turns to a thread.
@@ -759,6 +797,7 @@ pub struct DeveloperSessionApproval {
 pub enum DeveloperFileChangeKind {
     Created,
     Modified,
+    Deleted,
 }
 
 /// What kind of file a change touched. A surface renders a test, a manifest
@@ -947,6 +986,10 @@ pub struct ThreadListParams {
     pub cwd: Option<String>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub include_archived: bool,
+    /// Also list the account's open cloud Code sessions, after the local
+    /// threads on the first page.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub include_cloud: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1321,6 +1364,14 @@ pub struct TurnStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub cloud_project_id: Option<String>,
+    /// Tools this thread may use from this turn on. `Some(empty)` clears the
+    /// allow list; the host's own boundary rules still apply on top.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub allowed_tools: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub disallowed_tools: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1897,6 +1948,14 @@ pub struct SkillSummary {
     /// Project skills load only after explicit per-workspace consent. User and
     /// plugin skills carry no consent gate and report `true`.
     pub consented: bool,
+    #[serde(default)]
+    pub required_tools: Vec<String>,
+    #[serde(default)]
+    pub required_env_vars: Vec<String>,
+    #[serde(default)]
+    pub missing_tools: Vec<String>,
+    #[serde(default)]
+    pub missing_env_vars: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1996,6 +2055,7 @@ pub enum McpServerConfiguredStatus {
     Authorized,
     /// A remote server with neither a stored token nor a credential header.
     NeedsAuth,
+    Blocked,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2007,6 +2067,9 @@ pub struct McpServerSummary {
     pub transport: String,
     pub scope: McpServerScope,
     pub status: McpServerConfiguredStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub policy_refusal: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub url: Option<String>,
@@ -2481,6 +2544,208 @@ pub struct PermissionsListResponse {
 #[ts(rename_all = "camelCase")]
 pub struct PermissionsRemoveParams {
     pub id: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitPullRequestPlanParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitPullRequestCommit {
+    pub commit: String,
+    pub subject: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitPullRequestPlanResponse {
+    pub remote: String,
+    pub branch: String,
+    pub head: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub base: Option<String>,
+    pub commits: Vec<GitPullRequestCommit>,
+    pub needs_push: bool,
+    pub notices: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub blocked: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitPullRequestParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cwd: Option<String>,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub body: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub base: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub draft: bool,
+    pub confirmed_remote: String,
+    pub confirmed_branch: String,
+    pub confirmed_head: String,
+    pub confirmed_commits: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitPullRequestResponse {
+    pub url: String,
+    pub created: bool,
+    pub pushed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum PlanDecision {
+    Approve,
+    Reject,
+}
+
+/// Approve the thread's current plan, or reject it with the feedback the
+/// next turn carries to the model.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PlanDecideParams {
+    pub thread_id: String,
+    pub decision: PlanDecision,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub feedback: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProviderKeySummary {
+    pub provider: String,
+    pub label: String,
+    pub env_var: String,
+    pub configured: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProvidersListResponse {
+    pub providers: Vec<ProviderKeySummary>,
+    pub storage: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProviderSetKeyParams {
+    pub provider: String,
+    pub api_key: String,
+}
+
+impl std::fmt::Debug for ProviderSetKeyParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProviderSetKeyParams")
+            .field("provider", &self.provider)
+            .field("api_key", &"[redacted]")
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ProviderParams {
+    pub provider: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum PermissionRuleKind {
+    Command,
+    Domain,
+    File,
+    ExecPolicy,
+    Mcp,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum PermissionRuleDecision {
+    Allow,
+    Ask,
+    Deny,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionRule {
+    pub id: String,
+    pub kind: PermissionRuleKind,
+    pub target: String,
+    pub label: String,
+    pub decision: PermissionRuleDecision,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionRulesResponse {
+    pub rules: Vec<PermissionRule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PermissionsAddParams {
+    pub kind: PermissionRuleKind,
+    pub target: String,
+    pub decision: PermissionRuleDecision,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TrustedFolder {
+    pub path: String,
+    pub trusted_at: Option<String>,
+    pub trusted_by: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TrustListResponse {
+    pub folders: Vec<TrustedFolder>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TrustRevokeParams {
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

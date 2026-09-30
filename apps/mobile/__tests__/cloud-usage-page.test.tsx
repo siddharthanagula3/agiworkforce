@@ -71,14 +71,12 @@ jest.mock('@/src/features/settings/common', () => {
   };
 });
 
-jest.mock('@/lib/safeOpenURL', () => ({ openExternalUrl: jest.fn() }));
-
 const mockFetchUsageSnapshot = jest.fn();
 jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: (...args: unknown[]) => mockFetchUsageSnapshot(...args),
+  fetchUsageAllowances: () => new Promise(() => undefined),
+  fetchUsageHistory: () => new Promise(() => undefined),
 }));
-
-jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { usageDashboard: true } }));
 
 jest.mock('@/src/features/auth/store', () => ({
   useAuthStore: (selector: (s: typeof mockAuthState) => unknown) => selector(mockAuthState),
@@ -91,6 +89,7 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
 }));
 
 import CloudUsageScreen from '../src/features/settings/cloud-usage/index';
+import { useCloudUsageStore } from '../src/features/settings/cloud-usage/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 
 function snap(overrides: Record<string, unknown> = {}) {
@@ -130,6 +129,7 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
     });
     mockAccountOwner = 'user-a';
     mockAccountEpoch = 1;
+    useCloudUsageStore.getState().clear();
     useChatAppModeStore.setState({ appMode: 'cloud' });
   });
 
@@ -143,6 +143,26 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
     });
     expect(getByText('Pro plan')).toBeTruthy();
     expect(queryByText(/\$\d/)).toBeNull();
+  });
+
+  it('keeps server diagnostics private and recovers on retry', async () => {
+    mockFetchUsageSnapshot
+      .mockRejectedValueOnce(new Error('private usage route at /internal/billing'))
+      .mockResolvedValueOnce(snap({ usagePercentage: 12 }));
+
+    const screen = render(<CloudUsageScreen />);
+    await waitFor(() =>
+      expect(
+        screen.getByText('Could not load usage. Retry to see your current plan and limits.'),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText(/private usage route/)).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Retry loading usage'));
+    await waitFor(() => expect(screen.getByText('12% used')).toBeTruthy());
+    expect(
+      screen.queryByText('Could not load usage. Retry to see your current plan and limits.'),
+    ).toBeNull();
   });
 
   it('does not render an account-A usage response after switching to account B', async () => {
@@ -176,13 +196,13 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
     expect(queryByText(/\$\d/)).toBeNull();
   });
 
-  it('uses the canonical Max 15x plan label instead of collapsing Max tiers', async () => {
+  it('labels the max_15x tier with its canonical Max 20x name instead of collapsing Max tiers', async () => {
     mockFetchUsageSnapshot.mockResolvedValue(snap({ planTier: 'max_15x', usagePercentage: 40 }));
 
     const { getByText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
-      expect(getByText('Max 15x plan')).toBeTruthy();
+      expect(getByText('Max 20x plan')).toBeTruthy();
     });
   });
 
@@ -333,6 +353,9 @@ describe('Cloud Usage screen, signed-out gate', () => {
     expect(queryByText('% used')).toBeNull();
     expect(mockFetchUsageSnapshot).not.toHaveBeenCalled();
     fireEvent.press(getByLabelText('Sign in to AGI Cloud'));
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-usage' },
+    });
   });
 });

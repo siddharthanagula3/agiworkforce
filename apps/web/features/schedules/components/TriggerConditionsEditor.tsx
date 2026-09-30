@@ -127,7 +127,7 @@ export function TriggerConditionsEditor({
           size="sm"
           onClick={() => onChange([...drafts, newTriggerConditionDraft(source)])}
         >
-          <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+          <Plus className="me-1 h-4 w-4" aria-hidden="true" />
           Add condition
         </Button>
       ) : (

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Pressable, Platform, Linking, Alert } from 'react-native';
+import { View, Platform, Linking, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Calendar, Bell, CheckCircle, XCircle, HelpCircle, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   getCalendarPermissionStatus,
   type PermissionStatus,
@@ -86,7 +88,7 @@ interface IntegrationRowProps {
 
 function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowProps) {
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       disabled={!onPress}
       className="flex-row items-center gap-3 py-3 active:opacity-70"
@@ -104,16 +106,25 @@ function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowPr
       {/* Name + description */}
       <View className="flex-1">
         <View className="flex-row items-center gap-2">
-          <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '600' }}
+          >
             {integration.name}
           </Text>
           <StatusIcon status={integration.status} colors={colors} />
         </View>
-        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16, marginTop: 2 }}>
+        <Text
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.caption,
+            lineHeight: 16,
+            marginTop: 2,
+          }}
+        >
           {integration.description}
         </Text>
         {integration.lastSync && integration.status === 'active' ? (
-          <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
             Last sync: {integration.lastSync}
           </Text>
         ) : null}
@@ -121,7 +132,7 @@ function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowPr
 
       {/* Badge */}
       <Badge label={statusLabel(integration.status)} color={statusBadgeColor(integration.status)} />
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -206,7 +217,7 @@ export function DeviceIntegrationStatus() {
       <Card>
         <View className="flex-row items-center gap-2 py-2">
           <RefreshCw size={14} color={colors.textMuted} />
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
             Checking device integrations...
           </Text>
         </View>
@@ -224,7 +235,7 @@ export function DeviceIntegrationStatus() {
         <Text
           style={{
             color: colors.textMuted,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             fontWeight: '600',
             textTransform: 'uppercase',
           }}

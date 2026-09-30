@@ -6,9 +6,7 @@ import type { GitHubInstallationRow } from '@/lib/server/neon-types';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import {
   deleteGitHubAppInstallation,
   isGitHubInstallationLinkingAvailable,
@@ -53,7 +51,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   try {
     ({ db, userId } = await getUserScopedDb(request, GITHUB_SCOPE));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -121,7 +119,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse> {
   try {
     ({ db, userId } = await getUserScopedDb(request, GITHUB_SCOPE));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -212,7 +210,7 @@ async function handleDelete(request: NextRequest): Promise<NextResponse> {
   try {
     ({ db, userId } = await getUserScopedDb(request, GITHUB_SCOPE));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

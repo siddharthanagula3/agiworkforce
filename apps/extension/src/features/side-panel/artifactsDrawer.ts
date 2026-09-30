@@ -9,6 +9,7 @@ import {
 } from '../cloud-bridge/artifactsClient';
 import { t } from '../../i18n';
 import { el } from './dom';
+import { buildHelpArticleLink } from './helpLinks';
 
 export const ARTIFACTS_DRAWER_CSS = `
   .sp-drawer-artifacts-help {
@@ -127,6 +128,7 @@ export function buildArtifactsDrawerSection(
 
   const sectionEl = el('div', { class: 'sp-drawer-section', id: 'sp-drawer-artifacts-section' });
   sectionEl.appendChild(el('h3', { class: 'sp-drawer-section-title' }, t('spArtifactsTitle')));
+  sectionEl.appendChild(buildHelpArticleLink('artifacts', t('spHelpLinkArtifacts')));
   sectionEl.appendChild(el('p', { class: 'sp-drawer-artifacts-help' }, t('spArtifactsHelp')));
 
   const listEl = el('ul', {

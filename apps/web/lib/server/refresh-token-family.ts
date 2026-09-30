@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { revokeMobileIntentTokens } from '@/lib/server/mobile-intent-tokens';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -131,6 +132,7 @@ export async function revokeEveryDeviceRefreshCredential(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<number> {
+  await revokeMobileIntentTokens(db, userId, null);
   const revoked = await db.query<{ id: string }>(REVOKE_EVERY, [userId]);
   return revoked.length;
 }

@@ -4,7 +4,9 @@ import {
   type CloudAgentRun,
   type CloudAgentRunSnapshotPage,
   type ManagedCloudAgentRunApprovalDecision,
+  type ManagedCloudAgentRunInputAnswer,
 } from '@agiworkforce/cloud-contracts';
+import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -12,6 +14,7 @@ import {
 import {
   applyCloudRunPlanEvent,
   cloudRunFilterStates,
+  collectCloudRunFile,
   cloudRunTextDelta,
   isCloudRunPlanOverview,
   mergeCloudRuns,
@@ -20,6 +23,7 @@ import {
   type CloudRunActivityLine,
   type CloudRunFilterKey,
   type CloudRunPlanStep,
+  type CloudRunProducedFile,
 } from './runPresentation';
 import {
   cancelCloudRun,
@@ -35,13 +39,14 @@ import {
 } from './service';
 
 const MAX_TRANSCRIPT_CHARACTERS = 4_000;
+const CLOUD_RUN_INPUT_ERROR = 'Your answer could not be sent';
 const MAX_ACTIVITY_LINES = 40;
 
 export type CloudRunLoadReason = 'initial' | 'refresh' | 'background';
 
 export type CloudRunDetailStatus = 'loading' | 'live' | 'settled' | 'error';
 
-export type CloudRunPendingAction = 'approve' | 'reject' | 'cancel';
+export type CloudRunPendingAction = 'approve' | 'reject' | 'cancel' | 'answer';
 
 export interface CloudRunDetail {
   runId: string;
@@ -49,6 +54,7 @@ export interface CloudRunDetail {
   transcript: string;
   activity: CloudRunActivityLine[];
   plan: CloudRunPlanStep[];
+  files: CloudRunProducedFile[];
   status: CloudRunDetailStatus;
   error: string | null;
   pendingAction: CloudRunPendingAction | null;
@@ -70,6 +76,7 @@ export interface CloudTaskState {
   openRun: (runId: string) => Promise<void>;
   closeRun: () => void;
   resolveApproval: (decision: ManagedCloudAgentRunApprovalDecision) => Promise<void>;
+  answerInput: (answers: ManagedCloudAgentRunInputAnswer[]) => Promise<void>;
   stopRun: () => Promise<void>;
   reset: () => void;
 }
@@ -97,9 +104,11 @@ function applySnapshot(
   let transcript = detail.transcript;
   const activity = [...detail.activity];
   let plan = detail.plan;
+  let files = detail.files;
   for (const envelope of snapshot.events) {
     transcript += cloudRunTextDelta(envelope);
     plan = applyCloudRunPlanEvent(plan, envelope);
+    files = collectCloudRunFile(files, envelope);
     if (isCloudRunPlanOverview(envelope)) continue;
     const line = summarizeCloudRunEvent(envelope);
     if (line) activity.push(line);
@@ -111,6 +120,7 @@ function applySnapshot(
     transcript: trimTranscript(transcript),
     activity: activity.slice(-MAX_ACTIVITY_LINES),
     plan,
+    files,
     status: isCloudAgentRunFollowBoundary(snapshot.run.state) ? 'settled' : 'live',
     error: null,
   };
@@ -191,6 +201,7 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
         transcript: '',
         activity: [],
         plan: [],
+        files: [],
         status: 'loading',
         error: null,
         pendingAction: null,
@@ -267,6 +278,35 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
                 ...state.detail,
                 pendingAction: null,
                 error: describeCloudRunError(error, CLOUD_RUN_DECISION_ERROR),
+              },
+            }
+          : {},
+      );
+      void get().load('background');
+    }
+  },
+
+  answerInput: async (answers) => {
+    const detail = get().detail;
+    if (!detail?.run?.pendingInput || answers.length === 0) return;
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
+
+    set({ detail: { ...detail, pendingAction: 'answer', error: null } });
+
+    try {
+      await createMobileCloudAgentRunClient().answerRunInput(detail.runId, answers);
+      if (!isCloudAccountEpochCurrent(account)) return;
+      await get().openRun(detail.runId);
+    } catch (error) {
+      if (!isCloudAccountEpochCurrent(account)) return;
+      set((state) =>
+        state.detail?.runId === detail.runId
+          ? {
+              detail: {
+                ...state.detail,
+                pendingAction: null,
+                error: describeCloudRunError(error, CLOUD_RUN_INPUT_ERROR),
               },
             }
           : {},

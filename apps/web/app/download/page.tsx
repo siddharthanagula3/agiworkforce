@@ -20,7 +20,7 @@ const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 const CHECKSUM_FILE = 'SHA256SUMS';
 const CHECKSUM_BUNDLE = `${CHECKSUM_FILE}.sigstore.json`;
 const SAMPLE_ARCHIVE = 'agiworkforce-darwin-arm64.tar.gz';
-const DESKTOP_INSTALLER = 'agiworkforce.dmg';
+const DESKTOP_INSTALLER = 'AGI-Cloud-<version>-arm64.dmg';
 const DESKTOP_APP_PATH = '/Applications/AGI Cloud.app';
 const CERTIFICATE_ISSUER = 'https://token.actions.githubusercontent.com';
 const RELEASE_REPOSITORY = 'siddharthanagula3/agiworkforce';

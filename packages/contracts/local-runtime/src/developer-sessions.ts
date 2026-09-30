@@ -7,6 +7,7 @@ import type {
   TurnFailureAction,
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
+import type { MessageKind } from '@agiworkforce/types';
 
 export const DEVELOPER_SESSION_COMMANDS = [
   'developer_runtime_status',
@@ -68,6 +69,7 @@ export interface LocalDeveloperSession {
   createdAt: string;
   updatedAt: string;
   origin: DeveloperSessionSource;
+  location?: 'cloud';
 }
 
 /**
@@ -261,6 +263,8 @@ export type DeveloperSessionEvent =
       requestId: string;
       summary: string;
       detail: string;
+      /** Present when the agent asks the user to choose, not to allow a step. */
+      question?: DeveloperApprovalQuestion;
     }
   | {
       type: 'approval-answered';
@@ -270,6 +274,27 @@ export type DeveloperSessionEvent =
       approved: boolean;
     }
   | { type: 'runtime-stopped'; message: string };
+
+export const DEVELOPER_SESSION_EVENT_MESSAGE_KINDS = Object.freeze({
+  'turn-started': 'status',
+  'output-delta': 'text',
+  'turn-finished': 'status',
+  'tool-queued': 'tool_call',
+  'tool-started': 'tool_call',
+  'command-started': 'tool_call',
+  'file-changed': 'tool_result',
+  'turn-diff': 'tool_result',
+  'tool-finished': 'tool_result',
+  'approval-requested': 'approval',
+  'approval-answered': 'approval',
+  'runtime-stopped': 'error',
+} as const satisfies Readonly<Record<DeveloperSessionEvent['type'], MessageKind>>);
+
+export function messageKindForDeveloperSessionEvent(
+  type: DeveloperSessionEvent['type'],
+): MessageKind {
+  return DEVELOPER_SESSION_EVENT_MESSAGE_KINDS[type];
+}
 
 export interface DeveloperTurnRequest {
   rootId: string;
@@ -356,10 +381,17 @@ export function parseWorkingTreeStatus(output: string): WorkingTreeChange[] {
   return changes;
 }
 
+export interface DeveloperApprovalQuestion {
+  question: string;
+  options: string[];
+}
+
 export interface DeveloperApprovalAnswer {
   rootId: string;
   threadId: string;
   turnId: string;
   requestId: string;
   approved: boolean;
+  /** The option the user chose, for a question. */
+  note?: string;
 }
