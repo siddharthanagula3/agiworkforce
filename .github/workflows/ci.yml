@@ -406,8 +406,8 @@ jobs:
         run: |
           set -uo pipefail
           for attempt in 1 2 3; do
-            output=$(pnpm audit --audit-level=critical 2>&1)
-            status=$?
+            status=0
+            output=$(pnpm audit --audit-level=critical 2>&1) || status=$?
             printf '%s\n' "$output"
             if [ "$status" -eq 0 ]; then exit 0; fi
             if ! printf '%s' "$output" | grep -Eq 'ERR_SOCKET_TIMEOUT|ERR_PNPM_FETCH|ECONNRESET|ETIMEDOUT|Socket timeout'; then
@@ -427,8 +427,8 @@ jobs:
         run: |
           set -uo pipefail
           for attempt in 1 2 3; do
-            output=$(pnpm audit --audit-level=high 2>&1)
-            status=$?
+            status=0
+            output=$(pnpm audit --audit-level=high 2>&1) || status=$?
             printf '%s\n' "$output"
             if [ "$status" -eq 0 ]; then exit 0; fi
             if ! printf '%s' "$output" | grep -Eq 'ERR_SOCKET_TIMEOUT|ERR_PNPM_FETCH|ECONNRESET|ETIMEDOUT|Socket timeout'; then

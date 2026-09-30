@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { parse as parseYaml } from 'yaml';
 
 const WORKFLOW = path.join(process.cwd(), '.github/workflows/ci.yml');
 const AGGREGATE = 'ci-complete';
@@ -154,3 +157,92 @@ test('platform lanes still gate on change detection', () => {
     );
   }
 });
+
+const securitySteps = parseYaml(fs.readFileSync(WORKFLOW, 'utf8')).jobs.security.steps;
+
+for (const level of ['critical', 'high']) {
+  const step = securitySteps.find((entry) =>
+    entry.name?.startsWith(`Dependency audit (JS), ${level} (blocking`),
+  );
+
+  for (const scenario of ['clean', 'advisory', 'transient', 'persistent']) {
+    test(`${level} audit preserves output and blocking decisions under bash errexit: ${scenario}`, () => {
+      assert.ok(step?.run, `missing actual ${level} dependency audit script`);
+      assert.equal(step.shell, 'bash');
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-audit-capture-'));
+      try {
+        fs.writeFileSync(
+          path.join(directory, 'pnpm'),
+          `#!/bin/sh
+set -eu
+printf '%s\\n' "$*" >> "$AUDIT_CASE_DIR/calls"
+count=$(wc -l < "$AUDIT_CASE_DIR/calls" | tr -d ' ')
+case "$AUDIT_SCENARIO" in
+  clean) printf '%s\\n' 'synthetic audit clean'; exit 0 ;;
+  advisory) printf '%s\\n' 'synthetic vulnerability blocks audit'; exit 7 ;;
+  transient)
+    if [ "$count" -eq 1 ]; then printf '%s\\n' 'ERR_SOCKET_TIMEOUT synthetic transient'; exit 1; fi
+    printf '%s\\n' 'synthetic audit recovered'; exit 0 ;;
+  persistent) printf '%s\\n' 'ERR_PNPM_FETCH synthetic persistent'; exit 1 ;;
+  *) exit 99 ;;
+esac
+`,
+          { mode: 0o700 },
+        );
+        fs.writeFileSync(
+          path.join(directory, 'sleep'),
+          '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$AUDIT_CASE_DIR/sleeps"\n',
+          { mode: 0o700 },
+        );
+        const result = spawnSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', step.run], {
+          encoding: 'utf8',
+          env: {
+            PATH: `${directory}:/usr/bin:/bin`,
+            AUDIT_CASE_DIR: directory,
+            AUDIT_SCENARIO: scenario,
+          },
+          timeout: 5000,
+        });
+        assert.equal(result.error, undefined);
+        assert.equal(result.signal, null);
+        const expectedCalls = { clean: 1, advisory: 1, transient: 2, persistent: 3 }[scenario];
+        assert.deepEqual(
+          fs.readFileSync(path.join(directory, 'calls'), 'utf8').trim().split('\n'),
+          Array(expectedCalls).fill(`audit --audit-level=${level}`),
+        );
+        const sleeps = fs.existsSync(path.join(directory, 'sleeps'))
+          ? fs.readFileSync(path.join(directory, 'sleeps'), 'utf8').trim().split('\n')
+          : [];
+        assert.deepEqual(
+          sleeps,
+          Array(scenario === 'persistent' ? 3 : scenario === 'transient' ? 1 : 0).fill('60'),
+        );
+        assert.equal(
+          result.status,
+          scenario === 'advisory' ? 7 : scenario === 'persistent' ? 1 : 0,
+        );
+        assert.equal(result.stderr, '');
+        if (scenario === 'advisory') {
+          assert.match(result.stdout, /synthetic vulnerability blocks audit/);
+          assert.doesNotMatch(result.stdout, /retrying|unreachable/);
+        } else if (scenario === 'transient') {
+          assert.match(result.stdout, /ERR_SOCKET_TIMEOUT synthetic transient/);
+          assert.match(result.stdout, /synthetic audit recovered/);
+          assert.match(result.stdout, /unreachable on attempt 1; retrying/);
+          assert.doesNotMatch(result.stdout, /after 3 attempts/);
+        } else if (scenario === 'persistent') {
+          assert.equal(
+            (result.stdout.match(/ERR_PNPM_FETCH synthetic persistent/g) ?? []).length,
+            3,
+          );
+          assert.match(result.stdout, /unreachable after 3 attempts/);
+        } else {
+          assert.match(result.stdout, /synthetic audit clean/);
+          assert.doesNotMatch(result.stdout, /retrying|unreachable/);
+        }
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    });
+  }
+}
