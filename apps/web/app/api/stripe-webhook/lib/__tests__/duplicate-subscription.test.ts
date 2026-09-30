@@ -72,10 +72,11 @@ interface FakeSubscription {
 
 interface FakeInvoice {
   id: string;
-  subscriptionId: string;
+  subscriptionId: string | null;
   customerId: string;
   status: string;
   auto_advance: boolean;
+  metadata?: Record<string, string>;
 }
 
 interface FakeRefund {
@@ -127,6 +128,7 @@ function harness(options: {
   const refunds = [...(options.refunds ?? [])];
   const invoiceObject = (invoice: FakeInvoice) => ({
     ...invoice,
+    metadata: { ...invoice.metadata },
     customer: invoice.customerId,
     parent: { subscription_details: { subscription: invoice.subscriptionId } },
   });
@@ -209,11 +211,14 @@ function harness(options: {
       }),
     },
     invoices: {
-      list: vi.fn(async (params: { subscription: string; status: string }) => ({
+      list: vi.fn(async (params: { subscription?: string; customer?: string; status: string }) => ({
         data: [...invoices.values()]
           .filter(
             (invoice) =>
-              invoice.subscriptionId === params.subscription && invoice.status === params.status,
+              (params.subscription === undefined ||
+                invoice.subscriptionId === params.subscription) &&
+              (params.customer === undefined || invoice.customerId === params.customer) &&
+              invoice.status === params.status,
           )
           .map(invoiceObject),
         has_more: false,
@@ -223,12 +228,18 @@ function harness(options: {
         if (!invoice) throw new Error('Invoice missing');
         return invoiceObject(invoice);
       }),
-      update: vi.fn(async (id: string, params: { auto_advance: boolean }) => {
-        const invoice = invoices.get(id);
-        if (!invoice) throw new Error('Invoice missing');
-        invoice.auto_advance = params.auto_advance;
-        return invoiceObject(invoice);
-      }),
+      update: vi.fn(
+        async (
+          id: string,
+          params: { auto_advance: boolean; metadata?: Record<string, string> },
+        ) => {
+          const invoice = invoices.get(id);
+          if (!invoice) throw new Error('Invoice missing');
+          invoice.auto_advance = params.auto_advance;
+          invoice.metadata = { ...invoice.metadata, ...params.metadata };
+          return invoiceObject(invoice);
+        },
+      ),
     },
     customers: {
       retrieve: vi.fn(async () => ({ id: 'cus_1', email: 'buyer@example.com', deleted: false })),
@@ -582,12 +593,73 @@ describe('duplicate settlement preserves invoice collection and allocated paymen
     expect(world.stripeMock.invoices.update).toHaveBeenCalledTimes(1);
     expect(world.stripeMock.invoices.update).toHaveBeenCalledWith(
       'in_A_collecting',
-      { auto_advance: true },
+      expect.objectContaining({ auto_advance: true, metadata: expect.any(Object) }),
       { idempotencyKey: 'duplicate-subscription-collection:sub_B:in_A_collecting' },
     );
     expect(world.stripeMock.subscriptions.update.mock.invocationCallOrder[0]).toBeLessThan(
       world.stripeMock.subscriptions.cancel.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it('restores customer-wide original collection only for standalone or live subscriptions', async () => {
+    const world = settlementWorld({
+      subscriptions: [
+        { id: 'sub_A', status: 'past_due', created: 100, latest_invoice: 'in_A' },
+        { id: 'sub_B', status: 'active', created: 200, latest_invoice: 'in_B' },
+        { id: 'sub_C', status: 'active', created: 300, latest_invoice: 'in_C' },
+        { id: 'sub_D', status: 'canceled', created: 400, latest_invoice: 'in_D' },
+      ],
+      invoices: [
+        {
+          id: 'in_C',
+          subscriptionId: 'sub_C',
+          customerId: 'cus_1',
+          status: 'open',
+          auto_advance: true,
+        },
+        {
+          id: 'in_D',
+          subscriptionId: 'sub_D',
+          customerId: 'cus_1',
+          status: 'open',
+          auto_advance: true,
+        },
+        {
+          id: 'in_standalone',
+          subscriptionId: null,
+          customerId: 'cus_1',
+          status: 'open',
+          auto_advance: true,
+        },
+        {
+          id: 'in_paused',
+          subscriptionId: null,
+          customerId: 'cus_1',
+          status: 'open',
+          auto_advance: false,
+        },
+        {
+          id: 'in_B',
+          subscriptionId: 'sub_B',
+          customerId: 'cus_1',
+          status: 'open',
+          auto_advance: true,
+        },
+      ],
+    });
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(world.invoices.get('in_C')?.auto_advance).toBe(true);
+    expect(world.invoices.get('in_standalone')?.auto_advance).toBe(true);
+    expect(world.invoices.get('in_D')?.auto_advance).toBe(false);
+    expect(world.invoices.get('in_paused')?.auto_advance).toBe(false);
+    expect(world.invoices.get('in_B')?.auto_advance).toBe(false);
+    expect(world.stripeMock.invoices.list).toHaveBeenCalledWith({
+      customer: 'cus_1',
+      status: 'open',
+      limit: 100,
+    });
   });
 
   it('does not cancel when the original collection state cannot be saved durably', async () => {
@@ -665,6 +737,134 @@ describe('duplicate settlement preserves invoice collection and allocated paymen
 
     expect(world.invoices.get('in_A_collecting')?.auto_advance).toBe(false);
     expect(world.stripeMock.invoices.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves a later operator pause when global completion failed after durable invoice restoration', async () => {
+    const world = settlementWorld();
+    const update = world.stripeMock.subscriptions.update.getMockImplementation()!;
+    world.stripeMock.subscriptions.update
+      .mockImplementationOnce(update)
+      .mockRejectedValueOnce(new Error('completion metadata unavailable'));
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('completion metadata unavailable');
+
+    const invoice = world.invoices.get('in_A_collecting')!;
+    expect(invoice.auto_advance).toBe(true);
+    const receipts = Object.entries(invoice.metadata!);
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]![0].length).toBeLessThanOrEqual(40);
+    expect(JSON.parse(receipts[0]![1])).toEqual({
+      operation: 'sub_B',
+      kept: 'sub_A',
+      customer: 'cus_1',
+      invoice: 'in_A_collecting',
+      subscription: 'sub_A',
+    });
+    expect(
+      JSON.parse(world.subscriptions.get('sub_B')!.metadata!['agi_duplicate_collection']!).complete,
+    ).toBe(false);
+    invoice.auto_advance = false;
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(invoice.auto_advance).toBe(false);
+    expect(world.stripeMock.invoices.update).toHaveBeenCalledTimes(1);
+    expect(
+      JSON.parse(world.subscriptions.get('sub_B')!.metadata!['agi_duplicate_collection']!).complete,
+    ).toBe(true);
+  });
+
+  it('preserves a later operator pause when the invoice restoration response was lost', async () => {
+    const world = settlementWorld();
+    const update = world.stripeMock.invoices.update.getMockImplementation()!;
+    world.stripeMock.invoices.update.mockImplementationOnce(async (id, params) => {
+      await update(id, params);
+      throw new Error('restoration response lost');
+    });
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('restoration response lost');
+    const invoice = world.invoices.get('in_A_collecting')!;
+    expect(invoice.auto_advance).toBe(true);
+    invoice.auto_advance = false;
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(invoice.auto_advance).toBe(false);
+    expect(world.stripeMock.invoices.update).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['operation', 'kept', 'customer', 'invoice', 'subscription'])(
+    'refuses a durable receipt with a mismatched %s',
+    async (field) => {
+      const world = settlementWorld();
+      const update = world.stripeMock.subscriptions.update.getMockImplementation()!;
+      world.stripeMock.subscriptions.update
+        .mockImplementationOnce(update)
+        .mockRejectedValueOnce(new Error('completion metadata unavailable'));
+      await expect(
+        upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+      ).rejects.toThrow('completion metadata unavailable');
+      const invoice = world.invoices.get('in_A_collecting')!;
+      const receipts = Object.entries(invoice.metadata!);
+      expect(receipts).toHaveLength(1);
+      const [key, value] = receipts[0]!;
+      invoice.metadata![key] = JSON.stringify({ ...JSON.parse(value), [field]: 'different' });
+      invoice.auto_advance = false;
+
+      await expect(
+        upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+      ).rejects.toThrow('receipt does not match its settlement');
+
+      expect(invoice.auto_advance).toBe(false);
+      expect(world.stripeMock.invoices.update).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('retains older restoration receipts when a second duplicate settlement restores the same invoice', async () => {
+    const world = settlementWorld({
+      subscriptions: [
+        { id: 'sub_A', status: 'past_due', created: 100, latest_invoice: 'in_A' },
+        { id: 'sub_B', status: 'active', created: 200, latest_invoice: 'in_B' },
+        { id: 'sub_C', status: 'active', created: 300, latest_invoice: 'in_C' },
+      ],
+    });
+    const update = world.stripeMock.subscriptions.update.getMockImplementation()!;
+    world.stripeMock.subscriptions.update
+      .mockImplementationOnce(update)
+      .mockRejectedValueOnce(new Error('completion metadata unavailable'));
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('completion metadata unavailable');
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_C'));
+    const invoice = world.invoices.get('in_A_collecting')!;
+    expect(Object.keys(invoice.metadata!)).toHaveLength(2);
+    invoice.auto_advance = false;
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(invoice.auto_advance).toBe(false);
+    expect(world.stripeMock.invoices.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses cancellation when a restoring invoice cannot store a durable receipt', async () => {
+    const world = settlementWorld({ paidPaymentIntents: { in_B: ['pi_B'] } });
+    const invoice = world.invoices.get('in_A_collecting')!;
+    invoice.metadata = Object.fromEntries(
+      Array.from({ length: 50 }, (_, index) => [`key_${index}`, 'value']),
+    );
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('receipt has no metadata capacity');
+
+    expect(world.stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+    expect(world.stripeMock.refunds.create).not.toHaveBeenCalled();
+    expect(invoice.auto_advance).toBe(true);
   });
 
   it('refunds only the duplicate invoice allocation when a payment paid several invoices', async () => {
@@ -776,13 +976,43 @@ describe('duplicate settlement preserves invoice collection and allocated paymen
 });
 
 describe('refunding a charge from another subscription', () => {
-  function refundWorld(invoiceSubscriptionId: string) {
+  function allocation(subscription: string, amount: number, id: string) {
+    return {
+      id,
+      amount_paid: amount,
+      status: 'paid',
+      payment: { type: 'payment_intent', payment_intent: 'pi_1' },
+      invoice: {
+        id: `in_${id}`,
+        customer: 'cus_1',
+        status: 'paid',
+        amount_paid: amount,
+        amount_remaining: 0,
+        parent: { subscription_details: { subscription } },
+        lines: { has_more: false, data: [{ period: { start: PERIOD_START, end: PERIOD_END } }] },
+      },
+    };
+  }
+
+  function receipt(amount: number, duplicate = false): FakeRefund {
+    return {
+      id: duplicate ? 're_duplicate' : 're_ordinary',
+      charge: 'ch_1',
+      amount,
+      status: 'succeeded',
+      metadata: duplicate
+        ? { duplicate_subscription_id: 'sub_B', duplicate_invoice_payment_id: 'inpay_B' }
+        : {},
+    };
+  }
+
+  function refundWorld(invoiceSubscriptionId = 'sub_A') {
     const statements: string[] = [];
     const db = {
       query: vi.fn(async (sql: string) => {
         statements.push(sql);
         if (sql.includes('from profiles where stripe_customer_id')) return [{ id: 'user_1' }];
-        if (sql.includes('from subscriptions')) {
+        if (sql.includes('from subscriptions'))
           return [
             {
               subscription_id: 'row_1',
@@ -792,8 +1022,7 @@ describe('refunding a charge from another subscription', () => {
               current_period_end: new Date(PERIOD_END * 1000),
             },
           ];
-        }
-        if (sql.includes('from token_credits')) {
+        if (sql.includes('from token_credits'))
           return [
             {
               id: 'credits_1',
@@ -801,7 +1030,6 @@ describe('refunding a charge from another subscription', () => {
               top_up_allocated_microusd: 0,
             },
           ];
-        }
         if (sql.includes('from credit_transactions')) return [{ revoked: 0 }];
         return [];
       }),
@@ -809,22 +1037,6 @@ describe('refunding a charge from another subscription', () => {
         statements.push(sql);
         return 1;
       }),
-    };
-    const stripe = {
-      refunds: { list: vi.fn(async () => ({ data: [] as FakeRefund[], has_more: false })) },
-      invoicePayments: {
-        list: vi.fn(async () => ({
-          data: [
-            {
-              invoice: {
-                id: 'in_1',
-                parent: { subscription_details: { subscription: invoiceSubscriptionId } },
-                lines: { data: [{ period: { start: PERIOD_START, end: PERIOD_END } }] },
-              },
-            },
-          ],
-        })),
-      },
     };
     const charge = {
       id: 'ch_1',
@@ -836,124 +1048,179 @@ describe('refunding a charge from another subscription', () => {
       created: PERIOD_START + 60,
       metadata: {},
     };
+    const stripe = {
+      refunds: { list: vi.fn(async () => ({ data: [] as FakeRefund[], has_more: false })) },
+      invoicePayments: {
+        list: vi.fn(async () => ({
+          data: [allocation(invoiceSubscriptionId, charge.amount, 'inpay_A')],
+          has_more: false,
+        })),
+      },
+    };
     return { db, stripe, charge, statements };
   }
 
-  it('leaves the tracked plan alone when the refunded charge paid a duplicate subscription', async () => {
+  function sharedWorld(refunded: number) {
+    const world = refundWorld();
+    Object.assign(world.charge, {
+      amount: 3000,
+      amount_refunded: refunded,
+      refunded: refunded === 3000,
+    });
+    world.stripe.invoicePayments.list.mockResolvedValue({
+      data: [allocation('sub_A', 2500, 'inpay_A'), allocation('sub_B', 500, 'inpay_B')],
+      has_more: false,
+    });
+    return world;
+  }
+
+  it('leaves the tracked plan alone when the charge paid another subscription', async () => {
     const world = refundWorld('sub_B');
-
     await handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never);
-
-    expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
-      false,
-    );
-    expect(world.statements.some((sql) => sql.includes("plan_tier = 'free'"))).toBe(false);
+    expect(world.db.execute).not.toHaveBeenCalled();
   });
 
-  it('still revokes the plan when the refunded charge paid the tracked subscription', async () => {
-    const world = refundWorld('sub_A');
-
+  it('revokes a fully refunded kept allocation even when the duplicate allocation is first', async () => {
+    const world = sharedWorld(3000);
+    world.stripe.invoicePayments.list.mockResolvedValue({
+      data: [allocation('sub_B', 500, 'inpay_B'), allocation('sub_A', 2500, 'inpay_A')],
+      has_more: false,
+    });
     await handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never);
-
-    expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
-      true,
+    expect(world.db.execute).toHaveBeenCalledWith(
+      'select revoke_plan_allowance_microusd($1, $2, $3, $4)',
+      ['user_1', 'credits_1', 200_000_000, 'Refund for charge ch_1'],
     );
+    expect(world.statements.some((sql) => sql.includes("plan_tier = 'free'"))).toBe(true);
+    expect(world.stripe.invoicePayments.list).toHaveBeenCalledWith({
+      payment: { type: 'payment_intent', payment_intent: 'pi_1' },
+      status: 'paid',
+      limit: 100,
+      expand: ['data.invoice'],
+    });
+  });
+
+  it('refuses a fully refunded charge that funded only part of a settled kept invoice', async () => {
+    const world = refundWorld();
+    Object.assign(world.charge, { amount: 4000, amount_refunded: 4000, refunded: true });
+    const partialPayment = allocation('sub_A', 4000, 'inpay_A');
+    partialPayment.invoice.amount_paid = 10000;
+    world.stripe.invoicePayments.list.mockResolvedValue({
+      data: [partialPayment],
+      has_more: false,
+    });
+
+    await expect(
+      handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never),
+    ).rejects.toThrow('complete settled payment attribution');
+
+    expect(world.db.execute).not.toHaveBeenCalled();
+    expect(world.statements.some((sql) => sql.includes('from token_credits'))).toBe(false);
+  });
+
+  it.each([
+    { status: 'open', amount_paid: 4000, amount_remaining: 6000 },
+    { status: 'paid', amount_paid: 4000, amount_remaining: 1 },
+    { status: 'paid', amount_paid: Number.NaN, amount_remaining: 0 },
+  ])('refuses an unsettled or unverifiable kept invoice %j', async (invoiceState) => {
+    const world = refundWorld();
+    Object.assign(world.charge, { amount: 4000, amount_refunded: 4000, refunded: true });
+    const partialPayment = allocation('sub_A', 4000, 'inpay_A');
+    Object.assign(partialPayment.invoice, invoiceState);
+    world.stripe.invoicePayments.list.mockResolvedValue({
+      data: [partialPayment],
+      has_more: false,
+    });
+
+    await expect(
+      handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never),
+    ).rejects.toThrow('complete settled payment attribution');
+
+    expect(world.db.execute).not.toHaveBeenCalled();
   });
 
   it.each(['succeeded', 'pending'])(
-    'keeps the tracked allowance when a shared payment has only a %s duplicate refund',
+    'preserves kept allowance for a signed %s duplicate-only refund',
     async (status) => {
-      const world = refundWorld('sub_A');
-      Object.assign(world.charge, { amount: 3000, amount_refunded: 500, refunded: false });
-      world.stripe.refunds.list.mockResolvedValueOnce({
-        has_more: false,
-        data: [
-          {
-            id: 're_duplicate',
-            amount: 500,
-            status,
-            metadata: {
-              duplicate_subscription_id: 'sub_B',
-              duplicate_invoice_payment_id: 'inpay_B',
-            },
-          },
-        ],
+      const world = sharedWorld(500);
+      Object.assign(world.charge, {
+        refunds: { has_more: false, data: [{ ...receipt(500, true), status }] },
       });
-
       await handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never);
-
-      expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
-        false,
-      );
-      expect(world.statements.some((sql) => sql.includes("plan_tier = 'free'"))).toBe(false);
+      expect(world.db.execute).not.toHaveBeenCalled();
+      expect(world.stripe.refunds.list).not.toHaveBeenCalled();
     },
   );
 
-  it('still revokes a fully refunded kept allocation when a shared payment also refunded a duplicate', async () => {
-    const world = refundWorld('sub_A');
-    Object.assign(world.charge, { amount: 3000, amount_refunded: 3000, refunded: true });
-    world.stripe.refunds.list.mockResolvedValueOnce({
-      has_more: false,
-      data: [
-        {
-          id: 're_duplicate',
-          amount: 500,
-          status: 'succeeded',
-          metadata: {
-            duplicate_subscription_id: 'sub_B',
-            duplicate_invoice_payment_id: 'inpay_B',
-          },
-        },
-        { id: 're_plan', amount: 2500, status: 'succeeded', metadata: {} },
-      ],
+  it('uses the kept allocation as the denominator for a signed ordinary refund', async () => {
+    const world = sharedWorld(750);
+    Object.assign(world.charge, {
+      refunds: { has_more: false, data: [receipt(500, true), receipt(250)] },
     });
-
     await handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never);
-
-    expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
-      true,
+    expect(world.db.execute).toHaveBeenCalledWith(
+      'select revoke_plan_allowance_microusd($1, $2, $3, $4)',
+      ['user_1', 'credits_1', 20_000_000, 'Refund for charge ch_1'],
     );
-    expect(world.statements.some((sql) => sql.includes("plan_tier = 'free'"))).toBe(true);
   });
 
-  it('refuses newer duplicate receipts that could hide an ordinary refund in an older charge event', async () => {
-    const world = refundWorld('sub_A');
-    Object.assign(world.charge, { amount: 3000, amount_refunded: 250, refunded: false });
-    world.stripe.refunds.list.mockResolvedValueOnce({
-      has_more: false,
-      data: [
-        {
-          id: 're_duplicate_later',
-          amount: 500,
-          status: 'pending',
-          metadata: {
-            duplicate_subscription_id: 'sub_B',
-            duplicate_invoice_payment_id: 'inpay_B',
-          },
-        },
-        { id: 're_ordinary', amount: 250, status: 'succeeded', metadata: {} },
-      ],
+  it('refuses a later small live receipt rather than subtracting it from an older signed event', async () => {
+    const world = sharedWorld(250);
+    world.stripe.refunds.list.mockResolvedValue({ has_more: false, data: [receipt(100, true)] });
+    await expect(
+      handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never),
+    ).rejects.toThrow('complete signed charge snapshot');
+    expect(world.db.execute).not.toHaveBeenCalled();
+    expect(world.stripe.refunds.list).not.toHaveBeenCalled();
+  });
+
+  it('refuses incomplete signed refund snapshots', async () => {
+    const world = sharedWorld(500);
+    Object.assign(world.charge, { refunds: { has_more: true, data: [receipt(500, true)] } });
+    await expect(
+      handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never),
+    ).rejects.toThrow('complete signed charge snapshot');
+    expect(world.db.execute).not.toHaveBeenCalled();
+  });
+
+  it('refuses a signed snapshot whose receipt sum differs from its cumulative refund', async () => {
+    const world = sharedWorld(250);
+    Object.assign(world.charge, { refunds: { has_more: false, data: [receipt(100, true)] } });
+    await expect(
+      handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never),
+    ).rejects.toThrow('receipts do not match');
+    expect(world.db.execute).not.toHaveBeenCalled();
+  });
+
+  it('refuses another customer in a payment allocation', async () => {
+    const world = sharedWorld(3000);
+    const mismatched = allocation('sub_A', 3000, 'inpay_A');
+    mismatched.invoice.customer = 'cus_other';
+    world.stripe.invoicePayments.list.mockResolvedValue({ data: [mismatched], has_more: false });
+    await expect(
+      handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never),
+    ).rejects.toThrow('allocation cannot be verified');
+    expect(world.db.execute).not.toHaveBeenCalled();
+  });
+
+  it('refuses incomplete payment mappings', async () => {
+    const world = sharedWorld(3000);
+    world.stripe.invoicePayments.list.mockResolvedValue({
+      has_more: true,
+      data: [allocation('sub_A', 2500, 'inpay_A')],
     });
-
     await expect(
       handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never),
-    ).rejects.toThrow('Duplicate refund receipts exceed the charge refund snapshot');
-
-    expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
-      false,
-    );
+    ).rejects.toThrow('mapping is incomplete');
+    expect(world.db.execute).not.toHaveBeenCalled();
   });
 
-  it('retries an incomplete charge refund listing before revoking any kept allowance', async () => {
-    const world = refundWorld('sub_A');
-    world.stripe.refunds.list.mockResolvedValueOnce({ data: [], has_more: true });
-
+  it('refuses attribution to an unrelated invoice without proven duplicate receipts', async () => {
+    const world = sharedWorld(250);
+    Object.assign(world.charge, { refunds: { has_more: false, data: [receipt(250)] } });
     await expect(
       handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never),
-    ).rejects.toThrow('Charge refunds exceed');
-
-    expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
-      false,
-    );
+    ).rejects.toThrow('attribution is ambiguous');
+    expect(world.db.execute).not.toHaveBeenCalled();
   });
 });
