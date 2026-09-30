@@ -35,6 +35,8 @@ struct OperationHooks {
     after_staging_write: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
     before_write_open: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
     after_write_open: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    #[cfg(unix)]
+    before_directory_sync: std::sync::Mutex<Option<Box<dyn FnOnce(&File) + Send>>>,
     fail_directory_sync: std::sync::atomic::AtomicBool,
 }
 
@@ -108,7 +110,22 @@ impl DirectoryAuthority {
             anyhow::bail!("the injected directory flush failed");
         }
         #[cfg(unix)]
-        nix::unistd::fsync(self.file.as_ref())?;
+        {
+            let mut options = OpenOptions::new();
+            options.read(true).follow(FollowSymlinks::No);
+            let directory = confined::open(self.file.as_ref(), Path::new("."), &options)?;
+            let held = Metadata::from_file(self.file.as_ref())?;
+            let opened = Metadata::from_file(&directory)?;
+            anyhow::ensure!(
+                opened.is_dir() && same_identity(&held, &opened),
+                "the directory flush handle changed its granted identity"
+            );
+            #[cfg(test)]
+            if let Some(observe) = self.hooks.before_directory_sync.lock().unwrap().take() {
+                observe(&directory);
+            }
+            nix::unistd::fsync(&directory)?;
+        }
         #[cfg(not(unix))]
         self.file.sync_all()?;
         Ok(())
