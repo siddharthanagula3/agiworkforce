@@ -113,13 +113,14 @@ export class WebSocketRateLimiter {
   ): RateLimitResult {
     const now = Date.now();
     let entry = limitMap.get(ip);
+    const retainViolations = entry && now - entry.lastViolation < WS_BLACKLIST_DURATION_MS;
 
     if (!entry || now - entry.windowStart >= WS_RATE_LIMIT_WINDOW_MS) {
       entry = {
         count: 0,
         windowStart: now,
-        violations: entry?.violations ?? 0,
-        lastViolation: entry?.lastViolation ?? 0,
+        violations: retainViolations ? (entry?.violations ?? 0) : 0,
+        lastViolation: retainViolations ? (entry?.lastViolation ?? 0) : 0,
       };
       limitMap.set(ip, entry);
     }
@@ -157,13 +158,21 @@ export class WebSocketRateLimiter {
     const cutoff = now - WS_RATE_LIMIT_WINDOW_MS * 2;
 
     for (const [ip, entry] of this.connectionLimits.entries()) {
-      if (entry.windowStart < cutoff && entry.violations === 0) {
+      if (
+        entry.windowStart < cutoff &&
+        (entry.violations === 0 || now - entry.lastViolation >= WS_BLACKLIST_DURATION_MS) &&
+        !this.isBlacklisted(ip).blacklisted
+      ) {
         this.connectionLimits.delete(ip);
       }
     }
 
     for (const [ip, entry] of this.messageLimits.entries()) {
-      if (entry.windowStart < cutoff && entry.violations === 0) {
+      if (
+        entry.windowStart < cutoff &&
+        (entry.violations === 0 || now - entry.lastViolation >= WS_BLACKLIST_DURATION_MS) &&
+        !this.isBlacklisted(ip).blacklisted
+      ) {
         this.messageLimits.delete(ip);
       }
     }

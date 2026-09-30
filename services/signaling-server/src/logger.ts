@@ -22,6 +22,10 @@ const isTest = process.env['NODE_ENV'] === 'test';
 const logLevel = process.env['LOG_LEVEL'] ?? (isProduction ? 'info' : isTest ? 'silent' : 'debug');
 
 export const LOG_REDACTED_PATHS = [
+  'error',
+  '*.error',
+  'stack',
+  '*.stack',
   'pairToken',
   '*.pairToken',
   'pairTokens',
@@ -75,6 +79,10 @@ export function buildLogger(destination?: pino.DestinationStream, level: string 
 }
 
 export const logger = buildLogger();
+
+export function logUnhandledRejection(error: unknown): void {
+  logger.fatal({ error }, 'Unhandled promise rejection');
+}
 
 export function createChildLogger(correlationId: string) {
   return logger.child({ correlationId });

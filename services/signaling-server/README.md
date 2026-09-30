@@ -26,22 +26,20 @@ target is serving, not only the one DNS currently resolves to.
 
 ## Probes
 
-| Path      | Answers                                                                                                                    |
-| --------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `/live`   | `200` while the process runs. It never consults the pairing store.                                                         |
-| `/ready`  | `503` until the pairing store has answered once after start, then `200`, with the store's live state in `checks.database`. |
-| `/health` | `200 healthy`, or `503 degraded` while the pairing store is down, with the state in `dependencies.database`.               |
+| Path      | Answers                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------ |
+| `/live`   | `200` while the process runs. It never consults the pairing store.                                           |
+| `/ready`  | `200` when startup is complete and the pairing store is available; otherwise `503`.                          |
+| `/health` | `200 healthy`, or `503 degraded` while the pairing store is down, with the state in `dependencies.database`. |
 
-`/ready` gates on the store at startup only. Wrong credentials, an unreachable
-Neon or a missing `signaling_sessions` table keep a new deployment from ever
-reporting ready, so neither Fly nor Railway routes to it or promotes it. Once
-ready, it stays `200` through a later store outage: the relay runs as a single
-machine and live pairings relay from memory without the store, so a check that
-dropped the machine during an outage would cut every live pairing to protect
-new ones that cannot be made anyway. The Fly `http_service` check, the Railway
-healthcheck and the container `HEALTHCHECK` all target `/ready`.
+`/ready` refuses new routing during startup, shutdown, or a pairing-store
+outage. Wrong credentials, an unreachable Neon or a missing
+`signaling_sessions` table keep a new deployment from reporting ready. Existing
+WebSocket pairings continue relaying from memory during a store outage. A
+readiness failure must stop new routing without restarting the process or
+disconnecting those peers.
 
-`/health` is the one that turns red during an outage. The deploy workflow's
+`/health` also turns red during an outage. The deploy workflow's
 post-deploy gates and the readiness check below read it, so a deployment whose
 store is broken fails its gate instead of passing it. The store probe reads
 `signaling_sessions` with a bounded deadline and is cached for 15 seconds, so
