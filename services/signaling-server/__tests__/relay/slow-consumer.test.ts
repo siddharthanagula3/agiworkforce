@@ -1,5 +1,6 @@
 import type { Socket } from 'node:net';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import WebSocket from 'ws';
 
 import { MAX_SOCKET_BUFFERED_BYTES } from '../../src/constants.js';
 import {
@@ -44,24 +45,32 @@ async function pairedClients(): Promise<{ desktop: RelayClient; mobile: RelayCli
 describe('a participant that stops reading', () => {
   it('is dropped once its backlog passes the cap instead of growing relay memory', async () => {
     const { desktop, mobile } = await pairedClients();
-    (mobile.socket as unknown as { _socket: Socket })._socket.pause();
-
-    const blob = 'x'.repeat(47_000);
-    const frames = Math.ceil((MAX_SOCKET_BUFFERED_BYTES * 3) / blob.length);
-    for (let sent = 0; sent < frames; sent++) {
+    const backlog = vi.spyOn(WebSocket.prototype, 'bufferedAmount', 'get');
+    const mobilePort = (mobile.socket as unknown as { _socket: Socket })._socket.localPort;
+    expect(mobilePort).toBeTypeOf('number');
+    let measuredMobile = false;
+    backlog.mockImplementation(function (this: WebSocket) {
+      const socket = (this as unknown as { _socket: Socket })._socket;
+      if (socket.remotePort !== mobilePort) return 0;
+      measuredMobile = true;
+      return MAX_SOCKET_BUFFERED_BYTES + 1;
+    });
+    try {
       desktop.send({
         type: 'signal',
         kind: 'control',
-        payload: { action: 'code.session.event', data: { blob } },
+        payload: { action: 'code.session.event', data: { blob: 'one frame' } },
       });
+      expect(await desktop.frame('peer_left')).toMatchObject({
+        type: 'peer_left',
+        role: 'mobile',
+      });
+      expect(desktop.closed).toBeNull();
+      expect(measuredMobile).toBe(true);
+    } finally {
+      backlog.mockRestore();
+      desktop.close();
+      mobile.close();
     }
-
-    expect(await desktop.frame('peer_left', 10_000)).toMatchObject({
-      type: 'peer_left',
-      role: 'mobile',
-    });
-    expect(desktop.closed).toBeNull();
-    desktop.close();
-    mobile.close();
-  }, 20_000);
+  });
 });

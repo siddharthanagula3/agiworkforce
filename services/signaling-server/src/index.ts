@@ -1578,7 +1578,7 @@ function getPeer(session: Session, role: Role): Participant | undefined {
 function notifyParticipant(participant: Participant, payload: Record<string, unknown>): void {
   const { socket } = participant;
   if (socket.readyState !== WebSocket.OPEN) return;
-  if (socket.bufferedAmount > MAX_SOCKET_BUFFERED_BYTES * 1000) {
+  if (socket.bufferedAmount > MAX_SOCKET_BUFFERED_BYTES) {
     logger.warn(
       { role: participant.role, bufferedAmount: socket.bufferedAmount },
       'Dropping a participant that stopped reading',
