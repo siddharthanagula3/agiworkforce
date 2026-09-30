@@ -14,7 +14,10 @@ vi.mock('@/lib/rate-limit', async (importOriginal) => ({
 
 vi.stubGlobal('fetch', fetchMock);
 
-import { CLI_RELEASE_PLATFORMS } from '@/lib/releases/github-cli-releases';
+import {
+  CLI_RELEASE_PLATFORMS,
+  CLI_SIGNED_MANIFEST_ASSETS,
+} from '@/lib/releases/github-cli-releases';
 import { DESKTOP_CLOUD_TAG_PREFIX } from '@/lib/releases/github-desktop-releases';
 import { GET as getLatestCliRelease } from '@/app/api/releases/cli/latest/route';
 import { GET as getLatestDesktopRelease } from '@/app/api/releases/desktop-cloud/latest/route';
@@ -66,16 +69,17 @@ function githubRelease(tag: string, prerelease: boolean, assetNames: readonly st
 
 const DESKTOP_INSTALLERS = ['AGI.Cloud_arm64.dmg', 'AGI.Cloud_x64.dmg'];
 const CLI_ARCHIVES = ['darwin-arm64', 'linux-x64'].map(archiveName);
+const CLI_ASSETS = [...CLI_ARCHIVES, ...CLI_SIGNED_MANIFEST_ASSETS];
 
 const PUBLISHED_RELEASES = [
   githubRelease(`${DESKTOP_CLOUD_TAG_PREFIX}1.6.0-nightly.3`, true, DESKTOP_INSTALLERS),
   githubRelease(`${DESKTOP_CLOUD_TAG_PREFIX}1.5.0-beta.2`, true, DESKTOP_INSTALLERS),
   githubRelease(`${DESKTOP_CLOUD_TAG_PREFIX}1.5.0-rc.1`, false, DESKTOP_INSTALLERS),
   githubRelease(`${DESKTOP_CLOUD_TAG_PREFIX}1.4.0`, false, DESKTOP_INSTALLERS),
-  githubRelease('v-cli-2.1.0-beta.1', true, CLI_ARCHIVES),
-  githubRelease('v-cli-2.0.0-rc.2', false, CLI_ARCHIVES),
-  githubRelease('v-cli-2.0.0-nightly.9', true, CLI_ARCHIVES),
-  githubRelease('v-cli-1.9.0', false, CLI_ARCHIVES),
+  githubRelease('v-cli-2.1.0-beta.1', true, CLI_ASSETS),
+  githubRelease('v-cli-2.0.0-rc.2', false, CLI_ASSETS),
+  githubRelease('v-cli-2.0.0-nightly.9', true, CLI_ASSETS),
+  githubRelease('v-cli-1.9.0', false, CLI_ASSETS),
 ];
 
 const UNSTABLE_VERSIONS = ['1.6.0', '1.5.0', '2.1.0', '2.0.0'];
@@ -126,6 +130,16 @@ describe('what /download offers comes from the stable channel it says it reads',
       .getAllByRole('link', { name: /^Download / })
       .map((link) => link.getAttribute('href') ?? '');
     expect(hrefs).toHaveLength(CLI_ARCHIVES.length);
+    for (const name of CLI_ASSETS) {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${DOWNLOAD_ROOT}/v-cli-1.9.0/${name}`,
+        expect.objectContaining({ method: 'HEAD' }),
+      );
+    }
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/api\.github\.com\/repos\/.*\/releases\?/),
+      expect.any(Object),
+    );
     for (const href of hrefs) expect(href).toContain('/v-cli-1.9.0/');
     for (const version of UNSTABLE_VERSIONS) {
       expect(region).not.toHaveTextContent(version);
