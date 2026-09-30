@@ -316,6 +316,14 @@ export async function verifyMessage(state: HmacSessionState, msg: unknown): Prom
     return { ok: false, reason: 'hmac_mismatch' };
   }
 
-  state.nonceCache.set(nonce, now);
+  const claimedAt = Date.now();
+  const verifiedAge = claimedAt - ts;
+  if (verifiedAge > MAX_MESSAGE_AGE_MS || verifiedAge < -MAX_MESSAGE_AGE_MS) {
+    return { ok: false, reason: 'timestamp_expired' };
+  }
+  if (state.nonceCache.has(nonce)) {
+    return { ok: false, reason: 'nonce_replay' };
+  }
+  state.nonceCache.set(nonce, claimedAt);
   return { ok: true };
 }

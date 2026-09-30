@@ -161,6 +161,23 @@ function startConnectWatchdog(attemptId: number): void {
 
 let hmacState: HmacSessionState | null = null;
 
+function isCurrentControlSession(
+  attemptId: number,
+  sessionHmacState: HmacSessionState,
+  peerGeneration: number,
+): boolean {
+  return (
+    isCurrentConnectionAttempt(attemptId) &&
+    hmacState === sessionHmacState &&
+    peerConnectionGeneration === peerGeneration
+  );
+}
+
+function isControlSessionActive(): boolean {
+  const { status } = useConnectionStore.getState();
+  return status === 'connected' || status === 'stale' || status === 'reconnecting';
+}
+
 const pendingControlQueue: Array<{ action: string; payload: unknown }> = [];
 const MAX_PENDING_QUEUE = 200;
 
@@ -189,12 +206,16 @@ function clearPendingControlAcks(): void {
 }
 
 async function flushPendingControlQueue(): Promise<void> {
-  if (pendingControlQueue.length === 0) return;
+  if (pendingControlQueue.length === 0 || !hmacState) return;
   const store = useConnectionStore.getState();
-  while (pendingControlQueue.length > 0) {
+  const attemptId = connectionAttemptId;
+  const sessionHmacState = hmacState;
+  const peerGeneration = peerConnectionGeneration;
+  while (pendingControlQueue.length > 0 && useConnectionStore.getState().status === 'connected') {
     const msg = pendingControlQueue.shift();
     if (msg) {
       const accepted = await store.sendControl(msg.action, msg.payload);
+      if (!isCurrentControlSession(attemptId, sessionHmacState, peerGeneration)) return;
       if (!accepted) {
         pendingControlQueue.unshift(msg);
         return;
@@ -204,6 +225,7 @@ async function flushPendingControlQueue(): Promise<void> {
 }
 
 let peerConnection: RTCPeerConnection | null = null;
+let peerConnectionGeneration = 0;
 
 type RTCDataChannelType = ReturnType<RTCPeerConnection['createDataChannel']>;
 
@@ -592,11 +614,21 @@ async function handleControlMessageAsync(envelope: unknown): Promise<void> {
     console.warn('[dispatch] Message rejected: missing_hmac_state');
     return;
   }
+  if (!isControlSessionActive()) return;
+  const attemptId = connectionAttemptId;
+  const sessionHmacState = hmacState;
+  const peerGeneration = peerConnectionGeneration;
 
   let payload: unknown = envelope;
   const envelopeToVerify = getSignedEnvelopeCandidate(envelope);
 
-  const result = await verifyMessage(hmacState, envelopeToVerify);
+  const result = await verifyMessage(sessionHmacState, envelopeToVerify);
+  if (
+    !isCurrentControlSession(attemptId, sessionHmacState, peerGeneration) ||
+    !isControlSessionActive()
+  ) {
+    return;
+  }
   if (!result.ok) {
     console.warn('[dispatch] Message rejected:', result.reason);
     if (result.reason === 'protocol_version_unsupported') {
@@ -830,6 +862,7 @@ async function handleSignalingMessage(kind: SignalKind, payload: unknown): Promi
 }
 
 function cleanupPeerConnection(): void {
+  peerConnectionGeneration += 1;
   if (dataChannel) {
     try {
       dataChannel.close();
@@ -1319,13 +1352,13 @@ export const useConnectionStore = create<ConnectionState>()(
 
         const attemptId = connectionAttemptId;
         const sessionHmacState = hmacState;
+        const peerGeneration = peerConnectionGeneration;
         const sessionDataChannel = dataChannel;
         const sessionSignalingClient = signalingClient;
 
         const sendRaw = (envelope: unknown): boolean => {
           if (
-            !isCurrentConnectionAttempt(attemptId) ||
-            hmacState !== sessionHmacState ||
+            !isCurrentControlSession(attemptId, sessionHmacState, peerGeneration) ||
             get().status !== 'connected'
           ) {
             return false;
