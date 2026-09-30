@@ -460,8 +460,63 @@ pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result
     execute_tool_with_opts(call, &opts).await
 }
 
+async fn file_mutation_targets(
+    tool: &str,
+    args: &HashMap<String, String>,
+    workspace_root: Option<&std::path::Path>,
+) -> std::result::Result<Vec<(std::path::PathBuf, std::path::PathBuf)>, String> {
+    if !crate::platform::runtime::tool_catalog::is_file_edit_tool(tool) || tool == "lsp_format" {
+        return Ok(Vec::new());
+    }
+    let cwd = std::env::current_dir().map_err(|reason| reason.to_string())?;
+    let root = workspace_root.unwrap_or(&cwd);
+    let root = if tool == "resolve_conflict" {
+        crate::project_scope::resolve_project_scope(root)
+    } else {
+        root.to_path_buf()
+    };
+    let raw = if tool == "apply_patch" {
+        let patch = args.get("patch").ok_or("Missing: patch")?;
+        file_ops::patch_target_paths_with_cwd(patch, &root).await?;
+        crate::apply_patch::parsed_patch_targets(patch)
+            .await
+            .map_err(|reason| reason.to_string())?
+    } else {
+        let path = args.get("path").ok_or("Missing required argument: path")?;
+        let path = std::path::PathBuf::from(crate::path_security::expand_home(path));
+        if tool == "resolve_conflict" && path.is_absolute() {
+            return Err("path must be relative to the repository root".into());
+        }
+        vec![path]
+    };
+    raw.into_iter()
+        .map(|path| {
+            let requested = root.join(path);
+            let text = requested.to_str().ok_or("Non-UTF-8 file path")?;
+            let resolved =
+                crate::path_security::validate_workspace_write_path_with_cwd(text, &root)?;
+            Ok((requested, resolved))
+        })
+        .collect()
+}
+
 pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
     let canonical_name = canonical_tool_name(&call.name);
+    let mut scoped_call = call.clone();
+    if matches!(
+        canonical_name,
+        "write_file" | "edit_file" | "multiedit" | "notebook_edit"
+    ) {
+        if let (Some(root), Some(path)) = (opts.workspace_root.as_deref(), call.args.get("path")) {
+            let expanded = std::path::PathBuf::from(crate::path_security::expand_home(path));
+            if !expanded.is_absolute() {
+                scoped_call
+                    .args
+                    .insert("path".into(), root.join(expanded).display().to_string());
+            }
+        }
+    }
+    let call = &scoped_call;
 
     // Network-capable built-ins are a trust-boundary operation, even when
     // their catalog classification is read-only. Local means no hidden API or
@@ -585,6 +640,118 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         }
     }
 
+    let targets =
+        match file_mutation_targets(canonical_name, &call.args, opts.workspace_root.as_deref())
+            .await
+        {
+            Ok(targets) => targets,
+            Err(output) => {
+                return Ok(ToolResult {
+                    tool_name: canonical_name.into(),
+                    success: false,
+                    output,
+                })
+            }
+        };
+    if matches!(
+        canonical_name,
+        "write_file" | "edit_file" | "multiedit" | "notebook_edit"
+    ) {
+        if let Some((_, resolved)) = targets.first() {
+            scoped_call
+                .args
+                .insert("path".into(), resolved.display().to_string());
+        }
+    }
+    let call = &scoped_call;
+    if opts.require_confirmation {
+        let protected: Vec<_> = targets
+            .iter()
+            .filter(|(requested, resolved)| {
+                crate::path_security::is_protected_path(requested)
+                    || crate::path_security::is_protected_path(resolved)
+            })
+            .collect();
+        if !protected.is_empty() {
+            let operation = match canonical_name {
+                "write_file" => crate::permissions::FilePermissionOperation::Write,
+                "multiedit" => crate::permissions::FilePermissionOperation::MultiEdit,
+                "apply_patch" => crate::permissions::FilePermissionOperation::Patch,
+                _ => crate::permissions::FilePermissionOperation::Edit,
+            };
+            let permissions = crate::permissions::PermissionStore::load()?;
+            if targets
+                .iter()
+                .any(|(_, path)| permissions.check_file(operation, path) == Some(false))
+            {
+                return Ok(ToolResult {
+                    tool_name: canonical_name.into(),
+                    success: false,
+                    output: "Protected file change is denied by saved permissions.".into(),
+                });
+            }
+            let mut paths: Vec<_> = targets
+                .iter()
+                .flat_map(|(requested, path)| [requested.clone(), path.clone()])
+                .collect();
+            paths.sort();
+            paths.dedup();
+            let mut details: Vec<_> = targets
+                .iter()
+                .map(|(requested, path)| {
+                    let protected = crate::path_security::is_protected_path(requested)
+                        || crate::path_security::is_protected_path(path);
+                    format!(
+                        "{} (resolved: {}, protected: {protected})",
+                        requested.display(),
+                        path.display()
+                    )
+                })
+                .collect();
+            let summary = format!(
+                "Allow `{canonical_name}` to change protected paths: {}?",
+                protected
+                    .iter()
+                    .map(|(requested, _)| requested.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            details.push(format!(
+                "Proposed changes:\n{}",
+                serde_json::to_string_pretty(&call.args)?
+            ));
+            let preview =
+                crate::terminal_text::sanitize_terminal_text(&details.join("\n")).to_string();
+            let request = ApprovalRequest::new(
+                ApprovalRequestKind::Patch { files: paths },
+                summary.clone(),
+                details,
+            );
+            let allowed = match request_approval(opts.approval_callback.as_ref(), request).await {
+                Some(decision) => approval_allows(decision),
+                None if !std::io::stdin().is_terminal() => false,
+                None => {
+                    eprintln!("{preview}");
+                    Confirm::new()
+                        .with_prompt(
+                            crate::terminal_text::sanitize_terminal_text(&summary).as_ref(),
+                        )
+                        .default(false)
+                        .interact()
+                        .unwrap_or(false)
+                }
+            };
+            if !allowed {
+                return Ok(ToolResult {
+                    tool_name: canonical_name.into(),
+                    success: false,
+                    output: "Protected file change was not approved and did not run.".into(),
+                });
+            }
+            require_confirm = false;
+        }
+    }
+
     // C1: read-only tools resolve through the Tool-trait registry first. They are
     // side-effect-free, so they bypass the confirmation flow regardless.
     static READ_ONLY_REGISTRY: std::sync::OnceLock<registry::ToolRegistry> =
@@ -691,7 +858,13 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
         "generate_image" => execute_generate_image(&call.args, opts).await,
         "apply_patch" => {
-            execute_apply_patch(&call.args, require_confirm, opts.approval_callback.as_ref()).await
+            execute_apply_patch(
+                &call.args,
+                require_confirm,
+                opts.approval_callback.as_ref(),
+                opts.workspace_root.as_deref(),
+            )
+            .await
         }
         "resolve_conflict" => {
             execute_resolve_conflict(
@@ -2591,6 +2764,275 @@ decision = "ask"
     /// Every tool the catalog classes as a file edit is pointed at a file
     /// outside the workspace with approval already granted, so the only thing
     /// left to stop it is the workspace boundary.
+    #[tokio::test]
+    async fn protected_writes_require_named_approval_despite_automatic_or_saved_allows() {
+        for (policy_allow, saved_allow) in [(false, false), (true, false), (false, true)] {
+            let workspace = tempfile::Builder::new()
+                .prefix("protected-write")
+                .tempdir_in(std::env::current_dir().unwrap())
+                .unwrap();
+            let path = workspace.path().join(".vscode/tasks.json");
+            if policy_allow {
+                std::fs::create_dir_all(workspace.path().join(".agiworkforce")).unwrap();
+                std::fs::write(
+                    workspace.path().join(".agiworkforce/policy.toml"),
+                    "[[rules]]\ntool = \"write_file\"\ndecision = \"allow\"\n",
+                )
+                .unwrap();
+            }
+            if saved_allow {
+                let mut permissions = crate::permissions::PermissionStore::default();
+                permissions.allow_file_session_for_process(
+                    crate::permissions::FilePermissionOperation::Write,
+                    &path,
+                );
+            }
+            let (deny_callback, seen) = recording_callback(ApprovalDecision::Deny);
+            let callback: ApprovalCallback = std::sync::Arc::new(move |request| {
+                let deny_callback = deny_callback.clone();
+                Box::pin(async move {
+                    if matches!(request.kind, ApprovalRequestKind::WorkspacePolicy { .. }) {
+                        ApprovalDecision::AllowOnce
+                    } else {
+                        deny_callback(request).await
+                    }
+                })
+            });
+            let opts = ToolExecOptions {
+                require_confirmation: true,
+                auto_approve_safe: true,
+                auto_approve_edits: !policy_allow && !saved_allow,
+                quiet: true,
+                approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Byok,
+                workspace_root: Some(workspace.path().to_path_buf()),
+                mcp_tool_definitions: None,
+            };
+            let call = ToolCall {
+                name: "write_file".into(),
+                args: HashMap::from([
+                    ("path".into(), path.display().to_string()),
+                    ("content".into(), "{}\n".into()),
+                ]),
+            };
+            let result = execute_tool_with_opts(&call, &opts).await.unwrap();
+            assert!(
+                !result.success,
+                "policy_allow={policy_allow}: {}",
+                result.output
+            );
+            assert!(!path.exists());
+            let requests = seen.lock().unwrap();
+            assert!(
+                requests.iter().any(|request| matches!(request,
+                ApprovalRequestKind::Patch { files } if files.contains(&path))),
+                "{requests:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_file_editors_and_batch_cannot_skip_named_approval() {
+        let workspace = tempfile::Builder::new()
+            .prefix("protected-tools")
+            .tempdir_in(std::env::current_dir().unwrap())
+            .unwrap();
+        let path = workspace.path().join(".vscode/settings.txt");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "old\n").unwrap();
+        crate::file_state::record_file_read(&path, "old\n");
+        let notebook = workspace.path().join(".vscode/analysis.ipynb");
+        let body = r#"{"cells":[{"cell_type":"code","id":"a","metadata":{},"source":["x = 1"],"outputs":[],"execution_count":null}],"metadata":{},"nbformat":4,"nbformat_minor":5}"#;
+        std::fs::write(&notebook, body).unwrap();
+        crate::file_state::record_file_read(&notebook, body);
+        for tool in [
+            "write_file",
+            "edit_file",
+            "multiedit",
+            "apply_patch",
+            "notebook_edit",
+            "batch",
+        ] {
+            let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+            let opts = ToolExecOptions {
+                require_confirmation: true,
+                auto_approve_safe: true,
+                auto_approve_edits: true,
+                quiet: true,
+                approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Byok,
+                workspace_root: Some(workspace.path().to_path_buf()),
+                mcp_tool_definitions: None,
+            };
+            let args = match tool {
+                "write_file" => HashMap::from([("path".into(), path.display().to_string()), ("content".into(), "new\n".into())]),
+                "edit_file" => HashMap::from([("path".into(), path.display().to_string()), ("old_string".into(), "old".into()), ("new_string".into(), "new".into())]),
+                "multiedit" => HashMap::from([("path".into(), path.display().to_string()), ("edits".into(), r#"[{"old_string":"old","new_string":"new"}]"#.into())]),
+                "apply_patch" => HashMap::from([("patch".into(), "--- a/.vscode/settings.txt\n+++ b/.vscode/settings.txt\n@@ -1 +1 @@\n-old\n+new\n".into())]),
+                "notebook_edit" => HashMap::from([("path".into(), notebook.display().to_string()), ("mode".into(), "replace".into()), ("cell_id".into(), "a".into()), ("content".into(), "x = 2".into())]),
+                "batch" => HashMap::from([("calls".into(), serde_json::json!([{"name":"write_file","args":{"path":path,"content":"new\n"}}]).to_string())]),
+                _ => unreachable!(),
+            };
+            let result = execute_tool_with_opts(
+                &ToolCall {
+                    name: tool.into(),
+                    args,
+                },
+                &opts,
+            )
+            .await
+            .unwrap();
+            assert!(!result.success, "{tool}: {}", result.output);
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "old\n");
+            assert_eq!(std::fs::read_to_string(&notebook).unwrap(), body);
+            let requests = seen.lock().unwrap();
+            assert!(requests.iter().any(|request| matches!(request,
+                ApprovalRequestKind::Patch { files } if files.contains(if tool == "notebook_edit" { &notebook } else { &path }))), "{tool}: {requests:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_approval_uses_the_nested_workspace_and_bypass_is_the_only_exception() {
+        for bypass in [false, true] {
+            let workspace = tempfile::Builder::new()
+                .prefix("protected-scope")
+                .tempdir_in(std::env::current_dir().unwrap())
+                .unwrap();
+            let path = workspace.path().join(".vscode/tasks.json");
+            let (callback, seen) = recording_callback(if bypass {
+                ApprovalDecision::Deny
+            } else {
+                ApprovalDecision::AllowOnce
+            });
+            let opts = ToolExecOptions {
+                require_confirmation: !bypass,
+                auto_approve_safe: true,
+                auto_approve_edits: true,
+                quiet: true,
+                approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Byok,
+                workspace_root: Some(workspace.path().to_path_buf()),
+                mcp_tool_definitions: None,
+            };
+            let call = ToolCall {
+                name: "write_file".into(),
+                args: HashMap::from([
+                    ("path".into(), ".vscode/tasks.json".into()),
+                    ("content".into(), "{}\n".into()),
+                ]),
+            };
+            let result = execute_tool_with_opts(&call, &opts).await.unwrap();
+            assert!(result.success, "{}", result.output);
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "{}\n");
+            let requests = seen.lock().unwrap();
+            assert_eq!(requests.len(), usize::from(!bypass));
+            if !bypass {
+                assert!(
+                    matches!(&requests[0], ApprovalRequestKind::Patch { files } if files.contains(&path))
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_mixed_patch_approval_describes_every_target_and_the_changes() {
+        let workspace = tempfile::Builder::new()
+            .prefix("protected-mixed")
+            .tempdir_in(std::env::current_dir().unwrap())
+            .unwrap();
+        let seen = Arc::new(tokio::sync::Mutex::new(None));
+        let recorded = seen.clone();
+        let callback: ApprovalCallback = Arc::new(move |request| {
+            let recorded = recorded.clone();
+            Box::pin(async move {
+                *recorded.lock().await = Some(request);
+                ApprovalDecision::Deny
+            })
+        });
+        let opts = ToolExecOptions {
+            require_confirmation: true,
+            auto_approve_safe: false,
+            auto_approve_edits: false,
+            quiet: true,
+            approval_callback: Some(callback),
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            workspace_root: Some(workspace.path().to_path_buf()),
+            mcp_tool_definitions: None,
+        };
+        let patch = "--- /dev/null\n+++ b/.vscode/tasks.json\n@@ -0,0 +1 @@\n+{}\n--- /dev/null\n+++ b/notes.txt\n@@ -0,0 +1 @@\n+all changes visible\n";
+        execute_tool_with_opts(
+            &ToolCall {
+                name: "apply_patch".into(),
+                args: HashMap::from([("patch".into(), patch.into())]),
+            },
+            &opts,
+        )
+        .await
+        .unwrap();
+        let request = seen.lock().await.clone().expect("approval");
+        assert!(
+            matches!(request.kind, ApprovalRequestKind::Patch { ref files }
+            if files.contains(&workspace.path().join("notes.txt")) && files.contains(&workspace.path().join(".vscode/tasks.json")))
+        );
+        assert!(request.detail.join("\n").contains("all changes visible"));
+        assert!(!request.saves_always_allow);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_protected_alias_cannot_change_its_target_while_approval_is_pending() {
+        let workspace = tempfile::Builder::new()
+            .prefix("protected-alias")
+            .tempdir_in(std::env::current_dir().unwrap())
+            .unwrap();
+        let first = workspace.path().join("first.txt");
+        let second = workspace.path().join("second.txt");
+        std::fs::write(&first, "old\n").unwrap();
+        std::fs::write(&second, "old\n").unwrap();
+        crate::file_state::record_file_read(&first, "old\n");
+        crate::file_state::record_file_read(&second, "old\n");
+        let alias = workspace.path().join(".vscode/tasks.json");
+        std::fs::create_dir_all(alias.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&first, &alias).unwrap();
+        let swapped = alias.clone();
+        let other = second.clone();
+        let callback: ApprovalCallback = Arc::new(move |request| {
+            let swapped = swapped.clone();
+            let other = other.clone();
+            Box::pin(async move {
+                assert!(request.summary.contains(".vscode/tasks.json"));
+                std::fs::remove_file(&swapped).unwrap();
+                std::os::unix::fs::symlink(other, swapped).unwrap();
+                ApprovalDecision::AllowOnce
+            })
+        });
+        let opts = ToolExecOptions {
+            require_confirmation: true,
+            auto_approve_safe: true,
+            auto_approve_edits: true,
+            quiet: true,
+            approval_callback: Some(callback),
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            workspace_root: Some(workspace.path().to_path_buf()),
+            mcp_tool_definitions: None,
+        };
+        let result = execute_tool_with_opts(
+            &ToolCall {
+                name: "write_file".into(),
+                args: HashMap::from([
+                    ("path".into(), alias.display().to_string()),
+                    ("content".into(), "new\n".into()),
+                ]),
+            },
+            &opts,
+        )
+        .await
+        .unwrap();
+        assert!(result.success, "{}", result.output);
+        assert_eq!(std::fs::read_to_string(first).unwrap(), "new\n");
+        assert_eq!(std::fs::read_to_string(second).unwrap(), "old\n");
+    }
+
     #[tokio::test]
     async fn no_file_editing_tool_changes_a_file_outside_the_workspace() {
         let outside = tempfile::tempdir().expect("outside dir");

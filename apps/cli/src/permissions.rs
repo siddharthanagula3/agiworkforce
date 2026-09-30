@@ -554,14 +554,15 @@ impl PermissionStore {
             return None;
         }
 
+        let mut all_allowed = true;
         for path in paths {
             match self.check_file(operation, path) {
                 Some(false) => return Some(false),
                 Some(true) => {}
-                None => return None,
+                None => all_allowed = false,
             }
         }
-        Some(true)
+        all_allowed.then_some(true)
     }
 
     /// Add a command prefix to the "always allow" persistent list.
@@ -877,6 +878,20 @@ mod tests {
                 &PathBuf::from("/workspace/src/main.rs.bak")
             ),
             None
+        );
+    }
+
+    #[test]
+    fn a_later_file_denial_wins_over_an_earlier_unmatched_target() {
+        let mut store = PermissionStore::default();
+        let first = PathBuf::from("/workspace/new.rs");
+        let denied = PathBuf::from("/workspace/.vscode/tasks.json");
+        store
+            .always_deny
+            .insert(file_permission_key(FilePermissionOperation::Patch, &denied).unwrap());
+        assert_eq!(
+            store.check_files(FilePermissionOperation::Patch, &[first, denied]),
+            Some(false)
         );
     }
 
