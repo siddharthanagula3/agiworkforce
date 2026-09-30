@@ -4,4 +4,4 @@
  * Credential posture of a discovered MCP server, decided without opening a
  * connection. It never claims a server is reachable.
  */
-export type McpServerConfiguredStatus = 'configured' | 'authorized' | 'needs_auth';
+export type McpServerConfiguredStatus = 'configured' | 'authorized' | 'needs_auth' | 'blocked';
