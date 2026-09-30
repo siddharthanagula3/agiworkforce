@@ -316,6 +316,9 @@ export async function verifyMessage(state: HmacSessionState, msg: unknown): Prom
     return { ok: false, reason: 'hmac_mismatch' };
   }
 
+  if (state.nonceCache.has(nonce)) {
+    return { ok: false, reason: 'nonce_replay' };
+  }
   state.nonceCache.set(nonce, now);
   return { ok: true };
 }
