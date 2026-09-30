@@ -251,10 +251,10 @@ server.serve_forever()
             args: Vec::new(),
             env: HashMap::new(),
             enabled: true,
-            transport: Some(TransportConfig::Http(HttpSseConfig {
+            transport: Some(TransportConfig::Http(Box::new(HttpSseConfig {
                 url: format!("http://127.0.0.1:{port}"),
                 ..Default::default()
-            })),
+            }))),
         };
 
         let session = McpSession::connect("py-http-smoke".to_string(), config, false)

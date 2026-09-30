@@ -421,7 +421,7 @@ mod mcp_integration_tests {
         assert!(parsed.verify_ssl);
 
         // Test TransportConfig serialization
-        let transport_config = TransportConfig::Http(http_config);
+        let transport_config = TransportConfig::Http(Box::new(http_config));
         let json = serde_json::to_string(&transport_config).unwrap();
         assert!(json.contains("http"));
         assert!(json.contains("mcp.example.com"));

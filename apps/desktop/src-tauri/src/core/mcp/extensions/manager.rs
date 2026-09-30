@@ -492,7 +492,7 @@ impl ExtensionManager {
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string());
 
-                    Some(crate::core::mcp::TransportConfig::Http(
+                    Some(crate::core::mcp::TransportConfig::Http(Box::new(
                         crate::core::mcp::HttpSseConfig {
                             url: http_config.url.clone(),
                             api_key: None,
@@ -502,7 +502,7 @@ impl ExtensionManager {
                             verify_ssl: true,
                             ..Default::default()
                         },
-                    ))
+                    )))
                 } else {
                     None
                 }
