@@ -489,6 +489,80 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
   });
 });
 
+describe('ComposerPlusMenu, working folder row', () => {
+  const FOLDER = 'acme-repo';
+  const CLEAR = 'Clear working folder';
+  const folderRow = { showWorkingFolderRow: true, canPickFolder: true, folderName: FOLDER };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('renders the clear control beside the picker, never inside it', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { props } = renderMenu(folderRow);
+
+    const clear = screen.getByRole('button', { name: CLEAR });
+    const picker = screen.getByRole('button', { name: FOLDER });
+
+    expect(clear.parentElement?.closest('button')).toBeNull();
+    expect(picker).not.toHaveAccessibleName(/Clear working folder/);
+    expect(
+      consoleError.mock.calls.some((call) => String(call[0]).includes('cannot be a descendant of')),
+    ).toBe(false);
+
+    fireEvent.click(clear);
+    expect(props.onClearFolder).toHaveBeenCalledTimes(1);
+    expect(props.onPickFolder).not.toHaveBeenCalled();
+
+    fireEvent.click(picker);
+    expect(props.onPickFolder).toHaveBeenCalledTimes(1);
+    expect(props.onClearFolder).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves focus to the picker after clearing, so it does not fall to the page', () => {
+    renderMenu(folderRow);
+
+    const clear = screen.getByRole('button', { name: CLEAR });
+    clear.focus();
+    fireEvent.click(clear);
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: FOLDER }));
+  });
+
+  it('keeps the clear control usable when this browser cannot pick a folder', () => {
+    const { props } = renderMenu({ ...folderRow, canPickFolder: false });
+
+    expect(screen.getByRole('button', { name: new RegExp(FOLDER) })).toBeDisabled();
+    const clear = screen.getByRole('button', { name: CLEAR });
+    expect(clear).toBeEnabled();
+
+    fireEvent.click(clear);
+    expect(props.onClearFolder).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes the clear control its own palette item that arrow keys reach', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ entries: [] }) })),
+    );
+    invalidatePalettePlugins();
+    renderMenu({ ...folderRow, workPalette: true });
+
+    const menu = palette();
+    await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true));
+    const picker = within(menu).getByRole('menuitem', { name: FOLDER });
+    const clear = within(menu).getByRole('menuitem', { name: CLEAR });
+    expect(clear.parentElement?.closest('[role="menuitem"]')).toBeNull();
+
+    picker.focus();
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+
+    expect(document.activeElement).toBe(clear);
+  });
+});
+
 describe('ComposerPlusMenu, desktop host', () => {
   it('offers the local folder row on desktop and reports the choice', () => {
     const { props } = renderMenu({ showLocalFolderRow: true });

@@ -158,6 +158,7 @@ const VIDEO_ENTITLEMENT_HINT = `Video generation is available on ${new Intl.List
   BILLING_PLAN_CAPABILITY_TIERS.video_generation.map((plan) => getBillingPlanPricing(plan).label),
 )}.`;
 const FOLDER_UNSUPPORTED_TITLE = 'Folder access is not supported in this browser';
+const CLEAR_FOLDER_LABEL = 'Clear working folder';
 
 const ROW_CLASS = 'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors';
 const ROW_HOVER_CLASS = 'hover:bg-muted/60';
@@ -963,48 +964,60 @@ function BrowserRow({ props, role }: { props: ComposerPlusMenuProps; role?: stri
 
 function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?: string }) {
   const { folderName, canPickFolder } = props;
+  const pickerRef = useRef<HTMLButtonElement>(null);
   return (
-    <button
-      type="button"
-      role={role}
-      disabled={!canPickFolder}
-      title={
-        canPickFolder
-          ? folderName
-            ? `Working folder: ${folderName}`
-            : undefined
-          : FOLDER_UNSUPPORTED_TITLE
-      }
-      onClick={props.onPickFolder}
-      className={cn(
-        ROW_CLASS,
-        !canPickFolder && ROW_DISABLED_CLASS,
-        canPickFolder && folderName ? cn('text-primary', ROW_HOVER_CLASS) : ROW_HOVER_CLASS,
-      )}
-    >
-      {folderName ? (
-        <FolderOpen className={cn(GLYPH_CLASS, 'text-primary')} />
-      ) : (
-        <Folder className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
-      )}
-      <span className="flex-1 text-start">{folderName ? folderName : ROW_LABEL_FOLDER}</span>
+    <div role={role ? 'none' : undefined} className="flex items-center gap-1">
+      <button
+        ref={pickerRef}
+        type="button"
+        role={role}
+        disabled={!canPickFolder}
+        title={
+          canPickFolder
+            ? folderName
+              ? `Working folder: ${folderName}`
+              : undefined
+            : FOLDER_UNSUPPORTED_TITLE
+        }
+        onClick={props.onPickFolder}
+        className={cn(
+          ROW_CLASS,
+          'min-w-0 flex-1',
+          !canPickFolder && ROW_DISABLED_CLASS,
+          canPickFolder && folderName ? cn('text-primary', ROW_HOVER_CLASS) : ROW_HOVER_CLASS,
+        )}
+      >
+        {folderName ? (
+          <FolderOpen className={cn(GLYPH_CLASS, 'text-primary')} />
+        ) : (
+          <Folder className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+        )}
+        <span className="flex-1 truncate text-start">
+          {folderName ? folderName : ROW_LABEL_FOLDER}
+        </span>
+        {!canPickFolder && (
+          <span className="text-caption text-muted-foreground">{BADGE_NOT_SUPPORTED}</span>
+        )}
+      </button>
       {folderName && (
         <button
           type="button"
-          onClick={(event) => {
-            event.stopPropagation();
+          role={role}
+          onClick={() => {
             props.onClearFolder();
+            pickerRef.current?.focus();
           }}
-          className="shrink-0 rounded-compact p-0.5 text-muted-foreground hover:text-foreground"
-          aria-label="Clear working folder"
+          className={cn(
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-11',
+            ROW_HOVER_CLASS,
+          )}
+          aria-label={CLEAR_FOLDER_LABEL}
+          title={CLEAR_FOLDER_LABEL}
         >
-          <X className="h-4 w-4" />
+          <X aria-hidden className="h-4 w-4" />
         </button>
       )}
-      {!canPickFolder && (
-        <span className="text-caption text-muted-foreground">{BADGE_NOT_SUPPORTED}</span>
-      )}
-    </button>
+    </div>
   );
 }
 

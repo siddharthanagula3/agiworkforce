@@ -254,6 +254,22 @@ describe('streamFromProvider, paywall detection (opt-in)', () => {
     expect(chunks.some((c) => c.type === 'paywall')).toBe(false);
   });
 
+  it.each([
+    ['a non-JSON rate limit page', '<html>Too Many Requests</html>'],
+    ['a JSON null body', 'null'],
+  ])('ends with an error and a stop chunk for %s', async (_label, body) => {
+    const fetchImpl = fetchMockResolving(errorResponse(429, body));
+
+    const chunks = await collect<Chunk>(
+      streamFromProvider({ ...BASE, fetchImpl, detectPaywall: true }),
+    );
+
+    expect(chunks).toEqual([
+      { type: 'error', message: body },
+      { type: 'stop', reason: 'error' },
+    ]);
+  });
+
   it('does not treat a non-429 status as a paywall even with a paywall-shaped body', async () => {
     const fetchImpl = fetchMockResolving(errorResponse(503, paywallBody));
 
@@ -523,6 +539,79 @@ describe('streamFromProvider, idle watchdog (opt-in)', () => {
     });
     expect(chunks[2]).toEqual({ type: 'stop', reason: 'error' });
     expect(aborted).toBe(true);
+  });
+
+  function trackAbortListeners(signal: AbortSignal): Set<EventListenerOrEventListenerObject> {
+    const live = new Set<EventListenerOrEventListenerObject>();
+    const add = signal.addEventListener.bind(signal);
+    const remove = signal.removeEventListener.bind(signal);
+    vi.spyOn(signal, 'addEventListener').mockImplementation((type, listener, options) => {
+      if (type === 'abort' && listener) live.add(listener);
+      add(type, listener, options);
+    });
+    vi.spyOn(signal, 'removeEventListener').mockImplementation((type, listener, options) => {
+      if (type === 'abort' && listener) live.delete(listener);
+      remove(type, listener, options);
+    });
+    return live;
+  }
+
+  it('removes its listeners from a caller signal reused across streams once each stream ends', async () => {
+    const caller = new AbortController();
+    const live = trackAbortListeners(caller.signal);
+
+    for (let run = 0; run < 3; run += 1) {
+      const fetchImpl = fetchMockResolving(
+        okResponse('data: {"type":"text-delta","delta":"hi"}\n\n' + 'data: [DONE]\n\n'),
+      );
+      await collect<Chunk>(
+        streamFromProvider({ ...BASE, fetchImpl, signal: caller.signal, idleWatchdog: true }),
+      );
+      expect(live.size).toBe(0);
+    }
+  });
+
+  it('removes its listeners when the consumer stops reading early', async () => {
+    const caller = new AbortController();
+    const live = trackAbortListeners(caller.signal);
+    const fetchImpl = makeStallingFetch(() => undefined);
+
+    const iterator = streamFromProvider({
+      ...BASE,
+      fetchImpl,
+      signal: caller.signal,
+      idleWatchdog: { idleMs: 60_000 },
+    })[Symbol.asyncIterator]();
+    await iterator.next();
+    expect(live.size).toBe(1);
+    await iterator.return?.();
+
+    expect(live.size).toBe(0);
+  });
+
+  it('still forwards a caller abort to the request while the stream is open', async () => {
+    const caller = new AbortController();
+    let aborted = false;
+    const fetchImpl = makeStallingFetch(() => {
+      aborted = true;
+    });
+
+    const iterator = streamFromProvider({
+      ...BASE,
+      fetchImpl,
+      signal: caller.signal,
+      idleWatchdog: { idleMs: 60_000 },
+      catchTransportErrors: true,
+    })[Symbol.asyncIterator]();
+    await iterator.next();
+    caller.abort();
+
+    expect(aborted).toBe(true);
+    expect((await iterator.next()).value).toMatchObject({
+      type: 'error',
+      code: 'STREAM_TIMEOUT_OR_ABORT',
+    });
+    await iterator.return?.();
   });
 
   it('accepts idleWatchdog: true and uses watchdog defaults', async () => {

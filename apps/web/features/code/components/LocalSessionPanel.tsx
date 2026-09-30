@@ -34,6 +34,7 @@ import {
   type LocalDeveloperSession,
   type DeveloperSessionGroup,
 } from '@agiworkforce/local-runtime-contract';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { openWorkspaceInEditor } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
@@ -535,6 +536,7 @@ export function LocalSessionPanel({
                     onFocus={() => setFocused(true)}
                     onBlur={() => setFocused(false)}
                     onKeyDown={(event) => {
+                      if (isImeComposingKey(event.nativeEvent)) return;
                       if (event.key !== SUBMIT_KEY || event.shiftKey) return;
                       event.preventDefault();
                       submit();

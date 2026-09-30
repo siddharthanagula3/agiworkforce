@@ -8,6 +8,7 @@ import {
 import {
   createManagedCloudChatAttachmentsClient,
   MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   resolveChatAttachmentMimeType,
   TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
   type GeneratedFileWire,
@@ -8010,9 +8011,12 @@ function admitComposerDocument(file: File, mimeType: string): boolean {
     return false;
   }
   const documentBytes = pendingDocuments.reduce((sum, entry) => sum + entry.file.size, 0);
-  if (documentBytes + file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+  if (documentBytes + file.size > MAX_CHAT_ATTACHMENT_MESSAGE_BYTES) {
     composerAttachmentNotices.push(
-      t('spAttachmentOverBudget', [file.name, attachmentBudgetLabel(MAX_CHAT_ATTACHMENT_BYTES)]),
+      t('spAttachmentOverBudget', [
+        file.name,
+        attachmentBudgetLabel(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES),
+      ]),
     );
     return false;
   }

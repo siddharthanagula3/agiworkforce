@@ -8,8 +8,8 @@ import type {
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
 import {
-  MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   chatAttachmentAcceptAttribute,
   type ManagedCloudAgentRunReference,
   isSupportedChatAttachment,
@@ -145,7 +145,7 @@ export class WebRuntime implements ChatRuntime {
   readonly attachmentPolicy = {
     accept: chatAttachmentAcceptAttribute(),
     maxFiles: MAX_CHAT_ATTACHMENT_COUNT,
-    maxTotalBytes: MAX_CHAT_ATTACHMENT_BYTES,
+    maxTotalBytes: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
     validate: (file: File) =>
       isSupportedChatAttachment(file.name, file.type)
         ? null

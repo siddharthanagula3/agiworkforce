@@ -26,6 +26,7 @@ import {
   type CloudCodeApi,
 } from '@agiworkforce/cloud-contracts';
 import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
+import { IME_PROCESSING_KEY_CODE } from '@agiworkforce/unified-chat/ime-composition';
 
 const push = vi.fn();
 const replace = vi.fn();
@@ -491,6 +492,58 @@ describe('CloudCodePage', () => {
 
     await user.type(field, '{Enter}');
     await waitFor(() => expect(api.create).toHaveBeenCalled());
+  });
+
+  it('leaves Enter to an input method while it composes and sends on the Enter after it', async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<CloudCodePage api={api} />);
+
+    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    await user.type(field, 'テストを実行して');
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(field, { key: 'Enter', keyCode: IME_PROCESSING_KEY_CODE });
+
+    expect(api.create).not.toHaveBeenCalled();
+    expect(field).toHaveValue('テストを実行して');
+
+    fireEvent.compositionEnd(field);
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(api.startAgentTurn).toHaveBeenCalledWith(
+        session.id,
+        expect.objectContaining({ goal: 'テストを実行して' }),
+      ),
+    );
+    expect(api.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the slash command menu alone while an input method composes', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    await user.type(field, '/');
+    const menu = await screen.findByRole('listbox', { name: 'Slash command suggestions' });
+    expect(within(menu).getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.keyDown(field, { key: 'ArrowDown', isComposing: true });
+    fireEvent.keyDown(field, { key: 'Enter', keyCode: IME_PROCESSING_KEY_CODE });
+    fireEvent.keyDown(field, { key: 'Escape', isComposing: true });
+
+    expect(field).toHaveValue('/');
+    const options = within(
+      screen.getByRole('listbox', { name: 'Slash command suggestions' }),
+    ).getAllByRole('option');
+    expect(options[0]).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    expect(
+      within(screen.getByRole('listbox', { name: 'Slash command suggestions' })).getAllByRole(
+        'option',
+      )[1],
+    ).toHaveAttribute('aria-selected', 'true');
   });
 
   it('renders an agent reply as prose and the commands as one collapsible row', async () => {
@@ -1596,6 +1649,36 @@ describe('CloudCodePage', () => {
     );
   });
 
+  it('leaves Enter and Escape to an input method while the session title composes', async () => {
+    const user = userEvent.setup();
+    const rename: CloudCodeApi['rename'] = vi.fn(async (_sessionId, title) => ({
+      ...session,
+      title,
+    }));
+    const api = createApi({
+      rename,
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+
+    const field = await screen.findByRole('textbox', { name: 'Session title' });
+    await user.clear(field);
+    await user.type(field, 'テストの修正');
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(field, { key: 'Escape', keyCode: IME_PROCESSING_KEY_CODE });
+
+    expect(rename).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Session title' })).toHaveValue('テストの修正');
+
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    await waitFor(() => expect(rename).toHaveBeenCalledWith(session.id, 'テストの修正'));
+  });
+
   it('archives a session and offers unarchive where the composer was', async () => {
     const user = userEvent.setup();
     const archived: CloudCodeSession = { ...session, archivedAt: '2026-07-30T12:10:00.000Z' };
@@ -2100,6 +2183,64 @@ describe('CloudCodePage', () => {
       expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent(
         'release',
       ),
+    );
+  });
+
+  it('does not choose a searched branch while an input method composes', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      listRepositories: vi.fn(async () => repositoryPage),
+      listBranches: vi.fn(async () => ({
+        branches: [{ name: 'main', isProtected: true }],
+        truncated: false,
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+    await user.click(await screen.findByRole('button', { name: /owner\/public-one/ }));
+    await user.click(await screen.findByRole('button', { name: 'Change the branch' }));
+    const search = await screen.findByRole('textbox', { name: 'Search branches' });
+    await user.type(search, '機能');
+    fireEvent.keyDown(search, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(search, { key: 'Enter', keyCode: IME_PROCESSING_KEY_CODE });
+
+    expect(screen.getByRole('textbox', { name: 'Search branches' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent('main');
+
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent('機能'),
+    );
+  });
+
+  it('does not apply a typed branch while an input method composes', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+    await user.click(await screen.findByRole('button', { name: 'Use a repository URL instead' }));
+    await user.type(
+      await screen.findByLabelText('Repository URL'),
+      'https://github.com/owner/repository',
+    );
+    await user.type(await screen.findByLabelText('Branch'), 'release');
+    await user.click(screen.getByRole('button', { name: 'Use this repository' }));
+    await user.click(await screen.findByRole('button', { name: 'Change the branch' }));
+
+    const field = await screen.findByRole('textbox', { name: 'Branch' });
+    await user.clear(field);
+    await user.type(field, '修正');
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(field, { key: 'Enter', keyCode: IME_PROCESSING_KEY_CODE });
+
+    expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent('release');
+
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent('修正'),
     );
   });
 

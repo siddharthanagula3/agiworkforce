@@ -56,8 +56,8 @@ import {
   type CloudToolApprovalProjection,
   type ManagedCloudConversation,
   type ManagedCloudMessage,
-  MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   chatAttachmentAcceptAttribute,
   isSupportedChatAttachment,
   resolveVisibleThread,
@@ -286,7 +286,7 @@ export class CloudRuntime implements ChatRuntime {
   readonly attachmentPolicy = {
     accept: chatAttachmentAcceptAttribute(),
     maxFiles: MAX_CHAT_ATTACHMENT_COUNT,
-    maxTotalBytes: MAX_CHAT_ATTACHMENT_BYTES,
+    maxTotalBytes: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
     validate: (file: File) =>
       isSupportedChatAttachment(file.name, file.type)
         ? null
