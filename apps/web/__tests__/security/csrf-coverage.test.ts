@@ -37,6 +37,11 @@ const BEARER_GATE = /runAuthGate\s*\(/;
  * call has to be in the file, so deleting the check fails here.
  */
 const NON_COOKIE_PRINCIPAL: Record<string, { call: RegExp; reason: string }> = {
+  'mobile/intent/ask/route.ts': {
+    call: /resolveMobileIntentToken\s*\(/,
+    reason:
+      'The principal is a dedicated Ask from Siri bearer token, resolved by its hash only while unexpired and unrevoked. Missing bearer credentials are refused before answering, regardless of session cookies.',
+  },
   'auth/device/refresh/route.ts': {
     call: /hashDeviceRefreshToken\s*\(/,
     reason: 'The principal is the device refresh token in the body, matched by its hash.',

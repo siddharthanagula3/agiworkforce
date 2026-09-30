@@ -86,6 +86,11 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Executes model-authored code in an isolated cloud sandbox belonging to that conversation, not on your device. Classified as an irreversible execute action that creates an egress path.',
   },
+  run_command: {
+    label: 'Run a shell command',
+    description:
+      'Runs a shell command inside the Code session cloud sandbox. Commands are checked for denied and destructive operations; their risk and your approval mode decide whether they run or wait for confirmation.',
+  },
   write_file: {
     label: 'Write a file',
     description:
