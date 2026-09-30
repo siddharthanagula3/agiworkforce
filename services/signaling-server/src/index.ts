@@ -10,7 +10,7 @@ if (!process.env['NODE_ENV']) {
 import cors from 'cors';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { createServer, type Server } from 'http';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -26,10 +26,10 @@ import {
   deleteSessionByCode,
   deleteSessionsForDevice,
   getSessionByCode,
-  getSessionExpiresAtByCode,
   extendSessionExpiry,
   insertSession,
   listStoredSessionCodes,
+  probeDatabase,
 } from './db.js';
 import {
   deviceIdSchema,
@@ -58,7 +58,13 @@ import {
   DEFAULT_HOST,
   DEFAULT_PORT,
   DEFAULT_WS_PATH,
-  MAX_MESSAGE_SIZE_BYTES,
+  MAX_MESSAGE_SIZE_CHARS,
+  MAX_SOCKET_BUFFERED_BYTES,
+  WS_MAX_PAYLOAD_BYTES,
+  REHYDRATION_TIMEOUT_MS,
+  DB_CHECK_TTL_MS,
+  DB_STARTUP_RETRY_BASE_MS,
+  DB_STARTUP_RETRY_MAX_MS,
   MAX_SDP_SIZE,
   MAX_ICE_CANDIDATE_SIZE,
   MAX_SDP_MID_SIZE,
@@ -72,6 +78,7 @@ import {
   RATE_LIMIT_WINDOW_MS,
   RATE_LIMIT_RETRY_AFTER_SECONDS,
   RATE_LIMIT_PAIRING_CREATE,
+  RATE_LIMIT_PAIRING_CLAIM,
   RATE_LIMIT_PAIRING_LOOKUP,
   RATE_LIMIT_PAIRING_DELETE,
   RATE_LIMIT_DEVICE_REVOKE,
@@ -91,6 +98,8 @@ import {
   PENDING_APPROVAL_TTL_MS,
 } from './constants.js';
 import { controlPayloadSchema } from './control-payload.js';
+import { createDatabaseCheck, registerProbeRoutes } from './probes.js';
+import { lookupSession } from './rehydration.js';
 
 type Role = 'desktop' | 'mobile';
 
@@ -133,6 +142,27 @@ function constantTimeCompare(a: string, b: string): boolean {
   const ha = createHmac('sha256', COMPARE_KEY).update(a).digest();
   const hb = createHmac('sha256', COMPARE_KEY).update(b).digest();
   return timingSafeEqual(ha, hb);
+}
+
+function isInternalCaller(req: Request): boolean {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  return Boolean(SIGNALING_SECRET && token && constantTimeCompare(token, SIGNALING_SECRET));
+}
+
+const MAX_RATE_LIMIT_SUBJECT_LENGTH = 200;
+
+function internalCallerKey(subjectOf: (req: Request) => unknown) {
+  return (req: Request): string => {
+    const subject = isInternalCaller(req) ? subjectOf(req) : null;
+    if (
+      typeof subject === 'string' &&
+      subject.length > 0 &&
+      subject.length <= MAX_RATE_LIMIT_SUBJECT_LENGTH
+    ) {
+      return `subject:${subject}`;
+    }
+    return `ip:${ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? 'unknown')}`;
+  };
 }
 
 const REQUIRE_PAIR_TOKEN =
@@ -282,6 +312,9 @@ const pairingCreateLimiter = rateLimit({
   max: RATE_LIMIT_PAIRING_CREATE,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: internalCallerKey((req) =>
+    pairingAccountId((req.body as { metadata?: Record<string, unknown> } | undefined)?.metadata),
+  ),
   message: {
     error: 'RATE_LIMIT_EXCEEDED',
     message: `Too many pairing requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
@@ -301,11 +334,27 @@ const pairingLookupLimiter = rateLimit({
   },
 });
 
+const pairingClaimLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_PAIRING_CLAIM,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: internalCallerKey(
+    (req) => (req.body as { accountId?: unknown } | undefined)?.accountId,
+  ),
+  message: {
+    error: 'RATE_LIMIT_EXCEEDED',
+    message: `Too many claim requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
+    retryAfter: RATE_LIMIT_RETRY_AFTER_SECONDS,
+  },
+});
+
 const pairingDeleteLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_PAIRING_DELETE,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: internalCallerKey((req) => req.params['code']),
   message: {
     error: 'RATE_LIMIT_EXCEEDED',
     message: `Too many delete requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
@@ -318,6 +367,7 @@ const deviceRevokeLimiter = rateLimit({
   max: RATE_LIMIT_DEVICE_REVOKE,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: internalCallerKey((req) => req.params['deviceId']),
   message: {
     error: 'RATE_LIMIT_EXCEEDED',
     message: `Too many revocation requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
@@ -357,16 +407,22 @@ const adminLimiter = rateLimit({
 });
 
 const server: Server = createServer(app);
-const wss = new WebSocketServer({ server, path: wsPath });
+const wss = new WebSocketServer({ server, path: wsPath, maxPayload: WS_MAX_PAYLOAD_BYTES });
 
 const activeSessions = new Map<string, Session>();
 const clients = new WeakMap<WebSocket, ConnectedClient>();
 
 const pendingApprovals = new Map<string, PendingApproval[]>();
 
+type RehydrationOutcome =
+  | { kind: 'session'; session: Session }
+  | { kind: 'missing' }
+  | { kind: 'expired' }
+  | { kind: 'unavailable'; reason: 'timeout' | 'db_error' };
+
 const pendingRehydrations = new Map<
   string,
-  { promise: Promise<Session | null>; createdAt: number }
+  { promise: Promise<RehydrationOutcome>; createdAt: number }
 >();
 
 metrics.setConnectionCountCallback(() => connectionManager.getConnectionCount());
@@ -449,51 +505,38 @@ const endPairingMessageSchema = z.object({
 type RegisterMessage = z.infer<typeof registerMessageSchema>;
 type SignalMessage = z.infer<typeof signalMessageSchema>;
 
-app.get('/live', (_req, res) => {
-  res.status(200).json({ status: 'alive', timestamp: Date.now() });
-});
+const databaseCheck = createDatabaseCheck({ probe: probeDatabase, ttlMs: DB_CHECK_TTL_MS });
 
-app.get('/ready', (_req, res) => {
-  if (isShuttingDown) {
-    return res.status(503).json({ status: 'shutting_down', timestamp: Date.now() });
-  }
-  if (!isReady) {
-    return res.status(503).json({ status: 'not_ready', timestamp: Date.now() });
-  }
-  return res.status(200).json({ status: 'ready', timestamp: Date.now() });
-});
-
-app.get('/health', healthLimiter, (_req, res) => {
-  const memUsage = process.memoryUsage();
-  const stats = connectionManager.getStats();
-  const topCloseReasons = Array.from(stats.closeReasons.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([reason, count]) => ({ reason, count }));
-
-  const healthStatus = {
-    status: isShuttingDown ? 'shutting_down' : isReady ? 'healthy' : 'starting',
-    uptime: metrics.getUptimeSeconds(),
-    timestamp: Date.now(),
-    deployment: release,
-    connections: {
-      total: stats.totalConnections,
-      uniqueIps: stats.uniqueIps,
-      topCloseReasons,
-    },
-    sessions: {
-      active: activeSessions.size,
-    },
-    memory: {
-      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-      heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-      rss: Math.round(memUsage.rss / 1024 / 1024),
-      unit: 'MB',
-    },
-  };
-
-  const httpStatus = isShuttingDown ? 503 : isReady ? 200 : 503;
-  return res.status(httpStatus).json(healthStatus);
+registerProbeRoutes(app, {
+  lifecycle: () => (isShuttingDown ? 'shutting_down' : isReady ? 'ready' : 'starting'),
+  database: databaseCheck,
+  healthLimiter,
+  healthDetail: () => {
+    const memUsage = process.memoryUsage();
+    const stats = connectionManager.getStats();
+    const topCloseReasons = Array.from(stats.closeReasons.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([reason, count]) => ({ reason, count }));
+    return {
+      uptime: metrics.getUptimeSeconds(),
+      deployment: release,
+      connections: {
+        total: stats.totalConnections,
+        uniqueIps: stats.uniqueIps,
+        topCloseReasons,
+      },
+      sessions: {
+        active: activeSessions.size,
+      },
+      memory: {
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        unit: 'MB',
+      },
+    };
+  },
 });
 
 app.get(
@@ -535,7 +578,7 @@ app.get('/admin/status', adminLimiter, adminAuthMiddleware, (_req, res) => {
     },
     config: {
       defaultTtl: DEFAULT_TTL_SECONDS,
-      maxMessageSize: MAX_MESSAGE_SIZE_BYTES,
+      maxMessageSize: MAX_MESSAGE_SIZE_CHARS,
       allowedOrigins,
     },
     security: {
@@ -573,10 +616,7 @@ app.post('/admin/blacklist', adminLimiter, adminAuthMiddleware, (req, res) => {
 });
 
 app.post('/pairings', pairingCreateLimiter, async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+  if (!isInternalCaller(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -656,7 +696,13 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
 
   const code = codeValidation.data;
 
-  const { data: sessionData } = await getSessionByCode(code);
+  const { data: sessionData, error: lookupError } = await getSessionByCode(code);
+
+  if (lookupError) {
+    logger.error({ code, error: lookupError }, 'Pairing lookup failed on the store');
+    metrics.recordError('db_unavailable');
+    return res.status(503).json({ error: 'persistence_unavailable' });
+  }
 
   if (!sessionData) {
     return res.status(404).json(generic404);
@@ -681,11 +727,8 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
 // Minting a pair token is minting the right to take part in someone's pairing,
 // so the caller states which account it has authenticated and must be the one
 // the session was created for. A code alone is not a credential.
-app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+app.post('/pairings/:code/claim', pairingClaimLimiter, async (req, res) => {
+  if (!isInternalCaller(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -697,7 +740,12 @@ app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
   }
 
   const code = codeValidation.data;
-  const { data: sessionData } = await getSessionByCode(code);
+  const { data: sessionData, error: lookupError } = await getSessionByCode(code);
+  if (lookupError) {
+    logger.error({ code, error: lookupError }, 'Pairing claim lookup failed on the store');
+    metrics.recordError('db_unavailable');
+    return res.status(503).json({ error: 'persistence_unavailable' });
+  }
   if (!sessionData || sessionData.expires_at <= Date.now()) {
     return res.status(404).json(generic404);
   }
@@ -736,7 +784,7 @@ app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
     if (!bound.data) {
       return res.status(409).json({ error: 'pairing_role_in_use' });
     }
-    await pendingRehydrations.get(code)?.promise.catch(() => null);
+    await pendingRehydrations.get(code)?.promise;
     const live = activeSessions.get(code);
     if (live) live.metadata = withPairingDevice(live.metadata, 'mobile', deviceId);
   }
@@ -752,10 +800,7 @@ app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
 });
 
 app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+  if (!isInternalCaller(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -789,10 +834,7 @@ app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
 });
 
 app.post('/devices/:deviceId/revoke', deviceRevokeLimiter, async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+  if (!isInternalCaller(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -838,6 +880,27 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 });
 
 wss.on('connection', (socket, request) => {
+  const correlationId = generateCorrelationId();
+
+  socket.on('error', (error) => {
+    logger.error({ correlationId, error: error.message }, 'WebSocket error');
+    metrics.recordError(
+      'code' in error && error.code === 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH'
+        ? 'message_too_large'
+        : 'websocket_error',
+    );
+
+    const client = clients.get(socket);
+    if (client) {
+      const session = activeSessions.get(client.code);
+      if (session && session.participants[client.role]?.socket === socket) {
+        delete session.participants[client.role];
+        notifyPeer(session, client.role, { type: 'peer_left', role: client.role, reason: 'error' });
+      }
+      clients.delete(socket);
+    }
+  });
+
   if (isShuttingDown) {
     socket.send(JSON.stringify({ type: 'error', error: 'server_shutting_down' }));
     socket.close(1001, 'server_shutting_down');
@@ -900,7 +963,6 @@ wss.on('connection', (socket, request) => {
     return;
   }
 
-  const correlationId = generateCorrelationId();
   connectionManager.addConnection(socket, ip, correlationId);
 
   const connectionSpan = startSpan(
@@ -912,21 +974,6 @@ wss.on('connection', (socket, request) => {
 
   logger.debug({ ip, correlationId }, 'WebSocket connection established');
   metrics.recordMessage('connection');
-
-  socket.on('error', (error) => {
-    logger.error({ correlationId, error: error.message }, 'WebSocket error');
-    metrics.recordError('websocket_error');
-
-    const client = clients.get(socket);
-    if (client) {
-      const session = activeSessions.get(client.code);
-      if (session && session.participants[client.role]?.socket === socket) {
-        delete session.participants[client.role];
-        notifyPeer(session, client.role, { type: 'peer_left', role: client.role, reason: 'error' });
-      }
-      clients.delete(socket);
-    }
-  });
 
   socket.on('pong', () => {
     connectionManager.updateActivity(socket);
@@ -955,7 +1002,7 @@ wss.on('connection', (socket, request) => {
 
     const rawStr = raw.toString();
 
-    if (rawStr.length > MAX_MESSAGE_SIZE_BYTES) {
+    if (rawStr.length > MAX_MESSAGE_SIZE_CHARS) {
       logger.warn({ correlationId, size: rawStr.length }, 'Message too large');
       metrics.recordError('message_too_large');
       socket.send(JSON.stringify({ type: 'error', error: 'message_too_large' }));
@@ -978,7 +1025,11 @@ wss.on('connection', (socket, request) => {
         socket.send(JSON.stringify({ type: 'error', error: 'registration_required' }));
         return;
       }
-      handleRegister(socket, parsed.data, correlationId);
+      handleRegister(socket, parsed.data, correlationId).catch((error: unknown) => {
+        logger.error({ correlationId, error }, 'Registration failed');
+        metrics.recordError('register_failed');
+        refuseRetryably(socket);
+      });
       return;
     }
 
@@ -1144,7 +1195,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
 
     clearTimeout(shutdownTimeout);
     logger.info('Graceful shutdown completed');
-    process.exit(0);
+    process.exit(signal === 'SIGTERM' || signal === 'SIGINT' ? 0 : 1);
   } catch (error) {
     clearTimeout(shutdownTimeout);
     logger.error({ error }, 'Error during graceful shutdown');
@@ -1152,22 +1203,39 @@ async function gracefulShutdown(signal: string): Promise<void> {
   }
 }
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
 
 process.on('uncaughtException', (error) => {
   logger.fatal({ error: error.message, stack: error.stack }, 'Uncaught exception');
-  gracefulShutdown('uncaughtException');
+  void gracefulShutdown('uncaughtException');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   logger.fatal({ reason, promise }, 'Unhandled promise rejection');
-  gracefulShutdown('unhandledRejection');
+  void gracefulShutdown('unhandledRejection');
 });
+
+async function awaitDatabase(attempt = 0): Promise<void> {
+  const state = await databaseCheck.refresh();
+  if (isShuttingDown) return;
+  if (state.status === 'ok') {
+    isReady = true;
+    logger.info({ latencyMs: state.latencyMs }, 'Pairing store reachable; relay ready');
+    return;
+  }
+  const retryInMs = Math.min(DB_STARTUP_RETRY_BASE_MS * 2 ** attempt, DB_STARTUP_RETRY_MAX_MS);
+  logger.error(
+    { reason: state.reason, retryInMs },
+    'Pairing store unreachable at startup; relay not ready',
+  );
+  metrics.recordError('db_unavailable');
+  setTimeout(() => void awaitDatabase(attempt + 1), retryInMs);
+}
 
 server.listen(port, host, () => {
   connectionManager.start();
-  isReady = true;
+  void awaitDatabase();
   logger.info(
     {
       host,
@@ -1229,83 +1297,32 @@ async function handleRegister(
   let session = activeSessions.get(message.code);
 
   if (!session) {
-    let pendingEntry = pendingRehydrations.get(message.code);
-
-    if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) {
-      const now = Date.now();
-      for (const [code, entry] of pendingRehydrations.entries()) {
-        if (now - entry.createdAt > PENDING_REHYDRATION_TTL_MS) {
-          pendingRehydrations.delete(code);
-        }
-      }
-      if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) {
-        logger.error({ correlationId }, 'Server overloaded with pending rehydrations');
-        socket.send(JSON.stringify({ type: 'error', error: 'server_overloaded' }));
-        socket.close();
-        return;
-      }
-    }
-
-    if (!pendingEntry) {
-      const rehydrationPromise = (async (): Promise<Session | null> => {
-        const existingSession = activeSessions.get(message.code);
-        if (existingSession) {
-          return existingSession;
-        }
-
-        const DB_QUERY_TIMEOUT_MS = 10_000;
-        const dbQuery = getSessionByCode(message.code);
-        const timeout = new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error('Rehydration DB query timed out')),
-            DB_QUERY_TIMEOUT_MS,
-          ),
-        );
-        const { data: dbSession } = await Promise.race([dbQuery, timeout]);
-
-        if (!dbSession) {
-          return null;
-        }
-
-        if (dbSession.expires_at <= Date.now()) {
-          return null;
-        }
-
-        const rehydratedSession: Session = {
-          code: dbSession.code,
-          createdAt: dbSession.created_at,
-          expiresAt: dbSession.expires_at,
-          participants: {},
-          metadata: dbSession.metadata,
-          lastHeartbeatAt: Date.now(),
-        };
-        activeSessions.set(message.code, rehydratedSession);
-        return rehydratedSession;
-      })();
-
-      pendingEntry = { promise: rehydrationPromise, createdAt: Date.now() };
-      pendingRehydrations.set(message.code, pendingEntry);
-
-      rehydrationPromise.finally(() => {
-        pendingRehydrations.delete(message.code);
-      });
-    }
-
-    session = (await pendingEntry.promise) ?? undefined;
-
-    if (!session) {
-      const { data: dbSession } = await getSessionExpiresAtByCode(message.code);
-
-      if (!dbSession) {
-        logger.warn({ correlationId, code: message.code }, 'Pairing not found');
-        socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
-      } else {
-        logger.warn({ correlationId, code: message.code }, 'Pairing expired');
-        socket.send(JSON.stringify({ type: 'error', error: 'pairing_expired' }));
-      }
+    const rehydration = rehydrateSession(message.code);
+    if (!rehydration) {
+      logger.error({ correlationId }, 'Server overloaded with pending rehydrations');
+      socket.send(JSON.stringify({ type: 'error', error: 'server_overloaded' }));
       socket.close();
       return;
     }
+
+    const outcome = await rehydration;
+    if (outcome.kind === 'unavailable') {
+      logger.error(
+        { correlationId, code: message.code, reason: outcome.reason },
+        'Pairing store unavailable during registration',
+      );
+      metrics.recordError('rehydration_unavailable');
+      refuseRetryably(socket);
+      return;
+    }
+    if (outcome.kind !== 'session') {
+      const error = outcome.kind === 'expired' ? 'pairing_expired' : 'pairing_not_found';
+      logger.warn({ correlationId, code: message.code }, `Registration refused: ${error}`);
+      socket.send(JSON.stringify({ type: 'error', error }));
+      socket.close();
+      return;
+    }
+    session = outcome.session;
   }
 
   if (isSessionExpired(session)) {
@@ -1502,17 +1519,78 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
   });
 }
 
+function rehydrateSession(code: string): Promise<RehydrationOutcome> | null {
+  const pending = pendingRehydrations.get(code);
+  if (pending) return pending.promise;
+
+  if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) {
+    const now = Date.now();
+    for (const [pendingCode, entry] of pendingRehydrations.entries()) {
+      if (now - entry.createdAt > PENDING_REHYDRATION_TTL_MS) {
+        pendingRehydrations.delete(pendingCode);
+      }
+    }
+    if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) return null;
+  }
+
+  const entry = { promise: loadSession(code), createdAt: Date.now() };
+  pendingRehydrations.set(code, entry);
+  const clear = () => {
+    if (pendingRehydrations.get(code) === entry) pendingRehydrations.delete(code);
+  };
+  void entry.promise.then(clear, clear);
+  return entry.promise;
+}
+
+async function loadSession(code: string): Promise<RehydrationOutcome> {
+  const existing = activeSessions.get(code);
+  if (existing) return { kind: 'session', session: existing };
+
+  const lookup = await lookupSession(() => getSessionByCode(code), REHYDRATION_TIMEOUT_MS);
+  if (lookup.kind !== 'found') return lookup;
+  if (lookup.row.expires_at <= Date.now()) return { kind: 'expired' };
+
+  const live = activeSessions.get(code);
+  if (live) return { kind: 'session', session: live };
+
+  const session: Session = {
+    code: lookup.row.code,
+    createdAt: lookup.row.created_at,
+    expiresAt: lookup.row.expires_at,
+    participants: {},
+    metadata: lookup.row.metadata,
+    lastHeartbeatAt: Date.now(),
+  };
+  activeSessions.set(code, session);
+  return { kind: 'session', session };
+}
+
+function refuseRetryably(socket: WebSocket): void {
+  if (socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({ type: 'error', error: 'service_unavailable' }));
+  socket.close(1013, 'try_again_later');
+}
+
 function getPeer(session: Session, role: Role): Participant | undefined {
   return role === 'desktop' ? session.participants.mobile : session.participants.desktop;
 }
 
 function notifyParticipant(participant: Participant, payload: Record<string, unknown>): void {
-  if (participant.socket.readyState === WebSocket.OPEN) {
-    try {
-      participant.socket.send(JSON.stringify(payload));
-    } catch (error) {
-      logger.warn({ error, role: participant.role }, 'Failed to send message to participant');
-    }
+  const { socket } = participant;
+  if (socket.readyState !== WebSocket.OPEN) return;
+  if (socket.bufferedAmount > MAX_SOCKET_BUFFERED_BYTES * 1000) {
+    logger.warn(
+      { role: participant.role, bufferedAmount: socket.bufferedAmount },
+      'Dropping a participant that stopped reading',
+    );
+    metrics.recordError('slow_consumer_dropped');
+    socket.terminate();
+    return;
+  }
+  try {
+    socket.send(JSON.stringify(payload));
+  } catch (error) {
+    logger.warn({ error, role: participant.role }, 'Failed to send message to participant');
   }
 }
 

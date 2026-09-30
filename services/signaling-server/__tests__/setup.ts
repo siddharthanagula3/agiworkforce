@@ -21,13 +21,13 @@ vi.mock('../src/logger.js', () => ({
 
 vi.mock('../src/db.js', () => ({
   getSessionByCode: vi.fn().mockResolvedValue({ data: null, error: null }),
-  getSessionExpiresAtByCode: vi.fn().mockResolvedValue({ data: null, error: null }),
   deleteSessionByCode: vi.fn().mockResolvedValue({ error: null }),
   deleteSessionsForDevice: vi.fn().mockResolvedValue({ data: [], error: null }),
   bindSessionDevice: vi.fn().mockResolvedValue({ data: null, error: null }),
   extendSessionExpiry: vi.fn().mockResolvedValue({ error: null }),
   insertSession: vi.fn().mockResolvedValue({ error: null }),
   listStoredSessionCodes: vi.fn().mockResolvedValue({ data: [], error: null }),
+  probeDatabase: vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 }),
 }));
 
 beforeAll(() => {

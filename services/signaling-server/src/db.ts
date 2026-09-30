@@ -1,5 +1,7 @@
 import type { QueryResult } from '@neondatabase/serverless';
 import { Pool } from '@neondatabase/serverless';
+import { DB_CONNECTION_TIMEOUT_MS, DB_PROBE_TIMEOUT_MS, DB_QUERY_TIMEOUT_MS } from './constants.js';
+import { withinDeadline } from './deadline.js';
 import { logger } from './logger.js';
 import type { PairTokenRole } from './pair-token.js';
 import { pairingDeviceKey } from './pairing-device.js';
@@ -49,7 +51,12 @@ function guardTransportErrors(candidate: Pool): Pool {
 }
 
 const pool = guardTransportErrors(
-  new Pool({ connectionString: databaseUrl, idleTimeoutMillis: IDLE_TIMEOUT_MS }),
+  new Pool({
+    connectionString: databaseUrl,
+    idleTimeoutMillis: IDLE_TIMEOUT_MS,
+    connectionTimeoutMillis: DB_CONNECTION_TIMEOUT_MS,
+    query_timeout: DB_QUERY_TIMEOUT_MS,
+  }),
 );
 
 function normalizeTimestamp(value: string | number | null): number {
@@ -123,20 +130,6 @@ export async function getSessionByCode(
   return { data: toRow(data), error: null };
 }
 
-export async function getSessionExpiresAtByCode(
-  code: string,
-): Promise<QueryResultWrapper<{ expires_at: number }>> {
-  const sql = 'SELECT expires_at FROM signaling_sessions WHERE code = $1 LIMIT 1';
-  const { data, error } = await queryOne<{ expires_at: number | string }>(sql, [code]);
-  if (error || !data) {
-    return { data: null, error };
-  }
-  return {
-    data: { expires_at: normalizeTimestamp(data.expires_at) },
-    error: null,
-  };
-}
-
 export async function deleteSessionByCode(code: string): Promise<{ error: DbError | null }> {
   return queryNoReturn('DELETE FROM signaling_sessions WHERE code = $1', [code]);
 }
@@ -194,4 +187,28 @@ export async function insertSession(
   const insertSql =
     'INSERT INTO signaling_sessions (code, created_at, expires_at, metadata) VALUES ($1, $2, $3, $4)';
   return queryNoReturn(insertSql, [code, createdAt, expiresAt, metadata]);
+}
+
+export type DatabaseProbe = { ok: true; latencyMs: number } | { ok: false; reason: string };
+
+const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
+
+export async function probeDatabase(
+  timeoutMs: number = DB_PROBE_TIMEOUT_MS,
+): Promise<DatabaseProbe> {
+  const startedAt = Date.now();
+  const outcome = await withinDeadline(
+    queryNoReturn('SELECT 1 FROM signaling_sessions LIMIT 1'),
+    timeoutMs,
+  );
+  if (outcome.kind === 'timeout') return { ok: false, reason: 'timeout' };
+  if (outcome.kind === 'failed') return { ok: false, reason: 'unreachable' };
+  const { error } = outcome.value;
+  if (error) {
+    return {
+      ok: false,
+      reason: error.code && SQLSTATE_PATTERN.test(error.code) ? error.code : 'unreachable',
+    };
+  }
+  return { ok: true, latencyMs: Date.now() - startedAt };
 }
