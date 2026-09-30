@@ -57,13 +57,13 @@ describe('desktop workspace policy', () => {
 
     const { result } = renderHook(() => useDisabledWorkspaceFeatures());
     await waitFor(() => expect(mocks.cloudFetch).toHaveBeenCalledTimes(1));
-    expect(result.current).toEqual([]);
+    expect(result.current).toEqual(['fast_mode']);
 
     await act(async () => {
       window.dispatchEvent(new Event('focus'));
     });
 
-    await waitFor(() => expect(result.current).toEqual(['schedules']));
+    await waitFor(() => expect(result.current).toEqual(['schedules', 'fast_mode']));
     expect(mocks.cloudFetch.mock.calls[0]?.[0]).toBe(
       'https://cloud.test/api/settings/organization/policy/effective',
     );

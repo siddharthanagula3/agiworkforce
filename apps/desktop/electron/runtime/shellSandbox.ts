@@ -38,15 +38,11 @@ export const SEATBELT_SYSTEM_READ_PATHS: readonly string[] = [
   '/dev',
   '/private/var/select',
   '/etc',
-  '/tmp',
-  '/private/tmp',
   '/opt',
 ];
 
 // Seatbelt matches resolved paths, so the /etc symlink alone never grants a read.
 export const SEATBELT_DESKTOP_READ_PATHS: readonly string[] = ['/private/etc'];
-
-export const SEATBELT_SHARED_WRITE_PATHS: readonly string[] = ['/tmp', '/private/tmp'];
 
 export interface SandboxedSpawnInput {
   sandbox: Exclude<ShellSandbox, { backend: 'none' }>;
@@ -151,7 +147,6 @@ export function seatbeltProfile(input: {
     `(allow file-read* ${subpaths([...SEATBELT_SYSTEM_READ_PATHS, ...SEATBELT_DESKTOP_READ_PATHS])} (literal "/"))`,
     `(allow file-read* ${subpaths([...input.writableRoots, ...input.readableRoots])})`,
     '(allow file-write* (literal "/dev/null"))',
-    `(allow file-write* ${subpaths(SEATBELT_SHARED_WRITE_PATHS)})`,
     `(allow file-write* ${subpaths(input.writableRoots)})`,
     ...(input.terminal === true ? SEATBELT_TERMINAL_RULES : []),
   ];
