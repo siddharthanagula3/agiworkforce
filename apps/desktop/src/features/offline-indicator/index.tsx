@@ -175,7 +175,7 @@ export function OfflineIndicator({
               onClick={() => void handleRetry()}
               className={`
                 px-3 py-1 rounded text-sm font-medium
-                bg-danger-fill/10 hover:bg-danger-fill 
+                bg-danger-fill/10 hover:bg-danger-fill
                 text-danger-text
                 transition-colors duration-150
               `}
