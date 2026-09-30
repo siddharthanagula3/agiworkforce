@@ -60,7 +60,11 @@ jobs:
         github.event.workflow_run.head_repository.full_name == github.repository
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 95
+    permissions:
+      contents: read
+      actions: read
+      security-events: read
     outputs:
       signaling: ${{ steps.scope.outputs.signaling }}
       sha: ${{ steps.commit.outputs.sha }}
@@ -69,43 +73,30 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.ref || github.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Resolve the candidate commit
         id: commit
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Verify manually selected ref passed CI
+      - name: Verify manually selected ref passed CI and scanning
         if: github.event_name == 'workflow_dispatch'
         env:
-          GH_TOKEN: ${{ github.token }}
-          CANDIDATE_SHA: ${{ steps.commit.outputs.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          successful_runs="$(
-            gh api \
-              "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=$CANDIDATE_SHA&status=success&event=push" \
-              --jq '.total_count'
-          )"
-          if [ "$successful_runs" -lt 1 ]; then
-            echo "::error::No successful push-triggered CI run exists for $CANDIDATE_SHA"
-            exit 1
-          fi
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ steps.commit.outputs.sha }}
+        run: node scripts/production-deploy-scope.mjs --release-ready
 
       - name: Select the signaling surface
         id: scope
+        env:
+          SIGNALING_DEPLOY_URL: ${{ vars.FLY_PUBLIC_URL }}
         shell: bash
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" != "workflow_run" ]; then
             echo "signaling=true" >> "$GITHUB_OUTPUT"
-          elif git rev-parse HEAD^ >/dev/null 2>&1; then
-            git diff --name-only HEAD^ HEAD \
-              | node scripts/production-deploy-scope.mjs \
-              | grep '^signaling=' >> "$GITHUB_OUTPUT"
           else
-            echo "signaling=true" >> "$GITHUB_OUTPUT"
+            node scripts/production-deploy-scope.mjs --shipped signaling >> "$GITHUB_OUTPUT"
           fi
 
   # ===========================================================================
@@ -204,6 +195,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: AGI_RELEASE_SHA=${{ needs.gate.outputs.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
@@ -226,8 +218,13 @@ jobs:
     name: Deploy to Railway
     runs-on: ubuntu-24.04
     needs: [gate, build]
-    timeout-minutes: 15
+    timeout-minutes: 110
+    permissions:
+      contents: read
+      actions: read
+      security-events: read
     if: |
+      github.ref == 'refs/heads/main' &&
       needs.gate.outputs.signaling == 'true' &&
       (github.event_name == 'workflow_run' ||
       (github.event_name == 'workflow_dispatch' && (inputs.deploy_target == 'railway' || inputs.deploy_target == 'both')))
@@ -241,6 +238,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.gate.outputs.sha }}
+
+      - name: Require green scanning for this commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ needs.gate.outputs.sha }}
+        run: node scripts/production-deploy-scope.mjs --release-ready
 
       - name: Install Railway CLI
         # Pin to specific version to prevent supply chain attacks via @latest
@@ -281,8 +284,13 @@ jobs:
     name: Deploy to Fly.io
     runs-on: ubuntu-24.04
     needs: [gate, build]
-    timeout-minutes: 15
+    timeout-minutes: 110
+    permissions:
+      contents: read
+      actions: read
+      security-events: read
     if: |
+      github.ref == 'refs/heads/main' &&
       needs.gate.outputs.signaling == 'true' &&
       github.event_name == 'workflow_dispatch' &&
       (inputs.deploy_target == 'fly' || inputs.deploy_target == 'both')
@@ -296,39 +304,56 @@ jobs:
         with:
           ref: ${{ needs.gate.outputs.sha }}
 
+      - name: Require green scanning for this commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ needs.gate.outputs.sha }}
+        run: node scripts/production-deploy-scope.mjs --release-ready
+
       - name: Install Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1.6
 
       - name: Deploy to Fly.io
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          CANDIDATE_SHA: ${{ needs.gate.outputs.sha }}
         run: |
           set -euo pipefail
           flyctl machine list --config services/signaling-server/fly.toml --json \
             | node services/signaling-server/scripts/check-fly-machines.mjs --before
-          flyctl deploy . --config services/signaling-server/fly.toml --dockerfile services/signaling-server/Dockerfile --remote-only --wait-timeout 5m --ha=false
+          flyctl deploy . --config services/signaling-server/fly.toml --dockerfile services/signaling-server/Dockerfile --remote-only --wait-timeout 5m --ha=false --build-arg "AGI_RELEASE_SHA=$CANDIDATE_SHA"
           flyctl machine list --config services/signaling-server/fly.toml --json \
             | node services/signaling-server/scripts/check-fly-machines.mjs
 
-      - name: Verify deployment health
+      - name: Verify deployment health for ${{ needs.gate.outputs.sha }}
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: |
-          echo "Checking deployment status..."
-          flyctl status --app agiworkforce-signaling
+          SIGNALING_DEPLOY_URL: ${{ vars.FLY_PUBLIC_URL }}
+          GITHUB_SHA: ${{ needs.gate.outputs.sha }}
+        run: node scripts/production-deploy-scope.mjs --verify-relay
 
-          echo "Running health check..."
-          for i in {1..5}; do
-            if curl -sf "${{ vars.FLY_PUBLIC_URL }}/health" > /dev/null; then
-              echo "Health check passed!"
-              exit 0
-            fi
-            echo "Attempt $i failed, retrying in 10s..."
-            sleep 10
-          done
+  relay-verdict:
+    name: Record the verified relay candidate
+    needs: [gate, deploy-fly]
+    if: >-
+      always() && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' &&
+      (inputs.deploy_target == 'fly' || inputs.deploy_target == 'both')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - name: Checkout the candidate commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
 
-          echo "Health check failed after 5 attempts"
-          exit 1
+      - name: Publish the relay verdict for this commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ needs.gate.outputs.sha }}
+          RELAY_DEPLOY_RESULT: ${{ needs.deploy-fly.result }}
+        run: node scripts/production-deploy-scope.mjs --publish-relay-verdict
 
   # ===========================================================================
   # Cleanup Old Images (advisory)

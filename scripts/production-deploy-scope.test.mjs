@@ -3,7 +3,13 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 import {
+  RELEASE_READINESS,
   SURFACE_DEPLOY_JOBS,
+  SURFACE_DEPLOY_WORKFLOWS,
+  githubPages,
+  publishRelayVerdict,
+  requireReleaseReady,
+  requireZeroOpenAlerts,
   SYNC_PARITY_SOURCES,
   classifyDeployScope,
   formatGithubOutputs,
@@ -148,12 +154,14 @@ test('every surface baseline names a deploy job that actually exists', () => {
   // selectSurfaceBaseline matches on the job's display name, so a renamed job
   // reads as "never shipped". That fails open to deploying, but it also means
   // the surface is never again measured from what it shipped.
-  const workflow = fs.readFileSync('.github/workflows/deploy-production.yml', 'utf8');
-  const jobNames = new Set(
-    [...workflow.matchAll(/^ {4}name: (.+)$/gm)].map((match) => match[1].trim()),
-  );
-
   for (const [surface, jobName] of Object.entries(SURFACE_DEPLOY_JOBS)) {
+    const workflow = fs.readFileSync(
+      `.github/workflows/${SURFACE_DEPLOY_WORKFLOWS[surface]}`,
+      'utf8',
+    );
+    const jobNames = new Set(
+      [...workflow.matchAll(/^ {4}name: (.+)$/gm)].map((match) => match[1].trim()),
+    );
     assert.equal(jobNames.has(jobName), true, `${surface} -> ${jobName}`);
   }
 });
@@ -433,4 +441,424 @@ test('CI runs the TS suite and the Rust fixture replay in the same job', () => {
   assert.match(rust, /^mod fixture_tests \{$/m);
   assert.match(rust, /packages\/client\/sync\/src\/__fixtures__\/pull-apply\.json/);
   assert.match(rust, /packages\/client\/sync\/src\/__fixtures__\/cursor-compare\.json/);
+});
+
+const candidateSha = 'a'.repeat(40);
+const releaseEnvironment = {
+  GITHUB_REPOSITORY: 'fixture/repository',
+  GITHUB_TOKEN: 'fixture',
+  GITHUB_SHA: candidateSha,
+  GITHUB_RUN_ID: '42',
+  GITHUB_SERVER_URL: 'https://github.com',
+  SIGNALING_DEPLOY_URL: 'https://relay.fixture.invalid',
+};
+
+function releaseApi(replace = () => undefined) {
+  const calls = [];
+  const fetchImpl = async (rawUrl, request) => {
+    const url = new URL(rawUrl);
+    calls.push({ url, request });
+    const workflow = RELEASE_READINESS.workflows.find((name) =>
+      url.pathname.includes(`/workflows/${name}/runs`),
+    );
+    let body;
+    if (workflow) {
+      assert.equal(url.searchParams.get('head_sha'), candidateSha);
+      assert.equal(url.searchParams.get('event'), 'push');
+      assert.equal(url.searchParams.get('branch'), 'main');
+      body = {
+        workflow_runs: [
+          {
+            id: 1,
+            event: 'push',
+            status: 'completed',
+            conclusion: 'success',
+            head_sha: candidateSha,
+            head_branch: 'main',
+            head_repository: { full_name: releaseEnvironment.GITHUB_REPOSITORY },
+            path: `.github/workflows/${workflow}`,
+          },
+        ],
+      };
+    } else if (url.pathname === '/health') {
+      body = {
+        status: 'healthy',
+        deployment: { target: 'fly', version: candidateSha },
+        dependencies: { database: { status: 'ok' } },
+      };
+    } else if (url.pathname.endsWith('/code-scanning/alerts')) {
+      assert.equal(url.searchParams.get('state'), 'open');
+      body = [];
+    } else if (url.pathname.endsWith('/status')) {
+      assert.ok(url.pathname.endsWith(`/commits/${candidateSha}/status`));
+      body = {
+        sha: candidateSha,
+        statuses: [
+          {
+            id: 10,
+            context: RELEASE_READINESS.relay.context,
+            state: 'success',
+            target_url: `https://github.com/${releaseEnvironment.GITHUB_REPOSITORY}/actions/runs/42`,
+          },
+        ],
+      };
+    } else if (url.pathname.endsWith('/actions/runs/42')) {
+      body = {
+        id: 42,
+        event: 'workflow_dispatch',
+        head_branch: 'main',
+        head_sha: 'b'.repeat(40),
+        head_repository: { full_name: releaseEnvironment.GITHUB_REPOSITORY },
+        path: `.github/workflows/${RELEASE_READINESS.relay.workflow}`,
+      };
+    } else if (url.pathname.endsWith('/actions/runs/42/jobs')) {
+      body = {
+        jobs: [
+          {
+            name: RELEASE_READINESS.relay.jobName,
+            status: 'completed',
+            conclusion: 'success',
+            steps: [
+              {
+                name: `${RELEASE_READINESS.relay.verificationStepPrefix}${candidateSha}`,
+                status: 'completed',
+                conclusion: 'success',
+              },
+            ],
+          },
+        ],
+      };
+    } else if (url.pathname.endsWith(`/statuses/${candidateSha}`)) {
+      body = { id: 11 };
+    } else {
+      assert.fail(`Unexpected fixture API path ${url.pathname}`);
+    }
+    const replacement = replace(url, body, request) ?? {};
+    return new Response(JSON.stringify(replacement.body ?? body), {
+      status: replacement.status ?? 200,
+      headers: replacement.link ? { link: replacement.link } : {},
+    });
+  };
+  return { fetchImpl, calls };
+}
+
+function boundedReleaseOptions(api, extra = {}) {
+  let now = 0;
+  return {
+    fetchImpl: api.fetchImpl,
+    timeoutMs: 1000,
+    now: () => now,
+    sleep: async (milliseconds) => {
+      now += milliseconds;
+    },
+    ...extra,
+  };
+}
+
+test('release admission reads candidate CI, processed scanning, open alerts and the actual relay receipt', async () => {
+  const api = releaseApi();
+  await requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api, { requireRelay: true }));
+  assert.equal(api.calls.filter((call) => call.url.pathname.includes('/workflows/')).length, 2);
+  assert.equal(
+    api.calls.filter((call) => call.url.pathname.endsWith('/code-scanning/alerts')).length,
+    2,
+  );
+  assert.ok(api.calls.some((call) => call.url.pathname.endsWith('/actions/runs/42/jobs')));
+  assert.ok(
+    api.calls
+      .filter((call) => call.url.origin === 'https://api.github.com')
+      .every((call) => call.request.redirect === 'error'),
+  );
+  const health = api.calls.find((call) => call.url.pathname === '/health');
+  assert.ok(health);
+  assert.equal(health.request.headers.authorization, undefined);
+});
+
+test('manual relay admission requires CI too and does not consume an unrelated relay verdict', async () => {
+  const api = releaseApi();
+  await requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api));
+  assert.ok(api.calls.some((call) => call.url.pathname.includes('/workflows/ci.yml/runs')));
+  assert.ok(
+    api.calls.some((call) => call.url.pathname.includes('/workflows/codeql-analysis.yml/runs')),
+  );
+  assert.equal(
+    api.calls.some((call) => call.url.pathname.endsWith('/status')),
+    false,
+  );
+});
+
+test('release admission cannot reuse a green run from another source or an older failed rerun', async () => {
+  for (const mutate of [
+    (run) => {
+      run.head_repository.full_name = 'foreign/repository';
+    },
+    (run) => {
+      run.head_sha = 'b'.repeat(40);
+    },
+    (run) => {
+      run.head_branch = 'develop';
+    },
+    (run) => {
+      run.event = 'pull_request';
+    },
+    (run) => {
+      run.path = '.github/workflows/another.yml';
+    },
+    (run) => {
+      run.conclusion = 'failure';
+    },
+  ]) {
+    const api = releaseApi((url, body) => {
+      if (url.pathname.includes('/workflows/ci.yml/')) mutate(body.workflow_runs[0]);
+    });
+    await assert.rejects(requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api)));
+    assert.ok(api.calls.some((call) => call.url.pathname.includes('/workflows/ci.yml/runs')));
+    assert.equal(
+      api.calls.some((call) => call.url.pathname.endsWith('/code-scanning/alerts')),
+      false,
+    );
+  }
+  const api = releaseApi((url, body) => {
+    if (url.pathname.includes('/workflows/ci.yml/'))
+      body.workflow_runs.push({ ...body.workflow_runs[0], id: 2, conclusion: 'failure' });
+  });
+  await assert.rejects(
+    requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api)),
+    /did not accept/,
+  );
+});
+
+test('missing and pending candidate scans reach a bounded timeout', async () => {
+  for (const pending of [[], [{ status: 'in_progress', conclusion: null }]]) {
+    const api = releaseApi((url, body) => {
+      if (url.pathname.includes('/workflows/codeql-analysis.yml/')) {
+        body.workflow_runs = pending.map((run) => ({ ...body.workflow_runs[0], ...run }));
+      }
+    });
+    await assert.rejects(
+      requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api)),
+      /deadline/,
+    );
+    assert.equal(
+      api.calls.some((call) => call.url.pathname.endsWith('/code-scanning/alerts')),
+      false,
+    );
+    assert.ok(
+      api.calls.filter((call) => call.url.pathname.includes('/workflows/codeql-analysis.yml/'))
+        .length >= 2,
+    );
+  }
+});
+
+test('scan API failures and malformed collections block deployment', async () => {
+  for (const response of [{ status: 403 }, { status: 500 }, { body: {} }]) {
+    const api = releaseApi((url) =>
+      url.pathname.endsWith('/code-scanning/alerts') ? response : undefined,
+    );
+    await assert.rejects(requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api)));
+    assert.ok(api.calls.some((call) => call.url.pathname.endsWith('/code-scanning/alerts')));
+  }
+});
+
+test('open alerts on a later page block release without printing their details', async () => {
+  const marker = 'private finding detail';
+  const api = releaseApi((url) => {
+    if (!url.pathname.endsWith('/code-scanning/alerts')) return;
+    return url.searchParams.has('page')
+      ? { body: [{ state: 'open', number: 1, detail: marker }] }
+      : { body: [], link: `<${url.href}&page=2>; rel="next"` };
+  });
+  await assert.rejects(
+    requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api)),
+    (error) => /Open code scanning alerts/.test(error.message) && !error.message.includes(marker),
+  );
+  assert.ok(api.calls.some((call) => call.url.searchParams.get('page') === '2'));
+});
+
+test('pagination cannot change origins, selectors or loop indefinitely', async () => {
+  for (const link of [
+    'https://foreign.invalid/repos/fixture/repository/code-scanning/alerts?state=open&per_page=100&page=2',
+    'https://api.github.com/repos/fixture/repository/code-scanning/alerts?state=closed&per_page=100&page=2',
+    'https://api.github.com/repos/fixture/repository/code-scanning/alerts?state=open&state=closed&per_page=100&page=2',
+    'https://api.github.com/repos/fixture/repository/code-scanning/alerts?state=open&per_page=100&page=1',
+  ]) {
+    const api = releaseApi((url) =>
+      url.pathname.endsWith('/code-scanning/alerts')
+        ? { link: `<${link}>; rel="next"` }
+        : undefined,
+    );
+    await assert.rejects(
+      requireZeroOpenAlerts(
+        { repository: releaseEnvironment.GITHUB_REPOSITORY, token: 'fixture' },
+        { fetchImpl: api.fetchImpl },
+      ),
+    );
+    assert.equal(
+      api.calls.some((call) => call.url.origin === 'https://foreign.invalid'),
+      false,
+    );
+  }
+  const api = releaseApi(() => ({ link: 'invalid pagination' }));
+  await assert.rejects(
+    githubPages(
+      '/repos/fixture/repository/code-scanning/alerts?state=open&per_page=100',
+      'fixture',
+      null,
+      { fetchImpl: api.fetchImpl },
+    ),
+    /pagination/,
+  );
+});
+
+test('relay acceptance rejects a different candidate, foreign receipt and failed actual deploy', async () => {
+  for (const mutate of [
+    (url, body) => {
+      if (url.pathname.endsWith('/status')) body.sha = 'b'.repeat(40);
+    },
+    (url, body) => {
+      if (url.pathname.endsWith('/status'))
+        body.statuses[0].target_url = 'https://github.com/foreign/repository/actions/runs/42';
+    },
+    (url, body) => {
+      if (url.pathname.endsWith('/status')) body.statuses[0].state = 'failure';
+    },
+    (url, body) => {
+      if (url.pathname.endsWith('/actions/runs/42'))
+        body.head_repository.full_name = 'foreign/repository';
+    },
+    (url, body) => {
+      if (url.pathname.endsWith('/actions/runs/42')) body.path = '.github/workflows/ci.yml';
+    },
+    (url, body) => {
+      if (url.pathname.endsWith('/actions/runs/42/jobs')) body.jobs[0].conclusion = 'skipped';
+    },
+  ]) {
+    const api = releaseApi((url, body) => {
+      mutate(url, body);
+    });
+    await assert.rejects(
+      requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api, { requireRelay: true })),
+    );
+    assert.ok(
+      api.calls.some((call) => call.url.pathname.endsWith(`/commits/${candidateSha}/status`)),
+    );
+  }
+});
+
+test('a relay that never reports cannot unlock web promotion', async () => {
+  const api = releaseApi((url, body) => {
+    if (url.pathname.endsWith('/status')) body.statuses = [];
+  });
+  await assert.rejects(
+    requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api, { requireRelay: true })),
+    /deadline/,
+  );
+  assert.ok(api.calls.filter((call) => call.url.pathname.endsWith('/status')).length >= 2);
+});
+
+test('receipt publication binds both successful and unsuccessful outcomes to the resolved full candidate', async () => {
+  for (const outcome of ['success', 'failure', 'cancelled', 'skipped']) {
+    const api = releaseApi();
+    await publishRelayVerdict(
+      { ...releaseEnvironment, RELAY_DEPLOY_RESULT: outcome },
+      { fetchImpl: api.fetchImpl },
+    );
+    assert.equal(api.calls.length, 1);
+    const call = api.calls[0];
+    assert.equal(call.url.pathname, `/repos/fixture/repository/statuses/${candidateSha}`);
+    assert.equal(call.request.method, 'POST');
+    const receipt = JSON.parse(call.request.body);
+    assert.equal(receipt.state, outcome === 'success' ? 'success' : 'failure');
+    assert.equal(receipt.context, RELEASE_READINESS.relay.context);
+    assert.equal(receipt.target_url, 'https://github.com/fixture/repository/actions/runs/42');
+  }
+  const api = releaseApi();
+  await assert.rejects(
+    publishRelayVerdict(
+      { ...releaseEnvironment, GITHUB_SHA: candidateSha.slice(0, 7) },
+      { fetchImpl: api.fetchImpl },
+    ),
+    /full candidate/,
+  );
+  assert.equal(api.calls.length, 0);
+});
+
+test('a later workflow page cannot smuggle a foreign candidate past a clean first page', async () => {
+  const api = releaseApi((url, body) => {
+    if (!url.pathname.includes('/workflows/ci.yml/')) return;
+    if (!url.searchParams.has('page')) return { link: `<${url.href}&page=2>; rel="next"` };
+    body.workflow_runs[0].head_sha = 'b'.repeat(40);
+  });
+  await assert.rejects(
+    requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api)),
+    /invalid candidate workflow/,
+  );
+  assert.ok(
+    api.calls.some(
+      (call) =>
+        call.url.pathname.includes('/workflows/ci.yml/') &&
+        call.url.searchParams.get('page') === '2',
+    ),
+  );
+});
+
+test('a stale successful receipt cannot unlock web when the live relay has changed', async () => {
+  const api = releaseApi((url, body) => {
+    if (url.pathname === '/health') body.deployment.version = 'b'.repeat(40);
+  });
+  await assert.rejects(
+    requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api, { requireRelay: true })),
+    /another candidate/,
+  );
+  assert.ok(api.calls.some((call) => call.url.pathname.endsWith('/actions/runs/42/jobs')));
+  assert.ok(api.calls.some((call) => call.url.pathname === '/health'));
+});
+
+test('the check at a production write fails immediately instead of waiting on pending scans', async () => {
+  const api = releaseApi((url, body) => {
+    if (url.pathname.includes('/workflows/codeql-analysis.yml/'))
+      body.workflow_runs[0].status = 'in_progress';
+  });
+  let slept = false;
+  await assert.rejects(
+    requireReleaseReady(releaseEnvironment, {
+      fetchImpl: api.fetchImpl,
+      noWait: true,
+      sleep: async () => {
+        slept = true;
+      },
+    }),
+    /deadline/,
+  );
+  assert.equal(slept, false);
+});
+
+test('relay receipts from an unreviewed workflow branch cannot authorize production', async () => {
+  const api = releaseApi((url, body) => {
+    if (url.pathname.endsWith('/actions/runs/42')) body.head_branch = 'unreviewed';
+  });
+  await assert.rejects(
+    requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api, { requireRelay: true })),
+    /another deployment/,
+  );
+  assert.equal(
+    api.calls.some((call) => call.url.pathname === '/health'),
+    false,
+  );
+});
+
+test('a genuine successful deploy of another candidate cannot serve as this candidate receipt', async () => {
+  const api = releaseApi((url, body) => {
+    if (url.pathname.endsWith('/actions/runs/42/jobs'))
+      body.jobs[0].steps[0].name = `${RELEASE_READINESS.relay.verificationStepPrefix}${'b'.repeat(40)}`;
+  });
+  await assert.rejects(
+    requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api, { requireRelay: true })),
+    /did not verify this candidate/,
+  );
+  assert.ok(api.calls.some((call) => call.url.pathname.endsWith('/actions/runs/42/jobs')));
+  assert.equal(
+    api.calls.some((call) => call.url.pathname === '/health'),
+    false,
+  );
 });

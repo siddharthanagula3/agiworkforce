@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -35,6 +36,11 @@ function fixture(mutate, contractOverrides = {}) {
   const document = clone(workflow);
   mutate(document);
   writeFileSync(path.join(root, WORKFLOW_DIR, contract.workflow), stringify(document));
+  const relayWorkflow = contract.releaseReadiness.relay.workflow;
+  writeFileSync(
+    path.join(root, WORKFLOW_DIR, relayWorkflow),
+    stringify(readWorkflow(REPO_ROOT, relayWorkflow)),
+  );
   writeFileSync(
     path.join(root, CONTRACT_PATH),
     JSON.stringify({ ...contract, ...contractOverrides }),
@@ -45,6 +51,88 @@ function fixture(mutate, contractOverrides = {}) {
 function errorsAfter(mutate, contractOverrides) {
   return checkDeployGates(fixture(mutate, contractOverrides)).errors;
 }
+
+function errorsAfterRelay(mutate) {
+  const root = fixture(() => {});
+  const file = contract.releaseReadiness.relay.workflow;
+  const document = readWorkflow(root, file);
+  mutate(document);
+  writeFileSync(path.join(root, WORKFLOW_DIR, file), stringify(document));
+  return checkDeployGates(root).errors;
+}
+
+test('web promotion cannot remove or bypass the candidate release dependency', () => {
+  for (const mutate of [
+    (document) => {
+      document.jobs['deploy-web'].needs = ['scope', 'staging-gate'];
+    },
+    (document) => {
+      document.jobs['deploy-web'].if += ' && always()';
+    },
+    (document) => {
+      document.jobs['release-gate']['continue-on-error'] = true;
+    },
+    (document) => {
+      document.jobs['release-gate'].steps.at(-1).if = 'false';
+    },
+  ]) {
+    assert.ok(errorsAfter(mutate).some((error) => /release-readiness/.test(error)));
+  }
+});
+
+test('relay deployment gates use the candidate and the actual blocking checker', () => {
+  for (const job of ['deploy-fly', 'deploy-railway']) {
+    for (const mutate of [
+      (step) => {
+        step.env.GITHUB_SHA = '${{ github.sha }}';
+      },
+      (step) => {
+        step.run = 'echo scan passed';
+      },
+      (step) => {
+        step['continue-on-error'] = true;
+      },
+      (step) => {
+        step.if = 'false';
+      },
+    ]) {
+      const errors = errorsAfterRelay((document) =>
+        mutate(
+          document.jobs[job].steps.find(
+            (step) => step.name === 'Require green scanning for this commit',
+          ),
+        ),
+      );
+      assert.ok(errors.some((error) => /candidate CI and scanning/.test(error)));
+    }
+  }
+});
+
+test('a relay receipt cannot omit serving verification or use workflow head identity', () => {
+  for (const mutate of [
+    (document) => {
+      document.jobs['deploy-fly'].steps.at(-1).run = 'curl -sf example.invalid/health';
+    },
+    (document) => {
+      document.jobs['relay-verdict'].needs = ['gate'];
+    },
+    (document) => {
+      document.jobs['relay-verdict'].if = "github.event_name == 'workflow_dispatch'";
+    },
+    (document) => {
+      document.jobs['relay-verdict'].steps.at(-1).env.GITHUB_SHA = '${{ github.sha }}';
+    },
+    (document) => {
+      document.jobs['relay-verdict'].steps.at(-1).env.RELAY_DEPLOY_RESULT = 'success';
+    },
+  ]) {
+    assert.ok(
+      errorsAfterRelay(mutate).some((error) =>
+        /serving candidate|candidate relay verdict/.test(error),
+      ),
+    );
+  }
+});
 
 function dropStep(document, job, name) {
   const steps = document.jobs[job].steps;
@@ -213,4 +301,111 @@ test('the helpers read the graph the rules depend on', () => {
   assert.ok(gateConditions(workflow, 'deploy-web').includes("conclusion == 'success'"));
   assert.deepEqual(checkoutRefs(workflow.jobs['deploy-web']), [contract.verifiedCommitRef]);
   assert.ok(readFileSync(path.join(REPO_ROOT, WORKFLOW_DIR, contract.workflow), 'utf8').length > 0);
+});
+
+test('the web and sandbox writes cannot skip their fresh readiness checks', () => {
+  for (const gate of contract.gates.filter((gate) => gate.command)) {
+    for (const mutate of [
+      (step) => {
+        step.run = `echo "${gate.command}"`;
+      },
+      (step) => {
+        step.if = 'false';
+      },
+      (step) => {
+        step.env.GITHUB_SHA = '${{ github.sha }}';
+      },
+    ]) {
+      const errors = errorsAfter((document) =>
+        mutate(document.jobs[gate.job].steps.find((step) => step.name === gate.step)),
+      );
+      assert.ok(errors.some((error) => error.includes(gate.id)));
+    }
+  }
+});
+
+test('web promotion shares the serving relay deployment lock without cancellation', () => {
+  const errors = errorsAfter((document) => {
+    document.jobs['deploy-web'].concurrency.group = 'unrelated';
+  });
+  assert.ok(errors.some((error) => /serialize with the serving relay/.test(error)));
+});
+
+test('release CLI refuses an abbreviated candidate before it can contact GitHub', () => {
+  const result = spawnSync(
+    process.execPath,
+    [path.join(REPO_ROOT, 'scripts/production-deploy-scope.mjs'), '--release-ready'],
+    {
+      env: {
+        ...process.env,
+        GITHUB_REPOSITORY: 'fixture/repository',
+        GITHUB_TOKEN: 'fixture',
+        GITHUB_SHA: 'a'.repeat(7),
+      },
+      input: '',
+      encoding: 'utf8',
+      timeout: 2000,
+    },
+  );
+  assert.equal(result.error, undefined);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /full candidate commit/);
+});
+
+test('echoing a trusted command cannot satisfy any relay security gate', () => {
+  for (const [job, stepName] of [
+    ['deploy-fly', 'Require green scanning for this commit'],
+    ['deploy-railway', 'Require green scanning for this commit'],
+    [
+      'deploy-fly',
+      `${contract.releaseReadiness.relay.verificationStepPrefix}${'${{ needs.gate.outputs.sha }}'}`,
+    ],
+    ['relay-verdict', 'Publish the relay verdict for this commit'],
+  ]) {
+    const errors = errorsAfterRelay((document) => {
+      const step = document.jobs[job].steps.find((step) => step.name === stepName);
+      assert.ok(step, `${job} contains the real security step`);
+      step.run = `echo ${step.run}`;
+    });
+    assert.ok(errors.length > 0, `${job} rejects a checker it never executed`);
+  }
+});
+
+test('expressions cannot turn a deployment security gate into advisory behavior', () => {
+  for (const value of [true, '${{ true }}', '${{ vars.ADVISORY }}', 'false']) {
+    for (const mutate of [
+      (document) => {
+        document.jobs['deploy-fly']['continue-on-error'] = value;
+      },
+      (document) => {
+        document.jobs['relay-verdict']['continue-on-error'] = value;
+      },
+      (document) => {
+        document.jobs['deploy-fly'].steps.at(-1)['continue-on-error'] = value;
+      },
+      (document) => {
+        document.jobs['relay-verdict'].steps.at(-1)['continue-on-error'] = value;
+      },
+    ]) {
+      assert.ok(errorsAfterRelay(mutate).length > 0);
+    }
+    assert.ok(
+      errorsAfter((document) => {
+        document.jobs['release-gate']['continue-on-error'] = value;
+      }).length > 0,
+    );
+  }
+});
+
+test('literal false cannot skip a trusted security command', () => {
+  assert.ok(
+    errorsAfterRelay((document) => {
+      document.jobs['deploy-fly'].steps.at(-1).if = false;
+    }).length > 0,
+  );
+  assert.ok(
+    errorsAfter((document) => {
+      document.jobs['release-gate'].steps.at(-1).if = false;
+    }).length > 0,
+  );
 });

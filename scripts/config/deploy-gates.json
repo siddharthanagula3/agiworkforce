@@ -25,6 +25,15 @@
       "why": "Production promotes an artifact staging already accepted; without this the first place a build runs is production."
     },
     {
+      "id": "release-readiness",
+      "job": "release-gate",
+      "step": "Require green scanning and the verified relay for this commit",
+      "evidence": "--release-ready --require-relay",
+      "gatesJobs": ["deploy-web"],
+      "why": "The candidate must have completed security analysis, zero open alerts and a verified serving relay before web promotion.",
+      "command": "node scripts/production-deploy-scope.mjs --release-ready --require-relay"
+    },
+    {
       "id": "migration-ledger",
       "job": "deploy-web",
       "step": "Verify the production schema ledger without mutation",
@@ -79,10 +88,65 @@
       "job": "deploy-sandbox",
       "step": "Verify the promoted origin serves the repo's isolation headers",
       "why": "The artifact sandbox is a separate origin whose whole safety property is its headers."
+    },
+    {
+      "id": "require-release-readiness-before-production-env-writes",
+      "job": "deploy-web",
+      "step": "Require release readiness before production env writes",
+      "command": "node scripts/production-deploy-scope.mjs --release-ready --require-relay --no-wait",
+      "runsBefore": "Reconcile production env against the declared contract",
+      "why": "The serving relay and zero-alert verdict must still accept this candidate before production changes."
+    },
+    {
+      "id": "require-release-readiness-before-artifact-deployment",
+      "job": "deploy-web",
+      "step": "Require release readiness before artifact deployment",
+      "command": "node scripts/production-deploy-scope.mjs --release-ready --require-relay --no-wait",
+      "runsBefore": "Deploy the prebuilt artifact",
+      "why": "The serving relay and zero-alert verdict must still accept this candidate before production changes."
+    },
+    {
+      "id": "require-release-readiness-before-domain-promotion",
+      "job": "deploy-web",
+      "step": "Require release readiness before domain promotion",
+      "command": "node scripts/production-deploy-scope.mjs --release-ready --require-relay --no-wait",
+      "runsBefore": "Promote the deployment to the production domains",
+      "why": "The serving relay and zero-alert verdict must still accept this candidate before production changes."
+    },
+    {
+      "id": "sandbox-release-readiness",
+      "job": "deploy-sandbox",
+      "step": "Require release readiness before sandbox deployment",
+      "command": "node scripts/production-deploy-scope.mjs --release-ready --no-wait",
+      "runsBefore": "Deploy the prebuilt artifact",
+      "why": "The public artifact origin must not deploy before candidate CI, scanning and zero open alerts are verified."
+    },
+    {
+      "id": "release-before-migration-state-record",
+      "job": "deploy-web",
+      "step": "Require release readiness before migration state recording",
+      "command": "node scripts/production-deploy-scope.mjs --release-ready --require-relay --no-wait",
+      "runsBefore": "Record the migration state this deployment serves",
+      "why": "The deployment metadata write must still follow the candidate release verdict."
     }
   ],
   "rollback": {
     "job": "deploy-web",
     "step": "Roll back to the last verified production deployment"
+  },
+  "releaseReadiness": {
+    "workflows": ["ci.yml", "codeql-analysis.yml"],
+    "relay": {
+      "context": "production-relay",
+      "workflow": "deploy-signaling-server.yml",
+      "job": "deploy-fly",
+      "jobName": "Deploy to Fly.io",
+      "target": "fly",
+      "verificationStepPrefix": "Verify deployment health for "
+    },
+    "timeoutSeconds": 5400,
+    "pollSeconds": 15,
+    "requestTimeoutSeconds": 15,
+    "maxPages": 20
   }
 }
