@@ -172,23 +172,48 @@ fn wrapper_payload(wrapper: &Wrapper, tokens: &[String]) -> Option<String> {
     if index >= tokens.len() {
         return None;
     }
-    Some(tokens[index..].join(" "))
+    shlex::try_join(tokens[index..].iter().map(String::as_str)).ok()
 }
 
 /// The command line a wrapper segment will run, or `None` when the segment is
 /// not a wrapper, carries no payload, or cannot be tokenised.
-pub(crate) fn wrapped_payload(segment: &str) -> Option<String> {
-    let tokens = shlex::split(segment.trim())?;
-    let first = tokens.first()?;
+pub(crate) fn wrapped_payload_checked(segment: &str) -> Result<Option<String>, ()> {
+    let tokens = shlex::split(segment.trim()).ok_or(())?;
+    let assignments = tokens
+        .iter()
+        .take_while(|token| super::argv::is_env_assignment(token))
+        .count();
+    let tokens = &tokens[assignments..];
+    let Some(first) = tokens.first() else {
+        return Ok(None);
+    };
     let base = super::approval::strip_path(first);
+    if base == "env"
+        && tokens.iter().skip(1).any(|token| {
+            token.starts_with("--split-string")
+                || (token.starts_with('-') && !token.starts_with("--") && token.contains('S'))
+        })
+    {
+        return Err(());
+    }
     let payload = if SHELL_INTERPRETERS.contains(&base) {
-        shell_payload(&tokens)?
+        shell_payload(tokens)
     } else {
-        let wrapper = WRAPPERS.iter().find(|w| w.name == base)?;
-        wrapper_payload(wrapper, &tokens)?
+        let Some(wrapper) = WRAPPERS.iter().find(|w| w.name == base) else {
+            return Ok(None);
+        };
+        wrapper_payload(wrapper, tokens)
+    };
+    let Some(payload) = payload else {
+        return Ok(None);
     };
     let payload = payload.trim().to_string();
-    (!payload.is_empty()).then_some(payload)
+    Ok((!payload.is_empty()).then_some(payload))
+}
+
+#[cfg(test)]
+fn wrapped_payload(segment: &str) -> Option<String> {
+    wrapped_payload_checked(segment).ok().flatten()
 }
 
 #[cfg(test)]

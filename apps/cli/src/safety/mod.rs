@@ -313,7 +313,11 @@ fn classify_named_program(segment: &str, prev_was_safe: bool, depth: usize) -> C
     // A wrapper's arguments are another command line. Classifying only the
     // wrapper reads `sh -c 'rm -rf /'` as the unremarkable program `sh`.
     if depth < MAX_WRAPPER_DEPTH {
-        if let Some(payload) = program::wrapped_payload(trimmed) {
+        let payload = match program::wrapped_payload_checked(trimmed) {
+            Ok(payload) => payload,
+            Err(()) => return CommandSafety::Unknown,
+        };
+        if let Some(payload) = payload {
             let own = if DC.contains(&base_cmd) {
                 CommandSafety::Dangerous
             } else {

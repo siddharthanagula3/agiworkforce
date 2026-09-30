@@ -4,6 +4,7 @@ import * as path from 'path';
 import { describeRejection, safeResolveWorkspacePath } from '../../utils/pathSafety';
 import { buildInstructionContextSnapshot, type InstructionContextSnapshot } from '../instructions';
 import { projectInstructionFolder } from '../../data/projectInstructions';
+import { resolvedContextWithholdReason } from '../../data/contextExclusion';
 
 const GROUP_INSTRUCTIONS = 'instructions';
 const GROUP_PINNED = 'pinned';
@@ -27,6 +28,15 @@ export async function validateWorkspaceContextFile(
           ? 'Path is not inside any open workspace folder.'
           : describeRejection(resolved.reason),
     };
+  }
+
+  const withheld =
+    (await resolvedContextWithholdReason(uri.fsPath)) ??
+    (resolved.uri.fsPath === uri.fsPath
+      ? undefined
+      : await resolvedContextWithholdReason(resolved.uri.fsPath));
+  if (withheld !== undefined) {
+    return { ok: false, message: 'This file is withheld by the workspace context policy.' };
   }
 
   try {

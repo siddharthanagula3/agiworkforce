@@ -5,9 +5,178 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
-static SANDBOX_DISABLED: AtomicBool = AtomicBool::new(false);
+static SANDBOX_MODE: AtomicU8 = AtomicU8::new(SandboxMode::Contained as u8);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SandboxMode {
+    ReadOnly,
+    Contained,
+    Unrestricted,
+}
+
+impl SandboxMode {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "read-only" | "readonly" => Some(Self::ReadOnly),
+            "contained" | "workspace" | "workspace-write" => Some(Self::Contained),
+            "unrestricted" | "off" | "danger-full-access" => Some(Self::Unrestricted),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read-only",
+            Self::Contained => "contained",
+            Self::Unrestricted => "unrestricted",
+        }
+    }
+
+    fn from_u8(value: u8) -> Self {
+        match value {
+            0 => Self::ReadOnly,
+            2 => Self::Unrestricted,
+            _ => Self::Contained,
+        }
+    }
+
+    fn stricter(self, other: Self) -> Self {
+        if (self as u8) <= (other as u8) {
+            self
+        } else {
+            other
+        }
+    }
+
+    fn policy(self) -> SandboxPolicy {
+        match self {
+            Self::ReadOnly => SandboxPolicy::ReadOnly,
+            Self::Contained | Self::Unrestricted => SandboxPolicy::default(),
+        }
+    }
+
+    fn summary(self) -> &'static str {
+        match self {
+            Self::ReadOnly => {
+                "Commands the agent runs can read the workspace but write nothing outside a \
+                 private scratch directory, and reach the network only with your approval."
+            }
+            Self::Contained => {
+                "Commands the agent runs can write only inside the workspace, and reach the \
+                 network only with your approval."
+            }
+            Self::Unrestricted => {
+                "Commands the agent runs have your full user rights: any file you can change, \
+                 and the network."
+            }
+        }
+    }
+}
+
+pub fn set_sandbox_mode(mode: SandboxMode) {
+    SANDBOX_MODE.store(mode as u8, Ordering::Relaxed);
+}
+
+pub fn sandbox_mode() -> SandboxMode {
+    SandboxMode::from_u8(SANDBOX_MODE.load(Ordering::Relaxed))
+}
+
+pub fn launch_mode(no_sandbox: bool, user: Option<&str>, merged: Option<&str>) -> SandboxMode {
+    if no_sandbox {
+        return SandboxMode::Unrestricted;
+    }
+    let configured = |value: Option<&str>| {
+        value.map_or(SandboxMode::Contained, |value| {
+            SandboxMode::parse(value).unwrap_or_else(|| {
+                eprintln!(
+                    "{} sandbox_mode {value:?} is not read-only, contained or unrestricted; \
+                     commands run contained",
+                    crate::terminal_style::warning("note:")
+                );
+                SandboxMode::Contained
+            })
+        })
+    };
+    let user_mode = configured(user);
+    if merged == user {
+        return user_mode;
+    }
+    configured(merged).stricter(user_mode)
+}
+
+fn unrestricted_refusal(forced: bool, shell_unrestricted: bool) -> Option<&'static str> {
+    if forced {
+        Some("your organization requires the sandbox")
+    } else if !shell_unrestricted {
+        Some("this folder is not trusted; trust it with /trust grant first")
+    } else {
+        None
+    }
+}
+
+pub fn handle_sandbox_command(arg: &str) -> String {
+    let arg = arg.trim();
+    if !arg.is_empty() {
+        let Some(requested) = SandboxMode::parse(arg) else {
+            return format!(
+                "Unknown sandbox mode {arg:?}. Use /sandbox read-only, /sandbox contained or \
+                 /sandbox unrestricted."
+            );
+        };
+        if requested == SandboxMode::Unrestricted {
+            if let Some(reason) = unrestricted_refusal(
+                sandbox_settings().forced,
+                crate::trust::restrictions().unrestricted_shell,
+            ) {
+                return format!("Commands stay sandboxed: {reason}.");
+            }
+        }
+        set_sandbox_mode(requested);
+    }
+    describe_sandbox()
+}
+
+fn describe_sandbox() -> String {
+    let requested = sandbox_mode();
+    let active = if sandbox_disabled() {
+        SandboxMode::Unrestricted
+    } else if requested == SandboxMode::ReadOnly {
+        SandboxMode::ReadOnly
+    } else {
+        SandboxMode::Contained
+    };
+    let backend = SandboxType::detect();
+    let mut lines = vec![
+        format!("Sandbox: {}", active.name()),
+        format!("  {}", active.summary()),
+    ];
+    if active != SandboxMode::Unrestricted {
+        lines.push(format!("  Backend: {}", status_word(Some(backend))));
+        if backend == SandboxType::None {
+            lines.push(format!(
+                "  {}",
+                missing_sandbox_message(std::env::consts::OS)
+            ));
+        }
+    }
+    if requested == SandboxMode::Unrestricted && active != SandboxMode::Unrestricted {
+        if let Some(reason) = unrestricted_refusal(
+            sandbox_settings().forced,
+            crate::trust::restrictions().unrestricted_shell,
+        ) {
+            lines.push(format!("  Unrestricted was asked for, but {reason}."));
+        }
+    }
+    lines.push(
+        "  Change it with /sandbox read-only, /sandbox contained or /sandbox unrestricted, \
+         or set sandbox_mode in ~/.agiworkforce/config.toml."
+            .to_string(),
+    );
+    lines.join("\n")
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxType {
@@ -173,15 +342,28 @@ impl SandboxManager {
         }
         Ok(manager)
     }
-}
 
-pub fn set_sandbox_disabled(disabled: bool) {
-    SANDBOX_DISABLED.store(disabled, Ordering::Relaxed);
+    pub fn for_agent_command(
+        workspace_dir: PathBuf,
+        network_policy: NetworkPolicy,
+    ) -> Result<Self> {
+        let mut manager = Self::for_command_execution(workspace_dir, network_policy)?;
+        manager.policy = sandbox_mode().policy();
+        Ok(manager)
+    }
 }
 
 /// Whether the user asked for the sandbox to be off, before any policy applies.
 pub fn sandbox_disabled_requested() -> bool {
-    SANDBOX_DISABLED.load(Ordering::Relaxed) || std::env::var("AGIWORKFORCE_NO_SANDBOX").is_ok()
+    sandbox_mode() == SandboxMode::Unrestricted
+}
+
+pub fn sandbox_disabled_for_workspace(workspace: &Path) -> bool {
+    resolve_sandbox_disabled(
+        sandbox_disabled_requested(),
+        sandbox_settings().forced,
+        crate::trust::restrictions_for(workspace).unrestricted_shell,
+    )
 }
 
 pub fn sandbox_disabled() -> bool {
@@ -515,6 +697,7 @@ fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Res
             ));
             for root in writable_roots(manager)? {
                 let root = validate_and_escape_seatbelt_path(&root)?;
+                scratch_read_rules.push_str(&format!("(allow file-read* (subpath \"{root}\"))\n"));
                 write_rules.push_str(&format!("(allow file-write* (subpath \"{root}\"))\n"));
             }
         }
@@ -536,7 +719,7 @@ fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Res
                    ;; macOS resolves `sh` through this symlink directory
                    ;; (/private/var/select/sh -> /bin/bash).
                    (subpath "/private/var/select")
-                   (subpath "/etc") (subpath "/tmp") (subpath "/private/tmp")
+                   (subpath "/etc")
                    (literal "/") (subpath "/opt"))
 (allow file-read* (subpath "{ws}"))
 {scratch_read_rules}
@@ -600,10 +783,33 @@ fn bubblewrap_prefix(manager: &SandboxManager) -> Result<Vec<String>> {
     if manager.network_policy == NetworkPolicy::Deny {
         args.push("--unshare-net".to_string());
     }
+    for runtime in [
+        "/usr",
+        "/bin",
+        "/sbin",
+        "/lib",
+        "/lib64",
+        "/etc/ld.so.cache",
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/nsswitch.conf",
+        "/etc/resolv.conf",
+        "/etc/hosts",
+        "/etc/ssl/certs",
+        "/etc/pki/tls/certs",
+    ] {
+        if Path::new(runtime).exists() {
+            args.extend([
+                "--ro-bind".to_string(),
+                runtime.to_string(),
+                runtime.to_string(),
+            ]);
+        }
+    }
     args.extend([
-        "--ro-bind".to_string(),
-        "/".to_string(),
-        "/".to_string(),
+        "--setenv".to_string(),
+        "TMPDIR".to_string(),
+        "/tmp".to_string(),
         "--tmpfs".to_string(),
         "/tmp".to_string(),
         "--dev".to_string(),
@@ -611,9 +817,7 @@ fn bubblewrap_prefix(manager: &SandboxManager) -> Result<Vec<String>> {
         "--proc".to_string(),
         "/proc".to_string(),
     ]);
-    if manager.policy == SandboxPolicy::ReadOnly
-        && manager.workspace_dir.starts_with(Path::new("/tmp"))
-    {
+    if manager.policy == SandboxPolicy::ReadOnly {
         let workspace = manager
             .workspace_dir
             .to_str()
@@ -634,6 +838,14 @@ fn bubblewrap_prefix(manager: &SandboxManager) -> Result<Vec<String>> {
             .ok_or_else(|| anyhow::anyhow!("sandbox writable root is not valid UTF-8: {:?}", root))?
             .to_string();
         args.extend(["--bind".to_string(), root.clone(), root]);
+    }
+    if let Some(snapshot) = crate::shell_snapshot::applied_file() {
+        let snapshot = snapshot.canonicalize()?;
+        let snapshot = snapshot
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("shell snapshot path is not UTF-8"))?
+            .to_string();
+        args.extend(["--ro-bind".to_string(), snapshot.clone(), snapshot]);
     }
     args.push("--".to_string());
     Ok(args)
@@ -709,8 +921,16 @@ pub(crate) fn background_command(
         }
     };
     let mut command = match manager {
-        None => unsandboxed(),
-        Some(manager) if matches!(manager.policy, SandboxPolicy::DangerFullAccess) => unsandboxed(),
+        None => {
+            let mut command = unsandboxed();
+            apply_environment_policy(&mut command, scrub_environment_for(cwd));
+            command
+        }
+        Some(manager) if matches!(manager.policy, SandboxPolicy::DangerFullAccess) => {
+            let mut command = unsandboxed();
+            apply_environment_policy(&mut command, scrub_environment_for(&manager.workspace_dir));
+            command
+        }
         Some(manager) => {
             let scrub = scrub_environment_for(&manager.workspace_dir);
             match manager.sandbox_type {
@@ -771,6 +991,7 @@ async fn execute_sandboxed_in_environment(
                 command
             }
         };
+        apply_environment_policy(&mut cmd, scrub_environment);
         crate::interactive::mark_agent_spawned(&mut cmd);
         if let Some(dir) = cwd {
             cmd.current_dir(dir);
@@ -886,6 +1107,56 @@ mod environment_and_policy_tests {
         assert!(settings.scrub_environment);
         assert!(settings.sandbox_user_hooks);
         assert!(settings.sandbox_mcp_servers);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn unrestricted_execution_still_honors_environment_scrubbing() {
+        let workspace = tempfile::tempdir().unwrap();
+        let manager = SandboxManager::new(
+            SandboxPolicy::DangerFullAccess,
+            workspace.path().to_path_buf(),
+        );
+        let variable = "AGI_SANDBOX_ENV_REGRESSION_SENTINEL";
+        if std::env::var_os("AGI_SANDBOX_SCRUB_REGRESSION_CHILD").is_none() {
+            let output = tokio::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "sandbox::environment_and_policy_tests::unrestricted_execution_still_honors_environment_scrubbing", "--test-threads=1"])
+                .env(variable, "controlled-private-value")
+                .env("AGI_SANDBOX_SCRUB_REGRESSION_CHILD", "1")
+                .output().await.unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let script = "printf '%s' \"$AGI_SANDBOX_ENV_REGRESSION_SENTINEL\"";
+        let inherited = execute_sandboxed_in_environment(
+            &manager,
+            Invocation::Shell(script),
+            Some(workspace.path()),
+            None,
+            Some(std::time::Duration::from_secs(5)),
+            false,
+        )
+        .await;
+        let scrubbed = execute_sandboxed_in_environment(
+            &manager,
+            Invocation::Shell(script),
+            Some(workspace.path()),
+            None,
+            Some(std::time::Duration::from_secs(5)),
+            true,
+        )
+        .await;
+        let inherited = inherited.unwrap();
+        let scrubbed = scrubbed.unwrap();
+        assert!(inherited.status.success());
+        assert_eq!(inherited.stdout, b"controlled-private-value");
+        assert!(scrubbed.status.success());
+        assert!(scrubbed.stdout.is_empty(), "environment scrub was bypassed");
     }
 
     #[test]
@@ -1396,6 +1667,61 @@ mod tests {
         assert!(!marker.exists(), "read-only sandbox created the file");
     }
 
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[tokio::test]
+    async fn sandbox_refuses_private_sibling_reads() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let sibling_base = if cfg!(target_os = "linux") {
+            dirs::home_dir().expect("fixture home directory")
+        } else {
+            PathBuf::from("/tmp")
+        };
+        let sibling = tempfile::Builder::new()
+            .prefix("agi-private-sibling-")
+            .tempdir_in(sibling_base)
+            .expect("private sibling");
+        let private = sibling.path().join("private.txt");
+        std::fs::write(&private, "CONTROLLED_PRIVATE_SIBLING").expect("private fixture");
+        for policy in [SandboxPolicy::ReadOnly, SandboxPolicy::default()] {
+            let manager = SandboxManager::new(policy, workspace.path().to_path_buf());
+            assert_ne!(manager.sandbox_type, SandboxType::None);
+            let command = format!("cat {}", shell_quote(&private.to_string_lossy()));
+            let output = execute_sandboxed(&manager, &command, Some(workspace.path()))
+                .await
+                .expect("sandbox launch");
+            assert!(!output.status.success(), "private sibling read succeeded");
+            assert!(!String::from_utf8_lossy(&output.stdout).contains("CONTROLLED_PRIVATE_SIBLING"));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn explicit_writable_root_remains_readable() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let extra = tempfile::Builder::new()
+            .prefix("agi-explicit-root-")
+            .tempdir_in("/tmp")
+            .expect("extra root");
+        let file = extra
+            .path()
+            .canonicalize()
+            .expect("canonical extra")
+            .join("roundtrip.txt");
+        let manager = SandboxManager::new(
+            SandboxPolicy::WorkspaceWrite {
+                writable_roots: vec![extra.path().canonicalize().expect("extra root")],
+            },
+            workspace.path().to_path_buf(),
+        );
+        let quoted = shell_quote(&file.to_string_lossy());
+        let command = format!("printf controlled > {quoted} && cat {quoted}");
+        let output = execute_sandboxed(&manager, &command, Some(workspace.path()))
+            .await
+            .expect("sandbox launch");
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"controlled");
+    }
+
     #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn read_only_policy_blocks_a_workspace_write_below_tmp() {
@@ -1550,10 +1876,92 @@ mod tests {
 
     #[test]
     fn sandbox_disabled_flag_can_be_set_by_cli() {
-        set_sandbox_disabled(true);
+        set_sandbox_mode(launch_mode(true, None, None));
         assert!(sandbox_disabled_requested());
-        set_sandbox_disabled(false);
+        set_sandbox_mode(launch_mode(false, None, None));
         assert!(!sandbox_disabled_requested());
+    }
+
+    #[test]
+    fn unrestricted_launch_mode_does_not_bypass_an_untrusted_workspace() {
+        let workspace = tempfile::tempdir().unwrap();
+        assert!(!crate::trust::restrictions_for(workspace.path()).unrestricted_shell);
+        let previous = sandbox_mode();
+        set_sandbox_mode(SandboxMode::Unrestricted);
+        let manager =
+            SandboxManager::for_agent_command(workspace.path().to_path_buf(), NetworkPolicy::Deny);
+        set_sandbox_mode(previous);
+        let manager = manager.unwrap();
+        assert!(!matches!(manager.policy, SandboxPolicy::DangerFullAccess));
+    }
+
+    #[test]
+    fn the_configured_sandbox_mode_is_read_and_a_repository_can_only_tighten_it() {
+        assert_eq!(launch_mode(false, None, None), SandboxMode::Contained);
+        assert_eq!(
+            launch_mode(false, Some("read-only"), Some("read-only")),
+            SandboxMode::ReadOnly
+        );
+        assert_eq!(
+            launch_mode(false, Some("unrestricted"), Some("unrestricted")),
+            SandboxMode::Unrestricted
+        );
+        assert_eq!(
+            launch_mode(false, None, Some("off")),
+            SandboxMode::Contained,
+            "a repository's config must not switch the sandbox off"
+        );
+        assert_eq!(
+            launch_mode(false, Some("unrestricted"), Some("read-only")),
+            SandboxMode::ReadOnly
+        );
+        assert_eq!(
+            launch_mode(false, Some("contained"), Some("mystery")),
+            SandboxMode::Contained
+        );
+        assert_eq!(
+            launch_mode(true, Some("read-only"), Some("read-only")),
+            SandboxMode::Unrestricted
+        );
+    }
+
+    #[test]
+    fn unrestricted_is_refused_where_no_sandbox_would_be() {
+        assert!(
+            unrestricted_refusal(true, true).is_some_and(|reason| reason.contains("organization"))
+        );
+        assert!(unrestricted_refusal(false, false).is_some_and(|reason| reason.contains("trust")));
+        assert_eq!(unrestricted_refusal(false, true), None);
+    }
+
+    #[test]
+    fn every_sandbox_mode_round_trips_through_its_name() {
+        for mode in [
+            SandboxMode::ReadOnly,
+            SandboxMode::Contained,
+            SandboxMode::Unrestricted,
+        ] {
+            assert_eq!(SandboxMode::parse(mode.name()), Some(mode));
+            assert_eq!(SandboxMode::from_u8(mode as u8), mode);
+        }
+        assert_eq!(
+            SandboxMode::parse("workspace"),
+            Some(SandboxMode::Contained)
+        );
+        assert_eq!(SandboxMode::parse("full-auto"), None);
+    }
+
+    #[test]
+    fn a_read_only_mode_leaves_agent_commands_nothing_to_write() {
+        assert_eq!(SandboxMode::ReadOnly.policy(), SandboxPolicy::ReadOnly);
+        assert!(SandboxMode::Contained.policy().permits_workspace_writes());
+        let manager = SandboxManager {
+            sandbox_type: SandboxType::MacosSeatbelt,
+            policy: SandboxMode::ReadOnly.policy(),
+            workspace_dir: PathBuf::from("/workspace"),
+            network_policy: NetworkPolicy::Deny,
+        };
+        assert!(writable_roots(&manager).expect("roots").is_empty());
     }
 
     #[test]

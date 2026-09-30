@@ -27,7 +27,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::WebSocketUpgrade;
-use axum::http::header::{AUTHORIZATION, ORIGIN};
+use axum::http::header::{AUTHORIZATION, HOST, ORIGIN};
+use axum::http::uri::Authority;
 use axum::http::{HeaderMap, StatusCode, Uri};
 use axum::response::IntoResponse;
 use axum::routing::get;
@@ -79,6 +80,25 @@ pub struct WebSocketSecurity {
     /// Accept `?token=` during the WebSocket upgrade. Disabled by default
     /// because URL tokens are commonly captured by logs and browser history.
     pub allow_query_token: bool,
+    pub allow_public_listen: bool,
+}
+
+impl WebSocketSecurity {
+    fn authorize_listen_address(&self, addr: SocketAddr) -> Result<()> {
+        if !self.allow_public_listen && !addr.ip().is_loopback() {
+            anyhow::bail!(
+                "app-server refuses non-loopback listen address {addr}; pass --allow-public-listen only after adding network/firewall controls"
+            );
+        }
+        if self
+            .auth_token
+            .as_deref()
+            .is_none_or(|token| token.trim().is_empty())
+        {
+            anyhow::bail!("WebSocket app-server requires a non-empty auth token");
+        }
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -216,15 +236,10 @@ async fn run_ws(
     security: WebSocketSecurity,
     dispatch: Arc<dyn ToolDispatch>,
 ) -> Result<()> {
-    if security
-        .auth_token
-        .as_deref()
-        .is_none_or(|token| token.trim().is_empty())
-    {
-        anyhow::bail!("WebSocket app-server requires a non-empty auth token");
-    }
+    security.authorize_listen_address(addr)?;
     let proc = Arc::new(Processor::new(dispatch));
-    let listen_addr = addr;
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listen_addr = listener.local_addr()?;
     let app = Router::new()
         .route(
             "/ws",
@@ -244,8 +259,7 @@ async fn run_ws(
             }),
         )
         .route("/health", get(|| async { "ok" }));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    eprintln!("App server on ws://{}", addr);
+    eprintln!("App server on ws://{}", listen_addr);
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -260,6 +274,7 @@ pub async fn run_developer_session_websocket(
     host: Arc<dyn DeveloperSessionHost>,
     capabilities: AppServerCapabilities,
 ) -> Result<()> {
+    security.authorize_listen_address(addr)?;
     let listener = tokio::net::TcpListener::bind(addr).await?;
     eprintln!("Developer app server on ws://{}", listener.local_addr()?);
     serve_developer_session_websocket(listener, security, host, capabilities).await
@@ -274,15 +289,8 @@ pub async fn serve_developer_session_websocket(
     host: Arc<dyn DeveloperSessionHost>,
     capabilities: AppServerCapabilities,
 ) -> Result<()> {
-    if security
-        .auth_token
-        .as_deref()
-        .is_none_or(|token| token.trim().is_empty())
-    {
-        anyhow::bail!("WebSocket app-server requires a non-empty auth token");
-    }
-
     let listen_addr = listener.local_addr()?;
+    security.authorize_listen_address(listen_addr)?;
     let app = Router::new()
         .route(
             "/ws",
@@ -324,6 +332,10 @@ fn validate_ws_request(
     addr: SocketAddr,
     security: &WebSocketSecurity,
 ) -> std::result::Result<DeveloperConnectionTrust, StatusCode> {
+    if !host_allowed(headers, uri, addr) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let expected_token = security
         .auth_token
         .as_deref()
@@ -334,7 +346,7 @@ fn validate_ws_request(
     let Some(presented) = presented else {
         return Err(StatusCode::UNAUTHORIZED);
     };
-    if presented.token != expected_token {
+    if !tokens_match(presented.token.as_bytes(), expected_token.as_bytes()) {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -343,6 +355,40 @@ fn validate_ws_request(
     }
 
     Ok(presented.trust)
+}
+
+fn host_allowed(headers: &HeaderMap, uri: &Uri, addr: SocketAddr) -> bool {
+    if !addr.ip().is_loopback() {
+        return true;
+    }
+    let Some(authority) = headers
+        .get(HOST)
+        .and_then(|value| value.to_str().ok())
+        .or_else(|| uri.authority().map(Authority::as_str))
+    else {
+        return false;
+    };
+    let Ok(authority) = authority.trim().parse::<Authority>() else {
+        return false;
+    };
+    let host = authority
+        .host()
+        .trim_start_matches('[')
+        .trim_end_matches(']');
+    let names_loopback = host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback());
+    names_loopback && authority.port_u16().unwrap_or(80) == addr.port()
+}
+
+fn tokens_match(presented: &[u8], expected: &[u8]) -> bool {
+    let mut difference = presented.len() ^ expected.len();
+    for (index, expected_byte) in expected.iter().enumerate() {
+        let presented_byte = presented.get(index).copied().unwrap_or(0);
+        difference |= usize::from(presented_byte ^ expected_byte);
+    }
+    std::hint::black_box(difference) == 0
 }
 
 struct PresentedToken {
@@ -666,12 +712,19 @@ mod tests {
             auth_token: Some("secret-token".into()),
             allowed_origins: Vec::new(),
             allow_query_token: false,
+            allow_public_listen: false,
         }
+    }
+
+    fn loopback_headers() -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, "127.0.0.1:8787".parse().unwrap());
+        headers
     }
 
     #[test]
     fn ws_security_rejects_missing_token() {
-        let headers = HeaderMap::new();
+        let headers = loopback_headers();
         let uri: Uri = "/ws".parse().unwrap();
         let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
         assert_eq!(
@@ -682,7 +735,7 @@ mod tests {
 
     #[test]
     fn ws_security_accepts_bearer_token_and_loopback_origin() {
-        let mut headers = HeaderMap::new();
+        let mut headers = loopback_headers();
         headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
         headers.insert(ORIGIN, "http://localhost:8787".parse().unwrap());
         let uri: Uri = "/ws".parse().unwrap();
@@ -695,7 +748,7 @@ mod tests {
 
     #[test]
     fn ws_security_accepts_custom_header_token() {
-        let mut headers = HeaderMap::new();
+        let mut headers = loopback_headers();
         headers.insert("x-agi-app-server-token", "secret-token".parse().unwrap());
         let uri: Uri = "/ws".parse().unwrap();
         let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
@@ -707,7 +760,7 @@ mod tests {
 
     #[test]
     fn ws_security_rejects_query_token_by_default() {
-        let headers = HeaderMap::new();
+        let headers = loopback_headers();
         let uri: Uri = "/ws?token=secret-token".parse().unwrap();
         let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
         assert_eq!(
@@ -718,7 +771,7 @@ mod tests {
 
     #[test]
     fn ws_security_accepts_query_token_when_explicitly_enabled() {
-        let headers = HeaderMap::new();
+        let headers = loopback_headers();
         let uri: Uri = "/ws?token=secret-token".parse().unwrap();
         let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
         let mut security = ws_security();
@@ -734,7 +787,7 @@ mod tests {
 
     #[test]
     fn ws_security_rejects_untrusted_origin() {
-        let mut headers = HeaderMap::new();
+        let mut headers = loopback_headers();
         headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
         headers.insert(ORIGIN, "https://evil.example".parse().unwrap());
         let uri: Uri = "/ws".parse().unwrap();
@@ -749,7 +802,7 @@ mod tests {
     fn ws_security_rejects_missing_origin_when_allowlist_configured() {
         // Defense-in-depth: with an explicit allowlist set, a request that omits
         // the Origin header must not bypass the cross-site origin check.
-        let mut headers = HeaderMap::new();
+        let mut headers = loopback_headers();
         headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
         let uri: Uri = "/ws".parse().unwrap();
         let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
@@ -765,7 +818,7 @@ mod tests {
     fn ws_security_allows_missing_origin_without_explicit_allowlist() {
         // With no explicit allowlist (defaults), missing Origin stays permissive
         // for native/local tooling; token auth remains the mandatory boundary.
-        let mut headers = HeaderMap::new();
+        let mut headers = loopback_headers();
         headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
         let uri: Uri = "/ws".parse().unwrap();
         let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
@@ -773,6 +826,103 @@ mod tests {
             validate_ws_request(&headers, &uri, addr, &ws_security()),
             Ok(DeveloperConnectionTrust::LoopbackOwner)
         );
+    }
+
+    #[test]
+    fn ws_security_rejects_a_host_the_loopback_server_is_not_bound_to() {
+        let uri: Uri = "/ws".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        for host in [
+            "attacker.example:8787",
+            "localhost.attacker.example:8787",
+            "localhost:9999",
+            "192.168.1.20:8787",
+            "",
+        ] {
+            let mut headers = HeaderMap::new();
+            headers.insert(HOST, host.parse().unwrap());
+            headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
+            assert_eq!(
+                validate_ws_request(&headers, &uri, addr, &ws_security()),
+                Err(StatusCode::FORBIDDEN),
+                "{host}"
+            );
+        }
+    }
+
+    #[test]
+    fn ws_security_accepts_every_loopback_name_for_the_bound_port() {
+        let uri: Uri = "/ws".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        for host in [
+            "127.0.0.1:8787",
+            "localhost:8787",
+            "LOCALHOST:8787",
+            "[::1]:8787",
+        ] {
+            let mut headers = HeaderMap::new();
+            headers.insert(HOST, host.parse().unwrap());
+            headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
+            assert_eq!(
+                validate_ws_request(&headers, &uri, addr, &ws_security()),
+                Ok(DeveloperConnectionTrust::LoopbackOwner),
+                "{host}"
+            );
+        }
+    }
+
+    #[test]
+    fn ws_security_rejects_tokens_that_only_share_a_prefix() {
+        let uri: Uri = "/ws".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        for presented in ["secret", "secret-token-2", "secret-tokeN", ""] {
+            let mut headers = loopback_headers();
+            headers.insert(
+                AUTHORIZATION,
+                format!("Bearer {presented}").parse().unwrap(),
+            );
+            assert_eq!(
+                validate_ws_request(&headers, &uri, addr, &ws_security()),
+                Err(StatusCode::UNAUTHORIZED),
+                "{presented}"
+            );
+        }
+        assert!(tokens_match(b"secret-token", b"secret-token"));
+        assert!(!tokens_match(b"secret-token", b"secret-tokem"));
+        assert!(!tokens_match(b"secret-token\0", b"secret-token"));
+    }
+
+    #[test]
+    fn a_public_listen_address_needs_the_explicit_opt_in() {
+        let public: SocketAddr = "0.0.0.0:8788".parse().unwrap();
+        let loopback: SocketAddr = "127.0.0.1:8788".parse().unwrap();
+        assert!(ws_security().authorize_listen_address(public).is_err());
+        assert!(ws_security().authorize_listen_address(loopback).is_ok());
+        let mut opted_in = ws_security();
+        opted_in.allow_public_listen = true;
+        assert!(opted_in.authorize_listen_address(public).is_ok());
+    }
+
+    #[tokio::test]
+    async fn the_library_refuses_a_public_bind_whatever_the_caller_checked() {
+        let config = AppServerConfig {
+            transport: AppServerTransport::WebSocket {
+                addr: "0.0.0.0:0".parse().unwrap(),
+            },
+            ws_security: ws_security(),
+        };
+
+        let outcome = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            run_app_server(config, Arc::new(MockDispatch::new())),
+        )
+        .await
+        .expect("a public bind must be refused, not served");
+
+        assert!(outcome
+            .expect_err("public listen without opt-in")
+            .to_string()
+            .contains("non-loopback"));
     }
 
     #[tokio::test]

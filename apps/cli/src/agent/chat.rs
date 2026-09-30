@@ -2179,6 +2179,7 @@ impl TurnHostAdapter<'_> {
             }
         } else {
             let opts = crate::tools::ToolExecOptions {
+                additional_workspace_roots: self.session.additional_context_dirs.clone(),
                 mcp_tool_definitions: self.session.mcp_catalog_for(&call.name),
                 require_confirmation: !self.session.skips_approval(),
                 auto_approve_safe: self.session.auto_approve_safe,
@@ -2189,12 +2190,7 @@ impl TurnHostAdapter<'_> {
                 quiet: self.session.quiet,
                 approval_callback: self.session.recorded_approval_callback(),
                 privacy_mode: self.session.privacy_mode,
-                workspace_root: self
-                    .session
-                    .managed_session
-                    .as_ref()
-                    .and_then(|session| session.workspace_root.clone())
-                    .or_else(|| std::env::current_dir().ok()),
+                workspace_root: self.session.workspace_root(),
             };
             match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
                 Ok(r) => r,
@@ -2699,6 +2695,7 @@ impl TurnHost for TurnHostAdapter<'_> {
 
     fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
         let opts = crate::tools::ToolExecOptions {
+            additional_workspace_roots: self.session.additional_context_dirs.clone(),
             mcp_tool_definitions: self.session.mcp_catalog_for(&prepared.name),
             require_confirmation: !self.session.skips_approval(),
             auto_approve_safe: self.session.auto_approve_safe,
@@ -2709,12 +2706,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             quiet: self.session.quiet,
             approval_callback: self.session.recorded_approval_callback(),
             privacy_mode: self.session.privacy_mode,
-            workspace_root: self
-                .session
-                .managed_session
-                .as_ref()
-                .and_then(|session| session.workspace_root.clone())
-                .or_else(|| std::env::current_dir().ok()),
+            workspace_root: self.session.workspace_root(),
         };
         let legacy = super::executor::ToolCall {
             name: prepared.name.clone(),

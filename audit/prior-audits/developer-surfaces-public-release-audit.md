@@ -317,9 +317,7 @@ VS Code: activation, extension-host CPU, webview render and send-to-first-token
 are HYPOTHESIZED from code: `activate()` performs no awaited network call and
 no workspace scan; the only eager network is the opt-in localhost desktop
 bridge; `refreshAccountTierCache` fires and is not awaited
-(`extension.ts:244`). The always-on `WorkspaceIndexer` file watcher and the
-unconditional 30 s telemetry timer are the two pieces of idle activation work
-with no benefit (`DEV-016`).
+(`extension.ts:244`). The unconditional 30 s telemetry timer remains idle activation work.
 
 ## 10. Security
 
@@ -588,14 +586,6 @@ Evidence: `projectInstructions.ts:18` `workspaceFolders[0]!`; display only (Cont
 Recommended Correction: resolve through `getActiveWorkspaceFolder()` like every other path.
 Verification: multi-root test with `AGENTS.md` in folder 1 only.
 
-### DEV-016: Workspace indexer watchers are permanently inert
-
-Severity: P3
-Surface: VS Code
-Evidence: `registerFileWatcher()` runs at activation (`chatSetup.ts:118`) but `index()` is never called, so every handler no-ops (`workspaceIndexer.ts:72-111`); `buildFullContext()` is also uncalled.
-Recommended Correction: delete the indexer and the dead builder, or wire `index()` behind an explicit command with the sensitive-file filter. Deleting is the smaller change and removes an idle watcher over `**/*.{ts,...}` with no exclude glob.
-Verification: knip reports no unused exports in `src/data`.
-
 ### DEV-017: No file-level undo in the CLI
 
 Severity: P2
@@ -760,7 +750,6 @@ Group by root cause; each phase names the findings it closes.
 - Phase 4, tools, shell, approvals: `DEV-004`, `DEV-009`, `DEV-028`.
 - Phase 5, streaming and cancellation: `DEV-032` (streaming itself measured healthy).
 - Phase 6, CLI stdout/stderr, exit codes, signals, CI: `DEV-007`, `DEV-012`, `DEV-021`, `DEV-026`, `DEV-030`, `DEV-020`.
-- Phase 7, VS Code activation and native UX: `DEV-016`, `DEV-001` (done).
 - Phase 8, local runtime and offline: no defect found; the local-runtime error strings are already normalised and identical on both surfaces because VS Code renders the CLI's.
 - Phase 9, performance and large repositories: measure the release binary on a real monorepo; nothing in this audit contradicts the design (no eager scans on either surface).
 - Phase 10, packaging: `DEV-003`, `DEV-023`, `DEV-019`, `DEV-025`.
@@ -789,8 +778,7 @@ VS Code: activation fast (HYPOTHESIZED pass); Workspace Trust respected
 stale patch detection (**fail**, `DEV-002`); diff accurate (pass for
 line-level decorations); apply safe (**fail**, `DEV-002`, `DEV-011`); Undo
 works (pass, native); webview theme and accessibility (pass by tests and CSP;
-not run in a browser here); extension host responsive (HYPOTHESIZED pass,
-`DEV-016` is idle overhead); VSIX clean (pass); typecheck (pass after
+not run in a browser here); extension host responsiveness remains unmeasured; VSIX clean (pass); typecheck (pass after
 `DEV-001`).
 
 ## 16. The two questions
@@ -831,8 +819,8 @@ trust, or feel unfinished?**
   app-server pool and the project registry keep sessions apart. Project
   instructions in a multi-root window can show the wrong folder (`DEV-015`).
 - Unfinished: `mcp-server` with no tools, `marketplace` with no backend, dead
-  indexer and patch engine, empty help descriptions, no changelog, no listing,
-  no release since 1.0.0 (`DEV-025`, `DEV-016`, `DEV-019`, `DEV-023`,
+  patch engine, empty help descriptions, no changelog, no listing,
+  no release since 1.0.0 (`DEV-025`, `DEV-019`, `DEV-023`,
   `DEV-003`).
 
 What already works the way one product with two surfaces should: one model

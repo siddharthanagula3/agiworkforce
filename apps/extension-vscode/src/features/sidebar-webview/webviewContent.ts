@@ -35,6 +35,16 @@ export function getNonce(): string {
   return randomBytes(24).toString('base64url');
 }
 
+const CODICON_DIR = ['out', 'codicons'] as const;
+const RENDER_SCRIPT_DIR = ['out', 'webview'] as const;
+
+export function webviewResourceRoots(extensionUri: vscode.Uri): vscode.Uri[] {
+  return [
+    vscode.Uri.joinPath(extensionUri, ...CODICON_DIR),
+    vscode.Uri.joinPath(extensionUri, ...RENDER_SCRIPT_DIR),
+  ];
+}
+
 /**
  * COLOUR POLICY: geometry and the terra brand accent are AGI-owned; surfaces,
  * text, controls, focus, and state colours follow the host theme. The sidebar
@@ -81,11 +91,11 @@ export function getWebviewContent(
   const followUpBehaviorLiteral = initialFollowUpBehavior === 'steer' ? 'steer' : 'queue';
 
   const codiconCssUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, 'out', 'codicons', 'codicon.css'),
+    vscode.Uri.joinPath(extensionUri, ...CODICON_DIR, 'codicon.css'),
   );
 
   const renderJsUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, 'out', 'webview', 'render.js'),
+    vscode.Uri.joinPath(extensionUri, ...RENDER_SCRIPT_DIR, 'render.js'),
   );
 
   return /* html */ `<!DOCTYPE html>
