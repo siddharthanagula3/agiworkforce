@@ -9,7 +9,11 @@ const { mockQuery, mockIssue, mockRevoke, mockRevokeById } = vi.hoisted(() => ({
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  logRateLimitExceeded: vi.fn().mockResolvedValue(undefined),
+  recordAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mockQuery(...args) },

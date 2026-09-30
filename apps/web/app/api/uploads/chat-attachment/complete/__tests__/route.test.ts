@@ -65,7 +65,9 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: 'org-1',
   })),
 }));
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/organization-policy-gate')>()),
+  workspacesPermitProductAnalytics: vi.fn(async () => true),
   resolveSecretHandlingPolicy: mockResolveSecretHandlingPolicy,
 }));
 vi.mock('@/lib/security-audit', () => ({
