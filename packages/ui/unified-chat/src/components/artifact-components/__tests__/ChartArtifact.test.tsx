@@ -7,6 +7,7 @@ import {
   chartSeriesPalette,
   parseChartArtifact,
   toChartNumber,
+  summarizeChart,
 } from '../chart-spec';
 import { ArtifactRenderer } from '../../ArtifactRenderer';
 import type { Artifact } from '../../../lib/types';
@@ -14,6 +15,32 @@ import type { Artifact } from '../../../lib/types';
 function chartArtifact(content: string): Artifact {
   return { id: 'chart-1', type: 'chart', title: 'Revenue', content };
 }
+
+describe('summarizeChart', () => {
+  const parsed = parseChartArtifact(JSON.stringify({ data: [{ name: 'A', value: 1 }] }));
+  if (!parsed.ok) throw new Error('chart summary fixture must parse');
+  const spec = parsed.spec;
+
+  it.each([
+    ['Revenue!?', 'Revenue.'],
+    ['Revenue!?\n', 'Revenue!?\n.'],
+    ['Revenue!?\r\n', 'Revenue!?\r\n.'],
+    ['Revenue!?\u2028', 'Revenue!?\u2028.'],
+    ['Revenue!?\u2029', 'Revenue!?\u2029.'],
+    ['Revenue. next', 'Revenue. next.'],
+  ])('preserves chart title punctuation for %j', (title, prefix) => {
+    expect(summarizeChart({ ...spec, title })).toMatch(`${prefix} `);
+  });
+
+  it('bounds a summary whose fallback title has a long nonterminal punctuation run', () => {
+    const title = `${'.'.repeat(60_000)}x`;
+    const started = performance.now();
+    const summary = summarizeChart({ ...spec, title: undefined }, title);
+    const elapsed = performance.now() - started;
+    expect(summary.startsWith(`${title}. `)).toBe(true);
+    expect(elapsed).toBeLessThan(500);
+  });
+});
 
 beforeAll(() => {
   if (!('ResizeObserver' in globalThis)) {

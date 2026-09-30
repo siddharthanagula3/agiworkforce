@@ -1,6 +1,6 @@
 const ELICITATION_METHOD = 'elicitation/create';
 const STRING_FORMATS = ['email', 'uri', 'date', 'date-time'] as const;
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_WHITESPACE_PATTERN = /\s/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const PUNYCODE_LABEL_PREFIX = 'xn--';
 const OPENABLE_PROTOCOL = 'https:';
@@ -334,9 +334,17 @@ function isUri(value: string): boolean {
   }
 }
 
+function isEmail(value: string): boolean {
+  if (EMAIL_WHITESPACE_PATTERN.test(value)) return false;
+  const at = value.indexOf('@');
+  if (at < 1 || value.indexOf('@', at + 1) !== -1) return false;
+  const dot = value.indexOf('.', at + 2);
+  return dot !== -1 && dot < value.length - 1;
+}
+
 function isValidFormat(format: ConnectorInputStringFormat, text: string): boolean {
   return format === 'email'
-    ? EMAIL_PATTERN.test(text)
+    ? isEmail(text)
     : format === 'uri'
       ? isUri(text)
       : format === 'date'
