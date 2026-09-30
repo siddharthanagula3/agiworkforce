@@ -50,6 +50,10 @@ pub fn default_policy() -> Policy {
 /// Load the canonical user execution-policy rules and overlay them on the
 /// built-in catastrophic-command floor.
 pub fn load_policy() -> Result<Policy> {
+    #[cfg(test)]
+    if let Some(rules_dir) = crate::native_process_test_fixture::rules_dir() {
+        return load_policy_from_dir(&rules_dir);
+    }
     let Some(home) = dirs::home_dir() else {
         return Ok(default_policy());
     };
@@ -87,16 +91,35 @@ fn load_policy_from_dir(rules_dir: &Path) -> Result<Policy> {
     let mut parser = PolicyParser::new();
     let mut legacy_overlay = Policy::empty();
     for path in paths {
-        let contents = std::fs::read_to_string(&path)
-            .with_context(|| format!("failed to read exec policy {}", path.display()))?;
-        if uses_legacy_line_format(&contents) {
-            parse_legacy_rules(&mut legacy_overlay, &path, &contents)?;
+        #[cfg(test)]
+        crate::native_process_test_fixture::check_read(
+            crate::native_process_test_fixture::Input::ExecRules,
+            &path,
+        );
+        let contents = std::fs::read_to_string(&path);
+        #[cfg(test)]
+        crate::native_process_test_fixture::record_read(
+            crate::native_process_test_fixture::Input::ExecRules,
+            &path,
+            contents.is_ok(),
+        );
+        let contents =
+            contents.with_context(|| format!("failed to read exec policy {}", path.display()))?;
+        let parsed = if uses_legacy_line_format(&contents) {
+            parse_legacy_rules(&mut legacy_overlay, &path, &contents)
         } else {
             parser
                 .parse(&path.display().to_string(), &contents)
                 .map_err(anyhow::Error::new)
-                .with_context(|| format!("failed to parse exec policy {}", path.display()))?;
-        }
+                .with_context(|| format!("failed to parse exec policy {}", path.display()))
+        };
+        #[cfg(test)]
+        crate::native_process_test_fixture::record_validation(
+            crate::native_process_test_fixture::Input::ExecRules,
+            &path,
+            parsed.is_ok(),
+        );
+        parsed?;
     }
 
     Ok(default_policy()

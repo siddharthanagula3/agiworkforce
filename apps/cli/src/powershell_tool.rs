@@ -456,42 +456,53 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn powershell_interpreter_cannot_read_outside_its_workspace() {
-        use std::os::unix::fs::PermissionsExt;
-        let directory = tempfile::Builder::new()
-            .prefix("powershell-sandbox-")
-            .tempdir_in(std::env::current_dir().unwrap())
-            .unwrap();
-        let workspace = directory.path().join("workspace");
-        std::fs::create_dir(&workspace).unwrap();
-        let outside = directory.path().join("outside.txt");
-        std::fs::write(&outside, "outside-content-must-remain-private").unwrap();
-        let interpreter = workspace.join("pwsh-probe");
-        std::fs::write(
-            &interpreter,
-            format!(
-                "#!/bin/sh\nprintf 'interpreter-ran\\n'\n/bin/cat '{}'\n",
-                outside.display()
-            ),
-        )
-        .unwrap();
-        std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let req = PowerShellRequest {
-            command: "Get-Content ../outside.txt".into(),
-            working_dir: Some(workspace.display().to_string()),
-            timeout_sec: 5,
-            safe_mode: true,
-        };
-        assert!(!crate::sandbox::sandbox_disabled());
-        let output = invoke(&req, interpreter.to_str().unwrap(), &workspace)
-            .await
-            .unwrap();
-        assert!(
-            String::from_utf8_lossy(&output.stdout).contains("interpreter-ran"),
-            "interpreter did not run"
-        );
-        assert!(!output.status.success(), "PowerShell escaped its workspace");
-        assert!(!String::from_utf8_lossy(&output.stdout)
-            .contains("outside-content-must-remain-private"));
+        use crate::native_process_test_fixture::{Input, NativeProcessFixture};
+
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        NativeProcessFixture::require_backend();
+        let fixture = NativeProcessFixture::new();
+        fixture
+            .scope(async {
+                use std::os::unix::fs::PermissionsExt;
+                let directory = tempfile::Builder::new()
+                    .prefix("powershell-sandbox-")
+                    .tempdir_in(std::env::current_dir().unwrap())
+                    .unwrap();
+                let workspace = directory.path().join("workspace");
+                std::fs::create_dir(&workspace).unwrap();
+                let outside = directory.path().join("outside.txt");
+                std::fs::write(&outside, "outside-content-must-remain-private").unwrap();
+                let interpreter = workspace.join("pwsh-probe");
+                std::fs::write(
+                    &interpreter,
+                    format!(
+                        "#!/bin/sh\nprintf 'interpreter-ran\\n'\n/bin/cat '{}'\n",
+                        outside.display()
+                    ),
+                )
+                .unwrap();
+                std::fs::set_permissions(&interpreter, std::fs::Permissions::from_mode(0o700))
+                    .unwrap();
+                let req = PowerShellRequest {
+                    command: "Get-Content ../outside.txt".into(),
+                    working_dir: Some(workspace.display().to_string()),
+                    timeout_sec: 5,
+                    safe_mode: true,
+                };
+                assert!(!crate::sandbox::sandbox_disabled());
+                let output = invoke(&req, interpreter.to_str().unwrap(), &workspace)
+                    .await
+                    .unwrap();
+                assert!(
+                    String::from_utf8_lossy(&output.stdout).contains("interpreter-ran"),
+                    "interpreter did not run"
+                );
+                assert!(!output.status.success(), "PowerShell escaped its workspace");
+                assert!(!String::from_utf8_lossy(&output.stdout)
+                    .contains("outside-content-must-remain-private"));
+            })
+            .await;
+        fixture.assert_inputs(&[Input::DeviceIdentity, Input::ManagedSettings]);
     }
 
     #[tokio::test]

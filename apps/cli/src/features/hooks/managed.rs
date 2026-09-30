@@ -75,14 +75,33 @@ struct ManagedSettingsDocument {
 }
 
 fn read_managed_document(path: &Path) -> Result<Option<ManagedSettingsDocument>, String> {
-    let raw = match std::fs::read_to_string(path) {
+    #[cfg(test)]
+    crate::native_process_test_fixture::check_read(
+        crate::native_process_test_fixture::Input::ManagedSettings,
+        path,
+    );
+    let raw = std::fs::read_to_string(path);
+    #[cfg(test)]
+    crate::native_process_test_fixture::record_read(
+        crate::native_process_test_fixture::Input::ManagedSettings,
+        path,
+        raw.is_ok(),
+    );
+    let raw = match raw {
         Ok(raw) => raw,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(format!("cannot read {}: {error}", path.display())),
     };
-    serde_json::from_str::<ManagedSettingsDocument>(&raw)
+    let parsed = serde_json::from_str::<ManagedSettingsDocument>(&raw)
         .map(Some)
-        .map_err(|error| format!("{}: {error}", path.display()))
+        .map_err(|error| format!("{}: {error}", path.display()));
+    #[cfg(test)]
+    crate::native_process_test_fixture::record_validation(
+        crate::native_process_test_fixture::Input::ManagedSettings,
+        path,
+        parsed.is_ok(),
+    );
+    parsed
 }
 
 pub fn load_managed_plugin_policy() -> ManagedPluginPolicyState {
@@ -135,6 +154,10 @@ impl ManagedHookPolicyState {
 }
 
 pub fn managed_settings_path() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(path) = crate::native_process_test_fixture::managed_settings_file() {
+        return Some(path);
+    }
     #[cfg(target_os = "macos")]
     {
         Some(PathBuf::from("/Library/Application Support/AGIWorkforce").join(MANAGED_SETTINGS_FILE))
