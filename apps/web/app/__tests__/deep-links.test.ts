@@ -56,6 +56,13 @@ function probePathFor(pattern: string): string {
   return pattern.replace('/*', '/ABCD1234WXYZ');
 }
 
+/** A trailing wildcard also covers deeper paths, such as /open/<target>/<id>. */
+function probePathsFor(pattern: string): string[] {
+  return pattern.endsWith('/*')
+    ? [probePathFor(pattern), pattern.replace('/*', '/work/ABCD1234WXYZ')]
+    : [pattern];
+}
+
 async function claimedPaths(): Promise<string[]> {
   const body = (await getAppleAppSiteAssociation().json()) as {
     applinks: { details: Array<{ components: Array<{ '/': string }> }> };
@@ -74,8 +81,10 @@ describe('universal link paths resolve on web', () => {
     const unresolved: string[] = [];
 
     for (const pattern of await claimedPaths()) {
-      const probe = probePathFor(pattern);
-      if (resolveRoute(probe.split('/').filter(Boolean)) === null) unresolved.push(pattern);
+      const resolves = probePathsFor(pattern).some(
+        (probe) => resolveRoute(probe.split('/').filter(Boolean)) !== null,
+      );
+      if (!resolves) unresolved.push(pattern);
     }
 
     expect(unresolved).toEqual([]);

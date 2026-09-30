@@ -127,6 +127,14 @@ function world(hold: 'custodian' | 'released' = 'custodian') {
       { id: 'note-held', user_id: HELD, created_at: old },
       { id: 'note-free', user_id: FREE, created_at: old },
     ],
+    image_generation_jobs: [
+      { id: 'image-held', conversation_id: 'conv-held', status: 'completed', created_at: old },
+      { id: 'image-free', conversation_id: 'conv-free', status: 'completed', created_at: old },
+    ],
+    video_generation_jobs: [
+      { id: 'video-held', conversation_id: 'conv-held', status: 'completed', created_at: old },
+      { id: 'video-free', conversation_id: 'conv-free', status: 'completed', created_at: old },
+    ],
   });
 }
 
@@ -398,6 +406,8 @@ describe('a held row survives every path and its unheld sibling does not', () =>
     if (res.status !== 200) throw new Error(`temp cron ${res.status}: ${JSON.stringify(body)}`);
 
     expect(ids(db, 'web_conversations')).toEqual(['conv-held']);
+    expect(ids(db, 'image_generation_jobs')).toEqual(['image-held']);
+    expect(ids(db, 'video_generation_jobs')).toEqual(['video-held']);
     expect(body.heldChats).toBe(1);
   });
 
@@ -409,6 +419,8 @@ describe('a held row survives every path and its unheld sibling does not', () =>
     await GET(new Request('https://x/c') as never);
 
     expect(ids(db, 'web_conversations')).toEqual([]);
+    expect(ids(db, 'image_generation_jobs')).toEqual([]);
+    expect(ids(db, 'video_generation_jobs')).toEqual([]);
   });
 
   it('the workspace domain sweep', async () => {

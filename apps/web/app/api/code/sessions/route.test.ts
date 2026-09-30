@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const { auditSpy } = vi.hoisted(() => ({
+  auditSpy: vi.fn(async (_event: Record<string, unknown>) => undefined),
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  recordAuditEvent: auditSpy,
+}));
+
 const {
   mockGetUserScopedDb,
   mockCsrf,
@@ -61,6 +69,7 @@ import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import { POST } from './route';
 
 const db = createDatabaseAdapterFake();
+const SESSION = { id: 'session-1', title: 'workspace', state: 'ready' };
 
 function postRequest(body: unknown): NextRequest {
   return new NextRequest('http://localhost:3000/api/code/sessions', {
@@ -77,11 +86,7 @@ beforeEach(() => {
   mockE2bReady.mockReturnValue(true);
   mockBetaEnabled.mockReturnValue(true);
   mockGetUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
-  mockCreateSession.mockResolvedValue({
-    id: 'session-1',
-    title: 'workspace',
-    state: 'ready',
-  });
+  mockCreateSession.mockResolvedValue({ session: SESSION, reused: false });
   mockHasServerProviderKey.mockReturnValue(true);
 });
 
@@ -229,6 +234,69 @@ describe('POST /api/code/sessions, the full-network interim guard', () => {
     );
     expect(response.status).toBe(201);
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /api/code/sessions, the audit trail', () => {
+  it('records the opened session by id alone', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-audit-0001',
+        title: 'quarterly-close workspace',
+        networkAccess: 'trusted',
+        runtimeId: null,
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(auditSpy).toHaveBeenCalledTimes(1);
+    const event = auditSpy.mock.calls[0]![0];
+    expect(event).toMatchObject({
+      userId: 'user-1',
+      organizationId: null,
+      eventType: 'code_session_lifecycle_changed',
+    });
+    expect(event['detail']).toEqual({
+      resourceType: 'code_session',
+      resourceId: 'session-1',
+      status: 'opened',
+    });
+    expect(JSON.stringify(event['detail'])).not.toMatch(/quarterly-close|req-audit/);
+  });
+
+  it('records the opening once when a retry with the same requestId reuses the session', async () => {
+    const body = {
+      requestId: 'req-audit-0003',
+      title: 'workspace',
+      networkAccess: 'trusted',
+      runtimeId: null,
+    };
+    mockCreateSession
+      .mockResolvedValueOnce({ session: SESSION, reused: false })
+      .mockResolvedValueOnce({ session: SESSION, reused: true });
+
+    const first = await POST(postRequest(body));
+    const retry = await POST(postRequest(body));
+
+    expect(first.status).toBe(201);
+    expect(retry.status).toBe(201);
+    expect(((await retry.json()) as { session: { id: string } }).session.id).toBe('session-1');
+    expect(auditSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('records nothing when the session is refused', async () => {
+    const response = await POST(
+      postRequest({
+        requestId: 'req-audit-0002',
+        title: 'workspace',
+        networkAccess: 'full',
+        fullNetworkAcknowledged: true,
+        runtimeId: 'droid',
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(auditSpy).not.toHaveBeenCalled();
   });
 });
 

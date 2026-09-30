@@ -15,6 +15,7 @@ import {
   UserRound,
 } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
+import { useRouter } from 'expo-router';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
@@ -34,7 +35,6 @@ import {
 } from '@/src/features/settings/common';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
-import { ApiHttpError } from '@/services/apiErrors';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { exportCloudUserData } from '@/services/cloudDataExport';
@@ -48,10 +48,10 @@ import {
   isStaleCloudAccountOperation,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { accountDeletionRefusal } from './accountDeletionRefusal';
 import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
 import { useCloudProfilePhoto } from './useCloudProfilePhoto';
 import { useCloudProfileStore } from './cloudProfileStore';
-import { toUserMessage } from '@/services/userMessage';
 
 const ACCOUNT_DELETE_FAILED =
   'We could not delete your account. Check your connection and try again, ' +
@@ -59,6 +59,7 @@ const ACCOUNT_DELETE_FAILED =
 
 export default function CloudAccountScreen() {
   const colors = useThemeColors();
+  const router = useRouter();
   const signOut = useAuthStore((s) => s.signOut);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
@@ -306,21 +307,39 @@ export default function CloudAccountScreen() {
                 );
                 return;
               }
+              const refusal = accountDeletionRefusal(err);
+              if (refusal) {
+                Alert.alert(
+                  'Could not delete account',
+                  refusal.message,
+                  refusal.reason === 'active_subscription'
+                    ? [
+                        { text: 'OK', style: 'cancel' },
+                        {
+                          text: 'Open Billing',
+                          onPress: () =>
+                            router.push(
+                              '/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0],
+                            ),
+                        },
+                      ]
+                    : undefined,
+                );
+                return;
+              }
               const is401 = err instanceof Error && err.message.includes('401');
               Alert.alert(
                 'Could not delete account',
                 is401
                   ? 'Your session expired. Please sign in again and retry.'
-                  : err instanceof ApiHttpError && err.status === 409
-                    ? toUserMessage(err, ACCOUNT_DELETE_FAILED)
-                    : ACCOUNT_DELETE_FAILED,
+                  : ACCOUNT_DELETE_FAILED,
               );
             })
             .finally(() => setDeleting(false));
         },
       },
     ]);
-  }, [captureVisibleAccount, signOut, withStepUp]);
+  }, [captureVisibleAccount, router, signOut, withStepUp]);
 
   const handleCancelDeletion = useCallback(() => {
     const account = captureVisibleAccount();

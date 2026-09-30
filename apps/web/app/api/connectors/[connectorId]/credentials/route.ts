@@ -112,7 +112,7 @@ async function handlePost(
   const limited = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (limited) return limited;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
   const target = await requireTarget(context);
 
   if (!isConnectorTokenStorageAvailable()) {
@@ -129,7 +129,6 @@ async function handlePost(
   const policyDecision = await evaluateConnectorPolicyForUser({
     db,
     userId,
-    organizationId,
     connectorId: target.serverId,
     isCustom: true,
     request,

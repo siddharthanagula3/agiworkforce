@@ -125,6 +125,7 @@ import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-outp
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
+  canUseBillingPlanCapability,
   describeCapabilityDenial,
   getModels,
   isExecutableVideoModel,
@@ -941,9 +942,18 @@ const ChatComposerNewComponent = ({
   const videoCapability = useCapability('canUseVideoGeneration');
   const imageDecision = useCapabilityDecision('canUseImages');
   const videoDecision = useCapabilityDecision('canUseVideoGeneration');
-  const canUseAgiWork = billingPolicyReady && !isFreeTrial && agiWorkCapability;
+  const agiWorkDecision = useCapabilityDecision('canUseAgiWork');
+  const canUseAgiWork =
+    billingPolicyReady &&
+    !isFreeTrial &&
+    agiWorkCapability &&
+    (agiWorkDecision !== null || canUseBillingPlanCapability(subscriptionTier, 'agi_work'));
   const canUseImageGeneration = billingPolicyReady && !isFreeTrial && canUseImages;
-  const canUseVideoGeneration = billingPolicyReady && !isFreeTrial && videoCapability;
+  const canUseVideoGeneration =
+    billingPolicyReady &&
+    !isFreeTrial &&
+    videoCapability &&
+    (videoDecision !== null || canUseBillingPlanCapability(subscriptionTier, 'video_generation'));
   // A host must own the actual media turn. ChatComposerNew is also used by the
   // project-detail handoff composer, which deliberately has no generation
   // callbacks; rendering media controls there would accept and then discard a

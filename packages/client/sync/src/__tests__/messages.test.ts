@@ -81,6 +81,74 @@ describe('applyMessageDeltas', () => {
     expect(msg && 'provider' in msg).toBe(false);
   });
 
+  it.each([null, ''])('clears an answer label the server row no longer carries (%j)', (label) => {
+    const port = createInMemoryMessagePort({
+      c1: [
+        {
+          id: 'm1',
+          role: 'assistant',
+          content: 'hi',
+          createdAt: T,
+          model: 'fixture-model',
+          provider: 'openai',
+        },
+      ],
+    });
+    applyMessageDeltas(port, [
+      delta({ role: 'assistant', model: label, provider: label, server_version: '2' }),
+    ]);
+    const msg = port.getMessages('c1')[0];
+    expect(msg).not.toHaveProperty('model');
+    expect(msg).not.toHaveProperty('provider');
+  });
+
+  it('replaces an answer label with the one the server row carries', () => {
+    const port = createInMemoryMessagePort({
+      c1: [
+        {
+          id: 'm1',
+          role: 'assistant',
+          content: 'hi',
+          createdAt: T,
+          model: 'fixture-model',
+          provider: 'openai',
+        },
+      ],
+    });
+    applyMessageDeltas(port, [
+      delta({
+        role: 'assistant',
+        model: 'fixture-model-next',
+        provider: 'anthropic',
+        server_version: '2',
+      }),
+    ]);
+    expect(port.getMessages('c1')[0]).toMatchObject({
+      model: 'fixture-model-next',
+      provider: 'anthropic',
+    });
+  });
+
+  it('keeps the model a question was asked with, which the server does not store', () => {
+    const port = createInMemoryMessagePort({
+      c1: [
+        {
+          id: 'm1',
+          role: 'user',
+          content: 'hi',
+          createdAt: T,
+          model: 'fixture-model',
+          provider: 'openai',
+        },
+      ],
+    });
+    applyMessageDeltas(port, [delta({ model: null, provider: null, server_version: '2' })]);
+    expect(port.getMessages('c1')[0]).toMatchObject({
+      model: 'fixture-model',
+      provider: 'openai',
+    });
+  });
+
   it('threads a parent onto a message the server delivered inside a tree', () => {
     const port = createInMemoryMessagePort();
     applyMessageDeltas(port, [delta({ parent_id: 'm0' })]);
@@ -159,10 +227,10 @@ describe('toMessagePushItem', () => {
     expect(item).not.toHaveProperty('createdAt');
   });
 
-  it('nulls out missing optional model/provider', () => {
+  it('leaves out a model/provider the device never learned, so the server keeps its own', () => {
     const item = toMessagePushItem('c1', { id: 'm1', role: 'user', content: 'hi' });
-    expect(item.model).toBeNull();
-    expect(item.provider).toBeNull();
+    expect(item).not.toHaveProperty('model');
+    expect(item).not.toHaveProperty('provider');
     expect(item.baseVersion).toBe('0');
   });
 });
