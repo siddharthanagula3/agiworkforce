@@ -116,7 +116,7 @@
     "check:work-client-state": "node --test scripts/check-work-client-state.test.mjs && node scripts/check-work-client-state.mjs",
     "check:worktask-scope": "node --test scripts/check-worktask-scope.test.mjs && node scripts/check-worktask-scope.mjs",
     "check:audit-inventory": "node scripts/check-audit-inventory.mjs",
-    "check:audit-worklist": "node scripts/audit-worklist.mjs --check",
+    "check:audit-worklist": "node --test scripts/audit-worklist.test.mjs && node scripts/audit-worklist.mjs --check",
     "audit:worklist": "node scripts/audit-worklist.mjs",
     "check:capability-gaps": "node scripts/check-capability-gaps.mjs",
     "check:capability-preconditions": "node --test scripts/check-capability-preconditions.test.mjs && node scripts/check-capability-preconditions.mjs",

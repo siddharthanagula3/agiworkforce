@@ -337,6 +337,8 @@ impl LspClient {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    use super::LSP_REQUEST_TIMEOUT;
     use super::{path_to_file_uri, response_for, LspClient};
     use serde_json::json;
     use std::path::Path;
