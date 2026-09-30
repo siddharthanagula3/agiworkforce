@@ -3,7 +3,7 @@ import { getModelsForProvider } from '@agiworkforce/types';
 
 import { createPerplexityAdapter } from '../index';
 
-const perplexityFastModel = getModelsForProvider('perplexity').find(
+const perplexityFastModel = getModelsForProvider('perplexity', { includeDeprecated: true }).find(
   (model) => model.qualityTier === 'fast',
 );
 if (!perplexityFastModel) {

@@ -74,6 +74,10 @@ jest.mock('../src/features/auth/services/signOutPushTokenCleanup', () => ({
   unregisterPushTokenForSignOut: jest.fn(),
 }));
 
+jest.mock('../src/features/siri/askIntentToken', () => ({
+  revokeAskIntentForSignOut: jest.fn(),
+}));
+
 jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
   invalidateCloudAccount: jest.fn(),
 }));
@@ -103,8 +107,15 @@ jest.mock('../src/features/chat/actions/runImageGenerationTurn', () => ({
 }));
 
 jest.mock('../stores/chat/chatMessageStore', () => ({
+  clearCloudConversationPagination: jest.fn(),
   useChatMessageStore: {
     getState: jest.fn(() => ({ clearCloudConversationSelection: jest.fn() })),
+  },
+}));
+
+jest.mock('../src/features/model-picker/store', () => ({
+  useModelStore: {
+    getState: jest.fn(() => ({ selectedModel: 'local-model', setModel: jest.fn() })),
   },
 }));
 
@@ -231,6 +242,7 @@ import { secureStorage } from '../lib/secureStorage';
 import { useAuthStore } from '../src/features/auth/store';
 import { act } from '@testing-library/react-native';
 import { FEATURES } from '../lib/v1FeatureFlags';
+import { revokeAskIntentForSignOut } from '../src/features/siri/askIntentToken';
 
 let consoleErrorSpy: jest.SpyInstance;
 
@@ -593,6 +605,20 @@ describe('authStore, secure storage persistence', () => {
       _pushTokenCleanupMock.unregisterPushTokenForSignOut.mock.invocationCallOrder[0];
     const clerkClearOrder = mockClearAuthSession.mock.invocationCallOrder[0];
     expect(cleanupOrder).toBeLessThan(clerkClearOrder);
+  });
+
+  it('revokes the Siri token with the captured session before clearing Clerk credentials', async () => {
+    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+
+    await act(async () => {
+      await getState().signOut();
+    });
+
+    const revoke = jest.mocked(revokeAskIntentForSignOut);
+    expect(revoke).toHaveBeenCalledWith('captured-clerk-jwt');
+    expect(revoke.mock.invocationCallOrder[0]).toBeLessThan(
+      mockClearAuthSession.mock.invocationCallOrder[0],
+    );
   });
 
   it('onRehydrateStorage clears session and marks store uninitialized (biometric gate)', () => {
