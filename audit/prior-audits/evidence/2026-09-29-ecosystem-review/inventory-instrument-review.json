@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-29T21:15:11.873205+00:00",
+  "base_ref": "work/billing-e2e",
+  "base_commit": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+  "scope": "Read-only audit-instrument review plus source inventory; semantic samples and fixture reproductions only. No product source, canonical registers, branches or index modified.",
+  "ledger_snapshot": {
+    "items": 3439,
+    "cells_by_status": {
+      "done": 7305,
+      "n/a": 7230,
+      "missing": 6249,
+      "unverified": 78,
+      "partial": 319
+    },
+    "done_cells_without_evidence": 20,
+    "done_missing_evidence_file_references": 36,
+    "done_out_of_range_references": 165,
+    "meta_audited_commit": "21d439536dde221fe072757ac939c3eb6fccbe6d",
+    "meta_migrations_applied_through": 294,
+    "current_migration_record_applied_through": 350,
+    "migration_limit": "The ledger file records claimed production application; no live database verified. Metadata mismatch is recorded, not presented as the principal new defect."
+  },
+  "actual_guard_results": {
+    "audit_worklist_check": {
+      "exit": 0,
+      "output": "audit worklist is current (200 files)."
+    },
+    "check_audit_inventory": {
+      "exit": 0,
+      "records": 654,
+      "tally": {
+        "built": 465,
+        "partial": 1,
+        "stub": 0,
+        "unwired": 0,
+        "broken": 0,
+        "missing": 183,
+        "unclear": 5
+      }
+    }
+  },
+  "instrument_reproductions": {
+    "missing_implementation_evidence": {
+      "exit": 0,
+      "stdout": "audit worklist is current (200 files).\n",
+      "stderr": ""
+    },
+    "fabricated_reachability_evidence": {
+      "exit": 0,
+      "stdout": "{\"records\":654,\"tally\":{\"built\":465,\"partial\":1,\"stub\":0,\"unwired\":0,\"broken\":0,\"missing\":183,\"unclear\":5},\"surfaces\":{\"apps/web\":75,\"apps/desktop\":50,\"apps/chrome-extension\":49,\"apps/mobile\":54,\"apps/cli\":63,\"apps/ide-extensions\":41,\"apps/slack-app\":38,\"apps/github-app\":37,\"packages/core-agent\":37,\"packages/extensibility\":21,\"packages/tools/mcp\":19,\"packages/permissions\":19,\"packages/sessions\":19,\"packages/memory\":15,\"packages/auth\":22,\"packages/settings\":14,\"packages/platform\":31,\"packages/safety\":12,\"admin-and-billing\":26,\"release-infra\":12}}\n",
+      "stderr": ""
+    },
+    "file_ledger_coverage_reset": {
+      "source_files": 2,
+      "ledger_rows": 1,
+      "untracked_included": false,
+      "status_after_regeneration": "not-started",
+      "full_file_evidence_after": false,
+      "source_commit": "672ff317e4cd-dirty"
+    },
+    "file_inventory_unbound_to_source_content": {
+      "source_hash_before": "2f38083dffca2f3066e3f400406481cf460833008aa1bc22e4a1d842704f6255",
+      "source_hash_after": "51cb778f1212bb990b9f934d0d7c1195703f226d0353e8a42e9b750887588368",
+      "ledger_bytes_identical": true,
+      "source_commit": "672ff317e4cd-dirty"
+    }
+  },
+  "findings": [
+    {
+      "id": "INSTRUMENT-01",
+      "priority": 2,
+      "title": "Capability worklist can be green with missing or impossible completion evidence",
+      "existing_known_flaw_id": null,
+      "proven": true,
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/scripts/audit-worklist.mjs",
+          "lines": [
+            317,
+            332
+          ]
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/scripts/audit-worklist.mjs",
+          "lines": [
+            112,
+            123
+          ]
+        }
+      ],
+      "observed": "Current --check exits 0, but 20 done cells have no evidence, 36 done evidence references name absent files, and 165 done evidence references point past EOF. Replacing a done cell evidence with a nonexistent source file at line 999999 in an isolated copy still exits 0.",
+      "cause": "The check validates rollup and rendering consistency; it does not validate evidence schema, existence, source content, mounted entrypoints, handler/persistence paths, default flags, production migration prerequisites or a content hash.",
+      "limit": "This proves the guard cannot establish completion and current evidence is not reviewable in those cases. A moved path alone does not prove its underlying capability is broken.",
+      "recommendation": "Require per-cell structured evidence/version binding, current path/range checks and explicit route/entrypoint/callee/storage gates before accepting done; keep live proof separate."
+    },
+    {
+      "id": "INSTRUMENT-02",
+      "priority": 2,
+      "title": "Older reachability inventory accepts fabricated implementation evidence",
+      "existing_known_flaw_id": null,
+      "proven": true,
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/scripts/check-audit-inventory.mjs",
+          "lines": [
+            148,
+            155
+          ]
+        }
+      ],
+      "observed": "A built row with evidence saying apps/web/nonexistent-handler.ts:999999 exists passes with exit 0 in an isolated fixture. The current guard validates 654 rows, independently from the 3439-item capability ledger.",
+      "cause": "Evidence validation only requires a string of at least 20 characters; source files and call graphs are not inspected.",
+      "limit": "The script provides identity/status/schema validation. Its green result is not execution or source-reachability evidence.",
+      "recommendation": "Name/report its assurance as inventory integrity, and separately validate source-bound reachability evidence; avoid treating this tally as equivalent to the capability ledger."
+    },
+    {
+      "id": "INSTRUMENT-03",
+      "priority": 2,
+      "title": "Declined connector capability is counted as implemented",
+      "existing_known_flaw_id": null,
+      "proven": true,
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/audit/ledger/ecosystem-capability-ledger.jsonl",
+          "item_ids": [
+            "S9.04",
+            "S10.20",
+            "S55.12"
+          ]
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/docs/decisions/2026-09-27-founder-decisions.md",
+          "lines": [
+            73,
+            95
+          ]
+        }
+      ],
+      "observed": "S9.04 and S10.20 require choosing among several linked accounts, but both roll up done with four done cells each. Their resolvedBy states the capability was declined, one account is supported, and reconnection replaces the existing account. S55.12 correctly records the same underlying multi-account capability as declined. The cited ConnectorAccountSelector component no longer exists.",
+      "cause": "Decision closure is represented as done rather than declined/n/a, inflating completion and contradicting the unchanged criterion and recorded decision.",
+      "limit": "This is a proven ledger classification defect, not a demand to implement a capability the founder declined.",
+      "recommendation": "Classify the dependent picker criteria as declined/n/a with the same decision ID and keep completion counts distinct from deliberate scope reduction."
+    },
+    {
+      "id": "INSTRUMENT-04",
+      "priority": 2,
+      "title": "Per-file ledger regeneration loses review evidence and does not bind dirty source",
+      "existing_known_flaw_id": null,
+      "proven": true,
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/scripts/generate-surface-file-ledger.mjs",
+          "lines": [
+            33,
+            45
+          ]
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/scripts/generate-surface-file-ledger.mjs",
+          "lines": [
+            181,
+            228
+          ]
+        }
+      ],
+      "observed": "A fixture containing one tracked source and one untracked source produces one row and a -dirty source_commit. Setting its audit_status=reviewed and read_full_file=true then regenerating resets both. Changing tracked source content while preserving line count produces byte-identical ledger output despite different source SHA256 hashes.",
+      "cause": "The generator uses git ls-files without --others, records HEAD plus a generic dirty suffix instead of content hashes, and overwrites rows with default not-started evidence every time.",
+      "limit": "The generator explicitly scopes itself to focused CLI/shared paths, so omission of Web/Mobile/Electron roots is a stated scope limitation, not itself a bug. It is an inventory rather than semantic audit proof.",
+      "recommendation": "Include nonignored untracked files, hash each content variant, preserve review results only for identical hashes, invalidate changed variants and label scope explicitly."
+    }
+  ],
+  "known_flaw_search": {
+    "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/audit/registers/known-flaws.md",
+    "matched_existing_ids": []
+  },
+  "manifest_files": [
+    "source-manifest.jsonl",
+    "source-manifest-summary.json",
+    "source-manifest-exclusions.jsonl",
+    "source-manifest-historical-alternatives.jsonl"
+  ],
+  "related_detail_files": [
+    "ledger-structural-scan.json",
+    "instrument-reproductions.json"
+  ],
+  "limitations": [
+    "No semantic read-all claim; each manifest row explicitly records semantic_review=not-implied-by-manifest.",
+    "Default feature flags, current handlers and production migration dependencies are not proven by audit metadata alone.",
+    "Runtime/live provider, store publication and production database states were not queried.",
+    "Historical stashes/tags were inventoried in the prior git lane; their old versions are not folded into current-product manifest.",
+    "Ignored dependencies/builds/generated native directories, secret files, dangling objects and reflog-only abandoned revisions are excluded.",
+    "Snapshot is assembled during ongoing concurrent work, not an atomic filesystem freeze.",
+    "First-party provenance exclusions rely on known source/vendor/generated conventions; full licensing provenance review was not performed.",
+    "The manifest includes retained internal Tauri/renderer source and operational tools; runtime_role/reachability_status prevent source presence from being counted as shipping Electron functionality."
+  ],
+  "manifest_snapshot": {
+    "base_ref": "work/billing-e2e",
+    "base_commit": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+    "manifest_current_variants": 8798,
+    "manifest_current_distinct_paths": 8723,
+    "manifest_historical_alternative_variants": 103,
+    "current_by_variant_kind": {
+      "latest-integration": 8716,
+      "uncommitted-worktree": 35,
+      "cached-dependency-manifest-proposal": 9,
+      "current-satellite-delta": 38
+    },
+    "manifest_primary_scope": "Primary source-manifest.jsonl contains current integration plus current satellite/WIP and cached dependency manifest proposals only. Historical parallel alternatives are quarantined in source-manifest-historical-alternatives.jsonl and are not current missing functionality."
+  },
+  "instrument_fixture_commands": [
+    "cd /private/tmp/agi-ecosystem-audit-20260929/worklist-fixture && node scripts/audit-worklist.mjs --check",
+    "cd /private/tmp/agi-ecosystem-audit-20260929/inventory-fixture && node scripts/check-audit-inventory.mjs --json",
+    "cd /private/tmp/agi-ecosystem-audit-20260929/file-ledger-fixture && node scripts/generate-surface-file-ledger.mjs"
+  ],
+  "instrument_source_hashes": {
+    "scripts/audit-worklist.mjs": "88c99da8ecfec1934ff5ab8ae98e8e17a9b3a9a3c4a34b05566efab5de934eca",
+    "scripts/check-audit-inventory.mjs": "87880841b66da8b8645f6e8cd26dff9b860d594455b362731103ef8eb78bfee6",
+    "scripts/generate-surface-file-ledger.mjs": "02d340f5b34166f90d06c72d588de5208265b477a7e208282e67d9077845036b",
+    "audit/README.md": "c70d16cfa8452c0ee5656eb834899d4416f046fc041ebd72233c36a1409f6d81",
+    "audit/ledger/ecosystem-capability-ledger.jsonl": "5fc0e1d089ae9a85189e65bf0bcb6a0fa68d04b5ac9f973037902e3768b74767",
+    "audit/ledger/ecosystem-capability-ledger.meta.json": "b93809ec107c211cee970590a7251a624da4b455c09d2f3839849cbe421ae19b",
+    "audit/registers/code-reachability-inventory.json": "ff5e9b7278d83a1dccfe9a7022a424c7055050c808586fcb1f205e7cef22c805",
+    "audit/registers/known-flaws.md": "16905f0325724639ee492481e4da7138c4e49393d0c5db86cb14d6f84a9e8c1e",
+    "docs/agent-context/lanes.json": "725a69a614ef323928d557efb4ec2c59bf1c61dd470b59f9071d9edc1e484f61",
+    "scripts/config/production-migrations-applied.json": "43d78ef8b7b1b68f61c9bddd4f623a94e6e8b81a36d7b486a44715d878bf9da0"
+  },
+  "instrument_semantic_review": {
+    "read_full_files": [
+      "scripts/audit-worklist.mjs",
+      "scripts/check-audit-inventory.mjs",
+      "scripts/generate-surface-file-ledger.mjs",
+      "audit/README.md"
+    ],
+    "structured_scans": [
+      "audit/ledger/ecosystem-capability-ledger.jsonl",
+      "audit/registers/code-reachability-inventory.json",
+      "docs/agent-context/lanes.json"
+    ],
+    "searched_not_fully_read": [
+      "audit/registers/known-flaws.md"
+    ]
+  }
+}

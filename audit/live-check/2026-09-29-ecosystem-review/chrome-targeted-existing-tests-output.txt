@@ -1,9 +1,0 @@
-
- RUN  v4.1.11 /Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/extension
-
-
- Test Files  4 passed (4)
-      Tests  83 passed (83)
-   Start at  16:35:44
-   Duration  3.76s (transform 1.09s, setup 0ms, import 1.41s, tests 932ms, environment 887ms)
-

@@ -1,0 +1,1013 @@
+{
+  "lane": "web-cloud",
+  "head": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+  "findings": [
+    {
+      "id": "WEB-CLOUD-AUDIT-01",
+      "priority": "P2",
+      "title": "Recovered-run polling stops after the first running verdict",
+      "status": "reproduced against current integrated hooks",
+      "known_flaw_id": null,
+      "capability_ledger_id": "S19.20",
+      "location": {
+        "path": "apps/web/lib/hooks/useChatStream.ts",
+        "start": 3597,
+        "end": 3616
+      },
+      "trigger": "Reopen a persisted non-temporary conversation ending with a nonstreaming user message while its cloud run is active. The first liveness GET returns running.",
+      "impact": "The next scheduled poll skips the GET because the first verdict has set isLoading=true. No further timer is scheduled; the composer can remain busy after server completion or stall until another action resets it.",
+      "proof": [
+        "shouldAskWhetherTurnIsRunning returns false when isLoading=true at inFlightTurnRecovery.ts46.",
+        "useChatStream.ts3600 passes store.isLoading;3614 sets it true after a running verdict and3616 schedules the next ask, which exits3605.",
+        "Ephemeral real-hook test advanced5001ms after the first running GET. Expected2 GETs, actual1. The first assertion confirmed actual store.isLoading=true."
+      ],
+      "supporting_locations": [
+        {
+          "path": "apps/web/lib/hooks/inFlightTurnRecovery.ts",
+          "start": 43,
+          "end": 50
+        },
+        {
+          "path": "apps/web/shared/stores/web-chat-store.ts",
+          "start": 1795,
+          "end": 1816
+        },
+        {
+          "path": "apps/web/features/chat/components/ChatStreamRuntimeProvider.tsx",
+          "start": 9,
+          "end": 10
+        }
+      ],
+      "minimal_test": "Mount the real persistent stream hook with a user-tail conversation and no owned stream. Return running then terminal/idle from successive run GETs. Advance the poll interval and require a second GET, busy=false on completion, and a stalled run surfaced as an error. Also test that a genuinely owned active stream does not create duplicate followers.",
+      "validation_test": "continues polling a recovered running turn and clears busy on completion",
+      "limits": "Client hook behavior is reproduced with deterministic fetch. No live server run or end-to-end browser was used."
+    },
+    {
+      "id": "WEB-CLOUD-AUDIT-02",
+      "priority": "P2",
+      "title": "Stop on a recovered cloud turn never requests server cancellation",
+      "status": "client failure reproduced; durable lifecycle traced in source",
+      "known_flaw_id": null,
+      "capability_ledger_id": "S19.20",
+      "location": {
+        "path": "apps/web/lib/hooks/useChatStream.ts",
+        "start": 4597,
+        "end": 4608
+      },
+      "trigger": "After reopening a cloud conversation whose liveness GET reports a running durable turn, press the visible Stop control before starting a new client-owned request.",
+      "impact": "Stop clears the local busy state but sends no run cancellation. The detached workflow may continue provider/tool execution and associated usage until its normal stop condition or another cancellation path.",
+      "proof": [
+        "activeRunsRef starts empty at3502\u20133504 and receives handles only from consumeAssistantStream callbacks4162\u20134164/4455\u20134457. Reopen liveness recovery retains only a verdict and never installs the run handle.",
+        "stopGeneration only calls cancelCloudRunAndConfirm inside if(activeRun), but always stops local streaming/loading at4621\u20134622. abortConversation3511\u20133515 only aborts a controller in the separate client request map; recovery has no request controller there.",
+        "Ephemeral real-hook test asserted the running state, invoked stopGeneration and recorded all fetch calls. Expected POST to the returned run id, actual no POST.",
+        "The canonical run cancellation POST writes cancellation_requested_at through requestCloudAgentRunCancellation. The durable workflow is enqueued by workflow/api start, with no request signal in StartCloudAgentWorkflowExecutionInput; the invocation owns an AbortController and reads the DB cancellation flag at each loop check."
+      ],
+      "supporting_locations": [
+        {
+          "path": "apps/web/features/chat/pages/WebChatPage.tsx",
+          "start": 3672,
+          "end": 3675
+        },
+        {
+          "path": "apps/web/lib/hooks/inFlightTurnRecovery.ts",
+          "start": 73,
+          "end": 96
+        },
+        {
+          "path": "apps/web/app/api/llm/v1/chat/completions/runs/[runId]/route.ts",
+          "start": 68,
+          "end": 96
+        },
+        {
+          "path": "apps/web/lib/services/cloud-agent-run-service.ts",
+          "start": 1082,
+          "end": 1110
+        },
+        {
+          "path": "apps/web/lib/workflows/start-cloud-agent-workflow.ts",
+          "start": 74,
+          "end": 86
+        },
+        {
+          "path": "apps/web/lib/workflows/start-cloud-agent-workflow.ts",
+          "start": 128,
+          "end": 152
+        },
+        {
+          "path": "apps/web/lib/workflows/steps/execute-cloud-agent-invocation.ts",
+          "start": 561,
+          "end": 564
+        },
+        {
+          "path": "apps/web/lib/workflows/steps/execute-cloud-agent-invocation.ts",
+          "start": 635,
+          "end": 650
+        }
+      ],
+      "minimal_test": "Mount a restored running conversation, retain the authenticated run handle, click Stop, require cancellation POST for that run and poll confirmed terminal state. Use a durable workflow fixture independent of the browser request to assert the persisted cancellation flag halts a future provider/tool dispatch; require a visible failure if cancellation cannot be confirmed.",
+      "validation_test": "sends a cancellation for the recovered cloud run when Stop is pressed",
+      "limits": "The absence of the client cancellation call is reproduced. Continued live billing/tool execution was not observed; it follows from the source-owned durable lifecycle and is a conditional impact."
+    },
+    {
+      "id": "WEB-CLOUD-AUDIT-03",
+      "priority": "P2",
+      "title": "Reopening a cached chat discards newer persisted messages",
+      "status": "reproduced against current integrated conversation hook and store",
+      "known_flaw_id": null,
+      "location": {
+        "path": "apps/web/lib/hooks/useConversations.ts",
+        "start": 590,
+        "end": 608
+      },
+      "trigger": "Open a previously cached, nonstreaming conversation after a different device or durable server run has added persisted messages. The successful conversation-detail response contains a newer transcript.",
+      "impact": "The fresh transcript is parsed but discarded whenever any local cached message exists. Reopening still displays the stale transcript, and the next user turn can operate with missing remote context.",
+      "proof": [
+        "loadConversation fetches and parses current paginated server messages, maps them to messages, then immediately returns at599\u2013601 if cachedMessages.length>0. setActiveConversationWithMessages604\u2013608 only runs for an empty cache.",
+        "Ephemeral real-hook test cached one old message, returned two valid server messages, explicitly asserted loadConversation returned true, and observed only the old message in the real store.",
+        "Inspected web artifact cloud-sync reads the shared sync response but only applies artifacts; it does not compensate by merging chat messages. The server durable settlement does persist the completed assistant turn."
+      ],
+      "supporting_locations": [
+        {
+          "path": "apps/web/features/chat/services/artifact-cloud-sync.ts",
+          "start": 46,
+          "end": 88
+        },
+        {
+          "path": "apps/web/lib/workflows/steps/settle-workflow-invocation.ts",
+          "start": 77,
+          "end": 111
+        },
+        {
+          "path": "apps/web/lib/workflows/steps/settle-workflow-invocation.ts",
+          "start": 273,
+          "end": 285
+        }
+      ],
+      "minimal_test": "Cache a completed conversation, serve a valid response with an additional message, reopen it and require the new persisted message while preserving the locally selected valid branch leaf. Cover remote edits/deletes and protect the actual locally streaming transcript from stale network snapshots.",
+      "validation_test": "merges fresh server messages into a cached nonstreaming conversation on reopening",
+      "limits": "Reopen freshness failure is reproduced. Live cross-device sync, message conflict policy and every possible compensating handler were not exhaustively tested."
+    },
+    {
+      "id": "WEB-CLOUD-AUDIT-04",
+      "priority": "P2",
+      "title": "Channel preference refuses unrelated browser work when any structured connector is offered",
+      "status": "source-confirmed behavior; product policy premise needs root disposition",
+      "known_flaw_id": null,
+      "location": {
+        "path": "apps/web/lib/workflows/cloud-agent-tool-permission-gate.ts",
+        "start": 66,
+        "end": 91
+      },
+      "trigger": "A durable turn has Gmail/send-email or another structured connector plus browser-automation/navigate, and tries to visit an unrelated website that the structured connector cannot handle.",
+      "impact": "The browser step is refused as if the connector can perform the same work. Merely connecting a structured integration can disable unrelated browser/automation capability during the run.",
+      "proof": [
+        "preferredAlternativeTo compares only execution channel rankings across every offered tool, with no argument, service or capability match.",
+        "Durable invocation builds this gate from all connector-origin tool definitions and invokes refusalFor before dispatch.",
+        "The existing test72\u201377 explicitly expects Gmail/send-email to refuse browser/navigate and therefore codifies this blanket behavior rather than testing equivalent work."
+      ],
+      "supporting_locations": [
+        {
+          "path": "apps/web/lib/workflows/steps/execute-cloud-agent-invocation.ts",
+          "start": 549,
+          "end": 553
+        },
+        {
+          "path": "apps/web/lib/workflows/steps/execute-cloud-agent-invocation.ts",
+          "start": 677,
+          "end": 680
+        },
+        {
+          "path": "apps/web/lib/connectors/catalog.ts",
+          "start": 285,
+          "end": 311
+        },
+        {
+          "path": "apps/web/lib/workflows/__tests__/cloud-agent-tool-permission-gate.test.ts",
+          "start": 72,
+          "end": 80
+        }
+      ],
+      "minimal_test": "With allowed Gmail send-email and browser navigate, allow browser navigation to an unrelated research site; separately require the typed connector for genuinely equivalent email work. A denied email action must remain impossible through browser automation, so the fix needs capability-scoped denial equivalence rather than weakening permission checks.",
+      "limits": "No additional runtime test executed for this candidate. Current tests intentionally encode the behavior; root should decide whether blanket account-wide refusal is an explicit product requirement before registering it as a defect."
+    },
+    {
+      "id": "WEB-CLOUD-AUDIT-05",
+      "priority": "P2",
+      "title": "Managed-compute enforcement test accepts denials from different gates",
+      "status": "source-confirmed verification gap",
+      "known_flaw_id": null,
+      "location": {
+        "path": "apps/web/e2e/enterprise-enforcement.spec.ts",
+        "start": 90,
+        "end": 103
+      },
+      "trigger": "Managed compute is configured off, but its admission gate is bypassed while a spend or model gate still rejects the request.",
+      "impact": "The test can pass without proving the specific managed-compute policy is enforced, despite claiming to rule out earlier gates. This weakens enterprise admission evidence.",
+      "proof": [
+        "The accepted response pattern at97 is managed_compute_disabled|over_cap|model_blocked. over_cap/model_blocked do not establish the intended managed-compute gate.",
+        "Status402 or403 at90\u201393 is likewise shared by unrelated refusals; there is no positive control for the same admitted model/budget request in this case."
+      ],
+      "minimal_test": "Construct an otherwise admitted request with adequate budget and an allowed model; require the exact managed_compute_disabled code when the policy is off, then enable the policy and require that this gate permits the same request. Inject a broken managed-compute gate and prove the test fails even if another refusal remains.",
+      "limits": "The e2e suite was not run and no runtime enforcement bypass is claimed."
+    }
+  ],
+  "coverage": [
+    {
+      "path": "apps/web/lib/hooks/useChatStream.ts",
+      "sha256": "b0ebd4c41e93d6c5cbf18cfa6b75864d10003f86ccd31dbab299a3900e813533",
+      "ranges_read": [
+        [
+          1,
+          200
+        ],
+        [
+          3500,
+          3640
+        ],
+        [
+          4152,
+          4174
+        ],
+        [
+          4445,
+          4466
+        ],
+        [
+          4580,
+          4635
+        ]
+      ],
+      "total_lines": 5459,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/hooks/inFlightTurnRecovery.ts",
+      "sha256": "7339870e5e29dfbb0dad88330b7031dffff15d7dc3becdd635aeb403536dbaf1",
+      "ranges_read": [
+        [
+          1,
+          97
+        ]
+      ],
+      "total_lines": 97,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/runs/[runId]/route.ts",
+      "sha256": "05740ea76e448deeef4b632fd746a457a3e5126938535924d726438094bb89c8",
+      "ranges_read": [
+        [
+          1,
+          113
+        ]
+      ],
+      "total_lines": 113,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/runs/route.ts",
+      "sha256": "891f7abc740ba5cca6a8f793ba5b31903300d025d3cd8e85e11de88c0f9255bc",
+      "ranges_read": [
+        [
+          1,
+          142
+        ]
+      ],
+      "total_lines": 142,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/hooks/inFlightTurnRecovery.test.ts",
+      "sha256": "f57a7da106b4bb200d63516ba1dcacd3a522254182c16a979cbee1b7a57c1001",
+      "ranges_read": [
+        [
+          1,
+          100
+        ]
+      ],
+      "total_lines": 197,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/shared/stores/web-chat-store.ts",
+      "sha256": "6f8f3f6fa569d454250d4f9379e637c367cbd3e2b01dbe04d7c21f6c3c479dff",
+      "ranges_read": [
+        [
+          1220,
+          1243
+        ],
+        [
+          1790,
+          1820
+        ],
+        [
+          2148,
+          2208
+        ]
+      ],
+      "total_lines": 2389,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/hooks/useConversations.ts",
+      "sha256": "beaa4e461622eb1ca51b2fe44cd7a2ca70f207f661f0e14b4b5e3cc488de29ef",
+      "ranges_read": [
+        [
+          1,
+          180
+        ],
+        [
+          499,
+          620
+        ]
+      ],
+      "total_lines": 887,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/hooks/useChatStream.session-recovery.test.ts",
+      "sha256": "73cc337b1c230fd67055e37ee93b81b3a3106d9cf21b27ae9b43f0b1e7411fe2",
+      "ranges_read": [
+        [
+          1,
+          90
+        ]
+      ],
+      "total_lines": 90,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/features/chat/components/ChatStreamRuntimeProvider.tsx",
+      "sha256": "0d7ebff1628374f28e32aa92e7e0d4a2ced3f8e0bc121e124364f1707f832125",
+      "ranges_read": [
+        [
+          1,
+          25
+        ]
+      ],
+      "total_lines": 25,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/hooks/useConversations.test.tsx",
+      "sha256": "09ab1157abb240683058f2740b8e2d138dd922ecd514c7b9743332ac8727304a",
+      "ranges_read": [
+        [
+          1,
+          150
+        ],
+        [
+          495,
+          580
+        ]
+      ],
+      "total_lines": 959,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/features/chat/pages/WebChatPage.tsx",
+      "sha256": "96b15be7ec83c8c3ee5bc42d80f531bb684ededc88d479a1b5ce9a034050e1db",
+      "ranges_read": [
+        [
+          3650,
+          3680
+        ],
+        [
+          6390,
+          6418
+        ]
+      ],
+      "total_lines": 6687,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/features/chat/hooks/use-artifact-cloud-sync.ts",
+      "sha256": "39c9129d141af2bc390f04a51a54a5091ac42b53e56c8fdc332462c4ced10055",
+      "ranges_read": [
+        [
+          1,
+          135
+        ]
+      ],
+      "total_lines": 139,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/features/chat/services/artifact-cloud-sync.ts",
+      "sha256": "bf250bade8657d3d6c35a47b981c860cd959011275c6d84a21ca9a9ad25db965",
+      "ranges_read": [
+        [
+          1,
+          110
+        ]
+      ],
+      "total_lines": 129,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/shared/stores/authentication-store.ts",
+      "sha256": "6bf43b5951240ca5afa9cc536f1f5b97ee59fca1c3cfd66061d00445b1113107",
+      "ranges_read": [
+        [
+          1,
+          100
+        ],
+        [
+          115,
+          182
+        ],
+        [
+          292,
+          396
+        ]
+      ],
+      "total_lines": 744,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/app/api/chat/sync/route.ts",
+      "sha256": "2ee49fec319e15b26407489019019b9e2b1c0031caaf00537a388a0fbfa04830",
+      "ranges_read": [
+        [
+          77,
+          153
+        ]
+      ],
+      "total_lines": 940,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/features/chat/lib/artifact-sync-cursor-storage.ts",
+      "sha256": "f4f050574f5c5ebaca25b27415770c38f38226d8e89691242c8f8b6e95c79e13",
+      "ranges_read": [
+        [
+          1,
+          23
+        ]
+      ],
+      "total_lines": 23,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/features/chat/stores/artifacts-store.ts",
+      "sha256": "4dcb90d4dcae0865ba9b2b69d02ef02d20f1d49d0abc1478b41a27d283f62174",
+      "ranges_read": [
+        [
+          835,
+          852
+        ]
+      ],
+      "total_lines": 954,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/vitest.config.ts",
+      "sha256": "73ac359e647b575ccf42fe7f15a41bb5a033d916f31fad32457641a597895afe",
+      "ranges_read": [
+        [
+          1,
+          48
+        ]
+      ],
+      "total_lines": 48,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/hooks/useChatStream.test.tsx",
+      "sha256": "80f3441ad491236c2e912ab6640ff37b8167cc6348ffac03d78c3916398729b3",
+      "ranges_read": [
+        [
+          1,
+          115
+        ]
+      ],
+      "total_lines": 2754,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/features/workspaces/lib/workspace-cache-scope.ts",
+      "sha256": "533f6e13df04c6948d3e672b1873574e6ed09a9beadb5ceea6bde0b4a0f500e0",
+      "ranges_read": [
+        [
+          1,
+          54
+        ]
+      ],
+      "total_lines": 54,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/features/schedules/services/schedule-api.ts",
+      "sha256": "6e4e6b0c892813df72d98eef027b85842d4c03b4d8a8955490860be76aff247a",
+      "ranges_read": [
+        [
+          1,
+          220
+        ]
+      ],
+      "total_lines": 342,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/app/api/schedules/[id]/route.ts",
+      "sha256": "caf30900be866995c786d21acca540abf50e92222274d7b2eb5a4ffdf5f872ae",
+      "ranges_read": [
+        [
+          1,
+          118
+        ]
+      ],
+      "total_lines": 118,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/app/api/schedules/route.ts",
+      "sha256": "77789d1d08a11932ff1271c9ae62feac849c6761809bf144351298db333a77c4",
+      "ranges_read": [
+        [
+          1,
+          118
+        ]
+      ],
+      "total_lines": 118,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/runs/[runId]/resume/route.ts",
+      "sha256": "a0f593a8ea5a578502fb520baa6a30c0fbb9dbda7e454908a8b89dd22463ddbf",
+      "ranges_read": [
+        [
+          1,
+          240
+        ]
+      ],
+      "total_lines": 396,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/resume-input/route.ts",
+      "sha256": "35e0904dffff6076e4cdf023717c309bbb232531d5a16a6ebd32d0f2dfbea08d",
+      "ranges_read": [
+        [
+          1,
+          210
+        ]
+      ],
+      "total_lines": 512,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/workflows/cloud-agent-tool-permission-gate.ts",
+      "sha256": "c5a6f0b4babd7a023628753f84ff76315c14ef1f8681219c918c8ed6bc4f0254",
+      "ranges_read": [
+        [
+          1,
+          136
+        ]
+      ],
+      "total_lines": 136,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts",
+      "sha256": "d231d4ea466579bb2e0399f8748ae2e8b43633fc43a023b277b45cde20e195fc",
+      "ranges_read": [
+        [
+          430,
+          520
+        ],
+        [
+          870,
+          920
+        ]
+      ],
+      "total_lines": 1002,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/connectors/catalog.ts",
+      "sha256": "a38a24bf988e5380cc0ac7d9e818a7f93f7d97c563d3d01a1ff1d9262ad12e16",
+      "ranges_read": [
+        [
+          1,
+          120
+        ],
+        [
+          282,
+          314
+        ]
+      ],
+      "total_lines": 349,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/workflows/steps/execute-cloud-agent-invocation.ts",
+      "sha256": "33aaff40feb9ef30fe964d4064f18249faf05b68b478cd85e603cdec850f5c43",
+      "ranges_read": [
+        [
+          535,
+          655
+        ],
+        [
+          661,
+          700
+        ]
+      ],
+      "total_lines": 839,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/workflows/__tests__/cloud-agent-tool-permission-gate.test.ts",
+      "sha256": "e3b117e043cdeed26869ec4c2e834125ba9ed75673bbfce9d4e71fcf35b4fed4",
+      "ranges_read": [
+        [
+          1,
+          139
+        ]
+      ],
+      "total_lines": 139,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/csrf.ts",
+      "sha256": "dbd1f93549a0f520caa4da39649f266c95bfa64cd99395d13ed85d4e9157239c",
+      "ranges_read": [
+        [
+          1,
+          85
+        ]
+      ],
+      "total_lines": 306,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "packages/ai/provider-runtime/src/client/streamFromProvider.ts",
+      "sha256": "6f73a348cce05b38928dc1d3695d9d11526aacfc19fa86f3e55d9530c8fba76e",
+      "ranges_read": [
+        [
+          1,
+          207
+        ]
+      ],
+      "total_lines": 248,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/e2e/enterprise-enforcement.spec.ts",
+      "sha256": "65feb6f5750262e41d591d04debf9b65e15dca8fcf94828b34f5b16ab21a06f5",
+      "ranges_read": [
+        [
+          77,
+          112
+        ]
+      ],
+      "total_lines": 225,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/features/chat/lib/cancel-cloud-run.ts",
+      "sha256": "c9c207221e66e76d85dc30ae20cc6d9173a9b123b5b7c93f91f23b629cb1502c",
+      "ranges_read": [
+        [
+          1,
+          21
+        ]
+      ],
+      "total_lines": 21,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/services/cloud-agent-run-service.ts",
+      "sha256": "ff51e6f3de8d782a12c4172526045a08fff31e7a2a4abb03556004d92cbe0698",
+      "ranges_read": [
+        [
+          1080,
+          1117
+        ]
+      ],
+      "total_lines": 2758,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/test/setup.ts",
+      "sha256": "5ccc7c286505f191bd8a0c21a7a17d6d9d308539548f592117283a4896b45d82",
+      "ranges_read": [
+        [
+          1,
+          191
+        ]
+      ],
+      "total_lines": 191,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/route.ts",
+      "sha256": "4703406c439f05214504829d00c59bd957783acc29917933f9933a02b560a19c",
+      "ranges_read": [
+        [
+          959,
+          1012
+        ]
+      ],
+      "total_lines": 1470,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/workflows/start-cloud-agent-workflow.ts",
+      "sha256": "80980ac5938104985bb9174a04bcac9c0a726b2215b2482d6c69c6b573a25568",
+      "ranges_read": [
+        [
+          1,
+          240
+        ]
+      ],
+      "total_lines": 471,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "audit/codex-reaudit/open-work.md",
+      "sha256": "3302edd7314cdb801b10e1d3c081b3e95971f1b58f43a3ab84387eb4ead30c96",
+      "ranges_read": [
+        [
+          69,
+          84
+        ]
+      ],
+      "total_lines": 506,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/web/lib/workflows/steps/settle-workflow-invocation.ts",
+      "sha256": "cc38f3206a8f8c68f8bbc890bb6af52fab24f3a282f9d55677a230c82ccc1877",
+      "ranges_read": [
+        [
+          77,
+          111
+        ],
+        [
+          254,
+          289
+        ]
+      ],
+      "total_lines": 310,
+      "review_type": "selected line-range source inspection",
+      "hash_unchanged_at_completion": true
+    },
+    {
+      "path": "apps/mobile/lib/providerStreamClient.ts",
+      "sha256": "7973175f505e747dcfedb849df31ed8ae1ea987f350f350e748409fd160b6b28",
+      "ranges_read": [
+        [
+          1,
+          68
+        ]
+      ],
+      "total_lines": 68,
+      "review_type": "displayed source inspection; ranges are authoritative",
+      "hash_unchanged_at_completion": true
+    }
+  ],
+  "unreviewed": [
+    {
+      "area": "Web chat recovery/rendering",
+      "paths": [
+        "apps/web/lib/hooks/useChatStream.ts outside listed ranges",
+        "apps/web/features/chat/pages/WebChatPage.tsx outside listed ranges",
+        "apps/web/lib/hooks/useResolveToolApproval.ts",
+        "apps/web/lib/hooks/useResolveToolInput.ts"
+      ],
+      "next_steps": "Follow restored run id/cursor through full event stream, approval/input controls, rendering and terminal transcript refresh; distinguish same-request reconnect from reopening a browser."
+    },
+    {
+      "area": "Temporary chat and managed memory",
+      "paths": [
+        "apps/web/lib/services/managed-auto-memory-service.ts",
+        "apps/web/app/api/memory",
+        "apps/web/lib/chat-project-sources.ts"
+      ],
+      "next_steps": "Trace temporary/private mode through persistence, auto-memory extraction, search indexing, retention and export. Not comprehensively reviewed in this lane."
+    },
+    {
+      "area": "Projects/artifacts/research",
+      "paths": [
+        "apps/web/app/api/projects",
+        "apps/web/lib/services/cloud-research-service.ts",
+        "apps/web/features/chat/services/artifact-cloud-sync.ts outside ranges",
+        "apps/web/app/api/chat/sync/route.ts outside ranges"
+      ],
+      "next_steps": "Cross-workspace access, uploaded-source ownership, artifact conflict/deletion handling, durable research success/failure/cancel, client message sync are not exhaustively traced."
+    },
+    {
+      "area": "Schedules/durable work",
+      "paths": [
+        "apps/web/lib/services/schedules-service.ts",
+        "apps/web/lib/workflows/cloud-agent-workflow.ts",
+        "apps/web/app/api/schedules/run",
+        "apps/web/lib/workflows/steps/execute-cloud-agent-invocation.ts outside ranges"
+      ],
+      "next_steps": "Only schedule transport and CRUD route excerpts inspected; scheduler leases, duplicate firing, paused state, timezone/DST, deletion while running and budget recovery require continuation."
+    },
+    {
+      "area": "Connector/plugin/tool policy",
+      "paths": [
+        "apps/web/lib/user-connector-tools.ts",
+        "apps/web/lib/mcp-tool-executor.ts",
+        "apps/web/app/api/connectors",
+        "apps/web/app/api/plugins"
+      ],
+      "next_steps": "Follow execute-side policy revalidation, OAuth scope/token lifecycle, plugin registry ownership/installation, remote MCP approval and SSRF, operator permissions and irreversible actions."
+    },
+    {
+      "area": "Tenant/access/live admission",
+      "paths": [
+        "apps/web/lib/server/rls-db.ts",
+        "apps/web/lib/managed-compute-gate.ts",
+        "apps/web/db/neon",
+        "apps/web/lib/services/organizations-service.ts"
+      ],
+      "next_steps": "No live RLS/tenant isolation, actual deployment config or migration-applied state proof performed. Existing enterprise tests need premise-specific positive/negative controls."
+    },
+    {
+      "area": "Branch/worktree scope",
+      "paths": [
+        "Remaining unique cloud/web branches and dirty worktrees from root inventory"
+      ],
+      "next_steps": "This lane independently reviewed only selected fix/web-small diffs after integrated-source audit. Root inventory must retain unresolved branch deltas."
+    }
+  ],
+  "validation": [
+    {
+      "command": "pnpm exec vitest run --config /private/tmp/agi-ecosystem-audit-20260929/web-repro.config.ts",
+      "cwd": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web",
+      "exit_code": 1,
+      "result": "Three expected behavior assertions failed; three tests collected and executed. Latest duration4.57s. These are defect reproductions, not a passing check.",
+      "files": [
+        {
+          "path": "/private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx",
+          "sha256": "fb814f33e2f4259ed32c8b16cea6197046945c8cbaf5736faf2900c42b5ea940"
+        },
+        {
+          "path": "/private/tmp/agi-ecosystem-audit-20260929/web-repro.config.ts",
+          "sha256": "ba6c065dd895caf84b11e9070c2f6a5874baf6bb1c1dda40f9f21575c8d7ed92"
+        },
+        {
+          "path": "/private/tmp/agi-ecosystem-audit-20260929/web-repro-output.txt",
+          "sha256": "ea18b17c2120370aee28ba0d33938c4bd157fc318acb2a7af93811851b8e5476"
+        }
+      ],
+      "mocks": [
+        "Explicit test mock of identity client useSession with deterministic user1/token.",
+        "Explicit global fetch stub returning deterministic Response payloads and recording requests.",
+        "Repository test setup additionally mocks next/headers, server-only, WebContainer, requireCsrfToken, motion libraries and ResizeObserver; database and KV configuration are neutralized to prevent real service access.",
+        "Real useChatStream, useConversations, inFlightTurnRecovery and Zustand chat store execute; tests reset store/conversation loader and cleanup after each case."
+      ],
+      "instrument_limits": [
+        "Fake timers only in liveness test. Microtask flush and setLoading=true assert show the first recovery response was read before advancing the timer.",
+        "Conversation test asserts loadConversation=true so a schema/transport rejection cannot explain its stale-cache result.",
+        "No browser, workflow platform, provider or database run was used. Missing cancellation POST is the observed result; continued durable work is source-based conditional inference.",
+        "Vitest warns that imported config ESM syntax is loaded as CommonJS; test collection and execution completed.",
+        "Earlier temporary config/import bootstrap attempts failed before test collection; they are not counted as product failures."
+      ],
+      "output": "(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:\n  - ESM syntax in a file loaded as CommonJS (../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.config.ts:1:1). Use a `.mjs` extension or set `\"type\": \"module\"` in the closest package.json\n  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `\"type\": \"module\"` in the closest package.json\nSet `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.\n\n RUN  v5.0.1 /Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web\n\n \u276f ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx (3 tests | 3 failed) 22ms\n   \u00d7 continues polling a recovered running turn and clears busy on completion 12ms\n   \u00d7 sends a cancellation for the recovered cloud run when Stop is pressed 4ms\n   \u00d7 merges fresh server messages into a cached nonstreaming conversation on reopening 5ms\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 3 \u23af\u23af\u23af\u23af\u23af\u23af\u23af\n\n FAIL  ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx > continues polling a recovered running turn and clears busy on completion\nAssertionError: expected 1 to be 2 // Object.is equality\n\n- Expected\n+ Received\n\n- 2\n+ 1\n\n \u276f ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx:21:16\n     19|  expect(useChatStore.getState().isLoading).toBe(true);\n     20|  await act(async()=>{await vi.advanceTimersByTimeAsync(5001);});\n     21|  expect(polls).toBe(2);\n       |                ^\n     22|  expect(useChatStore.getState().isLoading).toBe(false);\n     23| });\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[1/3]\u23af\n\n FAIL  ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx > sends a cancellation for the recovered cloud run when Stop is pressed\nAssertionError: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false\n\n \u276f ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx:33:103\n     31|  act(()=>result.current.stopGeneration(id));\n     32|  await act(async()=>{await Promise.resolve();});\n     33|  expect(requests.some(r=>r.method==='POST'&&r.url.endsWith('/11111111-\u2026\n       |                                                                                                       ^\n     34| });\n     35| it('merges fresh server messages into a cached nonstreaming conversati\u2026\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[2/3]\u23af\n\n FAIL  ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx > merges fresh server messages into a cached nonstreaming conversation on reopening\nAssertionError: expected [ 'old' ] to deeply equal [ 'old', 'new from another device' ]\n\n- Expected\n+ Received\n\n  [\n    \"old\",\n-   \"new from another device\",\n  ]\n\n \u276f ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx:41:79\n     39|  const {result}=renderHook(()=>useConversations());\n     40|  await act(async()=>{expect(await result.current.loadConversation(id))\u2026\n     41|  expect(useChatStore.getState().messagesByConversation[id].map(m=>m.co\u2026\n       |                                                                               ^\n     42| });\n     43|\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[3/3]\u23af\n\n\n Test Files  1 failed (1)\n      Tests  3 failed (3)\n   Start at  16:12:16\n   Duration  4.57s (import 52%, transform 38%, environment 7%, setup 3%)\n\n"
+    }
+  ],
+  "generated_at_utc": "2026-09-29T21:20:26.650712+00:00",
+  "workspace": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e",
+  "scope": "Read-only audit of selected current integrated web/cloud hooks, routes, persistence, cancellation, tool permission gate and distinct fix/web-small source diffs. Not a complete web audit or live deployment validation.",
+  "excluded_product_features": [
+    "financial planning",
+    "GPT builder",
+    "Health"
+  ],
+  "branch_review": {
+    "integrated_head": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+    "branch": "fix/web-small",
+    "branch_head": "1047f771a77ccea4a96bbcb51acfd083cf2b06e7",
+    "unique_commit_count": 5,
+    "unique_commits": [
+      "1047f771a77ccea4a96bbcb51acfd083cf2b06e7 fix(web): move the working folder clear control out of the picker button",
+      "ee53b42bba1522fa2dc21362a1011694b6efb8d1 fix(provider-runtime): release caller signal listeners when a stream ends",
+      "a259efcbba23ea4750dfaef3b458a3da98c39a01 fix(provider-runtime): end a non-json 429 stream with an error and a stop chunk",
+      "00b1f771726fb9f3641ec8ca4d311aea76f7996f fix(web): spell the retrieval digest separator as an escape, not a nul byte",
+      "5145ffccd54d78325d3ed633631a3cbc8c55fef1 fix(web): refuse a per-instance csrf secret outside development and test"
+    ],
+    "reviewed_source_diff_paths": [
+      "apps/web/lib/csrf.ts",
+      "packages/ai/provider-runtime/src/client/streamFromProvider.ts"
+    ],
+    "reviewed_diff_sha256": "4ad1af216b9cca3626578b5ce3bf492a95addf764454cb4334ff9e83877827eb",
+    "existing_fixes": [
+      {
+        "known_id": "RISK-X01",
+        "commit": "5145ffccd5",
+        "status": "fix available outside integrated HEAD",
+        "behavior": "Production missing CSRF_SECRET currently generates an instance-local random key; branch refuses configuration instead. Multi-instance token rejection is conditional on missing configuration, not a proven production outage."
+      },
+      {
+        "known_id": "ROOT-FR-003",
+        "commit": "a259efcbba",
+        "status": "fix available outside integrated HEAD",
+        "behavior": "Shared streamFromProvider with detectPaywall=true returns no error/stop on a non-JSON429 body. Current production caller search found mobile provider client only; that caller does not enable detectPaywall, so current production reachability is not established."
+      },
+      {
+        "known_id": "ROOT-FR-004",
+        "commit": "ee53b42bba",
+        "status": "fix available outside integrated HEAD",
+        "behavior": "combineSignals adds listeners to caller/watchdog signals and never removes them on normal stream completion. Mobile provider client uses both caller signal and idleWatchdog, making retention reachable if a caller reuses its signal."
+      },
+      {
+        "known_id": "RISK-X03",
+        "commit": "00b1f77172",
+        "status": "commit/changed paths inventoried; source logic not revalidated in this lane"
+      },
+      {
+        "known_id": "WEB-003",
+        "commit": "1047f771a7",
+        "status": "commit/changed paths inventoried; source logic not revalidated in this lane"
+      }
+    ],
+    "other_branches_snapshot": {
+      "fix/code-cloud": "No unique commits against integrated HEAD in inspected rev-list snapshot",
+      "partials/mcp-web": "No unique commits against integrated HEAD in inspected rev-list snapshot",
+      "remaining_unique_web_cloud_branches": "Not independently audited by this lane; root inventory owns full branch reconciliation"
+    },
+    "branch_file_hashes": [
+      {
+        "path": "apps/web/lib/csrf.ts",
+        "sha256": "db2f12e4e35f26029e942213d965cc157939fb873d46127b2cc7e8ce542ee59b",
+        "review_type": "selected diff hunks rather than complete branch file read"
+      },
+      {
+        "path": "packages/ai/provider-runtime/src/client/streamFromProvider.ts",
+        "sha256": "a9e486f6ea9cfd0d8735e746837eb8116bdb0c85c2501c59ff06b227fa47253d",
+        "review_type": "selected diff hunks rather than complete branch file read"
+      }
+    ]
+  },
+  "rejected_hypotheses": [
+    {
+      "hypothesis": "Artifact sync cursor survives a workspace switch and can miss another workspace's deltas.",
+      "reason": "authentication-store cache scope reset includes artifacts/cursor cleanup and finalizeWorkspaceSwitch triggers a full location replacement/reload. This is not registered as a defect.",
+      "sources": [
+        "apps/web/shared/stores/authentication-store.ts115\u2013182,292\u2013396",
+        "apps/web/features/workspaces/lib/workspace-cache-scope.ts1\u201354"
+      ]
+    }
+  ],
+  "known_flaw_match_search": {
+    "register": "audit/registers/known-flaws.md",
+    "queries": [
+      "recovery|recovered|cached.*message|cache.*conversation|cancellation|csrf|non.?json|429|permission.gate|enterprise.enforce",
+      "inFlightTurnRecovery|recovered (turn|run)|cached transcript|cachedMessages|lower.preference|preferredAlternativeTo|non.json.429|releaseSignals|managed_compute_disabled\\|over_cap across audit"
+    ],
+    "result": "No exact known-flaw row matched the three new hook failures or source-only gate/test candidates. Existing shared-library/CSRF branch issues have legacy IDs in audit/codex-reaudit/open-work.md; do not duplicate them."
+  },
+  "coverage_summary": {
+    "file_count": 41,
+    "line_ranges_inspected_count": 5240,
+    "whole_web_scope_claim": false,
+    "hashes_verified_against_completion_working_tree": true
+  },
+  "product_changes": "none",
+  "register_changes": "none",
+  "working_tree_status_at_completion": ""
+}

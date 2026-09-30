@@ -36,28 +36,28 @@ works, nor that an observed source defect is deployed.
 
 | Severity | Current issue | Source and verification limits |
 | --- | --- | --- |
-| Medium | Recovered-run polling stops after the first running verdict | [evidence](../live-check/2026-09-29-ecosystem-review/web-cloud-review.json) |
-| Medium | Stop on a recovered cloud turn never requests server cancellation | [evidence](../live-check/2026-09-29-ecosystem-review/web-cloud-review.json) |
-| Medium | Reopening a cached chat discards newer persisted messages | [evidence](../live-check/2026-09-29-ecosystem-review/web-cloud-review.json) |
-| Medium | Managed-compute enforcement test accepts denials from different gates | [evidence](../live-check/2026-09-29-ecosystem-review/web-cloud-review.json) |
-| High | Checkpoint rewind follows swapped parent symlinks outside the approved workspace | [evidence](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json) |
-| Medium | Continue CLI Session accepts the chosen thread but never opens it in VS Code | [evidence](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json) |
-| Medium | Interrupt releases turn ownership before cleanup finishes | [evidence](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json) |
-| Medium | Modern MCP read cache retains unlimited responses and expired distinct keys | [evidence](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json) |
-| Medium | Background command pool caps finished history but leaves running commands unbounded | [evidence](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json) |
-| Medium | Crash recovery loses terminal turn status | [evidence](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json) |
-| Medium | Capability worklist can be green with missing or impossible completion evidence | [evidence](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
-| Medium | Older reachability inventory accepts fabricated implementation evidence | [evidence](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
-| Medium | Declined connector capability is counted as implemented | [evidence](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
-| Medium | Per-file ledger regeneration loses review evidence and does not bind dirty source | [evidence](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
-| Medium | Policy-refused schedules reported as completed | [evidence](../live-check/2026-09-29-ecosystem-review/continuous-assistant-review.json) |
-| Medium | Handshake/protocol rejection discards the registry handle without stopping the subprocess | [evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json) |
-| Medium | Notifications from a closed runtime remain eligible to mutate the current session | [evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json) |
-| Medium | Explicit stop allows a replacement runtime before the prior runtime has exited | [evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json) |
-| Medium | Trusted side-panel WebMCP calls bypass target-site automation authorization | [evidence](../live-check/2026-09-29-ecosystem-review/chrome-review.json) |
-| Medium | Stop reports cancellation success after the cloud cancellation API refuses it | [evidence](../live-check/2026-09-29-ecosystem-review/chrome-review.json) |
-| Medium | Approved WebMCP form checkbox arguments are submitted with the wrong state | [evidence](../live-check/2026-09-29-ecosystem-review/chrome-review.json) |
-| Medium | A new login session for the same account hides retained Chrome history | [evidence](../live-check/2026-09-29-ecosystem-review/chrome-review.json) |
+| Medium | Recovered-run polling stops after the first running verdict | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/web-cloud-review.json) |
+| Medium | Stop on a recovered cloud turn never requests server cancellation | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/web-cloud-review.json) |
+| Medium | Reopening a cached chat discards newer persisted messages | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/web-cloud-review.json) |
+| Medium | Managed-compute enforcement test accepts denials from different gates | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/web-cloud-review.json) |
+| High | Checkpoint rewind follows swapped parent symlinks outside the approved workspace | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/rust-developer-review.json) |
+| Medium | Continue CLI Session accepts the chosen thread but never opens it in VS Code | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/rust-developer-review.json) |
+| Medium | Interrupt releases turn ownership before cleanup finishes | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/rust-developer-review.json) |
+| Medium | Modern MCP read cache retains unlimited responses and expired distinct keys | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/rust-developer-review.json) |
+| Medium | Background command pool caps finished history but leaves running commands unbounded | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/rust-developer-review.json) |
+| Medium | Crash recovery loses terminal turn status | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/rust-developer-review.json) |
+| Medium | Capability worklist can be green with missing or impossible completion evidence | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
+| Medium | Older reachability inventory accepts fabricated implementation evidence | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
+| Medium | Declined connector capability is counted as implemented | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
+| Medium | Per-file ledger regeneration loses review evidence and does not bind dirty source | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
+| Medium | Policy-refused schedules reported as completed | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/continuous-assistant-review.json) |
+| Medium | Handshake/protocol rejection discards the registry handle without stopping the subprocess | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/electron-protocol-review.json) |
+| Medium | Notifications from a closed runtime remain eligible to mutate the current session | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/electron-protocol-review.json) |
+| Medium | Explicit stop allows a replacement runtime before the prior runtime has exited | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/electron-protocol-review.json) |
+| Medium | Trusted side-panel WebMCP calls bypass target-site automation authorization | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/chrome-review.json) |
+| Medium | Stop reports cancellation success after the cloud cancellation API refuses it | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/chrome-review.json) |
+| Medium | Approved WebMCP form checkbox arguments are submitted with the wrong state | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/chrome-review.json) |
+| Medium | A new login session for the same account hides retained Chrome history | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/chrome-review.json) |
 
 The web reproduction ran three real-hook/store cases; all three expected
 behavior assertions failed. That is defect evidence, not a green test suite.
@@ -87,7 +87,7 @@ interactive AGI Work has continuing durable execution. The reviewed owners
 provide account/project memory and conversation/code-session sandboxes;
 independent persistent bot memory and an account-wide shared cloud GUI computer
 were not established. These are scoped findings, not an exhaustive assertion
-that no other implementation exists. [Workflow evidence and limits](../live-check/2026-09-29-ecosystem-review/continuous-assistant-review.json).
+that no other implementation exists. [Workflow evidence and limits](../prior-audits/evidence/2026-09-29-ecosystem-review/continuous-assistant-review.json).
 Public Electron, retained internal Tauri, CLI local/BYOK/managed domains and
 browser/cloud surfaces are distinct. Code inside Tauri cannot establish a
 shipping Electron feature. Unique `fix/web-small` assets and pending native
@@ -106,12 +106,12 @@ No real website form, cloud provider or browser account was modified.
 
 - [Fresh review metadata](../ledger/competitive-review-2026-09-29.meta.json)
 - [Source snapshot and worktree metadata](../ledger/source-snapshot-2026-09-29.meta.json)
-- [Current manifest, compressed JSONL](../ledger/2026-09-29-source-manifest.jsonl.gz)
-- [Historical alternatives, separate](../ledger/2026-09-29-source-manifest-historical-alternatives.jsonl.gz)
-- [Exclusion reasons](../ledger/2026-09-29-source-manifest-exclusions.jsonl.gz)
+- [Current manifest, JSONL](../ledger/2026-09-29-source-manifest.jsonl)
+- [Historical alternatives, separate](../ledger/2026-09-29-source-manifest-historical-alternatives.jsonl)
+- [Exclusion reasons](../ledger/2026-09-29-source-manifest-exclusions.jsonl)
 - [Actual semantic reading scopes](../ledger/semantic-review-coverage-2026-09-29.jsonl)
 - [Full criterion checklist and review status](../ledger/competitive-review-checklist-2026-09-29.jsonl)
-- [Dated primary competitor evidence](../../docs/research/competitor-ecosystem-delta-2026-09-29.json)
+- [Dated primary competitor evidence](../../docs/research/evidence/competitor-ecosystem-delta-2026-09-29.json)
 - [Canonical open flaw identities](../registers/known-flaws.md)
 - [Root causes and acceptance](../prior-audits/active-issues-register.md)
 

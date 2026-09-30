@@ -454,8 +454,8 @@ export default [
 
   {
     files: [
-      'audit/live-check/2026-09-29-ecosystem-review/mobile-race-repro.cjs',
-      'audit/live-check/2026-09-29-ecosystem-review/reproduce-scheduled-refusal.cjs',
+      'audit/prior-audits/evidence/2026-09-29-ecosystem-review/mobile-race-repro.cjs',
+      'audit/prior-audits/evidence/2026-09-29-ecosystem-review/reproduce-scheduled-refusal.cjs',
     ],
     languageOptions: {
       sourceType: 'commonjs',
