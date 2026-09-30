@@ -191,10 +191,14 @@ describe('the relay binds every token site to an account', () => {
   });
 
   it('will not mint a claim token for an unauthenticated caller', () => {
+    const guard = source.slice(source.indexOf('function isInternalCaller('));
+    expect(guard.slice(0, guard.indexOf('\n}'))).toContain(
+      'constantTimeCompare(token, SIGNALING_SECRET)',
+    );
     const claimRoute = source.slice(source.indexOf("app.post('/pairings/:code/claim'"));
     const handler = claimRoute.slice(0, claimRoute.indexOf('\n});'));
-    expect(handler).toContain('constantTimeCompare(token, SIGNALING_SECRET)');
+    expect(handler).toContain('if (!isInternalCaller(req))');
     expect(handler).toContain('authorizePairTokenClaim(sessionData.metadata');
-    expect(handler.indexOf('constantTimeCompare')).toBeLessThan(handler.indexOf('issuePairToken'));
+    expect(handler.indexOf('isInternalCaller')).toBeLessThan(handler.indexOf('issuePairToken'));
   });
 });

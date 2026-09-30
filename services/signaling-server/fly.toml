@@ -23,6 +23,8 @@ primary_region = 'sjc'
   memory_mb = 1024
 
 [env]
+  TRUST_PROXY = 'true'
+  TRUSTED_PROXY_HOPS = '2'
   # Required before this app can serve any WebSocket client.
   # ALLOWED_ORIGINS is a comma-separated allow-list of the exact Origin headers the
   # desktop and mobile clients send. It is intentionally NOT defaulted: with an empty
@@ -32,4 +34,4 @@ primary_region = 'sjc'
   #   fly secrets set ALLOWED_ORIGINS="https://app.example,https://other.example"
   # Also required as secrets (never in this file):
   #   NEON_DATABASE_URL, SIGNALING_INTERNAL_SECRET
-  # Optional: SIGNALING_HTTP_URL, SIGNALING_WS_URL, ADMIN_API_KEY, TRUST_PROXY
+  # Optional: SIGNALING_HTTP_URL, SIGNALING_WS_URL, ADMIN_API_KEY

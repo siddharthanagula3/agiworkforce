@@ -6,7 +6,11 @@ export const DEFAULT_PORT = 4000;
 
 export const DEFAULT_WS_PATH = '/ws';
 
-export const MAX_MESSAGE_SIZE_BYTES = 64 * 1024;
+export const MAX_MESSAGE_SIZE_CHARS = 64 * 1024;
+
+export const WS_MAX_PAYLOAD_BYTES = 3 * MAX_MESSAGE_SIZE_CHARS;
+
+export const MAX_SOCKET_BUFFERED_BYTES = 8 * WS_MAX_PAYLOAD_BYTES;
 
 export const MAX_SDP_SIZE = 100_000;
 
@@ -32,6 +36,8 @@ export const SESSION_CLEANUP_INTERVAL_MS = 30_000;
 
 export const MAX_PENDING_REHYDRATIONS = 1000;
 
+export const REHYDRATION_TIMEOUT_MS = 10_000;
+
 export const PENDING_REHYDRATION_TTL_MS = 30_000;
 
 export const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -39,6 +45,8 @@ export const RATE_LIMIT_WINDOW_MS = 60_000;
 export const RATE_LIMIT_RETRY_AFTER_SECONDS = 60;
 
 export const RATE_LIMIT_PAIRING_CREATE = 10;
+
+export const RATE_LIMIT_PAIRING_CLAIM = 10;
 
 export const RATE_LIMIT_PAIRING_LOOKUP = 60;
 
@@ -113,3 +121,15 @@ export const READINESS_TIMEOUT_MS = 5_000;
 export const READINESS_ATTEMPTS = 3;
 
 export const READINESS_RETRY_DELAY_MS = 2_000;
+
+export const DB_CONNECTION_TIMEOUT_MS = 5_000;
+
+export const DB_QUERY_TIMEOUT_MS = 5_000;
+
+export const DB_PROBE_TIMEOUT_MS = 5_000;
+
+export const DB_CHECK_TTL_MS = 15_000;
+
+export const DB_STARTUP_RETRY_BASE_MS = 1_000;
+
+export const DB_STARTUP_RETRY_MAX_MS = 30_000;

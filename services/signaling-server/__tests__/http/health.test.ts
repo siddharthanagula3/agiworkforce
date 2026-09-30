@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import type { DatabaseProbe } from '../../src/db.js';
+import { createDatabaseCheck, registerProbeRoutes, type RelayLifecycle } from '../../src/probes.js';
 import { checkReadiness } from '../../src/readiness.js';
 import { releaseIdentity } from '../../src/release.js';
 
@@ -12,106 +14,89 @@ const DEPLOY_ENV = {
   AGI_DEPLOY_ENV: 'production',
 };
 
-function createHealthTestApp(deployEnv: Record<string, string | undefined> = DEPLOY_ENV) {
+interface ProbeHarness {
+  app: express.Application;
+  setLifecycle: (next: RelayLifecycle) => void;
+  setDatabase: (next: DatabaseProbe) => void;
+}
+
+function createProbeApp(deployEnv: Record<string, string | undefined> = DEPLOY_ENV): ProbeHarness {
   const app = express();
   const release = releaseIdentity(deployEnv);
+  let lifecycle: RelayLifecycle = 'ready';
+  let database: DatabaseProbe = { ok: true, latencyMs: 3 };
 
-  let isReady = true;
-  let isShuttingDown = false;
-
-  app.get('/live', (_req, res) => {
-    res.status(200).json({ status: 'alive', timestamp: Date.now() });
-  });
-
-  app.get('/ready', (_req, res) => {
-    if (isShuttingDown) {
-      return res.status(503).json({ status: 'shutting_down', timestamp: Date.now() });
-    }
-    if (!isReady) {
-      return res.status(503).json({ status: 'not_ready', timestamp: Date.now() });
-    }
-    return res.status(200).json({ status: 'ready', timestamp: Date.now() });
-  });
-
-  app.get('/health', (_req, res) => {
-    const memUsage = process.memoryUsage();
-
-    const healthStatus = {
-      status: isShuttingDown ? 'shutting_down' : isReady ? 'healthy' : 'starting',
-      uptime: process.uptime(),
-      timestamp: Date.now(),
+  registerProbeRoutes(app, {
+    lifecycle: () => lifecycle,
+    database: createDatabaseCheck({ probe: async () => database, ttlMs: 0 }),
+    healthLimiter: (_req, _res, next) => next(),
+    healthDetail: () => ({
+      uptime: 1,
       deployment: release,
-      connections: {
-        total: 0,
-        uniqueIps: 0,
-      },
-      sessions: {
-        active: 0,
-      },
-      memory: {
-        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-        rss: Math.round(memUsage.rss / 1024 / 1024),
-        unit: 'MB',
-      },
-    };
-
-    const httpStatus = isShuttingDown ? 503 : isReady ? 200 : 503;
-    return res.status(httpStatus).json(healthStatus);
+      connections: { total: 0, uniqueIps: 0, topCloseReasons: [] },
+      sessions: { active: 0 },
+      memory: { heapUsed: 1, heapTotal: 1, rss: 1, unit: 'MB' },
+    }),
   });
 
-  (app as express.Application & { setReady: (r: boolean) => void }).setReady = (r: boolean) => {
-    isReady = r;
-  };
-  (app as express.Application & { setShuttingDown: (s: boolean) => void }).setShuttingDown = (
-    s: boolean,
-  ) => {
-    isShuttingDown = s;
-  };
-
-  return app as express.Application & {
-    setReady: (r: boolean) => void;
-    setShuttingDown: (s: boolean) => void;
+  return {
+    app,
+    setLifecycle: (next) => {
+      lifecycle = next;
+    },
+    setDatabase: (next) => {
+      database = next;
+    },
   };
 }
 
 describe('Health Endpoints', () => {
-  let app: ReturnType<typeof createHealthTestApp>;
+  let probe: ProbeHarness;
 
   beforeEach(() => {
-    app = createHealthTestApp();
+    probe = createProbeApp();
   });
 
   describe('GET /live', () => {
-    it('should always return 200 if process is alive', async () => {
-      const response = await request(app).get('/live');
+    it('answers while the process runs, whatever the database is doing', async () => {
+      probe.setDatabase({ ok: false, reason: 'timeout' });
+      const response = await request(probe.app).get('/live');
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('alive');
-      expect(response.body).toHaveProperty('timestamp');
     });
   });
 
   describe('GET /ready', () => {
-    it('should return 200 when server is ready', async () => {
-      app.setReady(true);
-      const response = await request(app).get('/ready');
+    it('is ready once the store answered at startup and reports its state', async () => {
+      const response = await request(probe.app).get('/ready');
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('ready');
+      expect(response.body.checks.database).toMatchObject({ status: 'ok', latencyMs: 3 });
     });
 
-    it('should return 503 when server is not ready', async () => {
-      app.setReady(false);
-      const response = await request(app).get('/ready');
+    it('stays unready while the store has not answered at startup', async () => {
+      probe.setLifecycle('starting');
+      probe.setDatabase({ ok: false, reason: '28P01' });
+      const response = await request(probe.app).get('/ready');
 
       expect(response.status).toBe(503);
       expect(response.body.status).toBe('not_ready');
+      expect(response.body.checks.database).toMatchObject({ status: 'down', reason: '28P01' });
     });
 
-    it('should return 503 when server is shutting down', async () => {
-      app.setShuttingDown(true);
-      const response = await request(app).get('/ready');
+    it('keeps serving live relays through a later store outage and says so in the body', async () => {
+      probe.setDatabase({ ok: false, reason: 'timeout' });
+      const response = await request(probe.app).get('/ready');
+
+      expect(response.status).toBe(200);
+      expect(response.body.checks.database).toMatchObject({ status: 'down', reason: 'timeout' });
+    });
+
+    it('returns 503 while shutting down', async () => {
+      probe.setLifecycle('shutting_down');
+      const response = await request(probe.app).get('/ready');
 
       expect(response.status).toBe(503);
       expect(response.body.status).toBe('shutting_down');
@@ -119,38 +104,46 @@ describe('Health Endpoints', () => {
   });
 
   describe('GET /health', () => {
-    it('should return detailed health information', async () => {
-      const response = await request(app).get('/health');
+    it('reports healthy with the database dependency', async () => {
+      const response = await request(probe.app).get('/health');
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('healthy');
-      expect(response.body).toHaveProperty('uptime');
+      expect(response.body.dependencies.database).toMatchObject({ status: 'ok' });
       expect(response.body).toHaveProperty('connections');
-      expect(response.body).toHaveProperty('sessions');
-      expect(response.body).toHaveProperty('memory');
-      expect(response.body.memory).toHaveProperty('heapUsed');
       expect(response.body.memory.unit).toBe('MB');
     });
 
-    it('should include timestamp', async () => {
-      const before = Date.now();
-      const response = await request(app).get('/health');
-      const after = Date.now();
+    it('returns 503 degraded while the database is down', async () => {
+      probe.setDatabase({ ok: false, reason: '42P01' });
+      const response = await request(probe.app).get('/health');
 
-      expect(response.body.timestamp).toBeGreaterThanOrEqual(before);
-      expect(response.body.timestamp).toBeLessThanOrEqual(after);
+      expect(response.status).toBe(503);
+      expect(response.body.status).toBe('degraded');
+      expect(response.body.dependencies.database).toMatchObject({
+        status: 'down',
+        reason: '42P01',
+      });
+    });
+
+    it('reports starting before the store has answered', async () => {
+      probe.setLifecycle('starting');
+      const response = await request(probe.app).get('/health');
+
+      expect(response.status).toBe(503);
+      expect(response.body.status).toBe('starting');
     });
 
     it('should report shutting_down status when applicable', async () => {
-      app.setShuttingDown(true);
-      const response = await request(app).get('/health');
+      probe.setLifecycle('shutting_down');
+      const response = await request(probe.app).get('/health');
 
       expect(response.status).toBe(503);
       expect(response.body.status).toBe('shutting_down');
     });
 
     it('names the deployment serving the response', async () => {
-      const response = await request(app).get('/health');
+      const response = await request(probe.app).get('/health');
 
       expect(response.body.deployment).toEqual({
         target: 'fly',
@@ -162,8 +155,8 @@ describe('Health Endpoints', () => {
     });
 
     it('omits deployment fields the host does not set rather than inventing them', async () => {
-      const bare = createHealthTestApp({});
-      const response = await request(bare).get('/health');
+      const bare = createProbeApp({});
+      const response = await request(bare.app).get('/health');
 
       expect(response.body.deployment).toEqual({ target: 'local' });
       expect(JSON.stringify(response.body)).not.toContain('unknown');
@@ -184,7 +177,7 @@ describe('Health Endpoints', () => {
 
     it('passes and reports the deployment it reached', async () => {
       const report = await checkReadiness(['https://signal.example'], {
-        fetchImpl: probeFetch(app),
+        fetchImpl: probeFetch(probe.app),
         attempts: 1,
       });
 
@@ -193,9 +186,9 @@ describe('Health Endpoints', () => {
     });
 
     it('fails while the server is not ready, and retries before giving up', async () => {
-      app.setReady(false);
+      probe.setLifecycle('starting');
       const report = await checkReadiness(['https://signal.example'], {
-        fetchImpl: probeFetch(app),
+        fetchImpl: probeFetch(probe.app),
         attempts: 3,
         sleep: async () => {},
       });
@@ -205,12 +198,23 @@ describe('Health Endpoints', () => {
       expect(report.probes[0]?.failure).toBe('starting');
     });
 
+    it('fails a deployment whose pairing store is down', async () => {
+      probe.setDatabase({ ok: false, reason: 'unreachable' });
+      const report = await checkReadiness(['https://signal.example'], {
+        fetchImpl: probeFetch(probe.app),
+        attempts: 1,
+      });
+
+      expect(report.ready).toBe(false);
+      expect(report.probes[0]?.failure).toBe('degraded');
+    });
+
     it('reports degraded when one deploy target is down and the other answers', async () => {
-      const down = createHealthTestApp();
-      down.setShuttingDown(true);
+      const down = createProbeApp();
+      down.setLifecycle('shutting_down');
       const routes = new Map([
-        ['signal-a.example', app],
-        ['signal-b.example', down],
+        ['signal-a.example', probe.app],
+        ['signal-b.example', down.app],
       ]);
       const fetchImpl = (async (input: RequestInfo | URL) => {
         const url = new URL(String(input));
@@ -230,7 +234,7 @@ describe('Health Endpoints', () => {
 
       expect(report.ready).toBe(false);
       expect(report.degraded).toBe(true);
-      expect(report.probes.filter((probe) => probe.ok)).toHaveLength(1);
+      expect(report.probes.filter((entry) => entry.ok)).toHaveLength(1);
     });
 
     it('treats an unreachable endpoint as down rather than as ready', async () => {
