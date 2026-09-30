@@ -55,16 +55,32 @@ describe('useDisabledWorkspaceFeatures', () => {
 
     const { result } = renderHook(() => useDisabledWorkspaceFeatures());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(result.current).toEqual([]);
+    await waitFor(() => expect(result.current).toEqual(['fast_mode']));
 
     await act(async () => {
       window.dispatchEvent(new Event('focus'));
     });
 
-    await waitFor(() => expect(result.current).toEqual(['work', 'code']));
+    await waitFor(() => expect(result.current).toEqual(['work', 'code', 'fast_mode']));
     const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(url).toBe('/api/settings/organization/policy/effective');
     expect(init.headers).toMatchObject({ Authorization: 'Bearer token', 'If-None-Match': '"r1"' });
+  });
+
+  it('removes the opt-in restriction only after the admin enables fast mode', async () => {
+    fetchMock
+      .mockResolvedValueOnce(policy(1, {}))
+      .mockResolvedValueOnce(policy(2, { fast_mode: true }));
+
+    const { result } = renderHook(() => useDisabledWorkspaceFeatures());
+    await waitFor(() => expect(result.current).toEqual(['fast_mode']));
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => expect(result.current).toEqual([]));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('starts from the policy cached for this account while the network is away', async () => {
@@ -76,8 +92,8 @@ describe('useDisabledWorkspaceFeatures', () => {
 
     const { result } = renderHook(() => useDisabledWorkspaceFeatures());
 
-    expect(result.current).toEqual(['schedules']);
+    expect(result.current).toEqual(['schedules', 'fast_mode']);
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(result.current).toEqual(['schedules']);
+    expect(result.current).toEqual(['schedules', 'fast_mode']);
   });
 });

@@ -28,7 +28,8 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
-vi.mock('@agiworkforce/ui', () => ({
+vi.mock('@agiworkforce/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
   Switch: ({ checked }: { checked?: boolean }) =>
     React.createElement('button', { role: 'switch', 'aria-checked': Boolean(checked) }),
   useConfirm: () => ({ confirm: vi.fn(async () => true), dialog: null }),
