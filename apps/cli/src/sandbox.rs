@@ -414,12 +414,20 @@ pub struct SandboxSettings {
 static SANDBOX_SETTINGS: std::sync::OnceLock<SandboxSettings> = std::sync::OnceLock::new();
 
 pub fn sandbox_settings() -> SandboxSettings {
-    *SANDBOX_SETTINGS.get_or_init(|| {
-        resolve_sandbox_settings(
-            &crate::features::hooks::managed::load_managed_sandbox_policy(),
-            |name| std::env::var_os(name).is_some(),
-        )
-    })
+    #[cfg(test)]
+    if let Some(settings) =
+        crate::native_process_test_fixture::sandbox_settings(load_sandbox_settings)
+    {
+        return settings;
+    }
+    *SANDBOX_SETTINGS.get_or_init(load_sandbox_settings)
+}
+
+fn load_sandbox_settings() -> SandboxSettings {
+    resolve_sandbox_settings(
+        &crate::features::hooks::managed::load_managed_sandbox_policy(),
+        |name| std::env::var_os(name).is_some(),
+    )
 }
 
 pub fn resolve_sandbox_settings(
@@ -1220,89 +1228,105 @@ mod environment_and_policy_tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn a_wrapped_program_launches_and_keeps_a_writable_scratch_under_every_policy() {
-        if SandboxType::detect() == SandboxType::None {
-            return;
-        }
-        let workspace = tempfile::tempdir().expect("workspace");
-        let workspace_path = workspace.path().canonicalize().expect("workspace path");
-        let run = |policy: &SandboxPolicy, script: &str| {
-            let mut manager = SandboxManager::new(policy.clone(), workspace_path.clone());
-            manager.sandbox_type = SandboxType::MacosSeatbelt;
-            let (program, args) =
-                sandboxed_program(&manager, "/bin/sh", &["-c".to_string(), script.to_string()])
-                    .unwrap_or_else(|error| panic!("{policy:?} could not be wrapped: {error}"));
-            let output = std::process::Command::new(&program)
-                .args(&args)
-                .output()
-                .expect("launch sandbox-exec");
-            assert!(
-                output.status.success(),
-                "{policy:?} failed to launch: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            String::from_utf8_lossy(&output.stdout).into_owned()
-        };
+        use crate::native_process_test_fixture::NativeProcessFixture;
 
-        let scratch_policies = [
-            SandboxPolicy::ReadOnly,
-            SandboxPolicy::WorkspaceWrite {
-                writable_roots: Vec::new(),
-            },
-        ];
-        for policy in &scratch_policies {
-            assert_eq!(run(policy, "printf launched"), "launched");
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.blocking_lock();
+        NativeProcessFixture::require_backend();
+        let fixture = NativeProcessFixture::new();
+        fixture.sync_scope(|| {
+            let workspace = tempfile::tempdir().expect("workspace");
+            let workspace_path = workspace.path().canonicalize().expect("workspace path");
+            let run = |policy: &SandboxPolicy, script: &str| {
+                let mut manager = SandboxManager::new(policy.clone(), workspace_path.clone());
+                manager.sandbox_type = SandboxType::MacosSeatbelt;
+                let (program, args) =
+                    sandboxed_program(&manager, "/bin/sh", &["-c".to_string(), script.to_string()])
+                        .unwrap_or_else(|error| panic!("{policy:?} could not be wrapped: {error}"));
+                let output = std::process::Command::new(&program)
+                    .args(&args)
+                    .output()
+                    .expect("launch sandbox-exec");
+                assert!(
+                    output.status.success(),
+                    "{policy:?} failed to launch: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                String::from_utf8_lossy(&output.stdout).into_owned()
+            };
+
+            let scratch_policies = [
+                SandboxPolicy::ReadOnly,
+                SandboxPolicy::WorkspaceWrite {
+                    writable_roots: Vec::new(),
+                },
+            ];
+            for policy in &scratch_policies {
+                assert_eq!(run(policy, "printf launched"), "launched");
+                assert_eq!(
+                    run(
+                        policy,
+                        r#"printf scratch-ok > "$TMPDIR/probe" && cat "$TMPDIR/probe""#
+                    ),
+                    "scratch-ok"
+                );
+            }
             assert_eq!(
-                run(
-                    policy,
-                    r#"printf scratch-ok > "$TMPDIR/probe" && cat "$TMPDIR/probe""#
-                ),
-                "scratch-ok"
+                run(&SandboxPolicy::DangerFullAccess, "printf launched"),
+                "launched"
             );
-        }
-        assert_eq!(
-            run(&SandboxPolicy::DangerFullAccess, "printf launched"),
-            "launched"
-        );
+        });
+        fixture.assert_inputs(&[]);
     }
 
     #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn a_scrubbed_sandboxed_command_cannot_read_the_parent_environment() {
-        if SandboxType::detect() == SandboxType::None
-            || std::env::var_os("CARGO_PKG_NAME").is_none()
-        {
-            return;
-        }
-        let workspace = tempfile::tempdir().unwrap();
-        let workspace_path = workspace.path().canonicalize().unwrap();
-        let manager =
-            SandboxManager::for_command_execution(workspace_path.clone(), NetworkPolicy::Deny)
-                .unwrap();
-        let scrubbed = execute_sandboxed_in_environment(
-            &manager,
-            Invocation::Shell("env"),
-            Some(&workspace_path),
-            None,
-            None,
-            true,
-        )
-        .await
-        .unwrap();
-        let scrubbed = String::from_utf8_lossy(&scrubbed.stdout);
-        assert!(!scrubbed.contains("CARGO_PKG_NAME="), "{scrubbed}");
-        assert!(scrubbed.contains("PATH="), "{scrubbed}");
+        use crate::native_process_test_fixture::{Input, NativeProcessFixture};
 
-        let inherited = execute_sandboxed_in_environment(
-            &manager,
-            Invocation::Shell("env"),
-            Some(&workspace_path),
-            None,
-            None,
-            false,
-        )
-        .await
-        .unwrap();
-        assert!(String::from_utf8_lossy(&inherited.stdout).contains("CARGO_PKG_NAME="));
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        NativeProcessFixture::require_backend();
+        assert!(
+            std::env::var_os("CARGO_PKG_NAME").is_some(),
+            "Cargo package environment required for this regression"
+        );
+        let fixture = NativeProcessFixture::new();
+        fixture
+            .scope(async {
+                let workspace = tempfile::tempdir().unwrap();
+                let workspace_path = workspace.path().canonicalize().unwrap();
+                let manager = SandboxManager::for_command_execution(
+                    workspace_path.clone(),
+                    NetworkPolicy::Deny,
+                )
+                .unwrap();
+                let scrubbed = execute_sandboxed_in_environment(
+                    &manager,
+                    Invocation::Shell("env"),
+                    Some(&workspace_path),
+                    None,
+                    None,
+                    true,
+                )
+                .await
+                .unwrap();
+                let scrubbed = String::from_utf8_lossy(&scrubbed.stdout);
+                assert!(!scrubbed.contains("CARGO_PKG_NAME="), "{scrubbed}");
+                assert!(scrubbed.contains("PATH="), "{scrubbed}");
+
+                let inherited = execute_sandboxed_in_environment(
+                    &manager,
+                    Invocation::Shell("env"),
+                    Some(&workspace_path),
+                    None,
+                    None,
+                    false,
+                )
+                .await
+                .unwrap();
+                assert!(String::from_utf8_lossy(&inherited.stdout).contains("CARGO_PKG_NAME="));
+            })
+            .await;
+        fixture.assert_inputs(&[Input::DeviceIdentity]);
     }
 }
 
@@ -1697,29 +1721,39 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn explicit_writable_root_remains_readable() {
-        let workspace = tempfile::tempdir().expect("workspace");
-        let extra = tempfile::Builder::new()
-            .prefix("agi-explicit-root-")
-            .tempdir_in("/tmp")
-            .expect("extra root");
-        let file = extra
-            .path()
-            .canonicalize()
-            .expect("canonical extra")
-            .join("roundtrip.txt");
-        let manager = SandboxManager::new(
-            SandboxPolicy::WorkspaceWrite {
-                writable_roots: vec![extra.path().canonicalize().expect("extra root")],
-            },
-            workspace.path().to_path_buf(),
-        );
-        let quoted = shell_quote(&file.to_string_lossy());
-        let command = format!("printf controlled > {quoted} && cat {quoted}");
-        let output = execute_sandboxed(&manager, &command, Some(workspace.path()))
-            .await
-            .expect("sandbox launch");
-        assert!(output.status.success());
-        assert_eq!(output.stdout, b"controlled");
+        use crate::native_process_test_fixture::{Input, NativeProcessFixture};
+
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        NativeProcessFixture::require_backend();
+        let fixture = NativeProcessFixture::new();
+        fixture
+            .scope(async {
+                let workspace = tempfile::tempdir().expect("workspace");
+                let extra = tempfile::Builder::new()
+                    .prefix("agi-explicit-root-")
+                    .tempdir_in("/tmp")
+                    .expect("extra root");
+                let file = extra
+                    .path()
+                    .canonicalize()
+                    .expect("canonical extra")
+                    .join("roundtrip.txt");
+                let manager = SandboxManager::new(
+                    SandboxPolicy::WorkspaceWrite {
+                        writable_roots: vec![extra.path().canonicalize().expect("extra root")],
+                    },
+                    workspace.path().to_path_buf(),
+                );
+                let quoted = shell_quote(&file.to_string_lossy());
+                let command = format!("printf controlled > {quoted} && cat {quoted}");
+                let output = execute_sandboxed(&manager, &command, Some(workspace.path()))
+                    .await
+                    .expect("sandbox launch");
+                assert!(output.status.success());
+                assert_eq!(output.stdout, b"controlled");
+            })
+            .await;
+        fixture.assert_inputs(&[Input::DeviceIdentity, Input::ManagedSettings]);
     }
 
     #[cfg(target_os = "macos")]
@@ -1753,64 +1787,83 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn read_only_policy_keeps_private_scratch_writable() {
-        let workspace = tempfile::tempdir().expect("workspace");
-        let mgr = SandboxManager::new(SandboxPolicy::ReadOnly, workspace.path().to_path_buf());
+        use crate::native_process_test_fixture::{Input, NativeProcessFixture};
 
-        let output = execute_sandboxed(
-            &mgr,
-            "scratch_file=$(mktemp \"$TMPDIR/file.XXXXXX\"); printf scratch-ok > \"$scratch_file\"; cat \"$scratch_file\"",
-            Some(workspace.path()),
-        )
-        .await
-        .expect("sandbox should launch");
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        NativeProcessFixture::require_backend();
+        let fixture = NativeProcessFixture::new();
+        fixture
+            .scope(async {
+                let workspace = tempfile::tempdir().expect("workspace");
+                let mgr = SandboxManager::new(SandboxPolicy::ReadOnly, workspace.path().to_path_buf());
 
-        assert!(
-            output.status.success(),
-            "private scratch write failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert_eq!(String::from_utf8_lossy(&output.stdout), "scratch-ok");
+                let output = execute_sandboxed(
+                    &mgr,
+                    "scratch_file=$(mktemp \"$TMPDIR/file.XXXXXX\"); printf scratch-ok > \"$scratch_file\"; cat \"$scratch_file\"",
+                    Some(workspace.path()),
+                )
+                .await
+                .expect("sandbox should launch");
+
+                assert!(
+                    output.status.success(),
+                    "private scratch write failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                assert_eq!(String::from_utf8_lossy(&output.stdout), "scratch-ok");
+            })
+            .await;
+        fixture.assert_inputs(&[Input::DeviceIdentity, Input::ManagedSettings]);
     }
 
     #[cfg(target_os = "macos")]
     #[tokio::test]
     async fn workspace_write_keeps_temporary_files_out_of_the_shared_tmp() {
-        let workspace = tempfile::tempdir().expect("workspace");
-        let mgr = SandboxManager::full_auto(workspace.path().to_path_buf());
-        if mgr.sandbox_type == SandboxType::None {
-            return;
-        }
-        let marker =
-            std::path::PathBuf::from(format!("/tmp/agi-sandbox-escape-{}", std::process::id()));
-        let _ = std::fs::remove_file(&marker);
+        use crate::native_process_test_fixture::{Input, NativeProcessFixture};
 
-        let escape = execute_sandboxed(
-            &mgr,
-            &format!("printf escaped > {}", marker.display()),
-            Some(workspace.path()),
-        )
-        .await
-        .expect("sandbox should launch");
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        NativeProcessFixture::require_backend();
+        let fixture = NativeProcessFixture::new();
+        fixture
+            .scope(async {
+                let workspace = tempfile::tempdir().expect("workspace");
+                let mgr = SandboxManager::full_auto(workspace.path().to_path_buf());
+                let marker = std::path::PathBuf::from(format!(
+                    "/tmp/agi-sandbox-escape-{}",
+                    std::process::id()
+                ));
+                let _ = std::fs::remove_file(&marker);
 
-        assert!(
-            !escape.status.success(),
-            "a workspace-write sandbox wrote into the shared /tmp"
-        );
-        assert!(!marker.exists(), "shared /tmp file was created: {marker:?}");
+                let escape = execute_sandboxed(
+                    &mgr,
+                    &format!("printf escaped > {}", marker.display()),
+                    Some(workspace.path()),
+                )
+                .await
+                .expect("sandbox should launch");
 
-        let scratch = execute_sandboxed(
-            &mgr,
-            "printf scratch-ok > \"$TMPDIR/agi-scratch\"; cat \"$TMPDIR/agi-scratch\"",
-            Some(workspace.path()),
-        )
-        .await
-        .expect("sandbox should launch");
-        assert!(
-            scratch.status.success(),
-            "the private scratch dir must stay writable: {}",
-            String::from_utf8_lossy(&scratch.stderr)
-        );
-        assert_eq!(String::from_utf8_lossy(&scratch.stdout), "scratch-ok");
+                assert!(
+                    !escape.status.success(),
+                    "a workspace-write sandbox wrote into the shared /tmp"
+                );
+                assert!(!marker.exists(), "shared /tmp file was created: {marker:?}");
+
+                let scratch = execute_sandboxed(
+                    &mgr,
+                    "printf scratch-ok > \"$TMPDIR/agi-scratch\"; cat \"$TMPDIR/agi-scratch\"",
+                    Some(workspace.path()),
+                )
+                .await
+                .expect("sandbox should launch");
+                assert!(
+                    scratch.status.success(),
+                    "the private scratch dir must stay writable: {}",
+                    String::from_utf8_lossy(&scratch.stderr)
+                );
+                assert_eq!(String::from_utf8_lossy(&scratch.stdout), "scratch-ok");
+            })
+            .await;
+        fixture.assert_inputs(&[Input::DeviceIdentity, Input::ManagedSettings]);
     }
 
     /// The network-disabled profile has to block a real connection, not just
