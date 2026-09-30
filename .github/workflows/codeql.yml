@@ -34,7 +34,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install system dependencies (Linux)
         run: |
@@ -89,4 +89,4 @@ jobs:
         # even though they are well-vetted upstream. This matches ci.yml's
         # clippy step (.github/workflows/ci.yml) so the two security gates
         # stay consistent, see that file for the long-form rationale.
-        run: cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code
+        run: cargo clippy --locked -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code

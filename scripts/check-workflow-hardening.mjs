@@ -140,15 +140,11 @@ function actionReferences(job) {
     .filter((uses) => typeof uses === 'string' && uses.length > 0);
 }
 
-export function unpinnedAction(reference, trustedPrefixes) {
+export function unpinnedAction(reference) {
   if (reference.startsWith('./') || reference.startsWith('docker://')) return null;
   const at = reference.lastIndexOf('@');
   if (at === -1) return `${reference} names no version at all`;
-  const target = reference.slice(0, at);
   const version = reference.slice(at + 1);
-  if (trustedPrefixes.some((prefix) => target === prefix || target.startsWith(`${prefix}/`))) {
-    return null;
-  }
   if (FULL_SHA.test(version)) return null;
   return `${reference} is pinned to "${version}" and not to a 40 character commit sha`;
 }
@@ -187,14 +183,13 @@ function reportBaseline({ rule, found, contract, errors }) {
 }
 
 function checkPinnedActions({ workflows, contract, errors }) {
-  const trusted = contract.trustedActionPrefixes ?? [];
   const found = new Set();
   let scanned = 0;
   for (const { file, jobs } of workflows) {
     for (const [name, job] of jobs) {
       for (const reference of actionReferences(job)) {
         scanned += 1;
-        const problem = unpinnedAction(reference, trusted);
+        const problem = unpinnedAction(reference);
         if (problem) found.add(`${file}:${name}: ${problem}`);
       }
     }

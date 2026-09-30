@@ -12,6 +12,8 @@ const SURFACE_MANIFESTS = [
 ];
 
 const CLI_MANIFEST = 'apps/cli/Cargo.toml';
+const ARCHITECTURE = 'ARCHITECTURE.md';
+const CRATE_MAP = /(?:^|\n)`crates\/` mirrors this for Rust[\s\S]*?(?=\n\n|$)/u;
 
 const FRAMEWORK_CLAIMS = [
   ['Expo', 'apps/mobile/package.json', 'expo', /Expo (\d+)/, 1],
@@ -83,15 +85,17 @@ function countPackages(root, dir) {
   return total;
 }
 
-function countCrates(root) {
+function crateNames(root) {
   const absolute = path.join(root, 'crates');
-  if (!fs.existsSync(absolute)) return 0;
+  if (!fs.existsSync(absolute)) return [];
   return fs
     .readdirSync(absolute, { withFileTypes: true })
     .filter(
       (entry) =>
         entry.isDirectory() && fs.existsSync(path.join(absolute, entry.name, 'Cargo.toml')),
-    ).length;
+    )
+    .map((entry) => entry.name)
+    .sort();
 }
 
 function readCargoVersion(root, relative) {
@@ -127,7 +131,8 @@ export function collectFacts(root) {
     unlabelledProviders: providerKeys.filter((key) => !PROVIDER_LABELS[key]),
     adapterPackages,
     sharedPackages: countPackages(root, 'packages') - adapterPackages,
-    crateCount: countCrates(root),
+    crates: crateNames(root),
+    crateCount: crateNames(root).length,
     versions,
   };
 }
@@ -245,6 +250,21 @@ export function collectReadmeFactErrors(readme, facts) {
   return errors;
 }
 
+export function collectArchitectureCrateErrors(architecture, crates) {
+  const map = architecture.match(CRATE_MAP)?.[0];
+  if (!map) {
+    return [
+      `${ARCHITECTURE} no longer has its "\`crates/\` mirrors this for Rust" paragraph; the guard cannot verify the crate map.`,
+    ];
+  }
+  return crates
+    .filter(
+      (name) =>
+        !map.includes(`\`${name}\``) && !map.includes(`\`${name.replace(/^agiworkforce-/u, '')}\``),
+    )
+    .map((name) => `${ARCHITECTURE} does not name the crate ${name} in its crate map.`);
+}
+
 export function main() {
   const root = process.cwd();
   const readmePath = path.join(root, 'README.md');
@@ -253,14 +273,21 @@ export function main() {
     process.exit(1);
   }
   const facts = collectFacts(root);
-  const errors = collectReadmeFactErrors(fs.readFileSync(readmePath, 'utf8'), facts);
+  const architecturePath = path.join(root, ARCHITECTURE);
+  const errors = [
+    ...collectReadmeFactErrors(fs.readFileSync(readmePath, 'utf8'), facts),
+    ...(fs.existsSync(architecturePath)
+      ? collectArchitectureCrateErrors(fs.readFileSync(architecturePath, 'utf8'), facts.crates)
+      : [`${ARCHITECTURE} not found; the guard cannot verify the crate map.`]),
+  ];
 
   if (errors.length > 0) {
     console.error('README fact check failed:\n');
     for (const error of errors) console.error(`  - ${error}`);
     console.error(
       '\nREADME.md states counts, provider names, and surface versions that must match the model ' +
-        'catalog and the surface manifests. Update the README, not this guard.',
+        'catalog and the surface manifests, and ARCHITECTURE.md names every crate. Update the ' +
+        'documents, not this guard.',
     );
     process.exit(1);
   }
@@ -268,7 +295,7 @@ export function main() {
   console.log(
     `README fact check passed (${facts.modelCount} models, ${facts.providerCount} providers, ` +
       `${facts.sharedPackages} shared packages, ${facts.adapterPackages} provider adapters, ` +
-      `${facts.crateCount} crates, ${Object.keys(facts.versions).length} surface versions).`,
+      `${facts.crateCount} crates named in ${ARCHITECTURE}, ${Object.keys(facts.versions).length} surface versions).`,
   );
 }
 

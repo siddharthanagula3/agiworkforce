@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-09
+Last updated: 2026-09-29
 
 Commercial context: Guardian may ship later as proprietary SaaS / self-hosted
 product. Every component below records how it is used and whether that use is
@@ -53,7 +53,7 @@ without explicit legal approval; architecture patterns only.
    policy, and a row in this file, enforced by review, verified by the
    scanner adapter tests.
 2. GitHub Actions used by `guardian.yml` follow the repo pinning policy
-   (`scripts/check-action-pins.sh`): first-party `actions/*` by major tag,
-   third-party by full commit SHA.
+   (`scripts/check-action-pins.sh`): every action, GitHub's own `actions/*`
+   included, by full commit SHA with its release tag in a trailing comment.
 3. Upgrade/removal: change the pin here and in the invoking workflow/adapter
    in the same PR; removal deletes the adapter registration and this row.

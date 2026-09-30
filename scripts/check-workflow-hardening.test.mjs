@@ -19,7 +19,6 @@ import {
 const roots = [];
 
 const EMPTY_CONTRACT = {
-  trustedActionPrefixes: ['actions'],
   productionEnvironments: ['production-web'],
   allowedWriteScopes: [],
   knownGaps: {
@@ -43,7 +42,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@2222222222222222222222222222222222222222
       - uses: third/party@1111111111111111111111111111111111111111
       - run: pnpm test
 `;
@@ -95,6 +94,27 @@ test('an action pinned to a tag fails', () => {
   assert.equal(errors.length, 1);
   assert.match(errors[0], /unpinnedActions/);
   assert.match(errors[0], /third\/party@v3/);
+});
+
+test('a GitHub-owned action pinned to a tag fails, whatever the contract lists', () => {
+  const errors = errorsFor(
+    {
+      'first-party.yml': CLEAN_WORKFLOW.replace(
+        '      - uses: third/party@1111111111111111111111111111111111111111\n',
+        [
+          '      - uses: actions/checkout@v7',
+          '      - uses: github/codeql-action/init@v3',
+          '      - uses: microsoft/setup-msbuild@v2',
+          '',
+        ].join('\n'),
+      ),
+    },
+    { ...EMPTY_CONTRACT, trustedActionPrefixes: ['actions', 'github', 'microsoft'] },
+  );
+  assert.equal(errors.length, 3);
+  assert.match(errors[0], /unpinnedActions: first-party\.yml:build: actions\/checkout@v7/);
+  assert.match(errors[1], /github\/codeql-action\/init@v3/);
+  assert.match(errors[2], /microsoft\/setup-msbuild@v2/);
 });
 
 test('an action pinned to a short sha fails', () => {
@@ -280,7 +300,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@2222222222222222222222222222222222222222
         with:
           ref: \${{ github.event.pull_request.head.sha }}
       - run: pnpm test
@@ -330,10 +350,10 @@ test('an unparseable workflow and a workflow with no jobs both fail', () => {
 });
 
 test('the helpers read what the rules depend on', () => {
-  assert.equal(unpinnedAction('./.github/workflows/reusable.yml', []), null);
-  assert.equal(unpinnedAction('actions/checkout@v7', ['actions']), null);
-  assert.match(unpinnedAction('other/thing@v1', ['actions']), /not to a 40 character commit sha/);
-  assert.match(unpinnedAction('other/thing', ['actions']), /names no version at all/);
+  assert.equal(unpinnedAction('./.github/workflows/reusable.yml'), null);
+  assert.match(unpinnedAction('actions/checkout@v7'), /not to a 40 character commit sha/);
+  assert.match(unpinnedAction('other/thing@v1'), /not to a 40 character commit sha/);
+  assert.match(unpinnedAction('other/thing'), /names no version at all/);
 
   assert.deepEqual(writeScopes({ contents: 'read', packages: 'write' }), ['packages']);
   assert.deepEqual(writeScopes('write-all'), ['write-all']);

@@ -101,7 +101,7 @@ requireIncludes('.github/workflows/ci.yml', 'pnpm audit --audit-level=high');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run lint --affected');
 requireIncludes(
   '.github/workflows/ci.yml',
-  'cargo test -p agiworkforce-model-registry --test auto_route_conformance',
+  'cargo test --locked -p agiworkforce-model-registry --test auto_route_conformance',
 );
 // These gates must run in the blocking workflow. A step of their own satisfies
 // that, and so does ci.yml running the whole check:llm-operability chain, which
@@ -196,13 +196,13 @@ requireIncludes('.github/workflows/ci.yml', 'cargo deny check bans sources licen
 requireIncludes('.github/workflows/ci.yml', 'cargo deny check advisories');
 requireIncludes(
   '.github/workflows/ci.yml',
-  'cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib',
+  'cargo clippy --locked -p agiworkforce-desktop -p agiworkforce-cli --lib',
 );
 requireGatedByCi('bash apps/desktop/check-wiring.sh', 'pnpm check:tauri-wiring');
-requireIncludes('.github/workflows/ci.yml', 'cargo test -p agiworkforce-cli');
+requireIncludes('.github/workflows/ci.yml', 'cargo test --locked -p agiworkforce-cli');
 requireNotIncludes(
   '.github/workflows/ci.yml',
-  'cargo test -p agiworkforce-desktop -p agiworkforce-cli --lib',
+  'cargo test --locked -p agiworkforce-desktop -p agiworkforce-cli --lib',
 );
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/extension test:e2e');
 requireIncludes(
@@ -366,9 +366,9 @@ requireIncludes('.github/workflows/release-cli.yml', 'name: Validate CLI source'
 requireIncludes('.github/workflows/release-cli.yml', 'cargo fmt --all -- --check');
 requireIncludes(
   '.github/workflows/release-cli.yml',
-  'cargo clippy -p agiworkforce-cli --lib -- -D warnings',
+  'cargo clippy --locked -p agiworkforce-cli --lib -- -D warnings',
 );
-requireIncludes('.github/workflows/release-cli.yml', 'cargo test -p agiworkforce-cli');
+requireIncludes('.github/workflows/release-cli.yml', 'cargo test --locked -p agiworkforce-cli');
 requireIncludes(
   '.github/workflows/release-cli.yml',
   'cargo install cross --version 0.2.5 --locked',
@@ -403,7 +403,7 @@ requireIncludes(
   "workspaces: 'apps/desktop/src-tauri -> target'",
 );
 requireIncludes('.github/workflows/release-desktop.yml', 'args: --bundles appimage,deb');
-requireIncludes('.github/workflows/release-desktop.yml', 'includeUpdaterJson: false');
+requireIncludes('.github/workflows/release-desktop.yml', 'uploadUpdaterJson: false');
 requireIncludes('.github/workflows/release-desktop.yml', 'Verify Linux release artifacts');
 requireIncludes('.github/workflows/release-desktop.yml', 'minisign -Vm');
 requireIncludes('.github/workflows/release-desktop.yml', 'dpkg-deb --info');
@@ -734,7 +734,7 @@ requireIncludes(
  * Every native lane is main-only, and nothing said so.
  *
  * `rust-desktop-cli`, `clippy-all-features`, `macos-smoke` and `windows-smoke`
- * all carry `github.ref == 'refs/heads/main'`, so `cargo test` at any scope,
+ * all carry `github.ref == 'refs/heads/main'`, so `cargo test --locked` at any scope,
  * every crate under `crates/*`, and macOS and Windows compilation happen after
  * a merge rather than at review. That is a deliberate, commented cost decision:
  * a full native build is the slowest thing in CI by an order of magnitude, and

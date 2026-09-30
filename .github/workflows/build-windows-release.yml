@@ -30,6 +30,10 @@ jobs:
     timeout-minutes: 90
     env:
       VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN_DESKTOP }}
+      # OCR stays off on Windows (it needs the Tesseract native library).
+      # `remote-databases` is a Windows-only divergence from `default` that neither
+      # macOS nor Linux gets, which is a product decision rather than a build fix.
+      TAURI_CARGO_FEATURE_ARGS: --locked --no-default-features --features shell,updater,billing,vad,remote-databases
     steps:
       - name: Resolve release tag
         id: resolve-tag
@@ -100,7 +104,7 @@ jobs:
           ' >> "$GITHUB_OUTPUT"
 
       - name: Checkout the selected desktop release source
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.resolve-tag.outputs.tag }}
 
@@ -160,7 +164,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -259,11 +263,13 @@ jobs:
         shell: bash
         run: pnpm --filter @agiworkforce/desktop run build:native-host
 
+      - name: Refuse a feature set that bundles the webview inspector
+        shell: bash
+        run: node apps/desktop/scripts/check-no-devtools.mjs --config "${{ steps.windows-signing.outputs.tauri_config }}" -- $TAURI_CARGO_FEATURE_ARGS
+
       - name: Build Tauri Windows app
         # Build locally first. Uploading before Authenticode verification would
         # expose an unsigned installer if certificate discovery regressed.
-        # OCR feature excluded on Windows (requires Tesseract native library).
-        # All other features (shell, updater, billing, devtools, vad, remote-databases) included.
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -277,13 +283,7 @@ jobs:
           CI: 'true'
         with:
           projectPath: apps/desktop
-          # `devtools` enables the webview inspector and is a hard compile_error in a
-          # release build (src-tauri/src/lib.rs). It was shipping in the Windows
-          # installer because the old guard only read the `tauri = ` dependency line
-          # and never saw a --features flag. `remote-databases` is left as-is: it is a
-          # Windows-only divergence from `default` that neither macOS nor Linux gets,
-          # which is a product decision rather than part of this build fix.
-          args: --config "${{ steps.windows-signing.outputs.tauri_config }}" --bundles nsis -- --no-default-features --features shell,updater,billing,vad,remote-databases
+          args: --config "${{ steps.windows-signing.outputs.tauri_config }}" --bundles nsis -- ${{ env.TAURI_CARGO_FEATURE_ARGS }}
 
       - name: Verify Authenticode signatures before publication
         shell: pwsh
@@ -391,7 +391,7 @@ jobs:
 
       - name: Upload artifacts (backup / debugging)
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-x64-installer
           path: |
