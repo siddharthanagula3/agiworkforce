@@ -7,7 +7,6 @@ import {
   setContextPanelInstance,
 } from '../features/trees';
 import { type DiffDecorationProvider } from '../providers/diffDecorationProvider';
-import { WorkspaceIndexer } from '../data/workspaceIndexer';
 import { MemoryTreeProvider } from '../memory/memoryTreeProvider';
 import { AccountMemoryStore, setAccountMemoryStore } from '../memory/accountMemoryStore';
 import { CloudTasksTreeProvider, resolveCloudAgentRunClient } from '../features/cloud-tasks';
@@ -118,9 +117,6 @@ export function setupChat(
     resolveConnectorsClient(context.secrets),
   );
   context.subscriptions.push(connectorsTreeProvider);
-
-  const indexer = new WorkspaceIndexer(context);
-  context.subscriptions.push(...indexer.registerFileWatcher());
 
   return {
     conversationTreeProvider,

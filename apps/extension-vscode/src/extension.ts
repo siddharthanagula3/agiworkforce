@@ -31,6 +31,7 @@ import {
 import { resolveCloudCodeAgentModel } from '@agiworkforce/types';
 import { resolveTierSync } from './integrations/tierResolver';
 import { Config } from './platform/config';
+import { clearGitIgnoreCache } from './data/contextExclusion';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
 import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
@@ -419,7 +420,14 @@ export function activate(context: vscode.ExtensionContext): void {
         syncCodeLensProvider?.();
       }
 
-      if (e.affectsConfiguration('agiWorkforce.editorContext.autoAttach')) {
+      if (
+        e.affectsConfiguration('agiWorkforce.editorContext.autoAttach') ||
+        e.affectsConfiguration('agiWorkforce.respectGitIgnore') ||
+        e.affectsConfiguration('search.useIgnoreFiles') ||
+        e.affectsConfiguration('search.exclude') ||
+        e.affectsConfiguration('files.exclude')
+      ) {
+        clearGitIgnoreCache();
         sidebarProvider?.pushEditorContext();
       }
 

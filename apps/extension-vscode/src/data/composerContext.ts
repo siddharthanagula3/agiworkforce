@@ -2,8 +2,13 @@ import * as vscode from 'vscode';
 import { getContextBuilder } from './contextBuilder';
 import { CONTEXT_ATTACHMENT_KINDS, type ContextAttachmentKind } from '../protocol/webviewMessages';
 import { Config } from '../platform/config';
-import { tPlural } from '../l10n';
+import { t, tPlural } from '../l10n';
 import { MAX_TOTAL_REFERENCE_CHARS } from '../features/chat-participant/promptReferences';
+import {
+  isGitIgnored,
+  settingsWithholdReason,
+  type ContextWithholdReason,
+} from './contextExclusion';
 
 export interface ContextMenuItemState {
   kind: ContextAttachmentKind;
@@ -25,7 +30,7 @@ function selectionRange(editor: vscode.TextEditor): string {
   return from === to ? `${from}` : `${from}-${to}`;
 }
 
-function activeSelection(): { name: string; text: string } | undefined {
+function activeSelection(): { name: string; text: string; filePath: string } | undefined {
   const editor = vscode.window.activeTextEditor;
   if (editor === undefined || editor.selection.isEmpty) return undefined;
   const context = getContextBuilder().getActiveFileContext();
@@ -33,7 +38,27 @@ function activeSelection(): { name: string; text: string } | undefined {
   return {
     name: `${context.relativePath}:${selectionRange(editor)}`,
     text: `Selected from ${context.relativePath} (${context.languageId}), lines ${selectionRange(editor)}:\n${context.selectedText}`,
+    filePath: context.filePath,
   };
+}
+
+async function shareableSelection(): Promise<
+  { name: string; text: string } | { withheld: true } | undefined
+> {
+  const selection = activeSelection();
+  if (selection === undefined) return undefined;
+  if (
+    settingsWithholdReason(selection.filePath) !== undefined ||
+    (await isGitIgnored(selection.filePath))
+  ) {
+    return { withheld: true };
+  }
+  return { name: selection.name, text: selection.text };
+}
+
+function selectionDetail(selection: Awaited<ReturnType<typeof shareableSelection>>): string {
+  if (selection === undefined) return 'Select code in an editor first';
+  return 'withheld' in selection ? 'Text from this file is not sent' : selection.name;
 }
 
 function openFiles(): { name: string; text: string; count: number } {
@@ -137,7 +162,7 @@ async function webPage(): Promise<ContextAttachment | undefined> {
 }
 
 export async function resolveContextMenuState(): Promise<ContextMenuItemState[]> {
-  const selection = activeSelection();
+  const selection = await shareableSelection();
   const editors = openFiles();
   const reported = problems();
   const trusted = vscode.workspace.isTrusted;
@@ -146,8 +171,8 @@ export async function resolveContextMenuState(): Promise<ContextMenuItemState[]>
   const details: Record<ContextAttachmentKind, ContextMenuItemState> = {
     selection: {
       kind: 'selection',
-      available: selection !== undefined,
-      detail: selection === undefined ? 'Select code in an editor first' : selection.name,
+      available: selection !== undefined && !('withheld' in selection),
+      detail: selectionDetail(selection),
     },
     'open-files': {
       kind: 'open-files',
@@ -183,8 +208,10 @@ export async function buildContextAttachment(
   kind: ContextAttachmentKind,
 ): Promise<ContextAttachment | undefined> {
   switch (kind) {
-    case 'selection':
-      return activeSelection();
+    case 'selection': {
+      const selection = await shareableSelection();
+      return selection === undefined || 'withheld' in selection ? undefined : selection;
+    }
     case 'open-files': {
       const editors = openFiles();
       return editors.count === 0 ? undefined : { name: editors.name, text: editors.text };
@@ -212,6 +239,7 @@ export interface EditorContextSnapshot {
   chips: EditorContextChip[];
   contextFiles: string[];
   texts: string[];
+  source?: { filePath: string; relativePath: string };
 }
 
 const EMPTY_EDITOR_CONTEXT: EditorContextSnapshot = { chips: [], contextFiles: [], texts: [] };
@@ -237,13 +265,55 @@ function unsavedBuffer(relativePath: string, languageId: string): string | undef
   return `${state} ${relativePath} (${languageId}), as it is in the editor now:\n${clipped}`;
 }
 
+const WITHHELD_BECAUSE: Record<ContextWithholdReason, string> = {
+  credential: 'matches the credential-file policy',
+  excluded: 'matches the files.exclude or search.exclude setting',
+  gitignored: 'is ignored by git',
+};
+
+function pathOnlyContext(
+  keepFile: boolean,
+  relativePath: string,
+  reason: ContextWithholdReason,
+): EditorContextSnapshot {
+  if (!keepFile) return EMPTY_EDITOR_CONTEXT;
+  return {
+    chips: [
+      {
+        id: editorContextChipId('active-file', relativePath),
+        kind: 'active-file',
+        label: t('composer.pathOnly', { name: basename(relativePath) }),
+      },
+    ],
+    contextFiles: [],
+    texts: [
+      `${relativePath} is open in the editor. Its contents are withheld from this conversation because the file ${WITHHELD_BECAUSE[reason]}.`,
+    ],
+  };
+}
+
+export async function withholdGitIgnoredContext(
+  snapshot: EditorContextSnapshot,
+  ignoredByGit: (filePath: string) => Promise<boolean> = isGitIgnored,
+): Promise<EditorContextSnapshot> {
+  const source = snapshot.source;
+  if (source === undefined || !(await ignoredByGit(source.filePath))) return snapshot;
+  const keepFile = snapshot.chips.some((chip) => chip.kind === 'active-file');
+  return pathOnlyContext(keepFile, source.relativePath, 'gitignored');
+}
+
 export function resolveEditorContext(dismissed: ReadonlySet<string>): EditorContextSnapshot {
   if (!Config.editorContextAutoAttach()) return EMPTY_EDITOR_CONTEXT;
   const context = getContextBuilder().getActiveFileContext();
   if (context === undefined) return EMPTY_EDITOR_CONTEXT;
 
-  const snapshot: EditorContextSnapshot = { chips: [], contextFiles: [], texts: [] };
   const fileId = editorContextChipId('active-file', context.relativePath);
+  const withheld = settingsWithholdReason(context.filePath);
+  if (withheld !== undefined) {
+    return pathOnlyContext(!dismissed.has(fileId), context.relativePath, withheld);
+  }
+
+  const snapshot: EditorContextSnapshot = { chips: [], contextFiles: [], texts: [] };
   if (!dismissed.has(fileId)) {
     snapshot.chips.push({
       id: fileId,
@@ -277,5 +347,8 @@ export function resolveEditorContext(dismissed: ReadonlySet<string>): EditorCont
     snapshot.texts.push(reported.text);
   }
 
+  if (snapshot.contextFiles.length > 0 || snapshot.texts.length > 0) {
+    snapshot.source = { filePath: context.filePath, relativePath: context.relativePath };
+  }
   return snapshot;
 }
