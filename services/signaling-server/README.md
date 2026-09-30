@@ -7,8 +7,9 @@ sessions.
 
 Creating a pairing returns only the initiator's role credential in
 `pairTokens`. Send `initiator` as `desktop` or `mobile`; it defaults to
-`desktop`. A supplied device must have the same role. The other peer obtains
-its credential through the authenticated claim flow.
+`desktop`. A supplied device must have the same role. For a pairing started
+on Desktop, the phone obtains its credential through the authenticated claim
+flow.
 
 The relay's `qrData` contains only the code. Remote-control clients generate
 their own `agiw3` QR secret locally, so the relay never receives the private
