@@ -184,6 +184,7 @@ pub struct ApprovalRequest {
     pub detail: Vec<String>,
     pub proposal: Option<String>,
     pub saves_always_allow: bool,
+    pub tool_subject: Option<(String, serde_json::Value)>,
 }
 
 impl ApprovalRequest {
@@ -195,7 +196,13 @@ impl ApprovalRequest {
             detail,
             proposal: None,
             saves_always_allow: false,
+            tool_subject: None,
         }
+    }
+
+    pub fn with_tool_subject(mut self, name: impl Into<String>, args: serde_json::Value) -> Self {
+        self.tool_subject = Some((name.into(), args));
+        self
     }
 
     pub fn with_proposal(mut self, content: impl Into<String>) -> Self {
