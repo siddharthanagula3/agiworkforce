@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 
 import * as db from '../../src/db.js';
 import type { SignalingSession } from '../../src/db.js';
+import { pairingDeviceId, pairingDeviceIds } from '../../src/pairing-device.js';
 import { freePort } from '../websocket/harness.js';
 
 export const INTERNAL_SECRET = 'in-process-internal-secret';
@@ -43,6 +44,24 @@ export class FakeStore {
     vi.mocked(db.deleteSessionByCode).mockImplementation((code) => {
       this.rows.delete(code);
       return this.answer({ error: null });
+    });
+    vi.mocked(db.bindSessionDevice).mockImplementation((code, role, deviceId, metadata) => {
+      const row = this.rows.get(code);
+      const heldBy = pairingDeviceId(row?.metadata, role);
+      if (!row || (heldBy !== null && heldBy !== deviceId)) {
+        return this.answer({ data: null, error: null });
+      }
+      row.metadata = clone(metadata);
+      return this.answer({ data: { code }, error: null });
+    });
+    vi.mocked(db.deleteSessionsForDevice).mockImplementation((deviceId) => {
+      const removed: string[] = [];
+      for (const [code, row] of this.rows) {
+        if (!pairingDeviceIds(row.metadata).includes(deviceId)) continue;
+        this.rows.delete(code);
+        removed.push(code);
+      }
+      return this.answer({ data: removed, error: null });
     });
     vi.mocked(db.extendSessionExpiry).mockImplementation((code, expiresAt) => {
       const row = this.rows.get(code);

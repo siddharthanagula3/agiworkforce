@@ -1,7 +1,12 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import * as db from '../../src/db.js';
+import { connectionManager } from '../../src/connection-manager.js';
+import type { Socket } from 'node:net';
+import { withPairingDevice } from '../../src/pairing-device.js';
 
 import {
   FakeStore,
+  INTERNAL_SECRET,
   RelayClient,
   createPairing,
   startInProcessRelay,
@@ -20,6 +25,7 @@ beforeAll(async () => {
 afterEach(() => {
   store.failing = false;
   store.stalled = false;
+  store.install();
 });
 
 async function pairing(): Promise<{ code: string; desktopToken: string }> {
@@ -28,6 +34,125 @@ async function pairing(): Promise<{ code: string; desktopToken: string }> {
   const tokens = created.json['pairTokens'] as { desktop: string };
   return { code: String(created.json['code']), desktopToken: tokens.desktop };
 }
+
+async function pendingRegistration(code: string, desktopToken: string) {
+  const row = structuredClone(store.rows.get(code));
+  let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const pending = new Promise<Awaited<ReturnType<typeof db.getSessionByCode>>>((resolve) => {
+    release = () => resolve({ data: row ?? null, error: null });
+  });
+  vi.mocked(db.getSessionByCode).mockImplementationOnce(() => {
+    entered();
+    return pending;
+  });
+  const client = await RelayClient.connect(relay.ws);
+  client.send({ type: 'register', code, role: 'desktop', pairToken: desktopToken });
+  await started;
+  return { client, release };
+}
+
+describe('registration races with pairing lifecycle', () => {
+  it('cannot restore a pre-binding snapshot after the device is revoked', async () => {
+    const { code, desktopToken } = await pairing();
+    const { client, release } = await pendingRegistration(code, desktopToken);
+    const deviceId = '8f76b26b-367b-4d50-8c74-6a53ee221aac';
+    const row = store.rows.get(code);
+    expect(row).toBeDefined();
+    const bound = await db.bindSessionDevice(
+      code,
+      'mobile',
+      deviceId,
+      withPairingDevice(row?.metadata, 'mobile', deviceId),
+    );
+    expect(bound.data).toEqual({ code });
+    const revoked = await fetch(`${relay.http}/devices/${deviceId}/revoke`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${INTERNAL_SECRET}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'unlinked_by_owner' }),
+    });
+    expect(revoked.status).toBe(200);
+    expect(store.rows.has(code)).toBe(false);
+    release();
+    try {
+      expect(await client.frame('error')).toEqual({ type: 'error', error: 'pairing_not_found' });
+      expect(client.frames.some((frame) => frame['type'] === 'registered')).toBe(false);
+    } finally {
+      client.close();
+      connectionManager.reinstateDevice(deviceId);
+    }
+  });
+  it('accepts only the first registration while its lookup is pending', async () => {
+    const first = await pairing();
+    const second = await pairing();
+    const { client, release } = await pendingRegistration(first.code, first.desktopToken);
+    client.send({
+      type: 'register',
+      code: second.code,
+      role: 'desktop',
+      pairToken: second.desktopToken,
+    });
+    await Promise.race([client.frame('registered'), client.frame('error')]);
+    release();
+    try {
+      expect(await client.frame('registered')).toMatchObject({ code: first.code });
+      expect(client.frames.filter((frame) => frame['type'] === 'registered')).toHaveLength(1);
+      expect(await client.frame('error')).toEqual({
+        type: 'error',
+        error: 'registration_in_progress',
+      });
+    } finally {
+      client.close();
+    }
+  });
+
+  it('cannot resurrect a pairing deleted while its lookup was pending', async () => {
+    const { code, desktopToken } = await pairing();
+    const { client, release } = await pendingRegistration(code, desktopToken);
+    const deletion = await fetch(`${relay.http}/pairings/${code}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${INTERNAL_SECRET}` },
+    });
+    expect(deletion.status).toBe(200);
+    release();
+    try {
+      expect(await client.frame('error')).toEqual({ type: 'error', error: 'pairing_not_found' });
+      expect(client.frames.some((frame) => frame['type'] === 'registered')).toBe(false);
+    } finally {
+      client.close();
+    }
+  });
+
+  it('does not reserve a role for a socket closed during its lookup', async () => {
+    const { code, desktopToken } = await pairing();
+    const added = vi.spyOn(connectionManager, 'addConnection');
+    const { client, release } = await pendingRegistration(code, desktopToken);
+    const port = (client.socket as unknown as { _socket: Socket })._socket.localPort;
+    const serverSocket = added.mock.calls.find(
+      ([socket]) => (socket as unknown as { _socket: Socket })._socket.remotePort === port,
+    )?.[0];
+    expect(serverSocket).toBeDefined();
+    added.mockRestore();
+    const removed = vi.spyOn(connectionManager, 'removeConnection');
+    client.close();
+    await client.closure();
+    await vi.waitFor(() =>
+      expect(removed.mock.calls.some(([socket]) => socket === serverSocket)).toBe(true),
+    );
+    removed.mockRestore();
+    release();
+    const replacement = await RelayClient.connect(relay.ws);
+    replacement.send({ type: 'register', code, role: 'desktop', pairToken: desktopToken });
+    try {
+      expect(await replacement.frame('registered')).toMatchObject({ code, role: 'desktop' });
+    } finally {
+      replacement.close();
+    }
+  });
+});
 
 describe('registration while the pairing store is unavailable', () => {
   it('refuses retryably instead of calling a live pairing missing', async () => {
