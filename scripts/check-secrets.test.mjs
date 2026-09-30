@@ -327,3 +327,188 @@ test('an unmistakably fake key for the new formats is still allowed', async (t) 
     clean(`const k = '${shape('ak', '-', '000000000000000000')}';`),
   );
 });
+
+const HISTORY_A = 'a'.repeat(40);
+const HISTORY_B = 'b'.repeat(40);
+
+function historyRecord(sha, type, body) {
+  const bytes = Buffer.from(body);
+  return Buffer.concat([Buffer.from(`${sha} ${type} ${bytes.length}\n`), bytes, Buffer.from('\n')]);
+}
+
+function scanWithGitOutput({ failure = null, inventory, batch }, history = true) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'secret-git-read-'));
+  try {
+    const bin = path.join(dir, 'bin');
+    fs.mkdirSync(bin);
+    const calls = path.join(dir, 'calls.jsonl');
+    const config = {
+      failure,
+      inventory,
+      batch: Buffer.from(batch ?? '').toString('base64'),
+      calls,
+    };
+    const executable = String.raw`#!${process.execPath}
+const fs = require('node:fs');
+const config = ${JSON.stringify(config)};
+const args = process.argv.slice(2);
+fs.appendFileSync(config.calls, JSON.stringify(args) + '\n');
+if (args[0] === config.failure) {
+  process.stderr.write('sensitive-subprocess-stderr');
+  process.exit(2);
+}
+if (args[0] === 'rev-list') process.stdout.write(config.inventory ?? '');
+if (args[0] === 'cat-file') {
+  const input = fs.readFileSync(0, 'utf8');
+  fs.appendFileSync(config.calls, JSON.stringify({ input }) + '\n');
+  process.stdout.write(Buffer.from(config.batch, 'base64'));
+}
+`;
+    fs.writeFileSync(path.join(bin, 'git'), executable, { mode: 0o700 });
+    const run = spawnSync(process.execPath, [SCANNER, ...(history ? ['--history'] : [])], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ''}` },
+    });
+    return {
+      status: run.status,
+      output: `${run.stdout}${run.stderr}`,
+      calls: fs.readFileSync(calls, 'utf8'),
+    };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const fakeGitOptions = { skip: process.platform === 'win32' };
+
+for (const failure of ['ls-files', 'rev-list', 'cat-file']) {
+  test(`Git ${failure} failure cannot report a clean scan`, fakeGitOptions, () => {
+    const result = scanWithGitOutput({
+      failure,
+      inventory: `${HISTORY_A} src/read.ts\n`,
+      batch: historyRecord(HISTORY_A, 'blob', 'clean'),
+    });
+    assert.equal(result.status, 1, 'unread Git input must fail the scan');
+    assert.match(result.output, /Secret scan FAILED/);
+    assert.doesNotMatch(result.output, /Secret scan passed|sensitive-subprocess-stderr/);
+    assert.ok(result.calls.includes(failure), 'the fixture must reach the failed Git operation');
+  });
+}
+
+const invalidHistory = [
+  ['missing object', Buffer.from(`${HISTORY_A} missing\n`)],
+  ['empty response', Buffer.alloc(0)],
+  ['truncated header', Buffer.from(`${HISTORY_A} blob 4`)],
+  ['truncated body', Buffer.from(`${HISTORY_A} blob 10\nshort\n`)],
+  ['missing separator', Buffer.from(`${HISTORY_A} blob 4\nbody`)],
+  ['wrong object', historyRecord(HISTORY_B, 'blob', 'body')],
+  [
+    'extra object',
+    Buffer.concat([
+      historyRecord(HISTORY_A, 'blob', 'body'),
+      historyRecord(HISTORY_B, 'blob', 'body'),
+    ]),
+  ],
+  ['invalid size', Buffer.from(`${HISTORY_A} blob NaN\nbody\n`)],
+];
+for (const [name, batch] of invalidHistory) {
+  test(`history ${name} cannot report a clean scan`, fakeGitOptions, () => {
+    const result = scanWithGitOutput({ inventory: `${HISTORY_A} src/read.ts\n`, batch });
+    assert.equal(result.status, 1, 'incomplete or invalid content must fail the scan');
+    assert.match(result.output, /Secret scan FAILED/);
+    assert.doesNotMatch(result.output, /Secret scan passed/);
+    assert.ok(
+      result.calls.includes(JSON.stringify({ input: `${HISTORY_A}\n` })),
+      'cat-file must receive the enumerated object',
+    );
+  });
+}
+
+test('a malformed history inventory cannot report a clean scan', fakeGitOptions, () => {
+  const result = scanWithGitOutput({ inventory: 'not-an-object src/read.ts\n' });
+  assert.equal(result.status, 1);
+  assert.match(result.output, /Secret scan FAILED/);
+});
+
+test('tree payloads cannot hide the next blob', fakeGitOptions, () => {
+  const body = shape('-----BEGIN RSA ', 'PRIVATE KEY-----');
+  const result = scanWithGitOutput({
+    inventory: `${HISTORY_A} src\n${HISTORY_B} src/read.ts\n`,
+    batch: Buffer.concat([
+      historyRecord(
+        HISTORY_A,
+        'tree',
+        Buffer.concat([
+          Buffer.from('100644 name\nembedded blob 9999999\nentry\0'),
+          Buffer.alloc(20, 1),
+        ]),
+      ),
+      historyRecord(HISTORY_B, 'blob', body),
+    ]),
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.output, /src\/read.ts.*PEM private key/);
+  assert.ok(!result.output.includes(body), 'findings must not contain credential material');
+});
+
+test(
+  'a complete clean history response passes and proves a blob was inspected',
+  fakeGitOptions,
+  () => {
+    const result = scanWithGitOutput({
+      inventory: `${HISTORY_A} src/read.ts\n`,
+      batch: historyRecord(HISTORY_A, 'blob', 'clean'),
+    });
+    assert.equal(result.status, 0);
+    assert.match(result.output, /1 history blobs/);
+  },
+);
+
+test(
+  'oversized excluded history still requires complete framing and reports its count',
+  fakeGitOptions,
+  () => {
+    const body = Buffer.alloc(2 * 1024 * 1024 + 1, 0x61);
+    const complete = historyRecord(HISTORY_A, 'blob', body);
+    const input = { inventory: `${HISTORY_A} src/large.ts\n`, batch: complete };
+    const result = scanWithGitOutput(input);
+    assert.equal(result.status, 0);
+    assert.match(result.output, /1 oversized history blobs excluded/);
+    const truncated = scanWithGitOutput({
+      ...input,
+      batch: complete.subarray(0, complete.length - 1),
+    });
+    assert.equal(truncated.status, 1);
+  },
+);
+
+test('oversized excluded working-tree files are counted explicitly', () => {
+  const result = scan({ 'src/large.ts': 'a'.repeat(2 * 1024 * 1024 + 1) });
+  assert.equal(result.status, 0);
+  assert.match(result.output, /1 oversized working-tree files excluded/);
+});
+
+test('finding reports contain the type and path without a credential prefix', () => {
+  const result = scan({ 'src/config.ts': STRIPE });
+  assert.equal(result.status, 1);
+  assert.match(result.output, /src\/config.ts.*Stripe live key/);
+  assert.ok(
+    !result.output.includes(STRIPE.slice(0, 12)),
+    'credential prefixes must not be printed',
+  );
+});
+
+test(
+  'a batch cannot omit the last requested object after returning valid earlier content',
+  fakeGitOptions,
+  () => {
+    const result = scanWithGitOutput({
+      inventory: `${HISTORY_A} src/first.ts\n${HISTORY_B} src/second.ts\n`,
+      batch: historyRecord(HISTORY_A, 'blob', 'clean'),
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.output, /Secret scan FAILED/);
+    assert.ok(result.calls.includes(JSON.stringify({ input: `${HISTORY_A}\n${HISTORY_B}\n` })));
+  },
+);
