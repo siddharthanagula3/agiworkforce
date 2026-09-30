@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+const { auditSpy } = vi.hoisted(() => ({
+  auditSpy: vi.fn(async (_event: Record<string, unknown>) => undefined),
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  recordAuditEvent: auditSpy,
+}));
 import { ChatCodeRunResponseSchema } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
 
@@ -164,6 +172,44 @@ describe('POST /api/chat/conversations/[id]/code-runs', () => {
       expect.objectContaining({ language: 'python', code: 'print(1)' }),
     );
     expect(mocks.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('records the rerun as a tool execution by name, never the code or its output', async () => {
+    const response = await POST(
+      request({ language: 'python', code: 'print("payroll-secret")' }),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(auditSpy).toHaveBeenCalledTimes(1);
+    const event = auditSpy.mock.calls[0]![0];
+    expect(event).toMatchObject({
+      userId: 'user-1',
+      eventType: 'tool_executed',
+      outcome: 'success',
+    });
+    expect(event['detail']).toEqual({
+      resourceType: 'tool',
+      resourceId: 'execute_code',
+      source: 'code-execution',
+      status: 'completed',
+      conversationId: CONVERSATION_ID,
+      durationMs: expect.any(Number),
+    });
+    expect(JSON.stringify(event)).not.toMatch(/payroll-secret|iVBORw0KGgo/);
+  });
+
+  it('records a failed rerun as a failed tool execution', async () => {
+    mocks.runCode.mockResolvedValue({ ok: false, output: '', error: 'NameError' });
+
+    await POST(request(), context);
+
+    expect(auditSpy.mock.calls[0]![0]).toMatchObject({
+      eventType: 'tool_executed',
+      outcome: 'failure',
+      detail: expect.objectContaining({ status: 'failed' }),
+    });
+    expect(JSON.stringify(auditSpy.mock.calls[0]![0])).not.toContain('NameError');
   });
 
   it('answers 404 for a conversation the caller does not own', async () => {

@@ -151,6 +151,7 @@ const OPERATIONAL_RECORD = [
   'event_triggers',
   'feature_flags',
   'free_daily_usage_reservations',
+  'github_install_authorizations',
   'github_installations',
   'identities',
   'legal_holds',
