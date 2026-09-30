@@ -27,6 +27,8 @@ const COMMANDS = new Set([
   'deployments',
 ]);
 const TARGETS = new Set(MIGRATION_TARGETS);
+const LOCKING_COMMANDS = new Set(['apply', 'baseline']);
+const POOLED_ENDPOINT = /^([^.]+)-pooler\./iu;
 
 export function parseCliArgs(argv) {
   const options = {
@@ -81,8 +83,20 @@ export function parseCliArgs(argv) {
   return options;
 }
 
-function databaseUrl(env) {
-  return env.AGI_DATABASE_URL ?? env.DATABASE_URL ?? env.NEON_DATABASE_URL;
+export function migrationConnectionString(env, command) {
+  const connectionString = env.AGI_DATABASE_URL ?? env.DATABASE_URL ?? env.NEON_DATABASE_URL;
+  if (!connectionString || !LOCKING_COMMANDS.has(command)) return connectionString;
+  const { hostname } = new URL(connectionString);
+  if (!POOLED_ENDPOINT.test(hostname)) return connectionString;
+  const direct = hostname.replace(POOLED_ENDPOINT, '$1.');
+  const pooledHost = new RegExp(`(?<=[@/])${hostname.replaceAll('.', '\\.')}(?=[:/?#]|$)`, 'iu');
+  const directString = connectionString.replace(pooledHost, direct);
+  if (new URL(directString).hostname !== direct) {
+    throw new MigrationContractError(
+      `${command} could not derive the direct endpoint from the -pooler connection string`,
+    );
+  }
+  return directString;
 }
 
 function inferLocalTarget(connectionString) {
@@ -118,6 +132,8 @@ function printHelp() {
     --target branch|production --confirm-baseline [--confirm-production]
 
 Connection precedence: AGI_DATABASE_URL, DATABASE_URL, NEON_DATABASE_URL.
+apply and baseline hold a session advisory lock, which a Neon -pooler endpoint
+cannot keep, so they connect to the matching direct endpoint instead.
 The runner reads process.env only and never prints the connection string.`);
 }
 
@@ -191,7 +207,7 @@ async function execute(argv = process.argv.slice(2), env = process.env) {
     return;
   }
 
-  const connectionString = databaseUrl(env);
+  const connectionString = migrationConnectionString(env, options.command);
   if (!connectionString) {
     throw new MigrationContractError(
       'AGI_DATABASE_URL, DATABASE_URL, or NEON_DATABASE_URL must be exported',

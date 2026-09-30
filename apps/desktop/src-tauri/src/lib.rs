@@ -5,11 +5,13 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
-// A shipped build must not carry the webview inspector. The shell-script guard
-// only ever inspected the `tauri = ` dependency line, so a `--features devtools`
-// flag on the bundler command line passed it unseen and shipped an inspectable
-// installer. This fires in the compiler instead, where no build argument can
-// route around it; debug builds (`tauri dev`, `cargo clippy`) are unaffected.
+// A shipped build must not carry the webview inspector. This fires only for this
+// crate's own `devtools` feature. `devtools` in the tauri dependency's feature
+// list, `tauri/devtools` reached from another feature, Tauri config features and
+// any build with debug assertions all bypass it, so
+// apps/desktop/scripts/check-no-devtools.mjs checks those before every release
+// bundle and scripts/check-release-gates.mjs fails a workflow that skips it.
+// Debug builds (`tauri dev`, `cargo clippy`) are unaffected.
 #[cfg(all(feature = "devtools", not(debug_assertions)))]
 compile_error!(
     "the `devtools` feature enables the webview inspector and must not be enabled in a release build; drop it from the bundler's --features list"

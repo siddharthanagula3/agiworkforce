@@ -17,13 +17,6 @@
   ],
   "entries": [
     {
-      "rule": "yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag",
-      "paths": [".github/workflows/"],
-      "owner": "@siddhartha",
-      "expires": "2027-08-31",
-      "reason": "Flags every actions/* reference by tag. scripts/check-action-pins.sh SHA-pins every THIRD-PARTY action and deliberately exempts GitHub's own first-party actions, which is a stricter policy than this rule and is itself enforced by check:ci-guardrails and .github/workflows/actions-pinned-check.yml."
-    },
-    {
       "rule": "yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout",
       "paths": [
         ".github/workflows/deploy-production.yml",

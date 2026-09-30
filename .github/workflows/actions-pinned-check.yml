@@ -1,23 +1,23 @@
 name: Actions pinned-SHA check
 
-# C3 (services red team 2026-05-04): Every third-party GitHub Action must
-# be pinned by full 40-char commit SHA, not a floating tag like @v1 / @main.
-# A compromise of an action's repo could otherwise leak every CI secret
-# (TAURI_SIGNING_PRIVATE_KEY, SUPABASE_SERVICE_ROLE_KEY, APPLE_*, NPM_TOKEN,
-# FLY_API_TOKEN, RAILWAY_TOKEN, …).
+# C3 (services red team 2026-05-04): Every GitHub Action, actions/* and
+# github/* included, must be pinned by full 40-char commit SHA, not a floating
+# tag like @v1 / @main. A compromise of an action's repo could otherwise leak
+# every CI secret (TAURI_SIGNING_PRIVATE_KEY, SUPABASE_SERVICE_ROLE_KEY,
+# APPLE_*, NPM_TOKEN, FLY_API_TOKEN, RAILWAY_TOKEN, …).
 #
-# Allowlist for unpinned uses: actions/*, github/*, microsoft/*, and any
-# `uses: ./...` reusable workflow in this repo. Other external actions must use
-# a full commit SHA.
+# Only a `uses: ./...` reference into this repository is exempt.
 
 on:
   pull_request:
     paths:
       - '.github/workflows/**'
+      - 'scripts/check-action-pins.sh'
   push:
     branches: [main]
     paths:
       - '.github/workflows/**'
+      - 'scripts/check-action-pins.sh'
 
 jobs:
   check:
@@ -26,8 +26,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Scan for invalid external action pins
+      - name: Scan for invalid action pins
         shell: bash
         run: VERIFY_ACTION_PIN_OBJECTS=1 bash scripts/check-action-pins.sh

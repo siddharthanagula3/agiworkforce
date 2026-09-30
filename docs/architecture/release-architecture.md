@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-20
+Last updated: 2026-09-29
 
 What is deployable, in what order, from what artifact, with what credential, and
 what happens when a release is wrong. The policy behind the web gate is
@@ -146,8 +146,8 @@ the workflow that needs it:
 | Incident paging | `PAGER_WEBHOOK_URL`                                                                                     |
 
 `scripts/check-action-pins.sh`, run by `.github/workflows/actions-pinned-check.yml`,
-hold third-party actions to a pinned SHA, so a release credential is never handed
-to a tag someone else can move.
+holds every action, GitHub's own included, to a full commit SHA, so a release
+credential is never handed to a tag someone else can move.
 
 ## 8. Emergency and hotfix paths
 

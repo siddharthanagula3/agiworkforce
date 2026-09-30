@@ -6,7 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { collectFacts, collectReadmeFactErrors } from './check-readme-facts.mjs';
+import {
+  collectArchitectureCrateErrors,
+  collectFacts,
+  collectReadmeFactErrors,
+} from './check-readme-facts.mjs';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GUARD = join(REPO_ROOT, 'scripts', 'check-readme-facts.mjs');
@@ -39,9 +43,17 @@ git clone https://github.com/fixture-owner/fixture-repo.git
 Done.
 `;
 
-function sandboxFiles(readme) {
+const SANDBOX_ARCHITECTURE = `# Fixture architecture
+
+\`crates/\` mirrors this for Rust: \`fixture-crate\` is the only crate.
+
+## Next
+`;
+
+function sandboxFiles(readme, architecture = SANDBOX_ARCHITECTURE) {
   return {
     'README.md': readme,
+    'ARCHITECTURE.md': architecture,
     'package.json': JSON.stringify({
       repository: { url: 'https://github.com/fixture-owner/fixture-repo.git' },
     }),
@@ -54,10 +66,10 @@ function sandboxFiles(readme) {
   };
 }
 
-function runOnSandbox(readme) {
+function runOnSandbox(readme, architecture) {
   const sandbox = mkdtempSync(join(tmpdir(), 'docs05-'));
   try {
-    for (const [rel, contents] of Object.entries(sandboxFiles(readme))) {
+    for (const [rel, contents] of Object.entries(sandboxFiles(readme, architecture))) {
       const abs = join(sandbox, rel);
       mkdirSync(join(abs, '..'), { recursive: true });
       writeFileSync(abs, contents, 'utf8');
@@ -176,4 +188,40 @@ test('a catalog provider with no README label is reported instead of skipped', (
     versions: {},
   });
   assert.ok(errors.some((error) => /brand_new_provider has no README label/.test(error)));
+});
+
+test('the real ARCHITECTURE.md crate map names every crate under crates/', () => {
+  const { crates } = collectFacts(REPO_ROOT);
+  assert.ok(crates.length > 0);
+  assert.deepEqual(
+    collectArchitectureCrateErrors(
+      readFileSync(join(REPO_ROOT, 'ARCHITECTURE.md'), 'utf8'),
+      crates,
+    ),
+    [],
+  );
+});
+
+test('a crate the ARCHITECTURE.md crate map leaves out fails the guard', () => {
+  const result = runOnSandbox(
+    SANDBOX_README,
+    SANDBOX_ARCHITECTURE.replace('`fixture-crate` is the only crate', 'one crate lives here'),
+  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /ARCHITECTURE\.md does not name the crate fixture-crate/);
+});
+
+test('the crate map may name a crate without its agiworkforce- prefix, and must exist', () => {
+  const map = '`crates/` mirrors this for Rust: `agiworkforce-protocol` and `llm`.\n';
+  assert.deepEqual(
+    collectArchitectureCrateErrors(map, ['agiworkforce-protocol', 'agiworkforce-llm']),
+    [],
+  );
+  assert.deepEqual(collectArchitectureCrateErrors(map, ['agiworkforce-utils-image']), [
+    'ARCHITECTURE.md does not name the crate agiworkforce-utils-image in its crate map.',
+  ]);
+  assert.match(
+    collectArchitectureCrateErrors('# no crate map\n', ['agiworkforce-llm'])[0],
+    /no longer has its "`crates\/` mirrors this for Rust" paragraph/,
+  );
 });
