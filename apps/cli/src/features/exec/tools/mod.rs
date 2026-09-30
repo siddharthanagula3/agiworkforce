@@ -501,6 +501,38 @@ async fn file_mutation_targets(
 }
 
 pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
+    let permissions = crate::permissions::PermissionStore::load()?;
+    execute_tool_with_opts_and_permissions(call, opts, &permissions).await
+}
+
+fn saved_permission_commands(tool_name: &str, args: &HashMap<String, String>) -> Vec<String> {
+    match tool_name {
+        "run_command" => args.get("command").cloned().into_iter().collect(),
+        "powershell" => args
+            .get("command")
+            .map(|command| {
+                vec![
+                    command.clone(),
+                    format!("powershell -NoProfile -NonInteractive -Command {command}"),
+                ]
+            })
+            .unwrap_or_default(),
+        "command_output" => Vec::new(),
+        "enter_worktree" | "exit_worktree" => git::worktree_permission_command(tool_name, args)
+            .into_iter()
+            .collect(),
+        _ if crate::runtime::git_tools::git_tool_spec(tool_name).is_some() => {
+            vec![crate::runtime::git_tools::git_tool_target(tool_name, args)]
+        }
+        _ => Vec::new(),
+    }
+}
+
+async fn execute_tool_with_opts_and_permissions(
+    call: &ToolCall,
+    opts: &ToolExecOptions,
+    permissions: &crate::permissions::PermissionStore,
+) -> Result<ToolResult> {
     let canonical_name = canonical_tool_name(&call.name);
     let mut scoped_call = call.clone();
     if matches!(
@@ -537,12 +569,58 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         });
     }
 
+    let pending_input = if canonical_name == "command_output" {
+        match (
+            call.args.get("input").filter(|input| !input.is_empty()),
+            call.args
+                .get("id")
+                .and_then(|id| crate::terminals::find(id.trim())),
+        ) {
+            (Some(input), Some(command))
+                if command.state() == crate::terminals::CommandState::Running =>
+            {
+                match crate::terminals::prepare_input(command, input).await {
+                    Ok(input) => Some(input),
+                    Err(error) => {
+                        return Ok(ToolResult {
+                            tool_name: canonical_name.into(),
+                            success: false,
+                            output: error.to_string(),
+                        })
+                    }
+                }
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
+
     let pre_approved = (opts.auto_approve_safe
         && is_catalog_read_only_tool(canonical_name)
         && !crate::platform::runtime::tool_catalog::reads_a_private_surface(canonical_name))
         || (opts.auto_approve_edits
             && crate::platform::runtime::tool_catalog::is_file_edit_tool(canonical_name));
     let mut require_confirm = opts.require_confirmation && !pre_approved;
+    let permission_commands = pending_input
+        .as_ref()
+        .map(|input| vec![input.cumulative_input().to_string()])
+        .unwrap_or_else(|| saved_permission_commands(canonical_name, &call.args));
+    if opts.require_confirmation
+        && permission_commands.iter().any(|command| {
+            if canonical_name == "powershell" {
+                permissions.denies_powershell_command(command)
+            } else {
+                permissions.check_command(command) == Some(false)
+            }
+        })
+    {
+        return Ok(ToolResult {
+            tool_name: canonical_name.into(),
+            success: false,
+            output: "Command is denied by saved permissions and did not run.".into(),
+        });
+    }
     // Set when the user approved this exact call under the policy prompt, so the
     // trust gate below does not ask a second time for one command.
     let mut approved_this_call = false;
@@ -583,17 +661,24 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
                     require_confirm = false;
                 }
                 crate::platform::policy::PolicyDecision::Ask => {
+                    let approval_argument = if canonical_name == "command_output" {
+                        call.args.get("id").cloned().unwrap_or_default()
+                    } else {
+                        primary_argument.clone()
+                    };
                     let request = ApprovalRequest::new(
                         ApprovalRequestKind::WorkspacePolicy {
                             tool_name: canonical_name.to_string(),
-                            primary_argument: primary_argument.clone(),
+                            primary_argument: approval_argument.clone(),
                         },
                         format!("Workspace policy requires approval for `{canonical_name}`"),
                         vec![
                             format!("workspace: {}", workspace_root.display()),
-                            format!("argument: {primary_argument}"),
+                            format!("argument: {approval_argument}"),
                         ],
-                    );
+                    )
+                    .with_tool_subject(canonical_name, serde_json::to_value(&call.args)?)
+                    .requiring_explicit_decision();
                     let allowed = if let Some(decision) =
                         request_approval(opts.approval_callback.as_ref(), request).await
                     {
@@ -624,6 +709,65 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
                 }
             }
         }
+    }
+
+    if opts.require_confirmation
+        && !approved_this_call
+        && (pending_input.is_some()
+            || permission_commands.iter().any(|command| {
+                if canonical_name == "powershell" {
+                    permissions.asks_before_powershell(command)
+                } else {
+                    permissions.asks_before(command)
+                }
+            }))
+    {
+        let summary = if pending_input.is_some() {
+            "Allow sending input to this running command?".into()
+        } else {
+            format!("Saved permissions require approval for `{canonical_name}`")
+        };
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: if pending_input.is_some() {
+                    format!(
+                        "Input to {}",
+                        call.args.get("id").map(String::as_str).unwrap_or("command")
+                    )
+                } else {
+                    permission_commands.join("\n")
+                },
+            },
+            summary.clone(),
+            if pending_input.is_some() {
+                vec!["Send the input in this tool call to the running command".into()]
+            } else {
+                permission_commands
+                    .iter()
+                    .map(|command| describe_command(command))
+                    .collect()
+            },
+        )
+        .with_tool_subject(canonical_name, serde_json::to_value(&call.args)?)
+        .requiring_explicit_decision();
+        let allowed = match request_approval(opts.approval_callback.as_ref(), request).await {
+            Some(decision) => approval_allows(decision),
+            None if !std::io::stdin().is_terminal() => false,
+            None => Confirm::new()
+                .with_prompt(summary)
+                .default(false)
+                .interact()
+                .unwrap_or(false),
+        };
+        if !allowed {
+            return Ok(ToolResult {
+                tool_name: canonical_name.into(),
+                success: false,
+                output: "Command was not approved under its saved Ask rule and did not run.".into(),
+            });
+        }
+        require_confirm = false;
+        approved_this_call = true;
     }
 
     if let Some(workspace_root) = opts.workspace_root.as_deref() {
@@ -838,8 +982,14 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             execute_run_command(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
         "command_output" => {
-            execute_command_output(&call.args, require_confirm, opts.approval_callback.as_ref())
-                .await
+            execute_command_output(
+                &call.args,
+                pending_input,
+                require_confirm,
+                approved_this_call,
+                opts.approval_callback.as_ref(),
+            )
+            .await
         }
         "command_stop" => execute_command_stop(&call.args).await,
         // read_file / search_files / list_directory / glob / grep_files are
@@ -1635,6 +1785,13 @@ fn approval_request_tool(kind: &ApprovalRequestKind) -> (&'static str, serde_jso
 }
 
 fn approval_audit_subject(request: &ApprovalRequest) -> (String, serde_json::Value) {
+    if approval_subject(request).0 == "command_output" {
+        return (
+            "command_output".into(),
+            serde_json::json!({ "id": request.tool_subject.as_ref().and_then(|(_, args)| args.get("id")) }),
+        );
+    }
+
     let (fallback_name, targets) = approval_request_tool(&request.kind);
     let name = request
         .tool_subject
@@ -2966,6 +3123,158 @@ decision = "ask"
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    async fn saved_command_asks_cannot_be_waived_by_automatic_or_saved_allows() {
+        if std::env::var_os("AGI_SAVED_ASK_REGRESSION_CHILD").is_none() {
+            let config = tempfile::tempdir().unwrap();
+            let output = tokio::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "features::exec::tools::tests::saved_command_asks_cannot_be_waived_by_automatic_or_saved_allows", "--test-threads=1"])
+                .env("AGIWORKFORCE_HOME", config.path())
+                .env("AGI_SAVED_ASK_REGRESSION_CHILD", "1")
+                .output().await.unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let workspace = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(workspace.path().join(".agiworkforce")).unwrap();
+        std::fs::write(
+            workspace.path().join(".agiworkforce/policy.toml"),
+            ["run_command", "powershell", "git_status"]
+                .map(|tool| format!("[[rules]]\ntool = \"{tool}\"\ndecision = \"allow\"\n"))
+                .join("\n"),
+        )
+        .unwrap();
+        assert!(crate::trust::grant(workspace.path())
+            .unwrap()
+            .state
+            .is_trusted());
+        let mut failures = Vec::new();
+        for (tool, command, rule) in [
+            ("run_command", "printf saved-ask-must-stop", "printf"),
+            ("powershell", "Get-Date", "Get-Date"),
+            ("powershell", "get-date", "Get-Date"),
+            ("git_status", "", "git status"),
+        ] {
+            let mut permissions = crate::permissions::PermissionStore::default();
+            permissions.ask_always(rule);
+            permissions.allow_always(rule);
+            permissions.allow_always("powershell");
+            let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+            let opts = ToolExecOptions {
+                require_confirmation: true,
+                auto_approve_safe: true,
+                auto_approve_edits: true,
+                quiet: true,
+                approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Byok,
+                workspace_root: Some(workspace.path().to_path_buf()),
+                mcp_tool_definitions: None,
+            };
+            let result = execute_tool_with_opts_and_permissions(
+                &ToolCall {
+                    name: tool.into(),
+                    args: HashMap::from([("command".into(), command.into())]),
+                },
+                &opts,
+                &permissions,
+            )
+            .await
+            .unwrap();
+            if seen.lock().unwrap().is_empty() {
+                failures.push(format!("{tool} skipped its saved Ask rule"));
+            }
+            if result.success {
+                failures.push(format!("{tool} executed despite denial"));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:?}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn background_input_cannot_hide_denied_commands_with_erasure_or_split_calls() {
+        let workspace = tempfile::tempdir().unwrap();
+        let mut failures = Vec::new();
+        for mode in [0, 1, 2] {
+            let split = mode == 1;
+            let marker = workspace.path().join(format!("input-marker-{mode}"));
+            let background = crate::terminals::start("interactive test shell", |_| {
+                let mut command = std::process::Command::new("/bin/sh");
+                command.args(["-c", "stty -echo; exec /bin/sh -i"]);
+                Ok(command)
+            })
+            .unwrap();
+            let (callback, _) = recording_callback(ApprovalDecision::AllowOnce);
+            let opts = ToolExecOptions {
+                require_confirmation: true,
+                auto_approve_safe: true,
+                auto_approve_edits: true,
+                quiet: true,
+                approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Byok,
+                workspace_root: None,
+                mcp_tool_definitions: None,
+            };
+            let mut permissions = crate::permissions::PermissionStore::default();
+            permissions.deny_always("printf protected");
+            if split {
+                let result = execute_tool_with_opts_and_permissions(
+                    &ToolCall {
+                        name: "command_output".into(),
+                        args: HashMap::from([
+                            ("id".into(), background.id.clone()),
+                            ("input".into(), "pri".into()),
+                            ("wait_seconds".into(), "0".into()),
+                        ]),
+                    },
+                    &opts,
+                    &permissions,
+                )
+                .await
+                .unwrap();
+                assert!(result.success, "partial input should be accepted");
+            }
+            let input = if mode == 2 {
+                format!("pri\\\rntf protected > '{}'\r", marker.display())
+            } else if split {
+                format!("ntf protected > '{}'\n", marker.display())
+            } else {
+                format!("printf protectX\u{7f}ed > '{}'\n", marker.display())
+            };
+            let result = execute_tool_with_opts_and_permissions(
+                &ToolCall {
+                    name: "command_output".into(),
+                    args: HashMap::from([
+                        ("id".into(), background.id.clone()),
+                        ("input".into(), input),
+                        ("wait_seconds".into(), "0".into()),
+                    ]),
+                },
+                &opts,
+                &permissions,
+            )
+            .await
+            .unwrap();
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(300);
+            while result.success && !marker.exists() && tokio::time::Instant::now() < deadline {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            crate::terminals::stop(&background).await;
+            if result.success {
+                failures.push(format!("mode={mode}: input was accepted"));
+            }
+            if marker.exists() {
+                failures.push(format!("mode={mode}: denied command executed"));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:?}");
     }
 
     #[tokio::test]

@@ -1080,8 +1080,20 @@ mod environment_and_policy_tests {
             workspace.path().to_path_buf(),
         );
         let variable = "AGI_SANDBOX_ENV_REGRESSION_SENTINEL";
-        let previous = std::env::var_os(variable);
-        std::env::set_var(variable, "controlled-private-value");
+        if std::env::var_os("AGI_SANDBOX_SCRUB_REGRESSION_CHILD").is_none() {
+            let output = tokio::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "sandbox::environment_and_policy_tests::unrestricted_execution_still_honors_environment_scrubbing", "--test-threads=1"])
+                .env(variable, "controlled-private-value")
+                .env("AGI_SANDBOX_SCRUB_REGRESSION_CHILD", "1")
+                .output().await.unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
         let script = "printf '%s' \"$AGI_SANDBOX_ENV_REGRESSION_SENTINEL\"";
         let inherited = execute_sandboxed_in_environment(
             &manager,
@@ -1101,11 +1113,6 @@ mod environment_and_policy_tests {
             true,
         )
         .await;
-        if let Some(value) = previous {
-            std::env::set_var(variable, value);
-        } else {
-            std::env::remove_var(variable);
-        }
         let inherited = inherited.unwrap();
         let scrubbed = scrubbed.unwrap();
         assert!(inherited.status.success());

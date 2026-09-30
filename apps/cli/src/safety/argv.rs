@@ -104,7 +104,7 @@ pub(crate) fn parse_simple_command(command: &str) -> Option<(String, Vec<String>
 
 /// A leading `NAME=value` word is an environment assignment the shell applies
 /// to the command that follows, not a program.
-fn is_env_assignment(word: &str) -> bool {
+pub(crate) fn is_env_assignment(word: &str) -> bool {
     match word.split_once('=') {
         None => false,
         Some((name, _)) => {

@@ -487,7 +487,13 @@ fn shell_segments(command: &str) -> Option<Vec<String>> {
 }
 
 fn segment_argv(segment: &str) -> Option<Vec<String>> {
-    shlex::split(segment).filter(|tokens| !tokens.is_empty())
+    let mut tokens = shlex::split(segment)?;
+    let assignments = tokens
+        .iter()
+        .take_while(|token| crate::safety::argv::is_env_assignment(token))
+        .count();
+    tokens.drain(..assignments);
+    (!tokens.is_empty()).then_some(tokens)
 }
 
 /// How deep a wrapper chain (`sh -c 'sh -c ...'`) is followed.
@@ -495,22 +501,48 @@ const MAX_WRAPPER_DEPTH: usize = 8;
 
 /// `sh -c "rm -rf /"` is one argv to the policy and a different command to the
 /// machine. Every command line a wrapper carries is checked alongside it.
-fn with_wrapped_commands(segments: &[String], depth: usize) -> Vec<String> {
+fn with_wrapped_commands(segments: &[String], depth: usize) -> (Vec<String>, bool) {
     let mut expanded = Vec::with_capacity(segments.len());
+    let mut complete = true;
     for segment in segments {
         expanded.push(segment.clone());
+        let payload = match crate::safety::program::wrapped_payload_checked(segment) {
+            Ok(Some(payload)) => payload,
+            Ok(None) => continue,
+            Err(()) => {
+                complete = false;
+                continue;
+            }
+        };
         if depth >= MAX_WRAPPER_DEPTH {
+            complete = false;
             continue;
         }
-        let Some(payload) = crate::safety::program::wrapped_payload(segment) else {
-            continue;
-        };
         match shell_segments(&payload) {
-            Some(inner) => expanded.extend(with_wrapped_commands(&inner, depth + 1)),
-            None => expanded.push(payload),
+            Some(inner) => {
+                let (commands, parsed) = with_wrapped_commands(&inner, depth + 1);
+                expanded.extend(commands);
+                complete &= parsed;
+            }
+            None => {
+                expanded.push(payload);
+                complete = false;
+            }
         }
     }
-    expanded
+    (expanded, complete)
+}
+
+pub(crate) fn command_argvs(command: &str) -> Option<Vec<Vec<String>>> {
+    let segments = shell_segments(command)?;
+    let (segments, complete) = with_wrapped_commands(&segments, 0);
+    if !complete {
+        return None;
+    }
+    segments
+        .iter()
+        .map(|segment| segment_argv(segment))
+        .collect()
 }
 
 /// Evaluate a shell command string against the policy and return the aggregate
@@ -534,12 +566,16 @@ pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
             every_segment_matched_rule: false,
         };
     }
-    let segments = with_wrapped_commands(&segments, 0);
+    let (segments, complete) = with_wrapped_commands(&segments, 0);
 
     let fallback = |_: &[String]| heuristic_decision(command);
-    let mut decision = Decision::Allow;
-    let mut matched_rule = false;
-    let mut every_segment_matched_rule = true;
+    let mut decision = if complete {
+        Decision::Allow
+    } else {
+        Decision::Prompt
+    };
+    let mut matched_rule = !complete;
+    let mut every_segment_matched_rule = complete;
 
     for segment in &segments {
         let Some(argv) = segment_argv(segment) else {

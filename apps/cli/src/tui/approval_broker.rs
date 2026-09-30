@@ -185,6 +185,7 @@ pub struct ApprovalRequest {
     pub proposal: Option<String>,
     pub saves_always_allow: bool,
     pub tool_subject: Option<(String, serde_json::Value)>,
+    pub requires_explicit_decision: bool,
 }
 
 impl ApprovalRequest {
@@ -197,7 +198,17 @@ impl ApprovalRequest {
             proposal: None,
             saves_always_allow: false,
             tool_subject: None,
+            requires_explicit_decision: false,
         }
+    }
+
+    pub fn requiring_explicit_decision(mut self) -> Self {
+        self.requires_explicit_decision = true;
+        self
+    }
+
+    fn covered_by_turn_grant(&self) -> bool {
+        !self.requires_explicit_decision && self.kind.covered_by_turn_grant()
     }
 
     pub fn with_tool_subject(mut self, name: impl Into<String>, args: serde_json::Value) -> Self {
@@ -273,7 +284,7 @@ impl ApprovalBroker {
             if state.deny_all {
                 return ApprovalDecision::Cancel;
             }
-            if state.allow_all && request.kind.covered_by_turn_grant() {
+            if state.allow_all && request.covered_by_turn_grant() {
                 return ApprovalDecision::AllowOnce;
             }
             state.pending.push_back(request);
@@ -324,7 +335,7 @@ impl ApprovalBroker {
         state.allow_all = true;
         let pending = std::mem::take(&mut state.pending);
         for request in pending {
-            if request.kind.covered_by_turn_grant() {
+            if request.covered_by_turn_grant() {
                 if let Some(tx) = state.responders.remove(&request.id) {
                     let _ = tx.send((ApprovalDecision::AllowOnce, None));
                 }
@@ -408,6 +419,36 @@ mod tests {
         }
         let pending = broker.drain_pending().await.expect("protected prompt");
         assert!(!task.is_finished());
+        assert!(broker.allow_all_remaining().await.is_empty());
+        assert!(broker.complete(pending.id, ApprovalDecision::Deny).await);
+        assert_eq!(task.await.unwrap(), ApprovalDecision::Deny);
+    }
+
+    #[tokio::test]
+    async fn a_turn_grant_never_satisfies_an_explicit_policy_ask() {
+        let broker = ApprovalBroker::new();
+        broker.allow_all_remaining().await;
+        let worker = broker.clone();
+        let mut task = tokio::spawn(async move {
+            worker
+                .request(
+                    ApprovalRequest::new(
+                        ApprovalRequestKind::WorkspacePolicy {
+                            tool_name: "run_command".into(),
+                            primary_argument: "pwd".into(),
+                        },
+                        "Policy Ask",
+                        Vec::new(),
+                    )
+                    .requiring_explicit_decision(),
+                )
+                .await
+        });
+        tokio::select! {
+            _ = broker.notified() => {},
+            decision = &mut task => panic!("Policy Ask was automatically approved: {decision:?}"),
+        }
+        let pending = broker.drain_pending().await.expect("explicit prompt");
         assert!(broker.allow_all_remaining().await.is_empty());
         assert!(broker.complete(pending.id, ApprovalDecision::Deny).await);
         assert_eq!(task.await.unwrap(), ApprovalDecision::Deny);
