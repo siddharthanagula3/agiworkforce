@@ -1085,7 +1085,12 @@ interface ComposerDocument {
   controller: AbortController;
 }
 const pendingDocuments: ComposerDocument[] = [];
-let composerAttachmentIntakeCount = 0;
+interface ComposerAttachmentIntake {
+  owner: ManagedCloudOwner;
+  conversationGeneration: number;
+}
+const composerAttachmentIntakes = new Set<ComposerAttachmentIntake>();
+const composerAttachmentReads = new Map<FileReader, () => void>();
 const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
 interface ResolvedRoute {
   model: string;
@@ -1368,9 +1373,14 @@ function effortForNewChat(): Effort | undefined {
   return resolveModelEffort(model, newChatEffortSelection);
 }
 
+function advanceConversationGeneration(): void {
+  _ctx.conversationGeneration += 1;
+  cancelComposerImageIntake();
+}
+
 function clearStoredMessages(): void {
   historyRestoreToken += 1;
-  _ctx.conversationGeneration += 1;
+  advanceConversationGeneration();
   _ctx.conversationId = createBrowserConversationId();
   leaveTemporaryChat();
   _ctx.pendingProjectBinding = _ctx.activeProject?.id ?? null;
@@ -1420,7 +1430,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
 
   historyRestoreToken += 1;
   clearActivePersistenceState();
-  _ctx.conversationGeneration += 1;
+  advanceConversationGeneration();
   scheduledTasksRequestFence.invalidate();
   scheduledTaskCreateRequestFence.invalidate();
   resetScheduledTaskDraftForOwnerTransition();
@@ -1432,6 +1442,13 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
     _ctx.streamTimeoutHandle = null;
   }
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
+  capabilityDocument = null;
+  applyCapabilityGates();
+  if (nextOwner) {
+    setManagedCloudChatState('loading', { message: t('spGateChecking') });
+  } else {
+    setManagedCloudChatState('signed_out', { message: t('spGateSignedOut') });
+  }
   followUpQueue.clear();
   _ctx.workMode = 'chat';
   _ctx.messages.length = 0;
@@ -1442,6 +1459,10 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.isStreaming = false;
   _ctx.currentStreamId = null;
   clearPendingPageContext();
+  pendingAttachments.length = 0;
+  composerAttachmentNotices = [];
+  composerContextNotice = null;
+  updateAttachmentPreview();
   discardComposerDocuments();
   _ctx.conversationId = createBrowserConversationId();
   _ctx.activeProject = null;
@@ -6406,7 +6427,7 @@ function resolveManagedToolInput(
 
 function sendCardAnswer(text: string): void {
   if (!canAdmitComposerMessage(text)) return;
-  _ctx.conversationGeneration += 1;
+  advanceConversationGeneration();
   renderModelNotice(null);
   const payload: TurnPayload = {
     prompt: text,
@@ -6641,7 +6662,7 @@ function lastUserMessageIndex(): number {
 
 function applyModelSelection(value: string): void {
   if (_ctx.selectedModel !== value) {
-    _ctx.conversationGeneration += 1;
+    advanceConversationGeneration();
     _ctx.currentModelKey = undefined;
     _ctx.previousTaskType = undefined;
     _ctx.reasoningEffort =
@@ -7147,7 +7168,7 @@ function sendMessage(text: string, displayText?: string): void {
     )!,
     promptShortcuts,
   );
-  _ctx.conversationGeneration += 1;
+  advanceConversationGeneration();
   renderModelNotice(null);
 
   try {
@@ -7575,7 +7596,7 @@ function regenerateTurn(messageId: string, modelSelection?: string): void {
   if (modelSelection) applyModelSelection(modelSelection);
   _ctx.messages.splice(userIndex + 1);
   turnPayloadByMessageId.set(userMsg.id, payload);
-  _ctx.conversationGeneration += 1;
+  advanceConversationGeneration();
   _ctx.needsMessageRebuild = true;
   renderModelNotice(null);
   saveMessages();
@@ -7602,7 +7623,7 @@ function startAgiWorkPlan(messageId: string, steps: string[]): void {
   }
   _ctx.messages.splice(userIndex + 1);
   turnPayloadByMessageId.set(userMsg.id, payload);
-  _ctx.conversationGeneration += 1;
+  advanceConversationGeneration();
   _ctx.needsMessageRebuild = true;
   renderModelNotice(null);
   saveMessages();
@@ -7858,7 +7879,7 @@ function canAdmitComposerMessage(text: string): boolean {
     !_ctx.isStreaming &&
     stoppingStreamId === null &&
     !historyRestoreInProgress &&
-    composerAttachmentIntakeCount === 0 &&
+    composerAttachmentIntakes.size === 0 &&
     composerDocumentsSettled() &&
     resolveComposerPrompt(text, pendingAttachmentCount()) !== null
   );
@@ -7870,12 +7891,18 @@ function updateComposerAdmissionControls(): void {
     _ctx.managedCloudOwner !== null &&
     !_ctx.isStreaming &&
     !historyRestoreInProgress &&
-    composerAttachmentIntakeCount === 0;
+    composerAttachmentIntakes.size === 0;
   for (const control of document.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
     '#sp-attach-btn, #sp-attach-menu button, #sp-attach-file-input, #sp-mic-btn',
   )) {
     control.disabled = !controlsReady;
     control.setAttribute('aria-disabled', String(!controlsReady));
+  }
+  for (const control of document.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
+    '#sp-attach-screenshot-item, #sp-attach-file-input, #sp-drawer-capture-btn',
+  )) {
+    control.disabled = !controlsReady || !capabilityAllowed(capabilityDocument, 'canUploadFiles');
+    control.setAttribute('aria-disabled', String(control.disabled));
   }
   const pageContextBlocked =
     document.getElementById('sp-blocked')?.classList.contains('visible') === true;
@@ -7885,19 +7912,70 @@ function updateComposerAdmissionControls(): void {
   }
 }
 
+function composerAttachmentContextCurrent(intake: ComposerAttachmentIntake): boolean {
+  return (
+    intake.conversationGeneration === _ctx.conversationGeneration &&
+    sameManagedCloudOwner(intake.owner, _ctx.managedCloudOwner) &&
+    managedCloudChatState === 'ready' &&
+    capabilityAllowed(capabilityDocument, 'canUploadFiles')
+  );
+}
+
+function composerAttachmentIntakeCurrent(intake: ComposerAttachmentIntake): boolean {
+  return composerAttachmentIntakes.has(intake) && composerAttachmentContextCurrent(intake);
+}
+
+function beginComposerAttachmentIntake(): ComposerAttachmentIntake | null {
+  const owner = _ctx.managedCloudOwner;
+  if (
+    !owner ||
+    managedCloudChatState !== 'ready' ||
+    !capabilityAllowed(capabilityDocument, 'canUploadFiles')
+  )
+    return null;
+  const intake = { owner: { ...owner }, conversationGeneration: _ctx.conversationGeneration };
+  composerAttachmentIntakes.add(intake);
+  updateAttachmentPreview();
+  return intake;
+}
+
+function finishComposerAttachmentIntake(intake: ComposerAttachmentIntake): void {
+  if (composerAttachmentIntakes.delete(intake)) updateAttachmentPreview();
+}
+
+function cancelComposerImageIntake(): void {
+  composerAttachmentIntakes.clear();
+  for (const cancel of composerAttachmentReads.values()) cancel();
+  composerAttachmentReads.clear();
+  const capture = document.getElementById('sp-drawer-capture-btn');
+  if (capture) {
+    capture.replaceChildren(renderIcon(Camera, 13), document.createTextNode(t('spDrawerCapture')));
+    capture.classList.remove('active');
+  }
+  updateAttachmentPreview();
+}
+
 function readFileAsDataUrl(file: File): Promise<string | null> {
   return new Promise((resolve) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      resolve(typeof result === 'string' ? result : null);
+    const finish = (result: string | null): void => {
+      composerAttachmentReads.delete(reader);
+      reader.onload = null;
+      reader.onerror = null;
+      reader.onabort = null;
+      resolve(result);
     };
-    reader.onerror = () => resolve(null);
-    reader.onabort = () => resolve(null);
+    reader.onload = () => finish(typeof reader.result === 'string' ? reader.result : null);
+    reader.onerror = () => finish(null);
+    reader.onabort = () => finish(null);
+    composerAttachmentReads.set(reader, () => {
+      reader.abort();
+      finish(null);
+    });
     try {
       reader.readAsDataURL(file);
     } catch {
-      resolve(null);
+      finish(null);
     }
   });
 }
@@ -8126,7 +8204,8 @@ function takeComposerDocuments(): ComposerFile[] {
 
 function acceptIncomingComposerFiles(files: File[] | FileList): void {
   composerAttachmentNotices = [];
-  if (!capabilityAllowed(capabilityDocument, 'canUploadFiles')) {
+  const intake = beginComposerAttachmentIntake();
+  if (!intake) {
     composerAttachmentNotices.push(t('spAttachmentUploadsOff'));
     updateAttachmentPreview();
     return;
@@ -8163,14 +8242,12 @@ function acceptIncomingComposerFiles(files: File[] | FileList): void {
     incoming.push(file);
   }
   if (incoming.length === 0) {
-    updateAttachmentPreview();
+    finishComposerAttachmentIntake(intake);
     return;
   }
-
-  composerAttachmentIntakeCount += 1;
-  updateAttachmentPreview();
   void Promise.all(incoming.map(readFileAsDataUrl))
     .then((results) => {
+      if (!composerAttachmentIntakeCurrent(intake)) return;
       results.forEach((dataUrl, index) => {
         const name = incoming[index]?.name || t('spAttachmentImageName');
         if (dataUrl) admitComposerAttachment(dataUrl, name);
@@ -8178,12 +8255,10 @@ function acceptIncomingComposerFiles(files: File[] | FileList): void {
       });
     })
     .catch(() => {
-      composerAttachmentNotices.push(t('spAttachmentReadAllFailed'));
+      if (composerAttachmentIntakeCurrent(intake))
+        composerAttachmentNotices.push(t('spAttachmentReadAllFailed'));
     })
-    .finally(() => {
-      composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
-      updateAttachmentPreview();
-    });
+    .finally(() => finishComposerAttachmentIntake(intake));
 }
 
 function composerDocumentStatusLabel(entry: ComposerDocument): string {
@@ -8297,7 +8372,7 @@ function updateAttachmentPreview(): void {
     composerAttachmentNotices.length === 0 &&
     !composerContextNotice &&
     !pageAttached &&
-    composerAttachmentIntakeCount === 0
+    composerAttachmentIntakes.size === 0
   ) {
     bar.style.display = 'none';
     updateSendButton();
@@ -8358,7 +8433,7 @@ function updateAttachmentPreview(): void {
       notices.appendChild(el('li', { class: 'sp-attachment-notice' }, notice));
     }
     bar.appendChild(notices);
-  } else if (composerAttachmentIntakeCount > 0) {
+  } else if (composerAttachmentIntakes.size > 0) {
     bar.appendChild(
       el(
         'div',
@@ -9755,7 +9830,7 @@ function buildUI(): void {
       _ctx.isStreaming = false;
       _ctx.currentStreamId = null;
       clearPendingPageContext();
-      _ctx.conversationGeneration += 1;
+      advanceConversationGeneration();
       _ctx.conversationId = conversationOwner.conversationId;
       leaveTemporaryChat();
       adoptChatProject(entry.projectId);
@@ -10647,50 +10722,48 @@ function buildUI(): void {
   });
   drawerCaptureBtn.appendChild(renderIcon(Camera, 13));
   drawerCaptureBtn.appendChild(document.createTextNode(t('spDrawerCapture')));
+  let drawerCaptureAttempt: ComposerAttachmentIntake | null = null;
   drawerCaptureBtn.addEventListener('click', async () => {
+    const intake = beginComposerAttachmentIntake();
+    if (!intake) return;
+    drawerCaptureAttempt = intake;
+    const resetCaptureLabel = (): void => {
+      if (drawerCaptureAttempt !== intake || !composerAttachmentContextCurrent(intake)) return;
+      drawerCaptureBtn.replaceChildren(
+        renderIcon(Camera, 13),
+        document.createTextNode(t('spDrawerCapture')),
+      );
+      drawerCaptureBtn.classList.remove('active');
+      updateComposerAdmissionControls();
+    };
     drawerCaptureBtn.textContent = t('spDrawerCapturing');
-    (drawerCaptureBtn as HTMLButtonElement).disabled = true;
     try {
       const res = (await chrome.runtime.sendMessage({
         type: 'CAPTURE_SCREENSHOT',
         format: 'png',
         quality: 90,
       })) as { success: boolean; data?: string; error?: string };
-      if (res.success && res.data) {
-        composerAttachmentNotices = [];
-        const admitted = admitComposerAttachment(res.data, t('spScreenshotName'));
-        updateAttachmentPreview();
-        if (!admitted) {
-          throw new Error(
-            composerAttachmentNotices[composerAttachmentNotices.length - 1] ??
-              t('spAttachmentCaptureFailed'),
-          );
-        }
-        drawerCaptureBtn.textContent = t('spDrawerCaptured');
-        drawerCaptureBtn.classList.add('active');
-        closeDrawer();
-        switchTab('chat');
-        inputEl.focus();
-        setTimeout(() => {
-          drawerCaptureBtn.replaceChildren(
-            renderIcon(Camera, 13),
-            document.createTextNode(t('spDrawerCapture')),
-          );
-          drawerCaptureBtn.classList.remove('active');
-          (drawerCaptureBtn as HTMLButtonElement).disabled = false;
-        }, 1500);
-      } else {
-        throw new Error(res.error ?? 'No screenshot data returned');
-      }
-    } catch {
-      drawerCaptureBtn.textContent = t('spDrawerCaptureFailed');
-      setTimeout(() => {
-        drawerCaptureBtn.replaceChildren(
-          renderIcon(Camera, 13),
-          document.createTextNode(t('spDrawerCapture')),
+      if (!composerAttachmentIntakeCurrent(intake)) return;
+      if (!res.success || !res.data) throw new Error(res.error ?? 'No screenshot data returned');
+      composerAttachmentNotices = [];
+      const admitted = admitComposerAttachment(res.data, t('spScreenshotName'));
+      if (!admitted)
+        throw new Error(
+          composerAttachmentNotices[composerAttachmentNotices.length - 1] ??
+            t('spAttachmentCaptureFailed'),
         );
-        (drawerCaptureBtn as HTMLButtonElement).disabled = false;
-      }, 1500);
+      drawerCaptureBtn.textContent = t('spDrawerCaptured');
+      drawerCaptureBtn.classList.add('active');
+      closeDrawer();
+      switchTab('chat');
+      inputEl.focus();
+      setTimeout(resetCaptureLabel, 1500);
+    } catch {
+      if (!composerAttachmentIntakeCurrent(intake)) return;
+      drawerCaptureBtn.textContent = t('spDrawerCaptureFailed');
+      setTimeout(resetCaptureLabel, 1500);
+    } finally {
+      finishComposerAttachmentIntake(intake);
     }
   });
   toolsRow.appendChild(drawerCaptureBtn);
@@ -12900,7 +12973,7 @@ function buildUI(): void {
     const unavailableSelection =
       reconciledSelection !== _ctx.selectedModel ? _ctx.selectedModel : null;
     if (unavailableSelection !== null) {
-      _ctx.conversationGeneration += 1;
+      advanceConversationGeneration();
       _ctx.selectedModel = reconciledSelection;
       _ctx.currentModelKey = undefined;
       _ctx.previousTaskType = undefined;
@@ -14905,19 +14978,22 @@ function buildUI(): void {
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
     composerAttachmentNotices = [];
-    composerAttachmentIntakeCount += 1;
-    updateAttachmentPreview();
+    const intake = beginComposerAttachmentIntake();
+    if (!intake) return;
     const finishScreenshotCapture = (
       resp: { success?: boolean; data?: string; error?: string } | undefined,
     ): void => {
+      if (!composerAttachmentIntakeCurrent(intake)) {
+        finishComposerAttachmentIntake(intake);
+        return;
+      }
       const runtimeError = chrome.runtime.lastError;
       if (runtimeError || !resp?.success || !resp.data) {
         composerAttachmentNotices = [resp?.error ?? t('spAttachmentCaptureFailed')];
       } else {
         admitComposerAttachment(resp.data, t('spScreenshotName'));
       }
-      composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
-      updateAttachmentPreview();
+      finishComposerAttachmentIntake(intake);
     };
     try {
       chrome.runtime.sendMessage(
@@ -14926,8 +15002,7 @@ function buildUI(): void {
       );
     } catch {
       composerAttachmentNotices = [t('spAttachmentCaptureFailed')];
-      composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
-      updateAttachmentPreview();
+      finishComposerAttachmentIntake(intake);
     }
   });
 
