@@ -6,6 +6,7 @@ describe('LocalRuntimePool', () => {
     const dispose = vi.fn(async () => undefined);
     const factory = vi.fn((cwd: string) => ({
       cwd,
+      requiresPermissionRestart: () => false,
       restart: vi.fn(async () => undefined),
       dispose,
     }));
@@ -27,6 +28,7 @@ describe('LocalRuntimePool', () => {
     const pool = new LocalRuntimePool((cwd) => {
       const client = {
         cwd,
+        requiresPermissionRestart: () => false,
         restart: vi.fn(async () => undefined),
         dispose: vi.fn(async () => undefined),
       };
@@ -54,6 +56,7 @@ describe('LocalRuntimePool', () => {
     const pool = new LocalRuntimePool((cwd) => {
       const client = {
         cwd,
+        requiresPermissionRestart: () => false,
         restart: vi.fn(async () => undefined),
         dispose: vi.fn(async () => undefined),
       };
@@ -80,6 +83,7 @@ describe('LocalRuntimePool', () => {
     const pool = new LocalRuntimePool((cwd) => {
       return {
         cwd,
+        requiresPermissionRestart: () => false,
         restart: vi.fn(() => restartGate),
         dispose: vi.fn(async () => undefined),
       };
@@ -103,6 +107,7 @@ describe('LocalRuntimePool', () => {
   it('reuses one process for syntactic aliases of the same workspace root', async () => {
     const factory = vi.fn((cwd: string) => ({
       cwd,
+      requiresPermissionRestart: () => false,
       restart: vi.fn(async () => undefined),
       dispose: vi.fn(async () => undefined),
     }));

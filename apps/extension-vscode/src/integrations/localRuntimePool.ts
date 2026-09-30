@@ -3,6 +3,7 @@ import { LocalRuntimeClient } from './localRuntimeClient';
 
 export interface RestartableLocalRuntime {
   restart(): Promise<void>;
+  requiresPermissionRestart(): boolean;
   dispose(): Promise<void>;
 }
 
@@ -35,6 +36,10 @@ export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeCl
     const client = this.factory(resolved);
     this.clients.set(key, { cwd: resolved, client });
     return client;
+  }
+
+  requiresPermissionRestart(): boolean {
+    return [...this.clients.values()].some(({ client }) => client.requiresPermissionRestart());
   }
 
   restartAll(): Promise<LocalRuntimeRestartResult> {

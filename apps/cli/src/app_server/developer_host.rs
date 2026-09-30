@@ -346,6 +346,7 @@ pub struct CliDeveloperSessionHost {
     workspace_root: PathBuf,
     store: ManagedSessionStore,
     load_integrations: bool,
+    bypass_permissions_available: bool,
     sessions: Arc<Mutex<HashMap<String, Arc<Mutex<AgentSession>>>>>,
     running_turns: Arc<Mutex<HashMap<String, RunningTurn>>>,
     steering: Arc<Mutex<HashMap<String, Vec<PreparedInput>>>>,
@@ -395,6 +396,7 @@ impl CliDeveloperSessionHost {
             workspace_root,
             store,
             load_integrations,
+            bypass_permissions_available: false,
             sessions: Arc::new(Mutex::new(HashMap::new())),
             running_turns: Arc::new(Mutex::new(HashMap::new())),
             steering: Arc::new(Mutex::new(HashMap::new())),
@@ -408,6 +410,11 @@ impl CliDeveloperSessionHost {
             client_turns: Arc::new(StdMutex::new(HashMap::new())),
             taken_handoffs: Arc::new(Mutex::new(Vec::new())),
         })
+    }
+
+    pub fn with_bypass_permissions_available(mut self, available: bool) -> Self {
+        self.bypass_permissions_available = available;
+        self
     }
 
     async fn admit_request(&self) -> Result<RwLockReadGuard<'_, ()>, DeveloperSessionHostError> {
@@ -595,6 +602,7 @@ impl CliDeveloperSessionHost {
         )
         .map_err(invalid_request)?;
         agent.apply_ui_config(&self.config);
+        agent.bypass_permissions_available = self.bypass_permissions_available;
         agent
             .load_managed_conversation(managed_session, path)
             .map_err(invalid_request)?;
@@ -1527,6 +1535,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
         agent.apply_ui_config(&self.config);
+        agent.bypass_permissions_available = self.bypass_permissions_available;
         agent.quiet = true;
 
         let id = Uuid::new_v4().to_string();
@@ -2427,7 +2436,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     agent.fallback_chain = None;
                     agent.set_managed_auto_routing(None);
                 }
-                apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort);
+                apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort)?;
                 if params.allowed_tools.is_some() || params.disallowed_tools.is_some() {
                     let allowed = validated_tool_filter(params.allowed_tools.as_deref())?
                         .or_else(|| agent.allowed_tools.clone())
@@ -4790,7 +4799,12 @@ fn apply_agent_controls(
     agent: &mut AgentSession,
     mode: Option<DeveloperAgentMode>,
     effort: Option<DeveloperReasoningEffort>,
-) {
+) -> Result<(), DeveloperSessionHostError> {
+    if matches!(mode, Some(DeveloperAgentMode::Bypass)) && !agent.bypass_permissions_available {
+        return Err(DeveloperSessionHostError::invalid_request(
+            "Bypass requires the host to be launched with --allow-dangerously-skip-permissions before app-server or remote-control",
+        ));
+    }
     if let Some(mode) = mode {
         let stays_in_plan = agent.plan_mode && matches!(mode, DeveloperAgentMode::Plan);
         agent.plan_mode = matches!(mode, DeveloperAgentMode::Plan);
@@ -4818,6 +4832,7 @@ fn apply_agent_controls(
         agent.thinking_budget_tokens = effort.thinking_budget_for_anthropic();
         agent.effort = Some(effort);
     }
+    Ok(())
 }
 
 /// Classify the error that ended a turn into the protocol's closed set.
@@ -5067,10 +5082,31 @@ mod tests {
     }
 
     #[test]
+    fn a_remote_bypass_request_cannot_grant_launch_authority() {
+        let mut agent = test_agent();
+        agent.plan_mode = true;
+        agent.plan_approved = true;
+        let previous_mode = agent.permission_mode;
+        let previous_effort = agent.effort;
+        let result = apply_agent_controls(
+            &mut agent,
+            Some(DeveloperAgentMode::Bypass),
+            Some(DeveloperReasoningEffort::Max),
+        );
+        assert!(result.is_err());
+        assert!(!agent.skip_permissions);
+        assert_eq!(agent.permission_mode, previous_mode);
+        assert!(agent.plan_mode);
+        assert!(agent.plan_approved);
+        assert_eq!(agent.effort, previous_effort);
+    }
+
+    #[test]
     fn developer_modes_map_to_existing_cli_permission_controls() {
         let mut agent = test_agent();
 
-        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Plan), None);
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Plan), None)
+            .expect("authorized controls");
         assert_eq!(
             agent.permission_mode,
             crate::cli_options::PermissionMode::Plan
@@ -5078,7 +5114,8 @@ mod tests {
         assert!(agent.plan_mode);
         assert!(!agent.skip_permissions);
 
-        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Auto), None);
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Auto), None)
+            .expect("authorized controls");
         assert_eq!(
             agent.permission_mode,
             crate::cli_options::PermissionMode::AcceptEdits
@@ -5087,7 +5124,9 @@ mod tests {
         assert!(agent.auto_approve_safe);
         assert!(!agent.skip_permissions);
 
-        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None);
+        agent.bypass_permissions_available = true;
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
+            .expect("authorized controls");
         assert_eq!(
             agent.permission_mode,
             crate::cli_options::PermissionMode::BypassPermissions
@@ -6011,10 +6050,12 @@ mod tests {
     fn developer_effort_uses_the_existing_session_thinking_budget() {
         let mut agent = test_agent();
 
-        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::High));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::High))
+            .expect("authorized controls");
         assert_eq!(agent.thinking_budget_tokens, Some(32_768));
 
-        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium))
+            .expect("authorized controls");
         assert_eq!(agent.thinking_budget_tokens, None);
     }
 
@@ -6025,11 +6066,13 @@ mod tests {
         let mut agent = test_agent();
 
         // Low and Medium are indistinguishable in the Anthropic projection...
-        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Low));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Low))
+            .expect("authorized controls");
         assert_eq!(agent.thinking_budget_tokens, None);
         let low = agent.effort.expect("effort retained");
 
-        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium))
+            .expect("authorized controls");
         assert_eq!(agent.thinking_budget_tokens, None);
         let medium = agent.effort.expect("effort retained");
 
@@ -6041,7 +6084,8 @@ mod tests {
             medium.gemini_thinking_budget()
         );
 
-        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Max));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Max))
+            .expect("authorized controls");
         let max = agent.effort.expect("effort retained");
         assert_eq!(max.openai_effort_str(), "high");
     }
@@ -7584,7 +7628,7 @@ mod tests {
             DeveloperAgentMode::Auto,
             DeveloperAgentMode::Plan,
         ] {
-            apply_agent_controls(&mut agent, Some(mode), None);
+            apply_agent_controls(&mut agent, Some(mode), None).expect("authorized controls");
             host.apply_subagent_boundary_policy(&mut agent);
             let names = tool_names(&agent);
             for tool in SUBAGENT_SPAWN_TOOLS {
@@ -7597,7 +7641,9 @@ mod tests {
 
         // Bypass answers its own approvals, so the child never needs the sink
         // the crossing cannot carry, and `task` comes back. (`agent` stays out.
-        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None);
+        agent.bypass_permissions_available = true;
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
+            .expect("authorized controls");
         host.apply_subagent_boundary_policy(&mut agent);
         let names = tool_names(&agent);
         assert!(
@@ -7623,7 +7669,9 @@ mod tests {
         let host = boundary_host(workspace.path(), store.path());
         let mut agent = test_agent();
 
-        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None);
+        agent.bypass_permissions_available = true;
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
+            .expect("authorized controls");
         host.apply_subagent_boundary_policy(&mut agent);
         let names = tool_names(&agent);
 
