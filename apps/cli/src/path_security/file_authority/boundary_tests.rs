@@ -442,3 +442,58 @@ fn directory_grant_existing_write_only_and_large_edits_restore_original_inode() 
     assert_eq!(std::fs::metadata(&path).unwrap().ino(), original.ino());
     assert_eq!(std::fs::read(path).unwrap(), b"saved owned bytes");
 }
+
+#[cfg(unix)]
+#[test]
+fn directory_sync_retains_granted_identity_after_path_substitution() {
+    use std::os::unix::fs::MetadataExt;
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().canonicalize().unwrap();
+    let selected = root.join("selected");
+    let original = root.join("original");
+    let outside = root.join("outside");
+    std::fs::create_dir(&selected).unwrap();
+    std::fs::create_dir(&outside).unwrap();
+    std::fs::write(selected.join("owned.txt"), b"owned bytes").unwrap();
+    std::fs::write(outside.join("sentinel.txt"), b"outside bytes").unwrap();
+    let authority = DirectoryAuthority::open(&selected).unwrap();
+    let held = authority.file.metadata().unwrap();
+    let observed = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let receipt = observed.clone();
+    *authority.hooks.before_directory_sync.lock().unwrap() = Some(Box::new(move |file| {
+        let metadata = file.metadata().unwrap();
+        #[cfg(target_os = "linux")]
+        let readable = !nix::fcntl::OFlag::from_bits_truncate(
+            nix::fcntl::fcntl(file, nix::fcntl::FcntlArg::F_GETFL).unwrap(),
+        )
+        .contains(nix::fcntl::OFlag::O_PATH);
+        #[cfg(not(target_os = "linux"))]
+        let readable = true;
+        *receipt.lock().unwrap() = Some((metadata.dev(), metadata.ino(), readable));
+    }));
+    std::fs::rename(&selected, &original).unwrap();
+    std::os::unix::fs::symlink(&outside, &selected).unwrap();
+    authority.sync_directory().unwrap();
+    assert_eq!(
+        *observed.lock().unwrap(),
+        Some((held.dev(), held.ino(), true))
+    );
+    let synchronized = authority.file.metadata().unwrap();
+    assert_eq!(synchronized.dev(), held.dev());
+    assert_eq!(synchronized.ino(), held.ino());
+    assert_ne!(
+        synchronized.ino(),
+        std::fs::metadata(&selected).unwrap().ino()
+    );
+    assert_eq!(
+        std::fs::read(original.join("owned.txt")).unwrap(),
+        b"owned bytes"
+    );
+    assert_eq!(
+        std::fs::read(outside.join("sentinel.txt")).unwrap(),
+        b"outside bytes"
+    );
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 1);
+    authority.fail_next_directory_sync();
+    assert!(authority.sync_directory().is_err());
+}
