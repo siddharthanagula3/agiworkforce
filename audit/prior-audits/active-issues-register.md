@@ -3179,7 +3179,7 @@ test on the close route.
 ### `AGI-34` A stalled durable run row pins the conversation on Generating response
 
 **Severity:** P2
-**Status:** Fixed on main, awaiting deploy.
+**Status:** Partial; follow-up polling failure revalidated at `49d0c30f` on 2026-09-29.
 **Area:** Web chat client, runs API
 **What happens:** the chat page resumes a conversation from its run row. When
 the world never progresses and the function behind the row dies, the row stays
@@ -3200,6 +3200,19 @@ state on `stalled` and sets the error the existing retry banner already offers
 to resend. Verified on `:3100`: the conversation shows "This turn stopped
 running on the server and will not finish. Send it again to retry." with a
 Retry button, and no "Generating response".
+
+**2026-09-29 revalidation:** the initial-stalled case above does not cover a
+reopened run whose first verdict is `running`. `useChatStream.ts:3597-3616`
+sets `isLoading=true` after that verdict, then its next scheduled poll returns
+early because `inFlightTurnRecovery.ts:46` rejects `isLoading=true`. No further
+timer is scheduled. A real-hook/store reproduction advanced 5,001 ms and
+observed one GET rather than two. This leaves recovery busy after completion
+or a later stall. Keep this identity for the remaining recovery defect.
+The source snapshot, mocks, command and captured failing assertion are in
+`audit/live-check/2026-09-29-ecosystem-review/web-cloud-review.json` and
+`web-repro-output.txt`. The durable run and mounted browser were not executed
+in this reproduction. Separate owned-stream busy state from a restored-run
+follower and require terminal and stalled follow-up tests before closure.
 
 ## 5. P3, lower priority
 
@@ -3788,8 +3801,9 @@ Dependency-aware, not severity-ordered.
 7. `AGI-14` needs a vendor decision before it needs an implementer. `AGI-10`
    is closed, artifacts and conversations both carry the two-part audience
    model, so nothing sequences behind it.
-8. `AGI-32` and `AGI-34` need only the live confirmation their own sections
-   name; both are code-complete on main. `AGI-11`, `AGI-20`, `AGI-29`,
+8. `AGI-32` needs the live confirmation its section names; it is code-complete
+   on main. `AGI-34` still needs running and terminal follow-up polling repair
+   plus live stalled-run confirmation. `AGI-11`, `AGI-20`, `AGI-29`,
    `AGI-30`, `AGI-31`, `AGI-33`. Background and polish. `AGI-17` needs a
    decision before it needs an implementer.
 
@@ -3797,26 +3811,26 @@ Dependency-aware, not severity-ordered.
 
 ## 8. Acceptance matrix
 
-| Issue    | Automated                                            | Manual or live                           | Gate                                      |
-| -------- | ---------------------------------------------------- | ---------------------------------------- | ----------------------------------------- |
-| `AGI-3`  | per-class snapshot tests, e2e reload                 | reload after a tool-using answer         | nothing the transcript rendered is lost   |
-| `AGI-5`  | the four native lanes are pinned together            | a PR with a deliberate native break      | required check fails on the PR            |
-| `AGI-7`  | spec gate ledger                                     | signed build                             | 12 of 12 gates, or surface removed        |
-| `AGI-11` | service and cron tests                               | none                                     | expired token stops resolving             |
-| `AGI-12` | `check:boundaries`, desktop tests                    | none                                     | zero `task-1.3` markers                   |
-| `AGI-14` | per-provider route tests, registry contract          | none                                     | a second STT vendor exists and fails over |
-| `AGI-16` | resolve-on-ingest tests, no provider host in a href  | a grounded research turn                 | a citation survives redirect expiry       |
-| `AGI-17` | none until the decision is taken                     | none                                     | founder decides conform or forgive        |
-| `AGI-20` | e2e case invalidating only the retried row           | none, real layout needs a browser        | retried message stays in view             |
-| `AGI-22` | conformance fixtures, consent record migration       | none                                     | no Chinese-HQ route without consent       |
-| `AGI-23` | classification test over the observed 404            | none                                     | excluded route is not offered             |
-| `AGI-27` | tool-loop staging cases                              | a CSV total on a non-gateway model       | no write_file copy before execute_code    |
-| `AGI-29` | memory service tests                                 | a live two-chat recall                   | a fact without a trigger phrase is kept   |
-| `AGI-30` | hook test with a request counter                     | one live turn                            | one list refetch per completed turn       |
-| `AGI-31` | targeted test once the stack is captured             | a hundred turns with no warning          | no MaxListenersExceededWarning            |
-| `AGI-32` | test on the close route                              | a live session with a backend web search | second `provider_cost_events` row lands   |
-| `AGI-33` | the two pinning tests flip to asserting preservation | none                                     | classification survives the envelope      |
-| `AGI-34` | run-age contract, stalled-state unit tests           | a stalled run on the deployed build      | Retry banner, not Generating response     |
+| Issue    | Automated                                                  | Manual or live                           | Gate                                      |
+| -------- | ---------------------------------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| `AGI-3`  | per-class snapshot tests, e2e reload                       | reload after a tool-using answer         | nothing the transcript rendered is lost   |
+| `AGI-5`  | the four native lanes are pinned together                  | a PR with a deliberate native break      | required check fails on the PR            |
+| `AGI-7`  | spec gate ledger                                           | signed build                             | 12 of 12 gates, or surface removed        |
+| `AGI-11` | service and cron tests                                     | none                                     | expired token stops resolving             |
+| `AGI-12` | `check:boundaries`, desktop tests                          | none                                     | zero `task-1.3` markers                   |
+| `AGI-14` | per-provider route tests, registry contract                | none                                     | a second STT vendor exists and fails over |
+| `AGI-16` | resolve-on-ingest tests, no provider host in a href        | a grounded research turn                 | a citation survives redirect expiry       |
+| `AGI-17` | none until the decision is taken                           | none                                     | founder decides conform or forgive        |
+| `AGI-20` | e2e case invalidating only the retried row                 | none, real layout needs a browser        | retried message stays in view             |
+| `AGI-22` | conformance fixtures, consent record migration             | none                                     | no Chinese-HQ route without consent       |
+| `AGI-23` | classification test over the observed 404                  | none                                     | excluded route is not offered             |
+| `AGI-27` | tool-loop staging cases                                    | a CSV total on a non-gateway model       | no write_file copy before execute_code    |
+| `AGI-29` | memory service tests                                       | a live two-chat recall                   | a fact without a trigger phrase is kept   |
+| `AGI-30` | hook test with a request counter                           | one live turn                            | one list refetch per completed turn       |
+| `AGI-31` | targeted test once the stack is captured                   | a hundred turns with no warning          | no MaxListenersExceededWarning            |
+| `AGI-32` | test on the close route                                    | a live session with a backend web search | second `provider_cost_events` row lands   |
+| `AGI-33` | the two pinning tests flip to asserting preservation       | none                                     | classification survives the envelope      |
+| `AGI-34` | run-age, stalled-state and running follow-up polling tests | a stalled run on the deployed build      | Retry banner, not Generating response     |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
@@ -3830,7 +3844,8 @@ AGI-22                     blocked on a disclosure decision, not on code
 AGI-16                     provenance, independent
 LIVE-5 ──> AGI-7          desktop voice, measure before building
 AGI-14                     blocked on a second STT vendor, not on code
-AGI-32, AGI-34             code-complete, waiting on a live confirmation
+AGI-32                     code-complete, waiting on a live confirmation
+AGI-34                     partial, follow-up polling repair and live confirmation
 AGI-11, AGI-12, AGI-33     background
 AGI-17, AGI-20, AGI-29,
 AGI-30, AGI-31             polish, independent of everything
@@ -3838,3 +3853,285 @@ AGI-30, AGI-31             polish, independent of everything
 
 Two tracks can run at once without touching the same files: web chat
 (`AGI-3`) and CI (`AGI-5`).
+
+## WEB-RECOVERED-RUN-STOP-NOT-CANCELLED-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Stop on a recovered cloud turn never requests server cancellation. activeRunsRef starts empty at3502–3504 and receives handles only from consumeAssistantStream callbacks4162–4164/4455–4457. Reopen liveness recovery retains only a verdict and never installs the run handle. stopGeneration only calls cancelCloudRunAndConfirm inside if(activeRun), but always stops local streaming/loading at4621–4622. abortConversation3511–3515 only aborts a controller in the separate client request map; recovery has no request controller there. Ephemeral real-hook test asserted the running state, invoked stopGeneration and recorded all fetch calls. Expected POST to the returned run id, actual no POST. The canonical run cancellation POST writes cancellation_requested_at through requestCloudAgentRunCancellation. The durable workflow is enqueued by workflow/api start, with no request signal in StartCloudAgentWorkflowExecutionInput; the invocation owns an AbortController and reads the DB cancellation flag at each loop check.
+
+Impact/trigger: Stop clears the local busy state but sends no run cancellation. The detached workflow may continue provider/tool execution and associated usage until its normal stop condition or another cancellation path.
+
+Start at `apps/web/lib/hooks/useChatStream.ts:4597` in `.worktrees/billing-e2e`. Evidence and full anchors: [`web-cloud-review.json`](../live-check/2026-09-29-ecosystem-review/web-cloud-review.json).
+
+Verification: Real-hook/store assertion failed as expected; captured in web-repro-output.txt. Limit: The absence of the client cancellation call is reproduced. Continued live billing/tool execution was not observed; it follows from the source-owned durable lifecycle and is a conditional impact.
+
+Resolution/acceptance: Mount a restored running conversation, retain the authenticated run handle, click Stop, require cancellation POST for that run and poll confirmed terminal state. Use a durable workflow fixture independent of the browser request to assert the persisted cancellation flag halts a future provider/tool dispatch; require a visible failure if cancellation cannot be confirmed.
+
+## WEB-CACHED-TRANSCRIPT-NEVER-REFRESHED-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Reopening a cached chat discards newer persisted messages. loadConversation fetches and parses current paginated server messages, maps them to messages, then immediately returns at599–601 if cachedMessages.length>0. setActiveConversationWithMessages604–608 only runs for an empty cache. Ephemeral real-hook test cached one old message, returned two valid server messages, explicitly asserted loadConversation returned true, and observed only the old message in the real store. Inspected web artifact cloud-sync reads the shared sync response but only applies artifacts; it does not compensate by merging chat messages. The server durable settlement does persist the completed assistant turn.
+
+Impact/trigger: The fresh transcript is parsed but discarded whenever any local cached message exists. Reopening still displays the stale transcript, and the next user turn can operate with missing remote context.
+
+Start at `apps/web/lib/hooks/useConversations.ts:590` in `.worktrees/billing-e2e`. Evidence and full anchors: [`web-cloud-review.json`](../live-check/2026-09-29-ecosystem-review/web-cloud-review.json).
+
+Verification: Real-hook/store assertion failed as expected; captured in web-repro-output.txt. Limit: Reopen freshness failure is reproduced. Live cross-device sync, message conflict policy and every possible compensating handler were not exhaustively tested.
+
+Resolution/acceptance: Cache a completed conversation, serve a valid response with an additional message, reopen it and require the new persisted message while preserving the locally selected valid branch leaf. Cover remote edits/deletes and protect the actual locally streaming transcript from stale network snapshots.
+
+## WEB-MANAGED-COMPUTE-PROBE-PREMISE-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Managed-compute enforcement test accepts denials from different gates. The accepted response pattern at97 is managed_compute_disabled|over_cap|model_blocked. over_cap/model_blocked do not establish the intended managed-compute gate. Status402 or403 at90–93 is likewise shared by unrelated refusals; there is no positive control for the same admitted model/budget request in this case.
+
+Impact/trigger: The test can pass without proving the specific managed-compute policy is enforced, despite claiming to rule out earlier gates. This weakens enterprise admission evidence.
+
+Start at `apps/web/e2e/enterprise-enforcement.spec.ts:90` in `.worktrees/billing-e2e`. Evidence and full anchors: [`web-cloud-review.json`](../live-check/2026-09-29-ecosystem-review/web-cloud-review.json).
+
+Verification: Three real-hook/store assertions fail as expected; this particular enterprise-test finding is source-only. Limit: The e2e suite was not run and no runtime enforcement bypass is claimed.
+
+Resolution/acceptance: Construct an otherwise admitted request with adequate budget and an allowed model; require the exact managed_compute_disabled code when the policy is off, then enable the policy and require that this gate permits the same request. Inject a broken managed-compute gate and prove the test fails even if another refusal remains.
+
+## CLI-CHECKPOINT-PARENT-SYMLINK-ESCAPE-01
+
+Severity: High. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Checkpoint rewind follows swapped parent symlinks outside the approved workspace. Snapshot paths are lexical root joins, not stable confined handles. restore_files checks the final file only for Contents; symlink_metadata follows symlink parents, so an outside regular leaf passes. Absent directly removes the lexical path. The app-server rewind checks thread/writer ownership but never revalidates snapshot paths against the workspace or executes these writes in its shell sandbox.
+
+Impact/trigger: Capture workspace/sub/file during an approved edit, then replace sub with a symlink to a directory outside the workspace before choosing code rewind. An outside regular file of the same name is overwritten; a file captured as Absent is deleted through the symlink.
+
+Start at `apps/cli/src/agent/checkpoints.rs:322` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json).
+
+Verification: Exact unsafe_to_overwrite function extracted from current source into a standalone Rust probe; same restore filesystem operations performed in temporary directories. Limit: Primitive reproduction, not full CLI build, mounted app-server or rendered UI. No user files touched.
+
+Resolution/acceptance: Revalidate every snapshot destination under the owned workspace immediately before restore/delete and reject symlink ancestors; use confined/no-follow filesystem operations to avoid a check/write race. Keep skipped-file reporting.
+
+## VSCODE-CLI-HANDOFF-NOT-ACTIVATED-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Continue CLI Session accepts the chosen thread but never opens it in VS Code. continueCliSessionHere selects newest/requested ID, validates and accepts its handoff, then only executes agi-workforce.chat. That command reveals native chat or the sidebar; it does not resume the accepted thread. The existing fork command explicitly calls sidebarProvider.resumeConversation(forkedId), demonstrating the required activation is separate. Deep links reach the same command.
+
+Impact/trigger: With a different sidebar thread active, invoke Continue CLI Session or a developer-session deep link for a specific CLI thread and confirm Continue here.
+
+Start at `apps/extension-vscode/src/core/commandSetup.ts:498` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json).
+
+Verification: Read complete command consumer and target command. Limit: No mounted VS Code invocation; existing admission helper tests do not exercise this command-to-sidebar activation.
+
+Resolution/acceptance: After acceptance, reveal first-party chat and resume newest.id; only record acceptance once backend admission and activation succeed. Add a command test with a different active thread.
+
+## CLI-INTERRUPT-RELEASE-BEFORE-CLEANUP-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Interrupt releases turn ownership before cleanup finishes. interrupt_turn removes running_turns[thread] and drops its lock before awaiting process-tree shutdown. start_turn uses only that map as its in-process active claim; the same writer lease renews successfully. Old cleanup later takes session-wide subagent and memory managers, removes steering by thread alone, and calls cancel_turn on the shared current history. A new turn can therefore be accepted before the old transcript/cleanup settles, lose its steering/managers, or make the interrupt wait behind its long-held session mutex. WebSocket upgrades clone one shared host, while individual sockets process requests independently.
+
+Impact/trigger: Two authenticated WebSocket connections to the same app-server host: interrupt an active turn on one connection while starting a new turn on the same thread on the other. The old process tree shutdown yields long enough for the new start to proceed.
+
+Start at `apps/cli/src/app_server/developer_host.rs:2991` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json).
+
+Verification: Read locks, release points, awaits, writer-lease behavior, shared WebSocket host and existing tests. Limit: Single stdio connection serializes requests and mitigates this particular trigger. No direct race harness executed. Existing interrupt test awaits complete cleanup before reload (developer_host.rs6897-6921); simultaneous-start test covers start/start, not interrupt/start.
+
+Resolution/acceptance: Keep a stopping claim until process, subagents, steering, partial-history finalization and persistence settle; scope all cleanup to the interrupted turn generation.
+
+## MCP-READ-CACHE-AGGREGATE-UNBOUNDED-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Modern MCP read cache retains unlimited responses and expired distinct keys. Events owns a HashMap with no entry/byte limit. store clones every complete cacheable result. cached evicts an expired entry only when that exact key is requested again; notifications clear only selected prefixes when a notification arrives. Per-frame/per-response transport bounds do not constrain aggregate cached memory. Modern dispatch reaches store for a zero-round normal response.
+
+Impact/trigger: A configured modern MCP server returns ttlMs on resources/read; a long-lived client reads many distinct resource URIs without list-change notifications, including expired keys it never requests again.
+
+Start at `crates/agiworkforce-mcp/src/cache.rs:10` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json).
+
+Verification: Read entire cache module and dispatch call site. Limit: No OOM/load run or live server request; prerequisite is modern protocol and server-provided TTL. TTL overflow hypothesis was separately rejected on host.
+
+Resolution/acceptance: Bound total cache bytes and entries, periodically prune expired entries, clamp TTL, and use an eviction policy before cloning/inserting.
+
+## CLI-BACKGROUND-COMMANDS-UNBOUNDED-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Background command pool caps finished history but leaves running commands unbounded. terminals::start spawns the child, output reader thread(s) and waiter thread before storing it in a process-global vector. The only retention guard counts finished commands; running children are never capped. Each command can retain up to 1MiB output. Background commands intentionally survive turn lifetime, so the running-turn concurrency limit does not bound this pool. The caller has no active-command admission check.
+
+Impact/trigger: An agent repeatedly launches background servers/watchers or long-lived shell commands across turns without command_stop.
+
+Start at `apps/cli/src/terminals.rs:14` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json).
+
+Verification: Read start path, retention policy, background tool caller and searched all CLI call sites for active-command caps. Limit: No stress run or resource exhaustion reproduced; local process resource risk, not demonstrated remote tenant interference.
+
+Resolution/acceptance: Reserve bounded per-session/process active slots before spawning; expose explicit stop/cleanup and reject further starts with actionable feedback when full.
+
+## AUDIT-CAPABILITY-EVIDENCE-UNCHECKED-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Capability worklist can be green with missing or impossible completion evidence. Current --check exits 0, but 20 done cells have no evidence, 36 done evidence references name absent files, and 165 done evidence references point past EOF. Replacing a done cell evidence with a nonexistent source file at line 999999 in an isolated copy still exits 0. The check validates rollup and rendering consistency; it does not validate evidence schema, existence, source content, mounted entrypoints, handler/persistence paths, default flags, production migration prerequisites or a content hash.
+
+Impact/trigger: Current --check exits 0, but 20 done cells have no evidence, 36 done evidence references name absent files, and 165 done evidence references point past EOF. Replacing a done cell evidence with a nonexistent source file at line 999999 in an isolated copy still exits 0.
+
+Start at `scripts/audit-worklist.mjs:317` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json).
+
+Verification: Current guard outputs and isolated fixtures captured in instrument-reproductions.json; no product modification. Limit: This proves the guard cannot establish completion and current evidence is not reviewable in those cases. A moved path alone does not prove its underlying capability is broken.
+
+Resolution/acceptance: Require per-cell structured evidence/version binding, current path/range checks and explicit route/entrypoint/callee/storage gates before accepting done; keep live proof separate.
+
+## AUDIT-REACHABILITY-EVIDENCE-UNCHECKED-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Older reachability inventory accepts fabricated implementation evidence. A built row with evidence saying apps/web/nonexistent-handler.ts:999999 exists passes with exit 0 in an isolated fixture. The current guard validates 654 rows, independently from the 3439-item capability ledger. Evidence validation only requires a string of at least 20 characters; source files and call graphs are not inspected.
+
+Impact/trigger: A built row with evidence saying apps/web/nonexistent-handler.ts:999999 exists passes with exit 0 in an isolated fixture. The current guard validates 654 rows, independently from the 3439-item capability ledger.
+
+Start at `scripts/check-audit-inventory.mjs:148` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json).
+
+Verification: Current guard outputs and isolated fixtures captured in instrument-reproductions.json; no product modification. Limit: The script provides identity/status/schema validation. Its green result is not execution or source-reachability evidence.
+
+Resolution/acceptance: Name/report its assurance as inventory integrity, and separately validate source-bound reachability evidence; avoid treating this tally as equivalent to the capability ledger.
+
+## AUDIT-DECLINED-COUNTED-DONE-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Declined connector capability is counted as implemented. S9.04 and S10.20 require choosing among several linked accounts, but both roll up done with four done cells each. Their resolvedBy states the capability was declined, one account is supported, and reconnection replaces the existing account. S55.12 correctly records the same underlying multi-account capability as declined. The cited ConnectorAccountSelector component no longer exists. Decision closure is represented as done rather than declined/n/a, inflating completion and contradicting the unchanged criterion and recorded decision.
+
+Impact/trigger: S9.04 and S10.20 require choosing among several linked accounts, but both roll up done with four done cells each. Their resolvedBy states the capability was declined, one account is supported, and reconnection replaces the existing account. S55.12 correctly records the same underlying multi-account capability as declined. The cited ConnectorAccountSelector component no longer exists.
+
+Start at `audit/ledger/ecosystem-capability-ledger.jsonl:1` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json).
+
+Verification: Current guard outputs and isolated fixtures captured in instrument-reproductions.json; no product modification. Limit: This is a proven ledger classification defect, not a demand to implement a capability the founder declined.
+
+Resolution/acceptance: Classify the dependent picker criteria as declined/n/a with the same decision ID and keep completion counts distinct from deliberate scope reduction.
+
+## AUDIT-FILE-LEDGER-IDENTITY-LOST-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Per-file ledger regeneration loses review evidence and does not bind dirty source. A fixture containing one tracked source and one untracked source produces one row and a -dirty source_commit. Setting its audit_status=reviewed and read_full_file=true then regenerating resets both. Changing tracked source content while preserving line count produces byte-identical ledger output despite different source SHA256 hashes. The generator uses git ls-files without --others, records HEAD plus a generic dirty suffix instead of content hashes, and overwrites rows with default not-started evidence every time.
+
+Impact/trigger: A fixture containing one tracked source and one untracked source produces one row and a -dirty source_commit. Setting its audit_status=reviewed and read_full_file=true then regenerating resets both. Changing tracked source content while preserving line count produces byte-identical ledger output despite different source SHA256 hashes.
+
+Start at `scripts/generate-surface-file-ledger.mjs:33` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json).
+
+Verification: Current guard outputs and isolated fixtures captured in instrument-reproductions.json; no product modification. Limit: The generator explicitly scopes itself to focused CLI/shared paths, so omission of Web/Mobile/Electron roots is a stated scope limitation, not itself a bug. It is an inventory rather than semantic audit proof.
+
+Resolution/acceptance: Include nonignored untracked files, hash each content variant, preserve review results only for identical hashes, invalidate changed variants and label scope explicitly.
+
+## MOBILE-HMAC-CONCURRENT-REPLAY-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+Concurrent copies of one signed companion frame both pass nonce replay checks. Nonce presence is tested before awaiting the digest and recorded afterward without a second check. Sequential duplicate rejected and invalid MAC rejected; concurrent authentic duplicate accepted twice; nonce cache then has one entry.
+
+Impact/trigger: Duplicate authenticated inbound control frames can be applied, including repeated UI updates and notifications. This is not a signature forgery or demonstrated arbitrary command execution.
+
+Start at `apps/mobile/lib/dispatchHmac.ts:304` in `.worktrees/billing-e2e`. Evidence and full anchors: [`mobile-control-review.json`](../live-check/2026-09-29-ecosystem-review/mobile-control-review.json).
+
+Verification: mobile-race-repro.cjs exited0 and confirmed both failures plus sequential replay/bad-MAC controls. Limit: Native app/signaling/notifications not run; unchanged module logic exercised with cryptographic controls and deterministic async timing.
+
+Resolution/acceptance: After a valid digest, atomically recheck and record the nonce before returning acceptance. Do not let an invalid MAC reserve a nonce.
+
+## MOBILE-CONTROL-AFTER-DISCONNECT-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+
+A previously received companion frame mutates state after disconnect. Incoming verification does not capture and revalidate the attempt/HMAC session after its await. The signaling callback only checks the attempt before verification. Actual disconnect clears agents; releasing the pending digest restores old-pair-agent while status remains disconnected.
+
+Impact/trigger: Old paired task data can reappear after unpairing. Account-switch leakage and a native notification delivery were not demonstrated.
+
+Start at `apps/mobile/stores/connectionStore.ts:589` in `.worktrees/billing-e2e`. Evidence and full anchors: [`mobile-control-review.json`](../live-check/2026-09-29-ecosystem-review/mobile-control-review.json).
+
+Verification: mobile-race-repro.cjs exited0 and confirmed both failures plus sequential replay/bad-MAC controls. Limit: Native app/signaling/notifications not run; unchanged module logic exercised with cryptographic controls and deterministic async timing.
+
+Resolution/acceptance: Capture the incoming connection generation and HMAC identity, then check both after verification and before applying payloads. Apply the same ownership check to queued controls.
+
+## SCHEDULE-POLICY-REFUSAL-AS-SUCCESS-01
+
+Severity: Medium. Status: open in source snapshot `49d0c30f`; deployment unknown.
+
+A claimed task denied by managed-compute policy returns a normal result from
+`apps/web/lib/services/scheduled-agent-executor.ts:852-861`. The finalizer at
+`apps/web/lib/services/schedule-service.ts:2200-2205` unconditionally records
+`success` and announces success. Notification copy says completed, and the
+event-trigger handler classifies the delivery as fired. The policy still
+prevents provider work; the defect is false completion and lost truthful
+task outcome, not a demonstrated authorization bypass.
+
+An unchanged finalizer function extracted/transpiled from hash-bound source
+received a simulated subscription-inactive result and returned/announced
+success. The existing executor unit test expects the normal skipped return,
+so passing that test does not settle the composed outcome. Eight focused
+files / 96 tests passed in 9.46 seconds with mocked infrastructure; some
+entitlement fixtures use caught fallback paths. No production DB, scheduler,
+provider or push delivery was used.
+
+Evidence: [continuous assistant review](../live-check/2026-09-29-ecosystem-review/continuous-assistant-review.json)
+and [reproduction result](../live-check/2026-09-29-ecosystem-review/scheduled-refusal-reproduction.json).
+Return an explicit execution outcome and propagate policy refusal through
+finalization, notifications and event delivery. Add a composed test in which
+managed-compute refusal cannot become success or a completed announcement.
+
+## ELECTRON-REJECTED-RUNTIME-NOT-DISPOSED-01
+
+Severity: Medium. Status: source-confirmed; mounted timing and deployment unverified.
+
+The CLI is spawned with piped stdio. handshake throws after initialize; its catch calls closeServer. closeServer marks closed, rejects requests, removes the map entry and emits runtime-stopped, but neither ends stdin nor kills/detaches the child. The next ensureServer sees no registered server and spawns another. The rejected child retains its open pipe and is excluded from stopAllDeveloperRuntimes, which iterates the map.
+
+Trigger/impact: Configure an installed CLI that answers initialize with an unsupported protocol, runtime version or missing thread/turn capability. Open an approved coding folder, then retry the unavailable folder. Malformed output and oversized incomplete frames use the same disposal path. An ordinary compatibility mismatch can leave an idle app-server alive on every retry. If disposal follows a protocol failure during a running turn, the unregistered runtime can also continue work. No resource-exhaustion magnitude or live leakage was measured.
+
+Source: `apps/desktop/electron/runtime/developerSessionService.ts:678` in `49d0c30f`. [Full evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No mounted Electron run, process listing after a rejected handshake, or new regression test executed.
+
+Resolution/acceptance: Dispose failed handshakes and framing failures through the same owned shutdown path as explicit stop; retain child ownership until exit. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
+
+## ELECTRON-CLOSED-RUNTIME-STALE-EVENTS-01
+
+Severity: Medium. Status: source-confirmed; mounted timing and deployment unverified.
+
+The stdout listener captures the old server. acceptChunk/acceptLine/handleNotification have no early server.closed or registry-generation check. acceptChunk tests closed only after accepting one line, so each later chunk can still deliver its first notification. Notifications carry root/thread/turn ids but no runtime generation. The local session consumer filters the thread but does not check the event turn id before appending output, replacing approval or settling the current turn.
+
+Trigger/impact: Stop a runtime or discard it after a protocol failure while stdout has a buffered notification or emits another data chunk. Start or reopen the same root/session during the cleanup interval. A late old-turn delta can append to a replacement turn, a stale approval can reappear after runtime-stopped cleared it, or a late finished event can settle the newer turn in the same thread. This concerns ordinary buffered callbacks; no forged protocol input or exploit was constructed.
+
+Source: `apps/desktop/electron/runtime/developerSessionService.ts:295` in `49d0c30f`. [Full evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No asynchronous child/React regression test executed. Cross-account or permission impact remains unclassified.
+
+Resolution/acceptance: Fence old-child callbacks by current runtime identity and closed state; consumers should match the current turn before applying turn-specific events. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
+
+## ELECTRON-REPLACEMENT-BEFORE-SHUTDOWN-01
+
+Severity: Medium. Status: source-confirmed; mounted timing and deployment unverified.
+
+terminate ends stdin and schedules SIGKILL after 1,500 ms, then synchronously calls closeServer, which removes the map entry. stopDeveloperRuntime returns void and exposes no exit promise. ensureServer can immediately spawn a replacement; readyServer waits only for that new child handshake. The prior CLI releases its writer leases at the end of asynchronous host shutdown, after terminating process trees and waiting for managers/tasks.
+
+Trigger/impact: Use Stop background coding runtime, then immediately open/resume/start work in that folder while the prior CLI is still shutting down. Old and new runtimes may overlap for the same approved folder. A fast restart can encounter the old writer lease instead of resuming immediately, and old work can finish during the newly available runtime interval. No overlap duration or visible conflict was measured.
+
+Source: `apps/desktop/electron/runtime/developerSessionService.ts:1195` in `49d0c30f`. [Full evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No real subprocess timing, writer-conflict reproduction or shutdown/restart integration test executed.
+
+Resolution/acceptance: Keep a stopping registry entry with an exit/shutdown promise and sequence replacement admission after it, while retaining a bounded kill fallback. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
+
+## CHROME-STOP-FALSE-CANCELLATION-SUCCESS-01
+
+Severity: Medium. Status: reproduced against current source `49d0c30f`; deployed behavior unknown.
+
+The panel marks the answer no longer streaming and can send the next queued follow-up while the durable task may continue. The worker emits Cancelled before the API result and then returns success even when cancellation failed.
+
+Real registered CANCEL_STREAM handler invoked the cancellation seam once, received {status:error,code:server_error,message:Cancellation service unavailable}, logged that failure, but returned response.success=true. The expectation success=false failed. The worker broadcasts a done:true/error:Cancelled chunk before requesting server cancellation, logs failure without returning it, and always returns success. The mounted requestStreamCancellation discards the worker response and swallows rejection. cancelCurrentManagedStream clears streaming/current stream immediately and invokes sendNextFollowUp in finally. The server cancellation owner updates cloud_agent_runs.cancellation_requested_at. Its workflow is started independently of the browser request and its invocation owns the AbortController, checking the persisted flag; aborting a follower cannot substitute for this write.
+
+Source: `apps/extension/src/background.ts:3566`. [Exact harness, source hashes and output](../live-check/2026-09-29-ecosystem-review/chrome-review.json). Limits: The real worker return value and cancellation invocation are reproduced; provider/API transport is mocked. Continued live tool execution or billing is not observed and is a conditional impact supported by the independently traced server-owned lifecycle.
+
+Resolution/acceptance: Mount the panel with a recovered owned durable run, click Stop, inject cancellation rejection, and require a visible unconfirmed/failure state with no falsely cancelled chunk or automatic next dependent turn. A successful cancellation should poll a confirmed terminal state. Include a server workflow fixture that remains running until the cancellation flag changes.
+
+## CHROME-SAME-ACCOUNT-NEW-SESSION-HISTORY-01
+
+Severity: Medium. Status: reproduced against current source `49d0c30f`; deployed behavior unknown.
+
+The history drawer and active conversation lookup cannot find the retained record. Pending local mirror work is also filtered out. This hides data rather than deleting it; account-backed history cannot be rehydrated by the current flags-only pull.
+
+The real upsertConversation/listConversations/getConversation functions ran against callback-correct mocked chrome.storage.local. Old-session owner could list/read the chat, another account saw none, and the persisted conversations array retained one record. The same account/new-session list returned [] instead of one chat. Clerk resolveSessionOwner sets authIncarnation to session.id. Persistent conversation owner is that complete ManagedCloudOwner, and sameManagedCloudOwner compares both accountId and authIncarnation. The mounted owner-transition resets visible messages/conversation id and drawer calls listConversations for the current owner. Cloud delta pull filters the same owner and its insert port is a no-op, so it cannot recover earlier-session history.
+
+Source: `apps/extension/src/features/background/conversation-history.ts:1392`. [Exact harness, source hashes and output](../live-check/2026-09-29-ecosystem-review/chrome-review.json). Limits: Real persistence normalization/filtering is tested with callback Chrome storage mocks. Real Clerk login and whole panel rendering are not mounted. Changing session authority comparison globally would weaken the correctly strict in-flight ownership boundary and is not the proposed fix.
+
+Resolution/acceptance: Save account A history under session A1, revoke/sign out, sign in as A2 and require retained history plus safe pending mirror recovery; account B remains isolated. Model persistent data ownership separately from auth-incarnation operation leases, retaining strict stale-stream/approval/cancellation fencing.

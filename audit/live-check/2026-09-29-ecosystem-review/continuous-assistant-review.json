@@ -1,0 +1,1407 @@
+{
+  "schema_version": 1,
+  "reviewed_at_utc": "2026-09-29T21:32:17.443581+00:00",
+  "reviewer": "/root/ecosystem_evidence",
+  "mode": "read-only semantic audit; only temp artifact writes",
+  "snapshot": {
+    "root": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e",
+    "branch": "work/billing-e2e",
+    "head": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+    "dirty_porcelain": [],
+    "current_source_manifest": "/private/tmp/agi-ecosystem-audit-20260929/source-manifest.jsonl"
+  },
+  "scope": "Canonical public managed-cloud schedule/event/AGI Work execution chains plus actual Electron and retained Tauri distinction. Selected source ranges were semantically read; neither the entire source manifest nor every historical alternative was semantically read in this lane.",
+  "competitor_evidence": [
+    {
+      "url": "https://help.openai.com/en/articles/20001530-getting-started-with-your-dot",
+      "as_of": "2026-09-29",
+      "status": "documented; primary page read by parent /root this turn, communicated to child; no observed UI",
+      "relevant_claims": [
+        "Dot has own cloud computer; scheduled/in-progress/completed work; customizable behavior and persistent memory. Local computer permissions off by default, explicit allow/revoke. Pause/resume/reset.",
+        "Gradual eligible Pro and Business Premium rollout; Enterprise beta off by default; geographic/mobile/SMS limits apply."
+      ]
+    },
+    {
+      "url": "https://docs.x.ai/grok-bot/overview",
+      "as_of": "2026-09-29",
+      "status": "documented primary web page; no observed UI",
+      "relevant_claims": [
+        "Named bots with separate jobs/context/memory, persistent account shared cloud computer/browser/files, coordinated group chats/handoffs, recurring schedules and work after laptop closure."
+      ]
+    },
+    {
+      "url": "https://introducing.muse.ai/",
+      "as_of": "2026-09-29",
+      "status": "documented primary announcement; no observed UI",
+      "relevant_claims": [
+        "Own computer, filesystem/terminal/browser; goals and multitasking event/schedule background work, persistent memory/persona, selective proactive interruptions and structured approval."
+      ]
+    }
+  ],
+  "workflows": [
+    {
+      "id": "durable-schedules",
+      "status": "partial",
+      "implemented": [
+        "Mounted /chat/schedules UI and authenticated, CSRF-protected create API with plan/workspace quotas. PostgreSQL leased/idempotent claim and run rows; cron/once/interval/rrule/event types, retry/missed-execution, URL conditions, project/memory source scope.",
+        "Runs execute in the server cron, independent of client/laptop; interrupted claims and approvals are reaped/persisted."
+      ],
+      "limitations": [
+        "Vercel timer is every 15 minutes. Each cron invocation is capped at 60 seconds; individual executions are bounded to about 40 seconds, not the interactive durable workflow continuation mechanism. Approval checkpoint resumes are another 40 second route invocation.",
+        "Actual production deployment, CRON_SECRET, DB migrations, provider eligibility and cron delivery are unknown."
+      ],
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/chat/schedules/page.tsx",
+          "start": 12,
+          "end": 17,
+          "sha256": "2c562883df950a6b1c93612f7cf06580e54861a6ec91c6e0d5f4112ee43cf397",
+          "why": "mounted UI"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/schedules/route.ts",
+          "start": 76,
+          "end": 118,
+          "sha256": "77789d1d08a11932ff1271c9ae62feac849c6761809bf144351298db333a77c4",
+          "why": "authenticated create gate"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-service.ts",
+          "start": 1244,
+          "end": 1313,
+          "sha256": "56a6b54527bbbba378a6bf43b61e301a94b59bd5f60bc8bfeda0f4123b283946",
+          "why": "atomic SKIP LOCKED durable claim"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/vercel.json",
+          "start": 41,
+          "end": 44,
+          "sha256": "a7c38294626ff39c14611d0fac0d7c48a8cdc695c2a6c4f955b0e58e4b4c1a8d",
+          "why": "15 minute timer"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-service.ts",
+          "start": 2087,
+          "end": 2226,
+          "sha256": "56a6b54527bbbba378a6bf43b61e301a94b59bd5f60bc8bfeda0f4123b283946",
+          "why": "request-bounded execution and persisted outcome"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/schedules/[id]/runs/[runId]/approval/route.ts",
+          "start": 49,
+          "end": 60,
+          "sha256": "88cc55f524fbcfc3c362aaafe81a84cd847d9476654d89be7fe545cce6fa6dae",
+          "why": "40 second resume"
+        }
+      ]
+    },
+    {
+      "id": "durable-event-triggers",
+      "status": "implemented",
+      "implemented": [
+        "Signed generic connector callback reaches ingest, transactionally deduplicates/caps/debounces delivery and enqueues database-backed event-triggers.fire job. Registered background handler reaches the real scheduled executor.",
+        "Background cron drains every 5 minutes; queue policy fences leased attempts and retries/dead-letters failures. Approvals persist through the shared scheduled-run mechanism."
+      ],
+      "limitations": [
+        "Implemented/source-reachable, not production runtime validated. Event queue executes approximately 45 second attempts; long tasks do not use interactive workflow continuation. Webhook signatures, watch subscriptions and infrastructure credentials must be configured."
+      ],
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/webhooks/connectors/[triggerId]/route.ts",
+          "start": 46,
+          "end": 99,
+          "sha256": "13ca051ca7c7b269ee359eafc837afadbd1e9dcc67019b4f2f044c195f3bba4a",
+          "why": "signature boundary and mounted ingest"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/triggers/trigger-ingest.ts",
+          "start": 234,
+          "end": 278,
+          "sha256": "f01f078451205a8fe14a660c5c8bbc20894e4121fc05c50f5b88eb13a1167700",
+          "why": "bounded, idempotent queue insert"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/jobs/job-handlers.ts",
+          "start": 261,
+          "end": 275,
+          "sha256": "57b51dae56b73288ca39ee6b71527807e8dfdc29cd68f5273426db20f2c8bcd7",
+          "why": "real handler registration"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/triggers/trigger-fire.ts",
+          "start": 84,
+          "end": 159,
+          "sha256": "c9ada314e75f7540c4b15f0d8004471928c0151cbb0e829c25c7799e2fedf33b",
+          "why": "actual schedule executor and retry outcome"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/jobs/job-service.ts",
+          "start": 231,
+          "end": 283,
+          "sha256": "556d1f04c138e2a97c6d6a578fa72d1025b42b0e9d353f4933a4d7371a58e693",
+          "why": "persistent idempotent queue"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/jobs/job-service.ts",
+          "start": 414,
+          "end": 470,
+          "sha256": "556d1f04c138e2a97c6d6a578fa72d1025b42b0e9d353f4933a4d7371a58e693",
+          "why": "fenced settlement"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/vercel.json",
+          "start": 133,
+          "end": 136,
+          "sha256": "a7c38294626ff39c14611d0fac0d7c48a8cdc695c2a6c4f955b0e58e4b4c1a8d",
+          "why": "5 minute drain timer"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/cron/drain-background-jobs/route.ts",
+          "start": 17,
+          "end": 40,
+          "sha256": "3d11d9cd1f0a0383ff9ecc5e2fd86adcacdb86896a87e93236b2dd45c76b4ea5",
+          "why": "mounted worker"
+        }
+      ]
+    },
+    {
+      "id": "cloud-work-after-laptop-closure",
+      "status": "implemented",
+      "implemented": [
+        "Canonical AGI Work/tool-loop entry starts Workflow server execution, writes durable run/event/checkpoint data, attaches workflow id and offers journal reattachment. Default initial-turn switch is enabled unless explicitly off.",
+        "Workflow invocation checkpoints automatically continue; device presence is rechecked before remote steps. The server waits up to 60 minutes for an asleep host, then removes its tools and continues cloud work."
+      ],
+      "limitations": [
+        "Conditional: an inline fallback on unavailable workflow, billing input, first-byte budget or operator switch is request scoped and loses detachability. Simple single-turn chat without the tool/work path is not covered by this finding.",
+        "Liveness tests exercise workflow mocks and source; no live browser disconnect/restart or deployed workflow platform was tested. Local file/computer/browser actions still require awake, paired authorized hardware."
+      ],
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/route.ts",
+          "start": 959,
+          "end": 1036,
+          "sha256": "4703406c439f05214504829d00c59bd957783acc29917933f9933a02b560a19c",
+          "why": "actual initial workflow mount and fallback"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/durable-initial-turns.ts",
+          "start": 5,
+          "end": 19,
+          "sha256": "b8acc0442f2b99d66a1a906a033fec3b62cf43cb2c6565fc718a0b5b8b8f69fb",
+          "why": "enabled-by-default switch"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/start-cloud-agent-workflow.ts",
+          "start": 96,
+          "end": 150,
+          "sha256": "80980ac5938104985bb9174a04bcac9c0a726b2215b2482d6c69c6b573a25568",
+          "why": "server start and DB attachment"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/cloud-agent-workflow.ts",
+          "start": 69,
+          "end": 99,
+          "sha256": "5b7f071bec91f65ee8053a059094ec42ab2cdbbe4ad55170b62ad62c9c9de3a5",
+          "why": "automatic continuation"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/steps/execute-cloud-agent-invocation.ts",
+          "start": 696,
+          "end": 742,
+          "sha256": "33aaff40feb9ef30fe964d4064f18249faf05b68b478cd85e603cdec850f5c43",
+          "why": "continuation and checkpoint persistence"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/cloud-agent-workflow.ts",
+          "start": 15,
+          "end": 64,
+          "sha256": "5b7f071bec91f65ee8053a059094ec42ab2cdbbe4ad55170b62ad62c9c9de3a5",
+          "why": "durable device waiting budget"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/device-steps/device-clearance-step.ts",
+          "start": 37,
+          "end": 94,
+          "sha256": "4fed411be827a5b148abd825e14b88da5056c121a35986f134b0ae5c13f8a07e",
+          "why": "live device revalidation"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+          "start": 4326,
+          "end": 4355,
+          "sha256": "cfee4f3d69b3cd4f0e1d9a399d9b0d71f3d3e3a2602975a2a3f63331079379cb",
+          "why": "AGI Work capability gate also enforced before the initial route start; do not infer a kill-switch bypass solely from durable fallback"
+        }
+      ]
+    },
+    {
+      "id": "task-inbox-and-notifications",
+      "status": "implemented",
+      "implemented": [
+        "Mounted /tasks uses shared TasksPage, authenticated managed-run client and active/needs-you/all/archived filters; conversation navigation, pause/resume/cancel and approvals use common run IDs.",
+        "Lifecycle approval/input/completion/failure emits durable account notification feed and mobile/browser push. Schedule completion/approval feeds are queued and can push/email."
+      ],
+      "limitations": [
+        "Notification transport registration, OS permissions, delivery/retry latency and all six surface renderings were not live verified. The reviewed Web task inbox and schedules are separate routes, not one persistent bot conversation."
+      ],
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/tasks/page.tsx",
+          "start": 13,
+          "end": 19,
+          "sha256": "60ca94e92ab4753c82d7cd7c34fe622c5c9dd17b97a0b605efa8f654a25ebd4f",
+          "why": "UI mount"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/tasks/components/TasksPage.tsx",
+          "start": 13,
+          "end": 74,
+          "sha256": "068ef35c782f028fc9bdaa90ca366d2898eb96dc043fa2d09e5db1a8ff565eb5",
+          "why": "real shared client mount"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+          "start": 43,
+          "end": 75,
+          "sha256": "91270782e8f11546d949b9cccf4ca6bdc6975ff116747e428ee184885fe0c98c",
+          "why": "task inbox filters"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/agent-notification-service.ts",
+          "start": 124,
+          "end": 172,
+          "sha256": "e5dbb977e02c9f71b0cdb59307baf534d96f2e1aa3e7f758ba68040ea73ee12b",
+          "why": "feed and device/browser push"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/cloud-agent-run-service.ts",
+          "start": 1432,
+          "end": 1437,
+          "sha256": "ff51e6f3de8d782a12c4172526045a08fff31e7a2a4abb03556004d92cbe0698",
+          "why": "approval notification trigger"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-notification-service.ts",
+          "start": 83,
+          "end": 142,
+          "sha256": "db959706941de31f975374325c32d59915fe9a2ca3051a92df85d0e556745032",
+          "why": "schedule feed and push/email"
+        }
+      ]
+    },
+    {
+      "id": "persistent-persona-and-memory",
+      "status": "partial",
+      "implemented": [
+        "Account instruction/style settings and project personalization scopes reach the attended model. Managed memory is persistent, consent/policy scoped, and durable turn settlement invokes auto-memory write service.",
+        "Scheduled execution reads project context, account/project memories and optionally past chats with a context manifest."
+      ],
+      "limitations": [
+        "The reviewed public execution owners are account/project/conversation/run/task, not a independently named bot with its own persona/memory. No independent bot/group-conversation handoff was established; other product paths remain unknown rather than inferred absent by names.",
+        "Scheduled context constructs its system prompt from project/memory/past-chat/capability/task directive and does not call the account custom-instructions builder. It also sets conversationId undefined; repeat scheduled runs do not share a bot-owned conversation/code notebook through this path."
+      ],
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/server/user-identity.ts",
+          "start": 263,
+          "end": 314,
+          "sha256": "d07df0dd4bccc3da89494ee64214c30883326cab2603d61bd19a40d58dd53e1f",
+          "why": "account instructions/style owner"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+          "start": 3202,
+          "end": 3214,
+          "sha256": "cfee4f3d69b3cd4f0e1d9a399d9b0d71f3d3e3a2602975a2a3f63331079379cb",
+          "why": "attended personalization mount"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/steps/settle-workflow-invocation.ts",
+          "start": 287,
+          "end": 292,
+          "sha256": "cc38f3206a8f8c68f8bbc890bb6af52fab24f3a282f9d55677a230c82ccc1877",
+          "why": "durable auto-memory write mount"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/managed-auto-memory-service.ts",
+          "start": 149,
+          "end": 190,
+          "sha256": "21ddf2d435774b9c2d545adeabcb28797942e679b6d6e355e4f1d7de7bd86364",
+          "why": "completed-turn extraction/write"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/scheduled-agent-executor.ts",
+          "start": 396,
+          "end": 489,
+          "sha256": "fb57c108b01e90f23e4fb11ef926d486b3d102a7dd634b0be9915a8efc8c8268",
+          "why": "scheduled memory and recent-chat scope"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/scheduled-agent-executor.ts",
+          "start": 919,
+          "end": 942,
+          "sha256": "fb57c108b01e90f23e4fb11ef926d486b3d102a7dd634b0be9915a8efc8c8268",
+          "why": "scheduled system context composition"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/scheduled-agent-executor.ts",
+          "start": 523,
+          "end": 540,
+          "sha256": "fb57c108b01e90f23e4fb11ef926d486b3d102a7dd634b0be9915a8efc8c8268",
+          "why": "no persistent conversation id"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/db/neon/0061_cloud_agent_runs.sql",
+          "start": 9,
+          "end": 32,
+          "sha256": "ae61546e23620e6edd55aaaf492f3013b700fb70c805f1973ba887550701215f",
+          "why": "canonical run entity scope"
+        }
+      ]
+    },
+    {
+      "id": "account-shared-cloud-computer",
+      "status": "partial",
+      "implemented": [
+        "Cloud code/filesystem execution has scoped persistent sandbox mapping and code contexts, keyed by tenant+user+conversation or code session. Local browser/computer steps can be handed to a paired device/caller."
+      ],
+      "limitations": [
+        "The scoped sandbox mapping is not an account-wide always-shared cloud computer/browser filesystem and login profile. Mapping TTL is 24 hours. Scheduled runs have no conversation scope in their ProcessedRequest.",
+        "Public tool execution path hands caller-owned browser commands back to the caller, or schedules device-host tools; it does not establish a durable account cloud GUI browser. An alternative remote MCP provider could supply a browser, but that deployment/account configuration is unknown."
+      ],
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/e2b/session-store.ts",
+          "start": 27,
+          "end": 38,
+          "sha256": "8f1473967c1759ba0ba0537cb228e8e10e6b1ce88f959e2b64fcc06bb6afab69",
+          "why": "scope fields"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/e2b/session-store.ts",
+          "start": 55,
+          "end": 104,
+          "sha256": "8f1473967c1759ba0ba0537cb228e8e10e6b1ce88f959e2b64fcc06bb6afab69",
+          "why": "conversation/code-session keys and cache lifetime"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+          "start": 6117,
+          "end": 6155,
+          "sha256": "ed6e1638ae9d92b7c3822cffdafe239953465a69ebe8e101cb22bddbd735ddda",
+          "why": "caller-owned browser handoff"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/device-steps/device-clearance-step.ts",
+          "start": 37,
+          "end": 94,
+          "sha256": "4fed411be827a5b148abd825e14b88da5056c121a35986f134b0ae5c13f8a07e",
+          "why": "physical device path"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/scheduled-agent-executor.ts",
+          "start": 523,
+          "end": 540,
+          "sha256": "fb57c108b01e90f23e4fb11ef926d486b3d102a7dd634b0be9915a8efc8c8268",
+          "why": "unscoped scheduled conversation"
+        }
+      ]
+    },
+    {
+      "id": "human-approval-and-control",
+      "status": "implemented",
+      "implemented": [
+        "Tool permissions distinguish allow/ask/block, approval events carry arguments, and checkpoints persist before stream termination. Authenticated approval resumes verify checkpoint owner and re-read current tool permissions. Durable runs can pause, accept guidance/input and resume from another surface.",
+        "Unattended schedules pause on escalation, persist checkpoint/request and disable further occurrences pending decision; authorized CSRF-protected decision route claims/resumes them."
+      ],
+      "limitations": [
+        "Provider-native hosted tools requiring a pause are withheld if they cannot be governed. Live concurrency/race behavior and irreversible-action coverage across all tools were not comprehensively exercised in this lane."
+      ],
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+          "start": 6592,
+          "end": 6660,
+          "sha256": "ed6e1638ae9d92b7c3822cffdafe239953465a69ebe8e101cb22bddbd735ddda",
+          "why": "checkpoint before yielding pending approval"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/cloud-agent-run-service.ts",
+          "start": 1358,
+          "end": 1438,
+          "sha256": "ff51e6f3de8d782a12c4172526045a08fff31e7a2a4abb03556004d92cbe0698",
+          "why": "owner lock and persistent approval checkpoint"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/approve/route.ts",
+          "start": 326,
+          "end": 335,
+          "sha256": "4daf7e13df8d1818e5103c0d7493b7642e06d788e7598a2a652f031e6bb840a1",
+          "why": "current permission recheck"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/approve/route.ts",
+          "start": 370,
+          "end": 401,
+          "sha256": "4daf7e13df8d1818e5103c0d7493b7642e06d788e7598a2a652f031e6bb840a1",
+          "why": "public continuation mount"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/scheduled-agent-executor.ts",
+          "start": 587,
+          "end": 619,
+          "sha256": "fb57c108b01e90f23e4fb11ef926d486b3d102a7dd634b0be9915a8efc8c8268",
+          "why": "unattended escalation pauses"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-service.ts",
+          "start": 1774,
+          "end": 1822,
+          "sha256": "56a6b54527bbbba378a6bf43b61e301a94b59bd5f60bc8bfeda0f4123b283946",
+          "why": "approval persistence and pause"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/schedules/[id]/runs/[runId]/approval/route.ts",
+          "start": 31,
+          "end": 60,
+          "sha256": "88cc55f524fbcfc3c362aaafe81a84cd847d9476654d89be7fe545cce6fa6dae",
+          "why": "owner/CSRF/claim/resume"
+        }
+      ]
+    },
+    {
+      "id": "selective-proactive-attention",
+      "status": "partial",
+      "implemented": [
+        "URL changes, JSON response field conditions and event source filters/debounce can suppress unnecessary executions. Cancelled condition-not-met runs produce no completion notice."
+      ],
+      "limitations": [
+        "A completed run is always offered a generic completion notification subject to channel preferences; no content novelty/relevance decision reaches this notification path. This is a narrower control than Muse documented selective meaningful proactive interruptions.",
+        "The canonical public schedule directive asks the model to return results without questions. Structured tool approval works separately; an autonomous assistant\u2019s judgment about asking useful follow-up questions is not established in this scheduler flow."
+      ],
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-condition-service.ts",
+          "start": 66,
+          "end": 108,
+          "sha256": "547b777a47c2243ddb4c15801158cf3e01b76240f1b012fb62203cedb3fdab4a",
+          "why": "change/field watch"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-service.ts",
+          "start": 2158,
+          "end": 2168,
+          "sha256": "56a6b54527bbbba378a6bf43b61e301a94b59bd5f60bc8bfeda0f4123b283946",
+          "why": "condition suppresses run"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-notification-service.ts",
+          "start": 73,
+          "end": 74,
+          "sha256": "db959706941de31f975374325c32d59915fe9a2ca3051a92df85d0e556745032",
+          "why": "generic completion copy"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-notification-service.ts",
+          "start": 89,
+          "end": 112,
+          "sha256": "db959706941de31f975374325c32d59915fe9a2ca3051a92df85d0e556745032",
+          "why": "only cancelled suppression then preference gate"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/scheduled-agent-executor.ts",
+          "start": 151,
+          "end": 155,
+          "sha256": "fb57c108b01e90f23e4fb11ef926d486b3d102a7dd634b0be9915a8efc8c8268",
+          "why": "unattended directive"
+        }
+      ]
+    }
+  ],
+  "new_findings": [
+    {
+      "id": "CONT-SCHEDULE-REFUSAL-SUCCESS-01",
+      "severity": "medium",
+      "status": "proven-source-and-isolated-reproduction",
+      "known_flaw_id": null,
+      "known_flaw_search": "No matching existing row found by schedule/skipped/billingStatus/false-success searches in current audit/registers/known-flaws.md; canonical register left untouched.",
+      "title": "Policy-refused scheduled runs are recorded and announced as successful",
+      "trigger": "A task has already been claimed, then evaluateManagedComputeAccess denies it (e.g. subscription inactive or workspace policy).",
+      "effect": "Provider work is skipped, but the run finalizer records success, emits a completion notice and marks an event-trigger delivery fired; task history shows success while the result text says skipped.",
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/scheduled-agent-executor.ts",
+          "start": 842,
+          "end": 861,
+          "sha256": "fb57c108b01e90f23e4fb11ef926d486b3d102a7dd634b0be9915a8efc8c8268",
+          "why": "normal result return on policy denial"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-service.ts",
+          "start": 2180,
+          "end": 2205,
+          "sha256": "56a6b54527bbbba378a6bf43b61e301a94b59bd5f60bc8bfeda0f4123b283946",
+          "why": "approval-only special case then unconditional success"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-notification-service.ts",
+          "start": 73,
+          "end": 74,
+          "sha256": "db959706941de31f975374325c32d59915fe9a2ca3051a92df85d0e556745032",
+          "why": "completed user-facing copy"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/triggers/trigger-fire.ts",
+          "start": 144,
+          "end": 152,
+          "sha256": "c9ada314e75f7540c4b15f0d8004471928c0151cbb0e829c25c7799e2fedf33b",
+          "why": "success counted fired"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/scheduled-agent-executor.test.ts",
+          "start": 230,
+          "end": 245,
+          "sha256": "8268d747447d55781af181442c8f772b756549e3ad45b06894913f6dffb44b31",
+          "why": "existing test expects skipped normal return"
+        }
+      ],
+      "reproduction": {
+        "command": "node /private/tmp/agi-ecosystem-audit-20260929/reproduce-scheduled-refusal.cjs",
+        "result": "exit 0; actual unchanged finalizer function extracted/transpiled from SHA-bound source returns status success and announces success for a subscription_inactive result",
+        "artifact": "/private/tmp/agi-ecosystem-audit-20260929/scheduled-refusal-reproduction.json",
+        "scope": "Real function body, simulated DB/executor dependencies; not a live API/DB integration test."
+      }
+    }
+  ],
+  "surface_distinction": {
+    "public_electron": {
+      "status": "implemented source-reachable",
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/config.ts",
+          "start": 18,
+          "end": 42,
+          "sha256": "9a96a69ebd179f8c528f376450251f6b9fcdb7a1d13139bc62e0bd3e5ee9aaae",
+          "why": "default remote renderer"
+        },
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/remote/remoteControlService.ts",
+          "start": 48,
+          "end": 71,
+          "sha256": "a33b8a43c8353d4b991a1d0abb0731d439f4d7e4ed2410d6e36b0cfa04a40098",
+          "why": "native host mounts actual local/developer operations"
+        }
+      ],
+      "assessment": "Default public desktop is Electron remote web shell plus native host bridge, so web durable execution is its cloud path. Native device operations require this Electron process/paired host to be available."
+    },
+    "retained_internal_tauri": {
+      "status": "implemented internal source; not public Electron evidence",
+      "evidence": [
+        {
+          "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/src-tauri/src/lib.rs",
+          "start": 921,
+          "end": 957,
+          "sha256": "70efce8639d6185ac29e7a0f48914c87c6c29ad44d0c2c8c8be9562180144c01",
+          "why": "local SQLite scheduler initialization and process background loop"
+        }
+      ],
+      "assessment": "Internal Tauri has a separate local SQLite-backed background scheduler. It is mounted in the retained Tauri app, not public Electron cloud runtime, and a local process loop cannot demonstrate server execution with that machine off."
+    }
+  },
+  "satellite_relevance_screen": {
+    "matched_variants": [
+      {
+        "path": "packages/ui/unified-chat/src/stores/memoryStore.ts",
+        "variant_kinds": [
+          "current-satellite-delta"
+        ],
+        "origins": [
+          {
+            "commit": "10e48bc4ae70a853fbc1b5ad39a5c0783ca25c54",
+            "ref": "partials/chat-gates"
+          }
+        ],
+        "sha256": "04f23f2f1bef6f8308aca58bab39097ba60f90a06948738aef54a61d3cb79c92"
+      }
+    ],
+    "semantic_diff_review": {
+      "path": "packages/ui/unified-chat/src/stores/memoryStore.ts",
+      "ref": "partials/chat-gates",
+      "sha256": "04f23f2f1bef6f8308aca58bab39097ba60f90a06948738aef54a61d3cb79c92",
+      "review": "Full diff inspected; adds resetOnLogout action to clear facts/sync state. This strengthens user-cache lifecycle, not autonomous agent persona/cloud computer features. No other currently distinct manifest variant matched the focused scheduler/event/cloud-run/memory/host/browser path set.",
+      "limitations": "Path filtering of supplied current manifest is a relevance screen, not semantic review of every satellite variant."
+    }
+  },
+  "tests": {
+    "command": "pnpm --filter @agiworkforce/web exec vitest run lib/services/scheduled-agent-executor.test.ts lib/triggers/__tests__/trigger-fire.test.ts lib/triggers/__tests__/trigger-ingest.test.ts lib/workflows/cloud-agent-workflow.device-clearance.test.ts lib/workflows/cloud-agent-workflow.liveness.test.ts lib/workflows/cloud-agent-workflow.unread-stream.test.ts lib/services/__tests__/schedule-notification-service.test.ts lib/server/__tests__/personalization-reaches-model.test.ts --maxWorkers=1 --no-file-parallelism --reporter=dot",
+    "exit_code": 0,
+    "files_passed": 8,
+    "tests_passed": 96,
+    "duration_seconds": 9.46,
+    "instrument_limits": [
+      "Isolated Vitest with mocked provider/queue/workflow/DB dependencies; these results do not prove deployed durable survival, cron timeliness or notification delivery.",
+      "Executor unit tests hit test Neon URL parse errors on some unmocked entitlement reads and use caught fallbacks. Tests still passed. No actual production DB/API was used.",
+      "Actual finalizer extraction reproduction is separate and documents its simulated dependencies."
+    ]
+  },
+  "source_reads": [
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/vercel.json",
+      "repo_path": "vercel.json",
+      "sha256": "a7c38294626ff39c14611d0fac0d7c48a8cdc695c2a6c4f955b0e58e4b4c1a8d",
+      "lines": 182,
+      "read_ranges": [
+        [
+          1,
+          180
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/next.config.ts",
+      "repo_path": "apps/web/next.config.ts",
+      "sha256": "6852382590744541f2e094e8ce4059861bda1f866f7a5682abeb746c5ebac9d8",
+      "lines": 250,
+      "read_ranges": [
+        [
+          1,
+          30
+        ],
+        [
+          248,
+          250
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/cron/run-schedules/route.ts",
+      "repo_path": "apps/web/app/api/cron/run-schedules/route.ts",
+      "sha256": "65cfc2b46b44d211a907bca2f91f3bb3ebd609710321f38bf0798924fac20551",
+      "lines": 76,
+      "read_ranges": [
+        [
+          1,
+          76
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/cron/drain-background-jobs/route.ts",
+      "repo_path": "apps/web/app/api/cron/drain-background-jobs/route.ts",
+      "sha256": "3d11d9cd1f0a0383ff9ecc5e2fd86adcacdb86896a87e93236b2dd45c76b4ea5",
+      "lines": 41,
+      "read_ranges": [
+        [
+          1,
+          41
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/schedules/route.ts",
+      "repo_path": "apps/web/app/api/schedules/route.ts",
+      "sha256": "77789d1d08a11932ff1271c9ae62feac849c6761809bf144351298db333a77c4",
+      "lines": 118,
+      "read_ranges": [
+        [
+          1,
+          118
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/schedules/[id]/runs/[runId]/approval/route.ts",
+      "repo_path": "apps/web/app/api/schedules/[id]/runs/[runId]/approval/route.ts",
+      "sha256": "88cc55f524fbcfc3c362aaafe81a84cd847d9476654d89be7fe545cce6fa6dae",
+      "lines": 66,
+      "read_ranges": [
+        [
+          1,
+          66
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/chat/schedules/page.tsx",
+      "repo_path": "apps/web/app/chat/schedules/page.tsx",
+      "sha256": "2c562883df950a6b1c93612f7cf06580e54861a6ec91c6e0d5f4112ee43cf397",
+      "lines": 18,
+      "read_ranges": [
+        [
+          1,
+          18
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/tasks/page.tsx",
+      "repo_path": "apps/web/app/tasks/page.tsx",
+      "sha256": "60ca94e92ab4753c82d7cd7c34fe622c5c9dd17b97a0b605efa8f654a25ebd4f",
+      "lines": 19,
+      "read_ranges": [
+        [
+          1,
+          19
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/tasks/components/TasksPage.tsx",
+      "repo_path": "apps/web/features/tasks/components/TasksPage.tsx",
+      "sha256": "068ef35c782f028fc9bdaa90ca366d2898eb96dc043fa2d09e5db1a8ff565eb5",
+      "lines": 75,
+      "read_ranges": [
+        [
+          1,
+          75
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/tasks/services/cloud-tasks-client.ts",
+      "repo_path": "apps/web/features/tasks/services/cloud-tasks-client.ts",
+      "sha256": "23cdf89d68343ce54fad217fbb71da152200859d16de2ca300e60e02c90a9adb",
+      "lines": 49,
+      "read_ranges": [
+        [
+          1,
+          49
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+      "repo_path": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+      "sha256": "91270782e8f11546d949b9cccf4ca6bdc6975ff116747e428ee184885fe0c98c",
+      "lines": 969,
+      "read_ranges": [
+        [
+          1,
+          105
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/schedules/components/ScheduleRunHistory.tsx",
+      "repo_path": "apps/web/features/schedules/components/ScheduleRunHistory.tsx",
+      "sha256": "fc7d9b0133abfcefb766b8d2b633d30a2c4550cc1675c1e16b6e9dd05e476a7c",
+      "lines": 272,
+      "read_ranges": [
+        [
+          1,
+          150
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/schedules/types/index.ts",
+      "repo_path": "apps/web/features/schedules/types/index.ts",
+      "sha256": "e2de3e947b02faf7e41fc3a0edc95634452f81b9af2f2170c633665d5cf96df7",
+      "lines": 259,
+      "read_ranges": [
+        [
+          45,
+          175
+        ],
+        [
+          210,
+          233
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/notifications/components/NotificationBell.tsx",
+      "repo_path": "apps/web/features/notifications/components/NotificationBell.tsx",
+      "sha256": "1a1eccf7b64e1b95b94740349b9cad398aef57143684def3db247ec3a710c6da",
+      "lines": 191,
+      "read_ranges": [
+        [
+          1,
+          75
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/shared/components/layout/SidebarBrandRow.tsx",
+      "repo_path": "apps/web/shared/components/layout/SidebarBrandRow.tsx",
+      "sha256": "f2bdd45bac6ab00682a4eb557dafc7358225012e1d54e64ca1a15080254db425",
+      "lines": 13,
+      "read_ranges": [
+        [
+          1,
+          13
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-service.ts",
+      "repo_path": "apps/web/lib/services/schedule-service.ts",
+      "sha256": "56a6b54527bbbba378a6bf43b61e301a94b59bd5f60bc8bfeda0f4123b283946",
+      "lines": 2364,
+      "read_ranges": [
+        [
+          49,
+          95
+        ],
+        [
+          1244,
+          1326
+        ],
+        [
+          1765,
+          1840
+        ],
+        [
+          2080,
+          2260
+        ],
+        [
+          2295,
+          2360
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/scheduled-agent-executor.ts",
+      "repo_path": "apps/web/lib/services/scheduled-agent-executor.ts",
+      "sha256": "fb57c108b01e90f23e4fb11ef926d486b3d102a7dd634b0be9915a8efc8c8268",
+      "lines": 1109,
+      "read_ranges": [
+        [
+          143,
+          175
+        ],
+        [
+          196,
+          360
+        ],
+        [
+          392,
+          489
+        ],
+        [
+          495,
+          645
+        ],
+        [
+          810,
+          942
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/scheduled-agent-executor.test.ts",
+      "repo_path": "apps/web/lib/services/scheduled-agent-executor.test.ts",
+      "sha256": "8268d747447d55781af181442c8f772b756549e3ad45b06894913f6dffb44b31",
+      "lines": 368,
+      "read_ranges": [
+        [
+          210,
+          245
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-notification-service.ts",
+      "repo_path": "apps/web/lib/services/schedule-notification-service.ts",
+      "sha256": "db959706941de31f975374325c32d59915fe9a2ca3051a92df85d0e556745032",
+      "lines": 147,
+      "read_ranges": [
+        [
+          1,
+          147
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/schedule-condition-service.ts",
+      "repo_path": "apps/web/lib/services/schedule-condition-service.ts",
+      "sha256": "547b777a47c2243ddb4c15801158cf3e01b76240f1b012fb62203cedb3fdab4a",
+      "lines": 109,
+      "read_ranges": [
+        [
+          1,
+          109
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/triggers/trigger-ingest.ts",
+      "repo_path": "apps/web/lib/triggers/trigger-ingest.ts",
+      "sha256": "f01f078451205a8fe14a660c5c8bbc20894e4121fc05c50f5b88eb13a1167700",
+      "lines": 366,
+      "read_ranges": [
+        [
+          189,
+          285
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/triggers/trigger-fire.ts",
+      "repo_path": "apps/web/lib/triggers/trigger-fire.ts",
+      "sha256": "c9ada314e75f7540c4b15f0d8004471928c0151cbb0e829c25c7799e2fedf33b",
+      "lines": 160,
+      "read_ranges": [
+        [
+          1,
+          160
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/webhooks/connectors/[triggerId]/route.ts",
+      "repo_path": "apps/web/app/api/webhooks/connectors/[triggerId]/route.ts",
+      "sha256": "13ca051ca7c7b269ee359eafc837afadbd1e9dcc67019b4f2f044c195f3bba4a",
+      "lines": 102,
+      "read_ranges": [
+        [
+          1,
+          102
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/jobs/job-handlers.ts",
+      "repo_path": "apps/web/lib/jobs/job-handlers.ts",
+      "sha256": "57b51dae56b73288ca39ee6b71527807e8dfdc29cd68f5273426db20f2c8bcd7",
+      "lines": 275,
+      "read_ranges": [
+        [
+          246,
+          275
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/jobs/job-queues.ts",
+      "repo_path": "apps/web/lib/jobs/job-queues.ts",
+      "sha256": "40775ee090bcda3c90a20d9ad19658801acf999d6b36039e1ce571f47b9be905",
+      "lines": 149,
+      "read_ranges": [
+        [
+          1,
+          149
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/jobs/job-service.ts",
+      "repo_path": "apps/web/lib/jobs/job-service.ts",
+      "sha256": "556d1f04c138e2a97c6d6a578fa72d1025b42b0e9d353f4933a4d7371a58e693",
+      "lines": 652,
+      "read_ranges": [
+        [
+          231,
+          315
+        ],
+        [
+          400,
+          470
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/start-cloud-agent-workflow.ts",
+      "repo_path": "apps/web/lib/workflows/start-cloud-agent-workflow.ts",
+      "sha256": "80980ac5938104985bb9174a04bcac9c0a726b2215b2482d6c69c6b573a25568",
+      "lines": 471,
+      "read_ranges": [
+        [
+          1,
+          205
+        ],
+        [
+          220,
+          350
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/durable-initial-turns.ts",
+      "repo_path": "apps/web/lib/workflows/durable-initial-turns.ts",
+      "sha256": "b8acc0442f2b99d66a1a906a033fec3b62cf43cb2c6565fc718a0b5b8b8f69fb",
+      "lines": 20,
+      "read_ranges": [
+        [
+          1,
+          20
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/cloud-agent-workflow.ts",
+      "repo_path": "apps/web/lib/workflows/cloud-agent-workflow.ts",
+      "sha256": "5b7f071bec91f65ee8053a059094ec42ab2cdbbe4ad55170b62ad62c9c9de3a5",
+      "lines": 100,
+      "read_ranges": [
+        [
+          1,
+          100
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/steps/execute-cloud-agent-invocation.ts",
+      "repo_path": "apps/web/lib/workflows/steps/execute-cloud-agent-invocation.ts",
+      "sha256": "33aaff40feb9ef30fe964d4064f18249faf05b68b478cd85e603cdec850f5c43",
+      "lines": 839,
+      "read_ranges": [
+        [
+          1,
+          105
+        ],
+        [
+          680,
+          760
+        ],
+        [
+          810,
+          838
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/workflows/steps/settle-workflow-invocation.ts",
+      "repo_path": "apps/web/lib/workflows/steps/settle-workflow-invocation.ts",
+      "sha256": "cc38f3206a8f8c68f8bbc890bb6af52fab24f3a282f9d55677a230c82ccc1877",
+      "lines": 310,
+      "read_ranges": [
+        [
+          1,
+          95
+        ],
+        [
+          270,
+          309
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/device-steps/device-clearance-step.ts",
+      "repo_path": "apps/web/lib/device-steps/device-clearance-step.ts",
+      "sha256": "4fed411be827a5b148abd825e14b88da5056c121a35986f134b0ae5c13f8a07e",
+      "lines": 159,
+      "read_ranges": [
+        [
+          1,
+          159
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/feature-flags/capability-gate.ts",
+      "repo_path": "apps/web/lib/feature-flags/capability-gate.ts",
+      "sha256": "d83340796ee86de5c53e7880a069d06a0f188a0b3d7624a58fe1db0e0700b655",
+      "lines": 100,
+      "read_ranges": [
+        [
+          1,
+          100
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/route.ts",
+      "repo_path": "apps/web/app/api/llm/v1/chat/completions/route.ts",
+      "sha256": "4703406c439f05214504829d00c59bd957783acc29917933f9933a02b560a19c",
+      "lines": 1470,
+      "read_ranges": [
+        [
+          535,
+          640
+        ],
+        [
+          900,
+          1045
+        ],
+        [
+          1165,
+          1194
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+      "repo_path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+      "sha256": "ed6e1638ae9d92b7c3822cffdafe239953465a69ebe8e101cb22bddbd735ddda",
+      "lines": 6757,
+      "read_ranges": [
+        [
+          6040,
+          6180
+        ],
+        [
+          6592,
+          6705
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+      "repo_path": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+      "sha256": "cfee4f3d69b3cd4f0e1d9a399d9b0d71f3d3e3a2602975a2a3f63331079379cb",
+      "lines": 5820,
+      "read_ranges": [
+        [
+          3195,
+          3220
+        ],
+        [
+          4322,
+          4358
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/approve/route.ts",
+      "repo_path": "apps/web/app/api/llm/v1/chat/completions/approve/route.ts",
+      "sha256": "4daf7e13df8d1818e5103c0d7493b7642e06d788e7598a2a652f031e6bb840a1",
+      "lines": 525,
+      "read_ranges": [
+        [
+          110,
+          155
+        ],
+        [
+          260,
+          335
+        ],
+        [
+          365,
+          430
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/app/api/llm/v1/chat/completions/runs/[runId]/resume/route.ts",
+      "repo_path": "apps/web/app/api/llm/v1/chat/completions/runs/[runId]/resume/route.ts",
+      "sha256": "a0f593a8ea5a578502fb520baa6a30c0fbb9dbda7e454908a8b89dd22463ddbf",
+      "lines": 396,
+      "read_ranges": [
+        [
+          1,
+          95
+        ],
+        [
+          140,
+          220
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/cloud-agent-run-service.ts",
+      "repo_path": "apps/web/lib/services/cloud-agent-run-service.ts",
+      "sha256": "ff51e6f3de8d782a12c4172526045a08fff31e7a2a4abb03556004d92cbe0698",
+      "lines": 2758,
+      "read_ranges": [
+        [
+          1358,
+          1438
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/db/neon/0061_cloud_agent_runs.sql",
+      "repo_path": "apps/web/db/neon/0061_cloud_agent_runs.sql",
+      "sha256": "ae61546e23620e6edd55aaaf492f3013b700fb70c805f1973ba887550701215f",
+      "lines": 81,
+      "read_ranges": [
+        [
+          1,
+          77
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/agent-notification-service.ts",
+      "repo_path": "apps/web/lib/services/agent-notification-service.ts",
+      "sha256": "e5dbb977e02c9f71b0cdb59307baf534d96f2e1aa3e7f758ba68040ea73ee12b",
+      "lines": 377,
+      "read_ranges": [
+        [
+          1,
+          190
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/server/user-identity.ts",
+      "repo_path": "apps/web/lib/server/user-identity.ts",
+      "sha256": "d07df0dd4bccc3da89494ee64214c30883326cab2603d61bd19a40d58dd53e1f",
+      "lines": 355,
+      "read_ranges": [
+        [
+          263,
+          335
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/managed-memory-context-service.ts",
+      "repo_path": "apps/web/lib/services/managed-memory-context-service.ts",
+      "sha256": "e7e99e4bfc1904c9ce1d58993214dde6cdc1fd60c45f1de046e79e839d779c2c",
+      "lines": 1328,
+      "read_ranges": [
+        [
+          1,
+          100
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/services/managed-auto-memory-service.ts",
+      "repo_path": "apps/web/lib/services/managed-auto-memory-service.ts",
+      "sha256": "21ddf2d435774b9c2d545adeabcb28797942e679b6d6e355e4f1d7de7bd86364",
+      "lines": 218,
+      "read_ranges": [
+        [
+          149,
+          218
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/e2b/session-store.ts",
+      "repo_path": "apps/web/lib/e2b/session-store.ts",
+      "sha256": "8f1473967c1759ba0ba0537cb228e8e10e6b1ce88f959e2b64fcc06bb6afab69",
+      "lines": 264,
+      "read_ranges": [
+        [
+          1,
+          148
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/lib/visual/use-visual-session.ts",
+      "repo_path": "apps/web/lib/visual/use-visual-session.ts",
+      "sha256": "52f34f08612b3c31cd65ce1a473fb4ae0254a872e0af8692058453b7d25d1d0d",
+      "lines": 107,
+      "read_ranges": [
+        [
+          1,
+          107
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/config.ts",
+      "repo_path": "apps/desktop/electron/config.ts",
+      "sha256": "9a96a69ebd179f8c528f376450251f6b9fcdb7a1d13139bc62e0bd3e5ee9aaae",
+      "lines": 89,
+      "read_ranges": [
+        [
+          1,
+          89
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/main.ts",
+      "repo_path": "apps/desktop/electron/main.ts",
+      "sha256": "17db634a493031b22271b27ee3e21e687c6bc2660bd99382c6bcd1987e03d6a4",
+      "lines": 1584,
+      "read_ranges": [
+        [
+          530,
+          585
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/remote/remoteControlService.ts",
+      "repo_path": "apps/desktop/electron/remote/remoteControlService.ts",
+      "sha256": "a33b8a43c8353d4b991a1d0abb0731d439f4d7e4ed2410d6e36b0cfa04a40098",
+      "lines": 224,
+      "read_ranges": [
+        [
+          1,
+          210
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/src-tauri/src/lib.rs",
+      "repo_path": "apps/desktop/src-tauri/src/lib.rs",
+      "sha256": "70efce8639d6185ac29e7a0f48914c87c6c29ad44d0c2c8c8be9562180144c01",
+      "lines": 2838,
+      "read_ranges": [
+        [
+          917,
+          957
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    },
+    {
+      "path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/src-tauri/src/core/scheduler/proactive.rs",
+      "repo_path": "apps/desktop/src-tauri/src/core/scheduler/proactive.rs",
+      "sha256": "b2d65d4935e701adb850023c8c71c8e740698b886a88806745c293eac35392cf",
+      "lines": 1231,
+      "read_ranges": [
+        [
+          1,
+          85
+        ]
+      ],
+      "coverage": "selected semantic ranges; other lines not claimed read"
+    }
+  ],
+  "semantic_source_file_count": 51,
+  "global_limitations": [
+    "Production environment flags/kill-switch subjects, cron service, workflow platform, DB applied migration state, provider/connector credentials and notification channel registrations were not accessed. Deployment readiness remains unknown.",
+    "No tests installed, purchases, secrets, release/deployment mutation, production tasks or messages were performed.",
+    "No blanket parity with dots/Grok Bot/Muse is claimed. Memory/persona and shared-computer gaps are qualified to reviewed canonical public execution paths.",
+    "Comparators are documentation evidence, not observed functionality; rollout eligibility and limits must stay attached to claims."
+  ]
+}
