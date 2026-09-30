@@ -25,8 +25,8 @@ function readJson(filePath, label) {
   }
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (error) {
-    fail(`${label} at ${filePath} is not valid JSON: ${error.message}`);
+  } catch {
+    fail(`${label} at ${filePath} is not valid JSON.`);
     return null;
   }
 }
@@ -90,30 +90,102 @@ function matches(entry, finding) {
   );
 }
 
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isNonemptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function parseReport(report) {
+  if (!isRecord(report)) {
+    fail('Semgrep report must be an object.');
+    return null;
+  }
+  if (!isNonemptyString(report.version)) {
+    fail('Semgrep report version must be a nonempty string.');
+    return null;
+  }
+  if (!Array.isArray(report.results)) {
+    fail('Semgrep report results must be an array.');
+    return null;
+  }
+  if (!Array.isArray(report.errors)) {
+    fail('Semgrep report errors must be an array.');
+    return null;
+  }
+  if (report.errors.length > 0) {
+    fail(
+      `Semgrep report contains ${report.errors.length} scanner error(s). The scan is incomplete.`,
+    );
+    return null;
+  }
+  if (
+    !isRecord(report.paths) ||
+    !Array.isArray(report.paths.scanned) ||
+    report.paths.scanned.length === 0 ||
+    report.paths.scanned.some((value) => !isNonemptyString(value))
+  ) {
+    fail('Semgrep report paths.scanned must be a nonempty array of nonempty strings.');
+    return null;
+  }
+
+  let valid = true;
+  report.results.forEach((finding, index) => {
+    const label = `Semgrep report results[${index}]`;
+    if (!isRecord(finding)) {
+      fail(`${label} must be an object.`);
+      valid = false;
+      return;
+    }
+    if (!isNonemptyString(finding.check_id) || !isNonemptyString(finding.path)) {
+      fail(`${label} must set nonempty string check_id and path fields.`);
+      valid = false;
+    }
+    if (
+      !isRecord(finding.start) ||
+      !Number.isSafeInteger(finding.start.line) ||
+      finding.start.line <= 0
+    ) {
+      fail(`${label} start.line must be a positive safe integer.`);
+      valid = false;
+    }
+    if (
+      !isRecord(finding.extra) ||
+      !isNonemptyString(finding.extra.severity) ||
+      typeof finding.extra.message !== 'string'
+    ) {
+      fail(`${label} extra must set a nonempty string severity and string message.`);
+      valid = false;
+    }
+  });
+
+  return valid ? report.results : null;
+}
+
 const allowlist = parseAllowlist(readJson(allowlistPath, 'Semgrep allowlist'));
 
 if (!allowlistOnly) {
-  const report = readJson(resultsPath, 'Semgrep report');
-  const findings = Array.isArray(report?.results) ? report.results : [];
-  const blocking = [];
+  const findings = parseReport(readJson(resultsPath, 'Semgrep report'));
+  if (findings !== null) {
+    const blocking = [];
 
-  for (const finding of findings) {
-    const entry = allowlist.find((candidate) => matches(candidate, finding));
-    if (entry) {
-      entry.matched += 1;
-      continue;
+    for (const finding of findings) {
+      const entry = allowlist.find((candidate) => matches(candidate, finding));
+      if (entry) {
+        entry.matched += 1;
+        continue;
+      }
+      blocking.push(finding);
     }
-    blocking.push(finding);
-  }
 
-  for (const finding of blocking) {
-    const line = finding.start?.line ?? 0;
-    const message = (finding.extra?.message ?? '').split('\n')[0];
-    const severity = finding.extra?.severity ?? 'UNKNOWN';
-    fail(`unaccepted: ${finding.path}:${line} [${severity}] ${finding.check_id}, ${message}`);
-  }
+    for (const finding of blocking) {
+      fail(
+        `unaccepted: ${finding.path}:${finding.start.line} [${finding.extra.severity}] ${finding.check_id}`,
+      );
+    }
 
-  if (report) {
     for (const entry of allowlist) {
       if (entry.matched === 0) {
         fail(
@@ -121,12 +193,12 @@ if (!allowlistOnly) {
         );
       }
     }
-  }
 
-  if (errors.length === 0) {
-    console.log(
-      `Semgrep gate passed: ${findings.length} finding(s), every one accounted for by ${allowlist.length} reviewed allowlist entry(ies).`,
-    );
+    if (errors.length === 0) {
+      console.log(
+        `Semgrep gate passed: ${findings.length} finding(s), every one accounted for by ${allowlist.length} reviewed allowlist entry(ies).`,
+      );
+    }
   }
 } else if (errors.length === 0) {
   console.log(`Semgrep allowlist valid: ${allowlist.length} unexpired entry(ies).`);
