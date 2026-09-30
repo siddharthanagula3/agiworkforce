@@ -50,7 +50,7 @@
     "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "@clerk/chrome-extension": "^3.1.82",
-    "dompurify": "^3.4.15",
+    "dompurify": "^3.4.16",
     "markdown-it": "^15.0.2"
   },
   "devDependencies": {
