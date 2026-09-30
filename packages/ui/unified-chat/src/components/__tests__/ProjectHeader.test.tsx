@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { summarizeProjectHeader, type ProjectHeaderPresentation } from '@agiworkforce/types';
 import { ProjectHeader } from '../ProjectHeader';
+import { resolveProjectAccentHex } from '@agiworkforce/ui';
 
 type ProjectFixture = Parameters<typeof summarizeProjectHeader>[0]['project'];
 
@@ -44,6 +45,16 @@ describe('ProjectHeader', () => {
     render(<ProjectHeader presentation={presentation} />);
     const root = screen.getByTestId('project-header');
     expect(root.getAttribute('data-accent-color')).toBe('amber');
+  });
+
+  it('uses the shared project accent owner for the decorative icon', () => {
+    const presentation = buildPresentation({ accentColor: 'violet' });
+    render(<ProjectHeader presentation={presentation} />);
+    const icon = screen.getByTestId('project-header').querySelector('svg');
+    const actual = icon?.parentElement as HTMLElement;
+    const expected = document.createElement('div');
+    expected.style.color = resolveProjectAccentHex(presentation.accentColor);
+    expect(actual.style.color).toBe(expected.style.color);
   });
 
   it('falls back to zinc accent for unknown values via the canonical summarizer', () => {

@@ -311,7 +311,7 @@ export function CompareAnswersPage({ requestedModelIds }: CompareAnswersPageProp
                 onKeyDown={handlePromptKeyDown}
                 aria-describedby={hintId}
                 placeholder="Ask every model the same thing"
-                className="min-h-9 flex-1 resize-none bg-transparent py-1.5 text-base text-foreground outline-none placeholder:text-muted-foreground"
+                className="min-h-9 flex-1 resize-none bg-transparent py-1.5 text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground"
               />
               <SendButton
                 mode={running ? 'stop' : 'send'}

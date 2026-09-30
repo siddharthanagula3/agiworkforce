@@ -55,7 +55,7 @@ const EXPORT_FORMATS: Array<{
     description: 'Portable document format',
     icon: <FileText className="h-5 w-5" />,
     extension: '.pdf',
-    color: 'text-red-700 dark:text-red-300',
+    color: 'text-muted-foreground',
   },
   {
     id: 'docx',
@@ -71,7 +71,7 @@ const EXPORT_FORMATS: Array<{
     description: 'Web page format',
     icon: <FileCode className="h-5 w-5" />,
     extension: '.html',
-    color: 'text-orange-700 dark:text-orange-300',
+    color: 'text-muted-foreground',
   },
   {
     id: 'json',
@@ -79,7 +79,7 @@ const EXPORT_FORMATS: Array<{
     description: 'Machine-readable data',
     icon: <FileJson className="h-5 w-5" />,
     extension: '.json',
-    color: 'text-green-700 dark:text-green-300',
+    color: 'text-muted-foreground',
   },
 ];
 

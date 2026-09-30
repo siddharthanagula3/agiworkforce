@@ -6,6 +6,8 @@ import {
   WORKSPACE_FEATURE_LABELS,
   WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS,
   WORKSPACE_REASONING_EFFORTS,
+  MODEL_FAMILY_REGISTRY,
+  getModelMetadataById,
   type WorkspaceControls,
   type WorkspaceControlsLayer,
   type WorkspaceFeature,
@@ -46,6 +48,11 @@ export const GOVERNED_FEATURES: readonly WorkspaceFeature[] = [
   'fast_mode',
 ];
 
+const fastModeOptions = Object.values(MODEL_FAMILY_REGISTRY).flatMap(({ activeModelId }) => {
+  const model = getModelMetadataById(activeModelId);
+  return model?.fastTier ? [`${model.name} at ${model.fastTier.priceMultiplier}x the usage`] : [];
+});
+
 const FEATURE_HINTS: Readonly<Partial<Record<WorkspaceFeature, string>>> = {
   work: 'Multi-step Work runs in chat.',
   code: 'Cloud Code sessions, their agent, commands and notebooks.',
@@ -61,8 +68,7 @@ const FEATURE_HINTS: Readonly<Partial<Record<WorkspaceFeature, string>>> = {
   event_triggers: 'Triggers that start a task when a connected account fires an event.',
   artifact_connectors:
     "Published artifacts reading and changing data in a member's connected apps.",
-  fast_mode:
-    'Faster answers from Claude Opus at twice the usage, billed to usage credits. Off until you turn it on.',
+  fast_mode: `${fastModeOptions.length ? `Faster answers from ${fastModeOptions.join(', ')}. ` : ''}Billed to usage credits. Off until you turn it on.`,
 };
 
 const cardStyle = {

@@ -235,6 +235,10 @@
       },
       {
         "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/sync"
+      },
+      {
+        "from": "@agiworkforce/extension",
         "to": "@agiworkforce/types"
       },
       {
@@ -248,6 +252,10 @@
       {
         "from": "@agiworkforce/files",
         "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/guardian-core",
+        "to": "@agiworkforce/utils"
       },
       {
         "from": "@agiworkforce/guardian-github",
@@ -284,6 +292,10 @@
       {
         "from": "@agiworkforce/mobile",
         "to": "@agiworkforce/compliance"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/context"
       },
       {
         "from": "@agiworkforce/mobile",
@@ -867,6 +879,10 @@
       },
       {
         "from": "agi-workforce",
+        "to": "@agiworkforce/i18n"
+      },
+      {
+        "from": "agi-workforce",
         "to": "@agiworkforce/ide-runtime"
       },
       {
@@ -880,6 +896,10 @@
       {
         "from": "agi-workforce",
         "to": "@agiworkforce/routing"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/sync"
       },
       {
         "from": "agi-workforce",

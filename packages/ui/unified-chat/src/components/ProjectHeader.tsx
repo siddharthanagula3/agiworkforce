@@ -1,10 +1,11 @@
 import { Users } from 'lucide-react';
-import { TrustBadge, resolveProjectIcon, hasKnownProjectIcon } from '@agiworkforce/ui';
 import {
-  providerModeToPrivacyMode,
-  type ProjectAccentColor,
-  type ProjectHeaderPresentation,
-} from '@agiworkforce/types';
+  TrustBadge,
+  resolveProjectIcon,
+  resolveProjectAccentHex,
+  hasKnownProjectIcon,
+} from '@agiworkforce/ui';
+import { providerModeToPrivacyMode, type ProjectHeaderPresentation } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 
 export interface ProjectHeaderProps {
@@ -13,26 +14,22 @@ export interface ProjectHeaderProps {
   compact?: boolean;
 }
 
-const ACCENT_BG: Record<ProjectAccentColor, string> = {
-  emerald: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300',
-  sky: 'bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300',
-  amber: 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300',
-  rose: 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300',
-  violet: 'bg-violet-500/10 border-violet-500/30 text-violet-700 dark:text-violet-300',
-  zinc: 'bg-zinc-500/10 border-zinc-500/30 text-zinc-700 dark:text-zinc-300',
-};
-
 function IconCircle({ presentation }: { presentation: ProjectHeaderPresentation }) {
-  const accent = ACCENT_BG[presentation.accentColor];
+  const accent = resolveProjectAccentHex(presentation.accentColor);
   const Icon = resolveProjectIcon(
     hasKnownProjectIcon(presentation.iconEmoji) ? presentation.iconEmoji : null,
   );
   return (
     <div
       aria-hidden
+      style={{
+        color: accent,
+        backgroundColor: `color-mix(in srgb, ${accent} 10%, transparent)`,
+        borderColor: `color-mix(in srgb, ${accent} 30%, transparent)`,
+      }}
       className={cn(
         'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border',
-        accent,
+        'text-muted-foreground',
       )}
     >
       <Icon className="h-6 w-6" />
@@ -145,7 +142,7 @@ export function ProjectHeader({ presentation, className, compact = false }: Proj
                   data-testid="project-header-imported-from"
                   className={cn(
                     'inline-flex items-center rounded-full border px-1.5 py-0.5 text-caption uppercase tracking-wide',
-                    'border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+                    'border-border bg-muted text-info-text',
                   )}
                 >
                   {presentation.importedFromLabel}

@@ -1213,7 +1213,7 @@ function FileViewerOverlay({
             src={documentUri}
             title={item.file_name}
             data-testid="library-pdf-reader"
-            className="h-full min-h-[70vh] w-full rounded-md border-0 bg-white"
+            className="h-full min-h-[70vh] w-full rounded-md border-0 bg-background"
           />
         ) : textPreview.status === 'loading' ? (
           <Spinner size="default" />

@@ -222,7 +222,7 @@ export function ChipInput({
           onKeyDown={onInputKeyDown}
           onPaste={onPaste}
           onBlur={onBlur}
-          className="min-w-[8rem] flex-1 bg-transparent py-0.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed"
+          className="min-w-[8rem] flex-1 bg-transparent py-0.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
         />
       </div>
       {error ? (

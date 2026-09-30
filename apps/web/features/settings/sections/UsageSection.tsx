@@ -230,7 +230,10 @@ function RetryNotice({ message, onRetry }: { message: string; onRetry: () => voi
 
 function LoadingNotice({ label }: { label: string }) {
   return (
-    <div role="status" style={{ ...DETAIL, display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div
+      role="status"
+      style={{ ...DETAIL, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+    >
       <Spinner size="sm" aria-hidden="true" />
       {label}
     </div>

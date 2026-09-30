@@ -2056,7 +2056,7 @@ const MessageBubbleComponent = function MessageBubble({
             (isUser && message.metadata?.isPasted)) && (
             <div className="mb-1 flex items-center gap-1.5">
               {message.metadata?.isPinned && (
-                <Pin className="h-3 w-3 text-amber-700 dark:text-amber-500" aria-hidden="true" />
+                <Pin className="h-3 w-3 text-accent-text" aria-hidden="true" />
               )}
               {(hasBranches || branchNavigation) && (
                 <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />

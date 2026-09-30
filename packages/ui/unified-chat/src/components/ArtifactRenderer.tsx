@@ -672,7 +672,7 @@ export function ArtifactRenderer({
                           }}
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
                         >
-                          <FileText className="h-4 w-4 text-red-700 dark:text-red-300" />
+                          <FileText className="h-4 w-4 text-muted-foreground" />
                           Export as PDF
                         </button>
                       )}
@@ -711,7 +711,7 @@ export function ArtifactRenderer({
                       }}
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
                     >
-                      <FileSpreadsheet className="h-4 w-4 text-green-700 dark:text-green-300" />
+                      <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
                       Export as Excel
                     </button>
                   )}

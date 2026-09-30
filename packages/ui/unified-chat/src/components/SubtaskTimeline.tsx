@@ -32,7 +32,7 @@ function StepIcon({ status }: { status: SubtaskStep['status'] }) {
     case 'failed':
       return <XCircle className="h-4 w-4 shrink-0 text-danger-text" />;
     case 'running':
-      return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-700 dark:text-blue-400" />;
+      return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-info-text" />;
     default:
       return <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />;
   }
@@ -54,7 +54,7 @@ function StepRow({ step, isLast }: StepRowProps) {
       : step.status === 'failed'
         ? 'text-danger-text'
         : step.status === 'running'
-          ? 'text-blue-700 dark:text-blue-300'
+          ? 'text-info-text'
           : 'text-muted-foreground';
 
   return (

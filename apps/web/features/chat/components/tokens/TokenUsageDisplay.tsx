@@ -121,7 +121,7 @@ export function TokenUsageDisplay({
 
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-1.5">
-          <Zap className="h-3.5 w-3.5 text-yellow-700 dark:text-yellow-400" />
+          <Zap className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-mono">{formatTokens(tokensUsed)}</span>
           <span className="text-muted-foreground">tokens</span>
         </div>

@@ -67,7 +67,7 @@ export function BrowserActivityBadge({
         !extensionConnected
           ? 'border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:bg-zinc-800'
           : agentStatus === 'planning' || agentStatus === 'executing'
-            ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500/15'
+            ? 'border-border bg-muted text-accent-text hover:bg-muted'
             : hasError
               ? 'border-danger-fill/20 bg-danger-fill/5 text-danger-text hover:bg-danger-fill/10'
               : 'border-success-fill/20 bg-success-fill/5 text-success-text hover:bg-success-fill/10',
