@@ -2179,7 +2179,7 @@ impl TurnHostAdapter<'_> {
             }
         } else {
             let opts = crate::tools::ToolExecOptions {
-                additional_workspace_roots: self.session.additional_context_dirs.clone(),
+                additional_workspace_roots: self.session.additional_context_dirs(),
                 mcp_tool_definitions: self.session.mcp_catalog_for(&call.name),
                 require_confirmation: !self.session.skips_approval(),
                 auto_approve_safe: self.session.auto_approve_safe,
@@ -2695,7 +2695,7 @@ impl TurnHost for TurnHostAdapter<'_> {
 
     fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
         let opts = crate::tools::ToolExecOptions {
-            additional_workspace_roots: self.session.additional_context_dirs.clone(),
+            additional_workspace_roots: self.session.additional_context_dirs(),
             mcp_tool_definitions: self.session.mcp_catalog_for(&prepared.name),
             require_confirmation: !self.session.skips_approval(),
             auto_approve_safe: self.session.auto_approve_safe,
@@ -3069,12 +3069,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 );
             }
             TurnEvent::ToolStarted { id, name, args, .. } => {
-                let workspace_root = self
-                    .session
-                    .managed_session
-                    .as_ref()
-                    .and_then(|session| session.workspace_root.clone())
-                    .or_else(|| std::env::current_dir().ok());
+                let workspace_root = self.session.workspace_root();
                 if let Ok(mut activity) = self.session.session_activity.lock() {
                     activity.tool_started(id, name, args, workspace_root.as_deref());
                 }
