@@ -506,7 +506,12 @@ mod tests {
             timeout_sec: 5,
             safe_mode: true,
         };
-        let result = invoke(&req, "interpreter-that-must-never-launch", workspace.path()).await;
+        let result = crate::path_security::scope_workspace_paths(
+            Some(workspace.path().to_path_buf()),
+            vec![registered.clone()],
+            invoke(&req, "interpreter-that-must-never-launch", workspace.path()),
+        )
+        .await;
         crate::path_security::unregister_additional_workspace_roots(&[registered]);
         assert!(result
             .unwrap_err()

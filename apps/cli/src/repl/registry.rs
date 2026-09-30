@@ -655,14 +655,14 @@ pub fn trust_for_display(arg: &str) -> CommandOutcome {
     }
 }
 
-pub fn handle_permissions(arg: &str) {
-    permissions_for_display(arg).print();
+pub fn handle_permissions(arg: &str, session: &AgentSession) {
+    permissions_for_display(arg, session).print();
 }
 
-pub fn permissions_for_display(arg: &str) -> CommandOutcome {
+pub fn permissions_for_display(arg: &str, session: &AgentSession) -> CommandOutcome {
     let (subcommand, rest) = split_first_word(arg.trim());
     match subcommand {
-        "" => permissions_tab("allow"),
+        "" => permissions_tab("allow", session),
         "help" | "-h" | "--help" => CommandOutcome::Block(format!(
             "{}\n  /permissions [recent|allow|ask|deny|session|workspace]\n  /permissions allow <command-prefix>\n  /permissions ask <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|ask|deny|session> <command-prefix>\n  /permissions reset\n\nAn ask rule makes AGI ask before every command that starts with it, even one an allow rule covers.\n\nWebsites: a rule of the form domain:<host> decides which sites the agent may fetch with web_fetch or open in the browser. /permissions deny domain:example.com blocks that site, domain:*.example.com covers its subdomains, and domain:* covers every site. An allow rule that names a host on this computer or your network skips the prompt for it.",
             ts::accent_header("Permissions:")
@@ -677,14 +677,14 @@ pub fn permissions_for_display(arg: &str) -> CommandOutcome {
             }
             Err(e) => CommandOutcome::Error(format!("Failed to load: {:#}", e)),
         },
-        scope @ ("allow" | "ask" | "deny" | "session") if rest.is_empty() => permissions_tab(scope),
+        scope @ ("allow" | "ask" | "deny" | "session") if rest.is_empty() => permissions_tab(scope, session),
         scope @ ("allow" | "ask" | "deny" | "session") => mutate_permission_rule(scope, rest),
         "remove" | "rm" | "delete" => {
             let (scope, rule) = split_first_word(rest);
             remove_permission_rule(scope, rule)
         }
-        tab if is_permissions_tab(tab) => permissions_tab(tab),
-        _ => permissions_tab("allow"),
+        tab if is_permissions_tab(tab) => permissions_tab(tab, session),
+        _ => permissions_tab("allow", session),
     }
 }
 
@@ -703,7 +703,7 @@ fn is_permissions_tab(tab: &str) -> bool {
     )
 }
 
-fn permissions_tab(tab: &str) -> CommandOutcome {
+fn permissions_tab(tab: &str, session: &AgentSession) -> CommandOutcome {
     let store = match crate::permissions::PermissionStore::load() {
         Ok(store) => store,
         Err(e) => return CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),
@@ -715,9 +715,10 @@ fn permissions_tab(tab: &str) -> CommandOutcome {
         .take(50)
         .map(|entry| format!("{}: {}", entry.tool_name, entry.target))
         .collect();
-    let directories: Vec<std::path::PathBuf> = std::env::current_dir()
+    let directories: Vec<std::path::PathBuf> = session
+        .workspace_root()
         .into_iter()
-        .chain(crate::path_security::registered_additional_workspace_roots())
+        .chain(session.additional_context_dirs.iter().cloned())
         .collect();
     CommandOutcome::Block(
         sanitize_terminal_text(&store.display_tab(tab, &recent_denials, &directories)).into_owned(),

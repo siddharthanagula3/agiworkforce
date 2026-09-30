@@ -1,6 +1,43 @@
 use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 
+#[derive(Clone)]
+struct WorkspacePathAuthority {
+    root: PathBuf,
+    additional: Vec<PathBuf>,
+}
+
+tokio::task_local! {
+    static WORKSPACE_PATH_AUTHORITY: WorkspacePathAuthority;
+}
+
+pub(crate) async fn scope_workspace_paths<F: std::future::Future>(
+    root: Option<PathBuf>,
+    additional: Vec<PathBuf>,
+    future: F,
+) -> F::Output {
+    let root = root
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."));
+    WORKSPACE_PATH_AUTHORITY
+        .scope(WorkspacePathAuthority { root, additional }, future)
+        .await
+}
+
+pub(crate) fn scope_workspace_paths_sync<T>(
+    root: PathBuf,
+    additional: Vec<PathBuf>,
+    action: impl FnOnce() -> T,
+) -> T {
+    WORKSPACE_PATH_AUTHORITY.sync_scope(WorkspacePathAuthority { root, additional }, action)
+}
+
+pub(crate) fn validation_workspace() -> PathBuf {
+    WORKSPACE_PATH_AUTHORITY
+        .try_with(|authority| authority.root.clone())
+        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+}
+
 static ADDITIONAL_WORKSPACE_ROOTS: OnceLock<RwLock<Vec<PathBuf>>> = OnceLock::new();
 
 fn additional_roots() -> &'static RwLock<Vec<PathBuf>> {
@@ -24,7 +61,7 @@ pub fn register_additional_workspace_root(path_str: &str) -> std::result::Result
     register_additional_workspace_root_path(&absolute)
 }
 
-pub fn register_additional_workspace_root_path(
+pub(crate) fn validate_additional_workspace_root_path(
     path: &Path,
 ) -> std::result::Result<PathBuf, String> {
     let launch_dir = std::env::current_dir().ok();
@@ -47,6 +84,16 @@ pub fn register_additional_workspace_root_path(
     let canonical = path
         .canonicalize()
         .map_err(|e| format!("Cannot resolve additional directory: {e}"))?;
+    if let Some(refusal) = network_root_refusal(&canonical, launch_dir.as_deref()) {
+        return Err(refusal);
+    }
+    Ok(canonical)
+}
+
+pub fn register_additional_workspace_root_path(
+    path: &Path,
+) -> std::result::Result<PathBuf, String> {
+    let canonical = validate_additional_workspace_root_path(path)?;
     {
         let mut roots = additional_roots()
             .write()
@@ -61,7 +108,11 @@ pub fn register_additional_workspace_root_path(
 }
 
 fn network_root_refusal(path: &Path, launch_dir: Option<&Path>) -> Option<String> {
-    let host = reached_network_host(path, MAX_DENYLIST_LINK_HOPS)?;
+    let host = match reached_network_host(path, MAX_DENYLIST_LINK_HOPS) {
+        Ok(Some(host)) => host,
+        Ok(None) => return None,
+        Err(reason) => return Some(reason),
+    };
     let launched_there = launch_dir.is_some_and(|dir| {
         network_host(dir)
             .or_else(|| {
@@ -96,12 +147,14 @@ fn network_host(path: &Path) -> Option<String> {
     (!local).then_some(host)
 }
 
-fn reached_network_host(path: &Path, hops: usize) -> Option<String> {
+fn reached_network_host(path: &Path, hops: usize) -> Result<Option<String>, String> {
     if let Some(host) = network_host(path) {
-        return Some(host);
+        return Ok(Some(host));
     }
     if hops == 0 {
-        return None;
+        return Err(
+            "Cannot safely resolve additional directory within the symlink limit".to_string(),
+        );
     }
     let mut prefix = PathBuf::new();
     for component in path.components() {
@@ -119,11 +172,12 @@ fn reached_network_host(path: &Path, hops: usize) -> Option<String> {
                 .unwrap_or_else(|| Path::new(""))
                 .join(target)
         };
-        if let Some(host) = reached_network_host(&target, hops - 1) {
-            return Some(host);
-        }
+        let suffix = path
+            .strip_prefix(&prefix)
+            .map_err(|_| "Cannot resolve additional directory suffix".to_string())?;
+        return reached_network_host(&target.join(suffix), hops - 1);
     }
-    None
+    Ok(None)
 }
 
 pub fn registered_additional_workspace_roots() -> Vec<PathBuf> {
@@ -292,7 +346,7 @@ const PROTECTED_FILES: &[&str] = &[
 ];
 
 pub fn is_protected_path(path: &Path) -> bool {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = validation_workspace();
     is_protected_path_with_cwd(path, &cwd)
 }
 
@@ -421,7 +475,7 @@ fn resolve_for_denylist(path: &Path) -> PathBuf {
 /// Use this for every tool that WRITES. `validate_workspace_path` stays as-is
 /// for reads.
 pub fn validate_workspace_write_path(path_str: &str) -> std::result::Result<PathBuf, String> {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = validation_workspace();
     validate_workspace_write_path_with_cwd(path_str, &cwd)
 }
 
@@ -441,7 +495,7 @@ pub fn validate_workspace_write_path_with_cwd(
 }
 
 pub fn validate_workspace_path(path_str: &str) -> std::result::Result<PathBuf, String> {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = validation_workspace();
     validate_workspace_path_with_cwd(path_str, &cwd)
 }
 
@@ -525,7 +579,11 @@ fn lexically_normalized(path: &Path) -> PathBuf {
 
 fn allowed_workspace_roots(cwd: &Path) -> Vec<PathBuf> {
     let mut roots = vec![cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf())];
-    roots.extend(registered_additional_workspace_roots());
+    if let Ok(additional) =
+        WORKSPACE_PATH_AUTHORITY.try_with(|authority| authority.additional.clone())
+    {
+        roots.extend(additional);
+    }
     roots
 }
 
@@ -720,11 +778,74 @@ mod tests {
 
         register_additional_workspace_root_path(outside.path()).expect("register extra root");
 
-        let result = validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path())
-            .expect("registered additional root should be allowed");
+        let result = scope_workspace_paths_sync(
+            workspace.path().to_path_buf(),
+            vec![outside.path().canonicalize().expect("extra root")],
+            || validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path()),
+        )
+        .expect("session additional root should be allowed");
 
         assert_eq!(result, file.canonicalize().expect("canonical extra file"));
         clear_additional_workspace_roots_for_tests();
+    }
+
+    #[test]
+    fn another_sessions_directory_grant_does_not_authorize_this_workspace() {
+        let _guard = lock_roots();
+        clear_additional_workspace_roots_for_tests();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let other_session_root = tempfile::tempdir().expect("other session root");
+        let file = other_session_root.path().join("private.txt");
+        std::fs::write(&file, "controlled private content").expect("private fixture");
+        register_additional_workspace_root_path(other_session_root.path())
+            .expect("other session grant");
+        assert!(
+            validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path()).is_err()
+        );
+        clear_additional_workspace_roots_for_tests();
+    }
+
+    #[tokio::test]
+    async fn concurrent_same_workspace_sessions_keep_independent_directory_grants() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let first = tempfile::tempdir().expect("first grant");
+        let second = tempfile::tempdir().expect("second grant");
+        let first_file = first.path().join("first.txt");
+        let second_file = second.path().join("second.txt");
+        std::fs::write(&first_file, "first").expect("first fixture");
+        std::fs::write(&second_file, "second").expect("second fixture");
+        let check = |own: PathBuf, other: PathBuf| async move {
+            for _ in 0..3 {
+                tokio::task::yield_now().await;
+                assert!(validate_workspace_path(&own.to_string_lossy()).is_ok());
+                assert!(validate_workspace_path(&other.to_string_lossy()).is_err());
+            }
+        };
+        tokio::join!(
+            scope_workspace_paths(
+                Some(workspace.path().to_path_buf()),
+                vec![first.path().canonicalize().expect("first root")],
+                check(first_file.clone(), second_file.clone())
+            ),
+            scope_workspace_paths(
+                Some(workspace.path().to_path_buf()),
+                vec![second.path().canonicalize().expect("second root")],
+                check(second_file, first_file)
+            ),
+        );
+    }
+
+    #[test]
+    fn scoped_primary_workspace_resolves_relative_paths_without_process_cwd() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let file = workspace.path().join("ordinary.txt");
+        std::fs::write(&file, "ordinary").expect("fixture");
+        let resolved =
+            scope_workspace_paths_sync(workspace.path().to_path_buf(), Vec::new(), || {
+                validate_workspace_path("ordinary.txt")
+            })
+            .expect("scoped file");
+        assert_eq!(resolved, file.canonicalize().expect("canonical fixture"));
     }
 
     #[test]
@@ -778,6 +899,19 @@ mod tests {
         assert!(error.contains("network path on nas"), "{error}");
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn network_directory_inspection_refuses_exhausted_symlink_budget() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let mut target = PathBuf::from("/net/nas/projects");
+        for index in 0..=MAX_DENYLIST_LINK_HOPS {
+            let link = workspace.path().join(format!("link-{index}"));
+            std::os::unix::fs::symlink(&target, &link).expect("create link chain");
+            target = link;
+        }
+        assert!(network_root_refusal(&target, Some(workspace.path())).is_some());
+    }
+
     /// `ROOTS_GUARD` only serializes this module. `claude_parity` and `agent`
     /// tests also reset the registry, on their own threads, so the reset must
     /// not reach a root another running test registered.
@@ -802,9 +936,16 @@ mod tests {
             })
         };
 
-        let outcome = (0..500).try_for_each(|_| {
-            validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path()).map(|_| ())
-        });
+        let outcome = scope_workspace_paths_sync(
+            workspace.path().to_path_buf(),
+            vec![outside.path().canonicalize().expect("extra root")],
+            || {
+                (0..500).try_for_each(|_| {
+                    validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path())
+                        .map(|_| ())
+                })
+            },
+        );
 
         stop.store(true, Ordering::Relaxed);
         sibling.join().expect("sibling test thread");
@@ -1121,7 +1262,7 @@ pub fn filesystem_is_case_insensitive(dir: &Path) -> bool {
 /// The one internal spelling of a path: canonical, then relative to the
 /// workspace root, so routes to the same file give one key.
 pub fn repo_relative(path: &Path) -> PathBuf {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let cwd = validation_workspace();
     repo_relative_to(path, &cwd)
 }
 

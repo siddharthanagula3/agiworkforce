@@ -309,6 +309,7 @@ pub struct ToolExecOptions {
     /// This is carried per invocation for the same reason as `privacy_mode`:
     /// the app-server can host a workspace that is not the process cwd.
     pub workspace_root: Option<std::path::PathBuf>,
+    pub additional_workspace_roots: Vec<std::path::PathBuf>,
     /// The session's connected MCP tools, for `tool_search` to load a schema
     /// the initial list deferred. Per invocation, like the two fields above:
     /// concurrent sessions connect to different servers.
@@ -447,6 +448,7 @@ pub fn build_read_only_registry() -> registry::ToolRegistry {
 #[allow(dead_code)]
 pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result<ToolResult> {
     let opts = ToolExecOptions {
+        additional_workspace_roots: Vec::new(),
         mcp_tool_definitions: None,
         require_confirmation,
         auto_approve_safe: false,
@@ -529,6 +531,19 @@ fn saved_permission_commands(tool_name: &str, args: &HashMap<String, String>) ->
 }
 
 async fn execute_tool_with_opts_and_permissions(
+    call: &ToolCall,
+    opts: &ToolExecOptions,
+    permissions: &crate::permissions::PermissionStore,
+) -> Result<ToolResult> {
+    crate::path_security::scope_workspace_paths(
+        opts.workspace_root.clone(),
+        opts.additional_workspace_roots.clone(),
+        execute_tool_with_scoped_permissions(call, opts, permissions),
+    )
+    .await
+}
+
+async fn execute_tool_with_scoped_permissions(
     call: &ToolCall,
     opts: &ToolExecOptions,
     permissions: &crate::permissions::PermissionStore,
@@ -1620,6 +1635,18 @@ async fn untrusted_shell_refusal(
     let command = match canonical_name {
         "run_command" | "powershell" => args.get("command").cloned().unwrap_or_default(),
         "command_output" => args.get("input").filter(|input| !input.is_empty())?.clone(),
+        "lsp_definition"
+        | "lsp_hover"
+        | "lsp_completion"
+        | "lsp_document_symbols"
+        | "lsp_format" => {
+            format!(
+                "Start a language server for {}",
+                args.get("file")
+                    .map(String::as_str)
+                    .unwrap_or("the requested file")
+            )
+        }
         _ => return None,
     };
     let status = crate::trust::status_for(workspace_root);
@@ -2595,6 +2622,7 @@ mod tests {
 
     fn byok_options(callback: ApprovalCallback, auto_approve_safe: bool) -> ToolExecOptions {
         ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: true,
             auto_approve_safe,
@@ -2604,6 +2632,34 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Byok,
             workspace_root: None,
         }
+    }
+
+    #[tokio::test]
+    async fn file_dispatch_uses_only_the_calling_sessions_directory_grants() {
+        let workspace = tempfile::tempdir().unwrap();
+        let extra = tempfile::tempdir().unwrap();
+        let file = extra.path().join("ordinary.txt");
+        std::fs::write(&file, "controlled private fixture").unwrap();
+        let call = ToolCall {
+            name: "read_file".to_string(),
+            args: HashMap::from([("path".to_string(), file.display().to_string())]),
+        };
+        let (callback, _) = recording_callback(ApprovalDecision::AllowOnce);
+        let mut first = byok_options(callback, true);
+        first.workspace_root = Some(workspace.path().to_path_buf());
+        first.additional_workspace_roots = vec![extra.path().canonicalize().unwrap()];
+        let permissions = crate::permissions::PermissionStore::default();
+        let permitted = execute_tool_with_opts_and_permissions(&call, &first, &permissions)
+            .await
+            .unwrap();
+        assert!(permitted.success, "{}", permitted.output);
+        assert!(permitted.output.contains("controlled private fixture"));
+        first.additional_workspace_roots.clear();
+        let refused = execute_tool_with_opts_and_permissions(&call, &first, &permissions)
+            .await
+            .unwrap();
+        assert!(!refused.success);
+        assert!(!refused.output.contains("controlled private fixture"));
     }
 
     #[tokio::test]
@@ -2758,6 +2814,7 @@ mod tests {
     #[tokio::test]
     async fn local_mode_blocks_builtin_network_tools_before_dispatch() {
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2810,6 +2867,7 @@ reason = "regression test"
             args: HashMap::from([("command".to_string(), "printf policy-denied".to_string())]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2861,6 +2919,7 @@ decision = "ask"
             )]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2917,6 +2976,7 @@ decision = "ask"
             args: HashMap::from([("path".to_string(), notes.display().to_string())]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -2990,6 +3050,7 @@ decision = "ask"
                 })
             });
             let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 require_confirmation: true,
                 auto_approve_safe: true,
                 auto_approve_edits: !policy_allow && !saved_allow,
@@ -3046,6 +3107,7 @@ decision = "ask"
         ] {
             let (callback, seen) = recording_callback(ApprovalDecision::Deny);
             let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 require_confirmation: true,
                 auto_approve_safe: true,
                 auto_approve_edits: true,
@@ -3096,6 +3158,7 @@ decision = "ask"
                 ApprovalDecision::AllowOnce
             });
             let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 require_confirmation: !bypass,
                 auto_approve_safe: true,
                 auto_approve_edits: true,
@@ -3168,6 +3231,7 @@ decision = "ask"
             permissions.allow_always("powershell");
             let (callback, seen) = recording_callback(ApprovalDecision::Deny);
             let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 require_confirmation: true,
                 auto_approve_safe: true,
                 auto_approve_edits: true,
@@ -3213,6 +3277,7 @@ decision = "ask"
             .unwrap();
             let (callback, _) = recording_callback(ApprovalDecision::AllowOnce);
             let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 require_confirmation: true,
                 auto_approve_safe: true,
                 auto_approve_edits: true,
@@ -3293,6 +3358,7 @@ decision = "ask"
             })
         });
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             require_confirmation: true,
             auto_approve_safe: false,
             auto_approve_edits: false,
@@ -3406,6 +3472,7 @@ decision = "ask"
             })
         });
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             require_confirmation: true,
             auto_approve_safe: false,
             auto_approve_edits: false,
@@ -3463,6 +3530,7 @@ decision = "ask"
             })
         });
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             require_confirmation: true,
             auto_approve_safe: true,
             auto_approve_edits: true,
@@ -3561,6 +3629,7 @@ decision = "ask"
                     .collect(),
             };
             let opts = ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: false,
                 auto_approve_safe: true,
@@ -3614,6 +3683,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf unsafe".to_string())]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -3728,6 +3798,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf untrusted".to_string())]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -3778,6 +3849,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf untrusted".to_string())]),
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
@@ -3870,6 +3942,7 @@ decision = "deny"
     async fn every_git_tool_in_the_catalog_reaches_the_git_executor() {
         let workspace = tempfile::tempdir().expect("workspace");
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: false,
@@ -4012,6 +4085,7 @@ decision = "deny"
             args,
         };
         let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
             mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,

@@ -170,7 +170,7 @@ pub(super) async fn handle_slash_command(
             dialogs::handle_setup(config);
         }
         "/permissions" | "/perms" | "/approvals" | "/approve" => {
-            registry::handle_permissions(arg);
+            registry::handle_permissions(arg, session);
         }
         "/trust" | "/untrust" => {
             let arg = if cmd == "/untrust" && arg.is_empty() {

@@ -783,10 +783,33 @@ fn bubblewrap_prefix(manager: &SandboxManager) -> Result<Vec<String>> {
     if manager.network_policy == NetworkPolicy::Deny {
         args.push("--unshare-net".to_string());
     }
+    for runtime in [
+        "/usr",
+        "/bin",
+        "/sbin",
+        "/lib",
+        "/lib64",
+        "/etc/ld.so.cache",
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/nsswitch.conf",
+        "/etc/resolv.conf",
+        "/etc/hosts",
+        "/etc/ssl/certs",
+        "/etc/pki/tls/certs",
+    ] {
+        if Path::new(runtime).exists() {
+            args.extend([
+                "--ro-bind".to_string(),
+                runtime.to_string(),
+                runtime.to_string(),
+            ]);
+        }
+    }
     args.extend([
-        "--ro-bind".to_string(),
-        "/".to_string(),
-        "/".to_string(),
+        "--setenv".to_string(),
+        "TMPDIR".to_string(),
+        "/tmp".to_string(),
         "--tmpfs".to_string(),
         "/tmp".to_string(),
         "--dev".to_string(),
@@ -794,9 +817,7 @@ fn bubblewrap_prefix(manager: &SandboxManager) -> Result<Vec<String>> {
         "--proc".to_string(),
         "/proc".to_string(),
     ]);
-    if manager.policy == SandboxPolicy::ReadOnly
-        && manager.workspace_dir.starts_with(Path::new("/tmp"))
-    {
+    if manager.policy == SandboxPolicy::ReadOnly {
         let workspace = manager
             .workspace_dir
             .to_str()
@@ -817,6 +838,14 @@ fn bubblewrap_prefix(manager: &SandboxManager) -> Result<Vec<String>> {
             .ok_or_else(|| anyhow::anyhow!("sandbox writable root is not valid UTF-8: {:?}", root))?
             .to_string();
         args.extend(["--bind".to_string(), root.clone(), root]);
+    }
+    if let Some(snapshot) = crate::shell_snapshot::applied_file() {
+        let snapshot = snapshot.canonicalize()?;
+        let snapshot = snapshot
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("shell snapshot path is not UTF-8"))?
+            .to_string();
+        args.extend(["--ro-bind".to_string(), snapshot.clone(), snapshot]);
     }
     args.push("--".to_string());
     Ok(args)
@@ -892,8 +921,16 @@ pub(crate) fn background_command(
         }
     };
     let mut command = match manager {
-        None => unsandboxed(),
-        Some(manager) if matches!(manager.policy, SandboxPolicy::DangerFullAccess) => unsandboxed(),
+        None => {
+            let mut command = unsandboxed();
+            apply_environment_policy(&mut command, scrub_environment_for(cwd));
+            command
+        }
+        Some(manager) if matches!(manager.policy, SandboxPolicy::DangerFullAccess) => {
+            let mut command = unsandboxed();
+            apply_environment_policy(&mut command, scrub_environment_for(&manager.workspace_dir));
+            command
+        }
         Some(manager) => {
             let scrub = scrub_environment_for(&manager.workspace_dir);
             match manager.sandbox_type {
@@ -1634,9 +1671,14 @@ mod tests {
     #[tokio::test]
     async fn sandbox_refuses_private_sibling_reads() {
         let workspace = tempfile::tempdir().expect("workspace");
+        let sibling_base = if cfg!(target_os = "linux") {
+            dirs::home_dir().expect("fixture home directory")
+        } else {
+            PathBuf::from("/tmp")
+        };
         let sibling = tempfile::Builder::new()
             .prefix("agi-private-sibling-")
-            .tempdir_in("/tmp")
+            .tempdir_in(sibling_base)
             .expect("private sibling");
         let private = sibling.path().join("private.txt");
         std::fs::write(&private, "CONTROLLED_PRIVATE_SIBLING").expect("private fixture");
@@ -1838,6 +1880,19 @@ mod tests {
         assert!(sandbox_disabled_requested());
         set_sandbox_mode(launch_mode(false, None, None));
         assert!(!sandbox_disabled_requested());
+    }
+
+    #[test]
+    fn unrestricted_launch_mode_does_not_bypass_an_untrusted_workspace() {
+        let workspace = tempfile::tempdir().unwrap();
+        assert!(!crate::trust::restrictions_for(workspace.path()).unrestricted_shell);
+        let previous = sandbox_mode();
+        set_sandbox_mode(SandboxMode::Unrestricted);
+        let manager =
+            SandboxManager::for_agent_command(workspace.path().to_path_buf(), NetworkPolicy::Deny);
+        set_sandbox_mode(previous);
+        let manager = manager.unwrap();
+        assert!(!matches!(manager.policy, SandboxPolicy::DangerFullAccess));
     }
 
     #[test]

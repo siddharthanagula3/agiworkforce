@@ -386,10 +386,6 @@ impl CliDeveloperSessionHost {
         load_integrations: bool,
     ) -> Result<Self, DeveloperSessionHostError> {
         let workspace_root = canonical_directory(&workspace_root)?;
-        // AgentSession's existing context loader validates against the process
-        // cwd plus registered roots. App-server processes normally launch in.
-        crate::path_security::register_additional_workspace_root_path(&workspace_root)
-            .map_err(DeveloperSessionHostError::invalid_request)?;
         let (notifications, _) = broadcast::channel(1024);
         Ok(Self {
             config: Arc::new(config),
@@ -7526,6 +7522,7 @@ mod tests {
                 args: std::collections::HashMap::new(),
             },
             &crate::tools::ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: false,
                 auto_approve_safe: false,
@@ -7573,6 +7570,7 @@ mod tests {
                 )]),
             },
             &crate::tools::ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: false,
                 auto_approve_safe: false,
