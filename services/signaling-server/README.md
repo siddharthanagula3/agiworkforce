@@ -78,6 +78,26 @@ Adding a variable to the service means adding it to `CONFIG_VARIABLES` in
 `src/config-backup.ts`; `__tests__/config-backup.test.ts` fails when
 `.env.example` documents one the backup would not capture.
 
+## Container builds
+
+Build from the repository root:
+
+```
+docker build -f services/signaling-server/Dockerfile -t signaling-server .
+```
+
+The image installs the service's build and production dependencies separately
+from the root lockfile, with the root overrides and patches. Both installs are
+frozen and fail on a missing or mismatched lockfile. The Dockerfile-specific
+context allowlist excludes other applications, local worktrees and secrets.
+The runtime retains pnpm's relative dependency links and runs as a non-root
+user. Its readiness check targets `/ready`.
+
+Fly builds use the root working directory with the service's explicit config
+and Dockerfile paths. The Railway workflow uploads the repository root and
+copies the service's Docker build configuration to the archive root. Railway
+service settings must retain the repository root as their build root.
+
 ## Restart behaviour
 
 `closeAllConnections` releases each connection's bookkeeping as it closes the

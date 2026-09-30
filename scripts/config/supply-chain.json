@@ -14,10 +14,6 @@
     {
       "id": "docker-compose.yml:pgvector/pgvector:pg16",
       "reason": "Local development Postgres, pinned to the pg16 line rather than a digest so a patch release is picked up without a manifest edit. It is not part of any deployed image and the production database is Neon, not this container."
-    },
-    {
-      "id": "services/signaling-server/Dockerfile:node:24-alpine",
-      "reason": "The signaling server builds from the node:24-alpine tag in four stages so security patches on the Node 24 line arrive without a manifest edit. Digest pinning here needs a renovation job to move the digest, which does not exist yet."
     }
   ]
 }
