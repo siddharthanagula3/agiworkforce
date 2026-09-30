@@ -7,9 +7,11 @@ import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import type { Stripe } from '@/lib/stripe-types';
+import { duplicateRefundAmount } from './duplicate-subscription-settlement';
 
 interface PlanPeriod {
   subscription_id: string;
+  stripe_subscription_id: string | null;
   plan_tier: string | null;
   current_period_start: string | Date | null;
   current_period_end: string | Date | null;
@@ -74,10 +76,17 @@ async function coversCurrentPeriod(
       expand: ['data.invoice'],
     });
     const invoice = payments.data[0]?.invoice;
-    const lines =
-      invoice && typeof invoice !== 'string' && !invoice.deleted ? invoice.lines.data : [];
-    if (lines.length > 0) {
-      return Math.max(...lines.map((line) => line.period.end)) === periodEnd;
+    if (invoice && typeof invoice !== 'string' && !invoice.deleted) {
+      const invoiceSubscription = invoice.parent?.subscription_details?.subscription;
+      const invoiceSubscriptionId =
+        typeof invoiceSubscription === 'string' ? invoiceSubscription : invoiceSubscription?.id;
+      if (invoiceSubscriptionId && invoiceSubscriptionId !== period.stripe_subscription_id) {
+        return false;
+      }
+      const lines = invoice.lines.data;
+      if (lines.length > 0) {
+        return Math.max(...lines.map((line) => line.period.end)) === periodEnd;
+      }
     }
   }
   return charge.created >= periodStart && charge.created < periodEnd;
@@ -228,7 +237,8 @@ export async function handleChargeRefunded(
   }
 
   const [period] = await db.query<PlanPeriod>(
-    `select id as subscription_id, plan_tier, current_period_start, current_period_end
+    `select id as subscription_id, stripe_subscription_id, plan_tier, current_period_start,
+            current_period_end
        from subscriptions
       where stripe_customer_id = $1
       limit 1`,
@@ -242,12 +252,25 @@ export async function handleChargeRefunded(
     return;
   }
 
-  const revokedMicrousd = await revokePlanRefund(db, profile.id, period, charge, description);
+  const duplicateRefunded = await duplicateRefundAmount(
+    stripe,
+    charge,
+    period.stripe_subscription_id,
+  );
+  const planCharge = {
+    ...charge,
+    amount: charge.amount - duplicateRefunded,
+    amount_refunded: Math.max(0, charge.amount_refunded - duplicateRefunded),
+    refunded: duplicateRefunded === 0 && charge.refunded,
+  };
+  if (planCharge.amount_refunded === 0) return;
+
+  const revokedMicrousd = await revokePlanRefund(db, profile.id, period, planCharge, description);
   logger.info(
     { userId: profile.id, chargeId: charge.id, revokedMicrousd },
     'Plan credits revoked in proportion to the refunded share of the current period',
   );
-  if (isFullyRefunded(charge)) {
-    await endRefundedPlan(db, profile.id, stripeCustomerId, period, charge);
+  if (isFullyRefunded(planCharge)) {
+    await endRefundedPlan(db, profile.id, stripeCustomerId, period, planCharge);
   }
 }

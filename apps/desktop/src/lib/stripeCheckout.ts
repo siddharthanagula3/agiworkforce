@@ -19,6 +19,8 @@ import { getDesktopSubscriptionOwnerPolicy } from './subscriptionOwnership';
 
 type StripeBillingAction = 'portal' | 'plan-change';
 
+const BILLING_UNAVAILABLE_MESSAGE = 'Billing is temporarily unavailable. Please try again.';
+
 function stripeBillingActionBlockReason(action: StripeBillingAction): string | null {
   const auth = useAuthStore.getState();
   const policy = getDesktopSubscriptionOwnerPolicy(
@@ -104,7 +106,7 @@ export async function openCheckout(
       const payload = await readBillingPayload(res);
       request.assertBoundary();
       if (res.status === 503) {
-        return 'Stripe is not configured. Please contact support.';
+        return billingErrorFromPayload(payload, BILLING_UNAVAILABLE_MESSAGE);
       }
       return (
         (await upgradeGateRedirect(payload)) ??
@@ -152,7 +154,7 @@ export async function openBillingPortal(
       const payload = await readBillingPayload(res);
       request.assertBoundary();
       if (res.status === 503) {
-        return 'Stripe is not configured. Please contact support.';
+        return billingErrorFromPayload(payload, BILLING_UNAVAILABLE_MESSAGE);
       }
       return (
         (await upgradeGateRedirect(payload)) ??
