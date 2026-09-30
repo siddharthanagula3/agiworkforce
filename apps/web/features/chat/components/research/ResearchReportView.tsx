@@ -401,6 +401,15 @@ export function ResearchReportView({
   useDialogKeyboard({ open: reading, onClose: closeReader, panelRef: readerRef });
 
   useEffect(() => {
+    if (!reading || typeof document === 'undefined') return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [reading]);
+
+  useEffect(() => {
     if (wasReadingRef.current && !reading) readerToggleRef.current?.focus();
     wasReadingRef.current = reading;
     if (!reading) return;

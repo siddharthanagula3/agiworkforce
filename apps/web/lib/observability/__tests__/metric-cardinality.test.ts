@@ -189,7 +189,9 @@ describe('a label a caller writes names the closed set it is checked against', (
   });
 
   it('counts a well-formed client version no release series admits, without opening one', () => {
-    for (const invented of ['999.4.1', '0.1.0', '1.0.0', '4000.0.0', '2026.44.1']) {
+    const [floorMajor, floorMinor] = MINIMUM_SUPPORTED_RUNTIME_VERSION.split('.').map(Number);
+    const pastRuntimeLine = [`${floorMajor! + 2}.0.0`, `${floorMajor}.${floorMinor! + 20}.0`];
+    for (const invented of ['999.4.1', ...pastRuntimeLine, '4000.0.0', '2026.44.1']) {
       expect(labelsFor(CLIENT_VERSION_HEADER, invented).clientVersion, invented).toBe(
         UNKNOWN_CLIENT_VERSION_LABEL,
       );
@@ -214,8 +216,13 @@ describe('a label a caller writes names the closed set it is checked against', (
   });
 
   it('holds a runtime-line version to the floor and lets the calendar line through', () => {
-    expect(labelsFor(CLIENT_VERSION_HEADER, '1.0.0').clientVersion).toBe(
+    const [major, minor, patch] = MINIMUM_SUPPORTED_RUNTIME_VERSION.split('.').map(Number);
+    const belowFloor = patch! > 0 ? `${major}.${minor}.${patch! - 1}` : `${major}.${minor! - 1}.99`;
+    expect(labelsFor(CLIENT_VERSION_HEADER, belowFloor).clientVersion, belowFloor).toBe(
       UNKNOWN_CLIENT_VERSION_LABEL,
+    );
+    expect(labelsFor(CLIENT_VERSION_HEADER, MINIMUM_SUPPORTED_RUNTIME_VERSION).clientVersion).toBe(
+      MINIMUM_SUPPORTED_RUNTIME_VERSION.split('.').slice(0, 2).join('.'),
     );
     expect(
       labelsFor(CLIENT_VERSION_HEADER, `${new Date().getUTCFullYear()}.9.1`).clientVersion,

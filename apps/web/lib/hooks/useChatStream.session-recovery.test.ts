@@ -15,10 +15,8 @@ describe('a turn interrupted by an expired session is recoverable', () => {
   });
 
   it('treats only 401 as recoverable, not 403 or 429', () => {
-    const fn = source.slice(
-      source.indexOf('function isSessionExpiredError'),
-      source.indexOf('function readChatApiErrorPayload'),
-    );
+    const start = source.indexOf('function isSessionExpiredError');
+    const fn = source.slice(start, source.indexOf('\n}\n', start));
     expect(fn).toContain('error.status === 401');
     expect(fn).not.toContain('403');
     expect(fn).not.toContain('429');

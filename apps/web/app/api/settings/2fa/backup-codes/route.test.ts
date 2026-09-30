@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
@@ -77,11 +77,30 @@ function grant() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
   resetStepUpSigningKeyCache();
   mocks.readSecondFactorStatus.mockResolvedValue(ENROLLED);
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe('POST /api/settings/2fa/backup-codes', () => {
+  it('refuses with 503 and replaces nothing while authenticator enrollment is unavailable', async () => {
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '');
+
+    const response = await POST(request(grant()));
+    const body = (await response.json()) as { error: { message: string } };
+
+    expect(response.status).toBe(503);
+    expect(body.error.message).toBe(
+      'Authenticator apps and backup codes are temporarily unavailable.',
+    );
+    expect(mocks.registerSecondFactor).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
   it('regenerates backup codes once the second factor has been re-verified', async () => {
     const response = await POST(request(grant()));
 

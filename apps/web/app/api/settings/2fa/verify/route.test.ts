@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
@@ -67,9 +67,31 @@ const PENDING = [{ totp_secret_enc: 'enc' }];
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('POST /api/settings/2fa/verify', () => {
+  it('refuses with 503 and registers nothing while authenticator enrollment is unavailable', async () => {
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '');
+    mocks.query.mockResolvedValueOnce(PENDING).mockResolvedValueOnce([]);
+    mocks.verifyTOTPCode.mockResolvedValueOnce(true);
+
+    const response = await POST(request('123456'));
+    const body = (await response.json()) as { error: { message: string } };
+
+    expect(response.status).toBe(503);
+    expect(body.error.message).toBe(
+      'Authenticator apps and backup codes are temporarily unavailable.',
+    );
+    expect(mocks.query).not.toHaveBeenCalled();
+    expect(mocks.registerSecondFactor).not.toHaveBeenCalled();
+    expect(mocks.rememberMfaEnrollment).not.toHaveBeenCalled();
+  });
+
   it('registers the authenticator and fresh backup codes as a sign-in factor', async () => {
     mocks.query.mockResolvedValueOnce(PENDING).mockResolvedValueOnce([]);
     mocks.verifyTOTPCode.mockResolvedValueOnce(true);

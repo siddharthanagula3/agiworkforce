@@ -142,8 +142,10 @@ jest.mock('lucide-react-native', () => {
   };
 });
 
+import { router } from 'expo-router';
 import CloudAccountScreen from '../src/features/settings/cloud-account';
 import { useCloudProfileStore } from '../src/features/settings/cloud-account/cloudProfileStore';
+import { httpErrorFrom } from '../services/apiErrors';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -383,6 +385,73 @@ describe('Cloud Account destructive action ownership', () => {
 
     expect(mockSignOut).toHaveBeenCalledTimes(1);
     expect(Alert.alert).toHaveBeenCalledWith('Account deleted', 'Account deleted successfully.');
+  });
+
+  it('shows why a paid plan blocks deletion and offers Billing', async () => {
+    const refusal =
+      'Cancel your pro plan before deleting your account. Nothing was deleted, and billing ' +
+      'continues until you cancel in Settings > Billing. Email support@agiworkforce.com if you need help.';
+    mockDeleteAccount.mockRejectedValueOnce(
+      httpErrorFrom(
+        409,
+        JSON.stringify({
+          error: refusal,
+          reason: 'active_subscription',
+          planTier: 'pro',
+          status: 'active',
+          cancelAtPeriodEnd: false,
+        }),
+      ),
+    );
+    render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => {
+      destructiveActionFor('Delete Account')();
+    });
+
+    expect(Alert.alert).toHaveBeenLastCalledWith('Could not delete account', refusal, [
+      { text: 'OK', style: 'cancel' },
+      { text: 'Open Billing', onPress: expect.any(Function) },
+    ]);
+    const buttons = (Alert.alert as jest.Mock).mock.lastCall?.[2] as Array<{
+      text?: string;
+      onPress?: () => void;
+    }>;
+    buttons.find((button) => button.text === 'Open Billing')?.onPress?.();
+    expect(router.push).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it('shows why sole workspace ownership blocks deletion', async () => {
+    const refusal =
+      'You are the only owner of the workspace Acme. Nothing was deleted. Make someone else an ' +
+      'owner in Settings > Organization, or delete the workspace there first, then delete your account.';
+    mockDeleteAccount.mockRejectedValueOnce(
+      httpErrorFrom(
+        409,
+        JSON.stringify({
+          error: refusal,
+          reason: 'sole_organization_owner',
+          workspaces: [{ id: 'workspace-1', name: 'Acme' }],
+        }),
+      ),
+    );
+    render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => {
+      destructiveActionFor('Delete Account')();
+    });
+
+    expect(Alert.alert).toHaveBeenLastCalledWith('Could not delete account', refusal, undefined);
+    expect(mockSignOut).not.toHaveBeenCalled();
   });
 
   it('lets the signed-in owner cancel a pending deletion after confirmation', async () => {
