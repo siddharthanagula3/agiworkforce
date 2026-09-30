@@ -1,0 +1,628 @@
+{
+  "generated_at_utc": "2026-09-29T21:14:09.254302+00:00",
+  "base_ref": "work/billing-e2e",
+  "base_commit": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+  "refs_count": 109,
+  "local_branches": 93,
+  "cached_remote_refs": 16,
+  "registered_worktrees": 41,
+  "worktree_snapshot": [
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce",
+      "HEAD": "615a7858bd46f5772a3db1c3c7e333441acd3dae",
+      "branch": "refs/heads/main",
+      "status_records": [],
+      "head_now": "615a7858bd46f5772a3db1c3c7e333441acd3dae"
+    },
+    {
+      "worktree": "/Users/siddhartha/.cache/agi-audit/21d4395/partials/scratch/w-chat/verify-wt",
+      "HEAD": "8e42c57f7a65f524b091ae264912eb44430ef8c4",
+      "detached": true,
+      "status_records": [],
+      "head_now": "8e42c57f7a65f524b091ae264912eb44430ef8c4"
+    },
+    {
+      "worktree": "/Users/siddhartha/.cache/agi-audit/21d4395/partials/scratch/w-connect/master-wt",
+      "HEAD": "bfc64184ea1e7b52463e56c88fcc61cd4a53298f",
+      "detached": true,
+      "status_records": [],
+      "head_now": "bfc64184ea1e7b52463e56c88fcc61cd4a53298f"
+    },
+    {
+      "worktree": "/Users/siddhartha/.codex/worktrees/ios-store-build/agiworkforce",
+      "HEAD": "019b9a3d9b9aa3de673e65e038994b4fef38be43",
+      "branch": "refs/heads/codex/mobile-terms-status",
+      "status_records": [],
+      "head_now": "019b9a3d9b9aa3de673e65e038994b4fef38be43"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agi-release",
+      "HEAD": "d75b82695bc29b90b3583f4abe9b58cc4087a1e9",
+      "branch": "refs/heads/fix/provider-outage-health-2026-09-12",
+      "status_records": [],
+      "head_now": "d75b82695bc29b90b3583f4abe9b58cc4087a1e9"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce-e2e-0156",
+      "HEAD": "373140dbf74db94ec2d3a295a54cdb82058925e2",
+      "detached": true,
+      "status_records": [],
+      "head_now": "373140dbf74db94ec2d3a295a54cdb82058925e2"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce-jev",
+      "HEAD": "37dd63c8be5094dbc9f026fd5bcb08a0700df25d",
+      "branch": "refs/heads/jev/decision-primitive",
+      "status_records": [],
+      "head_now": "37dd63c8be5094dbc9f026fd5bcb08a0700df25d"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce-launch",
+      "HEAD": "b26e49f625a4fcba7467fe3a3ffd084aa8c96708",
+      "detached": true,
+      "status_records": [],
+      "head_now": "b26e49f625a4fcba7467fe3a3ffd084aa8c96708"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce-partials",
+      "HEAD": "424a80ed7d76b2850a28e3aee2f63eebf2b79942",
+      "branch": "refs/heads/local/post-launch",
+      "status_records": [],
+      "head_now": "424a80ed7d76b2850a28e3aee2f63eebf2b79942"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce-security",
+      "HEAD": "a4bffb93f46f468cc4b849b8eb8ac04efc2dd1ca",
+      "detached": true,
+      "status_records": [],
+      "head_now": "a4bffb93f46f468cc4b849b8eb8ac04efc2dd1ca"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce-verify",
+      "HEAD": "c85371e761498582bea7d5e636dcf902933b673e",
+      "detached": true,
+      "status_records": [],
+      "head_now": "c85371e761498582bea7d5e636dcf902933b673e"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.claude/worktrees/agent-a9de340c9736d4887",
+      "HEAD": "7c2c5d84d47a1f2a57b4615cdf66e57e4a92d0d5",
+      "branch": "refs/heads/w-chat-jest-b",
+      "status_records": [],
+      "head_now": "7c2c5d84d47a1f2a57b4615cdf66e57e4a92d0d5"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/b-no-yearly",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/billing",
+      "status_records": [],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e",
+      "HEAD": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+      "branch": "refs/heads/work/billing-e2e",
+      "status_records": [],
+      "head_now": "49d0c30f38ca53570dd4eade84548c9cf43705ae"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/codex-land",
+      "HEAD": "6e2d370e5394f9e1c1f3231e7a43c4e9cf0a7043",
+      "branch": "refs/heads/fix/cli-auth",
+      "status_records": [],
+      "head_now": "6e2d370e5394f9e1c1f3231e7a43c4e9cf0a7043"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/codex-reaudit",
+      "HEAD": "1f770f7f539b045371ce3158d0b0eabacd5d6bab",
+      "detached": true,
+      "status_records": [
+        "?? audit/codex-reaudit-2026-09-30/CHECKLIST.md",
+        "?? audit/codex-reaudit-2026-09-30/checklist-results.md",
+        "?? audit/codex-reaudit-2026-09-30/findings.md",
+        "?? audit/codex-reaudit-2026-09-30/future-risks.md",
+        "?? audit/codex-reaudit-2026-09-30/summary.md"
+      ],
+      "head_now": "1f770f7f539b045371ce3158d0b0eabacd5d6bab"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/guard-snapshot",
+      "HEAD": "27c04cc372327325773cf6987eba8bf38638e279",
+      "detached": true,
+      "status_records": [],
+      "head_now": "27c04cc372327325773cf6987eba8bf38638e279"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-auth",
+      "HEAD": "1047f771a77ccea4a96bbcb51acfd083cf2b06e7",
+      "branch": "refs/heads/fix/web-small",
+      "status_records": [
+        " M apps/web/app/api/scim/v2/Groups/route.ts",
+        " M apps/web/app/api/scim/v2/Users/route.ts",
+        " M apps/web/app/api/scim/v2/__tests__/fake-scim-db.ts",
+        " M apps/web/app/api/scim/v2/__tests__/scim-routes.test.ts",
+        " M apps/web/lib/server/scim/scim-provisioning-service.ts"
+      ],
+      "head_now": "1047f771a77ccea4a96bbcb51acfd083cf2b06e7"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-chat-gates",
+      "HEAD": "10e48bc4ae70a853fbc1b5ad39a5c0783ca25c54",
+      "branch": "refs/heads/partials/chat-gates",
+      "status_records": [],
+      "head_now": "10e48bc4ae70a853fbc1b5ad39a5c0783ca25c54"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-chrome",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/chrome",
+      "status_records": [],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-cli-final",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/cli-safety",
+      "status_records": [
+        " M apps/cli/src/agent/mod.rs",
+        " M apps/cli/src/apply_patch.rs",
+        " M apps/cli/src/command_registry.rs",
+        " M apps/cli/src/features/exec/tools/file_ops/mod.rs",
+        " M apps/cli/src/features/exec/tools/mod.rs",
+        " M apps/cli/src/features/exec/tools/task_registry/mod.rs",
+        " M apps/cli/src/lib.rs",
+        " M apps/cli/src/platform/lsp/client.rs",
+        " M apps/cli/src/platform/lsp/mod.rs",
+        " M apps/cli/src/tui/tui_app.rs",
+        " M crates/agiworkforce-app-server/src/lib.rs",
+        " M crates/agiworkforce-app-server/tests/developer_sessions.rs"
+      ],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-contrast",
+      "HEAD": "de27be195e4837684b92e9b17e776a03756bc05b",
+      "branch": "refs/heads/partials/contrast",
+      "status_records": [],
+      "head_now": "de27be195e4837684b92e9b17e776a03756bc05b"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-desktop-cli",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/code-editor",
+      "status_records": [
+        " M apps/desktop/electron/__tests__/dispatcher.test.ts",
+        " M apps/desktop/electron/__tests__/filesystemService.test.ts",
+        " M apps/desktop/electron/runtime/dispatcher.ts",
+        " M apps/desktop/electron/runtime/filesystemService.ts",
+        " M apps/web/features/code/components/LocalFileEditor.tsx",
+        " M apps/web/features/code/local-code.ts",
+        " M apps/web/features/desktop-host/lib/runtime-client.ts",
+        " M packages/contracts/local-runtime/src/filesystem.ts",
+        " M packages/contracts/local-runtime/src/index.ts",
+        " M packages/contracts/local-runtime/src/protocol.ts",
+        "?? apps/web/features/code/components/LocalFileEditor.test.tsx"
+      ],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-electron",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/desktop-shell",
+      "status_records": [],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-ext-final",
+      "HEAD": "95150a0d69a0b328e7165847ecb07a05dbbfce59",
+      "branch": "refs/heads/fix/vscode",
+      "status_records": [],
+      "head_now": "95150a0d69a0b328e7165847ecb07a05dbbfce59"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-google-lu",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/web-pub",
+      "status_records": [],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-mcp-rust",
+      "HEAD": "b996209e04100b8ae04f01c8dc2e6539c18b5c26",
+      "branch": "refs/heads/partials/code-workspace",
+      "status_records": [
+        " M apps/cli/src/app_server/surfaces.rs",
+        " M apps/cli/src/claude_parity.rs",
+        " M apps/cli/src/cloud/workspace_policy.rs",
+        " M apps/cli/src/lib.rs",
+        " M apps/cli/src/mcp/mod.rs",
+        " M apps/cli/src/tui/tui_app.rs",
+        " M apps/cli/src/tui/widgets/screen_renderers.rs"
+      ],
+      "head_now": "b996209e04100b8ae04f01c8dc2e6539c18b5c26"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-mcp-web",
+      "HEAD": "14380d39ba23c02f77e77674f33125b71a147122",
+      "branch": "refs/heads/partials/mcp-web",
+      "status_records": [],
+      "head_now": "14380d39ba23c02f77e77674f33125b71a147122"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-mobile-chat",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/mobile-chat",
+      "status_records": [],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-mobile-code",
+      "HEAD": "d15f539fb7488c746f71a77d9173f3c502414a51",
+      "branch": "refs/heads/partials/mobile-code",
+      "status_records": [],
+      "head_now": "d15f539fb7488c746f71a77d9173f3c502414a51"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-mobile-features",
+      "HEAD": "086de1f59c2aca33b671c3b382bbe03b8abc899f",
+      "branch": "refs/heads/fix/mobile-billing",
+      "status_records": [
+        " M apps/mobile/__tests__/cloud-account-owner-switch.test.tsx",
+        " M apps/mobile/src/features/settings/cloud-account/index.tsx",
+        "?? apps/mobile/src/features/settings/cloud-account/accountDeletionRefusal.ts"
+      ],
+      "head_now": "086de1f59c2aca33b671c3b382bbe03b8abc899f"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-platform",
+      "HEAD": "17fb7f8bf8129f370e37ed67f4dfc8868b107aaf",
+      "branch": "refs/heads/partials/platform",
+      "status_records": [],
+      "head_now": "17fb7f8bf8129f370e37ed67f4dfc8868b107aaf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-platform-final",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/signaling",
+      "status_records": [],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-privacy",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/web-org",
+      "status_records": [],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-routines-voice",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/code-composer",
+      "status_records": [],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-scanner",
+      "HEAD": "359eaf12e4246734906a695223336aa697d889bc",
+      "branch": "refs/heads/partials/scanner",
+      "status_records": [],
+      "head_now": "359eaf12e4246734906a695223336aa697d889bc"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-sessions",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/code-cloud",
+      "status_records": [],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-slack",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/ci",
+      "status_records": [
+        " M .github/workflows/actions-pinned-check.yml",
+        " M .github/workflows/agiworkforce-bot.yml",
+        " M .github/workflows/bot-author-gate-check.yml",
+        " M .github/workflows/build-windows-release.yml",
+        " M .github/workflows/ci-failure-attribution.yml",
+        " M .github/workflows/ci.yml",
+        " M .github/workflows/clerk-bot-protection.yml",
+        " M .github/workflows/codeql-analysis.yml",
+        " M .github/workflows/codeql.yml",
+        " M .github/workflows/cross-version-compatibility.yml",
+        " M .github/workflows/db-restore-drill.yml",
+        " M .github/workflows/deploy-production.yml",
+        " M .github/workflows/deploy-signaling-server.yml",
+        " M .github/workflows/deploy-staging.yml",
+        " M .github/workflows/e2e-tests.yml",
+        " M .github/workflows/env-drift.yml",
+        " M .github/workflows/evals.yml",
+        " M .github/workflows/guardian.yml",
+        " M .github/workflows/model-probe.yml",
+        " M .github/workflows/release-chrome-extension.yml",
+        " M .github/workflows/release-cli.yml",
+        " M .github/workflows/release-desktop-cloud.yml",
+        " M .github/workflows/release-desktop.yml",
+        " M .github/workflows/release-mobile.yml",
+        " M .github/workflows/release-vscode-extension.yml",
+        " M .github/workflows/repo-operability.yml",
+        " M .github/workflows/security-scanning.yml",
+        " M .github/workflows/test-l1.yml",
+        " M .github/workflows/web-container-drill.yml",
+        " M apps/desktop/scripts/check-no-devtools.mjs",
+        " M apps/desktop/scripts/check-no-devtools.test.ts",
+        " M scripts/check-action-pins.sh",
+        " M scripts/check-workflow-hardening.mjs",
+        " M scripts/check-workflow-hardening.test.mjs",
+        " M scripts/config/workflow-hardening.json",
+        "?? scripts/check-action-pins.test.mjs"
+      ],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/review-product-parity-ecosystem-audit",
+      "HEAD": "21d439536dde221fe072757ac939c3eb6fccbe6d",
+      "branch": "refs/heads/work/audit-ecosystem-inventory-2026-09-25",
+      "status_records": [],
+      "head_now": "21d439536dde221fe072757ac939c3eb6fccbe6d"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/sec-cli",
+      "HEAD": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "branch": "refs/heads/fix/cli-hooks",
+      "status_records": [],
+      "head_now": "563f1873926d18601427454ccc4e5d810ac7dfcf"
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/triage-head",
+      "HEAD": "3e92c6cc8c76b24f7340602b3600d5144c684ab6",
+      "detached": true,
+      "status_records": [],
+      "head_now": "3e92c6cc8c76b24f7340602b3600d5144c684ab6"
+    }
+  ],
+  "satellites": [
+    {
+      "ref": "codex/dependabot-511-fixes",
+      "sha": "d51e27360c442e55718a7514b853afe63f29a9a7",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 7,
+      "candidate_paths": 17
+    },
+    {
+      "ref": "fix/cli-auth",
+      "sha": "6e2d370e5394f9e1c1f3231e7a43c4e9cf0a7043",
+      "kind": "current-satellite-delta",
+      "unique_graph_commits": 2,
+      "candidate_paths": 9
+    },
+    {
+      "ref": "fix/mobile-billing",
+      "sha": "086de1f59c2aca33b671c3b382bbe03b8abc899f",
+      "kind": "current-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 2
+    },
+    {
+      "ref": "fix/vscode",
+      "sha": "95150a0d69a0b328e7165847ecb07a05dbbfce59",
+      "kind": "current-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 4
+    },
+    {
+      "ref": "fix/web-artifact-index-wiring",
+      "sha": "e2a3421ae81e1e1eb121ba44f85428c76d98c598",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 5,
+      "candidate_paths": 13
+    },
+    {
+      "ref": "fix/web-cancel-account-deletion",
+      "sha": "a632c9d86b72d5bdd9fb35ba72225589e7e6e9cd",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 5,
+      "candidate_paths": 22
+    },
+    {
+      "ref": "fix/web-connectors-panel-resilience",
+      "sha": "be716124f033654d7bf2e743e7a042261fe307e3",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 6,
+      "candidate_paths": 8
+    },
+    {
+      "ref": "fix/web-i18n-slice-1",
+      "sha": "5866dcdfacc1f8e3b723659352875c206db2932f",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 3,
+      "candidate_paths": 30
+    },
+    {
+      "ref": "fix/web-i18n-slice-2",
+      "sha": "d8e27a3db786ed3455c392dd5b8a7e41d01e828b",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 6,
+      "candidate_paths": 54
+    },
+    {
+      "ref": "fix/web-small",
+      "sha": "1047f771a77ccea4a96bbcb51acfd083cf2b06e7",
+      "kind": "current-satellite-delta",
+      "unique_graph_commits": 5,
+      "candidate_paths": 8
+    },
+    {
+      "ref": "fix/web-telemetry-consent-ssr",
+      "sha": "2994817a02d09f9dbd451e470d1507e2c2f032ec",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 4,
+      "candidate_paths": 13
+    },
+    {
+      "ref": "hotfix/2026-09-21-founder",
+      "sha": "c85371e761498582bea7d5e636dcf902933b673e",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 5,
+      "candidate_paths": 18
+    },
+    {
+      "ref": "landing/restore-flagship",
+      "sha": "bc90db286eae0d14e89357ae2e012b5447247df0",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 26
+    },
+    {
+      "ref": "partials/chat-gates",
+      "sha": "10e48bc4ae70a853fbc1b5ad39a5c0783ca25c54",
+      "kind": "current-satellite-delta",
+      "unique_graph_commits": 55,
+      "candidate_paths": 73
+    },
+    {
+      "ref": "origin/claude/eager-cray-v13jdu",
+      "sha": "9b7e990fcb9a8cf02417425f52e04d534f866e06",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 2
+    },
+    {
+      "ref": "origin/dependabot/cargo/rust-patch-minor-522b058308",
+      "sha": "ca66e7c99bc67264e20e4a7e0ded60e4fde90308",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    },
+    {
+      "ref": "origin/dependabot/npm_and_yarn/apps/desktop/desktop-major-f905918102",
+      "sha": "6352d4e2a956d809764ba6ba7dc926c7c103c1d8",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    },
+    {
+      "ref": "origin/dependabot/npm_and_yarn/apps/desktop/desktop-patch-minor-45bf466c3d",
+      "sha": "d45b87f59823bbc41b77f3c6e881161b1c86d8c0",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    },
+    {
+      "ref": "origin/dependabot/npm_and_yarn/apps/desktop/vitest/ui-5.0.2",
+      "sha": "9a66e4abad6aba528a43782081af64e2253f9e8b",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    },
+    {
+      "ref": "origin/dependabot/npm_and_yarn/apps/extension/extension-patch-minor-cd393eae9b",
+      "sha": "4ba74dbeb3451ca1d3b21500f9d74b26b673e0c5",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    },
+    {
+      "ref": "origin/dependabot/npm_and_yarn/apps/mobile/mobile-patch-minor-c82ff881e8",
+      "sha": "c1996a2b164b558567395d81116700bc4c26f9e6",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    },
+    {
+      "ref": "origin/dependabot/npm_and_yarn/apps/web/vitest/ui-5.0.2",
+      "sha": "54daec72c83bded5503d657642f90c409de52ba1",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    },
+    {
+      "ref": "origin/dependabot/npm_and_yarn/apps/web/web-major-36775cfaa5",
+      "sha": "70f55c626e309724f28f4a634850ea86d794ac1c",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    },
+    {
+      "ref": "origin/dependabot/npm_and_yarn/apps/web/web-patch-minor-936c922187",
+      "sha": "fef400954667f48a249b6777cce61f9f8a7a35de",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    },
+    {
+      "ref": "origin/dependabot/npm_and_yarn/services/signaling-server/signaling-patch-minor-92bc81cc91",
+      "sha": "bd4bc5bde0b7b4ae279ce143ff9a0fbc476b143a",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    },
+    {
+      "ref": "origin/dependabot/npm_and_yarn/undici-8.11.2",
+      "sha": "ba8563e959fe4498616bc6d46f802b75f766ddb3",
+      "kind": "historical-or-cached-satellite-delta",
+      "unique_graph_commits": 1,
+      "candidate_paths": 1
+    }
+  ],
+  "manifest_variants": 8901,
+  "manifest_distinct_paths": 8723,
+  "manifest_lines_with_variants": 2364284,
+  "by_surface": {
+    "repo-operability": 5,
+    "cli": 299,
+    "desktop": 1604,
+    "vscode": 187,
+    "chrome": 172,
+    "mobile": 827,
+    "web": 3660,
+    "shared-rust": 117,
+    "infrastructure": 4,
+    "shared-ai": 236,
+    "shared-client": 127,
+    "shared-contracts": 331,
+    "shared-guardian": 30,
+    "shared-platform": 139,
+    "shared-tools": 53,
+    "shared-ui": 504,
+    "scripts": 398,
+    "services": 37,
+    "tools": 171
+  },
+  "by_variant_kind": {
+    "latest-integration": 8716,
+    "uncommitted-worktree": 35,
+    "historical-or-cached-satellite-delta": 112,
+    "current-satellite-delta": 38
+  },
+  "excluded_occurrences_by_reason": {
+    "documentation/agent/config-not-runtime-scope": 996,
+    "test-or-test-configuration": 5491,
+    "generated/lock/snapshot/historical-data": 586,
+    "secret-or-environment-file": 11,
+    "non-code/non-runtime-text-or-media": 311,
+    "generated-header": 430
+  },
+  "scope": "Latest integrated first-party production source/config/data plus unique satellite touched-file variants and all nonignored tracked/untracked WIP from registered worktrees. File ownership comes from docs/agent-context/lanes.json; first-party provenance is inferred from maintained source locations and known vendor/generated exclusions, not a complete licensing audit. Line counts include embedded tests in production files. Branch containment is exact path+blob equality, not a claim of execution reachability. Historical tags/stashes inventoried separately, not merged into current-product manifest. Generated third-party files, tests, dependencies, builds, documentation and binary media excluded with reasons. No semantic read-all claim.",
+  "manifest_current_variants": 8798,
+  "manifest_current_distinct_paths": 8723,
+  "manifest_historical_alternative_variants": 103,
+  "current_by_variant_kind": {
+    "latest-integration": 8716,
+    "uncommitted-worktree": 35,
+    "cached-dependency-manifest-proposal": 9,
+    "current-satellite-delta": 38
+  },
+  "historical_by_origin": {
+    "codex/dependabot-511-fixes": 9,
+    "fix/web-artifact-index-wiring": 6,
+    "fix/web-connectors-panel-resilience": 4,
+    "fix/web-cancel-account-deletion": 14,
+    "fix/web-telemetry-consent-ssr": 5,
+    "landing/restore-flagship": 7,
+    "hotfix/2026-09-21-founder": 8,
+    "fix/web-i18n-slice-1": 13,
+    "fix/web-i18n-slice-2": 37
+  },
+  "manifest_primary_scope": "Primary source-manifest.jsonl contains current integration plus current satellite/WIP and cached dependency manifest proposals only. Historical parallel alternatives are quarantined in source-manifest-historical-alternatives.jsonl and are not current missing functionality."
+}

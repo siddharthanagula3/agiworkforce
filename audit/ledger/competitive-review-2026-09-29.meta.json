@@ -1,0 +1,86 @@
+{
+  "status": "in-progress",
+  "read_entire_codebase": false,
+  "scope": "Current integration, distinct current satellite and nonignored WIP variants; historical alternatives separate.",
+  "base": {
+    "ref": "work/billing-e2e",
+    "commit": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+    "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e"
+  },
+  "source_inventory": {
+    "current_variants": 8798,
+    "distinct_paths": 8723,
+    "integration_baseline_files": 8716,
+    "historical_alternatives": 103
+  },
+  "semantic_coverage": {
+    "distinct_file_variants_with_recorded_reading": 194,
+    "recorded_full_file_reads": 62,
+    "not_a_percentage_of_verified_product": true,
+    "qualitative_rust_scopes_are_not_numeric_line_coverage": true
+  },
+  "checklist": {
+    "baseline_items": 3439,
+    "dated_new_items": 16,
+    "user_excluded_items": 19,
+    "current_counts": {
+      "not-reviewed": 3428,
+      "ledger-classification-defect": 2,
+      "partially-reviewed": 6,
+      "excluded-by-user": 19
+    },
+    "prior_done_counts_not_accepted_as_proof": true,
+    "baseline_ledger_sha256": "5fc0e1d089ae9a85189e65bf0bcb6a0fa68d04b5ac9f973037902e3768b74767"
+  },
+  "remaining": [
+    "Most source variants and checklist cells have not been semantically reviewed.",
+    "Mounted browser/native workflows, provider calls, production DB/migrations, distribution and release states not verified in this pass.",
+    "Independent replay and complete end-to-end fixes are still required.",
+    "The current delegated lanes are complete as scoped; the full ecosystem audit remains in progress."
+  ],
+  "product_changes": false,
+  "findings": {
+    "accepted_current_issues": 24,
+    "new_canonical_rows": 23,
+    "existing_id_reused": [
+      "AGI-34",
+      "CLI-THREAD-STATUS-NOT-PERSISTED-01",
+      "C-01",
+      "C-07"
+    ],
+    "policy_candidates_not_registered": [
+      "WEB-CLOUD-AUDIT-04",
+      "CHROME-AUDIT-04"
+    ],
+    "all_are_source_snapshot_findings_not_deployment_claims": true
+  },
+  "focused_suite": {
+    "command": "pnpm --filter @agiworkforce/web exec vitest run lib/services/scheduled-agent-executor.test.ts lib/triggers/__tests__/trigger-fire.test.ts lib/triggers/__tests__/trigger-ingest.test.ts lib/workflows/cloud-agent-workflow.device-clearance.test.ts lib/workflows/cloud-agent-workflow.liveness.test.ts lib/workflows/cloud-agent-workflow.unread-stream.test.ts lib/services/__tests__/schedule-notification-service.test.ts lib/server/__tests__/personalization-reaches-model.test.ts --maxWorkers=1 --no-file-parallelism --reporter=dot",
+    "exit_code": 0,
+    "files_passed": 8,
+    "tests_passed": 96,
+    "duration_seconds": 9.46,
+    "instrument_limits": [
+      "Isolated Vitest with mocked provider/queue/workflow/DB dependencies; these results do not prove deployed durable survival, cron timeliness or notification delivery.",
+      "Executor unit tests hit test Neon URL parse errors on some unmocked entitlement reads and use caught fallbacks. Tests still passed. No actual production DB/API was used.",
+      "Actual finalizer extraction reproduction is separate and documents its simulated dependencies."
+    ]
+  },
+  "chrome_validation": [
+    {
+      "command": "pnpm exec vitest run --config /private/tmp/agi-ecosystem-audit-20260929/chrome-repro.config.ts",
+      "exit_code": 1,
+      "result": "4 tests, 4 intended expectation failures. Exact worker+DOM failures preserved."
+    },
+    {
+      "command": "pnpm exec vitest run --config /private/tmp/agi-ecosystem-audit-20260929/chrome-history-repro.config.ts",
+      "exit_code": 1,
+      "result": "1 test, 1 intended expectation failure; new-session same-account list is empty."
+    },
+    {
+      "command": "pnpm exec vitest run __tests__/background-security-guards.test.ts __tests__/managed-cloud-authority.test.ts __tests__/conversation-history.test.ts __tests__/conversation-cloud-sync-state.test.ts --maxWorkers=1",
+      "exit_code": 0,
+      "result": "4 existing test files, 83 tests passed."
+    }
+  ]
+}

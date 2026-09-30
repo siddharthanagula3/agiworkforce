@@ -1,0 +1,114 @@
+{
+  "lane": "mobile-control-lifecycle",
+  "head": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+  "workspace": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e",
+  "findings": [
+    {
+      "id": "MOBILE-HMAC-CONCURRENT-REPLAY-01",
+      "priority": "P2",
+      "title": "Concurrent copies of one signed companion frame both pass nonce replay checks",
+      "location": {
+        "path": "apps/mobile/lib/dispatchHmac.ts",
+        "start": 304,
+        "end": 319
+      },
+      "trigger": "Two authentic envelopes with the same nonce enter verification before asynchronous hashing returns.",
+      "observed": "Sequential duplicate rejected and invalid MAC rejected; concurrent authentic duplicate accepted twice; nonce cache then has one entry.",
+      "cause": "Nonce presence is tested before awaiting the digest and recorded afterward without a second check.",
+      "impact": "Duplicate authenticated inbound control frames can be applied, including repeated UI updates and notifications. This is not a signature forgery or demonstrated arbitrary command execution.",
+      "suggested_change": "After a valid digest, atomically recheck and record the nonce before returning acceptance. Do not let an invalid MAC reserve a nonce.",
+      "supporting_locations": [
+        {
+          "path": "apps/mobile/stores/connectionStore.ts",
+          "start": 589,
+          "end": 624
+        }
+      ]
+    },
+    {
+      "id": "MOBILE-CONTROL-AFTER-DISCONNECT-01",
+      "priority": "P2",
+      "title": "A previously received companion frame mutates state after disconnect",
+      "location": {
+        "path": "apps/mobile/stores/connectionStore.ts",
+        "start": 589,
+        "end": 618
+      },
+      "trigger": "Disconnect while an old paired frame is awaiting HMAC verification.",
+      "observed": "Actual disconnect clears agents; releasing the pending digest restores old-pair-agent while status remains disconnected.",
+      "cause": "Incoming verification does not capture and revalidate the attempt/HMAC session after its await. The signaling callback only checks the attempt before verification.",
+      "impact": "Old paired task data can reappear after unpairing. Account-switch leakage and a native notification delivery were not demonstrated.",
+      "suggested_change": "Capture the incoming connection generation and HMAC identity, then check both after verification and before applying payloads. Apply the same ownership check to queued controls.",
+      "supporting_locations": [
+        {
+          "path": "apps/mobile/stores/connectionStore.ts",
+          "start": 1038,
+          "end": 1040
+        },
+        {
+          "path": "apps/mobile/stores/connectionStore.ts",
+          "start": 1240,
+          "end": 1269
+        },
+        {
+          "path": "apps/mobile/stores/connectionStore.ts",
+          "start": 1292,
+          "end": 1301
+        }
+      ]
+    }
+  ],
+  "reachability": {
+    "flags": "FEATURES.companion and FEATURES.dispatch are true in the current v1FeatureFlags.ts; isDispatchCompanionEnabled reads those flags.",
+    "mount": "Expo route companion/index.tsx connects scanned/deep-linked pairing codes, mounts notifications and exposes disconnect; app/_layout.tsx routes valid pairing links to it."
+  },
+  "validation": {
+    "command": "node /private/tmp/agi-ecosystem-audit-20260929/mobile-race-repro.cjs",
+    "exit_code": 0,
+    "result": {
+      "sequential": [
+        {
+          "ok": true
+        },
+        {
+          "ok": false,
+          "reason": "nonce_replay"
+        }
+      ],
+      "bad_mac": {
+        "ok": false,
+        "reason": "hmac_mismatch"
+      },
+      "concurrent": [
+        {
+          "ok": true
+        },
+        {
+          "ok": true
+        }
+      ],
+      "nonce_count": 1,
+      "after_disconnect": {
+        "status": "disconnected",
+        "agents": 0
+      },
+      "after_verification": {
+        "status": "disconnected",
+        "agents": [
+          "old-pair-agent"
+        ]
+      }
+    },
+    "instrument": "Full unchanged TypeScript HMAC/connection/validator/flag/contract modules transpiled in memory; Node SHA256/randomness substitutes Expo crypto, with a digest gate to expose the asynchronous boundary. Real Zustand state; native transport, MMKV and unrelated stores are inert fixtures. Only private access appended in memory.",
+    "limits": [
+      "No mounted native app or real pairing/signaling service run.",
+      "Source logic and asynchronous ownership failure reproduced; native transport timing and UI/notification effects remain unverified.",
+      "No product source edited."
+    ],
+    "source_hashes": {
+      "apps/mobile/lib/dispatchHmac.ts": "38389f31ab3c4b33ff907dda0672f451b9f14293ad1c6eb5e4721e46cfca1503",
+      "apps/mobile/stores/connectionStore.ts": "9041faf2b8b9bf039ccda33a533166b8abb44d14ed07fe28295f6a38c981861e",
+      "packages/contracts/types/src/dispatch.ts": "5744eb3ef952f4ca391b3915696dcf83f1a4af4881cbb4d72132321c1a856155"
+    }
+  }
+}

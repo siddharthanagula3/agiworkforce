@@ -1,0 +1,79 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.1 /Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web
+
+ ❯ ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx (3 tests | 3 failed) 22ms
+   × continues polling a recovered running turn and clears busy on completion 12ms
+   × sends a cancellation for the recovered cloud run when Stop is pressed 4ms
+   × merges fresh server messages into a cached nonstreaming conversation on reopening 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx > continues polling a recovered running turn and clears busy on completion
+AssertionError: expected 1 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx:21:16
+     19|  expect(useChatStore.getState().isLoading).toBe(true);
+     20|  await act(async()=>{await vi.advanceTimersByTimeAsync(5001);});
+     21|  expect(polls).toBe(2);
+       |                ^
+     22|  expect(useChatStore.getState().isLoading).toBe(false);
+     23| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx > sends a cancellation for the recovered cloud run when Stop is pressed
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx:33:103
+     31|  act(()=>result.current.stopGeneration(id));
+     32|  await act(async()=>{await Promise.resolve();});
+     33|  expect(requests.some(r=>r.method==='POST'&&r.url.endsWith('/11111111-…
+       |                                                                                                       ^
+     34| });
+     35| it('merges fresh server messages into a cached nonstreaming conversati…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx > merges fresh server messages into a cached nonstreaming conversation on reopening
+AssertionError: expected [ 'old' ] to deeply equal [ 'old', 'new from another device' ]
+
+- Expected
++ Received
+
+  [
+    "old",
+-   "new from another device",
+  ]
+
+ ❯ ../../../../../../../../private/tmp/agi-ecosystem-audit-20260929/web-repro.test.tsx:41:79
+     39|  const {result}=renderHook(()=>useConversations());
+     40|  await act(async()=>{expect(await result.current.loadConversation(id))…
+     41|  expect(useChatStore.getState().messagesByConversation[id].map(m=>m.co…
+       |                                                                               ^
+     42| });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  16:12:16
+   Duration  4.57s (import 52%, transform 38%, environment 7%, setup 3%)
+

@@ -9,6 +9,13 @@ remain.
 Start with [`plan/waves.md`](plan/waves.md). It lists every open item, grouped
 into the order it should be fixed in, with live counts.
 
+The [expanded ecosystem review of 2026-09-29](flows/competitive-ecosystem-review-2026-09-29.md)
+audits the newer local integration and distinct satellite/worktree changes.
+It is in progress. Its source hashes, actual reading scopes and fresh checklist
+are under `ledger/`; prior completion labels are not current verification.
+Confirmed open defects use the existing `registers/known-flaws.md` and
+`prior-audits/active-issues-register.md` owners.
+
 ## Layout
 
 | Folder or file                         | What it holds                                                                                                                                                                              | Who writes it                   | When it goes away                                                                   |
