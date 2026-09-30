@@ -5,7 +5,8 @@ vi.mock('server-only', () => ({}));
 const { mockResolvePlan } = vi.hoisted(() => ({
   mockResolvePlan: vi.fn(async () => 'pro' as string),
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   resolveOrganizationEntitlementPlan: mockResolvePlan,
 }));
 
@@ -198,6 +199,40 @@ describe('sweepOrganizationRetention', () => {
     expect(String(sweepRow(h.sweepInserts).error)).toMatch(/nothing was deleted/i);
   });
 
+  it('deletes finished workspace routine runs on the conversation window', async () => {
+    const h = harness({});
+    h.query.mockImplementation(
+      ((original) => async (sql: string, params?: unknown[]) =>
+        /delete from public\.scheduled_task_runs/i.test(String(sql))
+          ? [{ id: 'r1' }]
+          : original(sql, params))(h.query.getMockImplementation()!),
+    );
+    const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(isSwept(result) && result.routineRunsDeleted).toBe(1);
+    const runDelete = h.query.mock.calls.find(([sql]) =>
+      /delete from public\.scheduled_task_runs/i.test(String(sql)),
+    );
+    expect(String(runDelete?.[0])).toMatch(/task\.organization_id = \$1/);
+    expect(String(runDelete?.[0])).toMatch(/run\.status = any \(\$4::text\[\]\)/);
+    expect(runDelete?.[1]?.[3]).toEqual(['success', 'failed', 'timeout', 'cancelled']);
+    expect(runDelete?.[1]?.[3]).not.toContain('awaiting_approval');
+    expect(runDelete?.[1]?.[3]).not.toContain('running');
+    expect(runDelete?.[1]?.[0]).toBe(ORG);
+    expect(runDelete?.[1]?.[1]).toBe(isSwept(result) && result.cutoff);
+  });
+
+  it('keeps every routine run while any legal hold is active in the workspace', async () => {
+    const h = harness({ holds: [hold()] });
+    await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(
+      h.query.mock.calls.some(([sql]) =>
+        /delete from public\.scheduled_task_runs/i.test(String(sql)),
+      ),
+    ).toBe(false);
+  });
+
   it('deletes nothing while an organization-wide hold is active', async () => {
     const h = harness({
       holds: [hold({ scope: 'organization', subject_user_id: null })],
@@ -273,6 +308,15 @@ describe('sweepOrganizationRetention', () => {
 
     expect(h.deletes[0]).toMatch(/updated_at </);
     expect(h.deletes[0]).not.toMatch(/created_at </);
+  });
+
+  it('revokes the shared links and published artifacts of the chats it deletes, in the same statement', async () => {
+    const h = harness();
+    await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(h.deletes[0]).toMatch(/delete from public\.web_conversations/);
+    expect(h.deletes[0]).toMatch(/delete from public\.shared_sessions share\s+using swept/);
+    expect(h.deletes[0]).toMatch(/delete from public\.published_artifacts artifact\s+using swept/);
   });
 
   it('computes the cutoff from the workspace retention window', async () => {

@@ -7,7 +7,11 @@ vi.mock('@/lib/client/csrf', () => ({
   })),
 }));
 
-import { joinUpgradeWaitlist, redeemUpgradeAccessCode } from './upgrade-waitlist';
+import {
+  isUpgradeWaitlistRequired,
+  joinUpgradeWaitlist,
+  redeemUpgradeAccessCode,
+} from './upgrade-waitlist';
 
 describe('upgrade waitlist client', () => {
   beforeEach(() => {
@@ -55,5 +59,20 @@ describe('upgrade waitlist client', () => {
     await expect(redeemUpgradeAccessCode('EXPIREDCODE')).rejects.toThrow(
       'This access code has expired.',
     );
+  });
+
+  it('opens checkout directly only when the server explicitly disables the gate', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ upgradeGateEnabled: false }),
+    } as Response);
+
+    await expect(isUpgradeWaitlistRequired()).resolves.toBe(false);
+  });
+
+  it('keeps the gate when its status cannot be verified', async () => {
+    vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Offline'));
+
+    await expect(isUpgradeWaitlistRequired()).resolves.toBe(true);
   });
 });

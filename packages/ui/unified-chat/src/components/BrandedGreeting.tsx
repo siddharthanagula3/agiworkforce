@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { AgiMark } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
-import { resolveGreetingHeadline } from '../lib/greeting';
+import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
 
 export interface BrandedGreetingProps {
   headline?: string;

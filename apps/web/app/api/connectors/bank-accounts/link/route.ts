@@ -1,9 +1,15 @@
 import 'server-only';
 
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
 
 import {
+  BankAccountsLinkRequestSchema,
+  type BankAccountsLinkResponse,
+} from '@agiworkforce/cloud-contracts';
+import {
   bankAccountsUnavailableReason,
+  createBankAccountsHostedLink,
   createBankAccountsLinkToken,
 } from '@/lib/connectors/bank-accounts';
 import { BANK_ACCOUNTS_CONNECTOR_ID } from '@/lib/connectors/plaid-config';
@@ -39,16 +45,26 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     organizationId,
     connectorId: BANK_ACCOUNTS_CONNECTOR_ID,
     request,
+    surface: resolveCloudChatSurface(request),
   });
   if (!policy.allowed) throw createError.forbidden(policy.reason).asUserSafe();
 
-  const link = await createBankAccountsLinkToken(userId);
+  const body = await request.json().catch(() => ({}));
+  const parsed = BankAccountsLinkRequestSchema.safeParse(body ?? {});
+  if (!parsed.success) throw createError.validation('Unknown bank link option');
+  const link: BankAccountsLinkResponse = parsed.data.hostedLink
+    ? await createBankAccountsHostedLink(userId)
+    : await createBankAccountsLinkToken(userId);
   await recordAuditEvent({
     userId,
     organizationId,
     eventType: 'connector_authorization_started',
     request,
-    detail: { resourceType: 'connector', connectorId: BANK_ACCOUNTS_CONNECTOR_ID, source: 'plaid' },
+    detail: {
+      resourceType: 'connector',
+      connectorId: BANK_ACCOUNTS_CONNECTOR_ID,
+      source: parsed.data.hostedLink ? 'plaid_hosted_link' : 'plaid',
+    },
   });
   return NextResponse.json(link, { headers: { 'Cache-Control': 'private, no-store' } });
 }

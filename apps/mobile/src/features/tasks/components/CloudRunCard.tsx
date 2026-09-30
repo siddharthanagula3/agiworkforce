@@ -1,9 +1,11 @@
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Bot, ChevronRight, Clock3 } from 'lucide-react-native';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   cloudRunBlock,
   cloudRunBlockLabel,
@@ -29,7 +31,9 @@ function Chip({ label }: { label: string }) {
         borderColor: colors.neutralBorder,
       }}
     >
-      <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600' }}>{label}</Text>
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, fontWeight: '600' }}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -53,7 +57,7 @@ export function CloudRunCard({
   const preview = cloudRunPreview(run, title);
 
   return (
-    <Pressable
+    <PressableBox
       onPress={() => onPress(run.id)}
       accessibilityRole="button"
       accessibilityLabel={`Open ${title}. ${stateLabel}. Started on ${originLabel}`}
@@ -87,15 +91,23 @@ export function CloudRunCard({
           </Text>
 
           {preview ? (
-            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13 }}>
+            <Text
+              numberOfLines={1}
+              style={{ color: colors.textMuted, fontSize: typeScale.footnote }}
+            >
               {preview}
             </Text>
           ) : null}
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: stateColor }} />
-            <Text style={{ color: stateColor, fontSize: 12, fontWeight: '600' }}>{stateLabel}</Text>
-            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, flex: 1 }}>
+            <Text style={{ color: stateColor, fontSize: typeScale.caption, fontWeight: '600' }}>
+              {stateLabel}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{ color: colors.textMuted, fontSize: typeScale.caption, flex: 1 }}
+            >
               · {getManagedDisplayName(run.model)}
             </Text>
           </View>
@@ -104,12 +116,16 @@ export function CloudRunCard({
             <Chip label={originLabel} />
             <Chip label={CLOUD_RUN_WORK_MODE_LABELS[run.workMode]} />
             {timeLabel ? (
-              <Text style={{ color: colors.textMuted, fontSize: 12 }}>{timeLabel}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+                {timeLabel}
+              </Text>
             ) : null}
           </View>
 
           {blockLabel ? (
-            <Text style={{ color: colors.agentWarning, fontSize: 12, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.agentWarning, fontSize: typeScale.caption, fontWeight: '600' }}
+            >
               {blockLabel}
             </Text>
           ) : null}
@@ -117,6 +133,6 @@ export function CloudRunCard({
 
         <ChevronRight size={18} color={colors.textMuted} />
       </View>
-    </Pressable>
+    </PressableBox>
   );
 }

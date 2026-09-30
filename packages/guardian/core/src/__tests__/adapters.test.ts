@@ -6,7 +6,7 @@ import { parseGitleaksOutput } from '../adapters/gitleaks.js';
 import { parseKnipOutput } from '../adapters/knip.js';
 import { parseRepoCheckResult } from '../adapters/repo-check.js';
 import { parseSemgrepOutput } from '../adapters/semgrep.js';
-import { redactSecrets } from '../adapters/types.js';
+import { redactEvidence } from '../adapters/types.js';
 import type { RunContext } from '../adapters/builder.js';
 
 const ctx: RunContext = {
@@ -229,7 +229,7 @@ describe('finalize', () => {
   });
 });
 
-describe('redactSecrets', () => {
+describe('redactEvidence', () => {
   it('redacts common credential shapes', () => {
     const awsAccessKeyFixture = ['AKIA', 'ABCDEFGHIJKLMNOP'].join('');
     const pemPrivateKeyFixture = [
@@ -243,7 +243,7 @@ describe('redactSecrets', () => {
       'password = "hunter2secret"',
       pemPrivateKeyFixture,
     ].join(' ');
-    const redacted = redactSecrets(text);
+    const redacted = redactEvidence(text);
     expect(redacted).not.toContain('ghp_');
     expect(redacted).not.toContain('sk-proj');
     expect(redacted).not.toContain('AKIA');
@@ -253,9 +253,9 @@ describe('redactSecrets', () => {
 
   it('redacts the whole remainder of an authorization line and bearer tokens', () => {
     const opaque = 'Zk9pQ2xhc3NpZmllZFRva2VuOTk5MTIz';
-    expect(redactSecrets(`Authorization: Bearer ${opaque}`)).not.toContain(opaque);
-    expect(redactSecrets(`x-forwarded-authorization = ${opaque} trailing`)).not.toContain(opaque);
-    expect(redactSecrets(`retrying with bearer ${opaque}`)).not.toContain(opaque);
+    expect(redactEvidence(`Authorization: Bearer ${opaque}`)).not.toContain(opaque);
+    expect(redactEvidence(`x-forwarded-authorization = ${opaque} trailing`)).not.toContain(opaque);
+    expect(redactEvidence(`retrying with bearer ${opaque}`)).not.toContain(opaque);
   });
 
   it('redacts JWTs, quoted JSON credential values, and vendor key prefixes', () => {
@@ -264,40 +264,40 @@ describe('redactSecrets', () => {
       'eyJzdWIiOiIxMjM0NTY3ODkwIn0',
       'S1gN4tuR3xyz',
     ].join('.');
-    expect(redactSecrets(`token expired: ${jwt}`)).not.toContain('eyJzdWIiOiIxMjM0NTY3ODkw');
+    expect(redactEvidence(`token expired: ${jwt}`)).not.toContain('eyJzdWIiOiIxMjM0NTY3ODkw');
 
-    expect(redactSecrets('{"token": "gArBaGe1234567890xyz"}')).not.toContain(
+    expect(redactEvidence('{"token": "gArBaGe1234567890xyz"}')).not.toContain(
       'gArBaGe1234567890xyz',
     );
-    expect(redactSecrets("{'api_key' : 'gArBaGe1234567890xyz'}")).not.toContain(
+    expect(redactEvidence("{'api_key' : 'gArBaGe1234567890xyz'}")).not.toContain(
       'gArBaGe1234567890xyz',
     );
     expect(
-      redactSecrets('AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY'),
+      redactEvidence('AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY'),
     ).not.toContain('wJalrXUtnFEMIK7MDENG');
 
     const stripeFixture = ['sk', '_live_', 'Qw3rTy0987654321AbCdEfGh'].join('');
     const webhookFixture = ['whsec', '_', 'Zx8Cv7Bn6Mq5Lp4Kj3Hg2Fd1'].join('');
     const googleFixture = ['AIza', 'Sy0987654321AbCdEfGhIjKlMnOpQrStUv'].join('');
-    expect(redactSecrets(stripeFixture)).toBe('[REDACTED]');
-    expect(redactSecrets(webhookFixture)).toBe('[REDACTED]');
-    expect(redactSecrets(googleFixture)).toBe('[REDACTED]');
+    expect(redactEvidence(stripeFixture)).toBe('[REDACTED]');
+    expect(redactEvidence(webhookFixture)).toBe('[REDACTED]');
+    expect(redactEvidence(googleFixture)).toBe('[REDACTED]');
   });
 
   it('redacts unprefixed high-entropy tokens without eating ordinary evidence', () => {
     const opaque = 'A1b2C3d4E5f6G7h8I9j0KlMnOpQrStUv';
-    expect(redactSecrets(`connect failed with ${opaque}`)).toBe('connect failed with [REDACTED]');
-    expect(redactSecrets('deadbeefcafebabe1234567890abcdef12345678')).toBe(
+    expect(redactEvidence(`connect failed with ${opaque}`)).toBe('connect failed with [REDACTED]');
+    expect(redactEvidence('deadbeefcafebabe1234567890abcdef12345678')).toBe(
       'deadbeefcafebabe1234567890abcdef12345678',
     );
-    expect(redactSecrets('packages/guardian/core/src/adapters/types.ts failed typecheck')).toBe(
+    expect(redactEvidence('packages/guardian/core/src/adapters/types.ts failed typecheck')).toBe(
       'packages/guardian/core/src/adapters/types.ts failed typecheck',
     );
   });
 
   it('stays linear on long adversarial input', () => {
     const started = Date.now();
-    redactSecrets(`${'a'.repeat(60_000)} password`);
+    redactEvidence(`${'a'.repeat(60_000)} password`);
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 });

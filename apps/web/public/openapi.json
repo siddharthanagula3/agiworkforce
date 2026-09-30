@@ -2020,6 +2020,10 @@
             "minLength": 1,
             "maxLength": 4000,
             "description": "Optional text the agent reads before it continues, for example what to do instead of a denied call. Guidance that contains a secret is refused with 400."
+          },
+          "detached": {
+            "type": "boolean",
+            "description": "`true` when the caller will not read the stream. The run then finishes even if the connection closes; follow it at the `X-AGI-Agent-Run-URL` response header. Omitted or `false` stops the run when the connection closes."
           }
         }
       },
@@ -2068,6 +2072,10 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 4000
+          },
+          "detached": {
+            "type": "boolean",
+            "description": "`true` when the caller will not read the stream. The run then finishes even if the connection closes; follow it at the `X-AGI-Agent-Run-URL` response header. Omitted or `false` stops the run when the connection closes."
           }
         }
       },

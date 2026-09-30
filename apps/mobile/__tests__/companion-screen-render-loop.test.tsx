@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('react-native-webrtc', () => ({
   RTCPeerConnection: jest.fn().mockImplementation(() => ({
@@ -82,7 +82,9 @@ jest.mock('@/src/features/companion/components/StatusBanners', () => ({
 jest.mock('@/src/features/companion/components/ConnectionStateViews', () => {
   const RN = require('react-native');
   return {
-    DisconnectedView: () => <RN.View testID="disconnected-view" />,
+    DisconnectedView: ({ onShowSetupSteps }: { onShowSetupSteps: () => void }) => (
+      <RN.Pressable testID="disconnected-view" onPress={onShowSetupSteps} />
+    ),
     ConnectingView: () => null,
     ErrorView: () => null,
     SessionExpiredView: () => null,
@@ -95,7 +97,9 @@ let mockHasSeenDispatchSetup = true;
 jest.mock('@/src/features/companion/components/DesktopSetupChecklistView', () => {
   const RN = require('react-native');
   return {
-    DesktopSetupChecklistView: () => <RN.View testID="dispatch-setup-checklist" />,
+    DesktopSetupChecklistView: ({ onContinue }: { onContinue: () => void }) => (
+      <RN.Pressable testID="dispatch-setup-checklist" onPress={onContinue} />
+    ),
     useDispatchSetupStore: (selector: (s: { hasSeenDispatchSetup: boolean }) => unknown) =>
       selector({ hasSeenDispatchSetup: mockHasSeenDispatchSetup }),
   };
@@ -171,6 +175,17 @@ describe('CompanionScreen, PAR-M28 first-run setup gate', () => {
 
     expect(screen.getByTestId('dispatch-setup-checklist')).toBeTruthy();
     expect(screen.queryByTestId('disconnected-view')).toBeNull();
+  });
+
+  it('lets returning users revisit setup and return to pairing', () => {
+    mockHasSeenDispatchSetup = true;
+    const screen = render(<CompanionScreen />);
+
+    fireEvent.press(screen.getByTestId('disconnected-view'));
+    expect(screen.getByTestId('dispatch-setup-checklist')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('dispatch-setup-checklist'));
+    expect(screen.getByTestId('disconnected-view')).toBeTruthy();
   });
 
   it('shows the disconnected pairing screen once the checklist has been cleared', () => {

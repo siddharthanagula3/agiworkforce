@@ -10,31 +10,25 @@ nothing is left.
 
 - Done when: The user can turn a text document (Word, text, markdown) into a PDF file.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A message or conversation can be exported as PDF, and text/CSV attachments can be rewritten as a PDF by the office-file tool; Word/Excel files cannot be attached on mobile and there is no convert-this-file action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:644-664`, `apps/mobile/services/docParser.ts:106-110`
 
 ## S31.02: Spreadsheet to PDF conversion.
 
 - Done when: The user can turn a spreadsheet into a PDF file.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A message or conversation can be exported as PDF, and text/CSV attachments can be rewritten as a PDF by the office-file tool; Word/Excel files cannot be attached on mobile and there is no convert-this-file action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:195-203`, `apps/web/lib/services/managed-office-file-service.ts:644-664`, `apps/mobile/services/docParser.ts:106-110`
 
 ## S31.03: Presentation to PDF conversion.
 
@@ -43,14 +37,14 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1756`, `apps/mobile/sr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | renders slides to PDF in the E2B sandbox with LibreOffice once AGI_E2B_EXECUTION is on; the public code-interpreter-v1 template has no LibreOffice, so the owner builds agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and sets AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter | flag-off |
-| desktop | partial | renders slides to PDF in the E2B sandbox with LibreOffice once AGI_E2B_EXECUTION is on; the public code-interpreter-v1 template has no LibreOffice, so the owner builds agi-office-interpreter with apps/web/scripts/build-e2b-office-template.mjs and sets AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter | flag-off |
+| web | partial | owner: run node apps/web/scripts/build-e2b-office-template.mjs with E2B credentials, set AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter and AGI_E2B_EXECUTION=1; live-check a PPTX converts to PDF | flag-off |
+| desktop | partial | owner: run node apps/web/scripts/build-e2b-office-template.mjs with E2B credentials, set AGI_E2B_CHAT_TEMPLATE=agi-office-interpreter and AGI_E2B_EXECUTION=1; live-check a PPTX converts to PDF | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/scripts/build-e2b-office-template.mjs:21-21`, `apps/web/lib/e2b/chat-template.ts:3-3`, `apps/web/lib/e2b/runtime.ts:801-801`, `apps/web/lib/e2b/execution-tools.ts:30-30`
+Code: `apps/web/scripts/build-e2b-office-template.mjs:29-29`
 
 ## S31.04: PDF summarization.
 
@@ -92,16 +86,13 @@ Code: `apps/web/scripts/build-e2b-office-template.mjs:21-21`, `apps/web/lib/e2b/
 
 - Done when: The user can get the plain text of a PDF.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Text is extracted only as model input; there is no action to show, copy or download the extracted text, and the assistant must retype it within its output limit. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/chatExecutionStore.ts:1095-1118`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`
 
 ## S31.08: Scanned-document OCR.
 
@@ -119,32 +110,29 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/ch
 
 - Done when: Tables in a PDF come out as structured rows and columns the user can use.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | PDF text is flattened (cell text joined by spaces), so table structure is guessed by the model; it can then write CSV or XLSX with the office-file tool. No table extractor exists. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/(app)/chat/[id].tsx:849-856`, `apps/mobile/stores/chat/chatExecutionStore.ts:1095-1118`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:450-466`, `apps/web/lib/server/pdf-attachment-content.ts:156-163`
-
 ## S31.23: Signature-service integration.
 
 - Done when: The user can send a document for e-signature through a connected signature service.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/mcp-web 4a48dadc2: Claude ships a Docusign connector on https://mcp.docusign.com/mcp (claude.com/connectors/docusign, made by Docusign; the endpoint is also in developers.docusign.com/platform/mcp-server). The directory pins that endpoint with Claude's twenty tools, and docusign is a pre-registered OAuth catalog connector (Docusign's authorization server has no registration endpoint and takes only the confidential code grant), so once connected the assistant creates, sends and tracks envelopes for signature, asking first on every call. It stays Needs setup until the owner registers a Docusign app (integration key and secret, our callback as redirect URI) and adds the docusign CONNECTOR_OAUTH_PROVIDERS_JSON descriptor with CONNECTOR_OAUTH_DOCUSIGN_CLIENT_ID and CONNECTOR_OAUTH_DOCUSIGN_CLIENT_SECRET (docs/runbooks/connector-oauth-apps.md section 8). | flag-off |
-| desktop | partial | partials/mcp-web 4a48dadc2: desktop cloud settings list Docusign once the server reports it available, through the same web connector. Same owner step as web: register the Docusign app and add its descriptor and client pair. | flag-off |
+| web | partial | owner: register the Docusign developer app (integration key, OAuth client pair, redirect URI) and set the DOCUSIGN_* env vars; catalog and endpoint entries exist (apps/web/lib/connectors/catalog.ts:248) | config |
+| desktop | partial | owner: register the Docusign developer app (integration key, OAuth client pair, redirect URI) and set the DOCUSIGN_* env vars; catalog and endpoint entries exist (apps/web/lib/connectors/catalog.ts:248) | config |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/connectors/directory/sources/first-party.json:499-499`, `apps/web/lib/connectors/mcp-endpoints.ts:127-127`, `apps/web/lib/connectors/catalog.ts:248-248`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:218-218`
+Code: `apps/web/lib/connectors/catalog.ts:248-248`
 
 ## S31.24: Export fidelity preview.
 

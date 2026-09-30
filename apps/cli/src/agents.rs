@@ -40,6 +40,7 @@ pub struct AgentDefinition {
     pub color: Option<String>,
     pub skills: Option<Vec<String>>,
     pub max_budget_usd: Option<f64>,
+    pub mcp_servers: Option<Vec<String>>,
     /// The markdown body after frontmatter, used as the system prompt.
     pub system_prompt: String,
     /// Source file path.
@@ -117,6 +118,9 @@ impl AgentDefinition {
                 }
             }
         }
+        if let Some(ref servers) = self.mcp_servers {
+            session.allowed_mcp_servers = Some(servers.clone());
+        }
         if let Some(max_turns) = self.max_turns {
             session.max_turns = Some(max_turns);
         }
@@ -173,6 +177,15 @@ impl AgentDefinition {
                     session.disallowed_tools.push(tool.clone());
                 }
             }
+        }
+        if let Some(ref servers) = self.mcp_servers {
+            session.allowed_mcp_servers = Some(match session.allowed_mcp_servers.take() {
+                Some(parent) => parent
+                    .into_iter()
+                    .filter(|server| servers.contains(server))
+                    .collect(),
+                None => servers.clone(),
+            });
         }
         if let Some(max_turns) = self.max_turns {
             session.max_turns = Some(
@@ -352,6 +365,7 @@ fn load_agent(path: &Path) -> Result<AgentDefinition> {
         color: fm.color,
         skills: fm.skills,
         max_budget_usd: fm.max_budget_usd,
+        mcp_servers: fm.mcp_servers,
         system_prompt: fm.body,
         path: path.to_path_buf(),
     })
@@ -1078,6 +1092,7 @@ struct AgentFrontmatter {
     color: Option<String>,
     skills: Option<Vec<String>>,
     max_budget_usd: Option<f64>,
+    mcp_servers: Option<Vec<String>>,
     body: String,
 }
 
@@ -1100,6 +1115,7 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
             skills: None,
             max_budget_usd: None,
             body: content.to_string(),
+            mcp_servers: None,
         });
     }
 
@@ -1120,6 +1136,7 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
         let mut color: Option<String> = None;
         let mut skills: Option<Vec<String>> = None;
         let mut max_budget_usd: Option<f64> = None;
+        let mut mcp_servers: Option<Vec<String>> = None;
 
         for line in frontmatter_str.lines() {
             let line = line.trim();
@@ -1163,6 +1180,11 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
             } else if let Some(val) = line.strip_prefix("skills:") {
                 skills = Some(parse_yaml_list(val));
             } else if let Some(val) = line
+                .strip_prefix("mcpServers:")
+                .or_else(|| line.strip_prefix("mcp_servers:"))
+            {
+                mcp_servers = Some(parse_yaml_list(val));
+            } else if let Some(val) = line
                 .strip_prefix("maxBudgetUsd:")
                 .or_else(|| line.strip_prefix("max_budget_usd:"))
             {
@@ -1189,6 +1211,7 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
             color,
             skills,
             max_budget_usd,
+            mcp_servers,
             body: body.to_string(),
         })
     } else {
@@ -1205,6 +1228,7 @@ fn parse_agent_frontmatter(content: &str) -> Result<AgentFrontmatter> {
             skills: None,
             max_budget_usd: None,
             body: content.to_string(),
+            mcp_servers: None,
         })
     }
 }
@@ -1366,6 +1390,7 @@ mod tests {
                 max_budget_usd: None,
                 system_prompt: "You research.".to_string(),
                 path: std::path::PathBuf::from(".agiworkforce/agents/researcher.md"),
+                mcp_servers: None,
             },
             AgentDefinition {
                 name: "minimal".to_string(),
@@ -1380,6 +1405,7 @@ mod tests {
                 max_budget_usd: None,
                 system_prompt: String::new(),
                 path: std::path::PathBuf::from(".agiworkforce/agents/minimal.md"),
+                mcp_servers: None,
             },
         ];
 
@@ -1527,6 +1553,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             max_budget_usd: None,
             system_prompt: "You are a researcher.".to_string(),
             path: PathBuf::from("/tmp/.agiworkforce/agents/researcher.md"),
+            mcp_servers: None,
         }];
         let out = format_agent_list(&agents);
         assert!(out.contains("researcher"));
@@ -1586,6 +1613,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             max_budget_usd: None,
             system_prompt: "You review code.".to_string(),
             path: PathBuf::from("/tmp/project/.agiworkforce/agents/reviewer.md"),
+            mcp_servers: None,
         };
 
         let out = format_agent_detail(&agent);
@@ -1613,6 +1641,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
                 max_budget_usd: None,
                 system_prompt: String::new(),
                 path: PathBuf::from("/tmp/a.md"),
+                mcp_servers: None,
             },
             AgentDefinition {
                 name: "DUPE".to_string(),
@@ -1627,6 +1656,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
                 max_budget_usd: None,
                 system_prompt: "Body".to_string(),
                 path: PathBuf::from("/tmp/b.md"),
+                mcp_servers: None,
             },
         ];
 
@@ -1657,6 +1687,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             max_budget_usd: None,
             system_prompt: "Body".to_string(),
             path: PathBuf::from(path),
+            mcp_servers: None,
         };
         let agents = vec![
             mk("zebra", "/tmp/z1.md"),
@@ -1718,6 +1749,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             max_budget_usd: None,
             system_prompt: String::new(),
             path: PathBuf::from("/some/project/.agiworkforce/agents/test.md"),
+            mcp_servers: None,
         };
         assert_eq!(agent_scope_label(&agent), "project");
     }
@@ -1757,6 +1789,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             max_budget_usd: None,
             system_prompt: "You are a test agent.".to_string(),
             path: PathBuf::from("/tmp/test-agent.md"),
+            mcp_servers: None,
         };
 
         agent.apply_to_session(&mut session);
@@ -1815,6 +1848,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             max_budget_usd: None,
             system_prompt: String::new(),
             path: PathBuf::from("/tmp/model-override.md"),
+            mcp_servers: None,
         };
 
         agent.apply_to_session(&mut session);
@@ -1845,6 +1879,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             max_budget_usd: None,
             system_prompt: "Review the requested change.".to_string(),
             path: PathBuf::from("/tmp/reviewer.md"),
+            mcp_servers: None,
         };
 
         agent.apply_to_subagent_session(&mut session);

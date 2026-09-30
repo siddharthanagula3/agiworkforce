@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -14,7 +15,8 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { colors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { formatClock } from '@/src/lib/time';
 
 interface VoiceRecordingProps {
@@ -28,7 +30,7 @@ interface VoiceRecordingProps {
 function RecordingDot() {
   const opacity = useSharedValue(1);
   useEffect(() => {
-    opacity.value = withRepeat(withTiming(0.25, { duration: 700 }), -1, true);
+    opacity.value = withRepeat(withTiming(0.25, { duration: motion.reveal }), -1, true);
   }, [opacity]);
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return (
@@ -54,8 +56,8 @@ export function VoiceRecording({
   const ringOpacity = useSharedValue(0);
   useEffect(() => {
     if (visible) {
-      ringScale.value = withRepeat(withTiming(1.7, { duration: 1100 }), -1, true);
-      ringOpacity.value = withRepeat(withTiming(0.4, { duration: 1100 }), -1, true);
+      ringScale.value = withRepeat(withTiming(1.7, { duration: motion.pulse }), -1, true);
+      ringOpacity.value = withRepeat(withTiming(0.4, { duration: motion.pulse }), -1, true);
     } else {
       ringScale.value = withSpring(1);
       ringOpacity.value = withSpring(0);
@@ -80,8 +82,8 @@ export function VoiceRecording({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(180)}
-      exiting={FadeOut.duration(140)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       style={styles.container}
       accessible
       accessibilityLabel="Voice recording in progress"
@@ -116,22 +118,22 @@ export function VoiceRecording({
 
       {/* Action buttons */}
       <View style={styles.actions}>
-        <Pressable
+        <PressableBox
           onPress={handleCancel}
           style={styles.cancelBtn}
           accessibilityLabel="Cancel recording"
           accessibilityRole="button"
         >
           <X size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Pressable
+        </PressableBox>
+        <PressableBox
           onPress={handleSend}
           style={[styles.sendBtn, { backgroundColor: colors.terraCotta }]}
           accessibilityLabel="Stop and send recording"
           accessibilityRole="button"
         >
           <Send size={22} color={colors.accentText} />
-        </Pressable>
+        </PressableBox>
       </View>
     </Animated.View>
   );
@@ -155,12 +157,12 @@ const styles = StyleSheet.create({
   },
   recordingLabel: {
     color: colors.terraCotta,
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontWeight: '600',
   },
   timer: {
     color: colors.voiceTextMuted,
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontVariant: ['tabular-nums'],
     marginLeft: 4,
   },
@@ -185,7 +187,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     color: colors.voiceTextSubtle,
-    fontSize: 12,
+    fontSize: typeScale.caption,
   },
   actions: {
     flexDirection: 'row',

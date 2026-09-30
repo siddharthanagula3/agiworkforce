@@ -78,6 +78,7 @@ export interface ModelAutoMemoryExtractionInput {
   userId: string;
   organizationId: string | null;
   planTier: string;
+  forceNoTraining?: boolean;
   /**
    * The turn this extraction reads. It is the chat request's own idempotency
    * key, so a retried or resumed turn reaches the same reservation instead of
@@ -102,13 +103,18 @@ export async function extractAutoMemoryFactsWithModel(
   // not even resolve a route or touch the registry.
   if (!isMemoryExtractionWorthwhile(input.message)) return patternFacts(input.message);
 
-  const routing = await sideCallRoutingRequest(input.db, input.userId, {
-    selection: 'auto',
-    taskType: 'simple_chat',
-    subscriptionTier: 'free',
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-  });
+  const routing = await sideCallRoutingRequest(
+    input.db,
+    input.userId,
+    {
+      selection: 'auto',
+      taskType: 'simple_chat',
+      subscriptionTier: 'free',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+    },
+    { forceNoTraining: input.forceNoTraining === true },
+  );
   if (!routing) return patternFacts(input.message);
   const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {

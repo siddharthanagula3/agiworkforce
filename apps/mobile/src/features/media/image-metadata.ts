@@ -9,6 +9,9 @@ import { stripImageMetadata, type ImageMetadataFormat } from '@agiworkforce/util
 
 const BASE64_CHUNK = 0x2000;
 
+export const PICTURE_METADATA_RECOVERY_MESSAGE =
+  'This picture was not attached because its location and camera details could not be removed. Save a copy from Photos and attach that instead.';
+
 const FORMAT_EXTENSION: Readonly<Record<ImageMetadataFormat, string>> = {
   jpeg: 'jpg',
   png: 'png',

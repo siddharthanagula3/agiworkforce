@@ -1,19 +1,32 @@
-import { useCallback, useLayoutEffect, useState } from 'react';
-import { Alert, Clipboard, Image, View } from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { Alert, Clipboard, Image, TextInput, View } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import {
   Copy,
   Check,
   Download,
   LogOut,
   Mail,
+  Pencil,
   Smartphone,
+  RefreshCw,
   Trash2,
+  Undo2,
   UserRound,
 } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
+import { useRouter } from 'expo-router';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
+import {
+  MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
+  NO_PENDING_ACCOUNT_DELETION,
+  parseAccountDeletionStatus,
+  type AccountDeletionStatus,
+} from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   SettingsGroup,
   SettingsInfo,
@@ -22,45 +35,112 @@ import {
 } from '@/src/features/settings/common';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
-import { ApiHttpError } from '@/services/apiErrors';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { exportCloudUserData } from '@/services/cloudDataExport';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
+import { syncNow } from '@/services/cloudSyncEngine';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
   isStaleCloudAccountOperation,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { accountDeletionRefusal } from './accountDeletionRefusal';
 import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
+import { useCloudProfilePhoto } from './useCloudProfilePhoto';
+import { useCloudProfileStore } from './cloudProfileStore';
+
+const ACCOUNT_DELETE_FAILED =
+  'We could not delete your account. Check your connection and try again, ' +
+  'or contact support@agiworkforce.com.';
 
 export default function CloudAccountScreen() {
   const colors = useThemeColors();
+  const router = useRouter();
   const signOut = useAuthStore((s) => s.signOut);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
+  const syncStatus = useCloudSyncStateStore((s) => s.status);
+  const lastSyncAt = useCloudSyncStateStore((s) => s.lastSyncAt);
   const { user: clerkUser } = useUser();
   const { withStepUp, modal: stepUpModal } = useStepUp();
+  const { changePhoto, savingPhoto } = useCloudProfilePhoto(clerkUser);
 
   const userId = clerkUser?.id ?? null;
   const userEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? null;
   const rawDisplayName = clerkUser?.fullName ?? clerkUser?.username ?? null;
-  const displayName = rawDisplayName ? normalizeDisplayName(rawDisplayName) : null;
-  const avatarUrl = clerkUser?.imageUrl ?? null;
+  const storedProfileName = useCloudProfileStore((state) =>
+    state.ownerId === userId ? state.displayName : null,
+  );
+  const storedProfileAvatar = useCloudProfileStore((state) =>
+    state.ownerId === userId && state.loaded ? state.avatarUrl : clerkUser?.imageUrl,
+  );
+  const profileNameError = useCloudProfileStore((state) =>
+    state.ownerId === userId ? state.error : null,
+  );
+  const savingName = useCloudProfileStore((state) => state.saving && state.ownerId === userId);
+  const loadProfileName = useCloudProfileStore((state) => state.load);
+  const saveProfileName = useCloudProfileStore((state) => state.save);
+  const displayName =
+    storedProfileName || (rawDisplayName ? normalizeDisplayName(rawDisplayName) : null);
+  const avatarUrl = storedProfileAvatar ?? null;
 
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [cancellingDeletion, setCancellingDeletion] = useState(false);
+  const [deletionStatus, setDeletionStatus] = useState<{
+    ownerId: string;
+    value: AccountDeletionStatus;
+  } | null>(null);
+  const [deletionStatusError, setDeletionStatusError] = useState(false);
 
   useLayoutEffect(() => {
     setCopied(false);
     setLoggingOut(false);
     setExporting(false);
     setDeleting(false);
+    setCancellingDeletion(false);
+    setDeletionStatus(null);
+    setDeletionStatusError(false);
+    setEditingName(false);
+    setNameDraft('');
   }, [userId]);
+
+  useEffect(() => {
+    if (userId) void loadProfileName(userId);
+  }, [loadProfileName, userId]);
+
+  const handleSaveName = useCallback(async () => {
+    if (!userId) return;
+    if (await saveProfileName(userId, nameDraft)) setEditingName(false);
+  }, [nameDraft, saveProfileName, userId]);
+
+  const refreshDeletionStatus = useCallback(async () => {
+    const account = captureCloudAccountEpoch();
+    if (!account || !userId || account.ownerId !== userId) return;
+    setDeletionStatusError(false);
+    try {
+      const status = parseAccountDeletionStatus(
+        await api.get<unknown>(MANAGED_CLOUD_ACCOUNT_DELETION_PATH),
+      );
+      if (isCloudAccountEpochCurrent(account)) {
+        setDeletionStatus({ ownerId: account.ownerId, value: status });
+      }
+    } catch {
+      if (isCloudAccountEpochCurrent(account)) setDeletionStatusError(true);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    void refreshDeletionStatus();
+  }, [refreshDeletionStatus]);
 
   const captureVisibleAccount = useCallback((): CloudAccountEpoch | null => {
     const account = captureCloudAccountEpoch();
@@ -173,9 +253,7 @@ export default function CloudAccountScreen() {
         }
         Alert.alert(
           'Export failed',
-          error instanceof Error
-            ? error.message
-            : 'AGI could not create your Cloud data export. Check your connection and try again.',
+          'AGI could not create your Cloud data export. Check your connection and try again.',
         );
       })
       .finally(() => {
@@ -201,7 +279,10 @@ export default function CloudAccountScreen() {
           }
           setDeleting(true);
           withStepUp('account.delete', null, (headers) =>
-            api.delete<{ message?: string }>('/api/user/delete-account', { headers }),
+            api.delete<{ message?: string; scheduledFor?: string }>(
+              MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
+              { headers },
+            ),
           )
             .then(async (res) => {
               if (!isCloudAccountEpochCurrent(account)) {
@@ -213,9 +294,8 @@ export default function CloudAccountScreen() {
               }
               await signOut().catch(() => {});
               Alert.alert(
-                'Account deletion scheduled',
-                res?.message ??
-                  'Your account and all cloud data will be permanently deleted within 24 hours.',
+                res?.scheduledFor ? 'Account deletion scheduled' : 'Account deleted',
+                res?.message ?? 'Your account deletion request was completed.',
               );
             })
             .catch((err: unknown) => {
@@ -227,22 +307,90 @@ export default function CloudAccountScreen() {
                 );
                 return;
               }
+              const refusal = accountDeletionRefusal(err);
+              if (refusal) {
+                Alert.alert(
+                  'Could not delete account',
+                  refusal.message,
+                  refusal.reason === 'active_subscription'
+                    ? [
+                        { text: 'OK', style: 'cancel' },
+                        {
+                          text: 'Open Billing',
+                          onPress: () =>
+                            router.push(
+                              '/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0],
+                            ),
+                        },
+                      ]
+                    : undefined,
+                );
+                return;
+              }
               const is401 = err instanceof Error && err.message.includes('401');
               Alert.alert(
                 'Could not delete account',
                 is401
                   ? 'Your session expired. Please sign in again and retry.'
-                  : err instanceof ApiHttpError && err.status === 409
-                    ? err.message
-                    : 'We could not delete your account. Check your connection and try again, ' +
-                      'or contact support@agiworkforce.com.',
+                  : ACCOUNT_DELETE_FAILED,
               );
             })
             .finally(() => setDeleting(false));
         },
       },
     ]);
-  }, [captureVisibleAccount, signOut, withStepUp]);
+  }, [captureVisibleAccount, router, signOut, withStepUp]);
+
+  const handleCancelDeletion = useCallback(() => {
+    const account = captureVisibleAccount();
+    if (!account) return;
+    Alert.alert(
+      'Cancel account deletion?',
+      'Your AGI Cloud account will stay active and its data will not be erased.',
+      [
+        { text: 'Keep deletion scheduled', style: 'cancel' },
+        {
+          text: 'Cancel deletion',
+          onPress: () => {
+            if (!isCloudAccountEpochCurrent(account)) {
+              Alert.alert('Account changed', 'Open this action again for the current account.');
+              return;
+            }
+            setCancellingDeletion(true);
+            api
+              .post<{ cancelled: boolean; message?: string }>(
+                MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
+              )
+              .then((response) => {
+                if (!isCloudAccountEpochCurrent(account)) return;
+                if (response.cancelled !== true) {
+                  throw new Error('The server did not confirm cancellation.');
+                }
+                setDeletionStatus({
+                  ownerId: account.ownerId,
+                  value: NO_PENDING_ACCOUNT_DELETION,
+                });
+                Alert.alert(
+                  'Account deletion cancelled',
+                  response.message ?? 'Your account is active.',
+                );
+              })
+              .catch(() => {
+                if (!isCloudAccountEpochCurrent(account)) return;
+                Alert.alert(
+                  'Could not cancel account deletion',
+                  'Check your connection and try again. The scheduled deletion remains in place until cancellation is confirmed.',
+                );
+                void refreshDeletionStatus();
+              })
+              .finally(() => {
+                if (isCloudAccountEpochCurrent(account)) setCancellingDeletion(false);
+              });
+          },
+        },
+      ],
+    );
+  }, [captureVisibleAccount, refreshDeletionStatus]);
 
   return (
     <SettingsScreenShell title="Account">
@@ -261,34 +409,128 @@ export default function CloudAccountScreen() {
           marginBottom: 18,
         }}
       >
-        {avatarUrl ? (
-          <Image
-            source={{ uri: avatarUrl }}
-            style={{ width: 52, height: 52, borderRadius: 26 }}
-            accessibilityLabel="Profile picture"
-          />
-        ) : (
+        <Pressable
+          testID="cloud-account-change-photo"
+          accessibilityRole="button"
+          accessibilityLabel="Change profile photo"
+          accessibilityState={{ disabled: savingPhoto || !clerkUser }}
+          disabled={savingPhoto || !clerkUser}
+          onPress={() => void changePhoto()}
+          style={{ width: 52, height: 52 }}
+        >
+          {avatarUrl ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={{ width: 52, height: 52, borderRadius: 26 }}
+              accessibilityLabel="Profile picture"
+            />
+          ) : (
+            <View
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                backgroundColor: colors.surfaceHover,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <UserRound size={24} color={colors.textMuted} />
+            </View>
+          )}
           <View
             style={{
-              width: 52,
-              height: 52,
-              borderRadius: 26,
-              backgroundColor: colors.surfaceHover,
+              position: 'absolute',
+              right: -3,
+              bottom: -3,
+              width: 20,
+              height: 20,
+              borderRadius: 10,
+              backgroundColor: colors.surfaceElevated,
+              borderWidth: 1,
+              borderColor: colors.border,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <UserRound size={24} color={colors.textMuted} />
+            <Pencil size={11} color={colors.textPrimary} />
           </View>
-        )}
+        </Pressable>
         <View style={{ flex: 1 }}>
+          {editingName ? (
+            <View style={{ gap: 8 }}>
+              <TextInput
+                testID="cloud-account-name-input"
+                accessibilityLabel="Display name"
+                value={nameDraft}
+                onChangeText={setNameDraft}
+                maxLength={120}
+                autoCapitalize="words"
+                autoCorrect={false}
+                style={{
+                  minHeight: 44,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  color: colors.textPrimary,
+                }}
+              />
+              <View style={{ flexDirection: 'row', gap: 16 }}>
+                <Pressable
+                  testID="cloud-account-save-name"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: savingName || !nameDraft.trim() }}
+                  disabled={savingName || !nameDraft.trim()}
+                  onPress={() => void handleSaveName()}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>
+                    {savingName ? 'Saving…' : 'Save'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={savingName}
+                  onPress={() => setEditingName(false)}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text style={{ color: colors.textMuted }}>Cancel</Text>
+                </Pressable>
+              </View>
+              {profileNameError ? (
+                <Text style={{ color: colors.agentError }}>{profileNameError}</Text>
+              ) : null}
+            </View>
+          ) : (
+            <Pressable
+              testID="cloud-account-edit-name"
+              accessibilityRole="button"
+              accessibilityLabel="Edit display name"
+              onPress={() => {
+                setNameDraft(displayName ?? '');
+                setEditingName(true);
+              }}
+              style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.headline,
+                  fontWeight: '700',
+                  flexShrink: 1,
+                }}
+              >
+                {displayName || 'AGI Cloud account'}
+              </Text>
+              <Pencil size={13} color={colors.textMuted} />
+            </Pressable>
+          )}
           <Text
             numberOfLines={1}
-            style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '700' }}
+            style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginTop: 2 }}
           >
-            {displayName || 'AGI Cloud account'}
-          </Text>
-          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13, marginTop: 2 }}>
             {userEmail || 'Signed in'}
           </Text>
         </View>
@@ -315,6 +557,29 @@ export default function CloudAccountScreen() {
       <SettingsGroup>
         <SettingsRow label="Current session" icon={Smartphone} value="Active" isLast />
       </SettingsGroup>
+
+      <SettingsGroup>
+        <SettingsRow
+          label="Last synced"
+          icon={RefreshCw}
+          value={
+            syncStatus === 'syncing'
+              ? 'Syncing…'
+              : lastSyncAt
+                ? new Date(lastSyncAt).toLocaleString()
+                : 'Never'
+          }
+          onPress={syncStatus === 'error' ? () => void syncNow() : undefined}
+          isLast
+        />
+      </SettingsGroup>
+      {syncStatus === 'error' ? (
+        <SettingsInfo
+          title="Cloud sync needs attention"
+          body="Recent changes have not reached your account. Tap Last synced to retry."
+          icon={RefreshCw}
+        />
+      ) : null}
 
       {/* User ID copy row */}
       {userId && (
@@ -354,7 +619,31 @@ export default function CloudAccountScreen() {
         />
       </SettingsGroup>
 
-      {/* Danger zone */}
+      {deletionStatus?.ownerId === userId && deletionStatus.value.pending && (
+        <SettingsInfo
+          title="Account deletion scheduled"
+          body={
+            deletionStatus.value.scheduledFor
+              ? `Erasure is scheduled for ${new Date(deletionStatus.value.scheduledFor).toLocaleString()}. ${
+                  deletionStatus.value.canCancel
+                    ? 'You can cancel before then.'
+                    : 'The cancellation window has closed.'
+                }`
+              : 'Your account is scheduled for deletion.'
+          }
+          icon={Trash2}
+        />
+      )}
+      {deletionStatusError && (
+        <SettingsGroup>
+          <SettingsRow
+            label="Could not check deletion status. Retry"
+            icon={Trash2}
+            onPress={() => void refreshDeletionStatus()}
+            isLast
+          />
+        </SettingsGroup>
+      )}
       <View
         style={{
           borderRadius: 14,
@@ -367,9 +656,10 @@ export default function CloudAccountScreen() {
       >
         <View style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: colors.dangerBorder }}>
           <Text
+            accessibilityRole="header"
             style={{
               color: colors.agentError,
-              fontSize: 12,
+              fontSize: typeScale.caption,
               fontWeight: '700',
               letterSpacing: 0.4,
               textTransform: 'uppercase',
@@ -378,12 +668,35 @@ export default function CloudAccountScreen() {
             Danger Zone
           </Text>
         </View>
-        <SettingsRow
-          label={deleting ? 'Deleting…' : 'Delete Account'}
-          icon={Trash2}
-          onPress={deleting ? undefined : handleDeleteAccount}
-          isLast
-        />
+        {deletionStatus?.ownerId === userId && deletionStatus.value.pending ? (
+          <SettingsRow
+            label={
+              deletionStatus.value.canCancel
+                ? cancellingDeletion
+                  ? 'Cancelling…'
+                  : 'Cancel Account Deletion'
+                : 'Cancellation window closed'
+            }
+            icon={deletionStatus.value.canCancel ? Undo2 : Trash2}
+            onPress={
+              cancellingDeletion || !deletionStatus.value.canCancel
+                ? undefined
+                : handleCancelDeletion
+            }
+            isLast
+          />
+        ) : (
+          <SettingsRow
+            label={deleting ? 'Deleting…' : 'Delete Account'}
+            icon={Trash2}
+            onPress={
+              deleting || deletionStatusError || deletionStatus?.ownerId !== userId
+                ? undefined
+                : handleDeleteAccount
+            }
+            isLast
+          />
+        )}
       </View>
     </SettingsScreenShell>
   );

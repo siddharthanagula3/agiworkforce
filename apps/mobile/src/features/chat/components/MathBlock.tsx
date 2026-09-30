@@ -5,6 +5,7 @@ import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { agiPalette } from '@agiworkforce/design-tokens';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { colors as darkTokens } from '@/src/ui/theme/tokens';
 import { KATEX_CSS_URL, KATEX_JS_URL } from '@/src/features/chat/utils/katexAssets';
 
@@ -254,13 +255,13 @@ const styles = StyleSheet.create({
   fallbackText: {
     fontFamily: 'Menlo',
     fontStyle: 'italic',
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     textAlign: 'center',
     lineHeight: 22,
   },
   fallbackInline: {
     fontFamily: 'Menlo',
     fontStyle: 'italic',
-    fontSize: 13,
+    fontSize: typeScale.footnote,
   },
 });

@@ -334,66 +334,94 @@ function isUri(value: string): boolean {
   }
 }
 
-function textFormatError(format: ConnectorInputStringFormat, text: string): string | null {
-  const valid =
-    format === 'email'
-      ? EMAIL_PATTERN.test(text)
-      : format === 'uri'
-        ? isUri(text)
-        : format === 'date'
-          ? DATE_PATTERN.test(text)
-          : !Number.isNaN(Date.parse(text));
-  return valid ? null : FORMAT_MESSAGES[format];
+function isValidFormat(format: ConnectorInputStringFormat, text: string): boolean {
+  return format === 'email'
+    ? EMAIL_PATTERN.test(text)
+    : format === 'uri'
+      ? isUri(text)
+      : format === 'date'
+        ? DATE_PATTERN.test(text)
+        : !Number.isNaN(Date.parse(text));
+}
+
+export type ConnectorInputFieldIssue =
+  | 'required'
+  | 'too_short'
+  | 'too_long'
+  | 'too_small'
+  | 'too_large'
+  | 'not_a_number'
+  | 'not_whole'
+  | 'bad_format';
+
+export function connectorInputFieldIssue(
+  field: ConnectorInputField,
+  value: ConnectorInputDraftValue | undefined,
+): ConnectorInputFieldIssue | null {
+  switch (field.kind) {
+    case 'boolean':
+      return null;
+    case 'choice':
+      return field.required && (typeof value !== 'string' || value === '') ? 'required' : null;
+    case 'choices': {
+      const selected = Array.isArray(value) ? value : [];
+      if (selected.length === 0) return field.required ? 'required' : null;
+      if (field.minItems !== undefined && selected.length < field.minItems) return 'too_short';
+      if (field.maxItems !== undefined && selected.length > field.maxItems) return 'too_long';
+      return null;
+    }
+    case 'number': {
+      const text = typeof value === 'string' ? value.trim() : '';
+      if (!text) return field.required ? 'required' : null;
+      const number = Number(text);
+      if (!Number.isFinite(number)) return 'not_a_number';
+      if (field.integer && !Number.isInteger(number)) return 'not_whole';
+      if (field.minimum !== undefined && number < field.minimum) return 'too_small';
+      if (field.maximum !== undefined && number > field.maximum) return 'too_large';
+      return null;
+    }
+    case 'text': {
+      const text = typeof value === 'string' ? value.trim() : '';
+      if (!text) return field.required ? 'required' : null;
+      if (field.minLength !== undefined && text.length < field.minLength) return 'too_short';
+      if (field.maxLength !== undefined && text.length > field.maxLength) return 'too_long';
+      return field.format && !isValidFormat(field.format, text) ? 'bad_format' : null;
+    }
+  }
+}
+
+function issueMessage(field: ConnectorInputField, issue: ConnectorInputFieldIssue): string {
+  if (issue === 'required') {
+    return field.kind === 'choice' || field.kind === 'choices'
+      ? CHOOSE_ONE_MESSAGE
+      : REQUIRED_MESSAGE;
+  }
+  if (issue === 'not_a_number') return NUMBER_MESSAGE;
+  if (issue === 'not_whole') return WHOLE_NUMBER_MESSAGE;
+  switch (field.kind) {
+    case 'choices':
+      return issue === 'too_short'
+        ? `Choose at least ${field.minItems}.`
+        : `Choose at most ${field.maxItems}.`;
+    case 'number':
+      return issue === 'too_small'
+        ? `Enter ${field.minimum} or more.`
+        : `Enter ${field.maximum} or less.`;
+    case 'text':
+      if (issue === 'too_short') return `Use at least ${field.minLength} characters.`;
+      if (issue === 'too_long') return `Use at most ${field.maxLength} characters.`;
+      return field.format ? FORMAT_MESSAGES[field.format] : REQUIRED_MESSAGE;
+    default:
+      return REQUIRED_MESSAGE;
+  }
 }
 
 export function connectorInputFieldError(
   field: ConnectorInputField,
   value: ConnectorInputDraftValue | undefined,
 ): string | null {
-  switch (field.kind) {
-    case 'boolean':
-      return null;
-    case 'choice':
-      return field.required && (typeof value !== 'string' || value === '')
-        ? CHOOSE_ONE_MESSAGE
-        : null;
-    case 'choices': {
-      const selected = Array.isArray(value) ? value : [];
-      if (selected.length === 0) return field.required ? CHOOSE_ONE_MESSAGE : null;
-      if (field.minItems !== undefined && selected.length < field.minItems) {
-        return `Choose at least ${field.minItems}.`;
-      }
-      if (field.maxItems !== undefined && selected.length > field.maxItems) {
-        return `Choose at most ${field.maxItems}.`;
-      }
-      return null;
-    }
-    case 'number': {
-      const text = typeof value === 'string' ? value.trim() : '';
-      if (!text) return field.required ? REQUIRED_MESSAGE : null;
-      const number = Number(text);
-      if (!Number.isFinite(number)) return NUMBER_MESSAGE;
-      if (field.integer && !Number.isInteger(number)) return WHOLE_NUMBER_MESSAGE;
-      if (field.minimum !== undefined && number < field.minimum) {
-        return `Enter ${field.minimum} or more.`;
-      }
-      if (field.maximum !== undefined && number > field.maximum) {
-        return `Enter ${field.maximum} or less.`;
-      }
-      return null;
-    }
-    case 'text': {
-      const text = typeof value === 'string' ? value.trim() : '';
-      if (!text) return field.required ? REQUIRED_MESSAGE : null;
-      if (field.minLength !== undefined && text.length < field.minLength) {
-        return `Use at least ${field.minLength} characters.`;
-      }
-      if (field.maxLength !== undefined && text.length > field.maxLength) {
-        return `Use at most ${field.maxLength} characters.`;
-      }
-      return field.format ? textFormatError(field.format, text) : null;
-    }
-  }
+  const issue = connectorInputFieldIssue(field, value);
+  return issue ? issueMessage(field, issue) : null;
 }
 
 function contentValue(

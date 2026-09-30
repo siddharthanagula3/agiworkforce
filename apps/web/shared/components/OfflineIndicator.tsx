@@ -123,7 +123,7 @@ export function OfflineIndicator({
 
   return (
     <div
-      className={`pointer-events-none fixed ${position}-0 left-0 right-0 z-[var(--z-notification)] ${className}`}
+      className={`pointer-events-none fixed ${position}-0 start-0 end-0 z-[var(--z-notification)] ${className}`}
       role="status"
       aria-live="polite"
       aria-label="Network status indicator"
@@ -175,7 +175,9 @@ export function OfflineIndicator({
           )}
 
           {state.state === SyncState.SYNCING && (
-            <span className="px-2 py-1 rounded-compact text-xs font-medium opacity-75">Syncing…</span>
+            <span className="px-2 py-1 rounded-compact text-xs font-medium opacity-75">
+              Syncing…
+            </span>
           )}
         </div>
       </div>

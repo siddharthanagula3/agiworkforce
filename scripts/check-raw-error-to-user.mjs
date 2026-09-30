@@ -11,6 +11,12 @@ const ROOTS = [
   'apps/web/lib',
   'apps/web/shared',
   'apps/web/app',
+  'apps/mobile/app',
+  'apps/mobile/src',
+  'apps/mobile/components',
+  'apps/mobile/hooks',
+  'apps/mobile/stores',
+  'apps/mobile/services',
   'packages/ui',
 ];
 const BASELINE_PATH = 'audit/baselines/raw-error-to-user.json';
@@ -60,9 +66,8 @@ const errors = checkAgainstBaseline(counts, baseline);
 
 if (errors.length > 0) {
   console.error(
-    "A caught error's own message is the browser's wording, not yours. When the network\n" +
-      'drops it reads "Failed to fetch" in Chrome and "Load failed" in Safari - neither names\n' +
-      "a condition or suggests an action. Wrap it: toUserMessage(err, '<what failed>').\n",
+    "A caught error's message can contain runtime, provider, or storage diagnostics.\n" +
+      'Show app-authored recovery copy instead of forwarding it to a user-visible sink.\n',
   );
   for (const error of errors) console.error(`  ${error}`);
   process.exit(1);

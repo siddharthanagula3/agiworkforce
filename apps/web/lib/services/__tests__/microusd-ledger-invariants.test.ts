@@ -153,6 +153,10 @@ describe('overage headroom', () => {
     'utf8',
   );
   const migrationsDir = path.resolve(import.meta.dirname, '..', '..', '..', 'db', 'neon');
+  const headroomMigration = fs.readFileSync(
+    path.join(migrationsDir, '0347_managed_usage_headroom_under_lock.sql'),
+    'utf8',
+  );
   const balanceFunction = (() => {
     const newest = fs
       .readdirSync(migrationsDir)
@@ -166,9 +170,12 @@ describe('overage headroom', () => {
     return newest.slice(start, newest.indexOf('$$;', start));
   })();
 
-  it('reads the headroom past the plan windows from the prepaid balance owner', () => {
-    expect(requestService).toContain('balances.overage_headroom_microusd as headroom_microusd');
-    expect(requestService).toContain('from public.prepaid_credit_balances_microusd($1::text) balances');
+  it('leaves the headroom past the plan windows to the reservation, which reads the prepaid balance owner', () => {
+    expect(requestService).not.toMatch(/topUpHeadroom|headroom_microusd/);
+    expect(headroomMigration).toContain('select balances.overage_headroom_microusd');
+    expect(headroomMigration).toContain(
+      'from public.prepaid_credit_balances_microusd(p_user_id) balances',
+    );
   });
 
   it('never lets the plan allowance fund purchased headroom', () => {
@@ -185,12 +192,7 @@ describe('overage headroom', () => {
     );
   });
 
-  it('treats an unreadable headroom as none rather than as unlimited', () => {
-    expect(requestService).toContain(
-      'Reservation ledger lookup failed; treating as no headroom on the current catalog',
-    );
-    expect(requestService).toMatch(
-      /catch \(error\) \{[\s\S]{0,260}return \{ topUpHeadroomMicrousd: 0, catalogVersion: null \};/,
-    );
+  it('treats an absent headroom as none rather than as unlimited', () => {
+    expect(headroomMigration.match(/v_headroom := greatest\(coalesce\(\(/g)).toHaveLength(2);
   });
 });

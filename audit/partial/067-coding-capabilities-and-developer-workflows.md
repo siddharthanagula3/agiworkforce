@@ -9,225 +9,204 @@ nothing is left.
 ## S67.01: Explain repository structure.
 
 - Done when: The agent reads the repository and explains its structure: main parts, entry points, how they fit.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.02: Find implementations.
 
 - Done when: Asked where something is implemented, the agent finds the defining code and cites file and line.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.03: Find references.
 
 - Done when: Asked where a symbol is used, the agent finds its references across the repository.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.04: Trace call paths.
 
 - Done when: The agent traces how a call flows through the code from entry point to effect.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.05: Answer repository questions.
 
 - Done when: The agent answers free-form questions about the repository by reading its files.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.06: Implement a feature.
 
 - Done when: Given a feature request, the agent edits and creates files in the repository to implement it.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.07: Fix a defect.
 
 - Done when: Given a defect, the agent finds the cause and edits the code to fix it.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.08: Refactor code.
 
 - Done when: The agent restructures existing code across files without changing behaviour.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.09: Generate tests.
 
 - Done when: The agent writes new test files or cases for existing code.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.10: Run tests.
 
 - Done when: The agent runs the project's test suite and reports the result.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, though package-manager commands (npm, pnpm, cargo...) always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.11: Interpret test failures.
 
 - Done when: After a test run fails, the agent reads the failure output and explains or fixes the cause.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, though package-manager commands (npm, pnpm, cargo...) always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.12: Run type checking.
 
 - Done when: The agent runs the project's type checker and reports errors.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, though package-manager commands (npm, pnpm, cargo...) always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.13: Run linting.
 
 - Done when: The agent runs the project's linter and reports findings.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, though package-manager commands (npm, pnpm, cargo...) always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.14: Build applications.
 
 - Done when: The agent builds the application with the project's build command.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, though package-manager commands (npm, pnpm, cargo...) always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.15: Start development servers.
 
 - Done when: The agent starts a development server and keeps it running while it continues working.
 - Wave: 3
+- Already works on: desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | The local agent's run_command waits for the command to exit (or time out); there are no background shells, so a server cannot stay up while it keeps working. | handler |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | run_command blocks until the command exits or times out; there is no background shell, so a dev server cannot keep running while the agent continues. | handler |
-| vscode | partial | Same local runtime limit (no background shell); the user can start a server in a VS Code terminal themselves. | handler |
-
-Code: `apps/web/features/code/components/LocalSessionPanel.tsx:160-160`, `apps/desktop/electron/runtime/dispatcher.ts:892-895`, `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:552-552`
 
 ## S67.16: Inspect browser behavior.
 
 - Done when: The agent opens the app in a browser and inspects how it behaves (navigate, click, read, screenshot).
+- Wave: 3
+- Already works on: desktop, mobile, cli, chrome
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | missing | Not built on this surface. |  |
+| vscode | partial | Needs a CLI-side browser pairing without AGI Desktop (c-cli lane); VS Code has nothing of its own to add. |  |
+
+Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:775-777`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:950-950`, `apps/cli/src/features/exec/tools/mod.rs:686-689`
+
+## S67.17: Inspect console errors.
+
+- Done when: The agent reads the browser console errors of the app under test.
 - Wave: 3
 - Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-| cli | partial | The CLI's browser_* tools do not drive a browser themselves: execute_browser_command (tools/mod.rs:1236-1249) forwards every call to crate::browser_bridge::run_command, which talks to AGI Desktop's loopback bridge (desktop-bridge.json, 127.0.0.1) and 'the shell owns the pairing; the CLI never speaks to the extension' (browser_bridge.rs:1-2). Without the Electron app running with a Chrome extension paired there, every browser tool returns 'No browser is paired with AGI Desktop' (l.149). The CLI has no pairing of its own (no /browser command, 0 hits). Partial, miss ['surface-only'], remaining: 'browser_* tools only work while AGI Desktop is running with the Chrome extension paired; add a CLI-side pairing or note the dependency.' |  |
-| vscode | partial | Same runtime as the CLI: the app-server's browser_* tools reach a browser only through AGI Desktop's loopback bridge (browser_bridge.rs:1-2, tools/mod.rs:1247); the extension has no browser pairing of its own, so with VS Code and the CLI alone the tools fail 'No browser is paired with AGI Desktop'. Partial, miss ['surface-only'], remaining: 'browser inspection needs AGI Desktop running with the Chrome extension paired; VS Code cannot pair a browser itself.' |  |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/cli/src/tui/tui_app.rs:4747-4749`, `apps/cli/src/features/exec/tools/mod.rs:686-689`
-
-## S67.17: Inspect console errors.
-
-- Done when: The agent reads the browser console errors of the app under test.
-- Wave: 3
-- Already works on: chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | partial | Not in my batch but the same dead search: the auditor searched read_console\|consoleMessages\|consoleCapture and missed browser_console. The Browser tools dialog's 'Read the console' action (BrowserToolsDialog.tsx:59,118-127) calls browser_console via runtime-client.ts:293-299, routed by dispatcher.ts:1035 to commandGate.ts:120-129, which reads the paired Chrome's console (level/pattern filters) into the conversation. Partial, miss ['handler'], remaining: 'Read the console is a manual Browser tools dialog action that attaches the paired Chrome's console to the chat; the local coding agent has no browser_console tool.' Web stays missing: the dialog only works under window.agiHost. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
@@ -236,12 +215,11 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 
 - Done when: The agent inspects failed network requests of the app under test.
 - Wave: 3
-- Already works on: chrome
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | The auditor's identifier regex (read_network\|networkCapture\|networkRequests) could never match the real name: the hosted web app's Browser tools dialog (mounted from the chat composer, ChatComposerNew.tsx:5255) has a 'Read network activity' action that calls browser_network through window.agiHost; dispatcher.ts:1035 routes every browser_* command to runBrowserCommand and commandGate.ts:130-139 plans it for the paired Chrome with a failedOnly filter. The coding agent itself has no such tool (tools/mod.rs:565 lists read_page/click/type/navigate/screenshot only), so this is partial, miss ['handler'], remaining: 'Read network activity is a manual Browser tools dialog that attaches the paired Chrome's requests to the chat; the local coding agent has no browser_network tool and cannot inspect them itself.' |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
@@ -249,15 +227,14 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`,
 ## S67.20: Review code changes.
 
 - Done when: The agent reviews the current code changes and reports issues with file/line references.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, with no review command (only by asking the agent in words); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.21: Review pull requests.
 
@@ -268,157 +245,127 @@ Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| chrome | partial | On a GitHub PR page the in-page panel sends the visible page text with an explain/review/summary prompt; no diff fetch and nothing is posted back. | handler |
-
-Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
 
 ## S67.22: Scan for security problems.
 
 - Done when: The agent scans the code for security problems and reports them.
-- Wave: 2
-- Already works on: desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, with no security-review command; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
-
-## S67.23: Explain findings.
-
-- Done when: After a review or scan, the agent explains each finding in plain language with its location.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-| chrome | partial | Explain diff / Review comments page actions explain a PR from its page text only. | handler |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.24: Propose patches.
 
 - Done when: The agent proposes a change as a reviewable patch before or as it applies it.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, and the Changes panel shows the resulting diff; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | The phone renders diffs (CodeSessionView.tsx:334-340) relayed by the Electron remote-control host (remoteControlHost.ts:104 -> codeRemoteController diffsFor) from a desktop session it can only steer; no patch is proposed or applied by the mobile surface. Every other mobile cell in this section is partial for exactly that dependency ('only by steering an existing desktop AGI Code session'), and the desktop cell for the same relayed data was rated partial, so done here is inconsistent. Partial, miss ['surface-only'], remaining: 'diffs and approvals are relayed from a paired desktop session; the phone cannot run the agent or produce a patch itself.' |  |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:334-340`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.25: Apply selected patches.
 
 - Done when: The user picks which of the agent's proposed patches to apply, and only those are applied.
-- Wave: 2
-- Already works on: desktop, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only per-command approve/reject of a paused step; no selection among patches (commit takes every change); Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, handler |
-| mobile | partial | Approve/deny each pending desktop tool call from the phone; no patch-level selection. | handler |
-| cli | partial | /diff-review stages the files you approve; agi apply applies the whole latest diff; no per-patch selection. | handler |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/components/CodeTranscript.tsx:405-409`, `apps/web/features/code/CloudCodePage.tsx:634-638`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:158-160`, `apps/mobile/src/features/companion/remote-code/service.ts:60-74`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.26: Generate documentation.
 
 - Done when: The agent writes or updates documentation (README, doc comments) from the code.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.27: Perform migrations.
 
 - Done when: The agent performs a code or schema migration across the repository.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but it has no file-write tool: every edit goes through a shell command that needs approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.28: Upgrade dependencies.
 
 - Done when: The agent upgrades dependencies and adjusts code to the new versions.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, but dependency installs always stop for approval; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.29: Create commits.
 
 - Done when: The agent (or user from the coding surface) commits the session's changes with a message.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Commit form commits and pushes the working branch; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:281-291`, `apps/web/lib/services/cloud-code-session-service.ts:2001-2003`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.30: Create branches.
 
 - Done when: The agent creates a git branch for its work.
-- Wave: 2
-- Already works on: desktop, cli, vscode
+- Wave: 3
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Each repository session gets its own working branch automatically; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:180-184`, `apps/web/lib/services/cloud-code-session-service.ts:1307-1311`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.31: Create pull requests.
 
 - Done when: The agent opens a pull request for its branch on the code host.
-- Wave: 2
-- Already works on: desktop
+- Wave: 3
+- Already works on: desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Create pull request opens a GitHub PR for the working branch; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-| cli | partial | No pull-request tool or command; only gh through run_command when the user has it installed and signed in. | handler |
-| vscode | partial | Same local runtime: no pull-request tool, only gh through the shell tool. | handler |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:320-327`, `apps/web/app/api/code/sessions/[sessionId]/pull-request/route.ts:57-60`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.32: Respond to review feedback.
 
 - Done when: The agent reads review comments on a pull request and changes the code to address them.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /pr-comments is a canned prompt; the agent has no GitHub tool and depends on gh through the shell to read the comments. | handler |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/claude_parity.rs:228-228`, `apps/cli/src/claude_parity.rs:1188-1197`
 
 ## S67.33: Investigate CI failures.
 
@@ -427,13 +374,13 @@ Code: `apps/cli/src/claude_parity.rs:228-228`, `apps/cli/src/claude_parity.rs:11
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A failed GitHub check can trigger a routine, but no step reads the CI logs or the repository to find the cause. | handler |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/triggers/github-events.ts:52-62`, `apps/web/app/api/github/webhook/route.ts:141-141`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:626-630`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.34: Work from issues or team mentions.
 
@@ -442,64 +389,52 @@ Code: `apps/web/lib/triggers/github-events.ts:52-62`, `apps/web/app/api/github/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An @agi-workforce mention on a PR only triggers a review; nothing turns an issue or mention into a coding task. | handler |
-| desktop | partial | Only the hosted-web PR-review mention; no issue or mention starts a coding task. | handler |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/github/webhook/route.ts:32-32`, `apps/web/app/api/github/webhook/route.ts:236-236`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:626-630`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.36: Run bounded goal/completion loops.
 
 - Done when: The user sets a goal and a bound (turns/time) and the agent loops until done or the bound is hit.
-- Wave: 2
-- Already works on: desktop, cli
+- Wave: 3
+- Already works on: desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Each cloud turn is bounded by a fixed 10-minute budget the user cannot change; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, ui |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-| vscode | partial | The runtime loop uses its default cap; the extension exposes only effort presets, not a goal bound. | ui |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/lib/deadline-policy.ts:33-33`, `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S67.37: Persist useful repository-specific Memory.
 
 - Done when: The agent saves useful repository-specific facts to memory and reuses them in later sessions on that repository.
 - Wave: 3
-- Already works on: desktop, cli
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-| vscode | partial | VS Code memory commands edit account-wide facts (/api/memory/sync); repository memory is only what the local runtime already loads from project files. | ui |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/extension-vscode/src/core/commandSetup.ts:1863-1868`, `apps/extension-vscode/src/memory/accountMemoryClient.ts:10-10`
 
 ## S67.38: Load repository instruction files.
 
 - Done when: The agent loads the repository's instruction files (AGENTS.md, CLAUDE.md) and follows them.
 - Wave: 3
-- Already works on: desktop, cli, vscode
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`
 
 ## S67.39: Use project-specific Skills and Plugins.
 
 - Done when: The agent uses skills and plugins defined in the project and the user can see or toggle them.
 - Wave: 3
-- Already works on: desktop, cli, vscode
+- Already works on: desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:89-90`, `apps/mobile/src/features/companion/remote-code/service.ts:49-49`

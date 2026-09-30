@@ -68,6 +68,47 @@
           "date": "2026-09-27",
           "digest": "c5252511fc5105de",
           "note": "The erasure table count moves from 105 to 106 as external resource references joined the list; no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "4795794cc34bf55d",
+          "note": "The erasure table count moves from 106 to 113 as the storage a published app keeps for its viewers, Slack account links and assistant runs, workspace plugin membership and community plugin submissions joined the list; no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "8729f7b20746c65f",
+          "note": "The erasure table count is now read from the erasure list when the page is built instead of being typed, so it cannot fall behind the list; the published figure and every commitment are unchanged, so the date stays."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "85f1c06b4c989919",
+          "note": "Adds a Google user data section stating how the Gmail, Calendar, Drive and Contacts connectors access, use, store and share Google data, and that this follows the Google API Services User Data Policy including Limited Use. It describes existing practice and narrows no right.",
+          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements. Product analytics now also covers usage events from the AGI apps recorded against your account, so a consent given under an earlier version covers page views only."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "e301293a3ab8f014",
+          "note": "Same-day revision before release: account deletion now revokes connector tokens at Google, Google data routes only to no-training providers, workspace retention covers routine runs, and deleted chats state the 30-day purge. The date stays because the 2026-09-29 version has not shipped."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "25028c9a8392c809",
+          "note": "Same-day revision before release: covers every Google connector including whole-Drive read-only search, adds the memory commitment and the background job retention row. The date stays because the 2026-09-29 version has not shipped."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "4cbe9937d3461d21",
+          "note": "Same-day revision before release: the memory row now also covers search and research results from chats holding Google data and files imported from Google. The date stays because the 2026-09-29 version has not shipped."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "a5112f1e720aea66",
+          "note": "Same-day revision before release, and material: product analytics now discloses per-account product usage events from web, desktop, mobile, Chrome, VS Code and the CLI (stop, regenerate, suggestion accepted or dismissed; no content), the Settings control on every surface and the workspace switch that turns it off. Because it widens what the product_analytics consent covers, a product_analytics consent is now recorded under the analytics notice identifier PRODUCT_ANALYTICS_NOTICE_VERSION rather than the privacy date, and every client and the server honour only consents carrying that exact identifier; earlier consents, including any recorded under this 2026-09-29 date, keep covering page views only. The date stays because the 2026-09-29 version has not shipped."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "2b51974c784151d6",
+          "note": "Same-day revision before release: the analytics basis names the notice revision product-analytics-v1 instead of a date as the point before which analytics consent covered page views only. The date stays because the 2026-09-29 version has not shipped."
         }
       ]
     },
@@ -198,6 +239,16 @@
           "date": "2026-08-14",
           "digest": "28c9bec60be66224",
           "note": "The erasure table count moves from 105 to 106 as external resource references joined the list; a factual correction rather than a fresh review of the page, so the date stays."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "4032d50f70f9fb42",
+          "note": "A row describes how Advanced Account Security stores passkeys, security keys and recovery keys and refuses unverified sessions, and the erasure table count moves from 106 to 113 as the day's published app storage, Slack and plugin tables joined the list; no existing security commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "bf9205838861af4d",
+          "note": "The erasure table count is now read from the erasure list when the page is built instead of being typed, so it cannot fall behind the list; no security commitment changed, so the date stays."
         }
       ]
     },
@@ -320,6 +371,21 @@
           "date": "2026-09-21",
           "digest": "8b143c0c03711fbc",
           "note": "The erasure count moves from 105 to 106 with external resource references, and the row-level-isolation row is re-measured at 223 of 347 database-backed routes with 124 on the owner connection and 128 touching no database; the change record says so and the date stays."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "89e66f3bf234d2b2",
+          "note": "The erasure count moves from 106 to 113 with the day's published app storage, Slack and plugin tables, the row-level-isolation row is re-measured at 249 of 383 database-backed routes with 134 on the owner connection and 129 touching no database, and the change record adds the Advanced Account Security entry; no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "f7232e73d879bce3",
+          "note": "The GDPR row's erasure count and the row-level-isolation row's route counts are now read from the erasure list and measured from the route files when the page is built instead of being typed, so neither can fall behind; the figures and commitments are unchanged, so the date stays."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "49e07e8852b881e1",
+          "note": "The Advanced Account Security change record counts the two routes its enrollment fix adds, the emailed code and the emailed link that turns it off, making fifteen; no commitment changed, so the date stays."
         }
       ]
     },
@@ -370,6 +436,12 @@
           "date": "2026-09-21",
           "digest": "c215d548ab4086a0",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-29",
+          "digest": "ef51e709b9835d9b",
+          "note": "Material: the app now sends first-party product usage events to AGI Cloud in managed-cloud mode with the account's product analytics consent, so the page lists them as a data category and drops the sentence saying no usage event leaves the device.",
+          "summary": "Adds product usage events, sent only in managed-cloud mode and only after you allow product analytics, as a data category, and removes the statement that no usage event leaves your device."
         }
       ]
     },

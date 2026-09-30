@@ -7,10 +7,9 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { invalidateAccountStatusCache } from '@/lib/server/request-context-cache';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { eraseUserAccountData } from '@/lib/server/account-erasure';
 import {
@@ -161,7 +160,7 @@ async function handleGet(request: NextRequest) {
     const authResult = await getClerkAuthUser(request);
     userId = authResult.userId;
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
@@ -223,7 +222,7 @@ async function handleDelete(request: NextRequest) {
     const authResult = await getClerkAuthUser(request);
     userId = authResult.userId;
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
@@ -365,6 +364,7 @@ async function handleDelete(request: NextRequest) {
           );
         }
         await getIdentityProvider().deleteUser(userId);
+        await invalidateAccountStatusCache(userId);
       } catch (clerkErr: unknown) {
         const errMsg = clerkErr instanceof Error ? clerkErr.message : String(clerkErr);
         logger.error({ userId, error: errMsg }, 'Account deletion failed');

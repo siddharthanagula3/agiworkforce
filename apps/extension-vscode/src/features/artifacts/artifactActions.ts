@@ -179,5 +179,5 @@ export async function openPublishedArtifact(
 }
 
 export function artifactsWebUrl(webOrigin: string): string {
-  return `${webOrigin}/artifacts?from=vscode-extension`;
+  return `${webOrigin}/chat/library?surface=artifact&from=vscode-extension`;
 }

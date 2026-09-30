@@ -63,35 +63,11 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S18.09: Change conversation mode.
-
-- Done when: Within a conversation, the user can switch its working mode (e.g. chat vs agent/work/plan) and later turns follow it.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A Cloud conversation shows a Chat and Work switch above its composer, so later turns run as chat or AGI Work, as Claude's mobile message box does; in post-codex/chat-gates-s18.09-mobile-work-mode-in-conversation.patch. | ui |
-
-Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
-
 ## S18.11: Conversation search.
 
 - Done when: The user can search within the open conversation's messages.
 - Wave: 3
 - Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S18.14: Jump to a turn.
-
-- Done when: The user can jump directly to a chosen earlier turn in the conversation.
-- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -139,16 +115,13 @@ Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
 
 - Done when: The user can share a conversation (e.g. a read-only link) from the conversation.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | A Cloud conversation's menu offers Share link, which confirms, creates the link through POST /api/share and opens the share sheet; temporary chats are refused; links are revoked in Settings, Shared links. In post-codex/chat-gates-s18.19-mobile-share-link.patch ([id].tsx is held). Both leaders share links from iOS (help.openai.com 7925741; support.claude.com 10593882). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/shared-links/service.ts:50-50`
 
 ## S18.20: Shared-link management.
 
@@ -177,14 +150,11 @@ Code: `apps/mobile/src/features/shared-links/service.ts:50-50`
 
 - Done when: The user can inspect what context and sources the conversation is using (files, instructions, memory, token budget).
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a warning chip appears when the thread nears the model's context limit; add a view of what is in context. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`
 
 ## S18.23: Usage summary.
 
@@ -203,13 +173,13 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`
 
 - Done when: The user can set instructions that apply only to this conversation.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | L2/R-k: the auditor searched for a per-conversation instructions UI and missed the terminal equivalent. `agi --system-prompt` / `--system-prompt-file` / `--append-system-prompt-file` (lib.rs:245-247, 470-475) set instructions for that session only and reach both the REPL and the TUI as effective_system_prompt (4609-4640). Launch-time only, so partial. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -217,15 +187,11 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`
 
 - Done when: Tool enablement (web search, code, etc.) can be set for this conversation and persists across its turns.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Task chips pick a tool mode for the next message only; add per-conversation tool toggles. | ui |
-| cli | partial | L2/R-k: --allowedTools/--disallowedTools (lib.rs:392-402) are passed into the session for every turn (4626-4630, and the TUI branch below it), which is per-conversation tool enablement that persists across the session's turns; there is no mid-session control, so partial. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobile/src/features/chat/components/Composer/Composer.tsx:81-81`
 
 ## S18.26: Conversation-level connected accounts.
 
@@ -251,15 +217,3 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobi
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S18.28: Continuation on another device.
-
-- Done when: A conversation started on one device can be continued on another.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | CLI sessions stay on this machine: they can move to VS Code here, and /continue-with-cloud only drafts a managed-cloud turn; add opening a CLI session on web/mobile. | ui |
-
-Code: `apps/cli/src/claude_parity.rs:169-176`

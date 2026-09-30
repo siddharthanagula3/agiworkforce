@@ -93,6 +93,7 @@ export async function loadTurnToolPermissions(
   db: DatabaseAdapter,
   userId: string,
   options: {
+    organizationId: string | null;
     modelSupportsTools: boolean;
     connectorPermissionsRequired?: boolean;
     toolApprovalPolicyRequired?: boolean;
@@ -103,7 +104,7 @@ export async function loadTurnToolPermissions(
 }> {
   const [connectorPermissions, toolApprovalPolicy] = await Promise.all([
     options.modelSupportsTools && options.connectorPermissionsRequired !== false
-      ? loadConnectorToolPermissions(db, userId)
+      ? loadConnectorToolPermissions(db, userId, options.organizationId)
       : Promise.resolve(EMPTY_CONNECTOR_TOOL_PERMISSIONS),
     options.toolApprovalPolicyRequired === false
       ? Promise.resolve(DEFAULT_TOOL_APPROVAL_POLICY)

@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
 import {
-  MANAGED_MEMORY_MAX_CONTENT_CHARS,
+  readManagedMemoryUpdateRequest,
   type ManagedMemoryDeleteResponse,
   type ManagedMemoryItemResponse,
   type ManagedMemoryRecord,
@@ -79,16 +79,16 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
-  let body: { content?: string; pinned?: boolean; expiresAt?: unknown };
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     throw createError.validation('Invalid request body');
   }
 
-  if (body.pinned !== undefined && typeof body.pinned !== 'boolean') {
-    throw createError.validation('pinned must be a boolean');
-  }
+  const read = readManagedMemoryUpdateRequest(rawBody);
+  if (!read.ok) throw createError.validation(read.message);
+  const body = read.request;
 
   const expiry = parseMemoryExpiry(body.expiresAt);
   if (!expiry.ok) {
@@ -97,20 +97,11 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
 
   const togglesPin = typeof body.pinned === 'boolean';
   const setsExpiry = expiry.expiresAt !== undefined;
-  const editsContent = body.content !== undefined || (!togglesPin && !setsExpiry);
 
   const assignments: string[] = [];
   const params: unknown[] = [];
 
-  if (editsContent) {
-    if (!body.content || typeof body.content !== 'string' || body.content.trim().length === 0) {
-      throw createError.validation('Content is required');
-    }
-    if (body.content.length > MANAGED_MEMORY_MAX_CONTENT_CHARS) {
-      throw createError.validation(
-        `Content must be ${MANAGED_MEMORY_MAX_CONTENT_CHARS.toLocaleString('en-US')} characters or less`,
-      );
-    }
+  if (body.content !== undefined) {
     const content = body.content.trim();
     await assertMemoryWriteAllowed(db, { userId, content });
     const admission = await memoryWriteAdmission(db, {

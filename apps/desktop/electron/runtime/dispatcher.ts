@@ -35,6 +35,7 @@ import {
   DEVICE_REGISTRY_PROFILE_COMMAND,
   type DeviceRegistryProfile,
   DEVICE_STEP_TOOLS,
+  MAX_DEVICE_REVIEW_LENGTH,
   deviceStepCapability,
   deviceStepCommand,
   deviceStepScope,
@@ -659,6 +660,11 @@ function emitRuntimeEvent(window: BrowserWindow | null, event: unknown): void {
   window.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, event);
 }
 
+function serverReview(args: Record<string, unknown>): { review?: string } {
+  const review = typeof args['review'] === 'string' ? args['review'].trim() : '';
+  return review === '' ? {} : { review: review.slice(0, MAX_DEVICE_REVIEW_LENGTH) };
+}
+
 let detectedShellSandbox: Promise<ShellSandbox> | null = null;
 
 function shellSandbox(): Promise<ShellSandbox> {
@@ -858,19 +864,22 @@ function declareDeviceHost(): DesktopHostDeclaration {
   const screenUsable = computerUseEnabled() && computerUseAvailability().supported;
   const capabilities = [
     ...new Set(
-      DEVICE_STEP_TOOLS.filter((tool) => {
+      DEVICE_STEP_TOOLS.flatMap((tool) => {
         const scope = deviceStepScope(tool);
+        const capability = deviceStepCapability(tool);
+        if (!isDesktopCapability(capability)) return [];
         if (scope === 'workspace') {
           return roots.some(
-            (root) =>
-              getPermissionState(deviceStepCapability(tool), workspaceScope(root)) !== 'denied',
-          );
+            (root) => getPermissionState(capability, workspaceScope(root)) !== 'denied',
+          )
+            ? [capability]
+            : [];
         }
         const usable = scope === 'screen' ? screenUsable : pairingState().paired;
-        return (
-          usable && getPermissionState(deviceStepCapability(tool), { kind: 'global' }) !== 'denied'
-        );
-      }).map(deviceStepCapability),
+        return usable && getPermissionState(capability, { kind: 'global' }) !== 'denied'
+          ? [capability]
+          : [];
+      }),
     ),
   ];
   return {
@@ -985,6 +994,7 @@ async function execute(
         network: 'deny',
         approve: (request) => approveShellCommand(window, request),
         emit: (chunk) => emitRuntimeEvent(window, { kind: 'shell-output', ...chunk }),
+        ...serverReview(args),
       });
     }
     case 'shell_cancel':
@@ -1001,6 +1011,7 @@ async function execute(
         network: 'deny',
         approve: (request) => approveShellCommand(window, request),
         emit: (chunk) => emitRuntimeEvent(window, { kind: 'shell-output', ...chunk }),
+        ...serverReview(args),
       });
     }
     case 'shell_read': {
@@ -1304,7 +1315,7 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
   if (error instanceof BrowserBridgeError) return runtimeFailure('io-error', error.message);
   if (error instanceof BrowserStepRefused) {
     return runtimeFailure(
-      error.reason === 'permission' ? 'permission-denied' : 'cancelled',
+      error.reason === 'cancelled' ? 'cancelled' : 'permission-denied',
       error.message,
     );
   }

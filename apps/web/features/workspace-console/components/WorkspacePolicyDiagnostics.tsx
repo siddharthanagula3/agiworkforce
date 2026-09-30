@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toUserMessage } from '@/lib/user-error-message';
 import { Spinner } from '@agiworkforce/ui';
 import {
   WORKSPACE_CODE_CONTROL_LABELS,
@@ -203,7 +204,7 @@ export function WorkspacePolicyDiagnostics({ organizationId }: { organizationId:
 
       {diagnosis.error ? (
         <p role="alert" className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
-          {diagnosis.error.message}
+          {toUserMessage(diagnosis.error, 'The policy could not be explained.')}
         </p>
       ) : null}
 

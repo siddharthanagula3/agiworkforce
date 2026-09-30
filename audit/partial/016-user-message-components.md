@@ -6,19 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S16.04: Source and context chips.
-
-- Done when: A sent user message shows chips for the non-file context it carried (quoted text, connector/MCP resources, page, editor selection, @mentions).
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A sent message shows its quoted reply and the skill it ran with as chips above the bubble; the skill is recorded as sendReplay.skillName, the key the web reads. In post-codex/chat-gates-s16.04-mobile-sent-context-chips.patch. | ui |
-| cli | partial | Show context the turn carried as distinct chips; the transcript only keeps the literal @path text the user typed. | ui |
-
-Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-60`, `apps/cli/src/tui/tui_app.rs:4926-4929`
-
 ## S16.05: Timestamp.
 
 - Done when: Each user message exposes when it was sent (inline or on demand).
@@ -68,18 +55,6 @@ Code: `packages/contracts/cloud-contracts/src/message-metadata-projection.ts:60-
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S16.09: Resend action.
-
-- Done when: A sent user message can be re-sent unchanged from the message itself to get a fresh reply.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Resend on the user's own message is built in post-codex/chat-gates-s16.09-s17.38-s17.39-s20.26-mobile-bubble.patch (MessageBubble is held by Codex); the store already re-runs from a user message (retryMessage). Claude's user message row has Retry. | ui |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3017-3017`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:522-522`
-
 ## S16.10: Branch-from-message action.
 
 - Done when: From a chosen user message the user can start a new branch conversation that contains the thread up to that message.
@@ -94,16 +69,13 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:3017-3017`, `apps/mobile/sr
 
 - Done when: When a user message has several revisions the user can page between them (n of m) and the thread follows the chosen revision.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Threaded Cloud chats show '< n / m >' on a revised question and a regenerated answer, switch the visible branch with the shared resolveLeafForSibling and save the choice through updateConversation, in post-codex/chat-gates-s16.11-s17.28-mobile-version-pager.patch. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 
 ## S16.12: Expand long message.
 
@@ -179,41 +151,25 @@ Code: `packages/contracts/cloud-contracts/src/message-thread.ts:253-253`
 
 - Done when: A user message that came from speech is marked as a voice transcript (e.g. mic badge or "Transcribed").
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Mark voice turns in the TUI transcript; they are labelled "You said:" only inside the voice console, and back in the TUI the exchange is absent (only "Voice session ended."). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:213-213`, `apps/cli/src/tui/tui_app.rs:4659-4672`
 
 ## S16.20: Imported-message attribution.
 
 - Done when: Messages brought in from elsewhere (another product, a shared link, another device) are marked with where they came from.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Mark adopted turns in the transcript; `agi resume --cloud <id>` copies account messages into a local session and prints one stderr line before the TUI takes the screen. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1646-1670`, `apps/cli/src/lib.rs:1668-1669`
-
-## S16.22: Message-level deep link.
-
-- Done when: A user can obtain and open a link that lands on one specific message in a conversation.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |

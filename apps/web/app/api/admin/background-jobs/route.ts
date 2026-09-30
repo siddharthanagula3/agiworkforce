@@ -11,6 +11,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { isJobQueueName } from '@/lib/jobs/job-queues';
 import {
+  jobsCarryingGoogleUserData,
+  withoutGoogleUserData,
+} from '@/lib/jobs/google-user-data-jobs';
+import {
+  deadReasonHeadline,
   listDeadJobs,
   readJobQueueStats,
   retryDeadJob,
@@ -29,7 +34,12 @@ const JOB_CONTENT_SCOPE = 'background_jobs';
 // A dead job's payload and its provider error are the tenant's words, not ours.
 // An operator sees the shape of the failure; the content needs a live grant.
 function withoutJobContent(job: BackgroundJob): BackgroundJob {
-  return { ...job, payload: {}, lastError: job.lastError === null ? null : 'redacted' };
+  return {
+    ...job,
+    payload: {},
+    lastError: job.lastError === null ? null : 'redacted',
+    deadReason: deadReasonHeadline(job.deadReason),
+  };
 }
 
 const RetrySchema = z.object({ jobId: z.string().uuid() });
@@ -61,6 +71,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     readJobQueueStats(db),
     listDeadJobs(db, { limit, offset, queue }),
   ]);
+  const carryingGoogleUserData = await jobsCarryingGoogleUserData(db, dead);
 
   const view = await readOperatorContentUnderGrants({
     db,
@@ -70,6 +81,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     records: dead,
     organizationIdOf: (job) => job.organizationId,
     withoutContent: withoutJobContent,
+    googleUserData: {
+      carries: (job) => carryingGoogleUserData.has(job.id),
+      withhold: withoutGoogleUserData,
+    },
   });
 
   const servedContent = view.grantedOrganizationIds.length > 0;
@@ -84,6 +99,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       scope: JOB_CONTENT_SCOPE,
       count: view.records.length,
       held: view.redactedCount,
+      googleUserDataWithheld: view.googleUserDataWithheldCount,
       status: servedContent ? 'content_served' : 'metadata_only',
     },
   });
@@ -93,6 +109,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       queues,
       dead: view.records,
       redacted: view.redactedCount,
+      googleUserDataWithheld: view.googleUserDataWithheldCount,
       pagination: { limit, offset },
     },
     { headers: { 'Cache-Control': NO_STORE } },

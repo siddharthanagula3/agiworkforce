@@ -82,7 +82,7 @@ const MessageSearchComponent = ({
         {/* Search icon + input */}
         <div className="relative flex-1">
           <Search
-            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
           />
           <input
@@ -93,7 +93,7 @@ const MessageSearchComponent = ({
             onKeyDown={handleKeyDown}
             placeholder="Search messages..."
             aria-label="Search messages"
-            className="w-full rounded-md border border-border bg-muted/50 py-1.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-focus-ring/50"
+            className="w-full rounded-md border border-border bg-muted/50 py-1.5 ps-9 pe-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-focus-ring/50"
           />
         </div>
 

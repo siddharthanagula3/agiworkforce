@@ -14,27 +14,45 @@ import {
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useNavigation } from 'expo-router';
+import { useFocusEffect, useNavigation } from 'expo-router';
 import { MoreHorizontal, WifiOff, SquarePen, Menu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/src/features/chat/components/MessageList';
 import type { ResearchPlanDecision } from '@/src/features/chat/components/research/ResearchRunCard';
+import type { ResearchStep } from '@agiworkforce/types';
 import { Composer } from '@/src/features/chat/components/Composer/Composer';
 import {
   TASK_CHIP_SEND_CONTEXT,
   type TaskChipType,
 } from '@/src/features/chat/components/TaskChips';
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
+import { trackProductEvent } from '@/services/productAnalytics';
 import { ContextWarningChip } from '@/src/features/chat/components/ContextWarningChip';
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
+import { confirmShareConversation } from '@/src/features/shared-links/shareConversation';
+import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
+import { WorkModeSwitch } from '@/src/features/chat/components/WorkModeSwitch';
+import {
+  EMPTY_VARIANT_INFO,
+  resolveLeafForSibling,
+  variantInfoByMessage,
+} from '@agiworkforce/cloud-contracts';
+import { managedCloudChat } from '@/services/managedCloudChat';
 import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
+import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
+import { buildAgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
+import { ContextDetailsSheet } from '@/src/features/chat/components/ContextDetailsSheet';
+import {
+  IN_FLIGHT_TURN_STALLED_MESSAGE,
+  useInFlightTurnRecovery,
+} from '@/src/features/chat/inFlightTurnRecovery';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
@@ -47,6 +65,7 @@ import { LiveVoiceComposer } from '@/src/features/voice/components/LiveVoiceComp
 import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
 import { CAPABILITY_SWITCHED_OFF_BODY, useCapability } from '@/src/lib/capabilities';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { takeConversationSend } from '@/src/features/chat/conversationSendHandoff';
 import {
   useVoiceConversation,
   voiceCaptureErrorMessage,
@@ -65,6 +84,7 @@ import {
 } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
+import { ProjectSourcesButton } from '@/src/features/projects/components/ProjectSourcesButton';
 import { useWaitlistStore } from '@/src/features/waitlist';
 import { ModelTierWarningBanner } from '@/src/features/chat/components/ModelTierWarningBanner';
 import { TemporaryChatBanner } from '@/src/features/chat/components/TemporaryChatBanner';
@@ -72,10 +92,18 @@ import { SendErrorBanner } from '@/src/features/chat/components/SendErrorBanner'
 import { ProviderConsentBanner } from '@/src/features/chat/components/ProviderConsentBanner';
 import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton';
 import {
+  classifyManagedQuotaErrorCode,
+  formatUsageResetIn,
+  managedQuotaResetAt,
   summarizeSendPreview,
   type ProviderMode,
   type SendPreviewInput,
 } from '@agiworkforce/types';
+import {
+  UsageLimitBanner,
+  usageWarningFromSnapshot,
+} from '@/src/features/chat/components/UsageLimitBanner';
+import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
@@ -83,7 +111,7 @@ import {
   isSelectableModelIdForAccess,
   getShortDisplayName,
 } from '@/src/features/model-picker/service';
-import { useTierStore } from '@/src/features/billing/store';
+import { isCapabilityRequestable, useTierStore } from '@/src/features/billing/store';
 import {
   executionModeForConversation,
   executionModeForSelection,
@@ -99,23 +127,38 @@ import {
   imageAssetsToChatAttachments,
   pickImageAssetsFromLibrary,
 } from '@/src/features/media/photo-picker';
-import { PictureMetadataError } from '@/src/features/media/image-metadata';
+import {
+  PictureMetadataError,
+  PICTURE_METADATA_RECOVERY_MESSAGE,
+} from '@/src/features/media/image-metadata';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { offlineQueue } from '@/services/offlineQueue';
+import { createMobileCloudAgentRunClient } from '@/services/streaming';
+import { ManagedCloudAgentRunReferenceSchema } from '@agiworkforce/cloud-contracts';
 import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
-import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
+import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
+import {
+  MediaGenerationAdmissionError,
+  mediaGenerationFailureMessage,
+} from '@/src/features/chat/actions/mediaGenerationError';
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
+import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
 import { useThemeColors, radii } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
@@ -126,6 +169,8 @@ import {
   isAccountScopedUiStateCurrent,
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
+import { toUserMessage } from '@/services/userMessage';
+import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
 const EMPTY_CHAT_MESSAGES: ChatMessage[] = [];
@@ -139,6 +184,11 @@ export default function ChatScreen() {
   const colors = useThemeColors();
   const params = useLocalSearchParams<{ id: string; prompt?: string; voice?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  useFocusEffect(
+    useCallback(() => {
+      if (id) useChatViewStore.getState().bindStyleConversation(id);
+    }, [id]),
+  );
   const initialPrompt = Array.isArray(params.prompt) ? params.prompt[0] : (params.prompt ?? '');
   const requestedVoiceMode = Array.isArray(params.voice) ? params.voice[0] : params.voice;
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
@@ -149,6 +199,7 @@ export default function ChatScreen() {
   const navigation = useNavigation();
   const modelPickerRef = useRef<BottomSheet>(null);
   const [exportSheetVisible, setExportSheetVisible] = useState(false);
+  const [contextSheetVisible, setContextSheetVisible] = useState(false);
   const addToChatRef = useRef<BottomSheet>(null);
   const [modelPickerScope, setModelPickerScope] = useState<'local' | 'cloud'>('local');
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
@@ -218,6 +269,8 @@ export default function ChatScreen() {
   const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
   const videoResolution = useChatViewStore((s) => s.videoResolution);
   const imageAspectRatio = useChatViewStore((s) => s.imageAspectRatio);
+  const imageTransparentBackground = useChatViewStore((s) => s.imageTransparentBackground);
+  const videoDurationSecs = useChatViewStore((s) => s.videoDurationSecs);
   const markConversationRead = useChatStore((s) => s.markConversationRead);
   const imageGenerationEnabled = useChatStore((s) => s.features.imageGen);
 
@@ -226,7 +279,15 @@ export default function ChatScreen() {
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const clerkUserId = useAuthStore((s) => s.clerkUserId);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const skillSelection = useMobileSkillSelectionStore((s) => s.selection);
+  const clearSelectedSkill = useMobileSkillSelectionStore((s) => s.clearSkill);
   const appMode = useChatAppModeStore((s) => s.appMode);
+
+  const usageSnapshot = useCloudUsageStore((s) =>
+    s.ownerId !== null && s.ownerId === clerkUserId ? s.snapshot : null,
+  );
+  const refreshUsage = useCloudUsageStore((s) => s.refresh);
+  const [dismissedUsageWarning, setDismissedUsageWarning] = useState<string | null>(null);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const approveRequest = useAgentStore((s) => s.approveRequest);
   const rejectRequest = useAgentStore((s) => s.rejectRequest);
@@ -243,6 +304,22 @@ export default function ChatScreen() {
   const conversationExecutionMode = conversation
     ? executionModeForConversation(conversation)
     : executionModeForSelection(selectedModel, appMode);
+  const inFlightTurn = useInFlightTurnRecovery({
+    conversationId: id,
+    isCloud: conversationExecutionMode === 'cloud',
+    isStreaming: isStreaming || isLoadingMessages,
+    messages: conversationMessages,
+    onFinished: () => {
+      if (id) void loadMessages(id);
+    },
+  });
+  const variantInfo = useMemo(
+    () =>
+      conversationExecutionMode === 'cloud'
+        ? variantInfoByMessage(conversationRows, conversation?.activeLeafMessageId)
+        : EMPTY_VARIANT_INFO,
+    [conversationExecutionMode, conversationRows, conversation?.activeLeafMessageId],
+  );
 
   const sendPreviewInput = useMemo<SendPreviewInput>(
     () => ({
@@ -254,6 +331,28 @@ export default function ChatScreen() {
     }),
     [conversationExecutionMode, selectedModel, subscriptionTier],
   );
+
+  const usageMetered = conversationExecutionMode === 'cloud' && isClerkSignedIn;
+  useEffect(() => {
+    if (usageMetered && !isStreaming) void refreshUsage();
+  }, [usageMetered, isStreaming, paywallError, clerkUserId, refreshUsage]);
+
+  const usageWarning = useMemo(
+    () => (usageMetered && usageSnapshot ? usageWarningFromSnapshot(usageSnapshot) : null),
+    [usageMetered, usageSnapshot],
+  );
+  const usageWarningKey = usageWarning ? `${usageWarning.bucket}:${usageWarning.severity}` : null;
+  const paywallPresentation = classifyManagedQuotaErrorCode(paywallError?.code);
+  const paywallResetAt =
+    paywallPresentation?.showResetTime && usageSnapshot
+      ? managedQuotaResetAt(paywallError?.code, {
+          usageResetAt: usageSnapshot.usageResetAt,
+          sessionResetAt: usageSnapshot.sessionResetAt,
+          weeklyResetAt: usageSnapshot.weeklyResetAt,
+          flagshipWeeklyResetAt: usageSnapshot.flagshipWeeklyResetAt,
+        })
+      : null;
+  const paywallResetLabel = paywallResetAt ? formatUsageResetIn(paywallResetAt) : null;
   const sendPreviewPresentation = useMemo(
     () => summarizeSendPreview(sendPreviewInput),
     [sendPreviewInput],
@@ -370,6 +469,7 @@ export default function ChatScreen() {
         mediaMode,
         aspectRatio: videoAspectRatio,
         resolution: videoResolution,
+        durationSecs: videoDurationSecs,
         subscriptionTier,
         isClerkSignedIn,
         ownerId: clerkUserId,
@@ -381,8 +481,7 @@ export default function ChatScreen() {
         return false;
       }
       if (videoRequest.status === 'ready') {
-        quotedMessageScopeRef.current = null;
-        setQuotedMessage(null);
+        let started = false;
         const videoTurn = runVideoGenerationTurn({
           conversationId: id,
           displayText: finalText,
@@ -390,7 +489,14 @@ export default function ChatScreen() {
           model: videoRequest.model,
           aspectRatio: videoRequest.aspectRatio,
           resolution: videoRequest.resolution,
+          durationSecs: videoRequest.durationSecs,
           ownerId: videoRequest.ownerId,
+          onStarted: () => {
+            started = true;
+            clearError();
+            quotedMessageScopeRef.current = null;
+            setQuotedMessage(null);
+          },
           begin: beginVideoGeneration,
           taskCreated: recordVideoGenerationTask,
           isCancelRequested: isVideoGenerationCancelRequested,
@@ -403,13 +509,18 @@ export default function ChatScreen() {
           },
           onUnexpectedError: (error) => {
             console.warn('[ChatScreen] Video generation failed:', error);
+            setSendError(
+              !started && error instanceof MediaGenerationAdmissionError
+                ? error.userMessage
+                : mediaGenerationFailureMessage('video'),
+            );
           },
         });
         if (dispatchOptions?.awaitCompletion) {
-          return videoTurn.then(() => true);
+          return videoTurn.then((outcome) => outcome.assistantMessageId !== null);
         }
         void videoTurn;
-        return true;
+        return started;
       }
 
       const imageRequest = resolveMobileImageGenerationRequest({
@@ -426,24 +537,32 @@ export default function ChatScreen() {
         grantedCapabilities,
         isOnline,
         aspectRatio: imageAspectRatio,
+        transparentBackground: imageTransparentBackground,
       });
 
       if (imageRequest.status === 'blocked') {
-        Alert.alert(imageRequest.alert.title, imageRequest.alert.message);
+        alertBlockedImageRequest(imageRequest);
         return false;
       }
       if (imageRequest.status === 'ready') {
-        quotedMessageScopeRef.current = null;
-        setQuotedMessage(null);
+        let started = false;
         const imageTurn = runImageGenerationTurn({
           conversationId: id,
           displayText: finalText,
           prompt: imageRequest.prompt,
           model: imageRequest.model,
           aspectRatio: imageRequest.aspectRatio,
+          transparentBackground: imageRequest.transparentBackground,
           operation: imageRequest.operation,
           sourceImage: imageRequest.sourceImage,
+          referenceImages: imageRequest.referenceImages,
           ownerId: imageRequest.ownerId,
+          onStarted: () => {
+            started = true;
+            clearError();
+            quotedMessageScopeRef.current = null;
+            setQuotedMessage(null);
+          },
           begin: beginImageGeneration,
           complete: completeImageGeneration,
           fail: failImageGeneration,
@@ -453,13 +572,18 @@ export default function ChatScreen() {
           },
           onUnexpectedError: (error) => {
             console.warn('[ChatScreen] Image generation failed:', error);
+            setSendError(
+              !started && error instanceof MediaGenerationAdmissionError
+                ? error.userMessage
+                : mediaGenerationFailureMessage('image'),
+            );
           },
         });
         if (dispatchOptions?.awaitCompletion) {
-          return imageTurn.then(() => true);
+          return imageTurn.then((outcome) => outcome.assistantMessageId !== null);
         }
         void imageTurn;
-        return true;
+        return started;
       }
 
       if (!isOnline && conversationExecutionMode === 'cloud') {
@@ -491,30 +615,45 @@ export default function ChatScreen() {
         return true;
       }
 
-      const sendOptions = mode ? TASK_CHIP_SEND_CONTEXT[mode] : undefined;
+      const skillNameForTurn =
+        conversationExecutionMode === 'cloud' &&
+        clerkUserId &&
+        skillSelection?.ownerId === clerkUserId
+          ? skillSelection.name
+          : undefined;
+      const sendOptions = {
+        ...(mode ? TASK_CHIP_SEND_CONTEXT[mode] : {}),
+        ...(skillNameForTurn ? { skillName: skillNameForTurn } : {}),
+      };
 
       quotedMessageScopeRef.current = null;
       setQuotedMessage(null);
       if (dispatchOptions?.awaitCompletion) {
-        return sendMessage(id, finalText, selectedModel, attachments, sendOptions).catch(
-          (err: unknown) => {
+        return sendMessage(id, finalText, selectedModel, attachments, sendOptions)
+          .then((accepted) => {
+            if (accepted && skillNameForTurn) clearSelectedSkill();
+            return accepted;
+          })
+          .catch((err: unknown) => {
             console.warn('[ChatScreen] sendMessage rejected:', err);
             setSendError('Message could not be sent. Please try again.');
             return false;
-          },
-        );
+          });
       }
       return resolveOnAcceptedSend(
         (onAccepted) =>
           sendMessage(id, finalText, selectedModel, attachments, {
-            ...(sendOptions ?? {}),
+            ...sendOptions,
             onAccepted,
           }),
         (err) => {
           console.warn('[ChatScreen] sendMessage rejected:', err);
           setSendError('Message could not be sent. Please try again.');
         },
-      );
+      ).then((accepted) => {
+        if (accepted && skillNameForTurn) clearSelectedSkill();
+        return accepted;
+      });
     },
     [
       id,
@@ -523,6 +662,8 @@ export default function ChatScreen() {
       subscriptionTier,
       grantedCapabilities,
       imageGenerationEnabled,
+      imageTransparentBackground,
+      videoDurationSecs,
       isClerkSignedIn,
       sendMessage,
       beginImageGeneration,
@@ -538,11 +679,14 @@ export default function ChatScreen() {
       deleteMessage,
       setPaywallError,
       setSendError,
+      clearError,
       stopSpeaking,
       quotedMessage,
       isConversationActionCurrent,
       isOnline,
       clerkUserId,
+      skillSelection,
+      clearSelectedSkill,
       enqueueOfflineMessage,
       imageAspectRatio,
       videoAspectRatio,
@@ -550,14 +694,21 @@ export default function ChatScreen() {
     ],
   );
 
+  useEffect(() => {
+    if (!id || isStreaming || isLoadingMessages) return;
+    const handedOff = takeConversationSend(id);
+    if (handedOff) void handleSend(handedOff);
+  }, [handleSend, id, isLoadingMessages, isStreaming]);
+
   const handleStop = useCallback(() => {
+    trackProductEvent('generation_stopped');
     stopStreaming();
   }, [stopStreaming]);
 
   const [resumingResearchMessageId, setResumingResearchMessageId] = useState<string | null>(null);
 
   const runResearchDecision = useCallback(
-    async (messageId: string, decision: 'start' | 'cancel' | 'retry') => {
+    async (messageId: string, decision: 'start' | 'cancel' | 'retry', steps?: ResearchStep[]) => {
       if (!id) return;
       if (decision === 'cancel') {
         await resumeResearch(id, messageId, decision);
@@ -565,7 +716,7 @@ export default function ChatScreen() {
       }
       setResumingResearchMessageId(messageId);
       try {
-        await resumeResearch(id, messageId, decision);
+        await resumeResearch(id, messageId, decision, steps);
       } finally {
         setResumingResearchMessageId(null);
       }
@@ -575,7 +726,14 @@ export default function ChatScreen() {
 
   const handleResearchPlanDecision = useCallback(
     (messageId: string, decision: ResearchPlanDecision) => {
-      void runResearchDecision(messageId, decision === 'start' ? 'start' : 'cancel');
+      if (decision === 'cancel') void runResearchDecision(messageId, 'cancel');
+      else {
+        void runResearchDecision(
+          messageId,
+          'start',
+          typeof decision === 'object' ? decision.steps : undefined,
+        );
+      }
     },
     [runResearchDecision],
   );
@@ -587,6 +745,26 @@ export default function ChatScreen() {
     [runResearchDecision],
   );
 
+  const handlePauseResearch = useCallback(
+    async (messageId: string): Promise<boolean> => {
+      const reference = ManagedCloudAgentRunReferenceSchema.safeParse(
+        conversationMessages.find((message) => message.id === messageId)?.metadata?.cloudAgentRun,
+      );
+      if (!reference.success) {
+        setSendError('This research cannot be paused. Stop it instead to keep what it found.');
+        return false;
+      }
+      try {
+        await createMobileCloudAgentRunClient().pauseRun(reference.data.runId);
+        return true;
+      } catch {
+        setSendError('Could not pause this research. It is still running.');
+        return false;
+      }
+    },
+    [conversationMessages, setSendError],
+  );
+
   const resolveAppMode = useCallback(
     (modelId: string): AppMode => {
       return executionModeForSelection(modelId, conversationExecutionMode);
@@ -594,8 +772,11 @@ export default function ChatScreen() {
     [conversationExecutionMode],
   );
 
+  const retryWithModelRef = useRef<string | null>(null);
+
   const handleOpenModelPicker = useCallback(
     (scope?: 'local' | 'cloud') => {
+      retryWithModelRef.current = null;
       setModelPickerScope(scope ?? conversationExecutionMode);
       setModelPickerOpenSignal((value) => value + 1);
       modelPickerRef.current?.snapToIndex(0);
@@ -603,9 +784,14 @@ export default function ChatScreen() {
     [conversationExecutionMode],
   );
 
+  useEffect(() => {
+    if (conversationExecutionMode !== 'cloud' || !isClerkSignedIn) return;
+    refreshPublishedArtifactAudiences().catch((error: unknown) => {
+      console.warn('[ChatScreen] publication states unavailable', error);
+    });
+  }, [clerkUserId, conversationExecutionMode, id, isClerkSignedIn]);
+
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
-  const waitlistJoined = useWaitlistStore((s) => s.joined);
-  const waitlistRank = useWaitlistStore((s) => s.rank);
 
   useEffect(() => {
     if (!conversation) return;
@@ -710,8 +896,20 @@ export default function ChatScreen() {
     sendFailureCode,
   ]);
 
+  const handleRetryWithModel = useCallback(
+    (messageId: string) => {
+      setModelPickerScope(conversationExecutionMode);
+      setModelPickerOpenSignal((value) => value + 1);
+      modelPickerRef.current?.snapToIndex(0);
+      retryWithModelRef.current = messageId;
+    },
+    [conversationExecutionMode],
+  );
+
   const handleModelSelect = useCallback(
     (newModelId: string) => {
+      const retryTarget = retryWithModelRef.current;
+      retryWithModelRef.current = null;
       const hasMessages = conversationMessages.length > 0;
       const nextMode = resolveAppMode(newModelId);
       if (!hasMessages) {
@@ -740,14 +938,21 @@ export default function ChatScreen() {
       if (id) void setConversationModel(id, newModelId);
       useModelStore.getState().setModel(newModelId);
       modelPickerRef.current?.close();
+      if (id && retryTarget) {
+        stopSpeaking();
+        trackProductEvent('response_regenerated');
+        retryMessage(id, retryTarget, newModelId);
+      }
     },
     [
       conversationExecutionMode,
       conversationMessages.length,
       id,
       resolveAppMode,
+      retryMessage,
       setAppMode,
       setConversationModel,
+      stopSpeaking,
     ],
   );
 
@@ -779,6 +984,12 @@ export default function ChatScreen() {
     addToChatRef.current?.close();
     setTimeout(() => {
       handleOpenModelPicker();
+    }, STYLE_SHEET_HANDOFF_DELAY_MS);
+  }, [handleOpenModelPicker]);
+
+  const handlePaywallChooseModel = useCallback(() => {
+    setTimeout(() => {
+      handleOpenModelPicker('cloud');
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, [handleOpenModelPicker]);
 
@@ -819,7 +1030,7 @@ export default function ChatScreen() {
       Alert.alert(
         'Camera',
         error instanceof PictureMetadataError
-          ? error.message
+          ? PICTURE_METADATA_RECOVERY_MESSAGE
           : 'Could not open the camera. Please try again.',
       );
     }
@@ -840,7 +1051,7 @@ export default function ChatScreen() {
       Alert.alert(
         'Photos',
         error instanceof PictureMetadataError
-          ? error.message
+          ? PICTURE_METADATA_RECOVERY_MESSAGE
           : 'Could not open Photos. Please try again.',
       );
     }
@@ -849,8 +1060,9 @@ export default function ChatScreen() {
   const handleSheetFile = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [...PICKABLE_DOCUMENT_MIME_TYPES],
+        type: pickableDocumentMimeTypes(conversationExecutionMode),
         copyToCacheDirectory: true,
+        multiple: true,
       });
       if (!result.canceled && result.assets.length > 0) {
         const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
@@ -866,7 +1078,25 @@ export default function ChatScreen() {
     } catch {
       Alert.alert('Error', 'Failed to pick document. Please try again.');
     }
-  }, []);
+  }, [conversationExecutionMode]);
+
+  const handleSelectVariant = useCallback(
+    (messageId: string) => {
+      if (!id || isStreaming) return;
+      const leafId = resolveLeafForSibling(conversationRows, messageId);
+      useChatCloudMessageStore
+        .getState()
+        .patchCloudConversation(id, { activeLeafMessageId: leafId });
+      managedCloudChat.updateConversation(id, { activeLeafMessageId: leafId }).catch((error) => {
+        console.warn('[ChatScreen] The chosen version was not saved for other devices:', error);
+      });
+    },
+    [conversationRows, id, isStreaming],
+  );
+
+  const handleOpenSkills = useCallback(() => {
+    router.push('/(app)/skills?returnTo=composer' as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const handleAttachFromLibrary = useCallback(
     (attachment: import('@/src/features/chat/components/AttachmentPreview').Attachment) => {
@@ -1009,6 +1239,16 @@ export default function ChatScreen() {
 
   const handleEnsureVoiceConversation = useCallback(async () => id ?? null, [id]);
 
+  const handleVoiceStartWorkTask = useCallback(
+    (goal: string) => {
+      const agiWorkGoal = buildAgiWorkGoalInput(goal);
+      if (!id || !agiWorkGoal || !isCapabilityRequestable('canUseAgiWork')) return false;
+      void sendMessage(id, goal, selectedModel, undefined, { workMode: 'agiwork', agiWorkGoal });
+      return true;
+    },
+    [id, selectedModel, sendMessage],
+  );
+
   useEffect(() => {
     if (requestedVoiceMode !== 'live') return;
     startVoiceMode();
@@ -1059,9 +1299,12 @@ export default function ChatScreen() {
     (messageId: string) => {
       if (!id) return;
       if (conversationExecutionMode === 'cloud') {
+        const accountEpoch = captureCloudAccountEpoch();
+        if (!isCloudAccountEpochCurrent(accountEpoch)) return;
         const previous = useChatCloudMessageStore.getState().messages[id];
         useChatCloudMessageStore.getState().deleteCloudMessage(id, messageId);
-        deleteCloudMessagesRemote(id, [messageId]).catch(() => {
+        deleteCloudMessagesRemote(id, [messageId], accountEpoch).catch(() => {
+          if (!isCloudAccountEpochCurrent(accountEpoch)) return;
           if (previous) {
             useChatCloudMessageStore.getState().setCloudMessages(id, previous);
           }
@@ -1077,7 +1320,9 @@ export default function ChatScreen() {
   const handleReaction = useCallback(
     (messageId: string, reaction: 'thumbsUp' | 'thumbsDown' | null) => {
       if (!id) return;
-      setMessageReaction(id, messageId, reaction);
+      void setMessageReaction(id, messageId, reaction).catch(() => {
+        Alert.alert('Could not save rating', 'Check your connection or sign in, then try again.');
+      });
     },
     [id, setMessageReaction],
   );
@@ -1090,6 +1335,22 @@ export default function ChatScreen() {
       const target = messageIndex >= 0 ? conversationMessages[messageIndex] : undefined;
       if (
         target?.role === 'assistant' &&
+        (target.type === 'video' ||
+          target.videoGenStatus === 'failed' ||
+          target.videoGenStatus === 'timeout' ||
+          target.videoGenStatus === 'cancelled')
+      ) {
+        const original = conversationMessages[messageIndex - 1];
+        const prompt = target.videoGenPrompt?.trim() || original?.content.trim();
+        if (prompt) {
+          void Promise.resolve(
+            handleSend(/^\/video(?:\s|$)/i.test(prompt) ? prompt : `/video ${prompt}`),
+          );
+          return;
+        }
+      }
+      if (
+        target?.role === 'assistant' &&
         (target.type === 'image' || target.imageGenStatus === 'failed')
       ) {
         const original = conversationMessages[messageIndex - 1];
@@ -1098,6 +1359,7 @@ export default function ChatScreen() {
           return;
         }
       }
+      trackProductEvent('response_regenerated');
       retryMessage(id, messageId);
     },
     [conversationMessages, handleSend, id, retryMessage, stopSpeaking],
@@ -1126,9 +1388,14 @@ export default function ChatScreen() {
   );
 
   const handleResolveToolApproval = useCallback(
-    (messageId: string, toolCallId: string, decision: 'approved' | 'rejected') => {
+    (
+      messageId: string,
+      toolCallId: string,
+      decision: 'approved' | 'rejected',
+      guidance?: string,
+    ) => {
       if (!id) return;
-      void resolveToolApproval(id, messageId, toolCallId, decision);
+      void resolveToolApproval(id, messageId, toolCallId, decision, guidance);
     },
     [id, resolveToolApproval],
   );
@@ -1171,12 +1438,108 @@ export default function ChatScreen() {
     [deleteConversation, handleBack, id, isConversationActionCurrent],
   );
 
+  const canEditImages =
+    conversationExecutionMode === 'cloud' &&
+    isClerkSignedIn &&
+    FEATURES.imageGen &&
+    imageGenerationEnabled;
+
+  const handleEditImageArea = useCallback(
+    (message: ChatMessage, edit: ImageAreaEdit) => {
+      if (!id || !clerkUserId || !message.model) return;
+      void runImageGenerationTurn({
+        conversationId: id,
+        displayText: edit.prompt,
+        prompt: edit.prompt,
+        model: message.model,
+        operation: 'inpaint',
+        sourceImageBase64: edit.sourceBase64,
+        maskImageBase64: edit.maskBase64,
+        ownerId: clerkUserId,
+        begin: beginImageGeneration,
+        complete: completeImageGeneration,
+        fail: failImageGeneration,
+        remove: deleteMessage,
+        onPaywall: (error) => setPaywallError(paywallErrorStateFromApiError(error)),
+        onUnexpectedError: () => setSendError(mediaGenerationFailureMessage('image')),
+      });
+    },
+    [
+      beginImageGeneration,
+      clerkUserId,
+      completeImageGeneration,
+      deleteMessage,
+      failImageGeneration,
+      id,
+      setPaywallError,
+      setSendError,
+    ],
+  );
+
+  const handleDeleteImageConversation = useCallback(() => {
+    const actionScope = captureConversationAction();
+    if (!id || !actionScope || !isConversationActionCurrent(actionScope)) return;
+    deleteConversation(id);
+    handleBack();
+  }, [captureConversationAction, deleteConversation, handleBack, id, isConversationActionCurrent]);
+
+  const shareConversationLink = useCallback(
+    (actionScope: ConversationUiActionScope) => {
+      if (!id || !isConversationActionCurrent(actionScope)) return;
+      if (conversation?.temporary) {
+        Alert.alert(
+          'Save this chat to share it?',
+          'Temporary chats cannot be shared. Saving keeps its messages in your history, and from then on it follows your memory and data settings like any other chat.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Save chat',
+              onPress: () => {
+                if (!isConversationActionCurrent(actionScope)) return;
+                useChatStore
+                  .getState()
+                  .keepTemporaryConversation(id)
+                  .then(() =>
+                    Alert.alert('Chat saved', 'It is in your history. You can share it now.'),
+                  )
+                  .catch((error: unknown) => {
+                    Alert.alert(
+                      'This chat could not be saved',
+                      toUserMessage(error, 'Try again in a moment.'),
+                    );
+                  });
+              },
+            },
+          ],
+        );
+        return;
+      }
+      confirmShareConversation({
+        conversationId: id,
+        title,
+        modelId: conversation?.model ?? null,
+        readMessages: () =>
+          conversationMessages.map((message) => ({
+            role: message.role,
+            content: message.content,
+            ...(message.createdAt ? { createdAt: message.createdAt } : {}),
+          })),
+        isCurrent: () => isConversationActionCurrent(actionScope),
+      });
+    },
+    [conversation, conversationMessages, id, isConversationActionCurrent, title],
+  );
+
   const handleMenuPress = useCallback(() => {
     const actionScope = captureConversationAction();
     if (!actionScope || !isConversationActionCurrent(actionScope)) return;
-    const options = ['Share', 'Rename', 'Delete', 'Cancel'];
-    const destructiveIndex = 2;
-    const cancelIndex = 3;
+    const linkSharing = conversationExecutionMode === 'cloud';
+    const options = linkSharing
+      ? ['Share link', 'Export', 'Rename', 'What is in context', 'Delete', 'Cancel']
+      : ['Share', 'Rename', 'What is in context', 'Delete', 'Cancel'];
+    const offset = linkSharing ? 1 : 0;
+    const destructiveIndex = 3 + offset;
+    const cancelIndex = 4 + offset;
 
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -1185,7 +1548,12 @@ export default function ChatScreen() {
           cancelButtonIndex: cancelIndex,
           destructiveButtonIndex: destructiveIndex,
         },
-        (buttonIndex) => {
+        (rawIndex) => {
+          if (linkSharing && rawIndex === 0) {
+            shareConversationLink(actionScope);
+            return;
+          }
+          const buttonIndex = rawIndex - offset;
           if (buttonIndex === 0) {
             if (!isConversationActionCurrent(actionScope)) return;
             setExportSheetVisible(true);
@@ -1203,14 +1571,20 @@ export default function ChatScreen() {
               title,
             );
           } else if (buttonIndex === 2) {
+            if (!isConversationActionCurrent(actionScope)) return;
+            setContextSheetVisible(true);
+          } else if (buttonIndex === 3) {
             confirmDeleteConversation(actionScope);
           }
         },
       );
     } else {
       Alert.alert('Conversation', undefined, [
+        ...(linkSharing
+          ? [{ text: 'Share link', onPress: () => shareConversationLink(actionScope) }]
+          : []),
         {
-          text: 'Share',
+          text: linkSharing ? 'Export' : 'Share',
           onPress: () => {
             if (!isConversationActionCurrent(actionScope)) return;
             setExportSheetVisible(true);
@@ -1226,6 +1600,13 @@ export default function ChatScreen() {
           },
         },
         {
+          text: 'What is in context',
+          onPress: () => {
+            if (!isConversationActionCurrent(actionScope)) return;
+            setContextSheetVisible(true);
+          },
+        },
+        {
           text: 'Delete',
           style: 'destructive',
           onPress: () => confirmDeleteConversation(actionScope),
@@ -1235,9 +1616,11 @@ export default function ChatScreen() {
   }, [
     captureConversationAction,
     confirmDeleteConversation,
+    conversationExecutionMode,
     id,
     isConversationActionCurrent,
     renameConversation,
+    shareConversationLink,
     title,
   ]);
 
@@ -1346,7 +1729,7 @@ export default function ChatScreen() {
             >
               <Text
                 numberOfLines={1}
-                style={{ fontSize: 12, color: colors.teal, fontWeight: '500' }}
+                style={{ fontSize: typeScale.caption, color: colors.teal, fontWeight: '500' }}
               >
                 {activeProject.name}
               </Text>
@@ -1357,9 +1740,7 @@ export default function ChatScreen() {
           <View style={{ flex: 1, alignItems: 'center' }}>
             <ModeToggle
               mode={currentAppMode}
-              cloudJoined={waitlistJoined}
               cloudUnlocked={cloudUnlocked}
-              waitlistRank={waitlistRank}
               compact
               onTapLocal={conversationExecutionMode === 'cloud' ? handleTapLocalMode : undefined}
               onTapCloud={handleTapCloudMode}
@@ -1368,6 +1749,7 @@ export default function ChatScreen() {
 
           {/* Right side: new-chat + conversation menu */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <ProjectSourcesButton projectId={conversation?.projectId} />
             <Pressable
               onPress={handleNewChat}
               hitSlop={6}
@@ -1418,7 +1800,7 @@ export default function ChatScreen() {
             }}
           >
             <WifiOff size={12} color={colors.agentError} />
-            <Text style={{ fontSize: 12, color: colors.agentError }}>
+            <Text style={{ fontSize: typeScale.caption, color: colors.agentError }}>
               You're offline, viewing cached conversations
             </Text>
           </View>
@@ -1438,10 +1820,16 @@ export default function ChatScreen() {
             onDeleteMessage={handleDeleteMessage}
             onReaction={handleReaction}
             onRetryMessage={handleRetryMessage}
+            onRetryWithModel={handleRetryWithModel}
+            onEditImageArea={canEditImages ? handleEditImageArea : undefined}
+            onDeleteImageConversation={handleDeleteImageConversation}
+            variantInfoByMessageId={variantInfo}
+            onSelectVariant={handleSelectVariant}
             onSwitchModel={handleOpenModelPicker}
             onResearchPlanDecision={handleResearchPlanDecision}
             onRetryResearch={handleRetryResearch}
             onStopResearch={handleStop}
+            onPauseResearch={handlePauseResearch}
             resumingResearchMessageId={resumingResearchMessageId}
             onEditMessage={handleEditMessage}
             onRefresh={handleRefresh}
@@ -1457,14 +1845,50 @@ export default function ChatScreen() {
         {/* Context-budget warning. The component computes its own threshold and
             renders null below it, so it is mounted unconditionally, it appears
             only once the thread crosses ~70% of the model's context window. */}
+        {inFlightTurn !== 'idle' ? (
+          <View
+            accessibilityRole={inFlightTurn === 'stalled' ? 'alert' : undefined}
+            accessibilityLiveRegion="polite"
+            testID="chat-in-flight-turn"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+            }}
+          >
+            {inFlightTurn === 'running' ? (
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            ) : null}
+            <Text
+              style={{
+                flex: 1,
+                fontSize: typeScale.footnote,
+                color: inFlightTurn === 'stalled' ? colors.agentError : colors.textSecondary,
+              }}
+            >
+              {inFlightTurn === 'running'
+                ? 'Still answering. The reply appears here when it is ready.'
+                : IN_FLIGHT_TURN_STALLED_MESSAGE}
+            </Text>
+          </View>
+        ) : null}
         <ContextWarningChip
           modelId={selectedModel}
           messages={conversationMessages}
           onStartFreshChat={handleNewChat}
         />
 
-        {/* Model-tier warning, shown when Opus-class model selected on free tier */}
         <ModelTierWarningBanner />
+
+        <UsageLimitBanner
+          warning={usageWarningKey !== dismissedUsageWarning ? usageWarning : null}
+          onGetMoreUsage={() =>
+            router.push('/(app)/settings/cloud-usage' as Parameters<typeof router.push>[0])
+          }
+          onDismiss={() => setDismissedUsageWarning(usageWarningKey)}
+        />
 
         {/* Named-provider consent gate, specific, with an inline opt-in */}
         <ProviderConsentBanner
@@ -1479,6 +1903,8 @@ export default function ChatScreen() {
           freeCapacity={providerConsentError ? null : freeCapacityError}
           action={sendRecoveryAction}
           onRetry={
+            sendError !== CLOUD_SIGN_IN_MESSAGE &&
+            !sendError?.startsWith('The active AGI Cloud account changed') &&
             conversationMessages.some((m) => m.role === 'user')
               ? () => {
                   if (!id) return;
@@ -1498,6 +1924,9 @@ export default function ChatScreen() {
             and rendering both stacked two input rows on screen at once, which
             is neither reference-03 nor what VoiceInlineBar's own docstring
             promises ("the only thing that changes is the composer"). */}
+        {conversationExecutionMode === 'cloud' && !voiceInlineVisible && !liveVoiceVisible ? (
+          <WorkModeSwitch />
+        ) : null}
         {voiceInlineVisible || liveVoiceVisible ? null : (
           <Composer
             onSend={handleSend}
@@ -1523,6 +1952,14 @@ export default function ChatScreen() {
                   ? { scope: 'cloud', ownerId: clerkUserId }
                   : undefined
             }
+            selectedSkillName={
+              conversationExecutionMode === 'cloud' &&
+              clerkUserId &&
+              skillSelection?.ownerId === clerkUserId
+                ? skillSelection.name
+                : undefined
+            }
+            onClearSelectedSkill={clearSelectedSkill}
           />
         )}
 
@@ -1537,12 +1974,25 @@ export default function ChatScreen() {
           onOpenModelPicker={handleSheetModelPicker}
           onOpenProjectPicker={handleSheetProjectPicker}
           onAttachFromLibrary={handleAttachFromLibrary}
+          onOpenSkills={handleOpenSkills}
+          offersOutputFormat
         />
 
         <StyleSelector openSignal={styleSelectorOpenSignal} />
 
         {/* Picker modal only -- the trigger lives in the "+" sheet. */}
-        <ProjectSelectorBar openSignal={projectPickerOpenSignal} />
+        <ProjectSelectorBar
+          openSignal={projectPickerOpenSignal}
+          {...(conversation && id
+            ? {
+                conversation: {
+                  id,
+                  ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
+                  executionMode: conversationExecutionMode,
+                },
+              }
+            : {})}
+        />
 
         {/* Model picker bottom sheet, conversationId scopes the reasoning-effort
             selector to this conversation (agentControlStore override). */}
@@ -1553,6 +2003,7 @@ export default function ChatScreen() {
           conversationId={id}
           onSelect={handleModelSelect}
           onOpenCloudAccess={handleOpenCloudSignIn}
+          offerRoutingProfiles
         />
 
         {/* First-run intro carrying the recording disclosure, then the voice
@@ -1593,6 +2044,7 @@ export default function ChatScreen() {
           ensureConversation={handleEnsureVoiceConversation}
           onSwitchToText={handleSwitchLiveVoiceToText}
           onEnded={handleLiveVoiceEnded}
+          onStartWorkTask={handleVoiceStartWorkTask}
         />
 
         {/* Conversation export bottom sheet */}
@@ -1603,6 +2055,14 @@ export default function ChatScreen() {
           title={title}
         />
 
+        <ContextDetailsSheet
+          visible={contextSheetVisible}
+          modelId={selectedModel}
+          messages={conversationMessages}
+          onClose={() => setContextSheetVisible(false)}
+          onStartFreshChat={handleNewChat}
+        />
+
         {/* Billing recovery sheet, preserves upgrade/subscribe/inactive semantics. */}
         <PaywallBottomSheet
           ref={paywallSheetRef}
@@ -1610,6 +2070,10 @@ export default function ChatScreen() {
           requiredTier={paywallError?.requiredTier ?? 'basic'}
           reason={paywallError?.reason}
           recoveryAction={paywallError?.recoveryAction}
+          resetLabel={paywallResetLabel}
+          onChooseStandardModel={
+            paywallPresentation?.suggestStandardModel ? handlePaywallChooseModel : undefined
+          }
           onDismiss={clearPaywallError}
         />
 
@@ -1653,7 +2117,7 @@ export default function ChatScreen() {
             >
               <Text
                 style={{
-                  fontSize: 16,
+                  fontSize: typeScale.callout,
                   fontWeight: '600',
                   color: colors.textPrimary,
                   marginBottom: 12,
@@ -1666,7 +2130,7 @@ export default function ChatScreen() {
                   backgroundColor: colors.inputSurface,
                   borderRadius: 8,
                   padding: 12,
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   color: colors.textPrimary,
                   borderWidth: 1,
                   borderColor: colors.border,
@@ -1686,7 +2150,9 @@ export default function ChatScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Cancel rename"
                 >
-                  <Text style={{ color: colors.textSecondary, fontSize: 15 }}>Cancel</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>
+                    Cancel
+                  </Text>
                 </Pressable>
                 <Pressable
                   style={{ padding: 8 }}
@@ -1705,7 +2171,7 @@ export default function ChatScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Submit rename"
                 >
-                  <Text style={{ color: colors.teal, fontSize: 15, fontWeight: '600' }}>
+                  <Text style={{ color: colors.teal, fontSize: typeScale.body, fontWeight: '600' }}>
                     Rename
                   </Text>
                 </Pressable>

@@ -54,6 +54,8 @@ const DERIVED_WIRE_FIELDS = Object.freeze({
   conversation: Object.freeze({
     work_mode:
       "read from the conversation's first agent run, so a later turn in Chat cannot erase the mode a task started in",
+    needs_you:
+      "true while one of the conversation's agent runs waits on the person (awaiting input, awaiting approval or paused), read from cloud_agent_runs so it clears the moment the run moves on",
   }),
   message: Object.freeze({}),
 });

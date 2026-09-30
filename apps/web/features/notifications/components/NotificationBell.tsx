@@ -45,7 +45,7 @@ function NotificationRow({ item, onOpen }: NotificationRowProps) {
         type="button"
         onClick={() => onOpen(item)}
         data-unread={item.read ? undefined : ''}
-        className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left outline-none transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+        className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-start outline-none transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
       >
         <span className="mt-1.5 flex h-2 w-2 shrink-0 items-center justify-center" aria-hidden>
           {!item.read && <span className="h-2 w-2 rounded-full bg-[var(--chat-accent-primary)]" />}
@@ -123,7 +123,7 @@ export function NotificationBell() {
           {feed.unreadCount > 0 && (
             <span
               aria-hidden
-              className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] px-1 text-xs font-semibold leading-none text-[var(--chat-accent-on-primary)]"
+              className="absolute end-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] px-1 text-xs font-semibold leading-none text-[var(--chat-accent-on-primary)]"
             >
               {badge}
             </span>

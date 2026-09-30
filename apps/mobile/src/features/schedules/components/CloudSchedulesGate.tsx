@@ -1,9 +1,11 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Cloud } from 'lucide-react-native';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface CloudSchedulesGateProps {
   signedIn: boolean;
@@ -17,7 +19,7 @@ export function CloudSchedulesGate({ signedIn, onBack, onContinue }: CloudSchedu
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
       <View style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 12 }}>
-        <Pressable
+        <PressableBox
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -25,7 +27,7 @@ export function CloudSchedulesGate({ signedIn, onBack, onContinue }: CloudSchedu
           style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
         >
           <ArrowLeft size={21} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       </View>
 
       <View
@@ -47,7 +49,7 @@ export function CloudSchedulesGate({ signedIn, onBack, onContinue }: CloudSchedu
           style={{
             marginTop: 20,
             color: colors.textPrimary,
-            fontSize: 21,
+            fontSize: typeScale.title3,
             fontWeight: '700',
             textAlign: 'center',
           }}
@@ -58,7 +60,7 @@ export function CloudSchedulesGate({ signedIn, onBack, onContinue }: CloudSchedu
           style={{
             marginTop: 9,
             color: colors.textSecondary,
-            fontSize: 14,
+            fontSize: typeScale.subhead,
             lineHeight: 21,
             textAlign: 'center',
           }}

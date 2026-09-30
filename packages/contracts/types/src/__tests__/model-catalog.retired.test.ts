@@ -4,6 +4,8 @@ import { listRetiredModels } from '@agiworkforce/model-registry';
 import {
   getModelMetadataById,
   getRetiredModelMetadataById,
+  isCurrentModel,
+  listChatModels,
   modelDisplayNameById,
 } from '../model-catalog';
 
@@ -11,6 +13,14 @@ const preserved = listRetiredModels().filter((record) => record.metadataPreserve
 const bare = listRetiredModels().filter((record) => !record.metadataPreserved);
 
 describe('retired model metadata', () => {
+  it('uses the catalogued retirement date as the picker cutoff', () => {
+    const model = listChatModels()[0]!;
+    const dated = { ...model, deprecation_date: '2026-09-27' };
+    expect(isCurrentModel(dated, Date.parse('2026-09-26T23:59:59Z'))).toBe(true);
+    expect(isCurrentModel(dated, Date.parse('2026-09-27T00:00:00Z'))).toBe(false);
+    expect(isCurrentModel({ ...model, deprecated: true }, 0)).toBe(false);
+  });
+
   it('has something to read: the registry preserves at least one retirement', () => {
     expect(preserved.length).toBeGreaterThan(0);
   });

@@ -114,9 +114,12 @@ test('a declaration missing a facet fails', () => {
 
 test('the repository itself passes, and every baseline entry carries a reason', () => {
   const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-  const { failures, offered, declared } = registryFailures(root);
+  const { failures, offered } = registryFailures(root);
   assert.deepEqual(failures, []);
-  assert.ok(offered > declared, 'the walk must see more offerable names than declared ones');
+  assert.ok(
+    offered > UNDECLARED_BASELINE.size,
+    'the walk must see offerable names beyond the baseline',
+  );
   assert.ok(offerableToolNames(root).has('web_search'));
   for (const [name, reason] of UNDECLARED_BASELINE) {
     assert.ok(typeof reason === 'string' && reason.length > 20, `${name} has no reason`);

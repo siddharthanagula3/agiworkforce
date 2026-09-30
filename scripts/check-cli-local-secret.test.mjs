@@ -45,6 +45,7 @@ function healthyTree(extra = {}) {
     'crates/agiworkforce-protocol/src/developer_session.rs':
       'pub const ACCOUNT_TOKEN: &str = "account/token";\n',
     'apps/cli/src/auth.rs': 'const CREDENTIAL_USE_LOG: &str = "credential-use.jsonl";\n',
+    'apps/cli/src/cloud/api_keys.rs': 'pub const API_KEYS_PATH: &str = "/api/settings/api-keys";\n',
     ...extra,
   });
 }

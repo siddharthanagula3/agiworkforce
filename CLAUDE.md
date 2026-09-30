@@ -18,9 +18,11 @@ adds what is specific to Claude Code.
   runs against real data: name the controls it must not click, and require it
   to reproduce a finding before reporting it. See AGENTS.md §1 on verifying the
   instrument, which applies to the agent as much as to its harness.
-- Route delegated work with `.agents/skills/model-orchestration`: Fable 5.1
-  leads and arbitrates, Opus 5 takes difficult implementation, Sonnet 5 takes
-  exploration, research, browser work and simple edits. Coordinate through
+- Route delegated work with `.agents/skills/model-orchestration`: use only
+  Opus 5.5 and Sonnet 5.5, never Fable or previous-generation models. The Opus
+  5.5 lead plans, arbitrates and does final review; Opus 5.5 agents take
+  difficult implementation and adversarial review of high-risk work; Sonnet 5.5
+  takes exploration, research, browser work, simple edits and cross-checks. Coordinate through
   named agent teammates and messages, not scripted workflow runs.
 - Load `.agents/skills/agiworkforce-design` before any visible UI work; it
   carries the design language and names which vendored design skill applies

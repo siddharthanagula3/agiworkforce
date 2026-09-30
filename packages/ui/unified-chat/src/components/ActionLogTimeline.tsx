@@ -159,7 +159,7 @@ export function ActionLogTimelineContent({ entries, className }: ActionLogTimeli
       <button
         type="button"
         onClick={() => setIsExpanded((value) => !value)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-white/5"
+        className="flex w-full items-center gap-2 px-3 py-2 text-start text-xs text-foreground transition-colors hover:bg-white/5"
         aria-expanded={isOpen}
       >
         <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.15 }}>
@@ -168,10 +168,10 @@ export function ActionLogTimelineContent({ entries, className }: ActionLogTimeli
         <Activity className="h-3.5 w-3.5" />
         <span className="font-medium">
           Agent activity
-          <span className="ml-1 text-muted-foreground">({entries.length})</span>
+          <span className="ms-1 text-muted-foreground">({entries.length})</span>
         </span>
         {statusSummary.length > 0 && (
-          <span className="ml-auto text-caption text-muted-foreground">
+          <span className="ms-auto text-caption text-muted-foreground">
             {statusSummary.join(' · ')}
           </span>
         )}

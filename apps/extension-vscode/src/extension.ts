@@ -48,6 +48,7 @@ import { announceExtensionUpdate, announceMissingNativeChat } from './core/hostN
 import { markInUse, whenInUse } from './core/startupWork';
 import * as telemetry from './core/telemetry';
 import { installGlobalErrorReporting } from './core/errorReporting';
+import { activateProductAnalytics } from './features/analytics/productAnalytics';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
 import { refreshAccountTierCache, watchAccountTierInvalidation } from './integrations/tierResolver';
@@ -86,6 +87,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   runBoot('telemetry', () => {
     context.subscriptions.push(telemetry.activate(context));
+    context.subscriptions.push(activateProductAnalytics(context));
   });
 
   runBoot('error-reporting', () => {
@@ -127,6 +129,7 @@ export function activate(context: vscode.ExtensionContext): void {
       new LocalRuntimeClient({
         cliPath: () => resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
         memoryEnabled: () => Config.memoryEnabled(),
+        bypassPermissionsAvailable: () => Config.agentMode() === 'bypass',
         cwd,
         clientVersion: getExtensionVersion(),
         ...(remoteEnvironment.kind === 'local'
@@ -285,6 +288,39 @@ export function activate(context: vscode.ExtensionContext): void {
     ChatEditorPanel.refreshRuntimeStatus();
     conversationTreeProvider?.refresh();
   };
+  let permissionRestartPrompt: Promise<void> | undefined;
+  function offerPermissionRuntimeRestart(): Promise<void> {
+    if (permissionRestartPrompt !== undefined) return permissionRestartPrompt;
+    if (!localRuntimes.requiresPermissionRestart()) return Promise.resolve();
+    const prompt = (async () => {
+      const choice = await vscode.window.showWarningMessage(
+        'Apply the changed agent permissions?',
+        {
+          modal: true,
+          detail:
+            'Restarting stops running local turns in this window and applies the current permission consent. New turns and steering are blocked until the restart finishes. Cancel keeps running turns and their interruption and approval controls available. You can restart later with AGI Workforce: Restart Local Runtime.',
+        },
+        'Restart Local Runtime',
+      );
+      if (choice !== 'Restart Local Runtime') return;
+      try {
+        await localRuntimes.restartAll();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`AGI Workforce: Local runtime restart failed, ${message}`);
+      } finally {
+        refreshRuntimeSurfaces();
+      }
+    })();
+    permissionRestartPrompt = prompt;
+    void prompt
+      .finally(() => {
+        if (permissionRestartPrompt === prompt) permissionRestartPrompt = undefined;
+      })
+      .catch((error: unknown) => recordFailure('permission-runtime-restart', error));
+    return prompt;
+  }
+
   context.subscriptions.push(
     vscode.workspace.onDidGrantWorkspaceTrust(refreshRuntimeSurfaces),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
@@ -367,7 +403,10 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('agiWorkforce.agent.effort')
       ) {
         void reconcileAgentControlConsent(context)
-          .then(updateStatusBar)
+          .then(async () => {
+            updateStatusBar();
+            await offerPermissionRuntimeRestart();
+          })
           .catch((error: unknown) => {
             recordFailure('agent-mode-consent', error);
           });
@@ -417,7 +456,13 @@ export function activate(context: vscode.ExtensionContext): void {
         syncCodeLensProvider?.();
       }
 
-      if (e.affectsConfiguration('agiWorkforce.editorContext.autoAttach')) {
+      if (
+        e.affectsConfiguration('agiWorkforce.editorContext.autoAttach') ||
+        e.affectsConfiguration('agiWorkforce.respectGitIgnore') ||
+        e.affectsConfiguration('search.useIgnoreFiles') ||
+        e.affectsConfiguration('search.exclude') ||
+        e.affectsConfiguration('files.exclude')
+      ) {
         sidebarProvider?.pushEditorContext();
       }
 

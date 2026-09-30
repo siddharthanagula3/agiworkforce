@@ -32,7 +32,7 @@ import {
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
-import { redactSecrets } from '@/lib/security/secrets-audit';
+import { redactAuditedSecrets } from '@/lib/security/secrets-audit';
 import {
   CLOUD_CODE_COMMAND_DEADLINE_MS,
   resolveCloudCodeCommandDeadlineMs,
@@ -148,6 +148,11 @@ export interface CloudCodeRunClaim {
    * the row's token has moved on.
    */
   leaseToken: string;
+}
+
+export interface OpenedCloudCodeSession {
+  session: CloudCodeSession;
+  reused: boolean;
 }
 
 export interface CloudCodeOwner {
@@ -270,7 +275,7 @@ function gitStepFailure(
       ...context,
       step,
       kind,
-      reason: redactSecrets(output.replace(URL_USERINFO, '$1')).slice(0, 500),
+      reason: redactAuditedSecrets(output.replace(URL_USERINFO, '$1')).slice(0, 500),
     },
     '[code] git step failed',
   );
@@ -1151,7 +1156,7 @@ export const createCloudCodeSession = tracedCodeAction(
     owner: CloudCodeOwner,
     input: CreateCloudCodeSessionInput,
     planTier: string,
-  ): Promise<CloudCodeSession> {
+  ): Promise<OpenedCloudCodeSession> {
     const validated = validateCreateCloudCodeSession(input);
     try {
       await assertExtraEgressHostsResolveSafely(validated.extraHosts);
@@ -1235,11 +1240,13 @@ export const createCloudCodeSession = tracedCodeAction(
       if (error instanceof CloudCodeConflictError || error instanceof CloudCodeLimitError)
         throw error;
       const raced = await findByRequestId(db, owner, validated.requestId);
-      if (raced && sameCreateRequest(raced, validated)) return mapCloudCodeSession(raced);
+      if (raced && sameCreateRequest(raced, validated)) {
+        return { session: mapCloudCodeSession(raced), reused: true };
+      }
       throw error;
     }
 
-    if (claimed.reused) return mapCloudCodeSession(claimed.row);
+    if (claimed.reused) return { session: mapCloudCodeSession(claimed.row), reused: true };
     const row = claimed.row;
 
     if (validated.repositoryUrl) {
@@ -1365,7 +1372,7 @@ export const createCloudCodeSession = tracedCodeAction(
         null,
       );
       if (!ready) throw new CloudCodeConflictError('Code session changed while provisioning');
-      return ready;
+      return { session: ready, reused: false };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       try {

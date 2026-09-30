@@ -1,8 +1,8 @@
 {
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
-  "documentCount": 41,
-  "chunkCount": 228,
+  "documentCount": 43,
+  "chunkCount": 238,
   "documents": [
     {
       "id": "account-security",
@@ -18,6 +18,9 @@
         "authenticator",
         "backup codes",
         "recovery codes",
+        "advanced account security",
+        "security key",
+        "recovery key",
         "change password",
         "forgot password",
         "sessions",
@@ -40,53 +43,67 @@
           "ordinal": 1,
           "heading": "Second factors",
           "headingPath": "Passkeys, two-factor and active sessions › Second factors",
-          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:\nSettings, Security shows **Temporarily unavailable** where you would set one up\nor replace your backup codes, and a workspace cannot start requiring\nmulti-factor authentication until they return. Hardware security keys and SMS\nMFA are not part of the current account contract, so they are not offered rather\nthan silently ignored.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one."
+          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Authenticator apps (TOTP) and backup codes are temporarily unavailable:\nSettings, Security shows **Temporarily unavailable** where you would set one up\nor replace your backup codes, and a workspace cannot start requiring\nmulti-factor authentication until they return. SMS MFA is not part of the\ncurrent account contract, so it is not offered rather than silently ignored.\nHardware security keys work with Advanced Account Security.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one."
         },
         {
           "id": "account-security#2",
           "ordinal": 2,
+          "heading": "Advanced Account Security",
+          "headingPath": "Passkeys, two-factor and active sessions › Advanced Account Security",
+          "text": "Advanced Account Security is an optional setting in Settings, Security for\naccounts at higher risk of targeted attacks. Signing in needs one of your\npasskeys or security keys. A password or an email code alone no longer gets in.\nTo turn it on, add at least two passkeys or security keys, including one that\nworks across devices, such as a passkey synced by your password manager or a\nhardware security key, then save your recovery keys. Turning it on requires a\ncode we email to the address on your account and one of the passkeys or security\nkeys you added. It cannot be turned on within 7 days of the email address on\nyour account being set or changed. Every other device is signed out when you turn it\non. We also email the address that got the code a link that turns it off\nwithout a passkey, for 48 hours after it was turned on, in case it was not you.\nThe link signs everyone out, resets your password and removes the passkeys,\nsecurity keys and recovery keys added when it was turned on.\n\nEmail account recovery no longer restores access. A recovery key starts\nrecovery, and the account unlocks 48 hours later. Each recovery key works once,\nand replacing your recovery keys stops the old ones from working. Every new\nsign-in is emailed to you, and each session has to be confirmed with your\npasskey or security key again every 7 days. Your API keys keep working; review\nthem under **API keys** when you turn it on.\n\nTurning it off asks you to confirm with one of your passkeys or security keys.\nYour passkeys and security keys stay on the account, and your recovery keys are\nremoved. Advanced Account Security is not available for an account your\norganization manages or for an account on a domain an organization has\nverified."
+        },
+        {
+          "id": "account-security#3",
+          "ordinal": 3,
+          "heading": "What support can do with Advanced Account Security on",
+          "headingPath": "Passkeys, two-factor and active sessions › What support can do with Advanced Account Security on",
+          "text": "AGI support cannot turn Advanced Account Security off, add a sign-in method,\nchange the email address or restore access for you. A recovery request sent to\nsupport for such an account is not acted on; you are told that it was made,\nand a recovery key is the only way back in."
+        },
+        {
+          "id": "account-security#4",
+          "ordinal": 4,
           "heading": "Password",
           "headingPath": "Passkeys, two-factor and active sessions › Password",
           "text": "The same page changes your password. Changing it requires your current password,\nand a code from your authenticator app as well when two-factor authentication is\non. An account that signs in without a password can add one after confirming it\nis you. Every other device signed in to the account is signed out when the\npassword changes. A password that fails the common-password check is refused\nwith \"That password is too common.\" A forgotten password is reset from the\nsign-in screen with **Forgot password?**."
         },
         {
-          "id": "account-security#3",
-          "ordinal": 3,
+          "id": "account-security#5",
+          "ordinal": 5,
           "heading": "Email address",
           "headingPath": "Passkeys, two-factor and active sessions › Email address",
           "text": "Settings, Account changes the email address on the account. The new address gets\na code to prove you own it, then you confirm it is you and it becomes the\naddress on the account. The previous address is removed unless a sign-in method\nstill uses it. Password resets and security notices go to the new address."
         },
         {
-          "id": "account-security#4",
-          "ordinal": 4,
+          "id": "account-security#6",
+          "ordinal": 6,
           "heading": "Confirming it is you",
           "headingPath": "Passkeys, two-factor and active sessions › Confirming it is you",
           "text": "Deleting the account, logging out of all devices, creating an API key, turning\ntwo-factor authentication on or off, replacing backup codes and changing the\nemail address each requires you to confirm it is you, even when you are already\nsigned in. With two-factor authentication on, you confirm with your\nauthenticator app or a backup code; without it, you confirm with your password,\na passkey or a code sent to your email. A confirmation stays valid for up to 5\nminutes, so a second change right after the first does not ask again."
         },
         {
-          "id": "account-security#5",
-          "ordinal": 5,
+          "id": "account-security#7",
+          "ordinal": 7,
           "heading": "If you cannot sign in",
           "headingPath": "Passkeys, two-factor and active sessions › If you cannot sign in",
-          "text": "- **Forgotten password.** Reset it from the sign-in screen with **Forgot\n  password?**.\n- **Lost the phone with your authenticator.** Enter one of your backup codes at\n  the second-factor screen. Each backup code works once.\n- **Lost the authenticator and every backup code.** There is no self-serve way\n  back in, and there is no screen from which support can remove a second factor.\n  Email contact@agiworkforce.com from the address on the account, with your\n  **User ID** if you have it."
+          "text": "- **Forgotten password.** Reset it from the sign-in screen with **Forgot\n  password?**.\n- **Lost the phone with your authenticator.** Enter one of your backup codes at\n  the second-factor screen. Each backup code works once.\n- **Lost the authenticator and every backup code, or the email address.** Ask\n  for account recovery at /recover. A person checks that the account is yours\n  before removing the second factor or changing the sign-in email, the account\n  owner is told a recovery was requested, and every other session is signed\n  out when access is restored.\n- **Lost every passkey and security key with Advanced Account Security on.** On\n  the screen that asks for your passkey, choose to use a recovery key. We email\n  you that recovery started, and you finish it on the same device once the 48\n  hours are up. Then add a new passkey or security key and replace your\n  recovery keys. Support cannot do this for you, and the link that turns the\n  setting off works only for 48 hours after it was turned on; after that a\n  passkey, a security key or a recovery key is the only way in."
         },
         {
-          "id": "account-security#6",
-          "ordinal": 6,
+          "id": "account-security#8",
+          "ordinal": 8,
           "heading": "Active sessions",
           "headingPath": "Passkeys, two-factor and active sessions › Active sessions",
           "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices** ends every session including this one, so you will\nneed to sign in again. It asks first and names that consequence.\n\nA session also ends on its own once it reaches its maximum age, counted from\nwhen you signed in rather than from your last request, so a session that is in\nconstant use still ends and asks you to sign in again. The maximum is 30 days.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
         },
         {
-          "id": "account-security#7",
-          "ordinal": 7,
+          "id": "account-security#9",
+          "ordinal": 9,
           "heading": "Your identifiers",
           "headingPath": "Passkeys, two-factor and active sessions › Your identifiers",
           "text": "Settings, Account shows your **User ID**, and an **Organization ID** when the\naccount belongs to a workspace. Support asks for these when investigating an\nissue; they identify the account, they are not secrets that grant access."
         },
         {
-          "id": "account-security#8",
-          "ordinal": 8,
+          "id": "account-security#10",
+          "ordinal": 10,
           "heading": "API keys",
           "headingPath": "Passkeys, two-factor and active sessions › API keys",
           "text": "API keys are managed in the developer console at /developers, and from Settings,\nAccount under **API keys**. Regenerating a key invalidates the previous one\nimmediately, so update anything using it."
@@ -556,6 +573,71 @@
       ]
     },
     {
+      "id": "configuration",
+      "title": "Configure the CLI",
+      "path": "/cli",
+      "category": "surfaces",
+      "tags": [
+        "configuration",
+        "config",
+        "config.toml",
+        "settings",
+        "default model",
+        "permission mode",
+        "agi init",
+        "agiworkforce_home",
+        "project config",
+        "mcp.json",
+        "hooks.json"
+      ],
+      "platforms": [
+        "cli",
+        "linux",
+        "macos",
+        "vscode",
+        "windows"
+      ],
+      "updated": "2026-09-28",
+      "source": "content/support/configuration.md",
+      "chunks": [
+        {
+          "id": "configuration#0",
+          "ordinal": 0,
+          "heading": "Where the settings live",
+          "headingPath": "Configure the CLI › Where the settings live",
+          "text": "The CLI keeps its settings in `~/.agiworkforce/config.toml` on every operating\nsystem. `agi init` creates the file if it is missing, together with\n`instructions.md` and `mcp.json` in the same folder. To keep the folder\nsomewhere else, set `AGIWORKFORCE_HOME` to an existing absolute path.\n\nA repository can add its own `.agiworkforce/config.toml`. It is read from the\nfolder you start `agi` in and only applies once you trust that workspace."
+        },
+        {
+          "id": "configuration#1",
+          "ordinal": 1,
+          "heading": "Viewing and changing settings",
+          "headingPath": "Configure the CLI › Viewing and changing settings",
+          "text": "- `agi --config` prints the settings in effect and where each one came from.\n- In a session, `/config` shows them, `/config get <key>` reads one and\n  `/config set <key> <value>` saves one to your own `config.toml`.\n- `/config set` accepts `model`, `provider`, `max-tokens`, `temperature`,\n  `stream`, `fallback-model`, `fallback-chain`, `fast-model`, `history`,\n  `output-style`, `privacy-mode`, `edit-mode`, `theme`, `reduced-motion`,\n  `bell` and `crash-reports`. Other settings are edited in the file itself.\n- The VS Code extension runs the same CLI, so it reads the same file."
+        },
+        {
+          "id": "configuration#2",
+          "ordinal": 2,
+          "heading": "Useful settings",
+          "headingPath": "Configure the CLI › Useful settings",
+          "text": "- `[default] model` and `provider` choose the default route; both start from\n  the model catalog.\n- `[default] permission_mode` is `default`, `plan`, `acceptEdits` or\n  `dontAsk`. Skipping every approval cannot be saved as a default; it is only\n  available for one run with a command-line flag.\n- `[default] reasoning_effort` is `low`, `medium`, `high` or `max`.\n- `max_tokens` is between 1 and 200000 (8192 by default) and `temperature`\n  between 0 and 1.\n- `[providers.<name>]` takes `api_key_env`, the name of the environment\n  variable that holds that provider's key, and an optional `base_url`."
+        },
+        {
+          "id": "configuration#3",
+          "ordinal": 3,
+          "heading": "Which setting wins",
+          "headingPath": "Configure the CLI › Which setting wins",
+          "text": "Your organization's managed policy wins first, then the environment variables\n`AGIWORKFORCE_MODEL`, `AGIWORKFORCE_PROVIDER` and `AGIWORKFORCE_MAX_TOKENS`,\nthen the repository's `.agiworkforce/config.toml`, then your own\n`config.toml`, then the defaults. A managed policy can fix the permission and\nprivacy modes and can turn repository settings off."
+        },
+        {
+          "id": "configuration#4",
+          "ordinal": 4,
+          "heading": "MCP servers and hooks",
+          "headingPath": "Configure the CLI › MCP servers and hooks",
+          "text": "MCP servers are listed in JSON, not in `config.toml`: `.mcp.json` or\n`mcp.json` in the repository, and `~/.agiworkforce/mcp.json` for your own.\nA repository's servers start only in a trusted workspace. `agi mcp` manages your list. Hooks live in\n`~/.agiworkforce/hooks.json` and `agi hooks` manages them."
+        }
+      ]
+    },
+    {
       "id": "connectors-and-mcp",
       "title": "Connectors and MCP",
       "path": "/connectors",
@@ -609,6 +691,55 @@
           "heading": "Custom MCP connections and plans",
           "headingPath": "Connectors and MCP › Custom MCP connections and plans",
           "text": "The number of custom MCP connections available depends on your plan. Current plan\ndetails live on the pricing page."
+        }
+      ]
+    },
+    {
+      "id": "custom-instructions",
+      "title": "Custom instructions for the CLI and VS Code",
+      "path": "/cli",
+      "category": "surfaces",
+      "tags": [
+        "custom instructions",
+        "instructions",
+        "agents.md",
+        "claude.md",
+        "instructions.md",
+        "rules",
+        "repository memory",
+        "remember for this repository",
+        "project instructions"
+      ],
+      "platforms": [
+        "cli",
+        "linux",
+        "macos",
+        "vscode",
+        "windows"
+      ],
+      "updated": "2026-09-28",
+      "source": "content/support/custom-instructions.md",
+      "chunks": [
+        {
+          "id": "custom-instructions#0",
+          "ordinal": 0,
+          "heading": "Files every session reads",
+          "headingPath": "Custom instructions for the CLI and VS Code › Files every session reads",
+          "text": "Before a session starts, `agi` reads your own instructions from\n`~/.agiworkforce/instructions.md`, then walks from the folder you are in up to\nthe top of the disk and reads, in each folder, `AGENTS.md`, `CLAUDE.md` and\n`.agiworkforce/instructions.md`. Your own file comes first and the folder you\nare in comes last, so the closest file has the final word. Together they may\nuse about 10,000 tokens; files past that are left out and the session says so.\n\nRules in `.agiworkforce/rules/*.md` in the repository and in\n`~/.agiworkforce/rules/*.md` are added too, some only for matching files."
+        },
+        {
+          "id": "custom-instructions#1",
+          "ordinal": 1,
+          "heading": "Repository memory",
+          "headingPath": "Custom instructions for the CLI and VS Code › Repository memory",
+          "text": "Notes the agent should keep for a repository are saved in `CLAUDE.md` at the\nrepository root. In VS Code, run **Remember for This Repository** to add one;\nit tells you which file it saved to. Notes for every repository go in\n`~/.agiworkforce/CLAUDE.md`. Each note can be up to 4,000 characters."
+        },
+        {
+          "id": "custom-instructions#2",
+          "ordinal": 2,
+          "heading": "Instructions set in VS Code",
+          "headingPath": "Custom instructions for the CLI and VS Code › Instructions set in VS Code",
+          "text": "VS Code Settings also has instruction boxes for all workspaces and for the\ncurrent one, up to 8,000 characters each. The workspace box replaces the\ngeneral one when it has text, and whichever applies is sent with every\nmessage. The Settings panel lists the instruction files it found in the\nworkspace folder."
         }
       ]
     },
@@ -1839,7 +1970,7 @@
         "citations",
         "help search"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-28",
       "source": "content/support/search.md",
       "chunks": [
         {
@@ -1847,7 +1978,7 @@
           "ordinal": 0,
           "heading": "Searching the web from a chat",
           "headingPath": "Search: the web, your chats and the help centre › Searching the web from a chat",
-          "text": "There is no search switch to find. Managed web search is ambient: it stays on\nwhenever the selected model and deployment have a real search path, and turns\noff only when no such path exists. The composer states whether search is on for\nthe model you picked. `/search` in the composer states the intent explicitly for\na single message.\n\nManaged cloud search follows the chat and usage policy for your plan. In Local\nand BYOK the behaviour depends on the runtime and provider you selected."
+          "text": "There is no search switch to find. Managed web search is ambient: it stays on\nwhenever the selected model and deployment have a real search path, and turns\noff only when no such path exists. The composer states whether search is on for\nthe model you picked. `/search` in the composer states the intent explicitly for\na single message.\n\nManaged cloud search follows the chat and usage policy for your plan. In Local\nand BYOK the behaviour depends on the runtime and provider you selected.\n\nIn a Team or Enterprise workspace, an owner or admin can limit which websites\nweb search and page fetching read, on the workspace Connectors page. Results\nfrom other sites are left out, and a page outside the allowed sites is not\nfetched."
         },
         {
           "id": "search#1",

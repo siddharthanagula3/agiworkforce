@@ -1,9 +1,11 @@
-
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { createManagedMediaIdempotencyKey, type ManagedMediaOperation } from '@agiworkforce/utils';
 import type {
   ManagedMediaImageAspectRatio,
+  ManagedMediaImageProvider,
   ManagedMediaVideoAspectRatio,
+  ManagedMediaVideoProvider,
   ManagedMediaVideoResolution,
 } from '@agiworkforce/cloud-contracts';
 
@@ -14,7 +16,7 @@ export interface GeneratedImage {
 
 export interface ImageGenerationRequest {
   prompt: string;
-  provider?: 'google' | 'openai' | 'stability';
+  provider?: ManagedMediaImageProvider;
   aspect_ratio?: ManagedMediaImageAspectRatio;
   size?: string;
   style?: string;
@@ -37,7 +39,7 @@ export interface VideoGenerationRequest {
   duration_secs?: number;
   resolution?: ManagedMediaVideoResolution;
   aspect_ratio?: ManagedMediaVideoAspectRatio;
-  provider?: 'runway' | 'google' | 'openrouter';
+  provider?: ManagedMediaVideoProvider;
   model?: string;
   conversation_id?: string;
   assistant_message_id?: string;
@@ -46,7 +48,7 @@ export interface VideoGenerationRequest {
 export interface VideoGenerationResponse {
   success: boolean;
   task_id: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: Extract<LifecycleStatus, 'queued' | 'completed' | 'failed'> | 'processing';
   provider: string;
   model: string;
   estimated_duration_secs: number;
@@ -57,7 +59,7 @@ export interface VideoGenerationResponse {
 export interface VideoStatusResponse {
   success: boolean;
   task_id: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
+  status: Extract<LifecycleStatus, 'queued' | 'completed' | 'failed'> | 'processing' | 'timeout';
   video_url?: string;
   thumbnail_url?: string;
   progress?: number;
@@ -74,7 +76,7 @@ async function requireAuthToken(): Promise<string> {
 
 function createWebMediaIdempotencyKey(
   operation: ManagedMediaOperation,
-  operationId = crypto.randomUUID(),
+  operationId: string = crypto.randomUUID(),
 ): string {
   return createManagedMediaIdempotencyKey({
     surface: 'web',

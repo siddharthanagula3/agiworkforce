@@ -96,6 +96,73 @@ describe('GET /api/mobile/iap/catalog', () => {
     });
   });
 
+  it('keeps code redemption and the waitlist available before store products are enabled', async () => {
+    vi.stubEnv('MOBILE_IAP_ENABLED', 'false');
+    const h = harness({ redeemed: false });
+
+    const response = await GET(request());
+
+    await expect(response.json()).resolves.toMatchObject({
+      enabled: false,
+      products: [],
+      appAccountToken: null,
+      unavailableCode: 'waitlist_access_required',
+      unavailableReason: expect.stringContaining('store products are ready'),
+    });
+    expect(h.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('insert into public.mobile_iap_accounts'),
+      expect.anything(),
+    );
+  });
+
+  it('keeps purchases disabled after a code is redeemed if store products are not enabled', async () => {
+    vi.stubEnv('MOBILE_IAP_ENABLED', 'false');
+    harness({ redeemed: true });
+
+    const response = await GET(request());
+
+    await expect(response.json()).resolves.toMatchObject({
+      enabled: false,
+      products: [],
+      appAccountToken: null,
+      unavailableCode: null,
+      unavailableReason: expect.stringContaining('not enabled'),
+    });
+  });
+
+  it('hides the access gate when the waitlist is turned off and purchases are not configured', async () => {
+    vi.stubEnv('MOBILE_IAP_ENABLED', 'false');
+    vi.stubEnv('AGI_BILLING_WAITLIST_OPEN', '1');
+    const h = harness({ redeemed: false });
+
+    const response = await GET(request());
+
+    await expect(response.json()).resolves.toMatchObject({
+      enabled: false,
+      products: [],
+      unavailableCode: null,
+    });
+    expect(h.query).not.toHaveBeenCalled();
+  });
+
+  it('offers configured store products without a code after the waitlist is turned off', async () => {
+    vi.stubEnv('AGI_BILLING_WAITLIST_OPEN', '1');
+    const h = harness({ redeemed: false });
+
+    const response = await GET(request());
+
+    await expect(response.json()).resolves.toMatchObject({
+      enabled: true,
+      appAccountToken: APP_ACCOUNT_TOKEN,
+      products: [expect.objectContaining({ productId: PRODUCT_ID })],
+      unavailableCode: null,
+    });
+    expect(h.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('beta_redemptions'),
+      expect.anything(),
+    );
+  });
+
   it('offers the catalogue once upgrade access is redeemed', async () => {
     harness({ redeemed: true });
 

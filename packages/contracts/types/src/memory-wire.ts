@@ -456,3 +456,128 @@ export function parseManagedMemoryCitations(value: unknown): ManagedMemoryCitati
   const count = Math.max(Math.floor(countOf(value['count'])), memories.length);
   return count > 0 ? { count, memories } : null;
 }
+
+export type ManagedMemoryRequestRead<T> =
+  { ok: true; request: T } | { ok: false; field: string; message: string };
+
+const MANAGED_MEMORY_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function refuseRequest(
+  field: string,
+  message: string,
+): { ok: false; field: string; message: string } {
+  return { ok: false, field, message };
+}
+
+function readOptionalId(value: unknown): string | null | undefined | false {
+  if (value === undefined || value === null) return value;
+  return typeof value === 'string' && MANAGED_MEMORY_ID_PATTERN.test(value) ? value : false;
+}
+
+function readMemoryContent(value: unknown): ManagedMemoryRequestRead<string> {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return refuseRequest('content', 'Content is required');
+  }
+  if (value.length > MANAGED_MEMORY_MAX_CONTENT_CHARS) {
+    return refuseRequest(
+      'content',
+      `Content must be ${MANAGED_MEMORY_MAX_CONTENT_CHARS.toLocaleString('en-US')} characters or less`,
+    );
+  }
+  return { ok: true, request: value };
+}
+
+function readMemoryExpiry(value: unknown): string | null | undefined | false {
+  if (value === undefined || value === null || typeof value === 'string') return value;
+  return false;
+}
+
+export function readManagedMemoryCreateRequest(
+  body: unknown,
+): ManagedMemoryRequestRead<ManagedMemoryCreateRequest> {
+  if (!isRecord(body)) return refuseRequest('body', 'Invalid request body');
+  const content = readMemoryContent(body['content']);
+  if (!content.ok) return content;
+  const { pinned, category, source } = body;
+  if (pinned !== undefined && typeof pinned !== 'boolean') {
+    return refuseRequest('pinned', 'pinned must be a boolean');
+  }
+  if (category !== undefined && category !== null) {
+    if (typeof category !== 'string') return refuseRequest('category', 'category must be a string');
+    if (category.trim().length > MANAGED_MEMORY_MAX_CATEGORY_CHARS) {
+      return refuseRequest(
+        'category',
+        `category must be ${MANAGED_MEMORY_MAX_CATEGORY_CHARS} characters or less`,
+      );
+    }
+  }
+  const expiresAt = readMemoryExpiry(body['expiresAt']);
+  if (expiresAt === false) return refuseRequest('expiresAt', 'expiresAt must be a date string');
+  const projectId = readOptionalId(body['projectId']);
+  if (projectId === false) return refuseRequest('projectId', 'projectId must be a project id');
+  return {
+    ok: true,
+    request: {
+      content: content.request,
+      ...(typeof category === 'string' || category === null ? { category } : {}),
+      ...(isManagedMemorySource(source) ? { source } : {}),
+      ...(typeof pinned === 'boolean' ? { pinned } : {}),
+      ...(expiresAt === undefined ? {} : { expiresAt }),
+      ...(projectId === undefined ? {} : { projectId }),
+    },
+  };
+}
+
+export function readManagedMemoryUpdateRequest(
+  body: unknown,
+): ManagedMemoryRequestRead<ManagedMemoryUpdateRequest> {
+  if (!isRecord(body)) return refuseRequest('body', 'Invalid request body');
+  const { pinned } = body;
+  if (pinned !== undefined && typeof pinned !== 'boolean') {
+    return refuseRequest('pinned', 'pinned must be a boolean');
+  }
+  const expiresAt = readMemoryExpiry(body['expiresAt']);
+  if (expiresAt === false) return refuseRequest('expiresAt', 'expiresAt must be a date string');
+  const editsContent =
+    body['content'] !== undefined || (typeof pinned !== 'boolean' && expiresAt === undefined);
+  const content = editsContent ? readMemoryContent(body['content']) : null;
+  if (content && !content.ok) return content;
+  return {
+    ok: true,
+    request: {
+      ...(content ? { content: content.request } : {}),
+      ...(typeof pinned === 'boolean' ? { pinned } : {}),
+      ...(expiresAt === undefined ? {} : { expiresAt }),
+    },
+  };
+}
+
+export function readManagedMemoryCommandRequest(
+  body: unknown,
+): ManagedMemoryRequestRead<ManagedMemoryCommandRequest> {
+  if (!isRecord(body)) return refuseRequest('body', 'Invalid memory command');
+  const { message, confirmed } = body;
+  if (
+    typeof message !== 'string' ||
+    message.length === 0 ||
+    message.length > MANAGED_MEMORY_COMMAND_MAX_CHARS
+  ) {
+    return refuseRequest('message', 'Invalid memory command');
+  }
+  if (confirmed !== undefined && typeof confirmed !== 'boolean') {
+    return refuseRequest('confirmed', 'Invalid memory command');
+  }
+  const projectId = readOptionalId(body['projectId']);
+  if (projectId === false) return refuseRequest('projectId', 'Invalid memory command');
+  const conversationId = readOptionalId(body['conversationId']);
+  if (conversationId === false) return refuseRequest('conversationId', 'Invalid memory command');
+  return {
+    ok: true,
+    request: {
+      message,
+      ...(typeof confirmed === 'boolean' ? { confirmed } : {}),
+      ...(projectId === undefined ? {} : { projectId }),
+      ...(conversationId === undefined ? {} : { conversationId }),
+    },
+  };
+}

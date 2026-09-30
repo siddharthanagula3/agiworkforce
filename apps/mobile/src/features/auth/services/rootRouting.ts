@@ -1,6 +1,6 @@
 export const CLOUD_SIGN_IN_RETURN_PATH = '/(auth)/login' as const;
 
-const APP_PATH = '/(app)' as const;
+export const APP_PATH = '/(app)' as const;
 const ONBOARDING_PATH = '/(public)/onboarding' as const;
 const AGE_GATE_PATH = '/(public)/age-gate' as const;
 

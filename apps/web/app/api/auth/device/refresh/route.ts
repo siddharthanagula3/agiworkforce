@@ -2,8 +2,10 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { DeviceTokenError, DeviceTokenResponse } from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsAndSecurityHeaders } from '@/lib/cors';
+import { accountAccessDecision } from '@/lib/auth/account-status';
 import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
@@ -20,7 +22,12 @@ import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { finishFamilyAsCompromised } from '@/lib/server/refresh-token-family';
 import { notifyDeviceCredentialCompromised } from '@/lib/services/account-activity-notifications';
-import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
+import {
+  CURRENT_TERMS_VERSION,
+  termsNoticeHeaders,
+  termsStandingFor,
+  type TermsStanding,
+} from '@/lib/server/terms';
 
 export const runtime = 'nodejs';
 
@@ -41,6 +48,7 @@ interface RefreshTokenRow {
   organization_id: string | null;
   owner_missing: boolean;
   owner_deletion_scheduled_for: string | null;
+  owner_account_status: string | null;
   owner_terms_version: string | null;
   owner_terms_accepted_at: string | null;
 }
@@ -54,6 +62,7 @@ function termsAcceptanceUrl(request: NextRequest, returnTo = '/'): string {
 type RotationResult =
   | {
       kind: 'rotated';
+      termsStanding: TermsStanding;
       accessToken: string;
       accessExpiresIn: number;
       refreshToken: string;
@@ -66,6 +75,7 @@ type RotationResult =
       revoked: number;
       compromiseRecorded: boolean;
     }
+  | { kind: 'account_unavailable'; message: string; recoveryPath: string | null }
   | { kind: 'invalid' | 'expired' | 'erased' | 'terms_required' };
 
 async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> {
@@ -75,10 +85,10 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
   const body = await request.json().catch(() => null);
   const parsed = RefreshSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'invalid_grant' },
-      { status: 400, headers: { 'Cache-Control': 'no-store' } },
-    );
+    return NextResponse.json({ error: 'invalid_grant' } satisfies DeviceTokenError, {
+      status: 400,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 
   const db = getNeonDb();
@@ -90,6 +100,7 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
               t.device_id, t.device_name, t.organization_id,
               p.id IS NULL AS owner_missing,
               p.deletion_scheduled_for AS owner_deletion_scheduled_for,
+              p.account_status AS owner_account_status,
               p.terms_version AS owner_terms_version,
               p.terms_accepted_at AS owner_terms_accepted_at
          FROM device_refresh_tokens t
@@ -136,10 +147,26 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       return { kind: 'expired' };
     }
 
-    // A terms revision is a consent gate, not a compromise signal: withhold the token but leave
-    // the family intact and unused so the same device resumes once the account re-accepts on web.
+    const access = accountAccessDecision(current.owner_account_status);
+    if (!access.allowed) {
+      return {
+        kind: 'account_unavailable',
+        message: access.message,
+        recoveryPath: access.recoveryPath,
+      };
+    }
+
+    // The chat gateway's rule: an owner with no acceptance on record, or one past the effective
+    // date of a material revision, has to accept first; an older but valid version is renewed with
+    // a notice. A refusal is a consent gate, not a compromise signal: withhold the token but leave
+    // the family intact and unused so the same device resumes once the account accepts on web.
     // Revoking here makes every published terms bump destroy every live device session.
-    if (current.owner_terms_version !== CURRENT_TERMS_VERSION || !current.owner_terms_accepted_at) {
+    const termsStanding = termsStandingFor(
+      current.owner_terms_version && current.owner_terms_accepted_at
+        ? { version: current.owner_terms_version }
+        : null,
+    );
+    if (termsStanding.kind === 'required') {
       return { kind: 'terms_required' };
     }
 
@@ -179,6 +206,7 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
     );
     return {
       kind: 'rotated',
+      termsStanding,
       accessToken,
       accessExpiresIn: expiresIn,
       refreshToken: nextCredential.token,
@@ -193,9 +221,27 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
     return NextResponse.json(
       {
         error: 'terms_acceptance_required',
+        error_description: `Accept the Terms of Service at ${termsAcceptanceUrl(request)} to keep using AGI Workforce on this device.`,
         terms_version: CURRENT_TERMS_VERSION,
         acceptance_url: termsAcceptanceUrl(request),
-      },
+      } satisfies DeviceTokenError,
+      { status: 403, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  if (result.kind === 'account_unavailable') {
+    logger.warn(
+      { reason: result.kind },
+      'Device refresh withheld while the account is unavailable',
+    );
+    return NextResponse.json(
+      {
+        error: 'account_unavailable',
+        error_description: result.message,
+        ...(result.recoveryPath
+          ? { recovery_url: new URL(result.recoveryPath, new URL(request.url).origin).toString() }
+          : {}),
+      } satisfies DeviceTokenError,
       { status: 403, headers: { 'Cache-Control': 'no-store' } },
     );
   }
@@ -233,18 +279,18 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
         status: result.compromiseRecorded ? 'recorded' : 'revoked_only',
       },
     });
-    return NextResponse.json(
-      { error: 'invalid_grant' },
-      { status: 400, headers: { 'Cache-Control': 'no-store' } },
-    );
+    return NextResponse.json({ error: 'invalid_grant' } satisfies DeviceTokenError, {
+      status: 400,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 
   if (result.kind !== 'rotated') {
     logger.warn({ reason: result.kind }, 'Device refresh credential rejected');
-    return NextResponse.json(
-      { error: 'invalid_grant' },
-      { status: 400, headers: { 'Cache-Control': 'no-store' } },
-    );
+    return NextResponse.json({ error: 'invalid_grant' } satisfies DeviceTokenError, {
+      status: 400,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 
   return NextResponse.json(
@@ -254,8 +300,8 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       token_type: 'Bearer',
       expires_in: result.accessExpiresIn,
       refresh_token_expires_in: DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
-    },
-    { headers: { 'Cache-Control': 'no-store' } },
+    } satisfies DeviceTokenResponse,
+    { headers: { 'Cache-Control': 'no-store', ...termsNoticeHeaders(result.termsStanding) } },
   );
 }
 

@@ -25,6 +25,7 @@ import {
   VIDEO_POLL_INTERVAL_MS,
 } from '../src/features/video/services/videogen';
 import { runVideoGenerationTurn } from '../src/features/chat/actions/runVideoGenerationTurn';
+import { CLOUD_SIGN_IN_MESSAGE } from '../services/apiErrors';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -81,6 +82,33 @@ describe('stopping a mobile video generation', () => {
     mockGet.mockReset();
     __resetCloudAccountSessionForTests();
     activateCloudAccount('default-test-account');
+  });
+
+  it('keeps an ownerless request out of the transcript and asks for sign-in', async () => {
+    __resetCloudAccountSessionForTests();
+    const callbacks = { ...createCallbacks(), onStarted: jest.fn(), onUnexpectedError: jest.fn() };
+    const generate = jest.fn();
+
+    await expect(
+      runVideoGenerationTurn(
+        {
+          conversationId: CONVERSATION_ID,
+          displayText: 'a kite over the sea',
+          prompt: 'a kite over the sea',
+          model: 'registry-video-route',
+          ownerId: 'default-test-account',
+          ...callbacks,
+        },
+        { generate },
+      ),
+    ).resolves.toEqual({ status: 'failed', assistantMessageId: null });
+
+    expect(callbacks.begin).not.toHaveBeenCalled();
+    expect(callbacks.onStarted).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+    expect(callbacks.onUnexpectedError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: CLOUD_SIGN_IN_MESSAGE }),
+    );
   });
 
   it('asks the server to cancel the durable task', async () => {
@@ -145,6 +173,32 @@ describe('stopping a mobile video generation', () => {
     );
 
     expect(taskCreated).toHaveBeenCalledWith('conversation-1', 'assistant-1', TASK_ID);
+  });
+
+  it('keeps provider diagnostics out of a failed video turn', async () => {
+    const callbacks = createCallbacks();
+    const outcome = await runVideoGenerationTurn(
+      {
+        conversationId: CONVERSATION_ID,
+        displayText: 'a kite over the sea',
+        prompt: 'a kite over the sea',
+        model: 'registry-video-route',
+        ownerId: 'default-test-account',
+        ...callbacks,
+      },
+      {
+        generate: async () => {
+          throw new Error('Provider token failed at /private/video-route');
+        },
+      },
+    );
+
+    expect(outcome).toEqual({ status: 'failed', assistantMessageId: ASSISTANT_MESSAGE_ID });
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      CONVERSATION_ID,
+      ASSISTANT_MESSAGE_ID,
+      'Video generation failed. Try again.',
+    );
   });
 
   it('stops polling and leaves the turn alone once the user requested a stop', async () => {

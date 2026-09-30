@@ -35,7 +35,11 @@ import { StorageScopeNotice } from '@/src/features/settings/StorageScopeNotice';
 import type { InstalledModel } from '@/storage/types';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
-const STORAGE_RETURN_PATHS = ['/(app)/settings/data-controls', '/(app)/settings/general'] as const;
+const STORAGE_RETURN_PATHS = [
+  '/(app)/(tabs)/settings',
+  '/(app)/settings/data-controls',
+  '/(app)/settings/general',
+] as const;
 type StorageReturnPath = (typeof STORAGE_RETURN_PATHS)[number];
 
 function isStorageReturnPath(value: string | undefined): value is StorageReturnPath {
@@ -161,9 +165,8 @@ export default function StorageManagerScreen() {
         (progress) => setExportProgress(progress),
         buildLocalDataExportSnapshot(),
       );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error.';
-      Alert.alert('Export failed', msg);
+    } catch {
+      Alert.alert('Export failed', 'Could not prepare your local data export. Try again.');
     } finally {
       setIsExporting(false);
       setExportProgress(null);
@@ -193,10 +196,9 @@ export default function StorageManagerScreen() {
                     try {
                       await wipeAllLocalData({ afterPersistentWipe: resetLocalInMemoryState });
                       router.replace('/(public)/age-gate' as Parameters<typeof router.replace>[0]);
-                    } catch (err) {
+                    } catch {
                       setIsWiping(false);
-                      const msg = err instanceof Error ? err.message : 'Unknown error.';
-                      Alert.alert('Wipe failed', `Could not delete all data: ${msg}`);
+                      Alert.alert('Wipe failed', 'Could not delete all local data. Try again.');
                     }
                   },
                 },
@@ -375,7 +377,7 @@ export default function StorageManagerScreen() {
         {/* Privacy actions */}
         <Card>
           <Text
-            className="text-[11px] uppercase font-semibold mb-3"
+            className="text-xs uppercase font-semibold mb-3"
             style={{ color: c.textMuted, letterSpacing: 0 }}
           >
             Privacy

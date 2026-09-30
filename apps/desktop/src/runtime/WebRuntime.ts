@@ -8,8 +8,8 @@ import type {
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
 import {
-  MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   chatAttachmentAcceptAttribute,
   type ManagedCloudAgentRunReference,
   isSupportedChatAttachment,
@@ -43,7 +43,7 @@ import {
 } from './cloudStreamDeltas';
 import { CloudToolApprovalRegistry, toPersistedCloudApprovalProjection } from './cloudToolApproval';
 import { uploadDesktopCloudAttachments } from '../services/desktopCloudAttachments';
-import { ensureCloudConversation } from '../services/cloudChat';
+import { ensureCloudConversation, readTemporaryChatPreference } from '../services/cloudChat';
 import { finishAgentActivityLocally } from '@agiworkforce/client-runtime';
 import {
   EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
@@ -145,7 +145,7 @@ export class WebRuntime implements ChatRuntime {
   readonly attachmentPolicy = {
     accept: chatAttachmentAcceptAttribute(),
     maxFiles: MAX_CHAT_ATTACHMENT_COUNT,
-    maxTotalBytes: MAX_CHAT_ATTACHMENT_BYTES,
+    maxTotalBytes: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
     validate: (file: File) =>
       isSupportedChatAttachment(file.name, file.type)
         ? null
@@ -166,7 +166,14 @@ export class WebRuntime implements ChatRuntime {
     const model = normalizeModelId(options?.model ?? '') ?? 'auto';
     const controller = new AbortController();
     this._abortControllers.set(conversationId, controller);
-    await ensureCloudConversation(conversationId, 'New chat', model, options?.projectId);
+    await ensureCloudConversation(
+      conversationId,
+      'New chat',
+      model,
+      options?.projectId,
+      undefined,
+      await readTemporaryChatPreference(),
+    );
     const persistence = createCloudChatPersistenceClient();
     const userMessageId = uuidv7();
     const assistantMessageId = options?.continuationMessageId ?? uuidv7();
@@ -178,7 +185,11 @@ export class WebRuntime implements ChatRuntime {
 
     const uploadedAttachments =
       !isContinuation && options?.attachments?.length
-        ? await uploadDesktopCloudAttachments(options.attachments, controller.signal)
+        ? await uploadDesktopCloudAttachments(
+            options.attachments,
+            controller.signal,
+            conversationId,
+          )
         : [];
     const messageHistory = options?.messageHistory ?? [];
     const currentHistoryAttachments = messageHistory[messageHistory.length - 1]?.attachments ?? [];

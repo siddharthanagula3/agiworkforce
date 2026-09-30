@@ -83,6 +83,13 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
   override fun getName() = MODULE_NAME
 
   @ReactMethod
+  fun memoryFootprintMB(promise: Promise) {
+    val manager = reactContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+    val info = manager.getProcessMemoryInfo(intArrayOf(android.os.Process.myPid())).firstOrNull()
+    promise.resolve(if (info == null) null else info.totalPss / 1024.0)
+  }
+
+  @ReactMethod
   fun setCellularDownloadAllowed(allowed: Boolean) {
     cellularDownloadAllowed = allowed
   }

@@ -9,9 +9,14 @@ import type {
 import type {
   McpServerInspection,
   McpServerProbe,
+  PermissionRule,
+  PermissionRuleList,
   PluginUpdate,
+  ProviderKeyList,
   SavedPermissionList,
+  TrustedFolderList,
 } from '../../integrations/localRuntimeClient';
+import type { ExtensionAgentMode } from '../permissions/agentModeConsent';
 import { createSkill } from './skillAuthoring';
 import type { McpServerDetailsProvider } from './mcpServerDetails';
 import { t, tPlural } from '../../l10n';
@@ -50,6 +55,7 @@ const MCP_STATUS_LABELS: Record<McpServerListResponse['servers'][number]['status
   configured: 'Configured',
   authorized: 'Signed in',
   needs_auth: 'Needs sign-in',
+  blocked: 'Blocked by your workspace',
 };
 
 const REMOVE = 'Remove';
@@ -175,6 +181,13 @@ async function installSkillFromFolder(adapter: CliCapabilityAdapter): ReturnType
   return adapter.call('skillsInstall', source);
 }
 
+function skillRequirements(skill: SkillListResponse['skills'][number]): string[] {
+  const missing = [...skill.missingTools, ...skill.missingEnvVars];
+  const required = [...skill.requiredTools, ...skill.requiredEnvVars];
+  if (missing.length > 0) return [`$(warning) Missing ${missing.join(', ')}, so it will not load`];
+  return required.length === 0 ? [] : [`Needs ${required.join(', ')}`];
+}
+
 export async function manageSkills(adapter: CliCapabilityAdapter): Promise<void> {
   const installs = await adapter.offers('installs');
   return showManagedSurface(
@@ -216,7 +229,7 @@ export async function manageSkills(adapter: CliCapabilityAdapter): Promise<void>
           items.push({
             label: toggleLabel(skill.name, skill.enabled && skill.consented),
             description: `${skill.scope}${skill.consented ? '' : ', not allowed yet'}`,
-            detail: skill.description,
+            detail: [skill.description, ...skillRequirements(skill)].join(' · '),
             run: () => adapter.call('skillsSetEnabled', skill.name, !skill.enabled),
             ...(installs && skill.scope === 'user'
               ? {
@@ -618,7 +631,7 @@ export async function manageMcpServers(
           : [];
         for (const server of result.value.servers) {
           const actions: ManagedAction[] = [
-            ...(inspects
+            ...(inspects && server.status !== 'blocked'
               ? [
                   {
                     button: {
@@ -632,7 +645,7 @@ export async function manageMcpServers(
                   },
                 ]
               : []),
-            ...(toolLists
+            ...(toolLists && server.status !== 'blocked'
               ? [
                   {
                     button: { iconPath: new vscode.ThemeIcon('list-tree'), tooltip: 'Show tools' },
@@ -664,9 +677,11 @@ export async function manageMcpServers(
             );
           }
           items.push({
-            label: `$(${server.status === 'needs_auth' ? 'key' : 'plug'}) ${server.name}`,
+            label: `$(${server.status === 'blocked' ? 'lock' : server.status === 'needs_auth' ? 'key' : 'plug'}) ${server.name}`,
             description: `${MCP_STATUS_LABELS[server.status]}, ${server.transport}, ${server.scope}`,
-            ...(server.url === undefined ? {} : { detail: server.url }),
+            ...([server.policyRefusal, server.url].filter(Boolean).length === 0
+              ? {}
+              : { detail: [server.policyRefusal, server.url].filter(Boolean).join(' · ') }),
             ...(server.status === 'needs_auth'
               ? { run: () => adapter.call('mcpLogin', server.name) }
               : {}),
@@ -761,7 +776,276 @@ const SAVED_PERMISSION_KINDS = {
   exec_policy: 'savedApprovals.kindPolicy',
 } as const;
 
-export async function manageSavedApprovals(adapter: CliCapabilityAdapter): Promise<void> {
+export interface SessionPermissions {
+  mode(): ExtensionAgentMode;
+  disallowedTools(): readonly string[];
+  setDisallowedTools(tools: readonly string[]): void;
+}
+
+const MODE_SUMMARIES: Record<ExtensionAgentMode, { label: string; detail: string }> = {
+  ask: { label: 'Ask before edits', detail: 'Every edit and command asks you first' },
+  auto: {
+    label: 'Auto safe operations',
+    detail: 'Reads run on their own; writes and commands ask you first',
+  },
+  plan: { label: 'Plan mode', detail: 'Reads only; nothing changes until you approve the plan' },
+  bypass: { label: 'Bypass permissions', detail: 'Nothing asks first, including commands' },
+};
+
+const SESSION_TOOLS: readonly { label: string; detail: string; specs: readonly string[] }[] = [
+  { label: 'Shell commands', detail: 'Run commands in a terminal', specs: ['Bash'] },
+  { label: 'File edits', detail: 'Change existing files and apply patches', specs: ['Edit'] },
+  { label: 'New files', detail: 'Create or overwrite whole files', specs: ['Write'] },
+  { label: 'Web search', detail: 'Search the web', specs: ['WebSearch'] },
+  { label: 'Web pages', detail: 'Read a page by its URL', specs: ['WebFetch'] },
+  {
+    label: 'Browser',
+    detail: 'Open, read and act on pages in the paired browser',
+    specs: [
+      'browser_read_page',
+      'browser_find',
+      'browser_click',
+      'browser_type',
+      'browser_fill_form',
+      'browser_navigate',
+      'browser_history',
+      'browser_screenshot',
+      'browser_console',
+      'browser_network',
+    ],
+  },
+];
+
+function disabledToolLabels(disallowed: readonly string[]): string[] {
+  return SESSION_TOOLS.filter((tool) => tool.specs.every((spec) => disallowed.includes(spec))).map(
+    (tool) => tool.label,
+  );
+}
+
+export async function chooseSessionTools(
+  adapter: CliCapabilityAdapter,
+  session: SessionPermissions,
+): Promise<void> {
+  if (!(await adapter.offers('turnToolFilters'))) {
+    void vscode.window.showErrorMessage(
+      `AGI Workforce: ${CLI_CAPABILITY_REQUIREMENT} to choose the tools a session may use.`,
+    );
+    return;
+  }
+  const disallowed = session.disallowedTools();
+  const items = SESSION_TOOLS.map((tool) => ({
+    label: tool.label,
+    detail: tool.detail,
+    picked: !tool.specs.every((spec) => disallowed.includes(spec)),
+    specs: tool.specs,
+  }));
+  const picked = await vscode.window.showQuickPick(items, {
+    title: 'AGI Workforce, Tools for this session',
+    placeHolder: 'Tick the tools the agent may use. Your choice applies from your next message.',
+    canPickMany: true,
+    ignoreFocusOut: true,
+  });
+  if (picked === undefined) return;
+  session.setDisallowedTools(
+    items.filter((item) => !picked.includes(item)).flatMap((item) => [...item.specs]),
+  );
+}
+
+const RULE_DECISIONS: Record<PermissionRule['decision'], { icon: string; label: string }> = {
+  allow: { icon: 'pass', label: 'Always allowed' },
+  ask: { icon: 'question', label: 'Asks first' },
+  deny: { icon: 'circle-slash', label: 'Blocked' },
+};
+
+const RULE_KINDS: Record<PermissionRule['kind'], string> = {
+  command: 'Shell command',
+  domain: 'Website',
+  file: 'File edit',
+  exec_policy: 'Command policy rule',
+  mcp: 'MCP server tool',
+};
+
+async function addPermissionRule(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {
+  const title = 'AGI Workforce, Add a permission rule';
+  const kind = await vscode.window.showQuickPick(
+    [
+      {
+        label: 'Website',
+        detail: 'A host such as example.com or *.example.com that web tools may reach',
+        value: 'domain' as const,
+        prompt: 'The website, such as example.com or *.example.com',
+      },
+      {
+        label: 'MCP server or tool',
+        detail: 'Every tool from a server, or one tool, written server or server/tool',
+        value: 'mcp' as const,
+        prompt: 'The server, or server/tool, such as github or github/create_issue',
+      },
+      {
+        label: 'Shell command',
+        detail: 'A command such as npm test, or a command family such as git:*',
+        value: 'command' as const,
+        prompt: 'The command, such as npm test or git:*',
+      },
+    ],
+    { title, placeHolder: 'What the rule applies to', ignoreFocusOut: true },
+  );
+  if (kind === undefined) return undefined;
+  const target = await vscode.window.showInputBox({
+    title,
+    prompt: kind.prompt,
+    ignoreFocusOut: true,
+    validateInput: (value) => (value.trim() === '' ? 'Name what the rule applies to.' : undefined),
+  });
+  if (target === undefined) return undefined;
+  const decision = await vscode.window.showQuickPick(
+    (['allow', 'ask', 'deny'] as const).map((value) => ({
+      label: RULE_DECISIONS[value].label,
+      value,
+    })),
+    {
+      title,
+      placeHolder: `What happens when the agent uses ${target.trim()}`,
+      ignoreFocusOut: true,
+    },
+  );
+  if (decision === undefined) return undefined;
+  return adapter.call('permissionRulesAdd', {
+    kind: kind.value,
+    target: target.trim(),
+    decision: decision.value,
+  });
+}
+
+async function loadPermissionsView(
+  adapter: CliCapabilityAdapter,
+  session: SessionPermissions,
+  offersTools: boolean,
+  offersTrust: boolean,
+): Promise<CliCapabilityResult<ManagedItem[]>> {
+  const [rules, trusted] = await Promise.all([
+    adapter.call<PermissionRuleList>('permissionRules'),
+    offersTrust ? adapter.call<TrustedFolderList>('trustedFolders') : Promise.resolve(undefined),
+  ]);
+  if (rules.status !== 'ok') return rules;
+  const mode = MODE_SUMMARIES[session.mode()];
+  const disabled = disabledToolLabels(session.disallowedTools());
+  const items: ManagedItem[] = [
+    { label: 'This session', kind: vscode.QuickPickItemKind.Separator },
+    {
+      label: `$(shield) ${mode.label}`,
+      description: 'Mode',
+      detail: mode.detail,
+      followUp: {
+        run: async () => {
+          await vscode.commands.executeCommand('agi-workforce.setAgentMode');
+          return undefined;
+        },
+        reopen: true,
+      },
+    },
+    ...(offersTools
+      ? [
+          {
+            label: `$(tools) ${disabled.length === 0 ? 'Every tool is on' : `Turned off: ${disabled.join(', ')}`}`,
+            description: 'Tools',
+            detail: 'Pick to choose which tools this session may use',
+            followUp: {
+              run: async () => {
+                await chooseSessionTools(adapter, session);
+                return undefined;
+              },
+              reopen: true,
+            },
+          },
+        ]
+      : []),
+    { label: 'Rules for every session', kind: vscode.QuickPickItemKind.Separator },
+    {
+      label: '$(add) Add a rule',
+      detail: 'Allow, ask first or block a website, an MCP server or tool, or a shell command',
+      followUp: { run: () => addPermissionRule(adapter), reopen: true },
+    },
+  ];
+  for (const rule of rules.value.rules) {
+    const decision = RULE_DECISIONS[rule.decision];
+    items.push({
+      label: `$(${decision.icon}) ${rule.label}`,
+      description: `${decision.label}, ${RULE_KINDS[rule.kind]}`,
+      actions: [
+        removeAction(async () =>
+          (await confirmRemoval(
+            'Remove this permission rule?',
+            `“${rule.label}” goes back to asking you first, in every session.`,
+          ))
+            ? adapter.call('savedPermissionsRemove', rule.id)
+            : undefined,
+        ),
+      ],
+    });
+  }
+  if (trusted !== undefined) {
+    items.push({ label: 'Trusted folders', kind: vscode.QuickPickItemKind.Separator });
+    if (trusted.status !== 'ok') {
+      items.push({ label: `$(warning) ${trusted.reason}`, alwaysShow: true });
+    } else if (trusted.value.folders.length === 0) {
+      items.push({ label: 'No folders are trusted yet', alwaysShow: true });
+    }
+    for (const folder of trusted.status === 'ok' ? trusted.value.folders : []) {
+      items.push({
+        label: `$(folder) ${folder.path}`,
+        description: 'The agent may read, edit and run commands here',
+        ...(folder.trustedAt === undefined || folder.trustedAt === null
+          ? {}
+          : { detail: `Trusted ${new Date(folder.trustedAt).toLocaleString()}` }),
+        actions: [
+          {
+            button: { iconPath: new vscode.ThemeIcon('trash'), tooltip: 'Stop trusting' },
+            followUp: {
+              run: async () => {
+                const choice = await vscode.window.showWarningMessage(
+                  `Stop trusting ${folder.path}?`,
+                  {
+                    modal: true,
+                    detail:
+                      'The AGI CLI asks again before it reads, edits or runs anything in this folder.',
+                  },
+                  'Stop Trusting',
+                );
+                return choice === 'Stop Trusting'
+                  ? adapter.call('trustedFoldersRevoke', folder.path)
+                  : undefined;
+              },
+              reopen: true,
+            },
+          },
+        ],
+      });
+    }
+  }
+  return { status: 'ok', value: items };
+}
+
+export async function manageSavedApprovals(
+  adapter: CliCapabilityAdapter,
+  session: SessionPermissions,
+): Promise<void> {
+  const [rules, tools, trust] = await Promise.all([
+    adapter.offers('permissionRules'),
+    adapter.offers('turnToolFilters'),
+    adapter.offers('trust'),
+  ]);
+  if (rules) {
+    return showManagedSurface(
+      {
+        title: 'AGI Workforce, Permissions',
+        placeholder: 'What the agent may do, in this session and in every session',
+        empty: t('savedApprovals.empty'),
+        load: () => loadPermissionsView(adapter, session, tools, trust),
+      },
+      'permissions',
+    );
+  }
   return showManagedSurface(
     {
       title: t('savedApprovals.title'),
@@ -794,5 +1078,68 @@ export async function manageSavedApprovals(adapter: CliCapabilityAdapter): Promi
       },
     },
     t('savedApprovals.noun'),
+  );
+}
+
+async function setProviderKey(
+  adapter: CliCapabilityAdapter,
+  provider: ProviderKeyList['providers'][number],
+): ReturnType<ManagedRun> {
+  const apiKey = await vscode.window.showInputBox({
+    title: `AGI Workforce, ${provider.label} API key`,
+    prompt: `Paste your ${provider.label} API key. Turns you send to ${provider.label} models are billed to it.`,
+    password: true,
+    ignoreFocusOut: true,
+    validateInput: (value) => (value.trim() === '' ? 'Paste a key.' : undefined),
+  });
+  if (apiKey === undefined) return undefined;
+  const result = await adapter.call<ProviderKeyList>(
+    'providerKeysSet',
+    provider.provider,
+    apiKey.trim(),
+  );
+  if (result.status === 'ok') {
+    void vscode.window.showInformationMessage(
+      `AGI Workforce: ${provider.label} models are now under Your providers in the model picker.`,
+    );
+  }
+  return result;
+}
+
+export async function manageProviderKeys(adapter: CliCapabilityAdapter): Promise<void> {
+  return showManagedSurface(
+    {
+      title: 'AGI Workforce, Provider API keys',
+      placeholder: 'Pick a provider to add or replace your own API key',
+      empty: 'The AGI CLI lists no providers that take a key',
+      load: async () => {
+        const result = await adapter.call<ProviderKeyList>('providerKeys');
+        if (result.status !== 'ok') return result;
+        return {
+          status: 'ok',
+          value: result.value.providers.map((provider) => ({
+            label: `$(${provider.configured ? 'key' : 'circle-large-outline'}) ${provider.label}`,
+            description: provider.configured ? 'Key saved' : 'No key',
+            detail: `Saved in ${result.value.storage}, or read from ${provider.envVar}`,
+            followUp: { run: () => setProviderKey(adapter, provider), reopen: true },
+            ...(provider.configured
+              ? {
+                  actions: [
+                    removeAction(async () =>
+                      (await confirmRemoval(
+                        `Remove your ${provider.label} API key?`,
+                        `It is deleted from ${result.value.storage}, and ${provider.label} models leave Your providers until you add a key again.`,
+                      ))
+                        ? adapter.call('providerKeysRemove', provider.provider)
+                        : undefined,
+                    ),
+                  ],
+                }
+              : {}),
+          })),
+        };
+      },
+    },
+    'provider API keys',
   );
 }

@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
+import { HEALTH_SPACE_SHARE_CONSTRAINT, isHealthSpaceViolation } from '@/lib/health-space';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   getOrganizationEntitlements,
@@ -351,6 +352,9 @@ export async function shareProject(
       throw createError.conflict(
         getSharedProjectLimitErrorMessage(entitlements.sharedProjectLimit),
       );
+    }
+    if (isHealthSpaceViolation(error, HEALTH_SPACE_SHARE_CONSTRAINT)) {
+      throw createError.conflict('Health cannot be shared.');
     }
     throw error;
   }

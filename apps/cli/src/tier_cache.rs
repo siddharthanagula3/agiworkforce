@@ -161,6 +161,11 @@ struct TierCacheEnvelope {
 pub const CLOUD_MODELS_CAPABILITY: &str = "canUseCloudModels";
 pub const IMAGES_CAPABILITY: &str = "canUseImages";
 pub const WEB_SEARCH_CAPABILITY: &str = "canUseWebSearch";
+pub const VOICE_CAPABILITY: &str = "canUseVoice";
+pub const CONNECTORS_CAPABILITY: &str = "canUseConnectors";
+pub const PLUGINS_CAPABILITY: &str = "canUsePlugins";
+pub const SKILLS_CAPABILITY: &str = "canUseSkills";
+pub const MARKETPLACE_CAPABILITY: &str = "canUseMarketplace";
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct CapabilityDocumentWire {
@@ -235,6 +240,24 @@ pub fn read_tier_cache() -> Option<CachedTier> {
 
 pub fn cached_capabilities() -> Option<CapabilityDocumentWire> {
     read_fresh_envelope()?.capability_handshake
+}
+
+pub fn capability_refusal(capability: &str, feature: &str) -> Option<String> {
+    let document = cached_capabilities()?;
+    let layer = document
+        .denied_by
+        .get(capability)
+        .and_then(|layers| layers.first())?;
+    let why = match layer.as_str() {
+        "tier" => " on your plan",
+        "settings" => {
+            ", because it is switched off in your account or workspace settings, or paused for now"
+        }
+        "surface" => " on this kind of device",
+        "model" => " with the current model",
+        _ => " on this account right now",
+    };
+    Some(format!("{feature} is not available{why}."))
 }
 
 pub fn capability_allowed(capability: &str) -> Option<bool> {
@@ -378,17 +401,17 @@ pub fn status_invalidates_tier(status: u16) -> bool {
 /// The web route nests subscription details under `plan`.
 /// We no longer read `credits`, the flat subscription model has no per-use credits.
 #[derive(Debug, Deserialize)]
-struct MeApiResponse {
-    plan: Option<MePlan>,
+pub(crate) struct MeApiResponse {
+    pub(crate) plan: Option<MePlan>,
     #[serde(default)]
-    capability_handshake: Option<CapabilityDocumentWire>,
+    pub(crate) capability_handshake: Option<CapabilityDocumentWire>,
 }
 
 #[derive(Debug, Deserialize)]
-struct MePlan {
+pub(crate) struct MePlan {
     /// e.g. `"free"`, `"basic"`, `"pro"`, `"max"`, `"max_15x"`,
     /// `"team"`, `"enterprise"`.
-    tier: Option<String>,
+    pub(crate) tier: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -510,9 +533,9 @@ fn tier_rank(t: &UserTier) -> u8 {
 
 /// Reconcile a freshly-fetched tier against a still-valid cached tier.
 ///
-/// `/api/me` fails OPEN to `plan.tier='free'` on transient DB/auth errors,
-/// so a freshly-fetched `Free` is non-authoritative when a higher tier is
-/// still valid in the cache.  Prefer the cached tier in that case.
+/// `/api/me` now errors instead of reporting `free` when a workspace member's
+/// seat lookup fails, but a lower fetched tier is still not trusted over a
+/// higher one the cache holds within its lifetime: prefer the cached tier.
 ///
 /// If the fetched tier is higher (or equal), use the fetched tier (cache refresh).
 pub fn reconcile_fetched_tier(fetched: &UserTier, cached: &UserTier) -> UserTier {
@@ -809,13 +832,22 @@ pub fn load_jwt() -> Option<String> {
         }
     }
 
-    // Legacy auth store, look for a `managed_cloud` or `agiworkforce` token.
-    let auth_path = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".agiworkforce")
+    // The legacy plaintext auth.toml moves into the credential store on first
+    // read and is then deleted, so the token stops living in the clear.
+    let auth_path = crate::config::CliConfig::config_dir()
+        .ok()?
         .join("auth.toml");
     let content = std::fs::read_to_string(&auth_path).ok()?;
-    jwt_from_legacy_auth_toml(&content)
+    let token = jwt_from_legacy_auth_toml(&content)?;
+    match crate::auth::AuthStore::adopt_legacy_token(&token) {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&auth_path);
+        }
+        Err(error) => {
+            tracing::warn!("[tier_cache] could not move auth.toml into the store: {error}")
+        }
+    }
+    Some(token)
 }
 
 // ---------------------------------------------------------------------------

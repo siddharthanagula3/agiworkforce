@@ -1,5 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { workspaceFileFixture } from './workspaceFileFixture';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   buildContextAttachment,
   resolveContextMenuState,
@@ -19,12 +24,20 @@ interface BuilderStub {
 }
 
 let builder: BuilderStub;
+let contextFixture: Awaited<ReturnType<typeof workspaceFileFixture>> | undefined;
+afterEach(async () => {
+  await contextFixture?.dispose();
+  contextFixture = undefined;
+});
 
 function stateFor(kind: string) {
   return resolveContextMenuState().then((items) => items.find((item) => item.kind === kind));
 }
 
-function setActiveEditor(selection: { empty: boolean; from: number; to: number } | null): void {
+function setActiveEditor(
+  selection: { empty: boolean; from: number; to: number } | null,
+  filePath = '/workspace/src/app.ts',
+): void {
   const editor =
     selection === null
       ? undefined
@@ -34,7 +47,7 @@ function setActiveEditor(selection: { empty: boolean; from: number; to: number }
             start: { line: selection.from - 1, character: 0 },
             end: { line: selection.to - 1, character: 0 },
           },
-          document: { uri: vscode.Uri.file('/workspace/src/app.ts') },
+          document: { uri: vscode.Uri.file(filePath) },
         };
   Object.defineProperty(vscode.window, 'activeTextEditor', {
     configurable: true,
@@ -68,22 +81,45 @@ describe('selection item', () => {
   });
 
   it('names the file and line span when a selection exists', async () => {
-    setActiveEditor({ empty: false, from: 12, to: 20 });
-    builder.getActiveFileContext.mockReturnValue({
-      relativePath: 'src/app.ts',
-      languageId: 'typescript',
-      selectedText: 'const a = 1;',
+    const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agi-selection-')));
+    await fs.mkdir(path.join(root, 'src'));
+    const file = path.join(root, 'src/app.ts');
+    await fs.writeFile(file, 'const a = 1;');
+    execFileSync('git', ['-c', 'init.templateDir=', 'init', '-q'], { cwd: root });
+    const original = vi.mocked(vscode.workspace.getWorkspaceFolder).getMockImplementation();
+    const originalFolders = vscode.workspace.workspaceFolders;
+    vscode.workspace.workspaceFolders = [
+      { name: 'controlled', index: 0, uri: vscode.Uri.file(root) },
+    ];
+    vi.mocked(vscode.workspace.getWorkspaceFolder).mockReturnValue({
+      name: 'controlled',
+      index: 0,
+      uri: vscode.Uri.file(root),
     });
+    try {
+      setActiveEditor({ empty: false, from: 12, to: 20 }, file);
+      builder.getActiveFileContext.mockReturnValue({
+        filePath: file,
+        relativePath: 'src/app.ts',
+        languageId: 'typescript',
+        selectedText: 'const a = 1;',
+      });
 
-    expect(await stateFor('selection')).toEqual({
-      kind: 'selection',
-      available: true,
-      detail: 'src/app.ts:12-20',
-    });
-    const attachment = await buildContextAttachment('selection');
-    expect(attachment?.name).toBe('src/app.ts:12-20');
-    expect(attachment?.text).toContain('const a = 1;');
-    expect(attachment?.text).toContain('lines 12-20');
+      expect(await stateFor('selection')).toEqual({
+        kind: 'selection',
+        available: true,
+        detail: 'src/app.ts:12-20',
+      });
+      const attachment = await buildContextAttachment('selection');
+      expect(attachment?.name).toBe('src/app.ts:12-20');
+      expect(attachment?.text).toContain('const a = 1;');
+      expect(attachment?.text).toContain('lines 12-20');
+    } finally {
+      vscode.workspace.workspaceFolders = originalFolders;
+      if (original !== undefined)
+        vi.mocked(vscode.workspace.getWorkspaceFolder).mockImplementation(original);
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 
   it('treats a caret with no span as no selection', async () => {
@@ -117,7 +153,10 @@ describe('open editors item', () => {
 
 describe('problems item', () => {
   it('says which file is clean when the active file reports nothing', async () => {
-    setActiveEditor({ empty: true, from: 1, to: 1 });
+    contextFixture = await workspaceFileFixture(['src/app.ts']);
+    const root = contextFixture.root;
+    vi.mocked(vscode.workspace.asRelativePath).mockReturnValue('src/app.ts');
+    setActiveEditor({ empty: true, from: 1, to: 1 }, path.join(root, 'src/app.ts'));
 
     expect(await stateFor('problems')).toEqual({
       kind: 'problems',
@@ -132,7 +171,10 @@ describe('problems item', () => {
   });
 
   it('carries each diagnostic with its position', async () => {
-    setActiveEditor({ empty: true, from: 1, to: 1 });
+    contextFixture = await workspaceFileFixture(['src/app.ts']);
+    const root = contextFixture.root;
+    vi.mocked(vscode.workspace.asRelativePath).mockReturnValue('src/app.ts');
+    setActiveEditor({ empty: true, from: 1, to: 1 }, path.join(root, 'src/app.ts'));
     builder.getDiagnosticsContext.mockReturnValue([
       { severity: 'error', message: 'bad argument', line: 31, column: 12, source: 'ts' },
     ]);

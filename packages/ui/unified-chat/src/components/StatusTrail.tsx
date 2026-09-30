@@ -147,7 +147,7 @@ export function StatusTrailContent({
   return (
     <div
       className={cn(
-        variant === 'absolute' ? 'absolute -top-20 left-0 right-0' : 'relative mb-4',
+        variant === 'absolute' ? 'absolute -top-20 start-0 end-0' : 'relative mb-4',
         'flex flex-col gap-2',
         'px-4 py-2',
         className,
@@ -211,7 +211,7 @@ export function FloatingStatusTrail({ className }: FloatingStatusTrailProps) {
       exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
       transition={{ duration: prefersReducedMotion ? 0.15 : 0.2 }}
       className={cn(
-        'fixed top-20 right-6 z-[var(--z-panel)]',
+        'fixed top-20 end-6 z-[var(--z-panel)]',
         'w-80 max-w-[calc(100vw-3rem)]',
         'flex flex-col gap-2',
         'p-4 rounded-xl',

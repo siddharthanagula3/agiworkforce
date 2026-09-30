@@ -1,6 +1,7 @@
 import { Shield } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   SettingsGroup,
   SettingsInfo,
@@ -11,18 +12,20 @@ import { openExternalUrl } from '@/lib/safeOpenURL';
 import { ExternalLink, FileText, EyeOff } from 'lucide-react-native';
 import { View } from 'react-native';
 import { ChineseHqProviderConsentGroup } from './ChineseHqProviderConsentGroup';
+import { ProductAnalyticsConsentGroup } from './ProductAnalyticsConsentGroup';
+import { ProviderTrainingOptOutGroup } from './ProviderTrainingOptOutGroup';
 import { UsOnlyRoutingGroup } from './UsOnlyRoutingGroup';
 
 const PRIVACY_ITEMS = [
   {
     key: 'no-training',
     label: 'Model training',
-    body: 'AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats in Privacy settings on the web.',
+    body: 'AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats below.',
   },
   {
     key: 'telemetry',
     label: 'Telemetry off by default',
-    body: 'Analytics are disabled by default. No third-party analytics or crash-reporting SDK (such as Sentry or PostHog) is bundled in the app; any diagnostics stay on your device.',
+    body: 'Product analytics stay off until you allow them below, and even then carry only event names such as a stopped response, never your messages. No third-party analytics or crash-reporting SDK (such as Sentry or PostHog) is bundled in the app; diagnostics leave the device only when you share them.',
   },
   {
     key: 'retention',
@@ -99,11 +102,19 @@ export default function CloudPrivacyScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <EyeOff size={15} color={colors.textSecondary} />
-              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                }}
+              >
                 {item.label}
               </Text>
             </View>
-            <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+            <Text
+              style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 18 }}
+            >
               {item.body}
             </Text>
           </View>
@@ -112,9 +123,10 @@ export default function CloudPrivacyScreen() {
 
       <View style={{ marginBottom: 18 }}>
         <Text
+          accessibilityRole="header"
           style={{
             color: colors.textMuted,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             fontWeight: '700',
             textTransform: 'uppercase',
             marginBottom: 8,
@@ -135,10 +147,22 @@ export default function CloudPrivacyScreen() {
                 borderBottomColor: colors.border,
               }}
             >
-              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                }}
+              >
                 {entry.feature}
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 18,
+                }}
+              >
                 {entry.where}
               </Text>
             </View>
@@ -147,7 +171,7 @@ export default function CloudPrivacyScreen() {
         <Text
           style={{
             color: colors.textMuted,
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 17,
             marginTop: 8,
             paddingHorizontal: 2,
@@ -158,9 +182,13 @@ export default function CloudPrivacyScreen() {
         </Text>
       </View>
 
+      <ProviderTrainingOptOutGroup />
+
       <UsOnlyRoutingGroup />
 
       <ChineseHqProviderConsentGroup />
+
+      <ProductAnalyticsConsentGroup />
 
       {/* External links */}
       <SettingsGroup>

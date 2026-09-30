@@ -260,7 +260,7 @@ export function OnboardingWizard() {
             <summary className="cursor-pointer text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               {EXPLANATION_SUMMARY}
             </summary>
-            <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-sm text-muted-foreground">
+            <ul className="mt-3 flex list-disc flex-col gap-2 ps-5 text-sm text-muted-foreground">
               {EXPLANATION_POINTS.map((point) => (
                 <li key={point}>{point}</li>
               ))}

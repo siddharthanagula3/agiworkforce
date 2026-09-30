@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ShieldAlert } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
@@ -36,7 +37,7 @@ export function PairingRiskDisclosure({ className }: { className?: string }) {
           you.
         </Text>
       </View>
-      <Pressable
+      <PressableBox
         onPress={() => void handleOpenSafetyGuide()}
         className="self-start mt-2 py-1"
         accessibilityRole="link"
@@ -45,7 +46,7 @@ export function PairingRiskDisclosure({ className }: { className?: string }) {
         <Text className="text-xs font-medium" style={{ color: colors.teal }}>
           Learn how to use this safely
         </Text>
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

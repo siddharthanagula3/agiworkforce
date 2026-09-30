@@ -12,6 +12,7 @@ import {
   CreateCustomConnectorRequestSchema,
   CreateCustomConnectorResponseSchema,
   DeleteCustomConnectorResponseSchema,
+  webDomainAllowed,
 } from '../connectors';
 
 describe('ConnectorConnectionSchema / ListConnectorsResponseSchema', () => {
@@ -378,5 +379,26 @@ describe('custom-connector contract (apps/web/app/api/connectors/custom/route.ts
 
   it('DeleteCustomConnectorResponseSchema matches the built-in disconnect shape', () => {
     expect(DeleteCustomConnectorResponseSchema.safeParse({ success: true }).success).toBe(true);
+  });
+});
+
+describe('webDomainAllowed', () => {
+  const blocked = { allow: [], deny: ['blocked.com'] };
+
+  it('holds a trailing-dot host to the same rule', () => {
+    expect(webDomainAllowed(blocked, 'https://blocked.com./page')).toBe(false);
+    expect(webDomainAllowed(blocked, 'https://www.blocked.com./page')).toBe(false);
+    expect(webDomainAllowed(blocked, 'https://docs.blocked.com/')).toBe(false);
+    expect(webDomainAllowed(blocked, 'https://notblocked.com/')).toBe(true);
+  });
+
+  it('refuses everything off an allow list, and a block beats an allow', () => {
+    const rules = { allow: ['example.com'], deny: ['private.example.com'] };
+    expect(webDomainAllowed(rules, 'https://example.com/')).toBe(true);
+    expect(webDomainAllowed(rules, 'https://private.example.com/')).toBe(false);
+    expect(webDomainAllowed(rules, 'https://other.org/')).toBe(false);
+    expect(webDomainAllowed(rules, 'not a url')).toBe(false);
+    expect(webDomainAllowed(blocked, 'not a url')).toBe(true);
+    expect(webDomainAllowed(null, 'https://anything.org/')).toBe(true);
   });
 });

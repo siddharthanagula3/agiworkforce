@@ -41,7 +41,7 @@ export function WebSearchCard({
         className={cn(
           'web-search-card__header',
           'flex items-center gap-2 select-none',
-          'h-7 px-1 rounded-md text-left w-full',
+          'h-7 px-1 rounded-md text-start w-full',
           'cursor-pointer hover:bg-[color:var(--bg-hover,rgba(0,0,0,0.04))]',
           'transition-colors duration-instant',
         )}
@@ -91,7 +91,7 @@ export function WebSearchCard({
               onClick={() => window.open(result.url, '_blank', 'noopener')}
               className={cn(
                 'web-search-card__result-row',
-                'w-full flex items-center gap-2 px-3 py-2 text-left',
+                'w-full flex items-center gap-2 px-3 py-2 text-start',
                 'border-b border-[color:var(--border-subtle,rgba(0,0,0,0.06))] last:border-b-0',
                 'hover:bg-[color:var(--bg-hover,rgba(0,0,0,0.04))] transition-colors duration-instant',
               )}
@@ -133,7 +133,7 @@ export function WebSearchCard({
             <button
               type="button"
               onClick={() => setShowAll(true)}
-              className="web-search-card__show-more w-full px-3 py-2 text-left text-caption text-[color:var(--chat-text-muted,#8b8680)] hover:text-[color:var(--chat-text-secondary,inherit)] transition-colors duration-instant"
+              className="web-search-card__show-more w-full px-3 py-2 text-start text-caption text-[color:var(--chat-text-muted,#8b8680)] hover:text-[color:var(--chat-text-secondary,inherit)] transition-colors duration-instant"
             >
               Show more ({hiddenCount} more)
             </button>

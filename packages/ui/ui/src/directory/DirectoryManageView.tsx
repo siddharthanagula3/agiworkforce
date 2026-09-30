@@ -38,7 +38,7 @@ import type {
 
 const CELL_CLASS = 'hidden px-3 py-2.5 text-sm text-muted-foreground sm:table-cell';
 const HEAD_CELL_CLASS =
-  'px-3 pb-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground';
+  'px-3 pb-2 text-start text-xs font-medium uppercase tracking-wide text-muted-foreground';
 const TRAILING_HEAD_CELL_CLASS = `hidden sm:table-cell ${HEAD_CELL_CLASS}`;
 
 function formatUpdated(value: string | undefined): string {
@@ -155,7 +155,7 @@ export function DirectoryManageView({
       <div className="relative">
         <Search
           aria-hidden
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
         />
         <input
           type="search"
@@ -164,7 +164,7 @@ export function DirectoryManageView({
           placeholder={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
           aria-label={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
           className={cn(
-            'h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground',
+            'h-10 w-full rounded-lg border border-border bg-background ps-9 pe-3 text-sm text-foreground placeholder:text-muted-foreground',
             DIRECTORY_FOCUS_RING,
           )}
         />
@@ -243,7 +243,7 @@ export function DirectoryManageView({
                       }}
                       aria-label={`${DIRECTORY_MANAGE_ROW_ACTION_PREFIX} ${row.name}`}
                       className={cn(
-                        'max-w-full truncate rounded-sm text-left text-sm font-medium text-foreground',
+                        'max-w-full truncate rounded-sm text-start text-sm font-medium text-foreground',
                         row.slashName ? 'font-mono' : '',
                         DIRECTORY_FOCUS_RING,
                       )}

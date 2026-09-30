@@ -69,16 +69,13 @@ nothing is left.
 
 - Done when: A user can add a git repository as a plugin marketplace and install plugins listed in it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Installs a single plugin from a git URL (agi plugin/marketplace install); a repository cannot be added as a marketplace to browse, and the name@marketplace registry resolver has no caller. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1428-1462`, `apps/cli/src/lib.rs:3984-4025`
 
 ## S54.08: Search and filters.
 
@@ -109,16 +106,13 @@ Code: `apps/cli/src/lib.rs:1428-1462`, `apps/cli/src/lib.rs:3984-4025`
 
 - Done when: A user can see details about a plugin's publisher.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | agi plugin list shows a signature label naming the trusted publisher when signed; no publisher detail. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:3613-3652`, `apps/cli/src/lib.rs:3617-3634`
 
 ## S54.13: Plugin detail.
 
@@ -160,17 +154,13 @@ Code: `apps/cli/src/lib.rs:3613-3652`, `apps/cli/src/lib.rs:3617-3634`
 
 - Done when: A plugin shows the agents it includes, and they are usable when installed.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Detail shows only a count/flag for agents; web installs only a plugin's skills, so its agents never run. | handler |
-| desktop | partial | Same as web: agents shown, never run. | handler |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/features/plugins/server/directory/install.ts:155-204`
 
 ## S54.17: Included commands.
 
@@ -250,16 +240,13 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/fea
 
 - Done when: A user can authenticate the connections a plugin bundles.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Plugin MCP servers join the MCP config and agi mcp login can authorize a remote server by name, but plugins have no sign-in step of their own. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:4920-4920`, `apps/cli/src/lib.rs:1336-1350`
 
 ## S54.24: Enable/disable.
 
@@ -288,16 +275,13 @@ Code: `apps/cli/src/lib.rs:4920-4920`, `apps/cli/src/lib.rs:1336-1350`
 
 - Done when: A user can pin a plugin to a specific version.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | --integrity sha256:<hex> pins the content on install, but there is no way to choose a version, and marketplace update moves every git plugin forward. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1293-1326`, `apps/cli/src/lib.rs:3984-4025`
 
 ## S54.27: Customize installed plugin.
 
@@ -306,14 +290,13 @@ Code: `apps/cli/src/lib.rs:1293-1326`, `apps/cli/src/lib.rs:3984-4025`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/routines-voice 71dda8e8f: Customize makes an installed registry, directory, uploaded or marketplace plugin into your own editable copy with its skills and bundled files and opens it for editing; it sits behind the skill-authoring gate and stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
-| desktop | partial | partials/routines-voice 71dda8e8f: Customize makes an installed registry, directory, uploaded or marketplace plugin into your own editable copy with its skills and bundled files and opens it for editing; it sits behind the skill-authoring gate and stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Installed plugins are local folders a user can edit by hand; the CLI offers no customization command. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/web/app/api/plugins/customize/route.ts:25-25`, `packages/ui/ui/src/directory/DirectoryPanel.tsx:557-557`, `packages/ui/ui/src/directory/PluginDetailView.tsx:694-694`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S54.28: Fork plugin.
 
@@ -322,14 +305,14 @@ Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/routines-voice 71dda8e8f: forking copies the plugin into a created plugin you own, turns the original off so chats use your copy, and reopens the existing copy on a second request; behind AGI_USER_SKILL_AUTHORING until the lead switches it on | flag-off |
-| desktop | partial | partials/routines-voice 71dda8e8f: forking copies the plugin into a created plugin you own, turns the original off so chats use your copy, and reopens the existing copy on a second request; behind AGI_USER_SKILL_AUTHORING until the lead switches it on | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/web/features/plugins/server/directory/customize.ts:198-198`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S54.29: Uninstall.
 
@@ -401,14 +384,14 @@ Code: `apps/web/features/plugins/server/directory/customize.ts:154-154`, `apps/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/routines-voice 71dda8e8f: asking to build or change a plugin or skill gives the model a draft_plugin tool whose validated draft renders as a card with Save plugin and Save as a skill; offered only where skill authoring is on, so it stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
-| desktop | partial | partials/routines-voice 71dda8e8f: asking to build or change a plugin or skill gives the model a draft_plugin tool whose validated draft renders as a card with Save plugin and Save as a skill; offered only where skill authoring is on, so it stays off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/server/tools/plugin-draft-tool.ts:101-101`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4332-4332`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:492-492`, `apps/web/features/chat/components/PluginDraftCard.tsx:35-35`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S54.36: Submission and review workflow.
 

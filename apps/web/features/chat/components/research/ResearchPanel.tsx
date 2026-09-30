@@ -362,10 +362,10 @@ export function ResearchPanel({
           detached
             ? 'flex min-h-0 flex-1 flex-col bg-card'
             : cn(
-                'flex flex-col border-l border-border/30',
+                'flex flex-col border-s border-border/30',
                 'bg-card/95 backdrop-blur-xl',
                 // Mobile: full-screen overlay
-                'fixed inset-y-0 right-0 z-[var(--z-panel)] w-full',
+                'fixed inset-y-0 end-0 z-[var(--z-panel)] w-full',
                 'sm:relative sm:inset-auto sm:z-auto sm:w-[360px] sm:min-w-[280px] sm:shrink',
                 // Slide-in animation
                 'animate-in slide-in-from-right duration-moved',
@@ -544,7 +544,7 @@ export function ResearchToggleButton({
     >
       <Globe className="h-4 w-4" />
       {count > 0 && !panelOpen && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground">
+        <span className="absolute -end-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground">
           {count}
         </span>
       )}
@@ -609,7 +609,7 @@ export function SourcesControl({ messageId, cited, more, query }: SourcesControl
     <button
       type="button"
       onClick={() => openPanel(activeConversationId, messageId, cited, more, query)}
-      className="inline-flex items-center gap-2 rounded-full border border-border/30 bg-muted/20 py-1.5 pl-1.5 pr-3 text-[13px] text-muted-foreground transition-colors hover:border-border/60 hover:bg-muted/50 hover:text-foreground"
+      className="inline-flex items-center gap-2 rounded-full border border-border/30 bg-muted/20 py-1.5 ps-1.5 pe-3 text-[13px] text-muted-foreground transition-colors hover:border-border/60 hover:bg-muted/50 hover:text-foreground"
       aria-label={translateUiPlural('chat', 'counts.viewSources', total, {
         one: 'View {{count}} source',
         other: 'View {{count}} sources',

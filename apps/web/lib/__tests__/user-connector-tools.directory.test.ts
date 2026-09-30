@@ -17,6 +17,9 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/lib/github-app', () => ({
+  GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
+  issueCommentPostedSince: vi.fn(() => false),
+  pullRequestReviewPostedSince: vi.fn(() => false),
   getInstallationAccessToken: vi.fn(),
   getPrDiff: vi.fn(),
   isGitHubAppConfigured: () => false,
@@ -42,6 +45,7 @@ vi.mock('@agiworkforce/mcp', () => ({
 }));
 
 vi.mock('@/lib/connectors/oauth-registry', () => ({
+  isConnectorOAuthConfigured: vi.fn(() => true),
   getConnectorOAuthProvider: () => null,
   getOAuthConfiguredConnectorIds: () => new Set<string>(),
   isConnectorOAuthSupported: () => false,
@@ -55,7 +59,9 @@ vi.mock('@/lib/connectors/oauth-access', () => ({
 }));
 
 const mockGrantSummaries = vi.fn();
-vi.mock('@/lib/connectors/oauth-store', () => ({
+vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/oauth-store')>()),
+  upsertConnectorOAuthGrant: vi.fn(async () => undefined),
   getUserConnectorOAuthGrantSummaries: (...a: unknown[]) => mockGrantSummaries(...a),
   ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
   getConnectorOAuthGrant: vi.fn(),

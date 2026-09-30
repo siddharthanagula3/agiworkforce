@@ -6,124 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S106.01: Assistant inside Word.
-
-- Done when: An assistant pane runs inside Word and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Word add-in. On Word on the web the Chrome in-page or side panel treats the document as a generic web page: no Word-specific guidance, it reads only visible page text, and it cannot read or change the document through the Word API. Desktop Word gets nothing. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
-
-## S106.02: Assistant inside Excel.
-
-- Done when: An assistant pane runs inside Excel and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Excel add-in. On Excel on the web the Chrome in-page or side panel treats the document as a generic web page: no Excel-specific guidance, it reads only visible page text, and it cannot read or change the document through the Excel API. Desktop Excel gets nothing. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
-
-## S106.03: Assistant inside PowerPoint.
-
-- Done when: An assistant pane runs inside PowerPoint and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| chrome | partial | No PowerPoint add-in. On PowerPoint on the web the Chrome in-page or side panel treats the document as a generic web page: no PowerPoint-specific guidance, it reads only visible page text, and it cannot read or change the document through the PowerPoint API. Desktop PowerPoint gets nothing. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
-
-## S106.04: Assistant inside Outlook.
-
-- Done when: An assistant pane runs inside Outlook and can read and change the open message through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Outlook add-in. On Outlook on the web the Chrome in-page or side panel treats the document as a generic web page: no Outlook-specific guidance, it reads only visible page text, and it cannot read or change the document through the Outlook API. Desktop Outlook gets nothing. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
-
-## S106.05: Assistant inside Google Docs.
-
-- Done when: An assistant pane runs inside Google Docs and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Workspace add-on. The Chrome panel on Google Docs gets Google Docs guidance and reads visible page text only; it cannot read or edit the file through the Google API. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
-
-## S106.06: Assistant inside Google Sheets.
-
-- Done when: An assistant pane runs inside Google Sheets and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Workspace add-on. Google Sheets lives on docs.google.com, so the Chrome panel gets the Google Docs guidance (wrong editor selectors); it reads visible page text only and cannot use the Google Sheets API. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
-
-## S106.07: Assistant inside Google Slides.
-
-- Done when: An assistant pane runs inside Google Slides and can read and change the open document through the host.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Workspace add-on. Google Slides lives on docs.google.com, so the Chrome panel gets the Google Docs guidance (wrong editor selectors); it reads visible page text only and cannot use the Google Slides API. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
-
-## S106.08: Host-document selection context.
-
-- Done when: The in-host assistant sees what the user has selected in the host document (text, cells, slide objects) as context.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | partial | Selected text can be shared from a host app into AGI through the share sheet, then sent as a draft; the assistant never reads the live host selection or ranges. | ui, handler |
-| chrome | partial | Right-click "Ask AGI" hands selected page text to the side panel; host editors that draw their own selection or menu (Docs, Sheets, Excel on the web) are not read through a host API, and cells or slide objects are not captured. | handler |
-
-Code: `apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift:120-140`, `apps/mobile/app/_layout.tsx:494-505`, `apps/mobile/src/features/share-preview/index.tsx:9-22`, `apps/extension/src/background.ts:4526-4529`
-
-## S106.12: Shared conversation context across supported host applications.
-
-- Done when: One assistant conversation carries across the supported host apps (for example, started in Word and continued in Excel) with its context.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| chrome | partial | Only as the same Chrome side-panel chat that stays open while the user switches between web host tabs (each turn gets the current site's guidance); no host add-ins share a session. | ui |
-
-Code: `apps/extension/src/side_panel.ts:10879-10887`, `apps/extension/src/background.ts:4930-4937`
-
 ## S106.13: Slack direct-message assistant.
 
 - Done when: A user can DM the product's Slack bot and gets the assistant's reply in that DM.
@@ -131,8 +13,8 @@ Code: `apps/extension/src/side_panel.ts:10879-10887`, `apps/extension/src/backgr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the product Slack app installs per Slack workspace from Settings > Slack (OAuth v2, bot token sealed, migration 0330); an unlinked Slack user who DMs it gets a single-use link to /slack/link; a linked user's DM is deduplicated on the event id, rate limited per workspace an | owner |
-| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the product Slack app installs per Slack workspace from Settings > Slack (OAuth v2, bot token sealed, migration 0330); an unlinked Slack user who DMs it gets a single-use link to /slack/link; a linked user's DM is deduplicated on the event id, rate limited per workspace an | owner |
+| web | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
+| desktop | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
 Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhooks/slack/route.ts:89-89`, `apps/web/lib/slack/slack-events.ts:67-67`, `apps/web/lib/slack/slack-assistant.ts:276-276`
 
@@ -143,23 +25,10 @@ Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhoo
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
-| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
+| web | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
+| desktop | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
 Code: `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/app/api/webhooks/slack/route.ts:89-89`, `apps/web/lib/slack/slack-events.ts:68-68`, `apps/web/lib/slack/slack-config.ts:14-14`
-
-## S106.15: Teams assistant.
-
-- Done when: Users can talk to the assistant inside Microsoft Teams (bot or app) and get answers there.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| chrome | partial | No Teams app or bot. The Chrome panel beside Teams on the web gets Teams guidance and reads visible page text; it cannot read or post Teams messages through Teams. | ui, handler |
-
-Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/setup.ts:55-70`, `apps/extension/src/features/content/in-page-panel/panel.ts:335-342`, `apps/extension/src/background.ts:3833-3840`
 
 ## S106.16: Mention-to-task handoff.
 
@@ -168,8 +37,8 @@ Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/s
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
-| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
+| web | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
+| desktop | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
 Code: `apps/web/lib/slack/slack-assistant.ts:340-340`, `apps/web/lib/slack/slack-assistant.ts:379-379`, `apps/web/lib/slack/slack-assistant.ts:380-380`, `apps/web/lib/slack/slack-assistant.ts:146-146`
 
@@ -180,21 +49,7 @@ Code: `apps/web/lib/slack/slack-assistant.ts:340-340`, `apps/web/lib/slack/slack
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the Slack app installs with bot scopes only and stores only the bot token, so every Slack post is made by the app's own bot identity (the APP badge), never as the person; channel answers carry a line naming the person they answer for and the model, as Claude in Slack does. | owner |
-| desktop | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md); built at partials/slack d1f8520cef, migration 0330 live. partials/slack d1f8520cef: the Slack app installs with bot scopes only and stores only the bot token, so every Slack post is made by the app's own bot identity (the APP badge), never as the person; channel answers carry a line naming the person they answer for and the model, as Claude in Slack does. | owner |
+| web | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
+| desktop | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
 Code: `apps/web/lib/slack/slack-api.ts:108-108`, `apps/web/lib/slack/slack-api.ts:109-109`, `apps/web/lib/slack/slack-installations.ts:87-87`, `apps/web/lib/slack/slack-assistant.ts:134-134`
-
-## S106.25: Native-host and standalone-app handoff.
-
-- Done when: A session started in a host add-in can be opened in the standalone app (and back) with its context.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | partial | Host apps can share text, links or files into AGI through the share sheet (review, then a new-chat draft); there is no session handoff back to the host. | handler |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift:120-140`, `apps/mobile/app/_layout.tsx:494-505`, `apps/mobile/src/features/share-preview/index.tsx:9-22`

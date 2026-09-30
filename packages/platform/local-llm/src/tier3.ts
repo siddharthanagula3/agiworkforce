@@ -61,6 +61,10 @@ export function _setLlamaModuleForTesting(initLlama: InitLlamaFn | null): void {
   _llamaModuleOverride = initLlama;
 }
 
+export function tier3LoadedModelPath(): string | null {
+  return _llamaContext ? _loadedModelPath : null;
+}
+
 export function tier3IsMultimodalReady(): boolean {
   return Boolean(_llamaContext) && _multimodalReady;
 }

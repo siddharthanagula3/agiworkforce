@@ -1,5 +1,6 @@
 import { useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
@@ -10,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { BILLING_PLAN_PRICING, isBillingPlanTier } from '@agiworkforce/types';
 import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
@@ -45,6 +47,8 @@ export interface PaywallSheetProps {
   recoveryAction?: PaywallRecoveryAction;
   onPrimaryAction?: () => void | Promise<void>;
   primaryActionUnavailableMessage?: string;
+  resetLabel?: string | null;
+  onChooseStandardModel?: () => void;
   onDismiss: () => void;
 }
 
@@ -57,6 +61,8 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       recoveryAction = 'upgrade',
       onPrimaryAction,
       primaryActionUnavailableMessage,
+      resetLabel,
+      onChooseStandardModel,
       onDismiss,
     },
     forwardedRef,
@@ -124,6 +130,11 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       }
       router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
     }, [onPrimaryAction, router, salesTier]);
+
+    const handleChooseStandardModel = useCallback(() => {
+      sheetRef.current?.close();
+      onChooseStandardModel?.();
+    }, [onChooseStandardModel]);
 
     const showPlanComparison = recoveryAction === 'upgrade' || recoveryAction === 'subscribe';
     const handleComparePlans = useCallback(() => {
@@ -195,7 +206,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               </View>
               <Text
                 style={{
-                  fontSize: 17,
+                  fontSize: typeScale.headline,
                   fontWeight: '600',
                   color: colors.textPrimary,
                   flex: 1,
@@ -207,7 +218,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             </View>
 
             {/* Close button, 44pt touch target per iOS HIG */}
-            <Pressable
+            <PressableBox
               onPress={handleDismiss}
               style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
               accessibilityLabel="Dismiss"
@@ -215,33 +226,42 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <X size={20} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           {/* Body copy */}
           <Text
             style={{
-              fontSize: 15,
+              fontSize: typeScale.body,
               color: colors.textSecondary,
               lineHeight: 22,
-              marginBottom: reason ? 8 : 20,
+              marginBottom: reason || resetLabel ? 8 : 20,
             }}
           >
             {body}
           </Text>
 
-          {/* Server-supplied reason (e.g. "10/10 images used this month") */}
-          {reason ? (
-            <Text
-              style={{
-                fontSize: 13,
-                color: colors.textMuted,
-                lineHeight: 20,
-                marginBottom: 20,
-              }}
-            >
-              {reason}
-            </Text>
+          {reason || resetLabel ? (
+            <View style={{ gap: 4, marginBottom: 20 }}>
+              {reason ? (
+                <Text
+                  style={{ fontSize: typeScale.footnote, color: colors.textMuted, lineHeight: 20 }}
+                >
+                  {reason}
+                </Text>
+              ) : null}
+              {resetLabel ? (
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    color: colors.textSecondary,
+                    lineHeight: 20,
+                  }}
+                >
+                  {resetLabel}
+                </Text>
+              ) : null}
+            </View>
           ) : null}
 
           {/* CTA follows the server-derived recovery action. */}
@@ -256,7 +276,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
           ) : (
             <Text
               style={{
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 color: colors.textMuted,
                 lineHeight: 20,
                 marginBottom: 4,
@@ -265,8 +285,31 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               {primaryActionUnavailableMessage}
             </Text>
           )}
+          {onChooseStandardModel ? (
+            <PressableBox
+              onPress={handleChooseStandardModel}
+              style={{
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 8,
+              }}
+              accessibilityLabel="Choose a standard model"
+              accessibilityRole="button"
+            >
+              <Text
+                style={{
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
+              >
+                Choose a standard model
+              </Text>
+            </PressableBox>
+          ) : null}
           {showPlanComparison ? (
-            <Pressable
+            <PressableBox
               onPress={handleComparePlans}
               style={{
                 minHeight: 44,
@@ -277,12 +320,18 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               accessibilityLabel="Compare plans"
               accessibilityRole="button"
             >
-              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+              <Text
+                style={{
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
+              >
                 Compare plans
               </Text>
-            </Pressable>
+            </PressableBox>
           ) : null}
-          <Pressable
+          <PressableBox
             onPress={handleDismiss}
             style={{
               minHeight: 44,
@@ -293,8 +342,8 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             accessibilityLabel="Try later"
             accessibilityRole="button"
           >
-            <Text style={{ fontSize: 14, color: colors.textMuted }}>Try later</Text>
-          </Pressable>
+            <Text style={{ fontSize: typeScale.subhead, color: colors.textMuted }}>Try later</Text>
+          </PressableBox>
         </BottomSheetView>
       </BottomSheet>
     );

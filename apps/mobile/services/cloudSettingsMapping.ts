@@ -16,6 +16,7 @@ import {
   type PreferredLength,
   type TechnicalLevel,
 } from '@agiworkforce/types';
+import { speechLanguageFromLegacy } from '@/src/features/voice/speechLanguage';
 
 function isPreferredLength(value: unknown): value is PreferredLength {
   return (PREFERRED_LENGTHS as readonly unknown[]).includes(value);
@@ -60,6 +61,7 @@ export interface CloudNotifications {
 export interface CloudLanguage {
   locale?: string;
   speechLocale?: string;
+  speechLanguage?: string;
 }
 
 export interface CloudChat {
@@ -154,7 +156,7 @@ export function toCloudSettings(
       enabled: notificationsEnabled,
     },
     language: {
-      speechLocale: speechLanguage,
+      speechLanguage,
     },
     ...(memoryPolicyInitialized
       ? {
@@ -219,7 +221,10 @@ export function applyCloudSettings(partial: CloudSettings): void {
   if (partial.general) {
     const { preferredName, workDescription, aboutYou, instructions } = partial.general;
     const patch: Partial<Personalization> = {};
-    if (preferredName !== undefined) patch.nickname = preferredName;
+    if (preferredName !== undefined) {
+      patch.nickname = preferredName;
+      patch.nameOptedOut = preferredName.trim() === '';
+    }
     if (workDescription !== undefined) patch.occupation = workDescription;
     if (typeof aboutYou === 'string') patch.aboutYou = aboutYou;
     if (instructions !== undefined) patch.instructions = instructions;
@@ -230,8 +235,10 @@ export function applyCloudSettings(partial: CloudSettings): void {
     store.setNotificationsEnabled(partial.notifications.enabled);
   }
 
-  if (partial.language?.speechLocale !== undefined) {
-    store.setSpeechLanguage(partial.language.speechLocale);
+  if (partial.language?.speechLanguage !== undefined) {
+    store.setSpeechLanguage(partial.language.speechLanguage);
+  } else if (partial.language?.speechLocale !== undefined) {
+    store.setSpeechLanguage(speechLanguageFromLegacy(partial.language.speechLocale));
   }
 
   if (partial.capabilities?.memory !== undefined) {

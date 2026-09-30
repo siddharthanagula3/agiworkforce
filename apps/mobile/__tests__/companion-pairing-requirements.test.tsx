@@ -45,6 +45,8 @@ jest.mock('@/lib/mmkv', () => ({
   rehydrateWhenMmkvReady: jest.fn(),
 }));
 
+jest.mock('@clerk/expo', () => ({ useUser: () => ({ user: null }) }));
+
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('@/src/ui/theme/tokens');
   return {
@@ -60,6 +62,7 @@ import {
   DisconnectedView,
 } from '../src/features/companion/components/ConnectionStateViews';
 import { CompanionDemoWalkthrough } from '../src/features/companion/components/CompanionDemoWalkthrough';
+import { DesktopSetupChecklistView } from '../src/features/companion/components/DesktopSetupChecklistView';
 
 describe('Companion pairing requirements', () => {
   it('states the real Desktop mode and short-lived-code trust boundary', () => {
@@ -68,7 +71,9 @@ describe('Companion pairing requirements', () => {
     expect(screen.getByText('Desktop setup required')).toBeTruthy();
     expect(screen.getByText(/Sign in on Desktop and switch to Managed Cloud/)).toBeTruthy();
     expect(screen.getByText(/apps do not compare account identities/)).toBeTruthy();
-    expect(screen.getByText('Go to Settings and select "Connections"')).toBeTruthy();
+    expect(
+      screen.getByText('Go to Settings, select Capabilities and choose "Pair a phone"'),
+    ).toBeTruthy();
     expect(screen.queryByText(/same AGI account/i)).toBeNull();
   });
 
@@ -85,5 +90,12 @@ describe('Companion pairing requirements', () => {
     expect(screen.getByText(/Settings > Connections/)).toBeTruthy();
     expect(screen.getByText(/Account identities are not compared/)).toBeTruthy();
     expect(screen.getByText(/do not need the same Wi-Fi/)).toBeTruthy();
+  });
+
+  it('does not require matching account identities during initial setup', () => {
+    const screen = render(<DesktopSetupChecklistView />);
+
+    expect(screen.getByText(/short-lived pairing code authorizes this phone/)).toBeTruthy();
+    expect(screen.queryByText(/account you use here|same account/i)).toBeNull();
   });
 });

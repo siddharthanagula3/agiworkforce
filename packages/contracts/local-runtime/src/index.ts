@@ -54,11 +54,13 @@ export {
   DEVELOPER_FILE_CHANGE_LABELS,
   DEVELOPER_FILE_CHANGES,
   DEVELOPER_SESSION_COMMANDS,
+  DEVELOPER_SESSION_EVENT_MESSAGE_KINDS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
   DEVELOPER_TURN_OUTCOMES,
   WORKING_TREE_CHANGE_STATES,
   isDeveloperSessionCommand,
+  messageKindForDeveloperSessionEvent,
   parseWorkingTreeStatus,
 } from './developer-sessions';
 export type {
@@ -266,6 +268,7 @@ export type { ContainmentOptions, PathPlatform } from './path-safety';
 export {
   BROWSER_STEP_COMMAND,
   DEVICE_HOST_HEADER,
+  DEVICE_BROWSER_CONSOLE_LEVELS,
   DEVICE_KEY_MODIFIERS,
   DEVICE_MOUSE_BUTTONS,
   DEVICE_NAMED_KEYS,
@@ -274,6 +277,7 @@ export {
   DEVICE_STEP_TOOLS,
   DEVICE_STEP_TTL_MINUTES,
   DeviceStepRefused,
+  PHONE_STEP_COMMAND,
   MAX_DEVICE_CLICK_COUNT,
   MAX_DEVICE_COORDINATE,
   MAX_DEVICE_DISPLAY_ID,
@@ -285,6 +289,7 @@ export {
   MAX_DEVICE_STEP_ROOTS,
   MAX_DEVICE_TYPE_LENGTH,
   MAX_DEVICE_WAIT_MS,
+  declarationForHost,
   describeDeviceDisplays,
   describeDeviceStep,
   deviceStepBrowserCommand,
@@ -300,6 +305,9 @@ export {
 } from './device-steps';
 export type {
   DesktopHostDeclaration,
+  DeviceBrowserConsoleLevel,
+  DeviceHostKind,
+  DeviceStepCapability,
   DeviceKeyModifier,
   DeviceMouseButton,
   DeviceNamedKey,
@@ -366,5 +374,6 @@ export {
   DESKTOP_SIGN_IN_PATH,
   desktopSignInLink,
   isDesktopSignInLink,
+  readDesktopSignInChallenge,
   readDesktopSignInCode,
 } from './desktop-sign-in';

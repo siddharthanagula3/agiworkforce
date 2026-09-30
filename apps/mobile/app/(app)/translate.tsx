@@ -16,6 +16,7 @@ import { ArrowLeft, ArrowLeftRight, Check, ChevronDown, Copy, X } from 'lucide-r
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   translate,
   translateBackendLabel,
@@ -105,12 +106,13 @@ export default function TranslateScreen() {
       if (!abortRef.current) {
         setState({ isTranslating: false, result, errorMessage: null, tokensAccum: '' });
       }
-    } catch (err) {
+    } catch {
       if (!abortRef.current) {
         setState({
           isTranslating: false,
           result: null,
-          errorMessage: err instanceof Error ? err.message : 'Translation failed',
+          errorMessage:
+            'Translation could not finish on this device. Check your local model and try again.',
           tokensAccum: '',
         });
       }
@@ -174,10 +176,19 @@ export default function TranslateScreen() {
           >
             <ArrowLeft size={20} color={colors.textSecondary} />
           </Pressable>
-          <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>
+          <Text
+            style={{
+              flex: 1,
+              fontSize: typeScale.body,
+              fontWeight: '600',
+              color: colors.textPrimary,
+            }}
+          >
             Translate
           </Text>
-          <Text style={{ fontSize: 11, color: colors.textMuted }}>On-device · Private</Text>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+            On-device · Private
+          </Text>
         </View>
 
         {/* Language selector bar */}
@@ -237,7 +248,7 @@ export default function TranslateScreen() {
               minHeight: 140,
             }}
           >
-            <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8 }}>
+            <Text style={{ fontSize: typeScale.caption, color: colors.textMuted, marginBottom: 8 }}>
               {sourceLangDef?.label ?? sourceLang}
             </Text>
             <TextInput
@@ -250,7 +261,7 @@ export default function TranslateScreen() {
               placeholder="Enter text to translate..."
               placeholderTextColor={colors.textMuted}
               style={{
-                fontSize: 16,
+                fontSize: typeScale.callout,
                 color: colors.textPrimary,
                 minHeight: 80,
                 textAlignVertical: 'top',
@@ -298,7 +309,7 @@ export default function TranslateScreen() {
             ) : (
               <Text
                 style={{
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   fontWeight: '600',
                   color: canTranslate ? colors.background : colors.textMuted,
                 }}
@@ -321,7 +332,7 @@ export default function TranslateScreen() {
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 11, color: colors.textMuted, flex: 1 }}>
+                <Text style={{ fontSize: typeScale.caption, color: colors.textMuted, flex: 1 }}>
                   {targetLangDef?.label ?? targetLang}
                 </Text>
                 {displayedTranslation.length > 0 && (
@@ -345,12 +356,14 @@ export default function TranslateScreen() {
                     paddingVertical: 8,
                   }}
                 >
-                  <Text style={{ fontSize: 13, color: '#f87171' }}>{state.errorMessage}</Text>
+                  <Text style={{ fontSize: typeScale.footnote, color: '#f87171' }}>
+                    {state.errorMessage}
+                  </Text>
                 </View>
               ) : (
                 <Text
                   style={{
-                    fontSize: 16,
+                    fontSize: typeScale.callout,
                     color: colors.textPrimary,
                     lineHeight: 24,
                     minHeight: 80,
@@ -371,7 +384,9 @@ export default function TranslateScreen() {
                   }}
                 >
                   <ActivityIndicator size="small" color={colors.teal} />
-                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Translating...</Text>
+                  <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+                    Translating...
+                  </Text>
                 </View>
               )}
 
@@ -387,7 +402,9 @@ export default function TranslateScreen() {
                     borderTopColor: colors.border,
                   }}
                 >
-                  <Text style={{ fontSize: 11, color: colors.textMuted }}>{backendLabel}</Text>
+                  <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+                    {backendLabel}
+                  </Text>
                 </View>
               )}
             </View>
@@ -432,7 +449,14 @@ export default function TranslateScreen() {
                 borderBottomColor: colors.border,
               }}
             >
-              <Text style={{ flex: 1, fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: typeScale.callout,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
+              >
                 {langPickerFor === 'source' ? 'Source Language' : 'Target Language'}
               </Text>
               <Pressable
@@ -472,14 +496,20 @@ export default function TranslateScreen() {
                     <View style={{ flex: 1 }}>
                       <Text
                         style={{
-                          fontSize: 15,
+                          fontSize: typeScale.body,
                           color: isActive ? colors.teal : colors.textPrimary,
                           fontWeight: isActive ? '600' : '400',
                         }}
                       >
                         {item.label}
                       </Text>
-                      <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
+                      <Text
+                        style={{
+                          fontSize: typeScale.caption,
+                          color: colors.textMuted,
+                          marginTop: 1,
+                        }}
+                      >
                         {item.nativeLabel}
                       </Text>
                     </View>
@@ -522,10 +552,14 @@ function LanguageButton({ lang, onPress, colors }: LanguageButtonProps) {
       accessibilityRole="button"
     >
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
+        <Text
+          style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.textPrimary }}
+        >
           {lang?.label ?? ', '}
         </Text>
-        <Text style={{ fontSize: 11, color: colors.textMuted }}>{lang?.nativeLabel ?? ''}</Text>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+          {lang?.nativeLabel ?? ''}
+        </Text>
       </View>
       <ChevronDown size={14} color={colors.textMuted} />
     </Pressable>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { SUPPORT_MAX_QUESTION_LENGTH } from '../lib/contract';
+import { SUPPORT_MAX_QUESTION_LENGTH } from '@agiworkforce/cloud-contracts/support';
 import styles from './SupportWidget.module.css';
 
 export function SupportComposer({

@@ -289,7 +289,7 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
                 </button>
               </div>
             ) : tools.length > 0 ? (
-              <div className="max-h-80 space-y-1.5 overflow-y-auto pr-0.5">
+              <div className="max-h-80 space-y-1.5 overflow-y-auto pe-0.5">
                 {error ? (
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                     <span>{DISCOVERY_DEGRADED_COPY}</span>

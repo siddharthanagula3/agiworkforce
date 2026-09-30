@@ -181,7 +181,7 @@ export function SkillEditorDialog({
               />
             </div>
             {importErrors.length > 0 ? (
-              <ul role="alert" className="list-disc space-y-1 pl-4 text-xs text-danger">
+              <ul role="alert" className="list-disc space-y-1 ps-4 text-xs text-danger">
                 {importErrors.map((error) => (
                   <li key={error}>{error}</li>
                 ))}
@@ -234,7 +234,7 @@ export function SkillEditorDialog({
               ) : null}
             </div>
             {showValidation ? (
-              <ul role="alert" className="list-disc space-y-1 pl-4 text-xs text-danger">
+              <ul role="alert" className="list-disc space-y-1 ps-4 text-xs text-danger">
                 {validation.errors.map((error) => (
                   <li key={error}>{error}</li>
                 ))}

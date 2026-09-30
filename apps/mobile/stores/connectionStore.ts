@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { SignalingClient, endsPairing } from '@agiworkforce/utils/signaling';
-import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
+import { isSecureRelayUrl, type SignalingEvent, type SignalKind } from '@agiworkforce/types';
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
 import * as Crypto from 'expo-crypto';
 import Constants from 'expo-constants';
@@ -43,14 +43,17 @@ import {
   ingestRemoteCodeControl,
   useRemoteCodeStore,
 } from '@/src/features/companion/remote-code/store';
-import type {
-  ControlReceiptEvent,
-  ControlReceiptOutcome,
-  DispatchTaskLifecycleStatus,
-  DispatchTaskStatusEvent,
+import {
+  parseDispatchTaskPendingSteps,
+  parseDispatchTaskReplyError,
+  type ControlReceiptEvent,
+  type ControlReceiptOutcome,
+  type DispatchTaskLifecycleStatus,
+  type DispatchTaskStatusEvent,
 } from '@agiworkforce/types';
 import {
   claimManualPairingToken,
+  ManualPairingClaimError,
   parsePairingPayload,
   PAIRING_SECRET_REQUIRED_MESSAGE,
   PAIRING_UPDATE_REQUIRED_MESSAGE,
@@ -507,7 +510,17 @@ export function parseDispatchTaskStatus(payload: unknown): DispatchTaskStatusEve
     normalized['result'] === undefined ? undefined : boundedString(normalized['result'], 4_000);
   const error =
     normalized['error'] === undefined ? undefined : boundedString(normalized['error'], 4_000);
+  const pending =
+    normalized['pending'] === undefined
+      ? undefined
+      : parseDispatchTaskPendingSteps(normalized['pending']);
+  const replyError =
+    normalized['replyError'] === undefined
+      ? undefined
+      : parseDispatchTaskReplyError(normalized['replyError']);
   if (
+    pending === null ||
+    replyError === null ||
     (normalized['taskId'] !== undefined && !taskId) ||
     (normalized['message'] !== undefined && !message) ||
     (normalized['result'] !== undefined && !result) ||
@@ -525,6 +538,8 @@ export function parseDispatchTaskStatus(payload: unknown): DispatchTaskStatusEve
     ...(message ? { message } : {}),
     ...(result ? { result } : {}),
     ...(error ? { error } : {}),
+    ...(pending && pending.length > 0 ? { pending } : {}),
+    ...(replyError ? { replyError } : {}),
     updatedAt,
   };
 }
@@ -694,7 +709,9 @@ function handleControlMessageInner(payload: unknown): void {
     }
     case 'code.sessions':
     case 'code.session.snapshot':
-    case 'code.session.event': {
+    case 'code.session.event':
+    case 'code.session.started':
+    case 'code.session.transcript': {
       ingestRemoteCodeControl(action, normalizedPayload);
       break;
     }
@@ -944,7 +961,7 @@ export const useConnectionStore = create<ConnectionState>()(
               set({
                 status: 'error',
                 error:
-                  error instanceof Error
+                  error instanceof ManualPairingClaimError
                     ? error.message
                     : 'Manual pairing failed. Generate a new code and try again.',
                 pairingCode: parsed.code,
@@ -956,6 +973,10 @@ export const useConnectionStore = create<ConnectionState>()(
             }
           }
 
+          if (!isSecureRelayUrl(signalingWsUrl, __DEV__)) {
+            throw new Error('The relay address must use a secure WebSocket connection.');
+          }
+
           const appVersion = Constants.expoConfig?.version ?? '0.0.0';
 
           if (!isCurrentConnectionAttempt(attemptId)) return;
@@ -965,11 +986,16 @@ export const useConnectionStore = create<ConnectionState>()(
             app: string;
             version: string;
             dispatchSalt: string;
+            deviceName?: string;
           } = {
             deviceType: 'mobile',
             app: 'agiworkforce-mobile',
             version: appVersion,
             dispatchSalt: '',
+            // The computer names the phone it is paired with from this.
+            ...(Constants.deviceName?.trim()
+              ? { deviceName: Constants.deviceName.trim().slice(0, 120) }
+              : {}),
           };
 
           try {
@@ -1006,6 +1032,7 @@ export const useConnectionStore = create<ConnectionState>()(
           setupPeerConnection();
 
           signalingClient = new SignalingClient({
+            allowInsecureLoopback: __DEV__,
             wsUrl: signalingWsUrl,
             code: parsed.code,
             role: 'mobile',
@@ -1019,7 +1046,7 @@ export const useConnectionStore = create<ConnectionState>()(
                   break;
 
                 case 'registered':
-                  set({ sessionExpiresAt: event.expiresAt });
+                  set({ sessionExpiresAt: event.expiresAt, pairToken: event.pairToken });
                   if (event.peerConnected) {
                     set({ status: 'connecting' });
                   }
@@ -1132,7 +1159,30 @@ export const useConnectionStore = create<ConnectionState>()(
               }
             },
           });
-        })();
+        })().catch((error: unknown) => {
+          if (!isCurrentConnectionAttempt(attemptId)) return;
+          invalidateConnectionAttempt();
+          clearConnectWatchdog();
+          detachSignalingClient();
+          cleanupPeerConnection();
+          forgetPairingSecret();
+          hmacState = null;
+          pendingControlQueue.length = 0;
+          clearPendingControlAcks();
+          set({
+            status: 'error',
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Secure pairing could not start. Generate a new code and try again.',
+            pairingCode: null,
+            pairToken: null,
+            desktopName: null,
+            desktopMetadata: null,
+            connectionQuality: 'disconnected',
+            reconnectStartedAt: null,
+          });
+        });
       },
 
       recordHeartbeat: (latencyMs?: number) => {

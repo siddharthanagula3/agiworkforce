@@ -225,6 +225,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
         }
       >
         <Text
+          accessibilityRole="header"
           style={
             {
               "color": "#777",
@@ -309,7 +310,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               Email
             </Text>
             <Text
-              maxFontSizeMultiplier={1.3}
+              maxFontSizeMultiplier={2}
               numberOfLines={1}
               style={
                 {
@@ -391,7 +392,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               Account Security
             </Text>
             <Text
-              maxFontSizeMultiplier={1.3}
+              maxFontSizeMultiplier={2}
               numberOfLines={1}
               style={
                 {
@@ -473,7 +474,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               Subscription
             </Text>
             <Text
-              maxFontSizeMultiplier={1.3}
+              maxFontSizeMultiplier={2}
               numberOfLines={1}
               style={
                 {
@@ -555,7 +556,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               Shared Links
             </Text>
             <Text
-              maxFontSizeMultiplier={1.3}
+              maxFontSizeMultiplier={2}
               numberOfLines={1}
               style={
                 {
@@ -637,7 +638,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               Workspace
             </Text>
             <Text
-              maxFontSizeMultiplier={1.3}
+              maxFontSizeMultiplier={2}
               numberOfLines={1}
               style={
                 {
@@ -666,6 +667,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
         }
       >
         <Text
+          accessibilityRole="header"
           style={
             {
               "color": "#777",
@@ -750,7 +752,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               Appearance
             </Text>
             <Text
-              maxFontSizeMultiplier={1.3}
+              maxFontSizeMultiplier={2}
               numberOfLines={1}
               style={
                 {
@@ -832,7 +834,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               Accent Color
             </Text>
             <Text
-              maxFontSizeMultiplier={1.3}
+              maxFontSizeMultiplier={2}
               numberOfLines={1}
               style={
                 {
@@ -1159,7 +1161,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               {
                 "alignItems": "center",
                 "borderBottomColor": "#333",
-                "borderBottomWidth": 0,
+                "borderBottomWidth": 1,
                 "flexDirection": "row",
                 "gap": 12,
                 "minHeight": 50,
@@ -1191,6 +1193,74 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               testID="icon-ChevronRight"
             />
           </View>
+          <View
+            accessibilityLabel="Storage"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 0,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#aaa"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-HardDrive"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flex": 1,
+                  "fontSize": 15,
+                }
+              }
+            >
+              Storage
+            </Text>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
         </View>
       </View>
       <View
@@ -1201,6 +1271,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
         }
       >
         <Text
+          accessibilityRole="header"
           style={
             {
               "color": "#777",
@@ -1504,6 +1575,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
         }
       >
         <Text
+          accessibilityRole="header"
           style={
             {
               "color": "#777",
@@ -1603,7 +1675,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 10,
+                    "fontSize": 12,
                     "fontWeight": "700",
                   }
                 }
@@ -1695,7 +1767,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 10,
+                    "fontSize": 12,
                     "fontWeight": "700",
                   }
                 }
@@ -1787,7 +1859,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 10,
+                    "fontSize": 12,
                     "fontWeight": "700",
                   }
                 }
@@ -1879,7 +1951,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 10,
+                    "fontSize": 12,
                     "fontWeight": "700",
                   }
                 }
@@ -1971,7 +2043,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 10,
+                    "fontSize": 12,
                     "fontWeight": "700",
                   }
                 }
@@ -1995,6 +2067,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
         }
       >
         <Text
+          accessibilityRole="header"
           style={
             {
               "color": "#777",
@@ -2283,7 +2356,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               About
             </Text>
             <Text
-              maxFontSizeMultiplier={1.3}
+              maxFontSizeMultiplier={2}
               numberOfLines={1}
               style={
                 {

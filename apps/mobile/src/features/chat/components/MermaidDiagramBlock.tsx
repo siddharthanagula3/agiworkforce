@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useTheme, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { SafeArtifactPreview } from './SafeArtifactPreview';
 
 const PENDING_DIAGRAM_HEIGHT = 160;
@@ -38,7 +40,7 @@ export function MermaidDiagramBlock({ source, colors, sourceBlock }: MermaidDiag
     return (
       <View style={{ marginVertical: 6, gap: 4 }}>
         <Text
-          style={{ fontSize: 13, lineHeight: 19, color: colors.textSecondary }}
+          style={{ fontSize: typeScale.footnote, lineHeight: 19, color: colors.textSecondary }}
           accessibilityLiveRegion="polite"
         >
           {outcome.reason
@@ -86,21 +88,23 @@ export function MermaidDiagramBlock({ source, colors, sourceBlock }: MermaidDiag
         }}
       >
         <Text
-          style={{ fontSize: 12, color: colors.textMuted, flexShrink: 1 }}
+          style={{ fontSize: typeScale.caption, color: colors.textMuted, flexShrink: 1 }}
           accessibilityLiveRegion="polite"
         >
           {drawnHeight === null ? 'Drawing diagram…' : 'Diagram'}
         </Text>
-        <Pressable
+        <PressableBox
           onPress={() => setShowSource((shown) => !shown)}
           accessibilityRole="button"
           accessibilityState={{ expanded: showSource }}
           style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textSecondary }}>
+          <Text
+            style={{ fontSize: typeScale.footnote, fontWeight: '500', color: colors.textSecondary }}
+          >
             {showSource ? 'Hide source' : 'Show source'}
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
       {showSource ? sourceBlock : null}
     </View>

@@ -8,15 +8,18 @@ import {
   isBillingPlanTier,
   normalizeSubscriptionAccessTier,
 } from '@agiworkforce/types';
+import {
+  ME_ROUTING_PREFERENCES_PATH,
+  RoutingPreferencesSchema,
+  type RoutingPreferences,
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from './SaveStatusLine';
 
-const ROUTING_PREFERENCES_PATH = '/api/me/routing-preferences';
+const ROUTING_PREFERENCES_PATH = ME_ROUTING_PREFERENCES_PATH;
 const LABEL = 'Only use AI providers based in the US';
-
-type RoutingPreferences = Record<string, unknown> & { us_only?: boolean };
 
 const US_ONLY_TIERS: readonly string[] =
   modelRegistry.policies.auto.providerPolicies.usOnly.allowedTiers;
@@ -39,7 +42,7 @@ export function UsOnlyRoutingPanel() {
     fetch(ROUTING_PREFERENCES_PATH, { credentials: 'same-origin' })
       .then(async (response) => {
         if (!response.ok) throw new Error('Routing preferences could not be loaded.');
-        const body = (await response.json()) as RoutingPreferences;
+        const body = RoutingPreferencesSchema.parse(await response.json());
         if (!cancelled) setPreferences(body);
       })
       .catch((caught: unknown) => {
@@ -74,6 +77,7 @@ export function UsOnlyRoutingPanel() {
 
   return (
     <div
+      aria-busy={preferences === null && !error}
       style={{
         padding: 'var(--space-4) 0',
         borderBottom: '1px solid var(--settings-border)',
@@ -90,6 +94,11 @@ export function UsOnlyRoutingPanel() {
             ? 'Auto and the models you pick are served only by providers based in the United States. Models without one are unavailable while this is on.'
             : `Available on ${US_ONLY_PLAN_LABELS}.`}
         </span>
+        {preferences === null && !error ? (
+          <span role="status" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            Loading your setting…
+          </span>
+        ) : null}
         {error ? <SaveStatusLine failed>{error}</SaveStatusLine> : null}
       </div>
       <Switch

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ChevronDown } from 'lucide-react-native';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
@@ -14,6 +15,8 @@ import type { CreateScheduleInput, Schedule, RecurrenceType } from '../store';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
 import { isoToZonedDateInput, zonedDateAndTimeToIso } from '../timing';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
+import { useUnsavedChangesGuard } from '@/src/shared/hooks/useUnsavedChangesGuard';
+import { TimezonePickerField } from './TimezonePickerField';
 
 interface ScheduleFormProps {
   initialData?: Partial<Schedule>;
@@ -58,6 +61,21 @@ export function ScheduleForm({
   const [timezone, setTimezone] = useState(initialTimezone);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const draft = JSON.stringify([
+    name,
+    prompt,
+    model,
+    recurrence,
+    daysOfWeek,
+    dayOfMonth,
+    timeOfDay,
+    scheduledDate,
+    timezone,
+  ]);
+  const [initialDraft] = useState(draft);
+  const [submittedDraft, setSubmittedDraft] = useState<string | null>(null);
+  useUnsavedChangesGuard(draft !== initialDraft && draft !== submittedDraft);
 
   const validate = useCallback((): {
     valid: boolean;
@@ -128,6 +146,7 @@ export function ScheduleForm({
     const validation = validate();
     if (!validation.valid) return;
 
+    setSubmittedDraft(draft);
     onSubmit({
       name: name.trim(),
       prompt: prompt.trim(),
@@ -145,6 +164,7 @@ export function ScheduleForm({
   }, [
     validate,
     onSubmit,
+    draft,
     name,
     prompt,
     model,
@@ -221,7 +241,7 @@ export function ScheduleForm({
         {/* Model selector */}
         <View className="mb-4">
           <Text className="text-sm text-white/70 mb-1.5">Model</Text>
-          <Pressable
+          <PressableBox
             className="flex-row items-center justify-between h-11 px-3 rounded-lg bg-surface-elevated border border-white/10"
             onPress={() => modelPickerRef.current?.snapToIndex(0)}
             accessibilityLabel={`Model: ${getDisplayName(model)}`}
@@ -230,7 +250,7 @@ export function ScheduleForm({
           >
             <Text className="text-sm text-white">{getDisplayName(model)}</Text>
             <ChevronDown size={16} color={colors.textMuted} />
-          </Pressable>
+          </PressableBox>
         </View>
 
         <Separator className="my-2" />
@@ -260,16 +280,13 @@ export function ScheduleForm({
 
         {/* Timezone */}
         <View className="mb-6 mt-2">
-          <Input
-            label="Timezone"
+          <TimezonePickerField
             value={timezone}
-            onChangeText={(text) => {
-              setTimezone(text);
+            deviceTimezone={getDeviceTimezone()}
+            onChange={(zone) => {
+              setTimezone(zone);
               if (errors.timezone) setErrors((current) => ({ ...current, timezone: '' }));
             }}
-            placeholder="America/New_York"
-            autoCapitalize="none"
-            autoCorrect={false}
             error={errors.timezone}
           />
         </View>

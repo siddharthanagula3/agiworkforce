@@ -10,43 +10,26 @@ nothing is left.
 
 - Done when: A browsable gallery of ready-made routines the user can start from at any time.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Codex holds schedules/index.tsx; patch /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/post-codex/routines-voice-S63.01.patch adds the gallery under the list | states |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/schedules/index.tsx:286-286`
 
 ## S63.03: Create routine from a completed task.
 
 - Done when: From a finished task or chat turn, one action turns that work into a saved routine.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The agent can create a schedule with its cron_create tool when asked, but there is no command that turns a finished task into a routine. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:136-136`, `apps/cli/src/platform/runtime/tool_catalog.rs:327-327`
-
-## S63.04: Routine name and description.
-
-- Done when: A routine has a user-set name and an optional description, both editable.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Name only; add a description field (the server already stores one). | ui |
-
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:173-173`, `apps/mobile/app/(app)/schedules/create.tsx:83-83`
 
 ## S63.06: Source selection.
 
@@ -70,15 +53,6 @@ Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:173-173`, 
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S63.10: Model/effort selection.
-
-- Done when: Per routine, the user picks the model and the reasoning effort the run uses.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
 ## S63.11: One-time schedule.
@@ -110,24 +84,18 @@ Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:173-173`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only once/daily/weekly (multi-day)/monthly; no cron, interval or rule, and those schedules cannot be edited on mobile. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/schedules/policy.ts:47-47`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:240-240`
 
 ## S63.15: Event-trigger selection.
 
 - Done when: A routine can be set to run when an external event happens (GitHub, Slack, Gmail, Calendar, webhook) and it runs when the event arrives.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The local daemon fires cron, webhook and file-watcher triggers, but only from a hand-written ~/.agiworkforce/triggers.json run with `agi --daemon`; no command creates them. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:360-360`, `apps/cli/src/features/hooks/hooks.rs:449-449`, `apps/cli/src/daemon.rs:967-967`
 
 ## S63.16: Event filters.
 
@@ -149,23 +117,17 @@ Code: `apps/cli/src/lib.rs:360-360`, `apps/cli/src/features/hooks/hooks.rs:449-4
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The local daemon serves bearer-token webhook triggers on port 7891, configured only by hand in triggers.json and run with `agi --daemon`. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/hooks/hooks.rs:476-476`, `apps/cli/src/daemon.rs:675-675`, `apps/cli/src/lib.rs:360-360`
 
 ## S63.19: Manual run.
 
 - Done when: A "Run now" control starts the routine immediately and the run completes with a result.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: triggerScheduleNow exists in the service but no screen calls it; add a Run now button. Runs also fail until pending migration 0284 ships. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/schedules/service.ts:174-174`
 
 ## S63.22: Run-history list.
 
@@ -200,15 +162,6 @@ Code: `apps/mobile/src/features/schedules/service.ts:174-174`
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S63.30: Notification preferences.
-
-- Done when: Per routine, the user chooses how (or whether) they are notified about its runs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-
 ## S63.31: Budget controls.
 
 - Done when: Per routine, the user caps what it may spend (cost, credits, or number of runs).
@@ -225,11 +178,8 @@ Code: `apps/mobile/src/features/schedules/service.ts:174-174`
 
 - Done when: When a scheduled occurrence is missed or skipped, the run history says so and why.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Codex holds schedules service.ts and store.ts; patch /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/post-codex/routines-voice-S63.33-held.patch carries the run timing and renders it | states |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/schedules/service.ts:104-104`

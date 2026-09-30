@@ -1,6 +1,6 @@
 {
   "name": "@agiworkforce/extension",
-  "version": "1.2.0",
+  "version": "0.0.1",
   "description": "Managed Cloud chat, approved-site browser context, and automation for AGI",
   "private": true,
   "type": "module",
@@ -45,6 +45,7 @@
     "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
+    "@agiworkforce/sync": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/utils": "workspace:*",

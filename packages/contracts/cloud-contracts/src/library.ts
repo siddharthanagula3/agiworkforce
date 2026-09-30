@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { bareMediaType, documentClassFor } from '@agiworkforce/types';
+import { MEDIA_JOB_STATUSES, bareMediaType, documentClassFor } from '@agiworkforce/types';
 import { GENERATED_FILE_SURFACES } from './generated-files';
 
 export const LIBRARY_ORIGINS = ['generated', 'uploaded'] as const;
@@ -83,7 +83,7 @@ export type LibraryItem = z.infer<typeof LibraryItemSchema>;
 export const LIBRARY_DEFAULT_PAGE_SIZE = 24;
 export const LIBRARY_MAX_PAGE_SIZE = 100;
 
-export const LIBRARY_SORTS = ['modified', 'name', 'size', 'type'] as const;
+export const LIBRARY_SORTS = ['modified', 'oldest', 'type', 'name', 'size'] as const;
 export type LibrarySort = (typeof LIBRARY_SORTS)[number];
 export const LIBRARY_DEFAULT_SORT: LibrarySort = 'modified';
 
@@ -129,10 +129,11 @@ export const FileTextPreviewSchema = z.object({
   kind: z.enum(FILE_TEXT_PREVIEW_KINDS),
   text: z.string(),
   truncated: z.boolean(),
+  fileName: z.string().optional(),
 });
 export type FileTextPreview = z.infer<typeof FileTextPreviewSchema>;
 
-export const MEDIA_JOB_STATUSES = ['queued', 'running', 'failed', 'done', 'cancelled'] as const;
+export { MEDIA_JOB_STATUSES };
 export const MEDIA_JOB_KINDS = ['image', 'video'] as const;
 export const MEDIA_JOB_HISTORY_MAX = 50;
 
@@ -157,3 +158,7 @@ export const MediaJobListResponseSchema = z.object({
   jobs: z.array(MediaJobEntrySchema).max(MEDIA_JOB_HISTORY_MAX),
 });
 export type MediaJobListResponse = z.infer<typeof MediaJobListResponseSchema>;
+
+export const LibraryMediaDeleteResponseSchema = z.object({
+  success: z.boolean(),
+});

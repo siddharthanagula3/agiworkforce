@@ -1,4 +1,3 @@
-
 const { withDangerousMod, withXcodeProject, createRunOncePlugin } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
@@ -66,7 +65,8 @@ function getExtensionBuildSettings({ bundleIdentifier, version, buildNumber, dev
 function applyTargetBuildSettings(project, target, settings) {
   const configurationLists = project.pbxXCConfigurationList();
   const configurations = project.pbxXCBuildConfigurationSection();
-  const list = configurationLists[target.pbxNativeTarget.buildConfigurationList];
+  const nativeTarget = target.pbxNativeTarget ?? target.firstTarget;
+  const list = configurationLists[nativeTarget?.buildConfigurationList];
   if (!list?.buildConfigurations) {
     throw new Error(`${PLUGIN_NAME}: missing build configurations for ${EXTENSION_NAME}`);
   }
@@ -188,13 +188,22 @@ function withCopyShareExtensionSources(config) {
 function withShareExtensionXcodeTarget(config) {
   return withXcodeProject(config, (c) => {
     const bundleIdentifier = c.ios?.bundleIdentifier;
+    const version = c.version;
+    const buildNumber = c.ios?.buildNumber;
     if (!bundleIdentifier) {
       throw new Error(`${PLUGIN_NAME}: expo.ios.bundleIdentifier is required`);
     }
+    if (!version || !buildNumber) {
+      throw new Error(`${PLUGIN_NAME}: expo.version and expo.ios.buildNumber are required`);
+    }
+    applyTargetBuildSettings(c.modResults, c.modResults.getFirstTarget(), {
+      CURRENT_PROJECT_VERSION: `"${buildNumber}"`,
+      MARKETING_VERSION: `"${version}"`,
+    });
     configureShareExtensionTarget(c.modResults, {
       bundleIdentifier,
-      version: c.version ?? '1.0.0',
-      buildNumber: c.ios?.buildNumber ?? '1',
+      version,
+      buildNumber,
       developmentTeam: getIosDevelopmentTeam(),
     });
     return c;

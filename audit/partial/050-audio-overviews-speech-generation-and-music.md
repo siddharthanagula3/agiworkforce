@@ -23,46 +23,24 @@ nothing is left.
 
 - Done when: The user can choose the voice and language used for spoken playback.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | F3: the settings do exist (Speech language row and Voice row -> voice-language screen, settings/voice/index.tsx:361-375) and the companion applies them (voice.tsx:178 spreads speechSettings()), but the message "Read aloud" button, which is the spoken playback of a reply, calls voiceOutput.speak(message.content, {onDone, onStopped}) with no voice, rate or language (MessageBubble.tsx:433-440), so tts.ts falls back to the default voice, rate 1.0 and en-US (tts.ts:39-43). The chosen voice and language reach the companion only; partial: "apply the Voice settings to the message read-aloud path". |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/voice-language/index.tsx:79-79`, `apps/mobile/src/features/voice/services/tts.ts:39-39`
 
 ## S50.03: Speaking-rate control where supported.
 
 - Done when: Where supported, the user can set the speaking rate of playback.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Speed slider in Settings > Voice (0.5x-2x) applies to the voice companion and inline voice, but the message Read-aloud button speaks at rate 1.0 because it passes no rate; pass the speech settings into that call. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/voice-language/index.tsx:321-321`, `apps/mobile/src/features/settings/voice-language/index.tsx:205-205`, `apps/mobile/src/features/settings/voice/index.tsx:388-396`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:435-439`
-
-## S50.04: Download generated speech.
-
-- Done when: Generated speech can be downloaded as an audio file.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S50.31: Custom-voice creation as a separately governed product.
-
-- Done when: Custom voices (cloned or designed) are a separate, governed product with its own consent and access rules.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |

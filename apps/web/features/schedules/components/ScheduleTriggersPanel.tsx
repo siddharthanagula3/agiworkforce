@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Input, Label, Spinner, Switch, useConfirm } from '@agiworkforce/ui';
+import {
+  MANAGED_CLOUD_TRIGGERS_PATH,
+  ManagedCloudEventTriggerCreatedResponseSchema,
+  ManagedCloudEventTriggerListResponseSchema,
+  managedCloudTriggerPath,
+  managedCloudTriggersForTaskPath,
+  managedCloudTriggerWatchPath,
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
@@ -132,14 +140,14 @@ export default function ScheduleTriggersPanel({
   const load = useCallback(async () => {
     setError(null);
     try {
-      const response = await fetch(`/api/triggers?taskId=${encodeURIComponent(scheduleId)}`, {
+      const response = await fetch(managedCloudTriggersForTaskPath(scheduleId), {
         cache: 'no-store',
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
         throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
       }
-      setTriggers((body as { triggers: EventTrigger[] }).triggers);
+      setTriggers(ManagedCloudEventTriggerListResponseSchema.parse(body).triggers);
     } catch (loadError) {
       setError(toUserMessage(loadError, 'Could not read the triggers for this schedule.'));
     }
@@ -163,7 +171,7 @@ export default function ScheduleTriggersPanel({
       .map((type) => type.trim())
       .filter(Boolean);
     try {
-      const response = await fetch('/api/triggers', {
+      const response = await fetch(MANAGED_CLOUD_TRIGGERS_PATH, {
         method: 'POST',
         headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
@@ -180,12 +188,7 @@ export default function ScheduleTriggersPanel({
       if (!response.ok) {
         throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
       }
-      const created = body as {
-        trigger: EventTrigger;
-        verificationCode: string | null;
-        signingSecret: string | null;
-        webhookPath: string;
-      };
+      const created = ManagedCloudEventTriggerCreatedResponseSchema.parse(body);
       setSecrets({
         triggerId: created.trigger.id,
         verificationCode: created.verificationCode,
@@ -208,7 +211,7 @@ export default function ScheduleTriggersPanel({
   async function setEnabled(trigger: EventTrigger, isEnabled: boolean) {
     setError(null);
     try {
-      const response = await fetch(`/api/triggers/${trigger.id}`, {
+      const response = await fetch(managedCloudTriggerPath(trigger.id), {
         method: 'PATCH',
         headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ isEnabled }),
@@ -232,7 +235,7 @@ export default function ScheduleTriggersPanel({
     setSavingConditions(true);
     setError(null);
     try {
-      const response = await fetch(`/api/triggers/${trigger.id}`, {
+      const response = await fetch(managedCloudTriggerPath(trigger.id), {
         method: 'PATCH',
         headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ conditions: parsed.conditions }),
@@ -254,7 +257,7 @@ export default function ScheduleTriggersPanel({
     setWatching(trigger.id);
     setError(null);
     try {
-      const response = await fetch(`/api/triggers/${trigger.id}/watch`, {
+      const response = await fetch(managedCloudTriggerWatchPath(trigger.id), {
         method: 'POST',
         headers: await addCsrfHeaders({}),
       });
@@ -283,7 +286,7 @@ export default function ScheduleTriggersPanel({
     if (!confirmed) return;
     setError(null);
     try {
-      const response = await fetch(`/api/triggers/${trigger.id}`, {
+      const response = await fetch(managedCloudTriggerPath(trigger.id), {
         method: 'DELETE',
         headers: await addCsrfHeaders({}),
       });

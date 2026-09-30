@@ -1,18 +1,95 @@
-import { useCallback, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FlatList, Modal, View, useWindowDimensions } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { X } from 'lucide-react-native';
+import { Square, Volume2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { colors, motion } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
+import { LIVE_VOICES } from '@agiworkforce/types/live-voices';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { VOICE_PRESETS, type VoicePreset } from '../voicePresets';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { liveVoiceModeUnavailableReason } from '../services/liveVoiceAvailability';
+import { VOICE_PRESETS } from '../voicePresets';
+import {
+  loadVoiceSamples,
+  playVoiceSample,
+  stopVoiceSample,
+} from '@/src/features/voice/services/voiceSamples';
 
 const ORB_SIZE = 176;
+
+interface VoiceChoice {
+  id: string;
+  name: string;
+  description: string;
+}
+
+const LIVE_CHOICES: readonly VoiceChoice[] = LIVE_VOICES.map((voice) => ({
+  id: voice.voiceURI,
+  name: voice.name,
+  description: voice.lang,
+}));
+
+function VoiceSampleButton({ voiceId, voiceName }: { voiceId: string; voiceName: string }) {
+  const [file, setFile] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setFile(null);
+    void loadVoiceSamples().then((samples) => {
+      if (active) setFile(samples[voiceId] ?? null);
+    });
+    return () => {
+      active = false;
+      stopVoiceSample();
+      setPlaying(false);
+    };
+  }, [voiceId]);
+
+  if (!file) return null;
+  const Icon = playing ? Square : Volume2;
+  return (
+    <PressableBox
+      onPress={() => {
+        if (playing) {
+          stopVoiceSample();
+          setPlaying(false);
+          return;
+        }
+        setPlaying(true);
+        playVoiceSample(file, () => setPlaying(false));
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={
+        playing ? `Stop the ${voiceName} sample` : `Play a sample of ${voiceName}`
+      }
+      style={{
+        marginTop: 16,
+        minHeight: 44,
+        paddingHorizontal: 16,
+        borderRadius: 999,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      <Icon size={16} color={colors.textPrimary} />
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
+        {playing ? 'Stop sample' : 'Play sample'}
+      </Text>
+    </PressableBox>
+  );
+}
 
 function Orb({ size = ORB_SIZE }: { size?: number }) {
   const r = size / 2;
@@ -38,7 +115,7 @@ const PILL = {
 };
 const PILL_LABEL = {
   color: colors.black,
-  fontSize: 17,
+  fontSize: typeScale.headline,
   fontWeight: '600' as const,
   textAlign: 'center' as const,
 };
@@ -56,13 +133,24 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
   const setSelectedPresetId = useSettingsStore((s) => s.setSelectedPresetId);
+  const liveVoice = useSettingsStore((s) => s.liveVoice);
+  const setLiveVoice = useSettingsStore((s) => s.setLiveVoice);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const live =
+    liveVoiceModeUnavailableReason({
+      executionMode: appMode === 'cloud' ? 'cloud' : 'local',
+      signedIn: isClerkSignedIn,
+    }) === null;
+  const choices: readonly VoiceChoice[] = live ? LIVE_CHOICES : VOICE_PRESETS;
+  const selectedId = live ? liveVoice : selectedPresetId;
 
   const initialIndex = Math.max(
     0,
-    VOICE_PRESETS.findIndex((p) => p.id === selectedPresetId),
+    choices.findIndex((choice) => choice.id === selectedId),
   );
   const [index, setIndex] = useState(initialIndex);
-  const listRef = useRef<FlatList<VoicePreset>>(null);
+  const listRef = useRef<FlatList<VoiceChoice>>(null);
 
   const handleMomentumEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -78,15 +166,18 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
   );
 
   const handleStart = useCallback(() => {
-    const preset = VOICE_PRESETS[index];
-    if (preset) setSelectedPresetId(preset.id);
+    const choice = choices[index];
+    if (choice) {
+      if (live) setLiveVoice(choice.id);
+      else setSelectedPresetId(choice.id);
+    }
     if (hapticsEnabled) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     onStart();
-  }, [index, setSelectedPresetId, hapticsEnabled, onStart]);
+  }, [choices, index, live, setLiveVoice, setSelectedPresetId, hapticsEnabled, onStart]);
 
-  const active = VOICE_PRESETS[index];
+  const active = choices[index];
 
   return (
     <Modal
@@ -98,7 +189,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
       accessibilityViewIsModal
     >
       <Animated.View
-        entering={FadeIn.duration(160)}
+        entering={FadeIn.duration(motion.quick)}
         style={{ flex: 1, backgroundColor: colors.scrim }}
       >
         <Animated.View
@@ -119,18 +210,18 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              paddingHorizontal: 20,
+              paddingHorizontal: dialogPadding,
               paddingTop: 16,
             }}
           >
             <View style={{ width: 36 }} />
             <Text
-              style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '600' }}
+              style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '600' }}
               accessibilityRole="header"
             >
               Choose your voice
             </Text>
-            <Pressable
+            <PressableBox
               onPress={onDismiss}
               accessibilityRole="button"
               accessibilityLabel="Close voice picker"
@@ -145,14 +236,14 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
               }}
             >
               <X size={20} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           <View style={{ flex: 1, minHeight: 200, justifyContent: 'center' }}>
             <FlatList
               ref={listRef}
-              data={VOICE_PRESETS}
-              keyExtractor={(p) => p.id}
+              data={choices}
+              keyExtractor={(choice) => choice.id}
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
@@ -165,16 +256,19 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
                   <Text
                     style={{
                       color: colors.textPrimary,
-                      fontSize: 28,
+                      fontSize: typeScale.title1,
                       fontWeight: '700',
                       marginTop: 48,
                     }}
                   >
                     {item.name}
                   </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 17, marginTop: 6 }}>
+                  <Text
+                    style={{ color: colors.textMuted, fontSize: typeScale.headline, marginTop: 6 }}
+                  >
                     {item.description}
                   </Text>
+                  {live ? <VoiceSampleButton voiceId={item.id} voiceName={item.name} /> : null}
                 </View>
               )}
             />
@@ -187,9 +281,9 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
-            {VOICE_PRESETS.map((p, i) => (
+            {choices.map((choice, i) => (
               <View
-                key={p.id}
+                key={choice.id}
                 style={{
                   width: 7,
                   height: 7,
@@ -201,7 +295,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
           </View>
 
           <View style={{ paddingHorizontal: 28 }}>
-            <Pressable
+            <PressableBox
               onPress={handleStart}
               accessibilityRole="button"
               accessibilityLabel={active ? `Start voice with ${active.name}` : 'Start voice'}
@@ -210,7 +304,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
               <View style={PILL}>
                 <Text style={PILL_LABEL}>Start Voice</Text>
               </View>
-            </Pressable>
+            </PressableBox>
           </View>
         </Animated.View>
       </Animated.View>

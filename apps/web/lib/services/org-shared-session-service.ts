@@ -1,8 +1,13 @@
 import 'server-only';
 
+import { CONVERSATION_SHARE_VISIBILITIES } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  UNATTENDED_RUN_DENIED_STATUSES,
+  ownerMayRunUnattendedSql,
+} from '@/lib/auth/account-lifecycle';
 
 /**
  * Who a conversation share is for (migration 0186). `public` is the 0051 rule,
@@ -10,7 +15,7 @@ import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
  * page and leaves the transcript readable only to members holding the grant row
  * in `organization_shared_sessions`. Expiry applies to both.
  */
-export const SHARED_SESSION_VISIBILITIES = ['public', 'organization'] as const;
+export const SHARED_SESSION_VISIBILITIES = CONVERSATION_SHARE_VISIBILITIES;
 
 export type SharedSessionVisibility = (typeof SHARED_SESSION_VISIBILITIES)[number];
 
@@ -242,8 +247,9 @@ export async function getPublicSharedSessionByToken(
          from public.shared_sessions
         where token = $1
           and visibility = 'public'
+          and ${ownerMayRunUnattendedSql('shared_sessions.owner_id', 2)}
         limit 1`,
-      [token],
+      [token, UNATTENDED_RUN_DENIED_STATUSES],
     );
   } catch (error) {
     if (!isConversationSharingSchemaUnavailable(error)) throw error;
@@ -252,8 +258,9 @@ export async function getPublicSharedSessionByToken(
               total_messages, expires_at, created_at
          from public.shared_sessions
         where token = $1
+          and ${ownerMayRunUnattendedSql('shared_sessions.owner_id', 2)}
         limit 1`,
-      [token],
+      [token, UNATTENDED_RUN_DENIED_STATUSES],
     );
   }
   return rows[0] ? rowToSession(rows[0]) : null;

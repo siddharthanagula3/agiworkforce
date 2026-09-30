@@ -1,6 +1,7 @@
 /** @type {import('expo/config').ExpoConfig} */
 const appEnv = process.env.APP_ENV || process.env.EXPO_PUBLIC_APP_ENV || 'development';
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
+const hostedOrigin = process.env.EXPO_PUBLIC_API_URL?.trim();
 const easProjectId = '38f0941c-88a7-468a-9750-fcd8b357ff4c';
 const iosShareAppGroupIdentifier = 'group.com.agiworkforce.app.share';
 
@@ -11,6 +12,13 @@ if (
   throw new Error(
     `[clerk] ${appEnv} builds require EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to be a live Clerk publishable key.`,
   );
+}
+
+if (
+  (appEnv === 'production' || appEnv === 'preview') &&
+  (!hostedOrigin || new URL(hostedOrigin).protocol !== 'https:')
+) {
+  throw new Error(`[expo-router] ${appEnv} builds require an HTTPS EXPO_PUBLIC_API_URL origin.`);
 }
 
 function envIsTruthy(name) {
@@ -30,11 +38,12 @@ const shouldUseProductionEntitlements =
 const iosEntitlements = shouldUseProductionEntitlements
   ? {
       'com.apple.developer.siri': true,
-      'com.apple.developer.natural-language.translation': true,
     }
   : {};
 
-const associatedDomains = shouldUseProductionEntitlements ? ['applinks:agiworkforce.com'] : [];
+const associatedDomains = shouldUseProductionEntitlements
+  ? ['applinks:agiworkforce.com', 'webcredentials:agiworkforce.com']
+  : [];
 
 const conditionalPlugins = [
   ...(shouldUseProductionEntitlements
@@ -56,7 +65,7 @@ const conditionalPlugins = [
 const config = {
   name: 'AGI Workforce',
   slug: 'agi-workforce',
-  version: '1.2.0',
+  version: '0.0.1',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'agiworkforce',
@@ -74,6 +83,8 @@ const config = {
         'AGI Workforce uses the microphone for voice input and real-time voice conversations with AI.',
       NSPhotoLibraryUsageDescription:
         'AGI Workforce accesses your photo library to select images for AI analysis and conversations.',
+      NSPhotoLibraryAddUsageDescription:
+        'AGI Workforce saves images you choose to save into your photo library.',
       NSFaceIDUsageDescription:
         'AGI Workforce uses Face ID to securely unlock the app and protect your data.',
       NSSpeechRecognitionUsageDescription:
@@ -81,6 +92,13 @@ const config = {
       NSTranslationUsageDescription:
         'AGI Workforce uses on-device translation to translate text between languages privately.',
       NSUserActivityTypes: ['INSendMessageIntent', 'com.agiworkforce.app.intent'],
+      AGIApiBaseURL: hostedOrigin || 'https://agiworkforce.com',
+      'UISupportedInterfaceOrientations~ipad': [
+        'UIInterfaceOrientationPortrait',
+        'UIInterfaceOrientationPortraitUpsideDown',
+        'UIInterfaceOrientationLandscapeLeft',
+        'UIInterfaceOrientationLandscapeRight',
+      ],
       ITSAppUsesNonExemptEncryption: false,
     },
     entitlements: {
@@ -149,6 +167,12 @@ const config = {
           NSPrivacyCollectedDataTypeTracking: false,
           NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
         },
+        {
+          NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeProductInteraction',
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAnalytics'],
+        },
       ],
       NSPrivacyTracking: false,
       NSPrivacyTrackingDomains: [],
@@ -163,6 +187,11 @@ const config = {
     versionCode: 1,
     allowBackup: false,
     permissions: ['RECORD_AUDIO'],
+    blockedPermissions: [
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+      'android.permission.ACCESS_MEDIA_LOCATION',
+    ],
     intentFilters: [
       {
         action: 'SEND',
@@ -192,6 +221,8 @@ const config = {
           { scheme: 'https', host: 'agiworkforce.com', path: '/pair' },
           { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/pair/' },
           { scheme: 'https', host: 'agiworkforce.com', path: '/auth/reset-password' },
+          { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/open/' },
+          { scheme: 'https', host: 'agiworkforce.com', path: '/github/installed' },
         ],
       },
     ],
@@ -215,7 +246,7 @@ const config = {
     ],
     'expo-background-task',
     'expo-image',
-    'expo-router',
+    hostedOrigin ? ['expo-router', { origin: hostedOrigin }] : 'expo-router',
     'expo-secure-store',
     [
       'expo-build-properties',
@@ -261,9 +292,8 @@ const config = {
       'expo-calendar',
       {
         calendarPermission:
-          'Allow $(PRODUCT_NAME) to read calendar events only after you enable device calendar context.',
-        remindersPermission:
-          'Allow $(PRODUCT_NAME) to access reminders only when you explicitly enable reminder access.',
+          'Allow $(PRODUCT_NAME) to read your calendars when you ask about your schedule, and to add the events you confirm in a chat.',
+        remindersPermission: 'Allow $(PRODUCT_NAME) to add the reminders you confirm in a chat.',
       },
     ],
     [
@@ -278,6 +308,15 @@ const config = {
       {
         photosPermission: 'Allow $(DISPLAYNAME) to access your photos.',
         cameraPermission: 'Allow $(DISPLAYNAME) to access your camera.',
+      },
+    ],
+    [
+      'expo-media-library',
+      {
+        savePhotosPermission:
+          'AGI Workforce saves images you choose to save into your photo library.',
+        isAccessMediaLocationEnabled: false,
+        granularPermissions: [],
       },
     ],
     ['expo-sqlite', { useSQLCipher: true }],
@@ -296,10 +335,12 @@ const config = {
     './native/android/withAGIVisionOCR.cjs',
     './native/ios/withAGINativeModulesIOS.cjs',
     './native/ios/withAGIShareExtension.cjs',
+    './native/ios/withAGIWidgets.cjs',
     './native/ios/withAGIDevEntitlements.cjs',
     './native/ios/withClerkModularHeaders.cjs',
     './native/android/withAGIAICore.cjs',
     './native/android/withAGIShareIntent.cjs',
+    './native/android/withAGIWidget.cjs',
     // Emits the iOS NSPinnedDomains and Android network_security_config pin-sets
     // derived from lib/pinning.ts. It emits nothing until that file provisions
     // every required host AND sets PINNING_ROLLOUT to 'enforced', so it is inert

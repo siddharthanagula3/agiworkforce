@@ -139,7 +139,7 @@ export default function BackgroundJobsPanel() {
       ) : (
         <div className={TABLE_WRAP_CLASS}>
           <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-card text-left">
+            <thead className="bg-card text-start">
               <tr>
                 <th className="p-3 font-medium">Queue</th>
                 <th className="p-3 font-medium">Queued</th>
@@ -187,7 +187,7 @@ export default function BackgroundJobsPanel() {
         ) : (
           <div className={`mt-4 ${TABLE_WRAP_CLASS}`}>
             <table className="w-full min-w-[760px] text-sm">
-              <thead className="bg-card text-left">
+              <thead className="bg-card text-start">
                 <tr>
                   <th className="p-3 font-medium">Kind</th>
                   <th className="p-3 font-medium">Account</th>

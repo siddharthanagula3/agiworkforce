@@ -1,17 +1,27 @@
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
-import { AppState, Pressable, StyleSheet, View, type AppStateStatus } from 'react-native';
+import { AppState, StyleSheet, View, type AppStateStatus } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { create } from 'zustand';
 import {
   ALL_PLATFORM_CAPABILITIES,
   getPlatformCapabilities,
   isCapabilityEnabled as matrixIsCapabilityEnabled,
+  resolveCapabilityDocumentDecision,
   type PlatformCapability,
   type SyncedAppSurface,
 } from '@agiworkforce/types';
+import { useTierStore } from '@/src/features/billing/store';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const CapabilityContext = createContext<SyncedAppSurface>('mobile');
 
@@ -21,6 +31,15 @@ const CapabilityContext = createContext<SyncedAppSurface>('mobile');
  * than keeping two lists that can drift apart.
  */
 const CAPABILITY_FLAG_PREFIX = 'capability.';
+let capabilityRefreshGeneration = 0;
+
+function canRefreshRemoteCapabilities(): boolean {
+  return (
+    useChatAppModeStore.getState().appMode === 'cloud' &&
+    useWaitlistStore.getState().cloudUnlocked &&
+    captureCloudAccountEpoch() !== null
+  );
+}
 
 export function capabilityFlagKey(capability: PlatformCapability): string {
   return `${CAPABILITY_FLAG_PREFIX}${capability.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)}`;
@@ -44,8 +63,18 @@ export const useRemoteCapabilityStore = create<RemoteCapabilityState>((set) => (
   switchedOff: {},
   loadedAt: null,
   refresh: async () => {
+    if (!canRefreshRemoteCapabilities()) return;
+    const account = captureCloudAccountEpoch();
+    const generation = capabilityRefreshGeneration;
     try {
       const parsed = parseMeResponse(await api.get<unknown>('/api/me?surface=mobile'));
+      if (
+        !isCloudAccountEpochCurrent(account) ||
+        generation !== capabilityRefreshGeneration ||
+        !canRefreshRemoteCapabilities()
+      ) {
+        return;
+      }
       const switchedOff: Record<string, boolean> = {};
       for (const capability of ALL_PLATFORM_CAPABILITIES) {
         if (parsed.feature_flags[capabilityFlagKey(capability)] === false) {
@@ -54,10 +83,15 @@ export const useRemoteCapabilityStore = create<RemoteCapabilityState>((set) => (
       }
       set({ switchedOff, loadedAt: new Date().toISOString() });
     } catch (error) {
-      console.warn('[capabilities] refresh failed (keeping the last answer):', error);
+      if (isCloudAccountEpochCurrent(account) && canRefreshRemoteCapabilities()) {
+        console.warn('[capabilities] refresh failed (keeping the last answer):', error);
+      }
     }
   },
-  clear: () => set({ switchedOff: {}, loadedAt: null }),
+  clear: () => {
+    capabilityRefreshGeneration += 1;
+    set({ switchedOff: {}, loadedAt: null });
+  },
 }));
 
 export function refreshRemoteCapabilities(): Promise<void> {
@@ -71,6 +105,9 @@ export function CapabilityProvider({
   platform?: SyncedAppSurface;
   children: ReactNode;
 }) {
+  const appMode = useChatAppModeStore((state) => state.appMode);
+  const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
+
   useEffect(() => {
     void refreshRemoteCapabilities();
     // A switch thrown while the app sits in the background has to reach it on
@@ -79,14 +116,18 @@ export function CapabilityProvider({
       if (next === 'active') void refreshRemoteCapabilities();
     });
     return () => subscription.remove();
-  }, []);
+  }, [appMode, cloudUnlocked]);
   return <CapabilityContext.Provider value={platform}>{children}</CapabilityContext.Provider>;
 }
 
 export function useCapability(capability: PlatformCapability): boolean {
   const platform = useContext(CapabilityContext);
+  const document = useTierStore((state) => state.capabilityDocument);
   const switchedOff = useRemoteCapabilityStore((state) => state.switchedOff[capability] === true);
-  return matrixIsCapabilityEnabled(platform, capability) && !switchedOff;
+  const decision = resolveCapabilityDocumentDecision(document, capability);
+  return decision
+    ? decision.allowed
+    : matrixIsCapabilityEnabled(platform, capability) && !switchedOff;
 }
 
 export const CAPABILITY_SWITCHED_OFF_BODY =
@@ -108,14 +149,14 @@ export function CapabilityUnavailable({
       <Text style={styles.title}>{label} is unavailable right now</Text>
       <Text style={styles.body}>{CAPABILITY_SWITCHED_OFF_BODY}</Text>
       {onDismiss ? (
-        <Pressable
+        <PressableBox
           onPress={onDismiss}
           style={styles.button}
           accessibilityRole="button"
           accessibilityLabel={dismissLabel}
         >
           <Text style={styles.buttonText}>{dismissLabel}</Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
@@ -133,13 +174,13 @@ function createUnavailableStyles(colors: ColorScheme) {
     title: {
       color: colors.textPrimary,
       textAlign: 'center',
-      fontSize: 16,
+      fontSize: typeScale.callout,
       fontWeight: '600',
     },
     body: {
       color: colors.textSecondary,
       textAlign: 'center',
-      fontSize: 14,
+      fontSize: typeScale.subhead,
       lineHeight: 20,
       marginTop: 8,
     },
@@ -153,7 +194,7 @@ function createUnavailableStyles(colors: ColorScheme) {
     },
     buttonText: {
       color: colors.accentText,
-      fontSize: 14,
+      fontSize: typeScale.subhead,
       fontWeight: '600',
     },
   });
@@ -161,12 +202,16 @@ function createUnavailableStyles(colors: ColorScheme) {
 
 export function useCapabilities() {
   const platform = useContext(CapabilityContext);
+  const document = useTierStore((state) => state.capabilityDocument);
   const switchedOff = useRemoteCapabilityStore((state) => state.switchedOff);
   return useMemo(() => {
     const effective: Record<PlatformCapability, boolean> = { ...getPlatformCapabilities(platform) };
     for (const capability of ALL_PLATFORM_CAPABILITIES) {
-      if (switchedOff[capability]) effective[capability] = false;
+      const decision = resolveCapabilityDocumentDecision(document, capability);
+      effective[capability] = decision
+        ? decision.allowed
+        : effective[capability] && !switchedOff[capability];
     }
     return effective;
-  }, [platform, switchedOff]);
+  }, [document, platform, switchedOff]);
 }

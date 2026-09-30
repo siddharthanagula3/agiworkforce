@@ -20,6 +20,22 @@ const MEMORY_ON: ManagedMemoryPolicy = {
 };
 
 describe('loadManagedMemoryContext', () => {
+  it('never injects a memory learned in a conversation that holds Google user data', async () => {
+    const query = vi.fn().mockResolvedValue([]);
+
+    await loadManagedMemoryContext({ query }, { userId: 'user-1', policy: MEMORY_ON });
+
+    const [sql] = query.mock.calls[0] as [string];
+    expect(sql).toContain(
+      "google_source.id::text = to_jsonb(user_memories)->>'source_conversation_id'",
+    );
+    expect(sql).toContain('google_source.google_user_data_at is not null');
+    expect(sql).toContain(
+      "case when to_jsonb(user_memories)->>'source_conversation_id' is null then not exists",
+    );
+    expect(sql).toContain('google_any.user_id = user_memories.user_id');
+  });
+
   it('loads only active memories owned by the authenticated user', async () => {
     const query = vi.fn().mockResolvedValue([
       {

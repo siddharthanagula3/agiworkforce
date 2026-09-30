@@ -1,3 +1,4 @@
+import type { LifecycleStatus } from '@agiworkforce/types';
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
@@ -14,7 +15,7 @@ export interface ChatSession {
   agentsInvolved: string[];
   messagesCount: number;
   tokensUsed: number;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: SessionStatusType;
   result?: string;
 }
 
@@ -49,13 +50,10 @@ export interface AgentMetrics {
 }
 
 export type AgentActivityType =
-  | 'session_start'
-  | 'session_end'
-  | 'agent_communication'
-  | 'task_complete'
-  | 'task_failed';
+  'session_start' | 'session_end' | 'agent_communication' | 'task_complete' | 'task_failed';
 
-export type SessionStatusType = 'pending' | 'in_progress' | 'completed' | 'failed';
+export type SessionStatusType =
+  Extract<LifecycleStatus, 'pending' | 'completed' | 'failed'> | 'in_progress';
 
 export interface AgentMetricsState extends AgentMetrics {
   startSession: (

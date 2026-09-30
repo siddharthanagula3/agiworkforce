@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { RESPONSE_LANGUAGE_AUTO } from '@agiworkforce/types';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, storage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import {
+  SPEECH_LANGUAGE_AUTO,
+  speechLanguageFromLegacy,
+} from '@/src/features/voice/speechLanguage';
 import type {
   ThemeMode,
   AccentColor,
@@ -58,7 +62,7 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       accentColor: 'neutral',
       fontPreference: 'default',
       notificationsEnabled: true,
-      speechLanguage: 'en',
+      speechLanguage: SPEECH_LANGUAGE_AUTO,
       autoListenEnabled: true,
       memoryEnabled: true,
       referencePastChats: true,
@@ -81,6 +85,13 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       name: 'settings-store-local',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<LocalSettingsState>;
+        return version < 1
+          ? { ...state, speechLanguage: speechLanguageFromLegacy(state.speechLanguage) }
+          : state;
+      },
       merge: (persisted, current) => {
         const persistedState = (persisted ?? {}) as Partial<LocalSettingsState>;
         return {
@@ -108,7 +119,7 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
                 accentColor: s.accentColor ?? 'neutral',
                 fontPreference: s.fontPreference ?? 'default',
                 notificationsEnabled: s.notificationsEnabled ?? true,
-                speechLanguage: s.speechLanguage ?? 'en',
+                speechLanguage: speechLanguageFromLegacy(s.speechLanguage),
                 autoListenEnabled: s.autoListenEnabled ?? true,
                 memoryEnabled: s.memoryEnabled ?? true,
                 referencePastChats: s.referencePastChats ?? true,

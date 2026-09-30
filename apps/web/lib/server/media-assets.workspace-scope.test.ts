@@ -99,6 +99,7 @@ describe('media asset active-workspace scoping', () => {
           provider: 'fixture-provider',
           model: 'fixture-model',
           sourceSurface: 'web',
+          conversationId: null,
           metadata: {},
         },
         callerDb,

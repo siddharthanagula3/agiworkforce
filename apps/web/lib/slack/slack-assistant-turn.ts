@@ -27,6 +27,11 @@ import {
 } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
 import { classifyToolLoopInputs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-routing';
+import {
+  GOOGLE_USER_DATA_SLACK_RESUME_MESSAGE,
+  runMessagesCarryGoogleUserData,
+  withoutGoogleHostedTools,
+} from '@/lib/connectors/google-user-data-runs';
 import { logger } from '@/lib/logger';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import {
@@ -434,11 +439,13 @@ export async function runSlackAssistantTurn(input: SlackTurnInput): Promise<Slac
       );
     }
     route = resume.checkpoint.route;
-    if (
-      !modelKeepsInputsOutOfTraining(route.modelKey) &&
-      (await sideCallTrainingOptOut(db, userId))
-    ) {
-      return refused('no_training_model_available', NO_TRAINING_MODEL_MESSAGE);
+    if (!modelKeepsInputsOutOfTraining(route.modelKey)) {
+      if (runMessagesCarryGoogleUserData(resume.checkpoint.messages)) {
+        return refused('no_training_model_available', GOOGLE_USER_DATA_SLACK_RESUME_MESSAGE);
+      }
+      if (await sideCallTrainingOptOut(db, userId)) {
+        return refused('no_training_model_available', NO_TRAINING_MODEL_MESSAGE);
+      }
     }
   } else {
     const selected = await selectRoute({
@@ -462,7 +469,7 @@ export async function runSlackAssistantTurn(input: SlackTurnInput): Promise<Slac
   if (!modelAccess.allowed) return refused(modelAccess.code, modelAccess.reason);
   const isFlagship = isFlagshipRoutingSlot(getSlotForModel(route.modelKey));
 
-  const plan = await buildScheduledToolPlan({
+  const fullPlan = await buildScheduledToolPlan({
     db,
     userId,
     organizationId,
@@ -472,6 +479,14 @@ export async function runSlackAssistantTurn(input: SlackTurnInput): Promise<Slac
     webAllowed: true,
     connectors: input.surface === 'direct_message' ? null : [],
   });
+  // Slack has no setting that turns Google connectors on for it, so neither
+  // their tools nor a custom, workspace or directory server on a Google API
+  // host is ever offered here: Slack messages reach models chosen without
+  // regard to Google API Limited Use.
+  const plan: ScheduledToolPlan = {
+    ...fullPlan,
+    mcpTools: await withoutGoogleHostedTools(db, userId, organizationId, fullPlan.mcpTools),
+  };
   const loopInputs = classifyToolLoopInputs(plan.mcpTools, plan.tools, plan.toolApprovalPolicy);
   const toolLoopRunnable = loopInputs.shouldRun && Boolean(ADAPTER_PROVIDERS[dispatchProvider]);
   if (resume && !toolLoopRunnable) {

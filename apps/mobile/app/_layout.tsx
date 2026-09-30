@@ -24,6 +24,7 @@ import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useFonts } from 'expo-font';
 import { Newsreader_500Medium, Newsreader_600SemiBold } from '@expo-google-fonts/newsreader';
 import { useAuthStore } from '@/src/features/auth/store';
+import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
@@ -39,6 +40,7 @@ import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { clearBiometricFlag, hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
 import { AppLockOverlay } from '@/src/features/auth/components/AppLockOverlay';
+import { AccountSecurityVerificationPrompt } from '@/src/features/auth/components/AccountSecurityVerificationPrompt';
 import { SecureStorageUnavailable } from '@/src/features/auth/components/SecureStorageUnavailable';
 import { ThemeVars, useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
@@ -61,7 +63,10 @@ import {
   parseSharedFilesParam,
   stageSharedFileAttachments,
 } from '@/src/features/share-preview/sharedAttachments';
-import { clearPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+import {
+  clearPostAuthIntent,
+  consumePostAuthDestination,
+} from '@/src/features/auth/services/postAuthIntent';
 import { completePendingPostAuthIntentForLoadedSession } from '@/src/features/auth/actions/postAuthIntent';
 
 export { default as ErrorBoundary } from './error';
@@ -81,6 +86,8 @@ import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { resolveRootRedirect } from '@/src/features/auth/services/rootRouting';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
+import { ToastHost } from '@/src/shared/components/Toast';
+import { CloudSyncErrorBanner } from '@/src/features/edge-cases/components/CloudSyncErrorBanner';
 import { CapabilityProvider } from '@/src/lib/capabilities';
 import { refreshRolloutRings, useRolloutStore } from '@/src/features/rollout';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
@@ -117,6 +124,8 @@ function ClerkTokenBridge() {
   const setClerkUserId = useAuthStore((s) => s.setClerkUserId);
   const setClerkLoaded = useAuthStore((s) => s.setClerkLoaded);
   const setCloudAccess = useWaitlistStore((s) => s.setCloudAccess);
+  const termsUserId = useTermsAcceptanceStore((s) => s.userId);
+  const termsStatus = useTermsAcceptanceStore((s) => s.status);
 
   useEffect(() => {
     if (isLoaded) return;
@@ -136,22 +145,36 @@ function ClerkTokenBridge() {
       if (!userId) {
         return;
       }
-      const owner = activateCloudAccount(userId);
-      if (owner.changed) {
-        clearLocalCloudAccountState();
-        startCloudSyncLoop();
-      }
       setClerkTokenGetter(
         () => getSurfaceToken(getToken),
         () => userId ?? null,
         () => getSurfaceToken(getToken, { skipCache: true }),
       );
       setClerkUserId(userId);
+      if (termsUserId !== userId) {
+        void useTermsAcceptanceStore.getState().verify(userId);
+      }
+      if (termsUserId !== userId || termsStatus !== 'accepted') {
+        if (useAuthStore.getState().isClerkSignedIn) {
+          invalidateCloudAccount();
+          clearLocalCloudAccountState();
+        }
+        setCloudAccess(false);
+        setClerkSignedIn(false);
+        setClerkLoaded(true);
+        return;
+      }
+      const owner = activateCloudAccount(userId);
+      if (owner.changed) {
+        clearLocalCloudAccountState();
+        startCloudSyncLoop();
+      }
       setCloudAccess(true);
       completePendingPostAuthIntentForLoadedSession({
         isLoaded,
         isSignedIn,
         userId,
+        termsAccepted: termsUserId === userId && termsStatus === 'accepted',
         cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
         subscriptionTier: useTierStore.getState().tier,
       });
@@ -162,6 +185,7 @@ function ClerkTokenBridge() {
       useRolloutStore.getState().clear();
       clearPostAuthIntent();
       setClerkTokenGetter(null, null, null);
+      useTermsAcceptanceStore.getState().reset();
       setClerkUserId(null);
       setClerkSignedIn(false);
       invalidateCloudAccount();
@@ -178,6 +202,8 @@ function ClerkTokenBridge() {
     setClerkSignedIn,
     setClerkUserId,
     setCloudAccess,
+    termsUserId,
+    termsStatus,
   ]);
 
   useEffect(() => {
@@ -210,6 +236,7 @@ export default function RootLayout() {
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const termsStatus = useTermsAcceptanceStore((s) => s.status);
   const authEnabled = FEATURES.auth;
   const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
@@ -421,6 +448,16 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!isInitialized || !isMmkvReady) return;
+    if (
+      clerkUserId &&
+      (termsStatus === 'required' || termsStatus === 'error') &&
+      isCloud &&
+      isAgeGateConfirmed() &&
+      segments[0] !== '(auth)'
+    ) {
+      router.replace('/(auth)/login');
+      return;
+    }
     const redirect = resolveRootRedirect({
       segments,
       authEnabled,
@@ -429,7 +466,11 @@ export default function RootLayout() {
       onboardingDone: Boolean(storage.getString('onboarding-done')),
       ageGateConfirmed: isAgeGateConfirmed(),
     });
-    if (redirect) router.replace(redirect as never);
+    if (redirect) {
+      const destination =
+        redirect.pathname === '/(app)' && isClerkSignedIn ? consumePostAuthDestination() : null;
+      router.replace((destination ? { pathname: destination } : redirect) as never);
+    }
     // clerkUserId, not only isClerkSignedIn: a direct account switch keeps
     // signed-in true while onboarding and age-gate state, which this reads from
     // per-account storage, belong to a different person.
@@ -442,6 +483,8 @@ export default function RootLayout() {
     segments,
     router,
     authEnabled,
+    termsStatus,
+    isCloud,
   ]);
 
   // C1: Deep linking, handles agiworkforce://pair/CODE and agiworkforce://pair?code=CODE
@@ -529,6 +572,12 @@ export default function RootLayout() {
     switch (verb) {
       case 'chat':
         router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+        break;
+      case 'camera':
+        router.push('/(app)/camera' as Parameters<typeof router.push>[0]);
+        break;
+      case 'voice':
+        router.push('/(app)/voice' as Parameters<typeof router.push>[0]);
         break;
       case 'ask': {
         const prompt = getParam('prompt');
@@ -723,6 +772,9 @@ export default function RootLayout() {
             </ThemeVars>
             {/* Global offline banner, renders above all content when NetInfo is offline */}
             <OfflineBanner />
+            <CloudSyncErrorBanner />
+            <ToastHost />
+            <AccountSecurityVerificationPrompt />
             {/* The lock covers the app, it does not replace it: unmounting the
                 navigator on every resume discarded the open conversation. */}
             {isUnlocked && !isCovered ? null : (

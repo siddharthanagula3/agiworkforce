@@ -21,6 +21,7 @@ import {
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
   inspectStreamSequence,
   isStreamEnvelope,
+  messageKindForAgentEvent,
   type InteractiveCard,
   type InteractiveCardClientCapability,
   type InteractiveCardResponsePayload,
@@ -28,6 +29,7 @@ import {
   type StreamSequenceState,
 } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import { accountSecurityVerifyPageHref } from '@agiworkforce/cloud-contracts/account-security';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { hasExplicitWebSearchIntent } from '@agiworkforce/search';
 import { useSession } from '@/lib/identity/client';
@@ -43,6 +45,7 @@ import {
   type MessageToolEntry,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { useFastModeAllowanceStore } from '@shared/stores/fast-mode-allowance-store';
 import { readSelectedLocalModel } from '@features/desktop-host';
 import {
   LOCAL_ATTACHMENTS_UNSUPPORTED,
@@ -74,12 +77,18 @@ import {
   AGENT_EVENT_SCHEMA_VERSION,
   createManagedCloudChatClient,
   createManagedCloudAgentRunClient,
+  ManagedCloudAgentRunHttpError,
   ManagedCloudChatHttpError,
   parseAgentEventDelta,
   parseGeneratedFilesDelta,
   reconcileManagedCloudPublicText,
   readPersistedCloudToolApproval,
   readManagedCloudAgentRunHandle,
+  managedCloudAgentRunPath,
+  MANAGED_CLOUD_AGENT_RUN_ID_HEADER,
+  MANAGED_CLOUD_AGENT_RUN_URL_HEADER,
+  MANAGED_CLOUD_TOOL_LOOP_DURABLE,
+  MANAGED_CLOUD_TOOL_LOOP_HEADER,
   CloudToolApprovalProjectionSchema,
   DEVICE_STEP_RESUME_PATH,
   TOOL_APPROVAL_RESUME_PATH,
@@ -96,6 +105,10 @@ import {
   withoutGenerationProgress,
   type AgentActivityState,
   type AgentActivityToolEntry,
+  readServerSentEvents,
+  ServerSentEventDecoder,
+  splitJoinedServerSentEventData,
+  SSE_DONE_DATA,
 } from '@agiworkforce/client-runtime';
 import {
   INTERACTIVE_CARD_RESPONSE_PATH,
@@ -126,7 +139,7 @@ import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notic
 import {
   ATTACHMENTS_TRUNCATED_HEADER,
   readAttachmentTruncationHeader,
-} from '@/lib/chat-attachment-truncation-notice';
+} from '@agiworkforce/cloud-contracts';
 import {
   PAST_CHAT_CITATIONS_HEADER,
   PROJECT_FILE_CITATIONS_HEADER,
@@ -409,6 +422,68 @@ function readServerQuotaRecoveries(value: unknown): readonly ServerQuotaRecovery
 function isSessionExpiredError(error: unknown): boolean {
   if (error instanceof ChatApiError) return error.status === 401;
   return false;
+}
+
+function isPasskeyRequiredChatError(error: unknown): boolean {
+  return (
+    error instanceof ChatApiError &&
+    error.status === 403 &&
+    error.code?.toUpperCase() === 'PASSKEY_REQUIRED'
+  );
+}
+
+/**
+ * The gateway refuses a turn when the account has no terms acceptance on
+ * record or is past a material revision's deadline. The acceptance page is the
+ * only way forward, so the draft is parked and the page opened, as for a
+ * passkey step-up.
+ */
+function isTermsAcceptanceRequiredChatError(error: unknown): boolean {
+  return (
+    error instanceof ChatApiError &&
+    error.status === 403 &&
+    error.code?.toLowerCase() === 'terms_acceptance_required'
+  );
+}
+
+function termsAcceptancePageHref(returnTo: string, review = false): string {
+  return `/login/complete?${review ? 'review=terms&' : ''}redirectTo=${encodeURIComponent(returnTo)}`;
+}
+
+const TERMS_NOTICE_SEEN_KEY = 'agi.terms-notice-seen';
+
+/**
+ * The gateway names a newer Terms of Service version on a turn from an account
+ * that accepted an older one. Continued use accepts it, as with ChatGPT and
+ * Claude, so this is a one-time notice per version, not a click-through;
+ * while a material revision is pending it names the date and offers to accept.
+ */
+function surfaceTermsNotice(response: Response): void {
+  const version = response.headers.get('X-AGI-Terms-Notice')?.trim();
+  if (!version) return;
+  try {
+    if (window.localStorage.getItem(TERMS_NOTICE_SEEN_KEY) === version) return;
+    window.localStorage.setItem(TERMS_NOTICE_SEEN_KEY, version);
+  } catch {
+    return;
+  }
+  const requiredFrom = Date.parse(response.headers.get('X-AGI-Terms-Required-From') ?? '');
+  if (Number.isFinite(requiredFrom)) {
+    const deadline = new Date(requiredFrom).toLocaleDateString(undefined, { dateStyle: 'long' });
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    toast.info(`Our Terms of Service were updated. Accept them by ${deadline} to keep chatting.`, {
+      duration: 15_000,
+      action: {
+        label: 'Review terms',
+        onClick: () => window.location.assign(termsAcceptancePageHref(returnTo, true)),
+      },
+    });
+    return;
+  }
+  toast.info('Our Terms of Service were updated. Using AGI Workforce means you accept them.', {
+    duration: 15_000,
+    action: { label: 'Read terms', onClick: () => window.open('/terms', '_blank', 'noopener') },
+  });
 }
 
 function readChatApiErrorPayload(
@@ -708,6 +783,7 @@ const pendingInputTurns = new Map<string, PendingInputTurn>();
 export function __resetPendingTurnsForTests(): void {
   pendingTurns.clear();
   pendingInputTurns.clear();
+  remoteApprovalWatches.clear();
 }
 
 export function isInputTurnLive(assistantMessageId: string): boolean {
@@ -1107,6 +1183,150 @@ function autoResolvePendingApprovals(
   }
 }
 
+const REMOTE_APPROVAL_POLL_INTERVAL_MS = 5_000;
+const REMOTE_APPROVAL_MAX_BACKOFF_MS = 60_000;
+const REMOTE_APPROVAL_FATAL_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
+let remoteApprovalFollowers = 0;
+const WAITING_RUN_STATES: ReadonlySet<string> = new Set(['awaiting_input', 'paused']);
+const remoteApprovalWatches = new Set<string>();
+
+function journalFollowResponse(runId: string): Response {
+  const frame = { choices: [{ index: 0, delta: { x_run_detached: { run_id: runId } } }] };
+  return new Response(`data: ${JSON.stringify(frame)}\n\n`, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      [MANAGED_CLOUD_AGENT_RUN_ID_HEADER]: runId,
+      [MANAGED_CLOUD_AGENT_RUN_URL_HEADER]: managedCloudAgentRunPath(runId),
+      [MANAGED_CLOUD_TOOL_LOOP_HEADER]: MANAGED_CLOUD_TOOL_LOOP_DURABLE,
+    },
+  });
+}
+
+async function continueRemotelyAnsweredTurn(
+  assistantMessageId: string,
+  turn: PendingTurn,
+  getAuthToken: AuthTokenProvider,
+): Promise<void> {
+  const store = useChatStore.getState();
+  pendingTurns.delete(assistantMessageId);
+  for (const call of turn.calls) {
+    store.updateToolEntry(
+      assistantMessageId,
+      call.toolCallId,
+      { requiresApproval: false, status: 'running' },
+      turn.conversationId,
+    );
+  }
+  const message = findConversationMessage(turn.conversationId, assistantMessageId);
+  const { cloudApproval: _answered, ...metadata } = message?.metadata ?? {};
+  store.updateMessage(assistantMessageId, { metadata }, turn.conversationId);
+  store.startStreaming(assistantMessageId, turn.conversationId);
+  store.setLoading(true, turn.conversationId);
+  try {
+    const outcome = await consumeAssistantStream({
+      response: journalFollowResponse(turn.runId),
+      assistantMessageId,
+      model: turn.model,
+      conversationId: turn.conversationId,
+      isTemporaryConversation: turn.isTemporaryConversation,
+      getAuthToken,
+      seedContent: message?.content ?? '',
+      ...(message?.metadata?.tools
+        ? { seedTools: message.metadata.tools.map((tool) => ({ ...tool })) }
+        : {}),
+    });
+    if (outcome.suspended && outcome.pendingCalls.length > 0) {
+      pendingTurns.set(assistantMessageId, {
+        runId: turn.runId,
+        model: turn.model,
+        conversationId: turn.conversationId,
+        isTemporaryConversation: turn.isTemporaryConversation,
+        calls: outcome.pendingCalls,
+        decisions: new Map(),
+        resolving: false,
+      });
+      followRemoteApproval(assistantMessageId, getAuthToken);
+    }
+    if (outcome.suspended && outcome.pendingInputs.length > 0) {
+      pendingInputTurns.set(assistantMessageId, {
+        runId: turn.runId,
+        model: turn.model,
+        conversationId: turn.conversationId,
+        isTemporaryConversation: turn.isTemporaryConversation,
+        calls: outcome.pendingInputs,
+        responses: new Map(),
+        resolving: false,
+      });
+    }
+  } catch (error) {
+    await handleStreamError(error, {
+      assistantMessageId,
+      model: turn.model,
+      conversationId: turn.conversationId,
+      isTemporaryConversation: turn.isTemporaryConversation,
+      getAuthToken,
+      setError: store.setError,
+      stopStreaming: store.stopStreaming,
+      setLoading: store.setLoading,
+      updateMessage: store.updateMessage,
+    });
+  }
+}
+
+async function watchRemoteApproval(
+  assistantMessageId: string,
+  getAuthToken: AuthTokenProvider,
+): Promise<void> {
+  const client = createManagedCloudAgentRunClient({ getAuthToken });
+  let failures = 0;
+  for (;;) {
+    const delay = Math.min(
+      REMOTE_APPROVAL_POLL_INTERVAL_MS * 2 ** failures,
+      REMOTE_APPROVAL_MAX_BACKOFF_MS,
+    );
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    const turn = pendingTurns.get(assistantMessageId);
+    if (!turn || turn.resolving || remoteApprovalFollowers === 0) return;
+    if (useChatStore.getState().activeConversationId !== turn.conversationId) return;
+    const lastSequence =
+      findConversationMessage(turn.conversationId, assistantMessageId)?.metadata?.agentActivity
+        ?.lastSequence ?? -1;
+    let progressed: boolean;
+    try {
+      const snapshot = await client.getRun(turn.runId, {
+        afterSequence: lastSequence,
+        limit: 1,
+      });
+      failures = 0;
+      progressed =
+        !WAITING_RUN_STATES.has(snapshot.run.state) ||
+        (lastSequence >= 0 && snapshot.events.length > 0);
+    } catch (error) {
+      logger.warn('[useChatStream] Could not check a waiting run for a remote answer', error);
+      if (
+        error instanceof ManagedCloudAgentRunHttpError &&
+        REMOTE_APPROVAL_FATAL_STATUSES.has(error.status)
+      ) {
+        return;
+      }
+      failures += 1;
+      continue;
+    }
+    if (pendingTurns.get(assistantMessageId) !== turn || turn.resolving) return;
+    if (!progressed) continue;
+    await continueRemotelyAnsweredTurn(assistantMessageId, turn, getAuthToken);
+    return;
+  }
+}
+
+function followRemoteApproval(assistantMessageId: string, getAuthToken: AuthTokenProvider): void {
+  if (remoteApprovalWatches.has(assistantMessageId)) return;
+  remoteApprovalWatches.add(assistantMessageId);
+  void watchRemoteApproval(assistantMessageId, getAuthToken).finally(() => {
+    remoteApprovalWatches.delete(assistantMessageId);
+  });
+}
+
 export interface PendingDeviceStep {
   toolCallId: string;
   name: string;
@@ -1164,20 +1384,10 @@ function turnResumeEndpoint(turnId: string): string {
 
 /** Reads the replay leg and returns only the assistant text the cursor did not cover. */
 async function readTurnResumeRemainder(body: ReadableStream<Uint8Array>): Promise<string> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
   let out = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = done ? '' : (lines.pop() ?? '');
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload || payload === '[DONE]') continue;
+  for await (const event of readServerSentEvents(body, { acceptUnterminatedFinalFrame: true })) {
+    for (const payload of splitJoinedServerSentEventData(event.data)) {
+      if (!payload || payload === SSE_DONE_DATA) continue;
       try {
         const parsed = JSON.parse(payload) as {
           choices?: Array<{ delta?: { content?: unknown } }>;
@@ -1186,10 +1396,9 @@ async function readTurnResumeRemainder(body: ReadableStream<Uint8Array>): Promis
           if (typeof choice.delta?.content === 'string') out += choice.delta.content;
         }
       } catch {
-        // A partial frame completes on the next read.
+        continue;
       }
     }
-    if (done) break;
   }
   return out;
 }
@@ -2328,7 +2537,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
+  const frames = new ServerSentEventDecoder();
   let fullAssistantContent = ctx.seedContent ?? '';
   let inThinkingBlock = false;
   let contentBuffer = '';
@@ -2526,6 +2735,24 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
   };
 
+  const recordAgentEventOutcome = (event: AgentEvent) => {
+    const kind = messageKindForAgentEvent(event.type);
+    if (kind === 'error' && event.type === 'error' && !streamErrorInfo) {
+      streamErrorInfo = readStreamErrorFrame(event);
+    }
+    if (event.type === 'stop') {
+      finishReason =
+        event.reason === 'max-tokens'
+          ? 'length'
+          : event.reason === 'cancelled'
+            ? 'stopped'
+            : event.reason === 'error'
+              ? 'error'
+              : 'stop';
+    }
+    return kind;
+  };
+
   const replayDurableRun = async (): Promise<StreamOutcome> => {
     if (!runHandle) throw new Error('Managed Cloud run handle is unavailable');
     beginStreamPhase(assistantMessageId, 'reconnecting');
@@ -2557,7 +2784,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         signal: terminalFollowAbort.signal,
         onEvent: (envelope) => {
           endStreamPhase(assistantMessageId, 'reconnecting');
-          if (envelope.event.type === 'text-delta' && envelope.event.delta) {
+          const kind = recordAgentEventOutcome(envelope.event);
+          if (kind === 'text' && envelope.event.type === 'text-delta' && envelope.event.delta) {
             const reconciled = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
               envelope.event.delta,
@@ -2568,20 +2796,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               coalescedAppends.append('content', assistantMessageId, reconciled.unmatchedIncoming);
             }
           }
-          if (envelope.event.type === 'error' && !streamErrorInfo) {
-            streamErrorInfo = readStreamErrorFrame(envelope.event);
-          }
-          if (envelope.event.type === 'stop') {
-            finishReason =
-              envelope.event.reason === 'max-tokens'
-                ? 'length'
-                : envelope.event.reason === 'cancelled'
-                  ? 'stopped'
-                  : envelope.event.reason === 'error'
-                    ? 'error'
-                    : 'stop';
-          }
-          if (envelope.event.type === 'input-requested') {
+          if (kind === 'approval' && envelope.event.type === 'input-requested') {
             const { toolCallId, connectorId, toolName, inputRequests } = envelope.event;
             if (
               inputRequests &&
@@ -2655,39 +2870,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
   };
 
-  const collectEventPayloads = (rawEvent: string): string[] => {
-    const dataLines: string[] = [];
-    for (const rawLine of rawEvent.split('\n')) {
-      const line = rawLine.trim();
-      if (!line || !line.startsWith('data:')) continue;
-      const value = line.slice(5);
-      dataLines.push(value.startsWith(' ') ? value.slice(1) : value);
-    }
-    if (dataLines.length <= 1) return dataLines;
-    const joined = dataLines.join('\n');
-    try {
-      JSON.parse(joined);
-      return [joined];
-    } catch {
-      return dataLines;
-    }
-  };
-
-  const drainEventPayloads = (flushAll: boolean): string[] => {
-    buffer = buffer.replace(/\r\n|\r/g, '\n');
-    const payloads: string[] = [];
-    let boundary = buffer.indexOf('\n\n');
-    while (boundary !== -1) {
-      const rawEvent = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      payloads.push(...collectEventPayloads(rawEvent));
-      boundary = buffer.indexOf('\n\n');
-    }
-    if (flushAll && buffer.trim()) {
-      payloads.push(...collectEventPayloads(buffer));
-    }
-    if (flushAll) buffer = '';
-    return payloads;
+  const drainEventPayloads = (text: string, done: boolean): string[] => {
+    const events = frames.push(text);
+    if (done) events.push(...frames.finish({ acceptUnterminatedFrame: true }).events);
+    return events.flatMap((event) => splitJoinedServerSentEventData(event.data));
   };
 
   try {
@@ -2696,10 +2882,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       if (!done && value && value.byteLength > 0) latencyTrace?.markFirstChunk();
       markFirstStreamActivitySeen();
 
-      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      const text = done ? decoder.decode() : decoder.decode(value, { stream: true });
 
-      for (const data of drainEventPayloads(done)) {
-        if (data === '[DONE]') {
+      for (const data of drainEventPayloads(text, done)) {
+        if (data === SSE_DONE_DATA) {
           // A terminator only says the producer is finished. If this client
           // missed an earlier frame, settlement must wait for cursor replay.
           if (sequenceGapSeen) continue;
@@ -2760,24 +2946,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             agentEnvelope && !admitAgentEvent(assistantMessageId, agentEnvelope),
           );
           if (agentEnvelope && !duplicateAgentEnvelope) {
-            if (agentEnvelope.event.type === 'text-delta') {
+            const kind = recordAgentEventOutcome(agentEnvelope.event);
+            if (kind === 'text' && agentEnvelope.event.type === 'text-delta') {
               unacknowledgedPublicText = reconcileManagedCloudPublicText(
                 unacknowledgedPublicText,
                 agentEnvelope.event.delta,
               ).pending;
-            }
-            if (agentEnvelope.event.type === 'error' && !streamErrorInfo) {
-              streamErrorInfo = readStreamErrorFrame(agentEnvelope.event);
-            }
-            if (agentEnvelope.event.type === 'stop') {
-              finishReason =
-                agentEnvelope.event.reason === 'max-tokens'
-                  ? 'length'
-                  : agentEnvelope.event.reason === 'cancelled'
-                    ? 'stopped'
-                    : agentEnvelope.event.reason === 'error'
-                      ? 'error'
-                      : 'stop';
             }
             applySourceListEvent(agentEnvelope.event);
             const previousAgentActivity = currentAgentActivity;
@@ -3376,6 +3550,38 @@ export function useChatStream(
     };
   }, []);
 
+  useEffect(() => {
+    if (!followActiveConversation) return undefined;
+    const getAuthToken: AuthTokenProvider = async () => {
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
+      return token;
+    };
+    remoteApprovalFollowers += 1;
+    const checked = new Set<string>();
+    const followRestored = (messages: readonly Message[]): void => {
+      for (const message of messages) {
+        if (checked.has(message.id) || !message.metadata?.cloudApproval) continue;
+        checked.add(message.id);
+        if (isApprovalTurnLive(message.id)) followRemoteApproval(message.id, getAuthToken);
+      }
+    };
+    followRestored(useChatStore.getState().messages);
+    const unsubscribe = useChatStore.subscribe((state, previous) => {
+      if (state.activeConversationId !== previous.activeConversationId) checked.clear();
+      if (
+        state.messages !== previous.messages ||
+        state.activeConversationId !== previous.activeConversationId
+      ) {
+        followRestored(state.messages);
+      }
+    });
+    return () => {
+      unsubscribe();
+      remoteApprovalFollowers -= 1;
+    };
+  }, [followActiveConversation, getToken]);
+
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   useEffect(() => {
     if (!followActiveConversation) return undefined;
@@ -3902,6 +4108,12 @@ export function useChatStream(
                 supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)
                   ? resolvedEffort
                   : undefined,
+              speed:
+                thinkingState.fast &&
+                useFastModeAllowanceStore.getState().allowed &&
+                selectedModelMetadata?.fastTier
+                  ? 'fast'
+                  : undefined,
               client_timezone: getBrowserTimeZone(),
               use_prompt_cache: true,
             }),
@@ -3926,6 +4138,7 @@ export function useChatStream(
 
           if (!isTemporaryConversation && !regenerateParentId) reportTurnCommitted();
 
+          surfaceTermsNotice(response);
           const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
           if (resolvedModel !== model) {
             updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
@@ -4002,6 +4215,7 @@ export function useChatStream(
               settled.pendingCalls,
               resolveToolApproval,
             );
+            followRemoteApproval(assistantMessageId, getAuthToken);
             break;
           }
 
@@ -4050,8 +4264,22 @@ export function useChatStream(
         // The composer clears on send, so by the time the 401 came back the
         // user's text survived only as a failed turn in the transcript, sign
         // back in and you retype it.
-        if (isSessionExpiredError(error)) {
+        if (
+          isSessionExpiredError(error) ||
+          isPasskeyRequiredChatError(error) ||
+          isTermsAcceptanceRequiredChatError(error)
+        ) {
           parkUnsentDraft(conversationId, content);
+        }
+        if (isPasskeyRequiredChatError(error)) {
+          window.location.assign(
+            accountSecurityVerifyPageHref(`${window.location.pathname}${window.location.search}`),
+          );
+        }
+        if (isTermsAcceptanceRequiredChatError(error)) {
+          window.location.assign(
+            termsAcceptancePageHref(`${window.location.pathname}${window.location.search}`),
+          );
         }
         await handleStreamError(error, {
           assistantMessageId,
@@ -4554,6 +4782,33 @@ export function useResolveToolApproval(
         }
       };
 
+      const closeAnsweredApprovalTurn = async (reason: string) => {
+        pendingTurns.delete(assistantMessageId);
+        for (const call of turn.calls) {
+          updateToolEntry(
+            assistantMessageId,
+            call.toolCallId,
+            { status: 'failed', requiresApproval: false, error: reason },
+            turn.conversationId,
+          );
+        }
+        const message = findConversationMessage(turn.conversationId, assistantMessageId);
+        const { cloudApproval: _answered, ...metadata } = message?.metadata ?? {};
+        updateMessage(assistantMessageId, { metadata, isStreaming: false }, turn.conversationId);
+        if (turn.isTemporaryConversation || !message) return;
+        await saveMessageToDb(
+          turn.conversationId,
+          {
+            id: assistantMessageId,
+            role: message.role,
+            content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+            model: message.model ?? turn.model,
+            metadata,
+          },
+          getAuthToken,
+        ).catch((error) => notifyPersistenceFailure('assistant', error));
+      };
+
       let authToken: string;
       try {
         authToken = await getAuthToken();
@@ -4670,6 +4925,7 @@ export function useResolveToolApproval(
             settled.pendingCalls,
             resolveToolApproval,
           );
+          followRemoteApproval(assistantMessageId, getAuthToken);
         } else {
           pendingTurns.delete(assistantMessageId);
         }
@@ -4689,7 +4945,11 @@ export function useResolveToolApproval(
         }
       } catch (error) {
         if (error instanceof ChatApiError) {
-          await restoreApprovalControls();
+          if (error.status !== undefined && ANSWERED_APPROVAL_STATUSES.has(error.status)) {
+            await closeAnsweredApprovalTurn(getVisibleErrorMessage(error));
+          } else {
+            await restoreApprovalControls();
+          }
           setError(getVisibleErrorMessage(error), turn.conversationId);
           stopStreaming(turn.conversationId);
           setLoading(false, turn.conversationId);
@@ -4718,6 +4978,7 @@ export function useResolveToolApproval(
 }
 
 const INACTIVE_INPUT_STATUSES = new Set([404, 410]);
+const ANSWERED_APPROVAL_STATUSES = new Set([404, 409, 410]);
 
 function useResolveToolInput(
   sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
@@ -4915,6 +5176,7 @@ function useResolveToolInput(
             resolving: false,
           });
           autoResolvePendingApprovals(assistantMessageId, pendingCalls, resolveToolApproval);
+          followRemoteApproval(assistantMessageId, getAuthToken);
         }
         if (runId && pendingInputs.length > 0) {
           pendingInputTurns.set(assistantMessageId, {

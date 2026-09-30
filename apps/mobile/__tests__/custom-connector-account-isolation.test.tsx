@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 jest.mock('../lib/mmkv', () => ({
@@ -119,5 +119,25 @@ describe('AddCustomConnectorModal account isolation', () => {
     });
 
     expect(onAdded).not.toHaveBeenCalled();
+  });
+
+  it('does not display private server details when creation fails', async () => {
+    mockAddCustomConnector.mockRejectedValue(new Error('authToken leaked at /api/connectors'));
+    const screen = render(
+      <SafeAreaProvider initialMetrics={METRICS}>
+        <AddCustomConnectorModal visible onClose={jest.fn()} onAdded={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+
+    fireEvent.changeText(screen.getByLabelText('Connector name'), 'My tools');
+    fireEvent.changeText(screen.getByLabelText('Connector URL'), 'https://tools.example.com/sse');
+    fireEvent.press(screen.getByLabelText('Add connector'));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Could not add this connector. Check its URL and try again.'),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText(/authToken leaked/)).toBeNull();
   });
 });

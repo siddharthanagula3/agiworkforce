@@ -14,6 +14,7 @@ use crate::schedules::api_error_message;
 use crate::tier_cache;
 
 const CLOUD_TIMEOUT: Duration = Duration::from_secs(20);
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(3600);
 
 #[derive(Debug)]
 pub enum CloudError {
@@ -263,12 +264,51 @@ impl CloudClient {
         serde_json::from_str(&reply.body).map_err(|error| CloudError::Decode(error.to_string()))
     }
 
+    /// Send, and on a 401 renew the session once and send again. A token the
+    /// server refuses before it was due to expire (a passkey enrolled, the
+    /// device unlinked) would otherwise fail every call while the account still
+    /// looked signed in. A refresh that is refused too, or a second 401, forgets
+    /// the credential, so the next status reads signed out and the user, or the
+    /// desktop's account sync, signs in again.
+    async fn send_renewing<T: DeserializeOwned>(
+        &self,
+        build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
+    ) -> Result<T, CloudError> {
+        match Self::send(build(self)).await {
+            Err(CloudError::SessionExpired) => {}
+            other => return other,
+        }
+        use crate::app_server::account::{
+            forget_refused_session, recover_rejected_session, RejectedSessionRecovery,
+        };
+        match recover_rejected_session(&self.jwt).await {
+            RejectedSessionRecovery::Renewed => {
+                let renewed = CloudClient::connect_managed()?;
+                match Self::send(build(&renewed)).await {
+                    Err(CloudError::SessionExpired) => {
+                        forget_refused_session();
+                        Err(CloudError::SessionExpired)
+                    }
+                    other => other,
+                }
+            }
+            RejectedSessionRecovery::Refused(message) => Err(CloudError::Api {
+                status: 403,
+                message,
+            }),
+            RejectedSessionRecovery::Ended(_) | RejectedSessionRecovery::Unavailable => {
+                Err(CloudError::SessionExpired)
+            }
+        }
+    }
+
     pub async fn get<T: DeserializeOwned>(
         &self,
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T, CloudError> {
-        Self::send(self.request(reqwest::Method::GET, path).query(query)).await
+        self.send_renewing(|client| client.request(reqwest::Method::GET, path).query(query))
+            .await
     }
 
     pub async fn post<B: Serialize, T: DeserializeOwned>(
@@ -276,7 +316,8 @@ impl CloudClient {
         path: &str,
         body: &B,
     ) -> Result<T, CloudError> {
-        Self::send(self.request(reqwest::Method::POST, path).json(body)).await
+        self.send_renewing(|client| client.request(reqwest::Method::POST, path).json(body))
+            .await
     }
 
     /// Send one declared [`Route`]. Commands that name their route go through
@@ -287,13 +328,16 @@ impl CloudClient {
         query: &[(&str, String)],
         body: Option<&serde_json::Value>,
     ) -> Result<T, CloudError> {
-        let mut builder = self
-            .request(route.method.reqwest(), &route.path)
-            .query(query);
-        if let Some(body) = body {
-            builder = builder.json(body);
-        }
-        Self::send(builder).await
+        self.send_renewing(|client| {
+            let builder = client
+                .request(route.method.reqwest(), &route.path)
+                .query(query);
+            match body {
+                Some(body) => builder.json(body),
+                None => builder,
+            }
+        })
+        .await
     }
 
     /// POST one billable Managed Cloud operation. The key identifies the
@@ -374,6 +418,93 @@ impl CloudClient {
             .map(|bytes| (bytes.to_vec(), value))
             .map_err(|error| CloudError::Transport(error.to_string()))
     }
+
+    pub async fn download_to(
+        &self,
+        path: &str,
+        target: &std::path::Path,
+    ) -> Result<u64, CloudError> {
+        let response = self.download_response(path).await?;
+        write_body(response, target).await
+    }
+
+    pub async fn download_into(
+        &self,
+        path: &str,
+        directory: &std::path::Path,
+        fallback_name: &str,
+    ) -> Result<std::path::PathBuf, CloudError> {
+        let response = self.download_response(path).await?;
+        let name = response
+            .headers()
+            .get(reqwest::header::CONTENT_DISPOSITION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(disposition_file_name)
+            .unwrap_or_else(|| fallback_name.to_string());
+        let target = directory.join(name);
+        write_body(response, &target).await?;
+        Ok(target)
+    }
+
+    async fn download_response(&self, path: &str) -> Result<reqwest::Response, CloudError> {
+        let response = self
+            .request(reqwest::Method::GET, path)
+            .header("Accept", "*/*")
+            .timeout(DOWNLOAD_TIMEOUT)
+            .send()
+            .await
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        let status = response.status().as_u16();
+        if status == 401 {
+            tier_cache::invalidate_tier_cache();
+            return Err(CloudError::SessionExpired);
+        }
+        if !(200..300).contains(&status) {
+            let body = response.text().await.unwrap_or_default();
+            return Err(CloudError::Api {
+                status,
+                message: api_error_message(&body),
+            });
+        }
+        Ok(response)
+    }
+}
+
+fn disposition_file_name(disposition: &str) -> Option<String> {
+    let raw = disposition.split(';').map(str::trim).find_map(|part| {
+        part.strip_prefix("filename=")
+            .map(|value| value.trim_matches('"').to_string())
+    })?;
+    std::path::Path::new(&raw)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty() && *name != "." && *name != "..")
+        .map(str::to_string)
+}
+
+async fn write_body(
+    mut response: reqwest::Response,
+    target: &std::path::Path,
+) -> Result<u64, CloudError> {
+    let write_error = |error: std::io::Error| {
+        CloudError::Transport(format!("could not write {}: {error}", target.display()))
+    };
+    let mut file = tokio::fs::File::create(target).await.map_err(write_error)?;
+    let mut written = 0u64;
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| CloudError::Transport(error.to_string()))?
+    {
+        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk)
+            .await
+            .map_err(write_error)?;
+        written += chunk.len() as u64;
+    }
+    tokio::io::AsyncWriteExt::flush(&mut file)
+        .await
+        .map_err(write_error)?;
+    Ok(written)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -385,6 +516,46 @@ pub struct Reply {
 impl Reply {
     pub fn is_success(&self) -> bool {
         (200..300).contains(&self.status)
+    }
+}
+
+pub async fn connectivity_line(privacy: PrivacyMode) -> String {
+    if privacy != PrivacyMode::Managed {
+        return format!("AGI Cloud: not used by this {} session", privacy.label());
+    }
+    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
+        .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
+    let Some(base) = tier_cache::resolve_agi_api_base(&raw_base) else {
+        return format!("AGI Cloud: {raw_base} is not an AGI Workforce address");
+    };
+    let started = std::time::Instant::now();
+    let probe = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map(|client| client.get(format!("{base}/api/health")).send());
+    let outcome = match probe {
+        Ok(request) => request.await,
+        Err(_) => {
+            return "AGI Cloud: unreachable. Check your connection, then run /status to try again."
+                .to_string()
+        }
+    };
+    match outcome {
+        Ok(response) if response.status().is_success() => format!(
+            "AGI Cloud: reachable ({} ms)",
+            started.elapsed().as_millis()
+        ),
+        Ok(response) => format!(
+            "AGI Cloud: answered HTTP {}. Run /status to try again.",
+            response.status().as_u16()
+        ),
+        Err(error) if error.is_timeout() => {
+            "AGI Cloud: no answer within 5 seconds. Check your connection, then run /status to try again."
+                .to_string()
+        }
+        Err(_) => {
+            "AGI Cloud: unreachable. Check your connection, then run /status to try again.".to_string()
+        }
     }
 }
 

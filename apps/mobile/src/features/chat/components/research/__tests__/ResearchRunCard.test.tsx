@@ -133,8 +133,8 @@ describe('ResearchRunCard over a recorded run', () => {
     );
 
     expect(screen.getByText('Review the plan to start searching')).toBeTruthy();
-    expect(screen.getByText('Battery chemistry roadmaps 2026')).toBeTruthy();
-    expect(screen.getByText('Sodium-ion cost per kilowatt hour')).toBeTruthy();
+    expect(screen.getByDisplayValue('Battery chemistry roadmaps 2026')).toBeTruthy();
+    expect(screen.getByDisplayValue('Sodium-ion cost per kilowatt hour')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('research-plan-approve'));
     expect(onPlanDecision).toHaveBeenCalledWith('start');

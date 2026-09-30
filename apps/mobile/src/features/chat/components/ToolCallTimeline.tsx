@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
-import { View, Pressable, Modal, ScrollView } from 'react-native';
+import { View, Modal, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   ChevronDown,
   ChevronRight,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { lucideRNToolIcon, lucideRNIconByName } from './toolIconRN';
 import { WebSearchResultCard } from './WebSearchResultCard';
 import { WebSearchToolCard, isWebSearchTool } from './WebSearchToolCard';
@@ -23,6 +25,7 @@ import {
   CloudToolApprovalControls,
   cloudToolApprovalPreview,
   parseToolArguments,
+  type AllowCloudToolForChat,
   type ResolveCloudToolApproval,
 } from './CloudToolApprovalControls';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
@@ -36,6 +39,7 @@ import {
 } from '@agiworkforce/types';
 import type { ToolStatus } from '@agiworkforce/types';
 import type { ToolCall } from '@/types/chat';
+import { translatePlural } from '@/src/i18n/plural';
 
 const STATUS_GLYPH: Record<Exclude<ToolStatus, 'succeeded'>, typeof CircleCheck> = {
   pending: Clock,
@@ -110,7 +114,9 @@ function ToolRowIcon({ tool }: { tool: ToolCall }) {
           borderColor: colors.border,
         }}
       >
-        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>
+        <Text
+          style={{ fontSize: typeScale.caption, fontWeight: '700', color: colors.textSecondary }}
+        >
           {sourceBadge}
         </Text>
       </View>
@@ -132,7 +138,10 @@ function trailingChipLabel(tool: ToolCall): string | null {
   }
   if (tool.duration !== undefined) return formatToolDuration(tool.duration);
   if (tool.searchResults?.length) {
-    return `${tool.searchResults.length} result${tool.searchResults.length === 1 ? '' : 's'}`;
+    return translatePlural('common', 'counts.results', tool.searchResults.length, {
+      one: '{{count}} result',
+      other: '{{count}} results',
+    });
   }
   if (tool.command) return 'Script';
   if (tool.filePath) {
@@ -156,6 +165,7 @@ function ToolCallTimelineRow({
   isLast,
   onOpenFullScreen,
   onResolveApproval,
+  onAllowApprovalForChat,
   approvalExpired,
   onResendApproval,
 }: {
@@ -164,6 +174,7 @@ function ToolCallTimelineRow({
   isLast: boolean;
   onOpenFullScreen: (tool: ToolCall) => void;
   onResolveApproval?: ResolveCloudToolApproval;
+  onAllowApprovalForChat?: AllowCloudToolForChat;
   approvalExpired?: boolean;
   onResendApproval?: () => void;
 }) {
@@ -205,7 +216,7 @@ function ToolCallTimelineRow({
 
   return (
     <View>
-      <Pressable
+      <PressableBox
         onPress={toggle}
         disabled={!hasBody}
         accessibilityRole={hasBody ? 'button' : 'text'}
@@ -232,7 +243,7 @@ function ToolCallTimelineRow({
             numberOfLines={1}
             style={{
               flex: 1,
-              fontSize: 13,
+              fontSize: typeScale.footnote,
               color: statusTone === 'error' ? colors.agentError : colors.textSecondary,
             }}
           >
@@ -249,7 +260,7 @@ function ToolCallTimelineRow({
             >
               <Text
                 numberOfLines={1}
-                style={{ fontSize: 10.5, color: colors.textMuted, maxWidth: 160 }}
+                style={{ fontSize: typeScale.caption, color: colors.textMuted, maxWidth: 160 }}
               >
                 {chip}
               </Text>
@@ -263,7 +274,7 @@ function ToolCallTimelineRow({
             )
           ) : null}
         </View>
-      </Pressable>
+      </PressableBox>
 
       {isSearch ? <WebSearchToolCard tool={tool} showSources={!expanded} /> : null}
 
@@ -285,14 +296,14 @@ function ToolCallTimelineRow({
           >
             {approvalExpired ? (
               <>
-                <Text style={{ fontSize: 12.5, color: colors.textSecondary }}>
+                <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
                   This approval request expired or is no longer active.{' '}
                   {onResendApproval
                     ? 'Send a new message to try again.'
                     : 'Send a new message to continue.'}
                 </Text>
                 {onResendApproval ? (
-                  <Pressable
+                  <PressableBox
                     onPress={onResendApproval}
                     accessibilityRole="button"
                     accessibilityLabel="Resend"
@@ -304,15 +315,21 @@ function ToolCallTimelineRow({
                       backgroundColor: colors.surfaceOverlay,
                     }}
                   >
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>
+                    <Text
+                      style={{
+                        fontSize: typeScale.footnote,
+                        fontWeight: '600',
+                        color: colors.textSecondary,
+                      }}
+                    >
                       Resend
                     </Text>
-                  </Pressable>
+                  </PressableBox>
                 ) : null}
               </>
             ) : (
               <>
-                <Text style={{ fontSize: 12.5, color: colors.textPrimary }}>
+                <Text style={{ fontSize: typeScale.caption, color: colors.textPrimary }}>
                   {tool.approvalDecision
                     ? `Decision saved: ${
                         tool.approvalDecision === 'approved'
@@ -324,7 +341,11 @@ function ToolCallTimelineRow({
                 {showRawApprovalInput ? (
                   <Text
                     numberOfLines={4}
-                    style={{ fontFamily: 'monospace', fontSize: 11, color: colors.textSecondary }}
+                    style={{
+                      fontFamily: 'monospace',
+                      fontSize: typeScale.caption,
+                      color: colors.textSecondary,
+                    }}
                   >
                     {tool.input}
                   </Text>
@@ -336,7 +357,9 @@ function ToolCallTimelineRow({
                   args={approvalArgs}
                   riskLevel={tool.approvalRiskLevel}
                   decision={tool.approvalDecision}
+                  guidance={tool.approvalGuidance}
                   onResolve={onResolveApproval}
+                  onAllowForChat={onAllowApprovalForChat}
                 />
               </>
             )}
@@ -365,7 +388,7 @@ function ToolCallTimelineRow({
                 <View>
                   <Text
                     style={{
-                      fontSize: 10,
+                      fontSize: typeScale.caption,
                       fontWeight: '600',
                       color: colors.textMuted,
                       textTransform: 'uppercase',
@@ -373,12 +396,16 @@ function ToolCallTimelineRow({
                       marginBottom: 4,
                     }}
                   >
-                    Request
+                    {executedCode(tool) === undefined ? 'Request' : 'Code'}
                   </Text>
                   <Text
-                    style={{ fontFamily: 'monospace', fontSize: 11.5, color: colors.textPrimary }}
+                    style={{
+                      fontFamily: 'monospace',
+                      fontSize: typeScale.caption,
+                      color: colors.textPrimary,
+                    }}
                   >
-                    {tool.command ?? tool.input}
+                    {tool.command ?? executedCode(tool) ?? tool.input}
                   </Text>
                 </View>
               ) : null}
@@ -386,7 +413,7 @@ function ToolCallTimelineRow({
                 <View>
                   <Text
                     style={{
-                      fontSize: 10,
+                      fontSize: typeScale.caption,
                       fontWeight: '600',
                       color: colors.textMuted,
                       textTransform: 'uppercase',
@@ -394,11 +421,15 @@ function ToolCallTimelineRow({
                       marginBottom: 4,
                     }}
                   >
-                    Response
+                    {executedCode(tool) === undefined ? 'Response' : 'Output'}
                   </Text>
                   <Text
                     numberOfLines={12}
-                    style={{ fontFamily: 'monospace', fontSize: 11.5, color: colors.textPrimary }}
+                    style={{
+                      fontFamily: 'monospace',
+                      fontSize: typeScale.caption,
+                      color: colors.textPrimary,
+                    }}
                   >
                     {tool.output}
                   </Text>
@@ -406,7 +437,7 @@ function ToolCallTimelineRow({
               ) : null}
               <ExecutionErrorOutput tool={tool} fontSize={11.5} numberOfLines={12} />
               {needsFullScreen(tool) ? (
-                <Pressable
+                <PressableBox
                   onPress={() => onOpenFullScreen(tool)}
                   accessibilityRole="button"
                   accessibilityLabel={`View full output for ${nameText}`}
@@ -414,10 +445,16 @@ function ToolCallTimelineRow({
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 2 }}
                 >
                   <Maximize2 size={11} color={colors.textMuted} />
-                  <Text style={{ fontSize: 11.5, fontWeight: '600', color: colors.textSecondary }}>
+                  <Text
+                    style={{
+                      fontSize: typeScale.caption,
+                      fontWeight: '600',
+                      color: colors.textSecondary,
+                    }}
+                  >
                     View full output
                   </Text>
-                </Pressable>
+                </PressableBox>
               ) : null}
             </View>
           )}
@@ -428,6 +465,22 @@ function ToolCallTimelineRow({
 }
 
 const FULLSCREEN_OUTPUT_THRESHOLD = 600;
+
+const CODE_EXECUTION_TOOLS: ReadonlySet<string> = new Set([
+  'code_execution',
+  'execute_code',
+  'code_interpreter',
+]);
+
+function executedCode(tool: ToolCall): string | undefined {
+  if (!CODE_EXECUTION_TOOLS.has(tool.name) || !tool.input) return undefined;
+  try {
+    const parsed = JSON.parse(tool.input) as { code?: unknown };
+    return typeof parsed.code === 'string' && parsed.code.trim() !== '' ? parsed.code : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function needsFullScreen(tool: ToolCall): boolean {
   const size =
@@ -524,11 +577,16 @@ export function ToolCallDetailsSheet({
         >
           <Text
             numberOfLines={1}
-            style={{ flex: 1, fontSize: 16, fontWeight: '600', color: colors.textPrimary }}
+            style={{
+              flex: 1,
+              fontSize: typeScale.callout,
+              fontWeight: '600',
+              color: colors.textPrimary,
+            }}
           >
             {label.displayName}
           </Text>
-          <Pressable
+          <PressableBox
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Close tool details"
@@ -543,14 +601,14 @@ export function ToolCallDetailsSheet({
             }}
           >
             <X size={16} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         </View>
         <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
           {tool.searchResults?.length ? (
             <View style={{ gap: 8 }}>
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   fontWeight: '600',
                   color: colors.textMuted,
                   textTransform: 'uppercase',
@@ -572,7 +630,7 @@ export function ToolCallDetailsSheet({
             <View>
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   fontWeight: '600',
                   color: colors.textMuted,
                   textTransform: 'uppercase',
@@ -584,7 +642,11 @@ export function ToolCallDetailsSheet({
               </Text>
               <Text
                 selectable
-                style={{ fontFamily: 'monospace', fontSize: 12.5, color: colors.textPrimary }}
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: typeScale.caption,
+                  color: colors.textPrimary,
+                }}
               >
                 {tool.command ?? tool.input}
               </Text>
@@ -594,7 +656,7 @@ export function ToolCallDetailsSheet({
             <View>
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   fontWeight: '600',
                   color: colors.textMuted,
                   textTransform: 'uppercase',
@@ -606,7 +668,11 @@ export function ToolCallDetailsSheet({
               </Text>
               <Text
                 selectable
-                style={{ fontFamily: 'monospace', fontSize: 12.5, color: colors.textPrimary }}
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: typeScale.caption,
+                  color: colors.textPrimary,
+                }}
               >
                 {tool.output}
               </Text>
@@ -624,6 +690,7 @@ export function ToolCallTimeline({
   toolCalls,
   summary,
   onResolveApproval,
+  onAllowApprovalForChat,
   approvalExpired,
   onResendApproval,
 }: {
@@ -631,6 +698,7 @@ export function ToolCallTimeline({
   toolCalls: ToolCall[];
   summary: string;
   onResolveApproval?: ResolveCloudToolApproval;
+  onAllowApprovalForChat?: AllowCloudToolForChat;
   approvalExpired?: boolean;
   onResendApproval?: () => void;
 }) {
@@ -666,19 +734,19 @@ export function ToolCallTimeline({
 
   return (
     <View style={{ marginBottom: 4 }}>
-      <Pressable
+      <PressableBox
         onPress={handleToggle}
         accessibilityRole="button"
         accessibilityLabel={`${summary}${collapsed ? ', collapsed' : ', expanded'}`}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}
       >
-        <Text style={{ fontSize: 12.5, color: colors.textMuted }}>{summary}</Text>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>{summary}</Text>
         {collapsed ? (
           <ChevronRight size={12} color={colors.textMuted} />
         ) : (
           <ChevronDown size={12} color={colors.textMuted} />
         )}
-      </Pressable>
+      </PressableBox>
 
       {!collapsed ? (
         <View>
@@ -690,6 +758,7 @@ export function ToolCallTimeline({
               isLast={i === toolCalls.length - 1 && !allDone}
               onOpenFullScreen={setFullScreenTool}
               onResolveApproval={onResolveApproval}
+              onAllowApprovalForChat={onAllowApprovalForChat}
               approvalExpired={approvalExpired}
               onResendApproval={onResendApproval}
             />
@@ -701,7 +770,13 @@ export function ToolCallTimeline({
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5 }}
               >
                 <OutcomeGlyph size={15} strokeWidth={1.75} color={colors.textMuted} />
-                <Text style={{ fontSize: 13, color: colors.textSecondary, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    color: colors.textSecondary,
+                    fontWeight: '600',
+                  }}
+                >
                   {TOOL_STATUS_PRESENTATION[outcome].label}
                 </Text>
               </View>

@@ -105,10 +105,10 @@ export function DragDropOverlay({
             className="relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-primary bg-card/90 p-12 shadow-e4"
           >
             {/* Corner accents */}
-            <div className="absolute left-4 top-4 h-8 w-8 rounded-tl-xl border-l-2 border-t-2 border-primary" />
-            <div className="absolute right-4 top-4 h-8 w-8 rounded-tr-xl border-r-2 border-t-2 border-primary" />
-            <div className="absolute bottom-4 left-4 h-8 w-8 rounded-bl-xl border-b-2 border-l-2 border-primary" />
-            <div className="absolute bottom-4 right-4 h-8 w-8 rounded-br-xl border-b-2 border-r-2 border-primary" />
+            <div className="absolute start-4 top-4 h-8 w-8 rounded-ss-xl border-s-2 border-t-2 border-primary" />
+            <div className="absolute end-4 top-4 h-8 w-8 rounded-se-xl border-e-2 border-t-2 border-primary" />
+            <div className="absolute bottom-4 start-4 h-8 w-8 rounded-es-xl border-b-2 border-s-2 border-primary" />
+            <div className="absolute bottom-4 end-4 h-8 w-8 rounded-ee-xl border-b-2 border-e-2 border-primary" />
 
             {/* Pulsing ring */}
             <motion.div

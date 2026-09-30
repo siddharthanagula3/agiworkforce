@@ -6,30 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S4.03: Conversation search.
-
-- Done when: A search destination where the user types a keyword, gets past conversations matching titles or message text, and opens one.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The Sessions History quick pick filters only session titles, model and folder; message text is not searched, so add content search. | handler |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1278`
-
 ## S4.04: Archived conversations.
 
 - Done when: A destination lists the user's archived conversations and lets them open, restore or delete them.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | A session can be archived from the tree, but the tree lists threads with includeArchived: false and nothing lists or restores archived sessions. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:109-113`
 
 ## S4.05: Pinned conversations.
 
@@ -42,18 +27,6 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extensio
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S4.07: Project overview.
-
-- Done when: Opening a project shows its home: name, description/instructions summary, and entry points to its chats and files.
-- Wave: 2
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The cloud project screen shows only the name plus Chats and Sources tabs; the summary header (description, instructions, members, last used) renders only after fetchProject, which is blocked while FEATURES.crossDeviceSync is off. | flag-off |
-
-Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/projects/[id].tsx:170-175`
 
 ## S4.08: Project conversations.
 
@@ -145,14 +118,11 @@ Code: `apps/mobile/app/(app)/projects/[id].tsx:222-226`, `apps/mobile/app/(app)/
 
 - Done when: A coding home lists the user's coding sessions and starts a new one on a repository or runtime.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Remote screen lists and opens AGI Code sessions running on a paired desktop, but mobile cannot start a new coding session (no cloud code, no remote thread start). | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:39-85`, `apps/mobile/src/features/companion/remote-code/service.ts:29-35`
 
 ## S4.20: Coding-session workspace.
 
@@ -190,19 +160,6 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:39-85`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S4.23: Library.
-
-- Done when: A Library destination lists everything the account produced or uploaded (files, images, videos, documents, artifacts) with filters and open/download actions.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `agi artifacts list` lists only the account's artifacts; uploaded files and generated images/videos are not browsable there. | ui |
-| chrome | partial | The Artifacts drawer lists only the account's artifacts; uploaded files and generated images/videos are not browsable there. | ui |
-
-Code: `apps/cli/src/lib.rs:1023-1024`, `apps/cli/src/lib.rs:1888-1900`, `apps/extension/src/side_panel.ts:7022-7024`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:234-238`
-
 ## S4.24: Shared-with-me resources.
 
 - Done when: A destination lists resources (projects, conversations, artifacts, connectors) that other people shared with the user, and opens them.
@@ -233,15 +190,12 @@ Code: `apps/cli/src/lib.rs:1023-1024`, `apps/cli/src/lib.rs:1888-1900`, `apps/ex
 
 - Done when: A dedicated image studio where the user writes a prompt, picks style/size options, generates images and sees results/history in one place.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile studio screen waits for the Codex mobile release (rule 12); the web studio's building blocks (image options, Library kind=image history) are ready to reuse. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/images/components/ImageStudio.tsx:73-73`
 
 ## S4.28: Image collection.
 
@@ -259,16 +213,13 @@ Code: `apps/web/features/images/components/ImageStudio.tsx:73-73`
 
 - Done when: A media job history lists image/video generation jobs with their status (queued, running, failed, done) and links to results.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | GET /api/media/jobs serves mobile too, but the mobile Library has no Generations section yet; the mobile app is in the Codex release. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/media/jobs/route.ts:20-20`
 
 ## S4.31: Notebook workspace.
 
@@ -309,22 +260,6 @@ Code: `apps/web/app/api/media/jobs/route.ts:20-20`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S4.34: Custom-assistant builder.
-
-- Done when: A builder lets the user define a custom assistant (name, instructions, knowledge, tools, starters), preview it and save it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | /agents create writes a markdown template (name, description, model, tools, maxTurns); there is no guided builder or preview, the user fills the file by hand. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agents.rs:625-645`, `apps/cli/src/agents.rs:421-434`
-
 ## S4.35: Skills manager.
 
 - Done when: A skills manager lists installed and available skills and lets the user install, enable/disable, author and remove them.
@@ -333,10 +268,7 @@ Code: `apps/cli/src/agents.rs:625-645`, `apps/cli/src/agents.rs:421-434`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile Skills screen only browses the cloud catalog and inserts a skill into chat; installing, removing, toggling or authoring skills is web-only. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `apps/mobile/src/features/skills/service.ts:20-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:290-298`
 
 ## S4.36: Plugins manager.
 
@@ -359,18 +291,6 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S4.38: Model catalog.
-
-- Done when: A model catalog lists the models the user can reach with capabilities/context/price and lets them pick one or set a default.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only the side-panel model dropdown (Auto, primary, more); no catalog view with capabilities, context size or pricing. | ui |
-
-Code: `apps/extension/src/side_panel.ts:6168-6178`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:47-50`
-
 ## S4.40: Billing settings.
 
 - Done when: A billing settings destination shows the current plan, renewal, payment method and invoices, and lets the user change or cancel the plan.
@@ -378,12 +298,11 @@ Code: `apps/extension/src/side_panel.ts:6168-6178`, `apps/extension/src/features
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
-| desktop | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
-| mobile | partial | Subscription screen shows the plan, but FEATURES.billing is false in v1, so the portal, plan changes and Stripe management are off; native IAP depends on an unset store catalog. | flag-off |
-| chrome | partial | Side panel shows plan tier and past-due/canceled status; all billing management opens web settings/billing. | surface-only |
+| web | partial | live-check: with a beta_redemptions-granted test account run Stripe test checkout, then /settings/billing on web and in Electron: plan, invoices, portal (opens externally in Electron) and the overage toggle work; migration 0281 is applied | flag-off |
+| desktop | partial | live-check: with a beta_redemptions-granted test account run Stripe test checkout, then /settings/billing on web and in Electron: plan, invoices, portal (opens externally in Electron) and the overage toggle work; migration 0281 is applied | flag-off |
+| mobile | partial | D-2026-09-28-27: web-billed plans are managed on the web; invoices, card and plan change link out. FEATURES.billing and the waitlist are owner-held. | flag-off |
 
-Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/components/WebSettingsModal.tsx:203-204`, `apps/web/features/settings/sections/BillingSection.tsx:304-318`, `apps/web/features/settings/sections/BillingSection.tsx:436-450`
+Code: `apps/web/features/settings/sections/BillingSection.tsx:304-304`, `apps/mobile/src/features/settings/index.tsx:434-442`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:128-132`, `apps/mobile/lib/v1FeatureFlags.ts:1-10`
 
 ## S4.42: Workspace administration.
 
@@ -393,20 +312,5 @@ Code: `apps/web/app/settings/billing/page.tsx:1-7`, `apps/web/features/settings/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile manages members, roles and the active workspace only; policies, identity/SSO, audit, sharing and model controls are web-only. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/index.tsx:451-456`, `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/app/(app)/settings/workspace.tsx:145-152`
-
-## S4.44: Help and feedback.
-
-- Done when: A help-and-feedback destination links to help/docs/status and lets the user send product feedback or a bug report from inside the product.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | /help lists commands, but /feedback and /bug only print a GitHub issues URL; there is no in-product feedback submission. | surface-only |
-
-Code: `apps/cli/src/tui/tui_app.rs:3531-3540`, `apps/cli/src/tui/tui_app.rs:3535-3540`

@@ -14,7 +14,8 @@
     "./task-display": "./src/components/tasks/task-display.ts",
     "./markdown-document": "./src/components/markdown/markdownDocument.ts",
     "./composer-editor": "./src/composer-editor/index.ts",
-    "./composer-editor.css": "./src/composer-editor/composer-editor.css"
+    "./composer-editor.css": "./src/composer-editor/composer-editor.css",
+    "./ime-composition": "./src/composer-editor/ime-composition.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

@@ -3,6 +3,7 @@ import 'server-only';
 import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { DeviceTokenError, DeviceTokenResponse } from '@agiworkforce/cloud-contracts';
 
 import { handleCorsPreflightRequest, withCorsAndSecurityHeaders } from '@/lib/cors';
 import { createError } from '@/lib/errors';
@@ -17,7 +18,8 @@ import {
 } from '@/lib/server/device-refresh-token';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
-import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms } from '@/lib/server/terms';
+import { CURRENT_TERMS_VERSION, mustAcceptTerms } from '@/lib/server/terms';
+import { accountAccessDecision } from '@/lib/auth/account-status';
 import { devicePairingFlow } from '@/lib/validations/device';
 import { DEVICE_POLL_INTERVAL_SECONDS } from '../grant-policy';
 
@@ -54,7 +56,7 @@ function slowDown(throttled: NextResponse): NextResponse {
     {
       error: 'slow_down',
       interval: Math.max(DEVICE_POLL_INTERVAL_SECONDS, Number(retryAfter) || 0),
-    },
+    } satisfies DeviceTokenError,
     {
       status: throttled.status,
       headers: { ...noStore.headers, ...(retryAfter ? { 'Retry-After': retryAfter } : {}) },
@@ -87,7 +89,10 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
   );
 
   if (!rows.length) {
-    return NextResponse.json({ error: 'invalid_grant' }, { status: 400, ...noStore });
+    return NextResponse.json({ error: 'invalid_grant' } satisfies DeviceTokenError, {
+      status: 400,
+      ...noStore,
+    });
   }
   const record = rows[0]!;
 
@@ -95,7 +100,10 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
   // XXXX-XXXX rows may be exchanged here, or a QR row's client-chosen device_id would mint
   // a developer token without the fingerprint binding /api/device/poll enforces.
   if (devicePairingFlow(record.user_code) !== 'cli') {
-    return NextResponse.json({ error: 'invalid_grant' }, { status: 400, ...noStore });
+    return NextResponse.json({ error: 'invalid_grant' } satisfies DeviceTokenError, {
+      status: 400,
+      ...noStore,
+    });
   }
 
   const nowIso = new Date().toISOString();
@@ -105,33 +113,68 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
       `UPDATE device_authorization_codes SET status = 'expired', updated_at = $1 WHERE device_id = $2`,
       [nowIso, record.device_id],
     );
-    return NextResponse.json({ error: 'expired_token' }, { status: 400, ...noStore });
+    return NextResponse.json({ error: 'expired_token' } satisfies DeviceTokenError, {
+      status: 400,
+      ...noStore,
+    });
   }
 
   if (record.status === 'denied' || record.status === 'revoked') {
-    return NextResponse.json({ error: 'access_denied' }, { status: 400, ...noStore });
+    return NextResponse.json({ error: 'access_denied' } satisfies DeviceTokenError, {
+      status: 400,
+      ...noStore,
+    });
   }
   if (record.status === 'consumed') {
-    return NextResponse.json({ error: 'expired_token' }, { status: 400, ...noStore });
+    return NextResponse.json({ error: 'expired_token' } satisfies DeviceTokenError, {
+      status: 400,
+      ...noStore,
+    });
   }
   if (record.status === 'pending') {
-    return NextResponse.json({ error: 'authorization_pending' }, { status: 403, ...noStore });
+    return NextResponse.json({ error: 'authorization_pending' } satisfies DeviceTokenError, {
+      status: 403,
+      ...noStore,
+    });
   }
   // Every state the schema allows is named above, so anything left is a row no
   // approval produced: refusing ends the wait instead of polling for ever.
   if (record.status !== 'approved' || !record.user_id) {
-    return NextResponse.json({ error: 'access_denied' }, { status: 400, ...noStore });
+    return NextResponse.json({ error: 'access_denied' } satisfies DeviceTokenError, {
+      status: 400,
+      ...noStore,
+    });
+  }
+
+  // Approval can precede the poll by up to the code's lifetime, so the account's status is read
+  // again here, as the refresh route reads it: a suspension in between issues no credential.
+  const [owner] = await db.query<{ account_status: string | null }>(
+    `SELECT account_status FROM profiles WHERE id = $1`,
+    [record.user_id],
+  );
+  const access = accountAccessDecision(owner?.account_status ?? null);
+  if (!access.allowed) {
+    return NextResponse.json(
+      {
+        error: 'account_unavailable',
+        error_description: access.message,
+        ...(access.recoveryPath
+          ? { recovery_url: new URL(access.recoveryPath, new URL(request.url).origin).toString() }
+          : {}),
+      } satisfies DeviceTokenError,
+      { status: 403, ...noStore },
+    );
   }
 
   // The code stays approved and unconsumed so the client can keep polling while the account
   // re-accepts on web, rather than losing an in-flight sign-in to a terms revision.
-  if (!(await hasAcceptedCurrentTerms(record.user_id))) {
+  if (await mustAcceptTerms(record.user_id, 'device-token')) {
     return NextResponse.json(
       {
         error: 'terms_acceptance_required',
         terms_version: CURRENT_TERMS_VERSION,
         acceptance_url: termsAcceptanceUrl(request, record.user_code),
-      },
+      } satisfies DeviceTokenError,
       { status: 403, ...noStore },
     );
   }
@@ -182,7 +225,10 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
     return true;
   });
   if (!consumed) {
-    return NextResponse.json({ error: 'expired_token' }, { status: 400, ...noStore });
+    return NextResponse.json({ error: 'expired_token' } satisfies DeviceTokenError, {
+      status: 400,
+      ...noStore,
+    });
   }
 
   const deviceRef = pseudonymizeIdentifier(record.device_id, 'device-id', 12);
@@ -194,7 +240,7 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
       token_type: 'Bearer',
       expires_in: expiresIn,
       refresh_token_expires_in: DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
-    },
+    } satisfies DeviceTokenResponse,
     noStore,
   );
 }

@@ -27,7 +27,7 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 
-const { GET } = await import('./route');
+const { GET, POST } = await import('./route');
 
 const url = (query = '') => `https://agiworkforce.com/api/chat/conversations${query}`;
 
@@ -83,5 +83,34 @@ describe('GET /api/chat/conversations deleted filter', () => {
     const [sql] = mocks.query.mock.calls[0]!;
     expect(sql).toContain('deleted_at is not null');
     expect(sql).toContain('archived = true');
+  });
+});
+
+describe('POST /api/chat/conversations deleted conflict', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.query.mockResolvedValue([]);
+  });
+
+  it('rejects a tombstoned or unavailable id without resurrecting it', async () => {
+    const response = await POST(
+      new NextRequest(url(), {
+        method: 'POST',
+        body: JSON.stringify({
+          id: '11111111-1111-4111-8111-111111111111',
+          title: 'Stale mobile conversation',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'conversation_unavailable' },
+    });
+    const sql = mocks.query.mock.calls
+      .map(([statement]) => String(statement))
+      .find((statement) => statement.includes('insert into web_conversations'));
+    expect(sql).toContain('web_conversations.deleted_at is null');
+    expect(sql).not.toContain('deleted_at = null');
   });
 });

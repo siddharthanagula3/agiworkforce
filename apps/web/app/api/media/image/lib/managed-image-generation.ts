@@ -113,6 +113,7 @@ export interface ManagedImageGenerationInput {
   readBody: () => Promise<unknown>;
   idempotencyKey: string | null;
   modelPolicyRefusal: (model: ManagedImageModelAsk) => Promise<NextResponse | null>;
+  assertCapabilityOpen?: (plan: string) => Promise<void>;
 }
 
 export async function generateManagedImage(
@@ -179,6 +180,7 @@ export async function generateManagedImage(
       },
     );
   }
+  await input.assertCapabilityOpen?.(userTier);
 
   let body: unknown;
   try {
@@ -675,7 +677,7 @@ export async function generateManagedImage(
       const [ownedConversation] = await scoped.db.query<{ id: string }>(
         `select id
            from public.web_conversations
-          where id = $1 and user_id = $2
+          where id = $1 and user_id = $2 and deleted_at is null
           limit 1`,
         [conversationId, userId],
       );

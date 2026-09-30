@@ -7,6 +7,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { findSelectableSkillWithFiles } from '@/lib/services/skill-catalog-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
+import { workspaceAllowsPlugins } from '@/lib/services/workspace-plugin-access';
 
 export const runtime = 'nodejs';
 
@@ -29,11 +30,15 @@ async function handleListFiles(
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
   const name = requireSkillName((await context.params).name);
 
+  const pluginsAllowed = await workspaceAllowsPlugins(db, userId);
+
   const found = await findSelectableSkillWithFiles({
     db,
     userId,
     name,
-    loadEnabledPluginIds: () => listEnabledPluginIds(db, userId),
+    loadEnabledPluginIds: () =>
+      pluginsAllowed ? listEnabledPluginIds(db, userId) : Promise.resolve(new Set<string>()),
+    pluginsAllowed,
   });
   if (!found) {
     throw createError.notFound(`Skill "${name}" not found`);

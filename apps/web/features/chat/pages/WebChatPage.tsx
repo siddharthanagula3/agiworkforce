@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-space-available';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
@@ -302,7 +303,7 @@ import {
   useDetachablePanels,
   useLocalModelSelection,
 } from '@/features/desktop-host';
-import type { AgiWorkGoalInput } from '../utils/agiwork-plan';
+import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '../utils/agiwork-plan';
 import {
   planEditRollback,
   planRegenerateRollback,
@@ -1318,6 +1319,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const { user: identityUser } = useCurrentUser();
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const disabledFeatures = useDisabledWorkspaceFeatures();
+  const fastModeDisabledByWorkspace = disabledFeatures.includes('fast_mode');
   const { isUnread, toggleUnread } = useUnreadConversations();
   const { user: compatibilityUser, logout } = useAuthStore();
   const canonicalUser = useBillingStore((s) => s.user);
@@ -2069,7 +2071,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         // the instance the restore was aimed at. A slot keyed by the send
         // rather than by any conversation survives both, and whichever
         // composer is on screen reads it on its next mount.
-        parkBlockedSend(sendFingerprint, content);
+        const blockedConversation = useChatStore
+          .getState()
+          .conversations.find((conversation) => conversation.id === sendGuardKey);
+        parkBlockedSend(
+          sendFingerprint,
+          content,
+          blockedConversation
+            ? blockedConversation.isTemporary === true
+            : resolveNewChatTemporary(
+                useChatStore.getState().pendingTemporaryChat,
+                useSettingsStore.getState().newChatsTemporary,
+              ) || localModelSelection !== null,
+        );
         if (options.attachments?.length) setRestoredAttachments(options.attachments);
         toast.error(BLOCKED_SEND_TOAST);
         lastSendGuardBlockedRef.current = true;
@@ -2588,7 +2602,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           generatedImage = await generateImage(turn.prompt, {
             ...turn.imageRequest,
             cancelScope: turn.conversationId,
-            ...(!turn.temporary ? { conversationId: turn.conversationId } : {}),
+            conversationId: turn.conversationId,
           });
           return generatedImage.imageUrl;
         },
@@ -2897,7 +2911,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             generatedImage = await generateImage(opts.prompt, {
               ...imageRequest,
               cancelScope: ownerConversationId,
-              ...(!ownerConversationIsTemporary ? { conversationId: ownerConversationId } : {}),
+              conversationId: ownerConversationId,
             });
             return generatedImage.imageUrl;
           },
@@ -3394,9 +3408,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   ...(videoOptions?.durationSecs !== undefined
                     ? { durationSecs: videoOptions.durationSecs }
                     : {}),
-                  ...(!isTemporaryConversation
-                    ? { conversationId: convId, assistantMessageId }
-                    : {}),
+                  conversationId: convId,
+                  ...(!isTemporaryConversation ? { assistantMessageId } : {}),
                 }),
             });
             if (!startResult.ok) {
@@ -5093,6 +5106,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedMessages, getToken],
   );
 
+  const handleSubmitPrompt = useCallback(
+    (prompt: string) => {
+      handleSend(prompt);
+    },
+    [handleSend],
+  );
+
   const sendResearchGuidanceAsMessage = useCallback(
     async (id: string, guidance: string): Promise<boolean> => {
       const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
@@ -5651,6 +5671,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [handleSend],
   );
 
+  const handleVoiceStartWorkTask = useCallback(
+    (goal: string) => {
+      const outcome = handleSend(goal, undefined, undefined, {
+        workMode: AGI_WORK_MODE,
+        agiWorkGoal: buildAgiWorkGoalInput(goal),
+      });
+      return outcome !== false && outcome !== SEND_GUARD_BLOCKED;
+    },
+    [handleSend],
+  );
+
   const handleVoiceOpenLibrary = useCallback(() => {
     const href = APP_NAV_DESTINATIONS.find(
       (destination) => destination.id === VOICE_LIBRARY_NAV_ID,
@@ -5674,6 +5705,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     turnActive: isLoading || isStreaming,
     conversationId: displayedConversationId ?? null,
     onSend: handleVoiceSend,
+    onStartWorkTask: handleVoiceStartWorkTask,
     onEnsureConversation: handleVoiceEnsureConversation,
     onTranscript: handleVoiceTranscript,
     onNewChat: handleNewChat,
@@ -5779,6 +5811,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // missing Tasks entirely, and hardcoded `isActive: true` for Chat so the
   // selection was wrong on /chat/[sessionId]). Add or reorder destinations there.
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
+  const healthSpaceAvailable = useHealthSpaceAvailable();
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () =>
@@ -5788,9 +5821,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
         disabledFeatures,
+        healthSpaceAvailable,
         translate: (key, fallback) => t(`common:${key}`, { defaultValue: fallback }),
       }),
-    [disabledFeatures, hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
+    [disabledFeatures, healthSpaceAvailable, hiddenNavIds, isWorkspaceAdmin, pathname, router, t],
   );
 
   const handleLogout = useCallback(async () => {
@@ -5838,7 +5872,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             aria-label={`Account menu for ${displayName}`}
             aria-busy={isAccountLoading}
             disabled={isAccountLoading}
-            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-wait disabled:opacity-70"
+            className="flex w-full items-center gap-2 px-3 py-3 text-start transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-wait disabled:opacity-70"
           >
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {userInitial}
@@ -6074,7 +6108,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:openNavigation')}
                     aria-expanded={mobileNavOpen}
                     aria-controls={MOBILE_NAV_DRAWER_ID}
-                    className="-ml-1 h-8 w-8 shrink-0 p-0"
+                    className="-ms-1 h-8 w-8 shrink-0 p-0"
                   >
                     <Menu className="h-5 w-5" aria-hidden="true" />
                   </Button>
@@ -6113,7 +6147,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:header.temporaryChatPersonalized')}
                     title={t('chat:header.temporaryChatPersonalizationHint')}
                     onClick={() => setTemporaryChatPersonalized(!temporaryChatPersonalized)}
-                    className="ml-1 inline-flex h-7 min-w-[24px] shrink-0 items-center rounded-md border border-border px-2 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="ms-1 inline-flex h-7 min-w-[24px] shrink-0 items-center rounded-md border border-border px-2 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {temporaryChatPersonalized
                       ? t('chat:header.temporaryChatPersonalized')
@@ -6379,6 +6413,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                         sendPreviewPresentation={sendPreviewPresentation}
                         onUpgradeRequest={handleOpenUpgradeDialog}
+                        fastModeDisabledByWorkspace={fastModeDisabledByWorkspace}
                         onModelChange={handleConversationModelChange}
                         onGenerateImage={handleGenerateImage}
                         onGenerateVideo={handleGenerateVideo}
@@ -6451,6 +6486,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                                 onResumeVideo={handleResumeVideo}
                                 onRetryVideo={handleRetryVideo}
                                 onSendMessage={setComposerPrefill}
+                                onSubmitPrompt={handleSubmitPrompt}
                                 onPaywallUpgrade={handlePaywallRecovery}
                                 onPaywallDismiss={handlePaywallDismiss}
                                 onRegenerateWithModel={handleRegenerateWithModel}
@@ -6507,6 +6543,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                         sendPreviewPresentation={sendPreviewPresentation}
                         onUpgradeRequest={handleOpenUpgradeDialog}
+                        fastModeDisabledByWorkspace={fastModeDisabledByWorkspace}
                         onModelChange={handleConversationModelChange}
                         onGenerateImage={handleGenerateImage}
                         onGenerateVideo={handleGenerateVideo}

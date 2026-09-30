@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { Globe } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
 import {
   CHINESE_HQ_PROVIDER_IDS,
@@ -12,6 +13,7 @@ import {
   type ChineseHqConsentMap,
   type ChineseHqProviderId,
 } from '@/services/providerConsent';
+import { NamedProviderConsentModal } from './NamedProviderConsentModal';
 
 export const PROVIDER_CONSENT_TEST_ID_PREFIX = 'settings-provider-consent-';
 
@@ -22,21 +24,53 @@ const SECTION_BODY =
 export function ChineseHqProviderConsentGroup() {
   const colors = useThemeColors();
   const [consent, setConsent] = useState<ChineseHqConsentMap>(readChineseHqConsent);
+  const [reviewingProvider, setReviewingProvider] = useState<ChineseHqProviderId | null>(null);
 
   const toggle = useCallback((providerId: ChineseHqProviderId, accepted: boolean) => {
+    if (accepted) {
+      setReviewingProvider(providerId);
+      return;
+    }
     setChineseHqProviderConsent(providerId, accepted);
     setConsent(readChineseHqConsent());
+  }, []);
+
+  const confirm = useCallback((providerId: ChineseHqProviderId) => {
+    try {
+      setChineseHqProviderConsent(providerId, true);
+    } catch {
+      setReviewingProvider(null);
+      Alert.alert(
+        'Privacy disclosure required',
+        'Complete the privacy disclosure before enabling this provider.',
+      );
+      return;
+    }
+    setConsent(readChineseHqConsent());
+    setReviewingProvider(null);
   }, []);
 
   return (
     <View testID="settings-provider-consent-section" style={{ marginBottom: 18 }}>
       <Text
         accessibilityRole="header"
-        style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600', marginBottom: 6 }}
+        style={{
+          color: colors.textPrimary,
+          fontSize: typeScale.subhead,
+          fontWeight: '600',
+          marginBottom: 6,
+        }}
       >
         {SECTION_TITLE}
       </Text>
-      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18, marginBottom: 10 }}>
+      <Text
+        style={{
+          color: colors.textSecondary,
+          fontSize: typeScale.footnote,
+          lineHeight: 18,
+          marginBottom: 10,
+        }}
+      >
         {SECTION_BODY}
       </Text>
       <SettingsGroup>
@@ -52,6 +86,11 @@ export function ChineseHqProviderConsentGroup() {
           />
         ))}
       </SettingsGroup>
+      <NamedProviderConsentModal
+        providerId={reviewingProvider}
+        onConfirm={confirm}
+        onCancel={() => setReviewingProvider(null)}
+      />
     </View>
   );
 }

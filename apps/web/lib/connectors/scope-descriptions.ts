@@ -48,6 +48,10 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
     sentence: 'Reads and writes files this app created or you opened with it.',
     access: WRITE,
   },
+  'drive.readonly': {
+    sentence: 'Searches and reads the files in your Drive.',
+    access: READ,
+  },
   'drive.metadata.readonly': {
     sentence: 'Reads file names and metadata across your Drive.',
     access: READ,

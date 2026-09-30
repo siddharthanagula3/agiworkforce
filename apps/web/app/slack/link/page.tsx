@@ -135,7 +135,11 @@ function SlackLinkForm() {
   }
 
   return (
-    <section aria-labelledby="slack-link-title" style={cardStyle}>
+    <section
+      aria-labelledby="slack-link-title"
+      aria-busy={lookup.kind === 'loading' || connecting}
+      style={cardStyle}
+    >
       <Stack gap="loose">
         <div>
           <Eyebrow>Slack</Eyebrow>
@@ -214,6 +218,10 @@ function SlackLinkForm() {
                   ))}
                 </select>
               </div>
+            ) : preview.workspaces.length === 0 ? (
+              <p role="alert" style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-error)' }}>
+                This account has no workspace that can answer in Slack.
+              </p>
             ) : (
               <p style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-2)' }}>
                 Answers run in your {workspace?.name ?? 'Personal'} workspace.

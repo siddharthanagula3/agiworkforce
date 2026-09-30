@@ -277,6 +277,7 @@ export async function routeExecutionTool(
   rawArgs: Record<string, unknown>,
   workspaceRoot?: string,
   unavailableCause?: E2BUnavailableCause | null,
+  signal?: AbortSignal,
 ): Promise<ExecutionResult> {
   if (!executor) {
     return {
@@ -310,6 +311,7 @@ export async function routeExecutionTool(
         result = await executor.runCode({
           language: typeof args['language'] === 'string' ? args['language'] : 'python',
           code: typeof args['code'] === 'string' ? args['code'] : '',
+          ...(signal ? { signal } : {}),
         });
         break;
       case WRITE_FILE_TOOL:

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -70,6 +71,16 @@ test('a tag that is not a digest is reported separately from a moving tag', () =
   assert.match(failures[0], /by tag, not by digest/);
 });
 
+test('ignored worktrees are excluded from container image checks', () => {
+  const root = fixture({ files: { Dockerfile: 'FROM node:24-alpine@sha256:' + 'a'.repeat(64) } });
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  fs.writeFileSync(path.join(root, '.gitignore'), '.worktrees/\n');
+  fs.mkdirSync(path.join(root, '.worktrees', 'other'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.worktrees', 'other', 'Dockerfile'), 'FROM node:latest\n');
+  assert.deepEqual(containerFiles(root), ['Dockerfile']);
+  assert.deepEqual(checkSupplyChain(root).failures, []);
+});
+
 test('a build argument is not read as an image name', () => {
   const root = fixture({
     files: {
@@ -90,6 +101,98 @@ test('an unfrozen workspace install fails, and a pinned tool install does not', 
       'jobs:\n  a:\n    steps:\n      - run: |\n          npm install --global vercel@58.4.0\n          pnpm exec playwright install --with-deps\n          pnpm install --frozen-lockfile\n',
   });
   assert.deepEqual(checkSupplyChain(tool).failures, []);
+});
+
+test('Docker install fallbacks and continued shell instructions cannot bypass the lockfile', () => {
+  const root = fixture({
+    files: {
+      Dockerfile:
+        'FROM node:24-alpine@sha256:' +
+        'a'.repeat(64) +
+        '\nRUN pnpm install --frozen-lockfile 2>/dev/null || \\\n    pnpm install\n',
+    },
+  });
+  assert.match(checkSupplyChain(root).failures.join('\n'), /Dockerfile.*without a frozen lockfile/);
+});
+
+test('filtered Vercel workspace installs still require a frozen lockfile', () => {
+  const root = fixture({
+    files: {
+      'apps/desktop/vercel.json': JSON.stringify({
+        installCommand: 'pnpm install --filter @agiworkforce/desktop...',
+      }),
+    },
+  });
+  assert.match(
+    checkSupplyChain(root).failures.join('\n'),
+    /vercel.json.*without a frozen lockfile/,
+  );
+});
+
+test('a frozen flag in a shell comment does not bless an unlocked install', () => {
+  const root = fixture({
+    workflow: 'jobs:\n  a:\n    steps:\n      - run: pnpm install # --frozen-lockfile\n',
+  });
+  assert.match(checkSupplyChain(root).failures.join('\n'), /without a frozen lockfile/);
+});
+
+test('offline resolution and explicitly disabled freezing do not satisfy the lockfile gate', () => {
+  for (const flags of [
+    '--offline',
+    '--frozen-lockfile=false',
+    '--frozen-lockfile --no-frozen-lockfile',
+  ]) {
+    const root = fixture({
+      workflow: `jobs:\n  a:\n    steps:\n      - run: pnpm install ${flags}\n`,
+    });
+    assert.match(checkSupplyChain(root).failures.join('\n'), /without a frozen lockfile/);
+  }
+});
+
+test('a filter before the install verb is checked and quoted comments remain arguments', () => {
+  const root = fixture({
+    workflow: 'jobs:\n  a:\n    steps:\n      - run: pnpm --filter "app#name" install\n',
+  });
+  assert.match(checkSupplyChain(root).failures.join('\n'), /without a frozen lockfile/);
+  assert.deepEqual(
+    workspaceInstalls({ file: 'f', line: 1, body: 'pnpm db:migrate -- apply --target ci' }),
+    [],
+  );
+});
+
+test('values, wrappers, redirections and another manager cannot impersonate freezing', () => {
+  for (const command of [
+    "pnpm install --filter '--frozen-lockfile'",
+    'npm install --frozen-lockfile',
+    '(pnpm install)',
+    "sh -c 'pnpm install'",
+    'pnpm install > /tmp/install.log',
+    "env sh -c 'pnpm install'",
+    'npm install --cache /tmp/npm-cache',
+    'pnpm install --lockfile-dir .',
+  ]) {
+    const root = fixture({ workflow: `jobs:\n  a:\n    steps:\n      - run: ${command}\n` });
+    assert.match(checkSupplyChain(root).failures.join('\n'), /without a frozen lockfile/, command);
+  }
+});
+
+test('Docker JSON instructions and build mount options are also checked', () => {
+  for (const instruction of [
+    'RUN ["pnpm", "install"]',
+    'RUN ["sh", "-c", "pnpm install"]',
+    'RUN --mount=type=cache,target=/pnpm pnpm install',
+  ]) {
+    const root = fixture({
+      files: {
+        Dockerfile: 'FROM node:24-alpine@sha256:' + 'a'.repeat(64) + '\n' + instruction + '\n',
+      },
+    });
+    assert.match(
+      checkSupplyChain(root).failures.join('\n'),
+      /Dockerfile.*without a frozen lockfile/,
+      instruction,
+    );
+  }
 });
 
 test('a download piped into a shell fails', () => {

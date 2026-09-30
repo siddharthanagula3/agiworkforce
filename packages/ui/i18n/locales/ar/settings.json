@@ -388,6 +388,18 @@
     "windowSeconds_one": "ثانية",
     "windowSeconds_other": "{{count}} ثانية",
     "windowSeconds_two": "ثانيتان",
-    "windowSeconds_zero": "ثانية"
+    "windowSeconds_zero": "ثانية",
+    "memoriesAdded_zero": "لم تُضف أي ذكريات",
+    "memoriesAdded_one": "أُضيفت ذكرى واحدة",
+    "memoriesAdded_two": "أُضيفت ذكريان",
+    "memoriesAdded_few": "أُضيفت {{count}} ذكريات",
+    "memoriesAdded_many": "أُضيف {{count}} ذكرى",
+    "memoriesAdded_other": "أُضيف {{count}} ذكرى",
+    "factsFound_zero": "لم يُعثر على حقائق في {{source}}.",
+    "factsFound_one": "عُثر على حقيقة واحدة في {{source}}.",
+    "factsFound_two": "عُثر على حقيقتين في {{source}}.",
+    "factsFound_few": "عُثر على {{count}} حقائق في {{source}}.",
+    "factsFound_many": "عُثر على {{count}} حقيقة في {{source}}.",
+    "factsFound_other": "عُثر على {{count}} حقيقة في {{source}}."
   }
 }

@@ -1,13 +1,23 @@
 export type Effort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export const EFFORT_LABEL: Readonly<Record<Effort, string>> = Object.freeze({
-  none: 'None',
-  minimal: 'Minimal',
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  xhigh: 'Extra high',
-  max: 'Max',
+  none: 'Direct',
+  minimal: 'Brief',
+  low: 'Quick',
+  medium: 'Balanced',
+  high: 'Deep',
+  xhigh: 'Extended',
+  max: 'Maximum',
+});
+
+export const EFFORT_DESCRIPTION: Readonly<Record<Effort, string>> = Object.freeze({
+  none: 'No extra reasoning for straightforward replies.',
+  minimal: 'Minimal extra reasoning for simple tasks.',
+  low: 'A short reasoning pass with less waiting.',
+  medium: 'A balance of reasoning depth and response time.',
+  high: 'More reasoning for complex tasks; may take longer.',
+  xhigh: 'Additional reasoning for difficult tasks; may take longer.',
+  max: 'The highest available reasoning setting; expect the longest wait.',
 });
 
 export const ANTHROPIC_THINKING_BUDGET: Readonly<

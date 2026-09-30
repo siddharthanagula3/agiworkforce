@@ -2,6 +2,7 @@ import { View, Pressable, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export default function NotFoundScreen() {
   const router = useRouter();
@@ -40,18 +41,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   code: {
-    fontSize: 64,
+    fontSize: typeScale.display,
     fontWeight: '800',
     marginBottom: 8,
   },
   heading: {
-    fontSize: 20,
+    fontSize: typeScale.title3,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 8,
   },
   description: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 32,
@@ -62,7 +63,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   homeText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontWeight: '600',
   },
 });

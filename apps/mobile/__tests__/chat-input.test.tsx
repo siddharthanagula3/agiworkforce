@@ -7,6 +7,7 @@ import { getModelMetadataById } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { LARGE_PASTE_THRESHOLD, pastedTextFileName } from '@agiworkforce/utils/composer-paste';
 import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
+import { useChatViewStore } from '../stores/chat/chatViewStore';
 
 const mockCapabilityModelId = requireMobileCloudModel((model) => {
   const metadata = getModelMetadataById(model.id);
@@ -321,6 +322,7 @@ describe('ChatInput', () => {
       codeExecutionAvailable: false,
       genericWebSearchAvailable: false,
     };
+    useChatViewStore.setState({ workMode: 'chat' });
     mockGetDraft.mockReturnValue('');
   });
 
@@ -562,6 +564,21 @@ describe('ChatInput', () => {
   });
 
   describe('streaming state', () => {
+    it('labels an entitled Cloud Work composer without changing Local chat copy', () => {
+      mockAppMode = 'cloud';
+      mockIsClerkSignedIn = true;
+      mockTierState = { ...mockTierState, tier: 'pro' };
+      useChatViewStore.setState({ workMode: 'agiwork' });
+
+      const cloud = renderInput();
+      expect(cloud.getByLabelText('Message input').props.placeholder).toBe('Work with AGI');
+      cloud.unmount();
+
+      mockAppMode = 'local';
+      const local = renderInput();
+      expect(local.getByLabelText('Message input').props.placeholder).toBe("What's on your mind?");
+    });
+
     it('shows "Reply to [model]..." placeholder during streaming', () => {
       const { getByLabelText } = renderInput({ isStreaming: true });
 
@@ -760,6 +777,8 @@ describe('ChatInput', () => {
     it('bumps voiceResetSignal even when the recording session already ended', async () => {
       const VoiceService = require('../src/features/voice/services/voice');
       VoiceService.isRecording.mockReturnValue(false);
+      VoiceService.stopRecording.mockClear();
+      VoiceService.transcribe.mockClear();
 
       const { getByLabelText } = renderInput();
       act(() => {
@@ -946,6 +965,21 @@ describe('ChatInput', () => {
   });
 
   describe('composer handle', () => {
+    it('prefills an empty editable draft without sending or replacing existing text', () => {
+      const ref = React.createRef<ChatInputHandle>();
+      const onSend = jest.fn();
+      const screen = renderInput({ attachRef: ref, onSend });
+
+      act(() => ref.current?.prefillText?.('Look up '));
+      expect(screen.getByLabelText('Message input').props.value).toBe('Look up ');
+      expect(onSend).not.toHaveBeenCalled();
+
+      fireEvent.changeText(screen.getByLabelText('Message input'), 'My existing draft');
+      act(() => ref.current?.prefillText?.('Help me write '));
+      expect(screen.getByLabelText('Message input').props.value).toBe('My existing draft');
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
     it('exposes focus() and drives the real text field with it', () => {
       const focusSpy = jest.spyOn(TextInput.prototype, 'focus');
       const ref = React.createRef<ChatInputHandle>();

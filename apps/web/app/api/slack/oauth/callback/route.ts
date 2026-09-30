@@ -5,10 +5,8 @@ import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { logger } from '@/lib/logger';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -65,7 +63,7 @@ async function handleGet(request: NextRequest): Promise<Response> {
   try {
     scope = await getUserScopedDb(request, { resolveOrganization: true });
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     const loginUrl = new URL('/login', request.url);

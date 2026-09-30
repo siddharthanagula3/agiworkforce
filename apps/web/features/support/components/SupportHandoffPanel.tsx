@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import type { SupportHandoffView, SupportPresenceView } from '../lib/contract';
+import type {
+  SupportHandoffView,
+  SupportPresenceView,
+} from '@agiworkforce/cloud-contracts/support';
 import { useHandoffThread } from '../hooks/useHandoffThread';
 import { fetchHandoffMessages, sendHandoffMessage } from '../lib/support-client';
 import { SupportHandoffThread } from './SupportHandoffThread';

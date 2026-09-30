@@ -151,7 +151,7 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
               <span
                 aria-hidden="true"
                 className={cn(
-                  'pointer-events-none absolute left-3 top-1/2 -translate-y-1/2',
+                  'pointer-events-none absolute start-3 top-1/2 -translate-y-1/2',
                   'flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground',
                 )}
               >
@@ -174,7 +174,7 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
                   if (errorMsg) setErrorMsg(null);
                 }}
                 onKeyDown={handleKeyDown}
-                className="h-11 rounded-xl bg-muted/40 pl-10"
+                className="h-11 rounded-xl bg-muted/40 ps-10"
               />
             </div>
 

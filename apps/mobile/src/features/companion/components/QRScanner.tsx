@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Pressable, StyleSheet, Linking, TextInput, Dimensions } from 'react-native';
+import { View, StyleSheet, Linking, TextInput, Dimensions } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
+import * as Clipboard from 'expo-clipboard';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -12,6 +14,7 @@ import { Zap, ZapOff, Keyboard, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { isValidPairingCode } from '@/services/companion';
 
 interface QRScannerProps {
@@ -36,7 +39,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   useEffect(() => {
     scanLineY.value = withRepeat(
       withTiming(VIEWFINDER_SIZE - 4, {
-        duration: 2000,
+        duration: motion.ambient,
         easing: Easing.inOut(Easing.ease),
       }),
       -1,
@@ -75,7 +78,21 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     onScan(trimmed);
   }, [manualCode, onScan]);
 
-  if (!permission) {
+  const handlePaste = useCallback(async () => {
+    try {
+      const pasted = (await Clipboard.getStringAsync()).trim();
+      if (!pasted) {
+        setManualError('Clipboard is empty. Copy the pairing code from Desktop first.');
+        return;
+      }
+      setManualCode(pasted);
+      setManualError(null);
+    } catch {
+      setManualError('Could not read the clipboard. Enter the code manually.');
+    }
+  }, []);
+
+  if (!permission && !showManualEntry) {
     return (
       <View
         className="flex-1 items-center justify-center"
@@ -86,7 +103,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     );
   }
 
-  if (!permission.granted) {
+  if (!permission?.granted && !showManualEntry) {
     return (
       <View
         className="flex-1 items-center justify-center px-8 gap-6"
@@ -112,6 +129,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
             variant="ghost"
             onPress={() => setShowManualEntry(true)}
           />
+          <Button title="Close" variant="ghost" onPress={onClose} />
         </View>
       </View>
     );
@@ -123,7 +141,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
         {/* Header */}
         <View className="flex-row items-center justify-between">
           <Text variant="subheading">Enter Pairing Code</Text>
-          <Pressable
+          <PressableBox
             onPress={() => {
               setShowManualEntry(false);
               setManualError(null);
@@ -134,7 +152,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
             accessibilityRole="button"
           >
             <X size={22} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         </View>
 
         <Text className="text-sm" style={{ color: colors.textSecondary }}>
@@ -166,12 +184,13 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
               paddingHorizontal: 16,
               paddingVertical: 14,
               color: colors.textPrimary,
-              fontSize: 18,
+              fontSize: typeScale.headline,
               fontFamily: 'Menlo',
               letterSpacing: 2,
               textAlign: 'center',
             }}
           />
+          <Button title="Paste code" variant="outline" onPress={handlePaste} />
           {manualError && <Text className="text-red-400 text-xs text-center">{manualError}</Text>}
         </View>
 
@@ -180,23 +199,24 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           variant="primary"
           size="lg"
           onPress={handleManualSubmit}
+          disabled={!manualCode.trim()}
           className="mt-2"
         />
 
-        <Pressable
+        <PressableBox
           onPress={() => {
             setShowManualEntry(false);
             setManualError(null);
             setManualCode('');
           }}
           className="items-center py-3"
-          accessibilityLabel="Back to QR Scanner"
+          accessibilityLabel={permission?.granted ? 'Back to QR Scanner' : 'Back to camera options'}
           accessibilityRole="button"
         >
           <Text className="text-sm" style={{ color: colors.teal }}>
-            Back to QR Scanner
+            {permission?.granted ? 'Back to QR Scanner' : 'Back to camera options'}
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
     );
   }
@@ -272,16 +292,16 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
 
       {/* Top bar: close + flash */}
       <View className="absolute top-16 left-4 right-4 flex-row items-center justify-between">
-        <Pressable
+        <PressableBox
           onPress={onClose}
           className="w-10 h-10 rounded-full bg-black/50 items-center justify-center"
           accessibilityLabel="Close scanner"
           accessibilityRole="button"
         >
           <X size={22} color={colors.white} />
-        </Pressable>
+        </PressableBox>
 
-        <Pressable
+        <PressableBox
           onPress={() => setFlashEnabled((prev) => !prev)}
           className="w-10 h-10 rounded-full bg-black/50 items-center justify-center"
           accessibilityLabel={flashEnabled ? 'Turn off flashlight' : 'Turn on flashlight'}
@@ -292,12 +312,12 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           ) : (
             <Zap size={20} color={colors.white} />
           )}
-        </Pressable>
+        </PressableBox>
       </View>
 
       {/* Bottom: manual entry link */}
       <View className="absolute bottom-12 left-0 right-0 items-center gap-3">
-        <Pressable
+        <PressableBox
           onPress={() => setShowManualEntry(true)}
           className="flex-row items-center gap-2 px-5 py-3 rounded-full bg-black/60"
           accessibilityLabel="Enter code manually"
@@ -308,7 +328,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           <Text className="text-sm font-medium" style={{ color: colors.cameraOverlayText }}>
             Enter code manually
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
     </View>
   );

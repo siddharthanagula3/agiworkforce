@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { z } from 'zod';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -12,10 +11,9 @@ import { readJsonBody } from '@/lib/read-json-body';
 import { deployEnvironment, releaseSha } from '@/lib/server/hosting';
 import { buildDiagnosticsExport } from '@/lib/support/diagnostics/export';
 import { normalizeDiagnostics } from '@/lib/support/diagnostics/schema';
+import { SupportDiagnosticsExportRequestSchema } from '@agiworkforce/cloud-contracts/support';
 
 export const runtime = 'nodejs';
-
-const ExportSchema = z.object({ diagnostics: z.unknown() });
 
 async function handleExport(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
@@ -26,7 +24,7 @@ async function handleExport(request: NextRequest) {
   const limited = await withRateLimit(request, 'support-tickets-write', `user:${userId}`);
   if (limited) return limited;
 
-  const parsed = ExportSchema.safeParse(await readJsonBody(request));
+  const parsed = SupportDiagnosticsExportRequestSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     throw createError.validation('Invalid diagnostics bundle', parsed.error);
   }

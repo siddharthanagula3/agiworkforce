@@ -87,6 +87,18 @@ const TOOL_CORPUS: readonly string[] = [
   UNDECLARED_CONNECTOR_TOOL,
 ];
 
+const READ_ONLY_BROWSER_COMMANDS: readonly string[] = [
+  'browser_find',
+  'browser_list_tabs',
+  'browser_read_page',
+  'browser_screenshot',
+  'browser_console',
+  'browser_network',
+];
+const EGRESS_BROWSER_COMMANDS: readonly string[] = BROWSER_COMMANDS.filter(
+  (command) => !READ_ONLY_BROWSER_COMMANDS.includes(command),
+);
+
 type ToolClass = 'read_only' | 'mutating' | 'exfiltrating';
 
 function toolClass(name: string): ToolClass {
@@ -426,9 +438,18 @@ describe('the lethal-trifecta escalation, and the three limits published for it'
       sensitiveSourceReachable({
         privateContextPresent: false,
         offeredTools: [],
-        availableToolNames: Object.keys(PLATFORM_TOOL_METADATA),
+        availableToolNames: Object.entries(PLATFORM_TOOL_METADATA)
+          .filter(([, metadata]) => metadata.readsPrivateData !== true)
+          .map(([name]) => name),
       }),
     ).toBe(false);
+    expect(
+      sensitiveSourceReachable({
+        privateContextPresent: false,
+        offeredTools: [],
+        availableToolNames: ['device_read_file'],
+      }),
+    ).toBe(true);
   });
 
   it('counts a sibling in the same batch but never the call being gated', () => {
@@ -486,8 +507,8 @@ describe('a browser or computer-use action goes through the same gate', () => {
     }
   });
 
-  it('refuses every browser command kind after a page has been read, unattended', () => {
-    for (const command of BROWSER_COMMANDS) {
+  it('refuses every egress-bearing browser command after a page has been read, unattended', () => {
+    for (const command of EGRESS_BROWSER_COMMANDS) {
       const gate = resolveToolCallGate(
         { qualifiedName: command, savedLevel: 'allow', batchIntroducesUntrustedContent: false },
         {
@@ -504,10 +525,19 @@ describe('a browser or computer-use action goes through the same gate', () => {
     }
   });
 
-  it('classifies every browser command as egress-bearing, so none of them slips the escalation', () => {
-    for (const command of BROWSER_COMMANDS) {
+  it('classifies every browser command that acts or is undeclared as egress-bearing', () => {
+    expect(EGRESS_BROWSER_COMMANDS.length).toBeGreaterThan(0);
+    for (const command of EGRESS_BROWSER_COMMANDS) {
       expect(toolCreatesEgressPath(command), command).toBe(true);
       expect(toolClass(command), command).toBe('exfiltrating');
+    }
+  });
+
+  it('declares only the browser reads as reads without egress, each carrying untrusted content', () => {
+    for (const command of READ_ONLY_BROWSER_COMMANDS) {
+      expect(resolveToolMetadata(command).actionClass, command).toBe('read');
+      expect(resolveToolMetadata(command).createsEgressPath, command).toBe(false);
+      expect(resolveToolMetadata(command).acceptsUntrustedContent, command).toBe(true);
     }
   });
 });

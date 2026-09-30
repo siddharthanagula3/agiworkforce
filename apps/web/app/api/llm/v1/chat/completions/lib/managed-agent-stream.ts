@@ -16,6 +16,7 @@ import {
   transitionCloudAgentRun,
 } from '@/lib/services/cloud-agent-run-service';
 import { createCloudAgentEventJournal } from '@/lib/services/cloud-agent-event-journal';
+import { readCloudAgentRunAssistantText } from '@/lib/services/cloud-agent-run-service';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, type InteractiveCard } from '@agiworkforce/types';
@@ -36,11 +37,8 @@ import {
 } from './assistant-turn-sources';
 import { buildPersistedTurnResearch, type PersistedTurnResearch } from './assistant-turn-research';
 import { isEmptyTurnOutput } from './turn-completeness';
-import { enqueueJob } from '@/lib/jobs/job-service';
-import {
-  recordResearchReportSettledCost,
-  type PersistedResearchReport,
-} from '@/lib/services/research-report-service';
+import { recordResearchRunSettledCost } from '@/lib/services/research-report-settlement';
+import type { PersistedResearchReport } from '@/lib/services/research-report-service';
 
 const TERMINAL_EVENT = 'data: [DONE]\n\n';
 
@@ -124,6 +122,7 @@ export interface ManagedAgentStreamInput {
     userId: string;
     runId: string;
   };
+  persistsRunContinuation?: boolean;
   onTerminal?: (outcome: 'completed' | 'failed' | 'cancelled') => Promise<void>;
   preserveAwaitingInputOnCancel?: () => boolean;
   getServingRequest?: () => ProcessedRequest;
@@ -165,6 +164,28 @@ export function buildManagedAgentStream(
     if (state !== undefined) lastTaskState = state;
   };
 
+  const continuation = input.persistsRunContinuation ? input.runJournal : undefined;
+  const priorRunText: Promise<string | null> | null = continuation
+    ? readCloudAgentRunAssistantText(continuation.db, {
+        userId: continuation.userId,
+        runId: continuation.runId,
+      }).then(
+        (prior) => prior.text,
+        (error: unknown) => {
+          logger.warn(
+            { error, runId: continuation.runId },
+            'Run journal unreadable; the resumed turn keeps only this leg',
+          );
+          return null;
+        },
+      )
+    : null;
+
+  const continuedRunContent = async (legContent: string): Promise<string> => {
+    const prior = priorRunText ? await priorRunText : null;
+    return prior === null ? legContent : prior + legContent;
+  };
+
   const persistTurn = async (failed: boolean): Promise<void> => {
     if (!persistable || turnPersisted || !input.userId) return;
     turnPersisted = true;
@@ -175,7 +196,8 @@ export function buildManagedAgentStream(
     const codeExecutionResult = sourceCollector.codeExecutionSnapshot();
     const generatedFiles = sourceCollector.generatedFilesSnapshot();
     const researchReport = input.getResearchReport?.() ?? null;
-    const content = assistantText + publicText.flush();
+    const legContent = assistantText + publicText.flush();
+    const content = await continuedRunContent(legContent);
     // A run that streamed no answer, no card and no artifact left the reader
     // with a blank bubble. Recording it as a complete turn is what made a
     // reload show a header and an action bar with nothing between them.
@@ -243,7 +265,8 @@ export function buildManagedAgentStream(
     // Buffered deltas must land before the run row moves, so a replaying client
     // never sees a terminal run whose last events are still in memory. A failed
     // flush is logged rather than rethrown: losing the tail of the text deltas
-    // is recoverable, the assistant turn is persisted from its own buffer.
+    // is recoverable, because the assistant turn is persisted from this leg's
+    // own buffer after the earlier legs' text, read before this leg began,
     // whereas failing to record the terminal state strands the run.
     await flushJournal().catch((error: unknown) => {
       logger.warn(
@@ -292,32 +315,12 @@ export function buildManagedAgentStream(
   const recordResearchRunCost = async (): Promise<void> => {
     const report = input.getResearchReport?.() ?? null;
     if (!report || settledCostMicrousd === null || !input.runJournal) return;
-    try {
-      await recordResearchReportSettledCost(input.runJournal.db, {
-        userId: input.runJournal.userId,
-        requestId: input.processed.requestId,
-        settledCostMicrousd,
-      });
-      report.settledCostMicrousd = settledCostMicrousd;
-    } catch (error) {
-      logger.warn(
-        { error, requestId: input.processed.requestId },
-        'Settled research cost could not be recorded on the report; queued for retry',
-      );
-      try {
-        await enqueueJob(input.runJournal.db, {
-          kind: 'research.settle-report-cost',
-          userId: input.runJournal.userId,
-          idempotencyKey: `research-cost:${input.processed.requestId}`.slice(0, 255),
-          payload: { requestId: input.processed.requestId, settledCostMicrousd },
-        });
-      } catch (queueError) {
-        logger.error(
-          { error: queueError, requestId: input.processed.requestId },
-          'Settled research cost could neither be recorded nor queued',
-        );
-      }
-    }
+    const recorded = await recordResearchRunSettledCost(input.runJournal.db, {
+      userId: input.runJournal.userId,
+      requestId: input.processed.requestId,
+      settledCostMicrousd,
+    });
+    if (recorded) report.settledCostMicrousd = settledCostMicrousd;
   };
 
   const settle = async (
@@ -376,6 +379,7 @@ export function buildManagedAgentStream(
 
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
+      if (priorRunText) await priorRunText;
       try {
         while (true) {
           const next = await input.generator.next();

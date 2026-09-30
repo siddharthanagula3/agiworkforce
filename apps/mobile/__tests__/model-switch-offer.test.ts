@@ -2,6 +2,17 @@ import { offersModelSwitch } from '../services/apiErrors';
 import { getMessageStreamErrorCode } from '../src/features/chat/utils/messageStreamError';
 
 describe('offersModelSwitch', () => {
+  it('does not offer another model when the whole usage budget is spent', () => {
+    for (const code of [
+      'monthly_limit_exceeded',
+      'insufficient_credits',
+      'insufficient_quota',
+      'organization_spend_cap_reached',
+    ]) {
+      expect(offersModelSwitch(code)).toBe(false);
+    }
+  });
+
   it('offers a switch for route and model failures', () => {
     for (const code of [
       'provider_billing_exhausted',

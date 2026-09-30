@@ -109,6 +109,7 @@ import {
   showArchivedSessions,
   showSessionsHistory,
 } from '../features/trees/sessionPickers';
+import { isCloudThread } from '../features/trees/cloudSessions';
 import { managePersonalization } from '../features/personalization/personalization';
 import { manageMemoryExclusions } from '../memory/memoryExclusions';
 import {
@@ -123,6 +124,11 @@ import {
   openCapabilitySurface,
   manageHooks,
   manageSavedApprovals,
+  manageProviderKeys,
+  chooseSessionTools,
+  type SessionPermissions,
+  createPullRequest,
+  CREATE_PULL_REQUEST_COMMAND,
   manageMcpServers,
   managePlugins,
   manageSkills,
@@ -137,6 +143,11 @@ import {
   openWorkSurface,
 } from '../features/surfaces';
 import { signIn as signInPreferringCli } from '../features/surfaces/accountAccess';
+import { rememberForRepository } from '../features/surfaces/repositoryMemory';
+import {
+  manageSessionWorktrees,
+  newSessionInWorktree,
+} from '../features/surfaces/sessionWorktrees';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
@@ -185,7 +196,6 @@ import {
   modelLockReason,
   type ModelLock,
 } from '../features/model-picker/modelConstants';
-import * as telemetry from './telemetry';
 import { recordFailure } from './subsystemHealth';
 import { markInUse } from './startupWork';
 import {
@@ -581,6 +591,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   } = deps;
 
   const cliCapabilities = new CliCapabilityAdapter(localRuntimes);
+  const sessionPermissions: SessionPermissions = {
+    mode: () => sidebarProvider.sessionAgentMode(),
+    disallowedTools: () => sidebarProvider.sessionDisallowedTools(),
+    setDisallowedTools: (tools) => sidebarProvider.setSessionDisallowedTools(tools),
+  };
   const mcpServerDetails = new McpServerDetailsProvider();
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(
@@ -706,7 +721,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
    * surface it already appeared to be.
    */
   const pickDeveloperSession = async (placeHolder: string) => {
-    const threads = await conversationTreeProvider.getThreads();
+    const threads = (await conversationTreeProvider.getThreads()).filter(
+      (thread) => !isCloudThread(thread),
+    );
     if (threads.length === 0) {
       vscode.window.showInformationMessage('AGI Workforce: No developer sessions in this window.');
       return undefined;
@@ -1244,7 +1261,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       const scope = await sidebarProvider.selectModel(picked.modelId);
 
-      telemetry.logEvent(telemetry.TelemetryEvents.MODEL_SELECTED, { model: picked.modelId });
       vscode.window.showInformationMessage(
         scope === 'conversation'
           ? `AGI Workforce: this chat now uses ${modelDisplayLabel(picked.modelId)}. New chats still start with ${modelDisplayLabel(normalizeConfiguredModelId(Config.model()))}.`
@@ -2536,12 +2552,22 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.showContextFiles', () => openContextSurface(contextPanelProvider)),
     register('agi-workforce.personalize', () => managePersonalization(context.secrets)),
     register('agi-workforce.showSkills', () => manageSkills(cliCapabilities)),
+    register('agi-workforce.rememberForRepository', () => rememberForRepository(cliCapabilities)),
+    register('agi-workforce.newSessionInWorktree', () => newSessionInWorktree(cliCapabilities)),
+    register('agi-workforce.manageWorktrees', () => manageSessionWorktrees(cliCapabilities)),
     register('agi-workforce.showPlugins', () => managePlugins(cliCapabilities)),
     register('agi-workforce.showMcpServers', () =>
       manageMcpServers(cliCapabilities, mcpServerDetails),
     ),
     register('agi-workforce.showHooks', () => manageHooks(cliCapabilities)),
-    register('agi-workforce.showSavedApprovals', () => manageSavedApprovals(cliCapabilities)),
+    register('agi-workforce.showSavedApprovals', () =>
+      manageSavedApprovals(cliCapabilities, sessionPermissions),
+    ),
+    register('agi-workforce.chooseSessionTools', () =>
+      chooseSessionTools(cliCapabilities, sessionPermissions),
+    ),
+    register('agi-workforce.manageProviderKeys', () => manageProviderKeys(cliCapabilities)),
+    register(CREATE_PULL_REQUEST_COMMAND, () => createPullRequest(cliCapabilities)),
     register('agi-workforce.showInstructions', () =>
       openCapabilitySurface(cliCapabilities, 'instructions'),
     ),
@@ -2568,6 +2594,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await showCloudRunDetail(resolution.client, runId, {
         webOrigin: getCloudWebOrigin(),
         onChanged: () => cloudTasksTreeProvider.refresh(),
+        renameConversation: async (conversationId, title) => {
+          const projects = await resolveProjectsWorkspace(context.secrets);
+          if (projects.status === 'signed-out') throw new Error('sign in to AGI Cloud first');
+          await projects.workspace.chat.updateConversation(conversationId, { title });
+        },
         listArtifacts: async () => {
           const artifacts = await resolveArtifactsWorkspace(context.secrets);
           return artifacts.status === 'signed-out' ? [] : artifacts.workspace.index.listArtifacts();

@@ -1,4 +1,5 @@
-import { View, Pressable, ScrollView } from 'react-native';
+import { View, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Image } from 'expo-image';
 import {
   Lock,
@@ -14,7 +15,8 @@ import {
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   isResumable,
@@ -164,8 +166,8 @@ function AttachmentThumbnail({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       layout={Layout.springify()}
       className="relative mr-2"
       accessibilityLabel={
@@ -191,7 +193,7 @@ function AttachmentThumbnail({
           <AttachmentImage attachment={attachment} />
         </View>
       ) : isPastedText ? (
-        <Pressable
+        <PressableBox
           className="rounded-xl items-center justify-center p-2"
           style={{
             width: 72,
@@ -207,15 +209,15 @@ function AttachmentThumbnail({
           accessibilityRole="button"
         >
           <ClipboardList size={24} color={colors.textMuted} />
-          <Text className="text-[9px] mt-1 text-center" style={{ color: colors.textMuted }}>
+          <Text className="text-xs mt-1 text-center" style={{ color: colors.textMuted }}>
             Pasted text
           </Text>
           {attachment.fileSize ? (
-            <Text className="text-[8px]" style={{ color: colors.textMuted }}>
+            <Text className="text-xs" style={{ color: colors.textMuted }}>
               {formatFileSize(attachment.fileSize)}
             </Text>
           ) : null}
-        </Pressable>
+        </PressableBox>
       ) : (
         <View
           className="rounded-xl items-center justify-center p-2"
@@ -229,14 +231,14 @@ function AttachmentThumbnail({
         >
           <DocumentIcon size={24} color={colors.textMuted} />
           <Text
-            className="text-[9px] mt-1 text-center"
+            className="text-xs mt-1 text-center"
             style={{ color: colors.textMuted }}
             numberOfLines={2}
           >
             {attachment.fileName}
           </Text>
           {attachment.fileSize ? (
-            <Text className="text-[8px]" style={{ color: colors.textMuted }}>
+            <Text className="text-xs" style={{ color: colors.textMuted }}>
               {formatFileSize(attachment.fileSize)}
             </Text>
           ) : null}
@@ -244,7 +246,7 @@ function AttachmentThumbnail({
       )}
 
       {/* Remove button, hitSlop 12 lifts the 20pt circle to a 44pt target */}
-      <Pressable
+      <PressableBox
         onPress={handleRemove}
         className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full items-center justify-center"
         style={{
@@ -260,7 +262,7 @@ function AttachmentThumbnail({
         hitSlop={12}
       >
         <X size={10} color={colors.textSecondary} />
-      </Pressable>
+      </PressableBox>
 
       {uploading ? (
         <View
@@ -290,7 +292,7 @@ function AttachmentThumbnail({
       ) : null}
 
       {canRetryUpload ? (
-        <Pressable
+        <PressableBox
           onPress={() => onRetryUpload?.(attachment.id)}
           accessibilityRole="button"
           accessibilityLabel={`${uploadLabel}. Retry uploading ${attachment.fileName}`}
@@ -312,8 +314,12 @@ function AttachmentThumbnail({
           }}
         >
           <RotateCcw size={16} color={colors.textPrimary} />
-          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textPrimary }}>Retry</Text>
-        </Pressable>
+          <Text
+            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textPrimary }}
+          >
+            Retry
+          </Text>
+        </PressableBox>
       ) : null}
 
       {sendFailed ? (
@@ -334,7 +340,9 @@ function AttachmentThumbnail({
           }}
         >
           <AlertCircle size={16} color={colors.agentError} />
-          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.agentError }}>
+          <Text
+            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.agentError }}
+          >
             Not sent
           </Text>
         </View>
@@ -362,7 +370,7 @@ function AttachmentThumbnail({
           <Lock size={11} color={colors.textPrimary} />
           <Text
             style={{
-              fontSize: 11,
+              fontSize: typeScale.caption,
               fontWeight: '600',
               color: colors.textPrimary,
             }}
@@ -387,8 +395,8 @@ export function AttachmentPreview({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       className="px-4 pt-2"
     >
       <View className="flex-row items-center">
@@ -417,7 +425,7 @@ export function AttachmentPreview({
             className="ml-1 px-2 py-0.5 rounded-full"
             style={{ backgroundColor: colors.surfaceOverlay }}
           >
-            <Text className="text-[10px] font-medium" style={{ color: colors.textSecondary }}>
+            <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>
               {attachments.length}
             </Text>
           </View>

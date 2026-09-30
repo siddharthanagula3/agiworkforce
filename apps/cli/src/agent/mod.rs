@@ -29,7 +29,7 @@ pub(crate) use checkpoints::CheckpointLog;
 pub use checkpoints::{CheckpointSummary, RestoreReport, RewindMode, RewindOutcome};
 pub(crate) use executor::value_to_legacy_args;
 pub use executor::ToolCall;
-pub(crate) use history::close_orphaned_tool_calls;
+pub(crate) use history::{close_orphaned_tool_calls, mark_interrupted_tool_calls};
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
 
@@ -176,6 +176,7 @@ pub struct AgentSession {
     pub plan_rejection_feedback: Option<String>,
     pub auto_approve_plan: bool,
     pub skip_permissions: bool,
+    pub(crate) bypass_permissions_available: bool,
     pub auto_approve_safe: bool,
     pub on_tool_approval: Option<ToolApprovalSink>,
     pub on_tool_event: Option<ToolEventSink>,
@@ -201,11 +202,13 @@ pub struct AgentSession {
     pub(crate) runtime_session_id: String,
     pub allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
+    pub(crate) allowed_mcp_servers: Option<Vec<String>>,
     pub privacy_mode: PrivacyMode,
     /// A reviewed Local→cloud continuation that has been drafted but not sent.
     /// The source durable session remains authoritative until the reviewed
     /// draft is sent and a new persisted fork has been adopted.
     pending_privacy_handoff: Option<PendingPrivacyHandoff>,
+    initial_workspace_root: Option<PathBuf>,
     pub additional_context_dirs: Vec<PathBuf>,
     pub attached_context_files: Vec<PathBuf>,
     /// Rules discovered for this workspace. Unconditional rules are included
@@ -444,7 +447,6 @@ pub(crate) fn rule_paths_from_tool_call(
         "resolve_conflict",
         "lsp_definition",
         "lsp_hover",
-        "lsp_diagnostics",
         "lsp_completion",
         "lsp_document_symbols",
         "lsp_format",
@@ -592,9 +594,14 @@ impl AgentSession {
             crate::shell_snapshot::ShellSnapshot::cleanup_stale(&home);
         }
 
+        // Memory off on the account binds every session on this machine, local
+        // and BYOK included, as it binds the web and desktop chat.
         let memory_enabled = crate::cli_options::memory_enabled()
             && crate::config::CliConfig::config_dir()
-                .map(|home| crate::memory_pipeline::load_memory_settings(&home).0)
+                .map(|home| {
+                    crate::memory_pipeline::load_memory_settings(&home).0
+                        && !crate::cloud::account_memory_off(&home)
+                })
                 .unwrap_or(true);
         let persistent_memory = crate::config::CliConfig::config_dir()
             .ok()
@@ -621,7 +628,13 @@ impl AgentSession {
         let account_memory = crate::config::CliConfig::config_dir()
             .ok()
             .filter(|_| memory_enabled)
-            .map(|home| crate::cloud::account_memory_context(privacy_mode, &home))
+            .map(|home| {
+                crate::cloud::account_memory_context_for(
+                    privacy_mode,
+                    &home,
+                    linked_cloud_project().as_deref(),
+                )
+            })
             .unwrap_or_default();
 
         let project_instructions = crate::config::CliConfig::config_dir()
@@ -692,6 +705,7 @@ impl AgentSession {
             plan_rejection_feedback: None,
             auto_approve_plan: false,
             skip_permissions: false,
+            bypass_permissions_available: false,
             auto_approve_safe: false,
             on_tool_approval: None::<ToolApprovalSink>,
             on_tool_event: None::<ToolEventSink>,
@@ -708,6 +722,7 @@ impl AgentSession {
             disallowed_tools: Vec::new(),
             privacy_mode,
             pending_privacy_handoff: None,
+            initial_workspace_root: std::env::current_dir().ok(),
             additional_context_dirs: Vec::new(),
             attached_context_files: Vec::new(),
             workspace_rules: rules,
@@ -726,6 +741,7 @@ impl AgentSession {
             session_activity: Default::default(),
             session_persistence: crate::cli_options::session_persistence_enabled(),
             auto_routing_tier: None,
+            allowed_mcp_servers: None,
             cloud_project: None,
             pending_image_blocks: Vec::new(),
             search_next_turn: false,
@@ -774,6 +790,32 @@ impl AgentSession {
         ));
     }
 
+    pub fn approve_plan(&mut self) -> Result<(), &'static str> {
+        if !matches!(
+            self.permission_mode,
+            crate::cli_options::PermissionMode::Plan
+        ) {
+            return Err("Not in plan mode.");
+        }
+        if self.current_plan.is_none() {
+            return Err("There is no plan to approve yet.");
+        }
+        self.plan_approved = true;
+        Ok(())
+    }
+
+    pub fn reject_plan(&mut self, feedback: &str) -> Result<(), &'static str> {
+        let feedback = feedback.trim();
+        if feedback.is_empty() {
+            return Err("Say what to change in the plan.");
+        }
+        self.plan_rejection_feedback = Some(feedback.to_string());
+        self.current_plan = None;
+        self.current_plan_path = None;
+        self.plan_approved = false;
+        Ok(())
+    }
+
     pub(crate) fn apply_tool_filters(
         &mut self,
         allowed_tools: &[String],
@@ -799,14 +841,82 @@ impl AgentSession {
         }
         self.mcp_manager
             .as_ref()
-            .map(|manager| std::sync::Arc::new(manager.tool_definitions(self.privacy_mode)))
+            .map(|manager| std::sync::Arc::new(self.permitted_mcp_definitions(manager)))
+    }
+
+    pub async fn expand_mcp_resource_mentions(&mut self, prompt: &str) -> (String, Vec<String>) {
+        const MAX_RESOURCE_CHARS: usize = 50_000;
+        let privacy_mode = self.privacy_mode;
+        let Some(manager) = self.mcp_manager.as_mut() else {
+            return (prompt.to_string(), Vec::new());
+        };
+        let mut attached = String::new();
+        let mut notices = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for token in prompt.split_whitespace() {
+            let Some((server, uri)) = token
+                .strip_prefix('@')
+                .and_then(|mention| mention.split_once(':'))
+            else {
+                continue;
+            };
+            let uri = uri.trim_end_matches(|character: char| ",.;)".contains(character));
+            if uri.is_empty() || !manager.has_server(server) || !seen.insert(token.to_string()) {
+                continue;
+            }
+            match manager.read_resource(server, uri, privacy_mode).await {
+                Ok(contents) => {
+                    for content in contents {
+                        match content.text {
+                            Some(text) => {
+                                let shown: String = text.chars().take(MAX_RESOURCE_CHARS).collect();
+                                attached.push_str(&format!(
+                                    "\n\n<mcp_resource server=\"{server}\" uri=\"{}\">\n{shown}\n</mcp_resource>",
+                                    content.uri
+                                ));
+                                if shown.len() < text.len() {
+                                    notices.push(format!(
+                                        "{server}:{} was cut to {MAX_RESOURCE_CHARS} characters.",
+                                        content.uri
+                                    ));
+                                }
+                            }
+                            None => notices.push(format!(
+                                "{server}:{} is not text, so it was not added.",
+                                content.uri
+                            )),
+                        }
+                    }
+                }
+                Err(error) => notices.push(format!("Could not read {server}:{uri}: {error:#}")),
+            }
+        }
+        (format!("{prompt}{attached}"), notices)
+    }
+
+    fn permitted_mcp_definitions(&self, manager: &crate::mcp::McpManager) -> Vec<ToolDefinition> {
+        manager
+            .tool_definitions(self.privacy_mode)
+            .into_iter()
+            .filter(|definition| self.mcp_server_permitted(&definition.name))
+            .collect()
+    }
+
+    pub(crate) fn mcp_server_permitted(&self, tool_name: &str) -> bool {
+        let Some(servers) = self.allowed_mcp_servers.as_ref() else {
+            return true;
+        };
+        servers.iter().any(|server| {
+            let prefix = crate::mcp::mcp_tool_name(server, "");
+            tool_name.starts_with(&prefix)
+        })
     }
 
     pub(crate) fn effective_tool_definitions(&self) -> Vec<ToolDefinition> {
         let mcp_tool_definitions = self
             .mcp_manager
             .as_ref()
-            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
+            .map(|mcp_manager| self.permitted_mcp_definitions(mcp_manager));
         let planning_locked = self.plan_mode && !self.plan_approved;
         let mut tool_definitions =
             crate::runtime::tool_catalog::effective_tool_definitions_with_browser(
@@ -851,7 +961,7 @@ impl AgentSession {
         let mcp_tool_definitions = self
             .mcp_manager
             .as_ref()
-            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
+            .map(|mcp_manager| self.permitted_mcp_definitions(mcp_manager));
         let planning_locked = self.plan_mode && !self.plan_approved;
         let mut callable = offered.to_vec();
         callable.extend(
@@ -981,10 +1091,17 @@ impl AgentSession {
     /// Add an additional directory root at runtime, mirroring Claude Code's
     /// `/add-dir` semantics for tool access and directory-scoped instructions.
     pub fn add_context_dir(&mut self, raw_path: &str) -> Result<AddContextDirReport> {
-        let canonical = crate::path_security::register_additional_workspace_root(raw_path)
-            .map_err(|e| {
-                anyhow::anyhow!("failed to register additional directory `{raw_path}`: {e}")
-            })?;
+        let path = PathBuf::from(crate::path_security::expand_home(raw_path));
+        let root = self
+            .workspace_root()
+            .ok_or_else(|| anyhow::anyhow!("Session workspace is unavailable"))?;
+        let absolute = if path.is_absolute() {
+            path
+        } else {
+            root.join(path)
+        };
+        let canonical = crate::path_security::validate_additional_workspace_root_path(&absolute)
+            .map_err(|e| anyhow::anyhow!("failed to add additional directory `{raw_path}`: {e}"))?;
         let already_present = self
             .additional_context_dirs
             .iter()
@@ -1022,13 +1139,14 @@ impl AgentSession {
         let absolute = if path.is_absolute() {
             path
         } else {
-            std::env::current_dir()?.join(path)
+            self.workspace_root()
+                .ok_or_else(|| anyhow::anyhow!("Session workspace is unavailable"))?
+                .join(path)
         };
         let resolved = absolute.canonicalize().unwrap_or(absolute);
-        let registered = crate::path_security::registered_additional_workspace_roots();
-        let Some(root) = registered
+        let Some(root) = self
+            .additional_context_dirs
             .iter()
-            .chain(self.additional_context_dirs.iter())
             .find(|root| **root == resolved)
             .cloned()
         else {
@@ -1037,7 +1155,6 @@ impl AgentSession {
                 resolved.display()
             );
         };
-        crate::path_security::unregister_additional_workspace_roots(std::slice::from_ref(&root));
         self.additional_context_dirs.retain(|path| path != &root);
         let opening = format!(
             "<additional_directory_context path=\"{}\">",
@@ -1085,7 +1202,7 @@ impl AgentSession {
         self.managed_session
             .as_ref()
             .and_then(|session| session.workspace_root.clone())
-            .or_else(|| std::env::current_dir().ok())
+            .or_else(|| self.initial_workspace_root.clone())
     }
 
     /// Give the model the instruction files `workspace_root` holds now when
@@ -1125,7 +1242,12 @@ impl AgentSession {
             if raw.is_empty() {
                 continue;
             }
-            let resolved = match resolve_context_file(raw) {
+            let root = self.workspace_root().unwrap_or_else(|| PathBuf::from("."));
+            let resolved = match crate::path_security::scope_workspace_paths_sync(
+                root,
+                self.additional_context_dirs.clone(),
+                || resolve_context_file(raw),
+            ) {
                 Ok(path) => path,
                 Err(e) => {
                     report.failed.push((raw.to_string(), e.to_string()));
@@ -1440,7 +1562,6 @@ impl AgentSession {
     }
 
     fn reset_source_context_after_privacy_handoff(&mut self) {
-        crate::path_security::unregister_additional_workspace_roots(&self.additional_context_dirs);
         self.additional_context_dirs.clear();
         self.attached_context_files.clear();
         self.pending_image_blocks.clear();
@@ -1571,7 +1692,7 @@ impl AgentSession {
         );
         managed_session.model = Some(self.model.clone());
         managed_session.routing_authority = Some(self.current_routing_authority());
-        managed_session.workspace_root = std::env::current_dir().ok();
+        managed_session.workspace_root = self.workspace_root();
         managed_session.created_by = Some("cli".to_string());
         let path = store.save(&managed_session)?;
         let carried = std::mem::take(&mut self.checkpoint_log);
@@ -1892,6 +2013,7 @@ impl AgentSession {
                         task_type: crate::routing::classify::developer_task_type(task_type),
                         trust_mode: TrustMode::ManagedCloud,
                         speed_first,
+                        policy_version: crate::runtime::session::current_routing_policy_version(),
                     },
                 ));
                 format!(
@@ -1970,10 +2092,20 @@ impl AgentSession {
     ///
     /// No-op under `--no-session-persistence`, including on a `--resume`d
     /// session: the file that was read stays exactly as it was on disk.
+    pub fn start_fresh_managed_session(&mut self) -> Result<()> {
+        self.clear();
+        self.managed_session = None;
+        self.managed_session_path = None;
+        self.checkpoint_log = checkpoints::CheckpointLog::in_memory();
+        self.checkpoint_captures.clear();
+        self.enable_managed_session()
+    }
+
     pub fn persist_managed_session(&mut self) -> Result<()> {
         if !self.session_persistence {
             return Ok(());
         }
+        let workspace_root = self.workspace_root();
         let (Some(managed_session), Some(path)) = (
             self.managed_session.as_mut(),
             self.managed_session_path.as_deref(),
@@ -1986,10 +2118,7 @@ impl AgentSession {
             privacy_mode: self.privacy_mode,
             provider: models::provider_persistence_name(&self.provider),
         });
-        managed_session.workspace_root = managed_session
-            .workspace_root
-            .clone()
-            .or_else(|| std::env::current_dir().ok());
+        managed_session.workspace_root = managed_session.workspace_root.clone().or(workspace_root);
         if managed_session.created_by.is_none() {
             managed_session.created_by = Some("cli".to_string());
         }
@@ -2122,7 +2251,8 @@ impl AgentSession {
             return Ok(());
         };
         let conn = crate::sessions::open_db()?;
-        let cwd = std::env::current_dir()
+        let cwd = self
+            .workspace_root()
             .map(|path| path.display().to_string())
             .unwrap_or_default();
         crate::sessions::sync_session_metadata(
@@ -2344,7 +2474,7 @@ fn escape_attr(path: &Path) -> String {
 /// The account project this working directory has been linked to with
 /// `agi projects link`. Visiting a directory never creates an account project,
 /// so this is `None` until the user asks for the link.
-fn linked_cloud_project() -> Option<String> {
+pub(crate) fn linked_cloud_project() -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
     let home = crate::config::CliConfig::config_dir().ok()?;
     let registry = crate::project_registry::ProjectRegistry::load(&home).ok()?;
@@ -2475,7 +2605,7 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 65);
+        assert_eq!(defs.len(), 64);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
         assert!(defs.iter().any(|definition| definition.name == "agent"));
         assert!(defs
@@ -2761,6 +2891,53 @@ mod tests {
     }
 
     #[test]
+    fn directory_grants_and_removals_are_private_to_each_session() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("ordinary.txt");
+        std::fs::write(&file, "controlled session fixture").unwrap();
+        let ctx = test_context();
+        let mut first = AgentSession::new("test-model", &ctx, None);
+        let mut second = AgentSession::new("test-model", &ctx, None);
+        first
+            .add_context_dir(&root.path().to_string_lossy())
+            .unwrap();
+        assert_eq!(
+            first
+                .attach_context_files([file.to_string_lossy()])
+                .added
+                .len(),
+            1
+        );
+        assert_eq!(
+            second
+                .attach_context_files([file.to_string_lossy()])
+                .failed
+                .len(),
+            1
+        );
+        second
+            .add_context_dir(&root.path().to_string_lossy())
+            .unwrap();
+        first
+            .remove_context_dir(&root.path().to_string_lossy())
+            .unwrap();
+        assert_eq!(
+            second
+                .attach_context_files([file.to_string_lossy()])
+                .added
+                .len(),
+            1
+        );
+        assert_eq!(
+            first
+                .attach_context_files([file.to_string_lossy()])
+                .failed
+                .len(),
+            1
+        );
+    }
+
+    #[test]
     fn add_context_dir_registers_root_and_loads_instructions() {
         crate::path_security::clear_additional_workspace_roots_for_tests();
         let ctx = SystemContext {
@@ -2947,6 +3124,7 @@ mod tests {
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::General,
                 trust_mode: agiworkforce_model_registry::TrustMode::Local,
                 speed_first: false,
+                policy_version: crate::runtime::session::current_routing_policy_version(),
             },
         ));
         let source_before = std::fs::read(&source_path).expect("read Local source");
@@ -3939,32 +4117,35 @@ mod tests {
 
     #[test]
     fn edited_added_and_removed_instruction_files_each_reach_the_conversation() {
-        let dir = tempfile::tempdir().unwrap();
-        checkout_whose_branches_disagree(dir.path());
-        let mut session = AgentSession::new("fixture-model", &test_context(), None);
-        assert!(session.refresh_instructions_in(dir.path()));
+        let home = tempfile::tempdir().expect("config home");
+        crate::compaction::with_config_home(home.path(), || {
+            let dir = tempfile::tempdir().unwrap();
+            checkout_whose_branches_disagree(dir.path());
+            let mut session = AgentSession::new("fixture-model", &test_context(), None);
+            assert!(session.refresh_instructions_in(dir.path()));
 
-        std::fs::write(dir.path().join("AGENTS.md"), "Indent with two spaces.\n").unwrap();
-        assert!(session.refresh_instructions_in(dir.path()));
-        assert!(last_system_message(&session).contains("Indent with two spaces."));
+            std::fs::write(dir.path().join("AGENTS.md"), "Indent with two spaces.\n").unwrap();
+            assert!(session.refresh_instructions_in(dir.path()));
+            assert!(last_system_message(&session).contains("Indent with two spaces."));
 
-        let package = dir.path().join("packages").join("ui");
-        std::fs::create_dir_all(&package).unwrap();
-        std::fs::write(package.join("AGENTS.md"), "Components are functions.\n").unwrap();
-        assert!(session.refresh_instructions_in(&package));
-        let nested = last_system_message(&session);
-        assert!(nested.contains("Indent with two spaces."), "{nested}");
-        assert!(nested.contains("Components are functions."), "{nested}");
+            let package = dir.path().join("packages").join("ui");
+            std::fs::create_dir_all(&package).unwrap();
+            std::fs::write(package.join("AGENTS.md"), "Components are functions.\n").unwrap();
+            assert!(session.refresh_instructions_in(&package));
+            let nested = last_system_message(&session);
+            assert!(nested.contains("Indent with two spaces."), "{nested}");
+            assert!(nested.contains("Components are functions."), "{nested}");
 
-        std::fs::remove_file(package.join("AGENTS.md")).unwrap();
-        std::fs::remove_file(dir.path().join("AGENTS.md")).unwrap();
-        assert!(session.refresh_instructions_in(&package));
-        let removed = last_system_message(&session);
-        assert!(
-            removed.contains("no longer apply") && !removed.contains("Indent with"),
-            "{removed}"
-        );
-        assert!(!session.refresh_instructions_in(&package));
+            std::fs::remove_file(package.join("AGENTS.md")).unwrap();
+            std::fs::remove_file(dir.path().join("AGENTS.md")).unwrap();
+            assert!(session.refresh_instructions_in(&package));
+            let removed = last_system_message(&session);
+            assert!(
+                removed.contains("no longer apply") && !removed.contains("Indent with"),
+                "{removed}"
+            );
+            assert!(!session.refresh_instructions_in(&package));
+        })
     }
 
     #[test]

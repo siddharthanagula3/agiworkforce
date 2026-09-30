@@ -20,6 +20,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   },
 }));
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: authMocks.getClerkAuthUser,
 }));
 
@@ -118,6 +119,18 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
         type: 'invalid_request_error',
         code: 'insufficient_scope',
       },
+    });
+  });
+
+  it('carries the step-up details with a passkey refusal, as the chat gateway does', async () => {
+    const { PasskeyRequiredError } = await import('@/lib/server/account-security/gate');
+    authMocks.getClerkAuthUser.mockRejectedValueOnce(new PasskeyRequiredError());
+
+    const response = await GET(request({ Authorization: 'Bearer session-token' }));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'passkey_required', details: { reason: 'passkey_required' } },
     });
   });
 

@@ -176,7 +176,7 @@ export default function ServiceHealthPanel() {
             >
               <div className={TABLE_WRAP_CLASS}>
                 <table className="w-full min-w-[420px] text-sm">
-                  <thead className="bg-card text-left">
+                  <thead className="bg-card text-start">
                     <tr>
                       <th className="p-3 font-medium">Queue</th>
                       <th className="p-3 font-medium">Waiting</th>
@@ -215,7 +215,7 @@ export default function ServiceHealthPanel() {
             ) : (
               <div className={TABLE_WRAP_CLASS}>
                 <table className="w-full min-w-[640px] text-sm">
-                  <thead className="bg-card text-left">
+                  <thead className="bg-card text-start">
                     <tr>
                       <th className="p-3 font-medium">Category</th>
                       <th className="p-3 font-medium">Calls</th>

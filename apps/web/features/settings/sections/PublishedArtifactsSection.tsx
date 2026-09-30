@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import type { ManagedCloudPublishedArtifactVersion } from '@agiworkforce/cloud-contracts';
 import {
   listPublishedArtifacts,
+  listPublishedArtifactVersions,
+  republishArtifactVersion,
   unpublishArtifact,
   type PublishedArtifactSummary,
 } from '../services/conversation-data-service';
@@ -58,6 +61,108 @@ function formatSize(characters: number): string {
   return `${Math.round(characters / 1000).toLocaleString()}k characters`;
 }
 
+function PublishHistory({
+  artifact,
+  onRepublished,
+}: {
+  artifact: PublishedArtifactSummary;
+  onRepublished: (version: number) => void;
+}) {
+  const [versions, setVersions] = useState<ManagedCloudPublishedArtifactVersion[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busyVersion, setBusyVersion] = useState<number | null>(null);
+
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      setError(null);
+      try {
+        setVersions(await listPublishedArtifactVersions(artifact.token, signal));
+      } catch (caught) {
+        if (caught instanceof DOMException && caught.name === 'AbortError') return;
+        setError(toUserMessage(caught, 'Failed to load the publish history'));
+      }
+    },
+    [artifact.token],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  const putLive = async (version: number) => {
+    setBusyVersion(version);
+    setError(null);
+    try {
+      await republishArtifactVersion(artifact, version);
+      await load();
+      onRepublished(version);
+    } catch (caught) {
+      setError(toUserMessage(caught, 'Failed to put that version live'));
+    } finally {
+      setBusyVersion(null);
+    }
+  };
+
+  return (
+    <div
+      aria-label={`Publish history for ${artifact.title || artifact.artifactId}`}
+      style={{ padding: '0 var(--space-5) var(--space-4)', fontSize: 12, color: 'var(--text-2)' }}
+    >
+      {error ? (
+        <div role="alert" style={{ marginBottom: 'var(--space-2)' }}>
+          {error}
+        </div>
+      ) : null}
+      {versions === null ? (
+        error ? null : (
+          <p style={{ margin: 0, color: 'var(--text-3)' }}>Loading the publish history…</p>
+        )
+      ) : (
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'grid',
+            gap: 'var(--space-2)',
+          }}
+        >
+          {versions.map((entry) => (
+            <li
+              key={entry.version}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 'var(--space-3)',
+              }}
+            >
+              <span style={{ minWidth: 0 }}>
+                Version {entry.version} · {formatDate(entry.createdAt)}
+                {entry.title && entry.title !== artifact.title ? ` · ${entry.title}` : ''}
+              </span>
+              {entry.live ? (
+                <span style={{ color: 'var(--text-3)' }}>Live now</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void putLive(entry.version)}
+                  disabled={busyVersion !== null}
+                  style={actionButtonStyle}
+                >
+                  {busyVersion === entry.version ? 'Putting live…' : 'Put live'}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function PublishedArtifactsSection() {
   const [artifacts, setArtifacts] = useState<PublishedArtifactSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +172,7 @@ export function PublishedArtifactsSection() {
   );
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [historyToken, setHistoryToken] = useState<string | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -181,71 +287,96 @@ export function PublishedArtifactsSection() {
         ) : (
           artifacts.map((artifact, index) => {
             const busy = actionToken === artifact.token;
+            const historyOpen = historyToken === artifact.token;
             return (
               <div
                 key={artifact.token}
-                style={{
-                  padding: 'var(--space-4) var(--space-5)',
-                  borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 'var(--space-4)',
-                }}
+                style={{ borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)' }}
               >
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      color: 'var(--text-1)',
-                      fontSize: 14,
-                      fontWeight: 500,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {artifact.title || artifact.artifactId}
-                  </div>
-                  <div
-                    style={{ marginTop: 'var(--space-1)', color: 'var(--text-3)', fontSize: 12 }}
-                  >
-                    {AUDIENCE_LABELS[artifact.visibility]} · {artifact.kind} ·{' '}
-                    {formatSize(artifact.contentChars)} · Published {formatDate(artifact.createdAt)}
-                    {/* State the serving mode, because it is the security
+                <div
+                  style={{
+                    padding: 'var(--space-4) var(--space-5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 'var(--space-4)',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        color: 'var(--text-1)',
+                        fontSize: 14,
+                        fontWeight: 500,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {artifact.title || artifact.artifactId}
+                    </div>
+                    <div
+                      style={{ marginTop: 'var(--space-1)', color: 'var(--text-3)', fontSize: 12 }}
+                    >
+                      {AUDIENCE_LABELS[artifact.visibility]} · {artifact.kind} ·{' '}
+                      {formatSize(artifact.contentChars)} · Published{' '}
+                      {formatDate(artifact.createdAt)}
+                      {/* State the serving mode, because it is the security
                         property a publisher should be able to verify. */}
-                    {artifact.sandboxed ? ' · runs in a sandboxed frame' : ''}
+                      {artifact.sandboxed ? ' · runs in a sandboxed frame' : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
+                    <a
+                      href={artifact.shareUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ ...actionButtonStyle, textDecoration: 'none' }}
+                    >
+                      Open
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopy(artifact)}
+                      disabled={busy}
+                      style={actionButtonStyle}
+                    >
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      aria-expanded={historyOpen}
+                      onClick={() => setHistoryToken(historyOpen ? null : artifact.token)}
+                      disabled={busy}
+                      style={actionButtonStyle}
+                    >
+                      History
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setArtifactToUnpublish(artifact)}
+                      disabled={busy}
+                      style={{
+                        ...actionButtonStyle,
+                        color: 'var(--chat-accent-primary-text)',
+                        cursor: busy ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {busy ? 'Unpublishing…' : 'Unpublish'}
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
-                  <a
-                    href={artifact.shareUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ ...actionButtonStyle, textDecoration: 'none' }}
-                  >
-                    Open
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => void handleCopy(artifact)}
-                    disabled={busy}
-                    style={actionButtonStyle}
-                  >
-                    Copy
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setArtifactToUnpublish(artifact)}
-                    disabled={busy}
-                    style={{
-                      ...actionButtonStyle,
-                      color: 'var(--chat-accent-primary-text)',
-                      cursor: busy ? 'not-allowed' : 'pointer',
+                {historyOpen ? (
+                  <PublishHistory
+                    artifact={artifact}
+                    onRepublished={(version) => {
+                      setNotice(
+                        `Version ${version} of “${artifact.title || artifact.artifactId}” is live again.`,
+                      );
+                      void load();
                     }}
-                  >
-                    {busy ? 'Unpublishing…' : 'Unpublish'}
-                  </button>
-                </div>
+                  />
+                ) : null}
               </div>
             );
           })

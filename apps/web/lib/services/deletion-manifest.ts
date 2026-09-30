@@ -27,6 +27,7 @@ export type DataClass =
 export type StoreKind = 'table' | 'object_store' | 'cache';
 
 const CUSTOMER_CONTENT = [
+  'bank_account_items',
   'chat_folders',
   'chat_messages',
   'cloud_agent_approval_checkpoints',
@@ -49,6 +50,7 @@ const CUSTOMER_CONTENT = [
   'media_assets',
   'message_bookmarks',
   'message_reactions',
+  'mobile_intent_tokens',
   'notebook_runs',
   'notifications',
   'organization_plugin_files',
@@ -102,6 +104,10 @@ const DERIVED_CONTENT = [
 const OPERATIONAL_RECORD = [
   'account_compromise_responses',
   'account_lockout_attempts',
+  'account_security_challenges',
+  'account_security_credentials',
+  'account_security_enrollments',
+  'account_security_sessions',
   'account_security_settings',
   'account_sessions',
   'admin_request_idempotency',
@@ -128,6 +134,7 @@ const OPERATIONAL_RECORD = [
   'credit_transactions',
   'data_rights_requests',
   'desktop_devices',
+  'desktop_sign_in_grants',
   'developer_projects',
   'developer_webhook_deliveries',
   'developer_webhook_endpoints',
@@ -144,6 +151,7 @@ const OPERATIONAL_RECORD = [
   'event_triggers',
   'feature_flags',
   'free_daily_usage_reservations',
+  'github_install_authorizations',
   'github_installations',
   'identities',
   'legal_holds',

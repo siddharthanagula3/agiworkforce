@@ -13,7 +13,8 @@ import { Pencil, Trash2, Pin, PinOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import type { MemoryEntry } from '@/src/features/memory/store';
 import { memoryFactOrigin } from '@/src/features/memory/services/consolidation';
 
@@ -53,9 +54,18 @@ function describeMemoryTime(memory: MemoryEntry): string {
 
 function describeMemoryOrigin(memory: MemoryEntry, conversationTitle: string | null): string {
   const origin = memoryFactOrigin(memory);
-  if (origin === 'imported') return 'Imported';
-  if (origin === 'typed') return 'Added by you';
-  return conversationTitle ? `Learned from “${conversationTitle}”` : 'Learned from a chat';
+  const base =
+    origin === 'imported'
+      ? 'Imported'
+      : origin === 'typed'
+        ? 'Added by you'
+        : conversationTitle
+          ? `Learned from “${conversationTitle}”`
+          : 'Learned from a chat';
+  if (memory.project_id) {
+    return `${base}, only in project “${memory.project_name ?? 'a project'}”`;
+  }
+  return base;
 }
 
 interface MemoryItemProps {
@@ -84,7 +94,7 @@ export function MemoryItem({
   const toggleExpand = useCallback(() => {
     const next = !expanded;
     setExpanded(next);
-    animOpacity.value = withTiming(next ? 1 : 0, { duration: 200 });
+    animOpacity.value = withTiming(next ? 1 : 0, { duration: motion.quick });
   }, [expanded, animOpacity]);
 
   const expandStyle = useAnimatedStyle(() => ({
@@ -113,7 +123,7 @@ export function MemoryItem({
   );
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(200)}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(motion.quick)}>
       <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
         <Card variant="default" className="mb-2">
           {/* Top row: fact text + actions */}
@@ -186,7 +196,7 @@ export function MemoryItem({
                   numberOfLines={1}
                   style={{
                     color: colors.textSecondary,
-                    fontSize: 11,
+                    fontSize: typeScale.caption,
                     textDecorationLine: 'underline',
                   }}
                 >
@@ -197,12 +207,12 @@ export function MemoryItem({
               <Text
                 numberOfLines={1}
                 className="flex-1"
-                style={{ color: colors.textMuted, fontSize: 11 }}
+                style={{ color: colors.textMuted, fontSize: typeScale.caption }}
               >
                 {originLabel}
               </Text>
             )}
-            <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
               {describeMemoryTime(memory)}
             </Text>
           </View>

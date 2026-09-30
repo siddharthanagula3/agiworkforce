@@ -7,9 +7,9 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
-import { MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
+import { chatAttachmentSizeLabel, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 
-const CHAT_ATTACHMENT_SIZE_LIMIT_MESSAGE = 'Chat attachments are limited to 12 MiB.';
+const CHAT_ATTACHMENT_SIZE_LIMIT_MESSAGE = `Chat attachments are limited to ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_BYTES)} each.`;
 
 function isOwnedChatAttachmentKey(key: string, userId: string): boolean {
   const prefix = `chat-attachments/${userId}/`;

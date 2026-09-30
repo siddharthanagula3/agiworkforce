@@ -118,9 +118,7 @@ function describeModel(metadata: ModelMetadata): string {
 /**
  * These lifecycle fields exist in the canonical models.json but are not part
  * of the web's narrower local ModelMetadata interface, read them
- * defensively. Shared by `isCurrentModel` (the on/off gate) and
- * `futureDeprecationDate` (the advance-warning label) so both read the exact
- * same catalog value.
+ * defensively for `futureDeprecationDate` (the advance-warning label).
  */
 function lifecycleFields(metadata: ModelMetadata): {
   deprecated?: boolean;
@@ -132,17 +130,6 @@ function lifecycleFields(metadata: ModelMetadata): {
     status?: string;
     deprecation_date?: string | null;
   };
-}
-
-function isCurrentModel(metadata: ModelMetadata): boolean {
-  const lifecycle = lifecycleFields(metadata);
-  if (lifecycle.deprecated === true) return false;
-  if (lifecycle.status === 'deprecated') return false;
-  if (lifecycle.deprecation_date) {
-    const retiresAt = Date.parse(lifecycle.deprecation_date);
-    if (!Number.isNaN(retiresAt) && retiresAt <= Date.now()) return false;
-  }
-  return true;
 }
 
 /**
@@ -186,7 +173,6 @@ function buildAvailableModels(): AIModel[] {
       (metadata): metadata is ModelMetadata =>
         !!metadata &&
         CHAT_MODEL_TYPES.has(metadata.modelType) &&
-        isCurrentModel(metadata) &&
         metadata.availability !== 'coming_soon',
     )
     .map((metadata) => {

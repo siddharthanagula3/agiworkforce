@@ -143,7 +143,7 @@ function FileDiffBlock({ filePath, lines, additions, deletions }: FileDiff) {
             <span aria-hidden="true" className="w-4 shrink-0 select-none text-center">
               {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}
             </span>
-            <span className="flex-1 whitespace-pre pr-2">{line.content || ' '}</span>
+            <span className="flex-1 whitespace-pre pe-2">{line.content || ' '}</span>
           </div>
         ))}
         {truncated > 0 && (
@@ -481,7 +481,7 @@ const ToolCallCardComponent = ({
 
         {showParameters && (hasArgs || commandText) && (
           <div>
-            <p className="text-caption uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
+            <p className="text-caption uppercase tracking-wider text-muted-foreground mb-1 ms-0.5">
               Request
             </p>
             {codeBlock ? (
@@ -502,7 +502,7 @@ const ToolCallCardComponent = ({
 
         {result && (
           <div>
-            <p className="text-caption uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
+            <p className="text-caption uppercase tracking-wider text-muted-foreground mb-1 ms-0.5">
               Response
             </p>
             {resultDiff ? (
@@ -517,7 +517,7 @@ const ToolCallCardComponent = ({
 
         {displayError && (
           <div>
-            <p className="text-caption uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
+            <p className="text-caption uppercase tracking-wider text-muted-foreground mb-1 ms-0.5">
               Error
             </p>
             <pre className="overflow-auto max-h-48 rounded-compact bg-muted/50 p-2.5 text-xs font-mono leading-relaxed text-danger-text scrollbar-thin">

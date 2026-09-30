@@ -6,6 +6,14 @@ function norm(sql: string): string {
   return sql.replace(/\s+/gu, ' ').trim().toLowerCase();
 }
 
+function byColumn(column: string) {
+  return (a: FakeRow, b: FakeRow): number => {
+    const left = String(a[column]);
+    const right = String(b[column]);
+    return left < right ? -1 : left > right ? 1 : 0;
+  };
+}
+
 let idCounter = 0;
 function uuid(): string {
   idCounter += 1;
@@ -135,11 +143,47 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       const edges = state.scim_group_members.filter(
         (row) => ids.includes(String(row['scim_user_id'])) && row['organization_id'] === p[1],
       );
-      return edges.flatMap((edge) => {
+      const joined = edges.flatMap((edge) => {
         const group = state.scim_groups.find((entry) => entry['id'] === edge['group_id']);
         if (!group || group['connection_id'] !== p[2]) return [];
-        return [{ scim_user_id: edge['scim_user_id'], mapped_role: group['mapped_role'] }];
+        return [{ edge, group }];
       });
+      if (q.includes('g.display_name')) {
+        return joined
+          .sort((a, b) => byColumn('display_name')(a.group, b.group))
+          .map(({ edge, group }) => ({
+            scim_user_id: edge['scim_user_id'],
+            id: group['id'],
+            display_name: group['display_name'],
+          }));
+      }
+      return joined.map(({ edge, group }) => ({
+        scim_user_id: edge['scim_user_id'],
+        mapped_role: group['mapped_role'],
+      }));
+    }
+
+    if (
+      q.includes('from scim_group_members m') &&
+      q.includes('scim_provisioned_users u') &&
+      q.includes('group_id = any(')
+    ) {
+      const ids = (p[0] as string[]) ?? [];
+      return state.scim_group_members
+        .filter((row) => ids.includes(String(row['group_id'])) && row['organization_id'] === p[1])
+        .flatMap((edge) => {
+          const user = state.scim_provisioned_users.find(
+            (entry) => entry['id'] === edge['scim_user_id'],
+          );
+          if (!user || user['connection_id'] !== p[2]) return [];
+          return [{ edge, user }];
+        })
+        .sort((a, b) => byColumn('user_name')(a.user, b.user))
+        .map(({ edge, user }) => ({
+          group_id: edge['group_id'],
+          id: user['id'],
+          user_name: user['user_name'],
+        }));
     }
 
     // Connection-scoped revocation. Both statements name `public.` and are
@@ -731,7 +775,9 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
       if (q.includes('g.mapped_role')) {
         return groups.map((group) => ({ mapped_role: group['mapped_role'] }));
       }
-      return groups.map((group) => ({ id: group['id'], display_name: group['display_name'] }));
+      return groups
+        .sort(byColumn('display_name'))
+        .map((group) => ({ id: group['id'], display_name: group['display_name'] }));
     }
     if (q.includes('from scim_group_members m') && q.includes('scim_provisioned_users u')) {
       const edges = state.scim_group_members.filter(
@@ -742,6 +788,7 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
           state.scim_provisioned_users.find((user) => user['id'] === edge['scim_user_id']),
         )
         .filter((user): user is FakeRow => Boolean(user) && user!['connection_id'] === p[2])
+        .sort(byColumn('user_name'))
         .map((user) => ({ id: user['id'], user_name: user['user_name'] }));
     }
 

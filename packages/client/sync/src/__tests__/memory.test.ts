@@ -40,7 +40,15 @@ describe('mapMemoryWireDelta', () => {
       origin: 'mobile',
       sourceConversationId: null,
       sourceConversationTitle: null,
+      projectId: null,
+      projectName: null,
     });
+  });
+
+  it('keeps the project a memory is confined to', () => {
+    const mapped = mapMemoryWireDelta(wire({ project_id: 'p1', project_name: 'Launch' }));
+    expect(mapped.projectId).toBe('p1');
+    expect(mapped.projectName).toBe('Launch');
   });
 
   it('normalizes an unknown or null source to "web"', () => {

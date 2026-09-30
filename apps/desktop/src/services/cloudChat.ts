@@ -226,6 +226,15 @@ export async function waitForCloudConversationReady(
   assertCloudConversationBoundary(boundary);
 }
 
+export async function readTemporaryChatPreference(): Promise<boolean> {
+  try {
+    const { useSettingsStore } = await import('../stores/settingsStore');
+    return useSettingsStore.getState().chatPreferences.temporaryChat === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function ensureCloudConversation(
   conversationId: string,
   title = 'New chat',

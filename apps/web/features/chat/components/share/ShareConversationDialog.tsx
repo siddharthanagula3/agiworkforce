@@ -160,7 +160,7 @@ function ShareConversationDialogImpl({
               <div className="flex gap-2">
                 <Input aria-label="Conversation link" readOnly value={activeShare.url} />
                 <Button variant="outline" onClick={() => void handleCopy()} disabled={isSharing}>
-                  {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                  {copied ? <Check className="me-2 h-4 w-4" /> : <Copy className="me-2 h-4 w-4" />}
                   {copied ? 'Copied' : 'Copy'}
                 </Button>
               </div>
@@ -279,7 +279,7 @@ function ShareConversationDialogImpl({
                   }
                   disabled={isSharing}
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
+                  <Trash2 className="me-2 h-4 w-4" />
                   {isSharing ? 'Revoking…' : 'Revoke share'}
                 </Button>
                 <Button variant="outline" onClick={() => handleOpenChange(false)}>

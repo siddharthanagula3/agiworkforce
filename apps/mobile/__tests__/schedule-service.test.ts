@@ -3,6 +3,7 @@ import { requireAutoMode } from '../test-utils/modelFixtures';
 import { api } from '@/services/api';
 import {
   createSchedule,
+  deleteSchedule,
   fetchScheduleRuns,
   fetchSchedules,
   toggleSchedule,
@@ -80,7 +81,7 @@ const serverRun = {
   completedAt: '2026-07-17T14:00:40.000Z',
   durationMs: 40_000,
   result: { text: 'Partial result', model: AUTO_MODEL_ID },
-  error: 'Execution timed out',
+  error: 'private provider token and execution details',
   idempotencyKey: 'request-12345678',
   leaseExpiresAt: null,
   attemptCount: 1,
@@ -171,6 +172,17 @@ describe('mobile schedule service', () => {
     });
   });
 
+  it('requires a confirmed schedule deletion response', async () => {
+    apiMock.delete.mockResolvedValueOnce({ success: true });
+    await expect(deleteSchedule('schedule/1')).resolves.toBeUndefined();
+    expect(apiMock.delete).toHaveBeenCalledWith('/api/schedules/schedule%2F1');
+
+    apiMock.delete.mockResolvedValueOnce({ success: false });
+    await expect(deleteSchedule('schedule/1')).rejects.toThrow(
+      'Schedule deletion returned an invalid response.',
+    );
+  });
+
   it('maps terminal run states and extracts user-facing result text', async () => {
     apiMock.get.mockResolvedValueOnce({
       runs: [serverRun],
@@ -185,11 +197,23 @@ describe('mobile schedule service', () => {
         startedAt: '2026-07-17T14:00:00.000Z',
         completedAt: '2026-07-17T14:00:40.000Z',
         result: 'Partial result',
-        error: 'Execution timed out',
+        error: 'This run exceeded its time limit. Try again.',
         pendingApproval: null,
+        timingNote: null,
       },
     ]);
     expect(apiMock.get).toHaveBeenCalledWith('/api/schedules/schedule%2F1/runs');
+  });
+
+  it('does not expose a failed run’s provider diagnostics', async () => {
+    apiMock.get.mockResolvedValueOnce({
+      runs: [{ ...serverRun, status: 'failed' }],
+      pagination: { limit: 20, offset: 0 },
+    });
+
+    await expect(fetchScheduleRuns(serverSchedule.id)).resolves.toMatchObject([
+      { status: 'failed', error: 'This run could not finish. Try again.' },
+    ]);
   });
 
   it('sends a retry-safe idempotency key when triggering a manual run', async () => {

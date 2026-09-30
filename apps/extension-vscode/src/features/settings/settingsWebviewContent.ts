@@ -1553,6 +1553,21 @@ export function getSettingsWebviewContent(
                 <span class="toggle-track" aria-hidden="true"></span>
               </label>
             </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-respect-gitignore">Respect .gitignore</label>
+                <span class="setting-description">Leave files git ignores out of @ file search, and send only the path of one that is open in the editor. Works while VS Code's search.useIgnoreFiles is on.</span>
+              </div>
+              <label class="toggle" title="Respect .gitignore">
+                <input
+                  id="setting-respect-gitignore"
+                  data-setting="respectGitIgnore"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
           </div>
 
           <div class="card">
@@ -1681,10 +1696,10 @@ export function getSettingsWebviewContent(
             </div>
             <div class="setting-row">
               <div>
-                <label class="setting-name" for="setting-telemetry">Share anonymous telemetry</label>
-                <span class="setting-description">Send bounded product-usage events.</span>
+                <label class="setting-name" for="setting-telemetry">Share usage events and crash reports</label>
+                <span class="setting-description">Send product usage events, such as a stopped response or an accepted edit, to your AGI account when its product analytics choice allows them, and scrubbed crash reports. Never your prompts, code or file names.</span>
               </div>
-              <label class="toggle" title="Anonymous telemetry">
+              <label class="toggle" title="Usage events and crash reports">
                 <input
                   id="setting-telemetry"
                   data-setting="telemetryEnabled"
@@ -1708,6 +1723,15 @@ export function getSettingsWebviewContent(
                 autocomplete="off"
                 spellcheck="false"
               />
+            </div>
+            <div class="setting-row">
+              <div>
+                <span class="setting-name">Product analytics for your account</span>
+                <span class="setting-description">Your account's choice applies to every AGI app. A workspace administrator can turn it off for every member.</span>
+              </div>
+              <button class="secondary-button" type="button" data-command="openPrivacySettings">
+                Manage
+              </button>
             </div>
           </div>
         </section>
@@ -1988,6 +2012,7 @@ ${capabilityAvailabilityRows}
           'composer.followUpBehavior': 'Active-turn send',
           contextLines: 'Context lines',
           'editorContext.autoAttach': 'Editor context',
+          respectGitIgnore: 'Respect .gitignore',
           telemetryEnabled: 'Telemetry',
           'memory.enabled': 'Memory',
           hoverEnabled: 'Hover actions',

@@ -196,6 +196,16 @@ fn export_typescript_bindings() {
         .expect("export developer-session permissions list graph");
     agiworkforce_protocol::developer_session::PermissionsRemoveParams::export_all_to(dir)
         .expect("export developer-session permissions remove params graph");
+    agiworkforce_protocol::developer_session::PlanDecideParams::export_all_to(dir)
+        .expect("export developer-session plan decide params graph");
+    agiworkforce_protocol::developer_session::GitPullRequestPlanParams::export_all_to(dir)
+        .expect("export developer-session pull request plan params graph");
+    agiworkforce_protocol::developer_session::GitPullRequestPlanResponse::export_all_to(dir)
+        .expect("export developer-session pull request plan graph");
+    agiworkforce_protocol::developer_session::GitPullRequestParams::export_all_to(dir)
+        .expect("export developer-session pull request params graph");
+    agiworkforce_protocol::developer_session::GitPullRequestResponse::export_all_to(dir)
+        .expect("export developer-session pull request graph");
 
     // One versioned agent event envelope (W5 discipline-wave item 4), not
     // reachable from any root above (a new, independent top-level type), so

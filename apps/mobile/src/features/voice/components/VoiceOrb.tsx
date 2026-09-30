@@ -1,4 +1,3 @@
-
 import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import Animated, {
@@ -12,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { colors } from '@/src/ui/theme';
+import { motion } from '@/src/ui/theme/tokens';
 
 export type VoiceOrbPhase = 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -44,26 +44,35 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
   useEffect(() => {
     if (amplitudeDriven) return;
     if (reducedMotion) {
-      scale.value = withTiming(1, { duration: 180 });
-      glowOpacity.value = withTiming(0.2, { duration: 180 });
+      scale.value = withTiming(1, { duration: motion.quick });
+      glowOpacity.value = withTiming(0.2, { duration: motion.quick });
       return;
     }
     if (phase === 'thinking') {
       scale.value = withRepeat(
-        withSequence(withTiming(1.1, { duration: 750 }), withTiming(0.94, { duration: 750 })),
+        withSequence(
+          withTiming(1.1, { duration: motion.reveal }),
+          withTiming(0.94, { duration: motion.reveal }),
+        ),
         -1,
         true,
       );
-      glowOpacity.value = withRepeat(withTiming(0.5, { duration: 750 }), -1, true);
+      glowOpacity.value = withRepeat(withTiming(0.5, { duration: motion.reveal }), -1, true);
       return;
     }
     scale.value = withRepeat(
-      withSequence(withTiming(1.04, { duration: 2000 }), withTiming(0.98, { duration: 2000 })),
+      withSequence(
+        withTiming(1.04, { duration: motion.ambient }),
+        withTiming(0.98, { duration: motion.ambient }),
+      ),
       -1,
       true,
     );
     glowOpacity.value = withRepeat(
-      withSequence(withTiming(0.28, { duration: 2000 }), withTiming(0.12, { duration: 2000 })),
+      withSequence(
+        withTiming(0.28, { duration: motion.ambient }),
+        withTiming(0.12, { duration: motion.ambient }),
+      ),
       -1,
       true,
     );

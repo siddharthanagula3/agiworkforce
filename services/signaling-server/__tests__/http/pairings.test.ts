@@ -6,8 +6,8 @@ import cors from 'cors';
 vi.mock('../../src/db.js', () => ({
   getSessionByCode: vi.fn(),
   deleteSessionByCode: vi.fn(),
-  getSessionExpiresAtByCode: vi.fn(),
   insertSession: vi.fn(),
+  probeDatabase: vi.fn(),
 }));
 
 function createTestApp() {

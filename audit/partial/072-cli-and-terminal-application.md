@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S72.30: Remote-session attachment.
-
-- Done when: The terminal can attach to a session that lives elsewhere (another device, the cloud or a running remote agent) and continue it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Attaching to a session still running elsewhere needs a server-side session relay (Claude Code Remote Control / --teleport equivalent); the CLI deliberately exposes no remote-control command without a real transport. | handler |
-
-Code: `apps/cli/src/claude_parity.rs:1831-1831`
-
 ## S72.35: Installer and updater.
 
 - Done when: The CLI can be installed via a published package/script and can check for and install updates itself.
@@ -24,6 +13,6 @@ Code: `apps/cli/src/claude_parity.rs:1831-1831`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Install and update verify a signed release manifest. Still open, owner only: set AGI_CLI_RELEASE_SIGNING_KEY, publish the first signed release, then mark the CLI available (surface-status.ts:7). | flag-off |
+| cli | partial | Owner only: set AGI_CLI_RELEASE_SIGNING_KEY, publish the first signed release, then mark the CLI available (surface-status.ts:7). | flag-off |
 
 Code: `apps/web/public/install.sh:139-139`, `apps/cli/src/update_check.rs:221-221`

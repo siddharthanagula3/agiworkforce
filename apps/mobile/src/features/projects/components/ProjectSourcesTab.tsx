@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
+import {
+  View,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import * as DocumentPicker from 'expo-document-picker';
-import { FileText, Plus, Trash2 } from 'lucide-react-native';
+import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
+import { FileText, Plus, Trash2, Type } from 'lucide-react-native';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { ALLOWED_ATTACHMENT_MIME_PREFIXES, IMAGE_ATTACHMENT_MIME_TYPES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -9,9 +21,12 @@ import {
   cloudProjectSources,
   useProjectSourceTarget,
   useProjectStore,
+  ProjectSourceCancelledError,
+  ProjectSourceError,
 } from '@/src/features/projects/store';
 import { formatBytes } from '@agiworkforce/utils/format';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ProjectSourcesTabProps {
   projectId: string;
@@ -32,10 +47,26 @@ export const PROJECT_SOURCE_MIME_TYPES: readonly string[] = [
   ),
 ];
 
+interface UploadProgress {
+  name: string;
+  position: number;
+  total: number;
+  percent: number | null;
+}
+
 const EMPTY_SOURCES: DisplaySource[] = [];
 
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message.trim() ? error.message : fallback;
+export function uploadProgressLabel({ name, percent }: UploadProgress): string {
+  return percent === null ? `Adding ${name}` : `Uploading ${name}, ${percent}%`;
+}
+
+function percentOf(bytesSent: number, totalBytes: number): number | null {
+  if (totalBytes <= 0) return null;
+  return Math.min(100, Math.max(0, Math.round((bytesSent / totalBytes) * 100)));
+}
+
+export function projectSourceErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof ProjectSourceError && error.message.trim() ? error.message : fallback;
 }
 
 function SourceRow({
@@ -80,13 +111,13 @@ function SourceRow({
         >
           {source.name}
         </Text>
-        <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+        <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
           {formatBytes(source.size)} · {formatRelativeTime(source.addedAt)}
         </Text>
       </View>
 
       {/* Remove */}
-      <Pressable
+      <PressableBox
         onPress={handleRemove}
         className="p-2 rounded-lg"
         style={{ backgroundColor: `${colors.agentError}10` }}
@@ -94,7 +125,55 @@ function SourceRow({
         accessibilityRole="button"
       >
         <Trash2 size={15} color={colors.agentError} />
-      </Pressable>
+      </PressableBox>
+    </View>
+  );
+}
+
+function UploadProgressRow({
+  progress,
+  onCancel,
+}: {
+  progress: UploadProgress;
+  onCancel: () => void;
+}) {
+  const colors = useThemeColors();
+  const label = uploadProgressLabel(progress);
+  const position = `File ${progress.position} of ${progress.total}`;
+  return (
+    <View
+      className="flex-row items-center gap-3 px-4 py-2 mx-4 mb-2 rounded-xl"
+      style={{
+        backgroundColor: colors.surfaceElevated,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+      testID="project-source-upload-progress"
+    >
+      <ActivityIndicator size="small" color={colors.teal} />
+      <View className="flex-1" accessible accessibilityLiveRegion="polite">
+        <Text
+          className="text-[13px] font-medium"
+          style={{ color: colors.textPrimary }}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <Text className="text-[12px]" style={{ color: colors.textSecondary }}>
+          {position}
+        </Text>
+      </View>
+      <PressableBox
+        onPress={onCancel}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel adding sources"
+        className="min-h-[44px] min-w-[44px] items-center justify-center rounded-lg px-3"
+        style={{ backgroundColor: `${colors.textMuted}14` }}
+      >
+        <Text className="text-[13px] font-semibold" style={{ color: colors.textPrimary }}>
+          Cancel
+        </Text>
+      </PressableBox>
     </View>
   );
 }
@@ -135,13 +214,21 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   const [cloudSources, setCloudSources] = useState<DisplaySource[]>(EMPTY_SOURCES);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const mounted = useRef(true);
+  const requestRef = useRef(0);
+  const uploadRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      uploadRef.current?.abort();
     };
+  }, []);
+
+  const cancelUpload = useCallback(() => {
+    uploadRef.current?.abort();
   }, []);
 
   const localSources = useMemo<DisplaySource[]>(
@@ -156,9 +243,11 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   );
 
   const refreshCloudSources = useCallback(async () => {
+    const request = ++requestRef.current;
+    setBusy(true);
     try {
       const files = await cloudProjectSources.list(projectId);
-      if (!mounted.current) return;
+      if (!mounted.current || requestRef.current !== request) return;
       setCloudSources(
         files.map((file) => ({
           id: file.id,
@@ -169,21 +258,24 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
       );
       setLoadError(null);
     } catch (error) {
-      if (!mounted.current) return;
-      setLoadError(errorMessage(error, 'Could not load this project’s sources.'));
+      if (!mounted.current || requestRef.current !== request) return;
+      setLoadError(
+        projectSourceErrorMessage(error, 'Could not load this project’s sources. Retry.'),
+      );
+    } finally {
+      if (mounted.current && requestRef.current === request) setBusy(false);
     }
   }, [projectId]);
 
   useEffect(() => {
     if (target !== 'cloud') {
+      requestRef.current += 1;
       setCloudSources(EMPTY_SOURCES);
       setLoadError(null);
+      setBusy(false);
       return;
     }
-    setBusy(true);
-    void refreshCloudSources().finally(() => {
-      if (mounted.current) setBusy(false);
-    });
+    void refreshCloudSources();
   }, [target, refreshCloudSources]);
 
   const sources = target === 'cloud' ? cloudSources : localSources;
@@ -208,19 +300,45 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
     if (result.canceled) return;
 
     setBusy(true);
+    const controller = new AbortController();
+    uploadRef.current = controller;
     const failures: string[] = [];
-    for (const asset of result.assets) {
+    const total = result.assets.length;
+    for (const [index, asset] of result.assets.entries()) {
+      if (controller.signal.aborted) break;
+      setUploadProgress({ name: asset.name, position: index + 1, total, percent: null });
       try {
-        await addSource(projectId, {
-          name: asset.name,
-          mimeType: asset.mimeType ?? 'application/octet-stream',
-          size: asset.size ?? 0,
-          uri: asset.uri,
-        });
+        await addSource(
+          projectId,
+          {
+            name: asset.name,
+            mimeType: asset.mimeType ?? 'application/octet-stream',
+            size: asset.size ?? 0,
+            uri: asset.uri,
+          },
+          {
+            signal: controller.signal,
+            onProgress: ({ bytesSent, totalBytes }) => {
+              if (!mounted.current || controller.signal.aborted) return;
+              const percent = percentOf(bytesSent, totalBytes);
+              setUploadProgress((current) =>
+                current && current.position === index + 1 && current.percent !== percent
+                  ? { ...current, percent }
+                  : current,
+              );
+            },
+          },
+        );
       } catch (error) {
-        failures.push(errorMessage(error, `"${asset.name}" could not be added.`));
+        if (error instanceof ProjectSourceCancelledError || controller.signal.aborted) break;
+        failures.push(
+          projectSourceErrorMessage(error, `"${asset.name}" could not be added. Try again.`),
+        );
       }
     }
+    if (uploadRef.current === controller) uploadRef.current = null;
+    if (!mounted.current) return;
+    setUploadProgress(null);
     if (target === 'cloud') await refreshCloudSources();
     if (!mounted.current) return;
     setBusy(false);
@@ -229,13 +347,57 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
     }
   }, [projectId, target, addSource, refreshCloudSources]);
 
+  const [textEditorOpen, setTextEditorOpen] = useState(false);
+  const [textTitle, setTextTitle] = useState('');
+  const [textBody, setTextBody] = useState('');
+
+  const closeTextEditor = useCallback(() => {
+    setTextEditorOpen(false);
+    setTextTitle('');
+    setTextBody('');
+  }, []);
+
+  const handleSaveText = useCallback(async () => {
+    const body = textBody.trim();
+    if (!body || !cacheDirectory) return;
+    const baseName =
+      textTitle
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, ' ')
+        .trim() || 'Text';
+    const name = baseName.toLowerCase().endsWith('.txt') ? baseName : `${baseName}.txt`;
+    const uri = `${cacheDirectory}project-text-${uuidv7()}.txt`;
+    setBusy(true);
+    try {
+      await writeAsStringAsync(uri, body);
+      await addSource(projectId, {
+        name,
+        mimeType: 'text/plain',
+        size: new TextEncoder().encode(body).length,
+        uri,
+      });
+      if (target === 'cloud') await refreshCloudSources();
+      if (mounted.current) closeTextEditor();
+    } catch (error) {
+      Alert.alert(
+        'Text was not added',
+        projectSourceErrorMessage(error, 'Check your connection and try again.'),
+      );
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }, [addSource, closeTextEditor, projectId, refreshCloudSources, target, textBody, textTitle]);
+
   const handleRemove = useCallback(
     async (sourceId: string) => {
       try {
         await removeSource(projectId, sourceId);
         if (target === 'cloud') await refreshCloudSources();
       } catch (error) {
-        Alert.alert('Could not remove source', errorMessage(error, 'Please try again.'));
+        Alert.alert(
+          'Could not remove source',
+          projectSourceErrorMessage(error, 'Please try again.'),
+        );
       }
     },
     [projectId, target, removeSource, refreshCloudSources],
@@ -252,7 +414,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
     <View className="flex-1">
       {/* Add sources button */}
       <View className="px-4 pt-4 pb-2">
-        <Pressable
+        <PressableBox
           onPress={() => void handleAddSources()}
           disabled={busy || target === 'unknown'}
           className="flex-row items-center justify-center gap-2 py-3 rounded-xl"
@@ -271,8 +433,125 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           <Text className="text-[14px] font-semibold" style={{ color: colors.teal }}>
             Add sources
           </Text>
-        </Pressable>
+        </PressableBox>
+        <PressableBox
+          onPress={() => setTextEditorOpen(true)}
+          disabled={busy || target === 'unknown'}
+          className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-2"
+          style={{
+            backgroundColor: colors.surfaceElevated,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: busy || target === 'unknown' ? 0.5 : 1,
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Add text"
+          accessibilityState={{ disabled: busy || target === 'unknown' }}
+        >
+          <Type size={16} color={colors.textPrimary} />
+          <Text className="text-[14px] font-semibold" style={{ color: colors.textPrimary }}>
+            Add text
+          </Text>
+        </PressableBox>
       </View>
+
+      {uploadProgress ? (
+        <UploadProgressRow progress={uploadProgress} onCancel={cancelUpload} />
+      ) : null}
+
+      <Modal
+        visible={textEditorOpen}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={closeTextEditor}
+      >
+        <KeyboardAvoidingView
+          accessibilityViewIsModal
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.surfaceElevated,
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              padding: 16,
+              paddingBottom: 32,
+              gap: 12,
+            }}
+          >
+            <Text
+              style={{ fontSize: typeScale.callout, fontWeight: '600', color: colors.textPrimary }}
+            >
+              Add text
+            </Text>
+            <TextInput
+              value={textTitle}
+              onChangeText={setTextTitle}
+              placeholder="Title"
+              placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Text source title"
+              maxLength={120}
+              style={{
+                minHeight: 44,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                color: colors.textPrimary,
+              }}
+            />
+            <TextInput
+              value={textBody}
+              onChangeText={setTextBody}
+              placeholder="Paste or type the text this project should use"
+              placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Text source content"
+              multiline
+              textAlignVertical="top"
+              style={{
+                minHeight: 160,
+                maxHeight: 320,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 10,
+                padding: 12,
+                color: colors.textPrimary,
+              }}
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+              <PressableBox
+                onPress={closeTextEditor}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+                style={{ minHeight: 44, paddingHorizontal: 16, justifyContent: 'center' }}
+              >
+                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
+              </PressableBox>
+              <PressableBox
+                onPress={() => void handleSaveText()}
+                disabled={busy || !textBody.trim()}
+                accessibilityRole="button"
+                accessibilityLabel="Add"
+                accessibilityState={{ disabled: busy || !textBody.trim() }}
+                style={{
+                  minHeight: 44,
+                  paddingHorizontal: 16,
+                  justifyContent: 'center',
+                  opacity: busy || !textBody.trim() ? 0.5 : 1,
+                }}
+              >
+                {busy ? (
+                  <ActivityIndicator size="small" color={colors.teal} />
+                ) : (
+                  <Text style={{ color: colors.teal, fontWeight: '600' }}>Add</Text>
+                )}
+              </PressableBox>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {target === 'unknown' ? (
         <Notice
@@ -280,9 +559,25 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           body="This project is no longer available on this device, so sources cannot be added."
         />
       ) : loadError ? (
-        <Notice title="Could not load sources" body={loadError} />
+        <View className="items-center">
+          <Notice title="Could not load sources" body={loadError} />
+          <PressableBox
+            onPress={() => void refreshCloudSources()}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading project sources"
+            accessibilityState={{ disabled: busy }}
+            className="min-h-[48px] min-w-[140px] items-center justify-center rounded-xl px-5"
+            style={{ backgroundColor: colors.surfaceElevated }}
+          >
+            <Text style={{ color: colors.textPrimary }}>Try Again</Text>
+          </PressableBox>
+        </View>
       ) : sources.length === 0 ? (
-        <Notice title="No sources added yet" body="Add files to give the project more context." />
+        <Notice
+          title="No sources added yet"
+          body="Add files or text to give the project more context."
+        />
       ) : (
         <ScrollView
           className="flex-1"

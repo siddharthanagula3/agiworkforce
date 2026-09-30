@@ -1,11 +1,5 @@
-import {
-  useState,
-  useRef,
-  useCallback,
-  useMemo,
-  useEffect,
-  type KeyboardEvent as ReactKeyboardEvent,
-} from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Tabs,
   TabsContent,
@@ -15,6 +9,7 @@ import {
   ScrollArea,
   Alert,
   AlertDescription,
+  Spinner,
   translateUiPlural,
 } from '@agiworkforce/ui';
 import {
@@ -262,7 +257,7 @@ function MarkdownDocumentPreview({
                         .getElementById(`artifact-${heading.id}`)
                         ?.scrollIntoView?.({ block: 'start' })
                     }
-                    className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-primary"
+                    className="block w-full truncate text-start text-xs text-muted-foreground transition-colors hover:text-primary"
                   >
                     {heading.text}
                   </button>
@@ -278,6 +273,24 @@ function MarkdownDocumentPreview({
     </div>
   );
 }
+
+function EditorLoading() {
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <Spinner size="sm" aria-label="Opening the editor" />
+    </div>
+  );
+}
+
+const ArtifactCodeEditor = dynamic(
+  () => import('./ArtifactCodeEditor').then((module) => module.ArtifactCodeEditor),
+  { ssr: false, loading: EditorLoading },
+);
+
+const ArtifactDocumentEditor = dynamic(
+  () => import('./ArtifactDocumentEditor').then((module) => module.ArtifactDocumentEditor),
+  { ssr: false, loading: EditorLoading },
+);
 
 const MARKDOWN_SHORTCUTS: Readonly<
   Record<string, { before: string; after: string; placeholder: string }>
@@ -708,23 +721,6 @@ export function ArtifactPreview({
     }, ARTIFACT_DRAFT_AUTOSAVE_MS);
     return () => clearTimeout(timer);
   }, [draftStorageKey, sourceDraft]);
-
-  const handleMarkdownShortcut = useCallback((event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
-    const wrap = MARKDOWN_SHORTCUTS[event.key.toLowerCase()];
-    if (!wrap) return;
-    event.preventDefault();
-    const field = event.currentTarget;
-    const { selectionStart, selectionEnd, value } = field;
-    const selected = value.slice(selectionStart, selectionEnd) || wrap.placeholder;
-    const replacement = `${wrap.before}${selected}${wrap.after}`;
-    const next = value.slice(0, selectionStart) + replacement + value.slice(selectionEnd);
-    setSourceDraft(next);
-    const cursor = selectionStart + wrap.before.length;
-    requestAnimationFrame(() => {
-      field.setSelectionRange(cursor, cursor + selected.length);
-    });
-  }, []);
 
   const endSourceEdit = useCallback(() => {
     removeStoredDraft(draftStorageKey);
@@ -1196,6 +1192,8 @@ if (__AgiApp) {
 
   const handleOpenInNewTab = () => {
     const page = sandboxedPreviewPage(artifact.title || 'Artifact', getPreviewHTML());
+
+    // eslint-disable-next-line no-restricted-syntax -- the page only frames the artifact in a sandbox without allow-same-origin
     const blob = new Blob([page], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -1407,13 +1405,13 @@ if (__AgiApp) {
           <div className="flex items-center gap-2">
             {pdfError && (
               <Button variant="ghost" size="sm" onClick={handleRefresh}>
-                <RefreshCw className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                <RefreshCw className="me-1 h-3.5 w-3.5" aria-hidden="true" />
                 Retry
               </Button>
             )}
             {pdfDownload && (
               <Button variant="outline" size="sm" onClick={pdfDownload}>
-                <Download className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                <Download className="me-1 h-3.5 w-3.5" aria-hidden="true" />
                 Download
               </Button>
             )}
@@ -1561,7 +1559,7 @@ if (__AgiApp) {
                 Navigation remains disabled until real edit history exists. */}
             {versionCount > 0 && (
               <div
-                className="ml-0.5 flex shrink-0 items-center gap-0.5 rounded-md border border-border/40 bg-muted/40 px-0.5"
+                className="ms-0.5 flex shrink-0 items-center gap-0.5 rounded-md border border-border/40 bg-muted/40 px-0.5"
                 data-testid="artifact-version-chip"
               >
                 <button
@@ -1640,7 +1638,7 @@ if (__AgiApp) {
             {/* Edit / Save · Cancel, only over the source view, and only for a
                 text artifact on its latest version (see canEditSource). */}
             {canEditSource &&
-              !showPreview &&
+              (!showPreview || isMarkdownDoc) &&
               !showChanges &&
               (sourceDraft === null ? (
                 <Button
@@ -1656,7 +1654,7 @@ if (__AgiApp) {
                   data-testid="artifact-edit-source"
                 >
                   <Pencil className="h-3.5 w-3.5" />
-                  <span className="ml-1 hidden text-xs @[30rem]:inline">Edit</span>
+                  <span className="ms-1 hidden text-xs @[30rem]:inline">Edit</span>
                 </Button>
               ) : (
                 <>
@@ -1670,7 +1668,7 @@ if (__AgiApp) {
                     data-testid="artifact-save-source"
                   >
                     <Check className="h-3.5 w-3.5" />
-                    <span className="ml-1 hidden text-xs @[30rem]:inline">Save</span>
+                    <span className="ms-1 hidden text-xs @[30rem]:inline">Save</span>
                   </Button>
                   {draftStatus ? (
                     <span className="text-xs text-muted-foreground" role="status">
@@ -1687,7 +1685,7 @@ if (__AgiApp) {
                     data-testid="artifact-cancel-source-edit"
                   >
                     <X className="h-3.5 w-3.5" />
-                    <span className="ml-1 hidden text-xs @[30rem]:inline">Cancel</span>
+                    <span className="ms-1 hidden text-xs @[30rem]:inline">Cancel</span>
                   </Button>
                 </>
               ))}
@@ -1704,7 +1702,7 @@ if (__AgiApp) {
                 data-testid="artifact-show-changes"
               >
                 <FileDiff className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs @[30rem]:inline">Show changes</span>
+                <span className="ms-1 hidden text-xs @[30rem]:inline">Show changes</span>
               </Button>
             )}
 
@@ -1721,12 +1719,12 @@ if (__AgiApp) {
                 {copied ? (
                   <>
                     <Check className="h-3.5 w-3.5 text-success-text" />
-                    <span className="ml-1 hidden text-xs @[30rem]:inline">Copied</span>
+                    <span className="ms-1 hidden text-xs @[30rem]:inline">Copied</span>
                   </>
                 ) : (
                   <>
                     <Copy className="h-3.5 w-3.5" />
-                    <span className="ml-1 hidden text-xs @[30rem]:inline">Copy</span>
+                    <span className="ms-1 hidden text-xs @[30rem]:inline">Copy</span>
                   </>
                 )}
               </Button>
@@ -1827,7 +1825,7 @@ if (__AgiApp) {
                 data-testid="artifact-fork"
               >
                 <GitFork className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs @[30rem]:inline">Duplicate</span>
+                <span className="ms-1 hidden text-xs @[30rem]:inline">Duplicate</span>
               </Button>
             )}
 
@@ -1852,7 +1850,7 @@ if (__AgiApp) {
                 data-testid="artifact-start-work"
               >
                 <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs @[30rem]:inline">Start Work</span>
+                <span className="ms-1 hidden text-xs @[30rem]:inline">Start Work</span>
               </Button>
             )}
 
@@ -1873,7 +1871,7 @@ if (__AgiApp) {
                     data-testid="artifact-save-to-project"
                   >
                     <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span className="ml-1 hidden text-xs @[30rem]:inline">
+                    <span className="ms-1 hidden text-xs @[30rem]:inline">
                       {savingProjectId ? 'Saving…' : 'Save to project'}
                     </span>
                   </Button>
@@ -1903,7 +1901,7 @@ if (__AgiApp) {
                 data-testid="artifact-save-to-library"
               >
                 <Library className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs @[30rem]:inline">
+                <span className="ms-1 hidden text-xs @[30rem]:inline">
                   {savingToLibrary ? 'Saving…' : 'Save to Library'}
                 </span>
               </Button>
@@ -1924,7 +1922,7 @@ if (__AgiApp) {
                 title="Publish"
               >
                 <Globe className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs @[30rem]:inline">
+                <span className="ms-1 hidden text-xs @[30rem]:inline">
                   {isPublishing ? 'Publishing…' : 'Publish'}
                 </span>
               </Button>
@@ -2160,11 +2158,11 @@ if (__AgiApp) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={() => setActiveTab('code')}>
-                    <Code className="mr-1 h-3.5 w-3.5" />
+                    <Code className="me-1 h-3.5 w-3.5" />
                     View source
                   </Button>
                   <Button variant="ghost" size="sm" onClick={handleRefresh}>
-                    <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                    <RefreshCw className="me-1 h-3.5 w-3.5" />
                     Retry
                   </Button>
                 </div>
@@ -2198,7 +2196,17 @@ if (__AgiApp) {
           {showPreview && isSharedRendered && renderSharedPreview('h-full w-full')}
 
           {/* Preview: rendered Markdown document */}
-          {showPreview && isMarkdownDoc && renderMarkdownPreview('h-full w-full')}
+          {showPreview &&
+            isMarkdownDoc &&
+            (sourceDraft !== null && draftOrigin === 'editor' ? (
+              <ArtifactDocumentEditor
+                value={sourceDraft}
+                onChange={setSourceDraft}
+                wraps={MARKDOWN_SHORTCUTS}
+              />
+            ) : (
+              renderMarkdownPreview('h-full w-full')
+            ))}
 
           {/* Preview: PDF */}
           {showPreview && isPdf && renderPdfPreview('h-full w-full')}
@@ -2233,15 +2241,12 @@ if (__AgiApp) {
           {!showPreview &&
             !showChanges &&
             (sourceDraft !== null ? (
-              <textarea
+              <ArtifactCodeEditor
                 value={sourceDraft}
-                onChange={(event) => setSourceDraft(event.target.value)}
-                onKeyDown={artifact.type === 'document' ? handleMarkdownShortcut : undefined}
-                spellCheck={false}
-                autoComplete="off"
-                className="h-full w-full resize-none border-0 bg-gray-900 p-4 font-mono text-sm text-gray-100 outline-none focus:ring-0"
-                aria-label="Artifact source"
-                data-testid="artifact-source-editor"
+                onChange={setSourceDraft}
+                language={isMarkdownDoc ? 'markdown' : (artifact.language ?? artifact.type)}
+                wraps={artifact.type === 'document' ? MARKDOWN_SHORTCUTS : undefined}
+                ariaLabel="Artifact source"
               />
             ) : (
               <ScrollArea className="h-full w-full bg-gray-900">
@@ -2324,12 +2329,12 @@ if (__AgiApp) {
               {copied ? (
                 <>
                   <Check className="h-3.5 w-3.5 text-success-text" />
-                  <span className="ml-1 hidden text-xs @[30rem]:inline">Copied</span>
+                  <span className="ms-1 hidden text-xs @[30rem]:inline">Copied</span>
                 </>
               ) : (
                 <>
                   <Copy className="h-3.5 w-3.5" />
-                  <span className="ml-1 hidden text-xs @[30rem]:inline">Copy</span>
+                  <span className="ms-1 hidden text-xs @[30rem]:inline">Copy</span>
                 </>
               )}
             </Button>
@@ -2519,11 +2524,11 @@ if (__AgiApp) {
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => setActiveTab('code')}>
-                      <Code className="mr-1 h-3.5 w-3.5" />
+                      <Code className="me-1 h-3.5 w-3.5" />
                       View source
                     </Button>
                     <Button variant="ghost" size="sm" onClick={handleRefresh}>
-                      <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                      <RefreshCw className="me-1 h-3.5 w-3.5" />
                       Retry
                     </Button>
                   </div>

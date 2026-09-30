@@ -11,12 +11,14 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   deviceStepCapability,
+  deviceStepScope,
   offeredDeviceStepTools,
-  type DesktopCapability,
   type DesktopHostDeclaration,
+  type DeviceStepCapability,
 } from '@agiworkforce/local-runtime-contract';
 import type { PlatformCapability } from '@agiworkforce/types';
 import { isRegistryMissing } from '@/app/api/settings/devices/schema-state';
+import { enqueueJob } from '@/lib/jobs/job-service';
 
 /**
  * What the device registry says about the machine a step would be sent to.
@@ -106,7 +108,7 @@ export async function readRegisteredDevice(
     surface: row.surface,
     name: row.name,
     lastSeenAt: row.last_seen_at,
-    presence: devicePresence(row.last_seen_at, params.now ?? Date.now()),
+    presence: devicePresence(row.last_seen_at, params.now ?? Date.now(), row.surface),
     remoteEnabled: row.remote_enabled,
     capabilities: {
       browser: row.browser_available,
@@ -180,34 +182,89 @@ export async function propagateDeviceRevocation(
     deviceId: revocation.deviceId,
   });
 
+  const relay = await sendRelayRevocation(revocation.deviceId, revocation.reason);
+  if (relay.reachable) {
+    return {
+      remoteWorkStopped,
+      liveSessionsDropped: relay.closed,
+      signalingReachable: true,
+    };
+  }
+  if (relay.configured) {
+    const revokedAt = new Date().toISOString();
+    // A relay that is down keeps the device's live socket open, so the revoke
+    // is queued and retried until the relay takes it.
+    await enqueueJob(db, {
+      kind: DEVICE_REVOCATION_JOB_KIND,
+      userId: revocation.userId,
+      payload: { deviceId: revocation.deviceId, reason: revocation.reason, revokedAt },
+      // One job per revocation: a device re-paired and revoked again later is a
+      // new revocation, and its revoke must not dedupe into the finished one.
+      idempotencyKey: `device-revoke:${revocation.deviceId}:${revocation.reason}:${revokedAt}`,
+    }).catch(() => undefined);
+  }
+  return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
+}
+
+export const DEVICE_REVOCATION_JOB_KIND = 'webhooks.signaling-device-revoke';
+
+export interface RegistrationSinceRevocation {
+  readonly remote_enabled: boolean;
+  readonly last_seen_at: string | null;
+}
+
+/**
+ * Whether a queued revoke still describes the device. It is stale once the user
+ * took remote work back on, and, for an unlinked or lost device, once the
+ * device reported in again after the revocation, which only a fresh sign-in
+ * can do. A device whose remote work was stopped keeps reporting in while it
+ * stays signed in, so for that reason only a re-enable makes the revoke stale.
+ */
+export function revocationIsStale(
+  reason: DeviceRevocationReason,
+  revokedAt: string,
+  registration: RegistrationSinceRevocation | null,
+): boolean {
+  if (!registration) return false;
+  if (registration.remote_enabled) return true;
+  if (reason === 'remote_work_stopped' || !registration.last_seen_at) return false;
+  return Date.parse(registration.last_seen_at) > Date.parse(revokedAt);
+}
+
+export interface RelayRevocation {
+  readonly configured: boolean;
+  readonly reachable: boolean;
+  readonly closed: number | null;
+}
+
+/** Tells the signaling relay to close the device's sockets and refuse it. */
+export async function sendRelayRevocation(
+  deviceId: string,
+  reason: DeviceRevocationReason,
+): Promise<RelayRevocation> {
   const url = process.env['SIGNALING_HTTP_URL'];
   const secret = process.env['SIGNALING_INTERNAL_SECRET'];
-  if (!url || !secret) {
-    return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
-  }
-
+  if (!url || !secret) return { configured: false, reachable: false, closed: null };
   try {
     const response = await fetch(
-      `${url.replace(/\/+$/, '')}/devices/${encodeURIComponent(revocation.deviceId)}/revoke`,
+      `${url.replace(/\/+$/, '')}/devices/${encodeURIComponent(deviceId)}/revoke`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ reason: revocation.reason }),
+        body: JSON.stringify({ reason }),
         signal: AbortSignal.timeout(SIGNALING_TIMEOUT_MS),
       },
     );
-    if (!response.ok) {
-      return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
-    }
+    if (!response.ok) return { configured: true, reachable: false, closed: null };
     const payload: unknown = await response.json().catch(() => null);
     const closed = (payload as { closed?: unknown } | null)?.closed;
     return {
-      remoteWorkStopped,
-      liveSessionsDropped: typeof closed === 'number' ? closed : null,
-      signalingReachable: true,
+      configured: true,
+      reachable: true,
+      closed: typeof closed === 'number' ? closed : null,
     };
   } catch {
-    return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
+    return { configured: true, reachable: false, closed: null };
   }
 }
 
@@ -231,7 +288,7 @@ export const DEVICE_PRESENCE_RETRY_MS = DEVICE_HEARTBEAT_INTERVAL_MS;
 
 /** Which advertised capability answers for a step's local-runtime permission. */
 export const STEP_CAPABILITY_ADVERTISEMENTS: Readonly<
-  Partial<Record<DesktopCapability, PlatformCapability>>
+  Partial<Record<DeviceStepCapability, PlatformCapability>>
 > = Object.freeze({
   'filesystem.read': 'canUseFileSystem',
   'filesystem.write': 'canUseFileSystem',
@@ -242,22 +299,25 @@ export const STEP_CAPABILITY_ADVERTISEMENTS: Readonly<
   'mcp.local': 'canUseLocalMcp',
   'local.inference': 'canUseLocalModels',
   'browser.site': 'canUseBrowserAutomation',
+  'browser.cdp': 'canUseBrowserAutomation',
 });
 
-const STEP_CAPABILITY_LABELS: Readonly<Partial<Record<DesktopCapability, string>>> = Object.freeze({
-  'filesystem.read': 'access to its files',
-  'filesystem.write': 'permission to write its files',
-  'shell.execute': 'a terminal',
-  'computer.use': 'screen control',
-  'screen.capture': 'screen capture',
-  'clipboard.read': 'access to its clipboard',
-  'mcp.local': 'its local tool servers',
-  'local.inference': 'its local models',
-  'browser.site': 'browser control',
-});
+const STEP_CAPABILITY_LABELS: Readonly<Partial<Record<DeviceStepCapability, string>>> =
+  Object.freeze({
+    'filesystem.read': 'access to its files',
+    'filesystem.write': 'permission to write its files',
+    'shell.execute': 'a terminal',
+    'computer.use': 'screen control',
+    'screen.capture': 'screen capture',
+    'clipboard.read': 'access to its clipboard',
+    'mcp.local': 'its local tool servers',
+    'local.inference': 'its local models',
+    'browser.site': 'browser control',
+    'browser.cdp': "its browser's console and network activity",
+  });
 
 interface RefusedDeviceCapability {
-  capability: DesktopCapability;
+  capability: DeviceStepCapability;
   label: string;
 }
 
@@ -298,6 +358,11 @@ function capabilitySourceFor(
     : 'inferred';
 }
 
+function stepsStayOnThePhone(declaration: DesktopHostDeclaration): boolean {
+  const offered = offeredDeviceStepTools(declaration);
+  return offered.length > 0 && offered.every((tool) => deviceStepScope(tool) === 'phone');
+}
+
 /**
  * Whether a durable run may hand work to this device right now.
  *
@@ -321,7 +386,7 @@ export function clearDeviceForRemoteSteps(
       reason: `The credential "${declaration.deviceName}" registered with has been revoked, so no step was sent to it.`,
     };
   }
-  if (!device.remoteEnabled) {
+  if (!device.remoteEnabled && !stepsStayOnThePhone(declaration)) {
     return {
       decision: 'withdrawn',
       reason: `"${declaration.deviceName}" has remote work switched off, so no step was sent to it.`,

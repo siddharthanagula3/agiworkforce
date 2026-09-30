@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: A user can browse a catalogue of available skills, including ones not yet installed, and open any of them.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile lists only the skills already on the account (GET /api/skills without catalog=all); it cannot browse or install others. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `apps/mobile/src/features/skills/service.ts:19-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:326-329`
 
 ## S53.02: Installed Skills.
 
@@ -39,12 +36,12 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Personal skills (authored, uploaded with bundled files, or uploaded as a plugin) are built end to end and stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
-| desktop | partial | Personal skills (authored, uploaded with bundled files, or uploaded as a plugin) are built end to end and stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
-| mobile | partial | Mobile would list personal skills the server returns but cannot create one; web creation is itself flag-off. | ui, flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| mobile | partial | mobile New skill is built (POST /api/skills, shown when canAuthorSkills); same switch-on as web: AGI_USER_SKILL_AUTHORING=1 in production after migration 0157 | ui, flag-off |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/user-skill-service.ts:255-255`, `apps/web/features/plugins/server/directory/install-gate.ts:26-26`, `apps/mobile/src/features/skills/service.ts:19-26`, `apps/mobile/src/features/skills/SkillsScreen.tsx:240-275`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`, `apps/mobile/src/features/skills/SkillsScreen.tsx:789-789`, `apps/web/lib/services/user-skill-authoring.ts:5-5`
 
 ## S53.04: Project Skills.
 
@@ -100,96 +97,68 @@ Code: `apps/web/lib/services/user-skill-service.ts:255-255`, `apps/web/features/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/routines-voice 71dda8e8f: the skill editor edits personal skills and Edit plugin now reopens a created plugin's skills for editing (instructions, names, descriptions, adding and removing skills, keeping bundled files and switches); both stay off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
-| desktop | partial | partials/routines-voice 71dda8e8f: the skill editor edits personal skills and Edit plugin now reopens a created plugin's skills for editing (instructions, names, descriptions, adding and removing skills, keeping bundled files and switches); both stay off until the lead switches AGI_USER_SKILL_AUTHORING on | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No in-product editor; users write SKILL.md files in their own editor. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/plugin-owned-source-service.ts:516-516`, `apps/web/app/api/plugins/authored/[entryId]/route.ts:56-56`, `packages/ui/ui/src/directory/DirectoryPanel.tsx:552-552`, `packages/ui/ui/src/directory/PluginDetailView.tsx:682-682`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S53.10: Reference-file bundle.
 
 - Done when: A skill can bundle reference files that the model reads when the skill runs.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Runs through the local CLI runtime, which has the same gap: package files are hashed but their location is not given to the model. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/skills.rs:61-64`, `apps/cli/src/skills.rs:931-980`
 
 ## S53.11: Script bundle.
 
 - Done when: A skill can bundle scripts that run when the skill is used.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Same CLI-runtime gap as the CLI cell. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/skills.rs:61-64`, `apps/cli/src/skills.rs:931-980`
 
 ## S53.14: Required tools.
 
 - Done when: A skill declares the tools it needs and the product shows or enforces that requirement.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Enforced by the CLI runtime when a skill loads, but VS Code never shows a skill's requirements. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/skills.rs:944-962`
-
-## S53.15: Required connections.
-
-- Done when: A skill declares the connectors/MCP servers it needs and the product shows or enforces it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | requires.mcp is enforced when the model loads a skill, but no screen shows which connectors a skill needs. | ui |
-| desktop | partial | Same as web. | ui |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `packages/tools/skills/src/tool.ts:180-200`
-
-## S53.17: Manual invocation.
-
-- Done when: A user can explicitly pick a skill for a message and the model then uses that skill.
 - Wave: 3
 - Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | skill_name works on POST /api/llm/v1/chat/completions but is undocumented in the API reference. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:613-637`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:498-512`
+## S53.15: Required connections.
 
-## S53.18: Automatic relevance-based invocation.
-
-- Done when: Without being asked, the product loads a skill whose description matches the user's request.
+- Done when: A skill declares the connectors/MCP servers it needs and the product shows or enforces it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Works only when chatting through the local CLI runtime; cloud chats from VS Code are excluded from skill offers. | handler |
+| mobile | missing | Not built on this surface. |  |
+| cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:639-639`, `apps/cli/src/agent/prompt.rs:411-412`
+## S53.17: Manual invocation.
+
+- Done when: A user can explicitly pick a skill for a message and the model then uses that skill.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode, api
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| chrome | missing | Not built on this surface. |  |
 
 ## S53.20: Enable/disable.
 
@@ -210,13 +179,13 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:639-639
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Upload skill (SKILL.md or a zipped skill folder with its files, migration 0322) and Upload plugin work end to end, and both now sit behind AGI_USER_SKILL_AUTHORING and the skills workspace gate; they stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
-| desktop | partial | Upload skill (SKILL.md or a zipped skill folder with its files, migration 0322) and Upload plugin work end to end, and both now sit behind AGI_USER_SKILL_AUTHORING and the skills workspace gate; they stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/skills/route.ts:194-194`, `apps/web/features/plugins/server/directory/archive.ts:430-430`, `apps/web/lib/services/user-skill-service.ts:255-255`, `apps/web/app/api/plugins/uploads/route.ts:120-120`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S53.22: Export.
 
@@ -231,34 +200,14 @@ Code: `apps/web/app/api/skills/route.ts:194-194`, `apps/web/features/plugins/ser
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S53.27: Recorded-demonstration creation.
-
-- Done when: A user can create a skill by recording a demonstration of the task.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | No deliberate record step: the CLI silently writes "learned" SKILL.md files from tool sequences repeated across 3+ past sessions. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/agent/chat.rs:1046-1062`, `apps/cli/src/skill_learner.rs:1-11`
-
 ## S53.36: Permission and provenance summary.
 
 - Done when: A skill shows a summary of the permissions it uses and where it came from.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Detail shows publisher (You/AGI/Plugin/Managed) and license, but nothing summarizes what the skill may access (tools, connectors) or where it came from beyond that label. | ui |
-| desktop | partial | Detail shows publisher (You/AGI/Plugin/Managed) and license, but nothing summarizes what the skill may access (tools, connectors) or where it came from beyond that label. | ui |
-| mobile | partial | Rows show the source label and required tools only; no permission or provenance summary. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/directory/services/skills-directory.ts:62-66`, `packages/ui/ui/src/directory/SkillDetailView.tsx:101-118`, `apps/web/features/directory/services/skills-directory.ts:265-292`, `apps/mobile/src/features/skills/SkillsScreen.tsx:240-275`

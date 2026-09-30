@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toUserMessage } from '@/lib/user-error-message';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
 import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
@@ -378,7 +379,7 @@ export function WorkspaceEncryptionKey() {
 
       {lookup.error ? (
         <p role="alert" className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
-          {lookup.error.message}
+          {toUserMessage(lookup.error, 'The encryption key could not be loaded.')}
         </p>
       ) : null}
 
@@ -412,7 +413,7 @@ export function WorkspaceEncryptionKey() {
 
       {error ? (
         <p role="alert" className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
-          {error.message}
+          {toUserMessage(error, 'The encryption key could not be changed.')}
         </p>
       ) : null}
     </section>

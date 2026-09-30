@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { View, ScrollView, Pressable } from 'react-native';
+import { View, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useRecyclingState } from '@shopify/flash-list';
 import Animated, {
   FadeIn,
@@ -31,7 +32,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useAgentStore } from '@/stores/agentStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { isTerminalToolStatus } from '@agiworkforce/types';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import type { ToolCall } from '@/types/chat';
@@ -50,7 +51,7 @@ function SpinningLoader({ size = 14, color }: { size?: number; color: string }) 
 
   useEffect(() => {
     rotation.value = withRepeat(
-      withTiming(360, { duration: 900, easing: Easing.linear }),
+      withTiming(360, { duration: motion.pulse, easing: Easing.linear }),
       -1,
       false,
     );
@@ -123,7 +124,7 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(250)}
+      entering={FadeIn.duration(motion.moved)}
       layout={LinearTransition.springify()}
       className="flex-row items-start gap-2.5 mb-2.5"
     >
@@ -164,20 +165,20 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
             {call.command ? `: ${call.command}` : ''}
           </Text>
           {call.duration != null && (
-            <Text className="text-[10px] text-white/30">{call.duration}ms</Text>
+            <Text className="text-xs text-white/30">{call.duration}ms</Text>
           )}
         </View>
 
         {/* Brief result */}
         {call.output && isTerminalToolStatus(call.status) && (
-          <Text className="text-[11px] text-white/40 leading-4" numberOfLines={2}>
+          <Text className="text-xs text-white/40 leading-4" numberOfLines={2}>
             {call.output}
           </Text>
         )}
 
         {/* File path hint */}
         {call.filePath && (
-          <Text className="text-[10px] mt-0.5" style={{ color: colors.teal }} numberOfLines={1}>
+          <Text className="text-xs mt-0.5" style={{ color: colors.teal }} numberOfLines={1}>
             {call.filePath}
           </Text>
         )}
@@ -195,7 +196,7 @@ function CompletionBanner({ status }: { status: 'completed' | 'failed' }) {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-row items-center gap-2.5 px-3 py-2.5 rounded-xl mt-1"
       style={{ backgroundColor: bgColor, borderWidth: 1, borderColor }}
     >
@@ -278,21 +279,21 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
         {/* Elapsed timer */}
         <View className="flex-row items-center gap-1">
           <Clock size={10} color={colors.textMuted} />
-          <Text className="text-[10px] text-white/40">{elapsedLabel}</Text>
+          <Text className="text-xs text-white/40">{elapsedLabel}</Text>
         </View>
       </View>
 
       {/* Current action pill */}
       {agent.currentAction && agent.status === 'running' && (
         <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(150)}
+          entering={FadeIn.duration(motion.quick)}
+          exiting={FadeOut.duration(motion.quick)}
           layout={LinearTransition.springify()}
           className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg mb-3"
           style={{ backgroundColor: 'rgba(59,130,246,0.08)' }}
         >
           <Zap size={10} color={colors.agentActive} />
-          <Text className="text-[11px] text-blue-400 flex-1" numberOfLines={1}>
+          <Text className="text-xs text-blue-400 flex-1" numberOfLines={1}>
             {agent.currentAction}
           </Text>
         </Animated.View>
@@ -302,24 +303,24 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
       {toolCalls.length > 0 ? (
         <View>
           {hiddenCount > 0 && (
-            <Pressable
+            <PressableBox
               onPress={() => setVisibleCount((count) => count + EXECUTION_STREAM_PAGE_SIZE)}
               accessibilityRole="button"
               accessibilityLabel={`Showing ${visibleCalls.length} of ${toolCalls.length} tool calls, show ${revealCount} earlier`}
               className="flex-row items-center gap-1 mb-2"
             >
               <Text
-                className="text-[10px] uppercase tracking-wider flex-1"
+                className="text-xs uppercase tracking-wider flex-1"
                 style={{ color: colors.textMuted }}
                 numberOfLines={1}
               >
                 Showing {visibleCalls.length} of {toolCalls.length} tool calls
               </Text>
-              <Text className="text-[10px] font-medium" style={{ color: colors.agentActive }}>
+              <Text className="text-xs font-medium" style={{ color: colors.agentActive }}>
                 Show {revealCount} earlier
               </Text>
               <ChevronUp size={10} color={colors.agentActive} />
-            </Pressable>
+            </PressableBox>
           )}
 
           <ScrollView

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { ChevronDown, ChevronRight, List } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { radii, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { extractReportSections } from '@/src/features/research/reportSections';
 
 const MIN_SECTIONS = 3;
@@ -36,7 +38,7 @@ export function ResearchReportSections({
         paddingVertical: 6,
       }}
     >
-      <Pressable
+      <PressableBox
         onPress={() => setExpanded((value) => !value)}
         accessibilityRole="button"
         accessibilityLabel={
@@ -48,7 +50,14 @@ export function ResearchReportSections({
         style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28 }}
       >
         <List size={13} color={colors.textMuted} />
-        <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>
+        <Text
+          style={{
+            flex: 1,
+            fontSize: typeScale.caption,
+            fontWeight: '600',
+            color: colors.textSecondary,
+          }}
+        >
           {`Sections · ${sections.length}`}
         </Text>
         {expanded ? (
@@ -56,7 +65,7 @@ export function ResearchReportSections({
         ) : (
           <ChevronRight size={14} color={colors.textMuted} />
         )}
-      </Pressable>
+      </PressableBox>
 
       {expanded ? (
         <View style={{ paddingBottom: 4 }}>
@@ -64,7 +73,7 @@ export function ResearchReportSections({
             <Text
               key={section.id}
               style={{
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 lineHeight: 19,
                 color: colors.textSecondary,
                 paddingLeft: Math.max(0, section.level - baseLevel) * 12,

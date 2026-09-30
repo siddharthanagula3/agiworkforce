@@ -5,6 +5,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { parseLockdownEnabled } from '@shared/types/lockdownMode';
+import { readConnectorPolicy } from '@/lib/services/connector-policy-service';
 import { resolveConnectorToolMetadata } from './tool-metadata';
 
 export type ConnectorToolPermissionLevel = 'allow' | 'ask' | 'deny';
@@ -33,17 +34,19 @@ export interface ConnectorToolPermissions {
   readonly size: number;
 }
 
-function buildPermissions(
-  levels: Map<string, ConnectorToolPermissionLevel>,
-): ConnectorToolPermissions {
-  const key = (connectorId: string, toolName: string): string => connectorId + ' ' + toolName;
-  const levelForConnectorTool = (
-    connectorId: string,
-    toolName: string,
-  ): ConnectorToolPermissionLevel | undefined =>
-    levels.get(key(connectorId, toolName)) ??
+function levelKey(connectorId: string, toolName: string): string {
+  return connectorId + ' ' + toolName;
+}
+
+function lookupLevel(
+  levels: ReadonlyMap<string, ConnectorToolPermissionLevel>,
+  connectorId: string,
+  toolName: string,
+): ConnectorToolPermissionLevel | undefined {
+  return (
+    levels.get(levelKey(connectorId, toolName)) ??
     levels.get(
-      key(
+      levelKey(
         connectorId,
         connectorCategoryToolName(
           resolveConnectorToolMetadata(connectorId, toolName).actionClass === 'read'
@@ -51,7 +54,17 @@ function buildPermissions(
             : 'write',
         ),
       ),
-    );
+    )
+  );
+}
+
+function buildPermissions(
+  levels: Map<string, ConnectorToolPermissionLevel>,
+): ConnectorToolPermissions {
+  const levelForConnectorTool = (
+    connectorId: string,
+    toolName: string,
+  ): ConnectorToolPermissionLevel | undefined => lookupLevel(levels, connectorId, toolName);
   const levelFor = (qualifiedName: string): ConnectorToolPermissionLevel | undefined => {
     const parsed = parseQualifiedToolName(qualifiedName);
     if (!parsed) return undefined;
@@ -154,6 +167,42 @@ export function withoutStandingApprovals(
   };
 }
 
+/**
+ * A workspace administrator's verdicts on connector tools, merged into each
+ * member's own. The stricter answer wins: a workspace block or approval
+ * requirement holds whatever the member saved, and a workspace allow only
+ * settles tools the member has not decided on. The result is a plain set of
+ * entries, so a durable run that stores and rebuilds them keeps the same
+ * effective verdicts.
+ */
+export function withWorkspaceToolRules(
+  permissions: ConnectorToolPermissions,
+  rules: ReadonlyArray<ConnectorToolPermissionEntry>,
+): ConnectorToolPermissions {
+  if (rules.length === 0) return permissions;
+  const member = new Map(
+    permissions.entries.map((entry) => [levelKey(entry.connectorId, entry.toolName), entry.level]),
+  );
+  const workspace = new Map(
+    rules.map((rule) => [levelKey(rule.connectorId, rule.toolName), rule.level]),
+  );
+  const merged = new Map<string, ConnectorToolPermissionLevel>();
+  for (const entry of [...permissions.entries, ...rules]) {
+    const key = levelKey(entry.connectorId, entry.toolName);
+    if (merged.has(key)) continue;
+    const own = lookupLevel(member, entry.connectorId, entry.toolName);
+    const ruled = lookupLevel(workspace, entry.connectorId, entry.toolName);
+    const level =
+      ruled === 'deny' || own === 'deny'
+        ? 'deny'
+        : ruled === 'ask' || own === 'ask'
+          ? 'ask'
+          : (own ?? ruled);
+    if (level) merged.set(key, level);
+  }
+  return buildPermissions(merged);
+}
+
 export function connectorToolPermissionsFromEntries(
   entries: ReadonlyArray<ConnectorToolPermissionEntry>,
 ): ConnectorToolPermissions {
@@ -201,6 +250,7 @@ export async function isLockedDown(db: DatabaseAdapter, userId: string): Promise
 export async function loadConnectorToolPermissions(
   db: DatabaseAdapter,
   userId: string,
+  organizationId: string | null,
 ): Promise<ConnectorToolPermissions> {
   if (!userId) return EMPTY_CONNECTOR_TOOL_PERMISSIONS;
   // Checked here rather than at each caller: the completions, approve and
@@ -222,14 +272,44 @@ export async function loadConnectorToolPermissions(
         '[connector-permissions] saved tool verdicts unavailable; falling back to approval prompts',
       );
     }
-    return EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+    return withWorkspaceToolRules(
+      EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+      await workspaceToolRules(db, organizationId),
+    );
   }
 
   const levels = new Map<string, ConnectorToolPermissionLevel>();
   for (const row of rows) {
     const level = DB_TO_WIRE[row.level];
     if (!level) continue;
-    levels.set(row.connector_id + ' ' + row.tool_name, level);
+    levels.set(levelKey(row.connector_id, row.tool_name), level);
   }
-  return buildPermissions(levels);
+  return withWorkspaceToolRules(
+    buildPermissions(levels),
+    await workspaceToolRules(db, organizationId),
+  );
+}
+
+async function workspaceToolRules(
+  db: DatabaseAdapter,
+  organizationId: string | null,
+): Promise<ReadonlyArray<ConnectorToolPermissionEntry>> {
+  const policy = organizationId ? await readConnectorPolicy(db, organizationId) : null;
+  return policy?.toolRules ?? [];
+}
+
+/**
+ * The verdicts one turn runs under: the saved ones, every allow turned into an
+ * ask in a temporary chat, and the connectors this chat switched off denied.
+ * The turn start and every route that resumes a paused turn build the same
+ * view, so a resume never offers a connector its turn had withheld.
+ */
+export function scopeConnectorPermissionsToTurn(
+  permissions: ConnectorToolPermissions,
+  turn: { temporary: boolean; disabledConnectorIds: readonly string[] | undefined },
+): ConnectorToolPermissions {
+  return withDisabledConnectorIds(
+    turn.temporary ? withoutStandingApprovals(permissions) : permissions,
+    new Set(turn.disabledConnectorIds),
+  );
 }

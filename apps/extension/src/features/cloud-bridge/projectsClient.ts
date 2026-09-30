@@ -1,6 +1,7 @@
 import {
   createManagedCloudChatClient,
   createManagedCloudProjectsClient,
+  listAllManagedCloudProjects,
   ManagedCloudChatHttpError,
   ManagedCloudProjectsHttpError,
   type ManagedCloudChatClient,
@@ -12,7 +13,6 @@ import {
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 
-export const CHROME_PROJECT_PAGE_SIZE = 50;
 export const CHROME_PROJECT_CONVERSATION_PAGE_SIZE = 10;
 export const CHROME_PROJECT_NAME_MAX_CHARS = 200;
 export const CHROME_PROJECT_INSTRUCTIONS_MAX_CHARS = 10_000;
@@ -131,10 +131,7 @@ export async function listChromeProjects(
   dependencies: Partial<ChromeProjectsDependencies> = {},
 ): Promise<ChromeProjectListResult> {
   const result = await withProjectsClient(dependencies, options.signal, (client) =>
-    client.listProjects(
-      { limit: CHROME_PROJECT_PAGE_SIZE },
-      options.signal ? { signal: options.signal } : {},
-    ),
+    listAllManagedCloudProjects(client, options.signal ? { signal: options.signal } : {}),
   );
   if (result.status === 'error') return result;
   return {

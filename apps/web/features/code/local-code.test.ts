@@ -22,6 +22,7 @@ import {
   localModelLabel,
   localModelSetup,
   localProviderSetups,
+  localOfferFor,
   localTurnFailureSentence,
   startingModelId,
   localSessionContext,
@@ -200,6 +201,37 @@ describe('local code surface', () => {
     ).toBe(
       'No Anthropic key on this computer. Run `agi login anthropic` in a terminal, then start a new session.',
     );
+  });
+
+  it('sends an ended account session back to the app sign-in, never to a terminal', () => {
+    const failure = {
+      code: 'provider_auth_missing' as const,
+      message: '[managed_cloud] Authentication failed. Run `agi login managed_cloud`.',
+      provider: 'managed_cloud',
+      action: 'sign_in_provider' as const,
+      retryable: false,
+    };
+
+    const sentence = localTurnFailureSentence(failure);
+
+    expect(sentence).toContain('Sign out of AGI Workforce and sign back in');
+    expect(sentence).not.toContain('agi login');
+    expect(localOfferFor(failure.action, failure.provider, failure.retryable)).toBeNull();
+    expect(
+      localTurnFailureSentence({ ...failure, code: 'account_signed_out', provider: null }),
+    ).toBe(sentence);
+  });
+
+  it('says the plan does not include the model', () => {
+    expect(
+      localTurnFailureSentence({
+        code: 'plan_excludes_model',
+        message: 'Upgrade to use this model.',
+        provider: null,
+        action: 'upgrade_plan',
+        retryable: false,
+      }),
+    ).toContain('Your plan does not include this model');
   });
 
   it('says a spent free allowance is shared by the plan, not a limit on this account', () => {

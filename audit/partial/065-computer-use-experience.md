@@ -121,15 +121,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S65.17: Native file-dialog interaction.
-
-- Done when: The agent can work native open/save file dialogs.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-
 ## S65.18: Background application operation where supported.
 
 - Done when: The agent can operate an application in the background without taking over the user's screen.
@@ -139,9 +130,9 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| chrome | partial | Claude in Chrome keeps working when the user switches tabs (support.claude.com/en/articles/12012173). The run still stops when another tab is activated outside a take-over; working in a hidden tab needs a live check that Page.captureScreenshot answers for a background tab before the cancellation can be lifted. | handler |
+| chrome | partial | partials/privacy c46c84d983: switching tabs no longer cancels a run and steps no longer require the run tab to be active; the run enables CDP focus emulation. Live check (final pass): start a run, switch to another tab, and confirm Page.captureScreenshot and input keep working in the background tab. | live |
 
-Code: `apps/extension/src/background.ts:4919-4919`
+Code: `apps/extension/src/features/computer-use/agentLoop.ts:565-565`, `apps/extension/src/background.ts:2805-2807`
 
 ## S65.19: User-input arbitration.
 
@@ -226,18 +217,6 @@ Code: `apps/extension/src/background.ts:4919-4919`
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 
-## S65.27: Device-offline state.
-
-- Done when: When the target computer is offline the product says so and waits or stops clearly.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Covers Remote Control of desktop code sessions only; there is no computer use to wait for. | surface-only |
-
-Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
-
 ## S65.28: Permission-revoked state.
 
 - Done when: When a permission is revoked the agent stops and the user is told how to restore it.
@@ -256,6 +235,6 @@ Code: `apps/mobile/src/features/companion/components/StatusBanners.tsx:38-45`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The phone steers desktop code sessions, but its Dispatch tasks go unanswered by the Electron app and it cannot use the screen. | handler |
+| mobile | partial | live check: phone Dispatch to Electron after the signaling server redeploy (dispatch.task.* and dispatch.task.reply in the relay allowlist). | handler |
 
-Code: `apps/mobile/src/features/companion/remote-code/service.ts:49-49`, `apps/mobile/services/companion.ts:134-140`
+Code: `services/signaling-server/src/control-payload.ts:1-1`

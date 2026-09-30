@@ -10,14 +10,11 @@ nothing is left.
 
 - Done when: A signed-in user can browse a catalogue of connectors they could add, with each entry's name, publisher and state.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Cited CATALOG is a fixed 21-entry hand-coded list (name, description, category); no publisher, and fetchConnectorDirectory loads /api/connectors (connected + available ids), never the registry directory, so the criterion's "publisher" and a browsable catalogue beyond 21 entries are not shown. |  |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/connectors/index.tsx:4-5`, `apps/mobile/src/features/settings/index.tsx:588-589`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:153-163`, `apps/mobile/src/features/settings/cloud-connectors/index.tsx:598-602`
 
 ## S55.02: Connector search.
 
@@ -39,20 +36,6 @@ Code: `apps/mobile/app/(app)/connectors/index.tsx:4-5`, `apps/mobile/src/feature
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S55.04: Connector detail page.
-
-- Done when: Selecting a connector opens a detail page with its description, publisher, sign-in requirement, tools and links.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only an already-connected connector opens a detail screen; tapping an unconnected entry connects it or does nothing, so there is no page to read about a connector before connecting. | ui |
-| cli | partial | agi mcp get still prints no description, publisher or tool list for a server outside a live session. | ui |
-| vscode | partial | VS Code shows a tooltip per connected connector (health, source, auth type, scopes); catalogue detail pages open on web. | surface-only |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`, `apps/mobile/app/(app)/connectors/[id].tsx:9-10`, `apps/cli/src/lib.rs:1337-1382`, `apps/cli/src/lib.rs:2505-2541`
-
 ## S55.05: Supported-operation list.
 
 - Done when: The connector page lists the operations/tools the connector exposes (before or after connecting).
@@ -73,26 +56,6 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:676-716`, `a
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-
-## S55.09: API-key authorization.
-
-- Done when: A connector that needs an API key offers a form to enter it, stores it encrypted, and connects.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only a custom MCP bearer token can be typed; catalogue connectors that need an API key get a 409 credentialsPath that the shared runtime ignores and sends into the OAuth path, so they cannot be connected on mobile. | handler |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:186-189`, `packages/client/client-runtime/src/connectors/runtime.ts:264-291`
-
-## S55.10: Service-account authorization.
-
-- Done when: A connector can be authorized with a service account (a non-personal credential) and it is shown as such.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
 
 ## S55.13: Account display name.
 
@@ -128,18 +91,6 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModa
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
-## S55.18: Connection health.
-
-- Done when: Each connector shows whether it is healthy, needs reauthorization or is not responding.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile marks only expired authorization; the server's "not-responding" health is ignored, so a failing connector still shows Connected. | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
-
 ## S55.20: Reconnect/reauthorize.
 
 - Done when: An expired or revoked connection offers a Reconnect action that re-runs authorization.
@@ -148,10 +99,10 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Connector detail in a warning state now shows Connect beside Disconnect and runs the connector's authorization again; not yet verified in a browser against a real expired grant, and the list row still shows only the warning label. | states |
-| desktop | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
+| web | partial | live-check: with a revoked or expired OAuth grant (e.g. Google Drive), open Connectors on web and in Electron: Reconnect shows beside Disconnect and re-runs OAuth, settings and tool permissions persist, and chat shows the agi_reconnect card | states |
+| desktop | partial | live-check: with a revoked or expired OAuth grant (e.g. Google Drive), open Connectors on web and in Electron: Reconnect shows beside Disconnect and re-runs OAuth, settings and tool permissions persist, and chat shows the agi_reconnect card | states |
 
-Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`
+Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:293-293`
 
 ## S55.21: Test connection.
 
@@ -163,18 +114,6 @@ Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/f
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S55.23: Revoke permission.
-
-- Done when: Revoking removes the stored grant and asks the provider to revoke the token.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `agi mcp logout` only deletes the locally stored token; it never calls the provider's revocation endpoint. | handler |
-
-Code: `apps/cli/src/lib.rs:2557-2571`, `apps/cli/src/mcp/mod.rs:658-670`
 
 ## S55.25: Folder or repository selection.
 
@@ -194,23 +133,7 @@ Code: `apps/cli/src/lib.rs:2557-2571`, `apps/cli/src/mcp/mod.rs:658-670`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Per-tool Allow/Ask/Block only, and only for tools that already have a saved permission; no read-only switch. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:53-56`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:278-282`
-
-## S55.27: Write-action settings.
-
-- Done when: The user controls whether a connector's write actions run automatically, need approval, or are blocked.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile lists only rows already in connector_tool_permissions (GET /api/connectors/permissions returns saved rows only; rows are created only by the upsert route, which mobile calls for existing rows). A connector whose tools were never set on web shows no tool to control, so mobile cannot set auto/approval/block on its own; the auditor rated S55.26 mobile partial for this same reason. |  |
-| cli | partial | Every MCP tool call asks (fail closed); there is no standing per-tool allow or block for MCP tools (`agi approvals` rules are shell command prefixes). | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:53-56`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:278-282`, `apps/web/app/api/connectors/permissions/route.ts:59-69`, `apps/cli/src/agent/tools.rs:134-142`
 
 ## S55.28: Data-retention explanation.
 
@@ -223,31 +146,6 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S55.29: Source-provider attribution.
-
-- Done when: Answers or steps that used a connector name the provider that supplied the data.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile tool rows show a humanized tool name with a one-letter server badge, not the provider name. | ui |
-| vscode | partial | Only the local-runtime tool name is shown with a generic plug icon; cloud connector calls are not labelled with their provider. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:84-87`, `packages/contracts/types/src/tool-display.ts:137-148`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5660-5662`
-
-## S55.30: Missing-scope request.
-
-- Done when: When a task needs a scope the grant lacks, the product asks the user to grant that permission.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Reconnect on the connector screen re-requests the wider scopes, but chat never shows which permission is missing (no connect card on mobile). | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:318-348`, `apps/web/app/api/connectors/oauth/start/route.ts:261-271`
 
 ## S55.32: Private-network setup where offered.
 

@@ -1,6 +1,8 @@
 'use client';
 
 import { translateUiPlural } from '@agiworkforce/ui';
+import { useCapability } from '@agiworkforce/unified-chat';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import {
@@ -55,6 +57,7 @@ import {
   useDirectoryAdapter,
 } from '@/features/directory';
 import { announceBankConnected } from '@features/finance/lib/announce-bank-connected';
+import { openConnectorAuthorization } from '../lib/open-connector-authorization';
 
 export const CONNECTOR_DETAIL_FOOTER_TESTID = 'connector-detail-footer';
 
@@ -335,12 +338,16 @@ export interface ConnectorsSettingsAdapterResult {
   setToolPermissionsConnectorId: (id: string | null) => void;
 }
 
+const CONNECTORS_UNAVAILABLE_COPY = 'Connectors are unavailable right now';
+
 export function useConnectorsSettingsAdapter({
   open,
   authedHeaders,
   onOpenCustomConnector,
   directorySkillActions,
 }: ConnectorsSettingsAdapterParams): ConnectorsSettingsAdapterResult {
+  const router = useRouter();
+  const connectorsAllowed = useCapability('canUseConnectors');
   const [connectedConnectors, setConnectedConnectors] = useState<ParsedConnectorRow[]>([]);
   const [customConnectorPreset, setCustomConnectorPreset] = useState<CustomConnectorPreset | null>(
     null,
@@ -510,9 +517,9 @@ export function useConnectorsSettingsAdapter({
         phase: 1,
         iconBg: CUSTOM_CONNECTOR_ICON_BG,
         iconText: CUSTOM_CONNECTOR_ICON_TEXT,
-        canConnect: customSignInPending(c),
+        canConnect: connectorsAllowed && customSignInPending(c),
       })),
-    [selfAddedConnectors],
+    [selfAddedConnectors, connectorsAllowed],
   );
 
   const [toolPermissionsConnector, setToolPermissionsConnector] =
@@ -523,11 +530,15 @@ export function useConnectorsSettingsAdapter({
     () =>
       [
         ...SETTINGS_CONNECTORS.map((c) =>
-          availableIds.includes(c.id) ? { ...c, canConnect: true, statusLabel: undefined } : c,
+          !connectorsAllowed
+            ? { ...c, canConnect: false, statusLabel: CONNECTORS_UNAVAILABLE_COPY }
+            : availableIds.includes(c.id)
+              ? { ...c, canConnect: true, statusLabel: undefined }
+              : c,
         ),
         ...customSettingsConnectors,
       ] as typeof SETTINGS_CONNECTORS,
-    [availableIds, customSettingsConnectors],
+    [availableIds, customSettingsConnectors, connectorsAllowed],
   );
 
   const mergedConnectedConnectors = useMemo(() => {
@@ -586,7 +597,7 @@ export function useConnectorsSettingsAdapter({
       const parsed = OAuthStartSchema.safeParse(await res.json().catch(() => null));
       const body = parsed.success ? parsed.data : null;
       if (res.ok && body?.authorizeUrl) {
-        window.location.href = body.authorizeUrl;
+        openConnectorAuthorization(body.authorizeUrl, () => void loadConnectors());
         return;
       }
       throw new Error(
@@ -595,7 +606,7 @@ export function useConnectorsSettingsAdapter({
           `Could not connect ${name}.`,
       );
     },
-    [authedHeaders],
+    [authedHeaders, loadConnectors],
   );
 
   const connectConnector = useCallback(
@@ -654,7 +665,7 @@ export function useConnectorsSettingsAdapter({
               ...prev.filter((c) => c.connectorId !== id),
               { connectorId: id, connectedAt },
             ]);
-            announceBankConnected();
+            announceBankConnected((href) => router.push(href));
           }
           return;
         }
@@ -675,7 +686,7 @@ export function useConnectorsSettingsAdapter({
               );
               const probeBody = probeParsed.success ? probeParsed.data : null;
               if (probeRes.ok && probeBody?.authorizeUrl) {
-                window.location.href = probeBody.authorizeUrl;
+                openConnectorAuthorization(probeBody.authorizeUrl, () => void loadConnectors());
                 return;
               }
               throw new Error(
@@ -686,7 +697,7 @@ export function useConnectorsSettingsAdapter({
             }
           }
           if (body?.installStartPath) {
-            window.location.href = body.installStartPath;
+            openConnectorAuthorization(body.installStartPath, () => void loadConnectors());
             return;
           }
         }
@@ -700,7 +711,14 @@ export function useConnectorsSettingsAdapter({
         { connectorId: saved.connectorId, connectedAt: saved.connectedAt },
       ]);
     },
-    [authedHeaders, customConnectors, onOpenCustomConnector, startCustomConnectorSignIn],
+    [
+      authedHeaders,
+      customConnectors,
+      onOpenCustomConnector,
+      router,
+      startCustomConnectorSignIn,
+      loadConnectors,
+    ],
   );
 
   const setGithubPrReview = useCallback(
@@ -972,7 +990,7 @@ export function useConnectorsSettingsAdapter({
               onClick={() =>
                 setToolPermissionsConnector(toolPermissionsTargetFor(connectorId, detail))
               }
-              className="w-full rounded-lg border border-border px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted"
+              className="w-full rounded-lg border border-border px-3 py-2 text-start text-xs text-foreground transition-colors hover:bg-muted"
             >
               <span className="font-medium">{TOOL_PERMISSIONS_LABEL}</span>
               <span className="mt-0.5 block text-muted-foreground">{TOOL_PERMISSIONS_HINT}</span>

@@ -18,6 +18,8 @@ const gateMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/managed-compute-gate', () => ({
+  resolveWorkspaceControlsForRequest: async () => ({ ok: true, controls: null }),
+  buildWorkspaceFeatureGateResponse: vi.fn(async () => null),
   buildManagedComputeGateResponse: gateMocks.managedCompute,
   buildOrganizationPolicyGateResponse: gateMocks.orgPolicy,
   buildModelPolicyGateResponse: async () => null,
@@ -301,6 +303,7 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
       customConnectorLimit: 25,
       planTier: 'pro',
       isToolDenied: expect.any(Function),
+      googleUserDataRouted: false,
     });
     expect(workflowMocks.start).toHaveBeenCalledWith(
       expect.objectContaining({

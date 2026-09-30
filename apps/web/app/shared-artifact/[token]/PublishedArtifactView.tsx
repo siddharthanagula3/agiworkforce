@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@agiworkforce/ui';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
@@ -13,7 +14,10 @@ import {
   isSandboxedPublishedKind,
   type PublishedArtifactKind,
 } from '@/features/chat/components/artifacts/publishedArtifactRender';
+import { ArtifactConnectorConsent } from './ArtifactConnectorConsent';
 import { usePublishedArtifactRuntime } from './usePublishedArtifactRuntime';
+import { copySharedArtifactToChat } from '@/features/chat/lib/copy-shared-artifact';
+import { toUserMessage } from '@/lib/user-error-message';
 
 /**
  * Public viewer for a published artifact (CAP-015 slice 2).
@@ -66,6 +70,9 @@ export function PublishedArtifactView({
   const runnable = kind === 'html' || kind === 'react';
   const runtime = usePublishedArtifactRuntime(runnable ? token : undefined);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const router = useRouter();
+  const [copying, setCopying] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const payload = useMemo(() => buildPublishedSandboxPayload(kind, content), [kind, content]);
   const fallbackSrcDoc = useMemo(
@@ -80,10 +87,51 @@ export function PublishedArtifactView({
   const publishedLabel = formatDate(publishedAt);
   const heading = title || t('artifactPublish.untitled', 'Published artifact');
 
+  const saveCopy = async () => {
+    setCopying(true);
+    setCopyError(null);
+    try {
+      const result = await copySharedArtifactToChat({ title: heading, kind, language, content });
+      if (result.kind === 'sign-in') {
+        const returnTo = token ? `/shared-artifact/${token}` : '/chat';
+        router.push(`/login?redirectTo=${encodeURIComponent(returnTo)}`);
+        return;
+      }
+      router.push(`/chat/${encodeURIComponent(result.conversationId)}`);
+    } catch (error) {
+      setCopyError(
+        toUserMessage(
+          error,
+          t('artifactPublish.saveCopyFailed', 'This artifact could not be copied.'),
+        ),
+      );
+    } finally {
+      setCopying(false);
+    }
+  };
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-4 px-4 py-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-h2 text-foreground">{heading}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-h2 text-foreground">{heading}</h1>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={copying}
+            onClick={() => void saveCopy()}
+            data-testid="published-artifact-save-copy"
+          >
+            {copying
+              ? t('artifactPublish.saveCopyBusy', 'Copying…')
+              : t('artifactPublish.saveCopy', 'Save a copy to my chats')}
+          </Button>
+        </div>
+        {copyError ? (
+          <p role="alert" className="text-xs text-danger">
+            {copyError}
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           {publishedLabel
             ? `${t('artifactPublish.publishedOn', 'Published {{date}}', { date: publishedLabel })} · `
@@ -128,33 +176,25 @@ export function PublishedArtifactView({
       ) : null}
 
       {runtime.askingForAi ? (
-        <section
-          aria-label={t('artifactPublish.runtimeConsentLabel', 'AI permission')}
-          aria-live="polite"
-          className="flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-muted/40 px-4 py-3 text-sm text-foreground"
-          data-testid="artifact-runtime-consent"
-        >
-          <p className="min-w-0 flex-1">
-            {runtime.askingForAi.connectors.length > 0
-              ? t(
-                  'artifactPublish.runtimeConsentConnectors',
-                  "This app wants to use AI with your account and read or change data in {{apps}}. It sees what those apps return, and each request counts toward your plan's usage.",
-                  { apps: connectorList(runtime.askingForAi.connectors) },
-                )
-              : t(
-                  'artifactPublish.runtimeConsent',
-                  "This app wants to use AI with your account. Each request counts toward your plan's usage.",
-                )}
-          </p>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button size="sm" onClick={() => runtime.answerAiRequest(true)}>
-              {t('artifactPublish.runtimeAllow', 'Allow')}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => runtime.answerAiRequest(false)}>
-              {t('artifactPublish.runtimeDecline', "Don't allow")}
-            </Button>
-          </div>
-        </section>
+        <ArtifactConnectorConsent
+          request={runtime.askingForAi}
+          appNames={connectorList(runtime.askingForAi.connectorIds)}
+          onAnswer={runtime.answerAiRequest}
+        />
+      ) : runtime.grantedConnectorSets.length > 0 ? (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const latest = runtime.grantedConnectorSets[runtime.grantedConnectorSets.length - 1];
+              if (latest) runtime.reviewConnectors(latest);
+            }}
+            data-testid="artifact-runtime-manage-connectors"
+          >
+            {t('artifactPublish.runtimeManageConnectors', 'Connected apps')}
+          </Button>
+        </div>
       ) : null}
 
       {sandboxed ? (

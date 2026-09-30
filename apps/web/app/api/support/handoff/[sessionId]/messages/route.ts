@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -7,20 +6,22 @@ import { createError } from '@/lib/errors';
 import { requireHumanCaller } from '@/lib/security/bot-challenge';
 import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
-import { redactSecrets } from '@/lib/support/handoff/transcript';
+import { redactTranscriptText } from '@/lib/support/handoff/transcript';
 import {
   appendHandoffMessage,
   getSessionForOwner,
   listHandoffMessages,
 } from '@/lib/support/handoff/store';
 import { resolveHandoffIdentity } from '@/lib/support/handoff/request-identity';
-import type { HandoffMessage, HandoffMessagesResponse } from '@/lib/support/handoff/types';
+import {
+  type HandoffMessage,
+  type HandoffMessagesResponse,
+  SupportHandoffMessageRequestSchema,
+} from '@agiworkforce/cloud-contracts/support';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
 const MESSAGE_PAGE_SIZE = 100;
-
-const PostSchema = z.object({ body: z.string().trim().min(1).max(4_000) });
 
 function toMessage(row: {
   seq: string | number;
@@ -80,13 +81,15 @@ async function handlePost(request: NextRequest, context: RouteContext) {
     throw createError.conflict('This conversation is not connected to a person');
   }
 
-  const parsed = PostSchema.safeParse(await request.json().catch(() => null));
+  const parsed = SupportHandoffMessageRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) throw createError.badRequest('Invalid message');
 
   const row = await appendHandoffMessage({
     sessionId,
     author: 'user',
-    body: redactSecrets(parsed.data.body),
+    body: redactTranscriptText(parsed.data.body),
   });
   if (!row) throw createError.internal('Could not send that message');
 

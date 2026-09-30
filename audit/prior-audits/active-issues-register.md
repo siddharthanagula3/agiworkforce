@@ -2,13 +2,852 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-23
+Last updated: 2026-09-27
 
 The register of unresolved defects, risks and required corrections, with the
 execution plan to clear them, as it stood when it was the root active-issues file.
 It moved here on 2026-09-27 and is waiting to be split: P0 and P1 rows into
 `audit/blockers/`, live-validation rows into `audit/live-check/`, and founder
 items into `audit/decisions/`. `audit/plan/waves.md` is the entry point now.
+
+## MOBILE-IOS-APP-STORE-2026-09-26
+
+The earlier iOS 1.2.0 Release configuration built and launched in Simulator. A clean
+production-configured unsigned Release Simulator build also succeeded and its
+app bundle contains `AGIShareExtension.appex`. Isolated
+iPhone 17 Pro Max and iPad Pro 13 first-run flows pass the ten-step Detox
+onboarding spec. Opaque welcome screenshots at Apple-listed dimensions are
+saved under `apps/mobile/store-listing/screenshots/captures/ios/` (generated
+files ignored by Git). The release listing draft, privacy declarations,
+environment check, integrity check, TLS pins, Expo dependencies, lint,
+typecheck, and the full mobile test suite pass. The public Apple and Google
+store lookups previously reported no live listing; the 2026-09-26 rerun could
+not reach the stores and failed closed.
+After the 2026-09-27 Cloud auth, account-isolation, Free-route, and stale local
+invite cleanup, the full Mobile package test command passed 56 release Node
+tests, four IPA verifier unit tests, 455 Jest suites, 4,292 Jest cases, and 30
+snapshots. Its first run found four outdated test expectations: pairing and
+approval-settings tests expected raw server errors, the voice test omitted its
+permission-retry flag, and the onboarding test's mocked disclosure acceptance
+never persisted the record required for provider consent. The four corrected
+suites passed, then the complete command passed. Mobile typecheck and targeted
+lint pass. These are local checks, not signed-device behavior. The unused invite
+modal and its hardcoded local alpha code no longer
+ship; upgrade access codes continue through the server-verified billing path.
+The shared Cloud connector API now checks organization policy on the remaining
+catalog and directory connection route before discovery or credential work.
+When a workspace policy cannot be read, connection attempts fail and connector
+tools are withheld from the offered catalog; personal accounts and workspaces
+with no policy row retain their normal access. Focused Web route, policy, and
+catalog suites pass 120 tests. Production deployment and a governed-account
+connector run remain unverified.
+Captured workspace connector calls now use the canonical active-membership
+check. A revoked membership or unavailable membership table cannot turn a
+governed workspace request into a personal connector request; the 33-case
+focused connector-tool suite passes.
+The full Mobile lint command and its 20-case trust-boundary suite also pass.
+Those checks do not establish signed-device Cloud or store behavior.
+The iOS privacy-manifest guard now parses the reviewed plist and compares every
+declaration and flag against generated Expo configuration in both directions;
+the current values match. This closes the copy-drift defect, while live App
+Store privacy answers and the signed submission build still need verification.
+The iOS and Android release-note drafts now identify the 0.0.1 release and
+distinguish open Free Cloud access from the access-code gate on paid upgrades.
+Their metadata lengths and JSON validate locally; the live store-listing probe
+could not reach either store from this shell, so publication status is unknown.
+The production-configured release-integrity check passes with the checked-in
+mobile environment file; it now compares the binary version, release-note keys,
+and listed character counts with both store drafts. Its 13 focused tests pass.
+This does not establish a signed or uploaded build.
+The Mobile Desktop pairing screen now keeps manual entry available when camera
+permission is denied, allows a full pairing link to be pasted, disables an empty
+Connect action, and offers an exit from the denied-camera screen. The focused
+pairing UI and payload suites pass 13 cases; Mobile typecheck, targeted lint,
+formatting, and diff checks pass. Camera-denied and clipboard behavior still
+need a signed-device smoke test.
+The primary Mobile drawer already exposed Remote; Settings now also opens the
+same companion screen and displays the live pairing state. First-run and
+pairing-failure copy now follows the actual short-lived-code authorization
+instead of implying that phone and Desktop accounts must match. Six Settings
+suites passed 48 tests and three companion/drawer suites passed 24 tests;
+Mobile typecheck, targeted lint, and formatting pass. The Settings and pairing
+journeys still need signed-device navigation checks. The repository-wide
+`check:mock-exports` guard initially found two added Web test mocks beyond
+Web's whole-module ceiling. Both now preserve the original connector-policy
+exports while overriding the required function. Their two focused suites pass
+56 tests; the guard's own 20 tests and full 3,751-file scan pass. This restores
+the release gate without raising its ceiling.
+
+The production iOS preflight previously passed with EAS authentication; the
+2026-09-26 rerun stopped because this shell is not logged in to EAS. A production EAS
+build attempt on 2026-09-26 stopped before upload because EAS has no iOS
+distribution certificate or provisioning profile. That attempt created the
+production update channel and branch and advanced EAS's remote iOS build number
+to 3. The local EAS CLI was updated from 20.4.0 to 24.8.0 after its Apple
+login failed with the known `iTunes service key is empty` error. Fresh Apple
+SMS verification codes were still rejected by EAS after the account holder
+accepted the updated Apple Developer agreement in the browser.
+The submission preflight also requires a numeric App Store Connect `ascAppId`
+in `apps/mobile/eas.json`; that value is still absent and cannot be inferred
+from the bundle identifier. Read it from the app record before an EAS submit.
+
+Xcode automatic signing produced a Release device archive and exported an
+App Store signed IPA for iOS 1.2.0 build 2 on 2026-09-26. The main app and
+share extension contain distribution provisioning profiles and an Apple
+Distribution certificate for team `D2PR62RLT4`. Xcode's upload validation
+stopped with `Failed to find an account with App Store Connect access for team
+D2PR62RLT4`. The account holder confirmed that the AGI Workforce app record
+is visible and the Free Apps agreement is Active in the browser, so the Xcode
+failure is specific to Xcode's sign-in state. Apple ingestion, processing,
+and TestFlight installation remain unverified. The local machine also lacks
+the WWDR G3 intermediate needed for `codesign --verify --strict` to establish
+the certificate chain.
+
+App Store Connect now has draft version 0.0.1 metadata, AGI Workforce as the
+accepted name (Apple rejected `AGI` as already in use), Productivity and
+Utilities categories, a 13+ age override, free pricing, 173 available
+regions, and seven configured privacy data types. The privacy disclosure is
+saved but not published. Release remains blocked on build upload and Apple
+processing, iPhone/iPad screenshots, a provisioned Cloud review account
+supplied securely in App Store Connect, and live Cloud sign-in testing.
+The App Review contact and review notes are saved, but the secure review-account
+fields are empty. The Content Rights declaration is unanswered. EU Digital
+Services Act trader verification requires publicly displaying the account's
+business address plus a contact phone and email; that contact has not been
+submitted. The founder confirmed on 2026-09-26 that the `@agiworkforce.com`
+mailboxes named in the listing draft, App Review notes, support links, and
+content-report mailto flow have not been purchased yet. Those addresses must
+not be treated as reachable until provisioned and tested. One monitored mailbox
+can receive `contact@`, `support@`, and `review@` through aliases; a separate
+founder mailbox is optional. Buy or substitute a working review and support
+channel before submission. The Paid Apps agreement
+is pending bank/tax information, while the Free Apps agreement is Active. App
+Accessibility is optional and has not been
+claimed without feature-level validation.
+The app and AGI-owned workspace package versions were reset to 0.0.1 on
+2026-09-26. The existing signed IPA remains version 1.2.0 build 2; it cannot
+serve as a 0.0.1 submission build. A current-source iOS device archive for
+0.0.1 build 2 succeeded locally; both the main app and share extension report
+that version and build. The archive has not been exported or uploaded. Local
+App Store IPA export fails with `No signing certificate "iOS Distribution" found`.
+Xcode automatic provisioning also reports `No Accounts`, and the local keychain
+has no valid Apple Distribution identity. Restore an App Store Connect-capable
+Xcode account and distribution signing, then export and verify the 0.0.1 IPA.
+EAS's remote iOS build counter was last recorded at 3.
+The local IPA submission path now reads the archive's app and share-extension
+Info.plist files and rejects a version, bundle identifier, or extension build
+mismatch before upload; the archived 1.2.0 IPA cannot pass that check for 0.0.1.
+The 2026-09-26 production iOS and Android Hermes exports now pass the release
+bundle scanner. It inspects Hermes' actual string entries, accepts only exact
+reviewed dependency documentation and generated legal bodies, and checks the
+two React Native/Expo Router development fallback strings against their owner
+source. It also scans mobile source for a reachable development endpoint. The
+shared client runtime's localhost fallback was removed, the Expo Router plugin
+has a configured HTTPS production origin, and a Clerk development publishable
+key found in the first export was removed from the app module and absent from
+the refreshed exports. These are static export checks; distribution signing,
+an exported 0.0.1 IPA, and device network-path validation remain outstanding.
+Mobile Account now reads the server's pending-deletion state, offers cancellation
+inside the grace window, and avoids a second delete request while deletion is
+pending. Its confirmation copy explains that cancellation remains possible before
+erasure begins. Focused owner-switch and cancellation tests pass; a signed-in
+device test of the scheduled deletion and cancellation endpoints remains open.
+Web and Mobile now parse the pending-deletion response through the same Cloud
+contract. Both disable a new deletion request when status is malformed instead
+of treating an invalid response as no pending deletion. Focused shared, Web,
+and Mobile tests pass; this does not replace the signed-in device test.
+Mobile Compare now aborts both Cloud streams and clears their results when the
+selected model, Cloud/Local mode, or account changes. Late callbacks cannot
+place an old model's answer under a new model label or carry Cloud output into
+Local Mode. Its initial models and send path now follow the current tier's
+shared Cloud catalog: Free, which currently has one comparison-eligible model,
+sees an explanation and Chat path instead of two inaccessible paid defaults.
+A tier change aborts old streams, and Pro/Max choose two eligible models.
+Focused account, mode, and tier tests, Mobile typecheck, and targeted lint pass;
+a signed-device comparison remains unverified.
+Legacy Cloud message edit and retry now capture the initiating account epoch.
+If an account changes while remote replacement is pending, they leave the new
+account's messages untouched and do not resend the old prompt. Research resume
+has the same post-delete guard; multi-message remote deletion checks the epoch
+before each request, and message-delete failure cannot restore an old account's
+rows into a new session. Focused account-switch tests pass. These paths still
+need signed-device validation with a real Cloud account switch.
+Cloud message ratings now serialize writes for the same account and message.
+A failed current write restores the last confirmed rating and shows a retry
+message; an older failure cannot overwrite a newer rating or put an old-account
+rating into a successor account. The message bubble follows the restored rating
+after a failed write. Focused reaction and account-switch tests pass; a signed
+device should verify the visible recovery against a real Cloud request failure.
+The open-source attribution inventory was regenerated from the installed
+production dependency graph on 2026-09-26: 542 packages and 70 unique license
+bodies. The founder prefers AGI Workforce branding without third-party license
+files in the repository. Shipped third-party code still requires accurate
+distribution notices; replacing dependencies with original implementations is
+a separate, validated architecture change, not an attribution removal.
+An unused `expo-contacts` direct dependency and its iOS source-build override
+were removed after a source and config search found no contact API use.
+Mobile previously admitted every economy model to Free even when the shared
+subscription contract admitted only selected models. The picker and direct
+dispatch now use the shared contract; a signed-in live website comparison is
+still needed to verify current Free, billing and tool behavior end to end.
+The website also exposes quota-attested promotional Qwen offerings through
+`/api/models/free-quota` and a separate completion route. Mobile now loads that
+account-scoped catalogue in its Cloud model picker and sends selected ready
+promotional chat offerings through the Free completion route with durable
+message handling. The provider-funded automatic OpenRouter offering remains in
+the shared Free contract.
+The Mobile streaming boundary now rejects any generated provider-funded
+offering on the billed chat route and rejects a billed model on the Free quota
+route. This makes an incorrectly shaped call fail before network egress rather
+than risk paid inference. Focused provider routing, timeout, and Cloud send
+suites pass 34 cases; Mobile typecheck, targeted lint, and formatting pass.
+The shared Mobile stream now checks cancellation after token retrieval and
+requires a token before any Cloud request. A token resolved after account
+teardown cannot carry an old Free prompt into the new account's request; an
+ownerless stream stops locally. The provider-route, stream-timeout, and
+React Native response-fallback suites pass 27 cases. The fallback test now
+uses an actual generated Free offering for its Free-route probe. Mobile
+typecheck, targeted lint, and formatting pass. Signed-device token timing is
+still unverified.
+The Models settings screen now refreshes that account-scoped catalogue on
+Cloud entry and picker reopen, and subscribes to catalogue changes so its
+favorite and recent rows update when provider-funded offerings load. A focused
+screen test, Mobile typecheck, targeted lint and formatting pass. Live signed-in
+device selection remains unverified.
+The Mobile Usage screen now always reads its authenticated usage API; an
+unreachable "coming soon" panel and its web link were removed on 2026-09-27.
+The project detail route now identifies a project from the Local and Cloud
+stores instead of a permanently disabled legacy project-fetch flag. Opening a
+Local project while in Cloud mode, or a Cloud project while in Local mode,
+requires an explicit mode switch before showing chats or sources. An unknown
+project no longer offers a New chat action and provides a route back to
+Projects. Focused route tests cover both switches, correct active-project
+store selection, and the unavailable path. Device navigation and cross-device
+project recovery remain unverified. The 2026-09-27 Mobile run after this route
+change passed 446 Jest suites, 4,135 tests, 30 snapshots, 56 release Node tests,
+and four IPA verifier tests; Mobile typecheck, lint, formatting and hygiene pass.
+Mobile Cloud search previously allowed an in-flight server response to refill
+results after an account, mode, or query change. Search now clears old rows at
+the start of each query, discards stale responses using the active account
+epoch and request generation, and searches only the Cloud conversation cache
+if its server request fails. A signed-out Cloud search cannot read that cache.
+Focused tests cover these boundaries; a signed-device account-switch search
+pass remains open. The full Mobile Jest run passed 446 suites, 4,138 tests,
+and 30 snapshots after the search fix; typecheck and lint passed. A server-only
+project returned by global search can open before periodic project sync. The
+detail route now fetches that project through the authorized Cloud endpoint,
+checks the current account and sync version, and adds it to the Cloud project
+store without overwriting pending local changes. The endpoint now returns its
+authoritative sync version. Focused route, service, contract, sync, and API
+tests cover this path; signed-device navigation and account switching remain
+unverified. The 2026-09-27 full Mobile Jest run after this change passed 447
+suites, 4,144 tests and 30 snapshots; Mobile typecheck, lint, formatting and
+hygiene, shared contract and sync typechecks, focused Vitest suites, and the
+focused Web project API test passed.
+An older project pull can finish after the direct project fetch and would
+replace its newer name or delete it. Mobile now compares server versions before
+applying pulled project records or tombstones, and does not lower a dirty
+project's push base version. Focused project sync and account-recovery tests
+passed 27 cases; related sync, delete, and active-project suites passed 56
+cases. Mobile typecheck, lint, formatting and hygiene passed after this guard.
+The direct fetch also tracks its in-flight project ID: a pulled tombstone,
+acknowledged local delete, or account clear invalidates the pending fetch
+before it can restore an older project. Focused tests cover server and local
+delete races; signed-device account and project navigation remain unverified.
+The iOS and Android reviewer notes were updated for the current signup legal
+links and billing purchase-help link. The 2026-09-27 full Mobile run passed 446
+Jest suites, 4,133 tests, 30 snapshots, 56 release Node tests and four IPA
+verifier tests; Mobile typecheck, lint, formatting and hygiene also pass. The
+external-link inventory still needs a signed-build App Review policy check
+before submission. A submission-config test now reads production Mobile source
+and fails if a file that opens an external website is absent from either
+platform's reviewer notes; it does not validate live link availability.
+The promotional path is code-tested but has not passed a live signed-in Qwen
+mobile turn, and account-bound quota hard-stop settings remain unverified.
+The provider-funded Mobile stream now switches from its initial response timeout
+to an activity-based stall timeout once Qwen starts sending data, matching the
+ordinary Managed Cloud stream. A long healthy reply no longer times out at the
+initial limit, while missing responses and stalled streams surface a timeout
+error. Focused stream tests, Mobile typecheck, targeted lint and formatting pass;
+this does not substitute for the outstanding signed-in device and provider-quota
+checks.
+Mobile previously advertised image-capable promotional Qwen chat offerings in
+the picker but rejected every attachment before upload. The Free send path now
+accepts images only when the selected provider offering declares image input,
+requires a Cloud asset ID, and sends the latest user image as a file reference
+to the same Free completion endpoint used by Web. Non-image files still fail
+before provider egress. A focused Mobile test verifies upload consent, the
+image request and document refusal with mocked network calls; a signed-in
+device upload and live Qwen image response remain
+unverified.
+Mobile attachment completion now obtains a current session token after the
+storage upload. If that completion receives 401, it refreshes once and retries
+only the completion request; a terminal 401 clears Cloud account state and
+asks for sign-in. A presign request that still returns 401 after refresh now
+ends the session as well. The focused API and upload lifecycle suites pass 45
+cases, including refresh success and failure without a second storage upload;
+Mobile typecheck, targeted lint, and formatting pass. A signed-in device upload
+remains unverified. The shared Mobile API client now also ends the Cloud session
+when its one refreshed retry still returns 401. The focused auth, API, and upload
+lifecycle suites pass 62 cases; the actual signed-in Cloud recovery remains to
+be exercised on device.
+Cloud file-upload retries now retain the account epoch from the first attempt.
+An account switch during retry backoff stops the old file before another upload
+can start, account teardown cancels and clears upload progress, and the composer
+does not install a completed asset into a different account's draft. A rejected
+manual Retry is recorded as a failed upload instead of escaping as an unhandled
+promise. Focused upload, teardown, and composer suites pass 72 cases and two
+snapshots; Mobile typecheck, targeted lint, formatting, and diff checks pass.
+The account-switch upload path still needs a signed-device check.
+Earlier image attachments no longer strand a Mobile Free conversation on a
+follow-up turn. Mobile and Web now use one shared history normalizer that keeps
+the earlier text and notes that the attachment is unavailable to the model;
+the latest image remains eligible for the server's image-capable route. Focused
+Mobile and Web tests plus both app typechecks and the shared contract typecheck
+pass. Follow-up questions that require seeing the earlier image again still
+need the user to reattach it under the current server attachment policy.
+Mobile now distinguishes an empty provider-funded catalogue from sign-in,
+plan, Cloud route, and connection failures in the model picker and offers a
+retry; it does not silently present those failures as an empty Free list.
+The Mobile send path refreshes its account-bound Free catalogue before every
+promotional turn. Concurrent picker and send checks for the same account now
+share one in-flight request, so a picker refresh cannot invalidate the send's
+availability check. A change of account or session still invalidates the old
+response. The completion endpoint independently checks the current plan,
+provider decision, and shared allowance for every turn. A missing or failed
+catalogue check blocks selection and displays the catalogue error. The focused
+catalogue suite passes ten cases, including concurrent picker/send and
+account-switch cases.
+The Free conversation preflight now checks its account epoch inside the 404
+recovery branch before attempting to create a conversation, and again before
+showing a create failure. A 404 response arriving after an account switch can no
+longer create the old conversation under the new account. The focused Cloud send
+suite passes 22 cases; Mobile typecheck, targeted lint, and formatting pass.
+Signed-device account switching during Free conversation creation is still
+unverified.
+The Cloud send path also checks the account epoch before showing upload and
+branch-write failures. A late failure from the prior account can no longer put
+an old-account error into the new account's composer. The focused Cloud send
+suite, Mobile typecheck, targeted lint, and formatting pass; signed-device
+account-switch behavior remains open.
+The Mobile Free-model list now renders a single current-account catalogue
+snapshot throughout each picker render. An older snapshot cannot contribute
+model keys while the global cache supplies newer labels, and an account switch
+invalidates the old snapshot before its rows are built. The focused catalogue,
+picker, and models-page suites pass 62 tests; the catalogue suite also exits
+cleanly with Jest open-handle detection. The combined picker run passed its
+assertions but retained an asynchronous handle, so it was stopped after
+completion rather than counted as a clean process exit.
+The Mobile chat model picker now explains when a successfully loaded catalogue
+contains no ready provider-funded chat offer, including when every listed offer
+is exhausted. Previously that state showed no offer and no explanation. The
+47-case picker suite covers this state; live Qwen quota availability still needs
+the current provider account check described below.
+Cloud chat-history refresh now publishes its first page before the remaining
+pages finish, and checks the captured account epoch plus request version before
+applying every page. A late response from a previous account or superseded
+refresh can no longer write old conversations into the current Cloud store or
+show its failure in the current account. The Chats list now requests only the
+first page on focus or refresh and loads older pages near the list end; a
+visible Load older chats action remains available. Other callers retain full
+history loading. Cloud account teardown also clears the pending pagination
+cursor and cancels its request version. Focused shared-client, Chats-list,
+chat-tab, and teardown tests pass;
+signed-device scrolling and account-switch validation remain open.
+After that change, the Mobile package checks completed all 56 release Node
+tests, four IPA verifier tests, 448 Jest suites, 4,194 Jest tests, and 30
+snapshots. The surrounding shell wrapper returned an error because it assigned
+to zsh's read-only `status` variable after the package command completed; the
+package log itself shows no failed checks. The standard Jest command still
+uses `--forceExit`, so the broad run does not establish handle cleanup.
+The 2026-09-27 full Mobile run initially exposed three Free-model stream
+test failures: a mocked API omitted the HTTP error class and the cases only
+seeded a cached catalogue, while production sends now recheck the server.
+The catalogue imports its error class from the owning error module and those
+tests now return a ready server catalogue for the preflight. The standard
+Mobile package test command passed 448 Jest suites, 4,193 tests, 30 snapshots,
+and 56 release Node tests. The package script uses Jest `--forceExit`; the
+full run is functional evidence, not proof that all asynchronous handles close.
+Provider-funded inference must remain conditional on the current
+provider terms, privacy posture, and a hard stop before paid overage. NVIDIA's
+Developer Program NIM endpoints are for prototyping and do not authorize
+production end-user traffic; they are not a launch free pool. QwenCloud's
+published free quota is time-limited, and its "Free quota only" hard stop is
+disabled by default, so the founder's account quota cannot be treated as
+permanent or automatically cost-safe capacity.
+On 2026-09-27, the two local Qwen account verification records matched the
+configured credential but were last checked on 2026-09-20. The executable
+quota-probe policy accepts verification only within one hour, so neither record
+authorizes a new provider-funded probe or proves the present account hard stop.
+The production Mobile preflight stopped at missing EAS login. Its separate
+TLS-pin check passed; the Expo dependency check passed against its local SDK
+map while reporting that its online version check was unavailable.
+The Free completion route also treated absent, zero, malformed, or unsafe
+provider usage as zero-token consumption and refunded the entire reserved
+allowance. It now preserves the reservation unless the provider reports valid,
+nonzero safe-integer prompt and completion counts. Route regressions cover
+those malformed usage shapes. A later malformed stream report also invalidates
+an earlier valid report, while a lower valid report cannot reduce the recorded
+count. The Free-route suite passed 49 tests on 2026-09-27; targeted lint passes.
+This is accounting protection, not evidence that the current Qwen account has
+a provider-enforced free-only hard stop.
+The Qwen promotional catalogue previously treated a fresh account quota
+attestation as sufficient to mark an offering ready, without checking whether
+commercial use, serving third-party users, proxying, and the provider's data
+terms had been reviewed for that offering. It now also requires a current,
+favorable, per-offering `inventory.termsReview` record. The shipped record is
+null, so promotional Qwen offerings remain unavailable until their terms and
+model-specific licenses are reviewed and the approved keys are recorded.
+The official Model Studio free-quota instructions describe the account switch
+and allocation but do not alone grant all four uses; Alibaba's product terms
+also restrict resale of Model Studio or models, and the boundary between an
+application's end-user feature and resale needs a documented review. This is
+a launch blocker for provider-funded Qwen, not proof that its API free quota
+cannot be used commercially.
+The 2026-09-27 primary-source recheck confirms that Alibaba's
+[free-quota rules](https://www.alibabacloud.com/help/en/model-studio/new-free-quota)
+describe a 90-day allocation, Singapore-only eligibility, automatic
+pay-as-you-go billing after exhaustion unless Free Quota Only is enabled, and
+an account-wide shared pool. The current
+[Model Studio product terms](https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-product-terms-of-service-v-3-8-0)
+prohibit reselling Model Studio or its models without express authorization;
+they discuss end users but do not explicitly resolve whether AGI's bundled
+free inference is an allowed end-user feature. Keep the per-offering terms
+review null until the commercial, third-party-serving, and proxying rights are
+confirmed for AGI's use case. Do not infer permission from quota availability.
+The Mobile Cloud SSE reader now surfaces response-handler exceptions as turn
+errors and applies the final event when the stream ends without a newline;
+focused tests cover both the ordinary and provider-funded stream paths.
+It now also requires the server's terminal `[DONE]` marker before completing a
+turn. A closed connection without that marker preserves any received text but
+reports an incomplete response, including on the buffered React Native path.
+The full Mobile test command passed 56 release Node tests, four IPA verifier
+tests, 447 Jest suites, 4,197 cases, and 30 snapshots after this change;
+Mobile typecheck, targeted lint, formatting, and diff checks pass.
+Focused Mobile tests on 2026-09-26 covered both selected Qwen Cloud chat
+models: each appears ready in the Max picker,
+resolves to chat dispatch, and sends its model key through the authenticated
+Managed Cloud completion endpoint with a distinct idempotency key. Both are
+locked on the Free plan. A Qwen server failure reaches the app's error callback
+without bypassing the managed route. A Qwen promotional offering cannot be
+selected on Mobile Free and is rejected by its ordinary dispatch route. These
+are mocked-network Mobile contract tests, not live Mobile inference or quota
+tests. On 2026-09-27, a single direct local-key probe of the catalogued Qwen
+promotional offering succeeded with nonempty text and reported usage. This
+confirms live inference from that local credential; it does not prove the
+request consumed provider-funded quota or exercise the authenticated Mobile
+route. A current-source signed Release Simulator app launches, but it has no
+authenticated Qwen session; the Mobile promotional flow and live device
+inference remain unverified.
+The Web free-quota catalogue and Qwen completion route's focused tests also
+pass (48 cases), including quota and billing-failure behavior. This verifies
+the backend contract in mocks; it does not supply Mobile selection, a current
+account attestation or a live Mobile provider response.
+On 2026-09-26, the Free quota catalogue shape and endpoint paths moved to the
+shared Cloud contract consumed by Web, so Mobile can use the same typed wire
+contract for its promotional flow. The current Mobile full suite passed on
+2026-09-27 (446 suites, 4,133 Jest tests, 30 snapshots, 56 release Node tests, and 4 IPA
+verifier tests) after removing a test mock for the unused `expo-contacts`
+dependency. Mobile typecheck also passed. The production release preflight still stops because
+this shell is not logged in to EAS. None of these local checks establishes a
+live Qwen inference or a store-submittable IPA.
+The Mobile account entry now has explicit native sign-in and create-account
+paths and links to the current legal/data-use pages. The create-account view
+displays the full Free-provider data-use question, answer and qualification
+from the website's shared compliance owner. A signed Release Simulator build
+of the 2026-09-26 source, version 0.0.1, launched on the AGI Current Source QA
+device; its Local home, Cloud sign-in and then-current native account-creation
+form rendered. The form was inspected without accepting its Terms or creating
+an account. This AuthView showed
+Google and GitHub sign-in but no Apple sign-in. Apple's
+[Guideline 4.8](https://developer.apple.com/app-store/review/guidelines/),
+rechecked 2026-09-27,
+requires an equivalent login service that limits data collection, lets users
+keep their email private, and does not collect app interactions for advertising
+without consent when third-party social login authenticates a primary account.
+The present Google, GitHub, and email choices do not establish that equivalent.
+Clerk's Expo AuthView documentation says Apple appears when the Apple connection
+is enabled in the Clerk Dashboard. Verify the
+production Clerk native app registration, enable Apple for sign-up and sign-in,
+and test it on device before iOS submission. Clerk's `Secured by Clerk` badge
+also appears in this native view; its official documentation says removal from
+prebuilt UI requires a paid plan in production. An authenticated device pass
+through email, social sign-in, sign-up, recovery, account creation and Cloud
+return routing remains outstanding.
+On 2026-09-26 the current source built as a Release iPhone Simulator app and
+launched on a clean signed QA device. Welcome, data/provider disclosure, a
+test-only age-gate entry, and the native Cloud sign-in entry rendered. The
+sign-in entry showed Sign in/Create account tabs, Clerk email and social
+choices, and legal/data-use links. An unsigned Simulator build had instead
+shown an unexpected passcode prompt alongside a Keychain entitlement error;
+the signed build did not reproduce it. The later signed QA run inspected Create
+account. No authenticated account or Qwen inference was tested.
+The website records versioned Terms acceptance on account creation or sign-in.
+The 2026-09-26 signed Simulator run verified the earlier AuthView layout in light
+and dark appearance after the Clerk theme changed from amber to neutral controls.
+On 2026-09-27, the live website signup showed Google and GitHub first, then a
+labeled email field and Continue button. Mobile now has a custom first signup
+step in that order, using the shared provider list and Clerk's email verification
+and Core 3 SSO hooks. Mobile sign-in now also uses a custom provider-first first
+step, followed by password or email-code verification when offered by Clerk.
+The live website form uses a narrow column near the top of one elevated
+surface, with a monochrome AGI mark. Mobile signup and sign-in now use that
+layout and surface roles rather than vertically centering the form. Focused
+auth tests and Mobile typecheck pass; a current signed-device visual comparison
+is still open. The installed `@clerk/expo/experimental` SSO implementation
+finalizes new sessions and activates returned existing sessions internally.
+Clerk's current public Expo OAuth guide, checked 2026-09-27, describes the
+non-experimental hook that requires explicit `setActive`; that example does
+not override the installed experimental code. Mobile keeps native AuthView for
+incomplete flows. Focused tests cover completed, existing, and cancelled
+responses. The create-account form no longer opens native AuthView after the
+SDK has already activated an existing social session returned on `signUp`;
+live Google/GitHub return routing still needs device verification.
+Cancelled native Apple authentication now returns to the form without a
+spurious error, following Clerk's current Expo Apple-auth guidance.
+Failed email-code delivery can be retried without restarting sign-in.
+The custom mobile sign-in now places its create-account switch with the email
+step, as the website does, while the native fallback keeps its own switch.
+The website's auth-error classifier now lives in the shared client runtime.
+Mobile signup offers Log in instead when Clerk reports an existing email, and
+mobile sign-in offers Create an account instead when Clerk reports an unknown
+email. Focused mobile and web taxonomy tests cover these recovery actions.
+The two custom Mobile forms now map Clerk errors through the shared auth
+taxonomy before displaying them. Known wrong-code, credential, rate-limit,
+provider, and network states retain specific recovery copy; unknown SDK text
+cannot enter the form. Focused tests cover classified cases and a raw diagnostic
+containing an internal path. Live Clerk error flows remain unverified on device.
+Mobile signup now keeps verification-code entry hidden if initial delivery fails,
+allows retrying delivery without creating another account, and prevents duplicate
+email requests while Clerk is processing a signup step. Focused auth tests cover
+the failed-delivery recovery and concurrent-submit cases.
+The same in-flight guard now covers Google, GitHub, and Apple signup, so rapid
+provider taps cannot open overlapping authentication sessions or race an email
+signup. A cancelled provider flow releases the guard for an email retry.
+The native AuthView remains for MFA, recovery, and unusual incomplete
+signup/session states. Focused signup tests cover completed, cancelled, and
+incomplete SSO responses, plus recovery into AuthView after a social or legal
+error. Clerk's Core 3 SSO helper does not accept `legalAccepted`, unlike the
+website's direct signup SSO call; native completion and the app's versioned
+Terms gate must be exercised with live accounts to confirm legal acceptance.
+Mobile typecheck and focused auth tests pass, but these custom forms have not
+yet been exercised against a live Clerk account on device.
+The custom Mobile signup and sign-in forms now support Clerk's native Apple flow with Apple's
+system button when the public Mobile provider configuration includes Apple and
+the device reports Apple authentication available. It is not enabled in the
+current default configuration because the live Clerk Apple connection remains
+unverified. Enable the connection and configure
+`EXPO_PUBLIC_AGI_AUTH_PROVIDERS=google,github,apple` for the iOS release, then
+test new and returning accounts on a signed device.
+The 2026-09-27 iOS release check now refuses an empty or non-Apple provider
+list, using the same provider parser as the auth screens. Tagged-release
+validation and iOS beta/production preflight run that check before building;
+the public provider list must match between Actions and EAS. This detects the
+current Google/GitHub-only default but does not prove the production Clerk
+Apple connection or Apple private-email relay works. Both require a signed
+device account-creation and return-sign-in run.
+After authentication, the app checks account-specific
+acceptance through the bearer-authenticated Terms endpoint, shows the current
+version and clickwrap, and keeps Cloud locked until the account has accepted. A native acceptance
+write records its mobile surface; stale versions fail closed. Focused tests
+cover the API, state transitions, account switching, and explicit confirmation.
+The 2026-09-27 signed-in simulator run exposed a launch blocker: Local mode
+blocked the Terms request before Cloud could be unlocked. The native egress
+guard now permits only an authenticated GET or POST to the exact Terms path on
+the configured API origin as an explicit auth-control request. The current
+public web deployment still returns HTTP 405 for GET `/api/terms/accept`
+(reverified by the production Cloud API release probe on 2026-09-27); the same
+probe returns HTTP 404 for GET `/api/models/free-quota`. The required GET
+handler and `mobile-auth` POST
+surface exist only in the local web changes. The signed-in app therefore still
+cannot enter Cloud against production. A signed Release Simulator build now
+shows the service-update explanation at the Terms gate rather than a generic
+failure. Deploy and verify the web endpoint,
+then repeat signed-in Terms review and Cloud entry on device before submission.
+The interim signed-in check now explains that Cloud access is being checked
+and offers Continue in Local Mode, so an unresolved account or Terms status
+does not trap the user behind a spinner. The focused login and Terms tests
+pass 46 cases; Mobile typecheck, targeted lint, and formatting pass. This
+recovery does not bypass the Terms requirement or fix the live 405.
+Mobile social sign-in and sign-up now include the requested Cloud destination
+in the OAuth callback URL. A callback to bare `/login` could otherwise clear
+the pending destination and leave a newly signed-in user in Local Mode. The
+focused login and post-auth intent suites pass 72 tests, with Mobile typecheck,
+targeted lint, and formatting passing. The provider callback still needs a
+signed-device run after the live Terms endpoint is available.
+The Mobile Clerk token bridge also no longer falls back to a plain, unbound
+session token if the `agi-mobile` template cannot mint. The Terms API refuses
+to send without a bound mobile credential, and the Terms gate explains the
+device-session problem while preserving Local Mode. Focused sign-in, Terms,
+egress, and API tests pass 88 cases; Mobile typecheck and targeted lint pass.
+The pending Cloud-chat destination now remains staged until the same signed-in
+account's Terms status is accepted. Both login and the root Clerk bridge pass
+that requirement to the shared post-auth action, so an early Clerk session
+cannot consume the destination before legal acceptance. The three focused
+sign-in and routing suites pass 63 assertions, Mobile typecheck and targeted
+lint pass. The combined Jest command needs `--forceExit` because importing the
+Clerk native singleton in the routing suite leaves a `MESSAGEPORT` handle;
+the login suite alone exits cleanly under open-handle detection. A signed-device
+handoff remains unverified.
+The live Clerk template and signed-in end-to-end Cloud handoff still require
+device verification after the endpoint is published.
+The endpoint-only patch is committed as `7ebe6fce4` on
+`codex/mobile-terms-status` and is under review in
+[PR #522](https://github.com/siddharthanagula3/agiworkforce/pull/522).
+The full pre-push `check:llm-operability` chain passed on the isolated branch.
+The route is not yet deployed to production.
+The live `/api/version` probe on 2026-09-27 reported serving commit
+`e353673cce9df114fcfb58fd4c467d4d2dfc4240` from 2026-09-21. That
+commit deliberately returns 404 for the public Free catalogue and has only a
+POST Terms route. The 2026-09-26 `main` CI run for `e84a8cbbd3648cc42c56c143fc089a81f728a41f`
+failed on one five-second Mobile model-picker test timeout (4071 other tests
+passed), so staging skipped and the normal production promotion did not run.
+That test passed alone on 2026-09-27 (47 cases), but a full exact-SHA CI rerun
+and release promotion are still required. PR #522 also exposed a Web build
+type error where `mobile-auth` was absent from `TermsAcceptanceSurface`; commit
+`208ec0fbf` adds it, with 16 focused Terms tests and Web typecheck passing.
+The production workflow run
+[`35951454568`](https://github.com/siddharthanagula3/agiworkforce/actions/runs/35951454568)
+has been waiting at the protected `production-web` environment since
+2026-09-24. Its scope and same-SHA staging gate passed, but its deploy job
+still awaits the configured founder reviewer. Subsequent production runs have
+been cancelled or queued; do not infer that a green `main` CI alone will
+publish these routes. Before approving any deployment, resolve the stale
+waiting run and review the exact newer release candidate and its staging verdict.
+The Mobile release preflight now checks the configured HTTPS Cloud origin for
+both the Terms status and provider-funded Free catalogue routes. Each must
+answer an unauthenticated GET with HTTP 401; 404, 405, redirects, an open 200,
+or a network failure block the release. Unsandboxed 2026-09-27
+unauthenticated GET probes confirmed HTTP 405 for Terms and HTTP 404
+for the Free catalogue, so both deployed routes must be corrected and
+reverified after the web patch is published. The preflight requires the
+release shell's `EXPO_PUBLIC_API_URL`, and the tagged workflow now checks the
+deployed routes in its first validation job before source validation and device
+builds. It reads the public origin from GitHub Actions configuration. The
+repository Actions variable was set and read back as `https://agiworkforce.com`
+on 2026-09-27; that value
+must also match the EAS production environment. The protected
+`mobile-store-release` GitHub environment was not found when queried, so store
+credential and approval configuration remains outstanding.
+The endpoint probe now also requires the JSON error envelope and request ID
+emitted by the app's API wrapper. A generic CDN or proxy HTTP 401 no longer
+counts as proof that either route exists. Its six Node tests and the focused
+Web Terms, Free catalogue, and error-handler tests pass; live signed-in access
+still requires the deployed route update.
+The Mobile API's 401/session test had been excluded from Jest because its
+native dependency mocks could not load. It is now included and passes all 16
+cases. The test also exposed a refresh-deadline timer left running after a
+successful token refresh; the API now clears that timer in every outcome.
+Focused auth, egress, and Terms tests pass (42 cases), and the auth suite exits
+cleanly under Jest open-handle detection. This strengthens local verification
+but does not replace a live signed-in Cloud run after the endpoint is deployed.
+The confirmation is bound to the current account and Terms version, so a
+checked box cannot carry into another account or a newly returned version.
+Mobile now validates the shared Terms status and acceptance response shapes,
+including the recorded acceptance time, before opening Cloud. A malformed
+write response requires a fresh status check. The focused six-case store test,
+Mobile and shared-contract typechecks, and targeted lint pass. The live Terms
+GET still returned 405 on 2026-09-27, so signed-device Cloud entry remains blocked.
+A current signed-out and signed-in device run must still verify email/social
+signup, returning sessions, error recovery, and the server record before
+claiming full signup parity or launch readiness.
+The custom Mobile email entry now checks the shared email validator before
+starting either Clerk flow, matching the website's required email field. The
+signed-in Terms review scrolls so its consent and recovery controls remain
+reachable when text expands. The focused login suite passed 31 tests on
+2026-09-27; Mobile typecheck, formatting, and hygiene passed. A signed-device
+large-text layout pass remains necessary.
+When Clerk supports both password and email code for a returning account, the
+custom Mobile sign-in now offers email code directly from the password step.
+Sending a new code uses the same recovery path, clears the stale code entry,
+and keeps the account on the custom screen. The focused login suite passes 32
+tests; Mobile typecheck and targeted lint pass. Signed-device Clerk validation
+remains open.
+The release screenshot pipeline's iPhone wiring check passed after adding
+Detox cleanup to prevent a post-test server shutdown hang. Its onboarding and
+Local empty-chat frames passed and produced store-sized images. The
+first-message frame initially failed after typing because Detox targeted the
+composer parent view. The spec now taps the accessible Send message button.
+On 2026-09-27, a Release iPhone 17 Pro Max Simulator run sent a Local "hello",
+streamed an Apple Intelligence reply, completed, and produced a visually
+reviewed 1320 × 2868 first-message frame. The screenshot assertion now checks
+the completed answer's action control because the performance chip is only
+shown when measured token-rate data exists. The Cloud sign-in frame also passed
+on 2026-09-27 after the spec completed the signed-out age review; its native
+Clerk sign-in form was visually reviewed at 1320 × 2868. The voice frame,
+all iPad frames beyond the earlier welcome capture, and visual
+review of the complete set remain open. Interrupted Detox runs left ten QA or
+Detox Simulators booted and drove system memory free down to 25%; shutting them
+down raised it to 66%, then 73% after settling. The pipeline now shuts down new
+Detox clones after each spec and its selected Simulator on completion or
+failure. It can target one frame by ID so another failing frame does not block
+capture. Its 25 focused tests and Mobile typecheck pass, but live validation of
+that cleanup on another capture run remains open. The production IAP
+deployment gate and external purchase links also need a final live App Review
+policy check before submission. Do not mark the iOS store record published or
+submit the app until those checks are complete.
+
+The native IAP catalogue already gates plans and top-ups behind redeemed
+billing access. Mobile Billing now lets a signed-in user redeem that same code
+or join the upgrade waitlist, then refreshes the catalogue. It rechecks the
+server catalogue immediately before opening the store purchase sheet. The
+catalogue now exposes those access controls while native purchases are disabled
+for store setup; redeeming a code never enables an unconfigured purchase.
+Mobile Billing's plan row now offers the waitlist directly during that gate,
+while the panel below handles access-code entry without a duplicate join action.
+server setting `AGI_BILLING_WAITLIST_OPEN=1` can later remove the
+gate for web checkout and native IAP without a client release; the web upgrade
+flow reads that setting through the authenticated waitlist endpoint. The gate
+defaults on. Focused IAP and waitlist tests pass, but real StoreKit sandbox
+purchase, restore and refund flows have not been tested. `MOBILE_IAP_ENABLED`
+remains off and App Store products are not yet configured, so IAP is not ready
+for submission with purchases advertised. An App Review account with upgrade
+access and functioning store products is needed to review the gated flow.
+The native billing hook now discards catalog responses that arrive after Cloud
+billing is disabled and refuses to start a purchase from a stale catalog; the
+purchase preflight and receipt acknowledgement are also bound to the active
+account epoch, so a sign-in change cannot carry a cached verification into a
+different account. The 2026-09-26 full Mobile run passed 447 Jest suites,
+4,099 tests, 30 snapshots, 53 release Node tests, and four IPA verifier tests;
+Mobile typecheck and lint also pass. This does not replace a live StoreKit
+sandbox purchase or validate the store product configuration.
+The purchase boundary now blocks a second rapid tap synchronously while the
+first catalogue preflight or store sheet is in flight, then releases on store
+success, cancellation or failure for that product. A redelivered older purchase
+for a different product cannot unlock the current purchase sheet. Focused native
+IAP tests cover duplicate taps, release after cancellation, old receipt
+processing, acknowledgement and restore; Mobile
+typecheck and targeted lint pass. A live StoreKit sandbox flow remains open.
+The purchase hook now keeps an old account's receipt completion from clearing
+a new account's purchase or restore state when the product ID is shared.
+Restore purchases stays in progress until the native store finishes loading
+receipts, including an empty result. The focused 19-case IAP suite, Mobile
+typecheck and targeted lint pass; the StoreKit sandbox sequence still needs a
+signed-device run.
+Turning off new IAP sales now leaves previously configured product IDs available
+to server receipt verification and store notifications. Mobile still processes
+unfinished transactions and exposes Restore purchases while the catalogue is
+disabled. Focused server and native-hook regressions pass; keep the product-ID
+mapping configured when switching sales off. Live sandbox purchase and restore
+validation remains open.
+The Mobile purchase hook now keeps store and receipt exception text out of the
+purchase UI. Account-switch, revoked upgrade-access and missing-pricing
+preflight messages remain explicit because they are owned by the app. The
+2026-09-27 focused native IAP and acknowledgement tests pass 24 cases, and
+Mobile typecheck and targeted lint pass. The raw-error guard now scans Mobile;
+its baseline now records zero sinks after the Apple Reminders review screen
+switched to app-owned messages selected by typed error codes. A forged exception
+message cannot reach the review alert. The focused reminder suites pass nine
+tests, Mobile typecheck, targeted lint, formatting, and the raw-error guard pass.
+Connector directory, detail,
+custom-create, connect, and reauthorization failures now use safe copy; a typed
+HTTP 501 explains unavailable deployment configuration without exposing server
+diagnostics. Usage loading also keeps server details private and supports retry.
+Five focused connector suites pass 30 tests; the usage suite passes 11 tests.
+After server verification and store acknowledgement, a failed tier refresh now
+reports that the purchase was confirmed and that Billing should be reopened;
+it no longer incorrectly says the receipt was unverified. The tier store now
+returns whether it actually refreshed, since it deliberately keeps cached data
+on failure. The three focused IAP and tier-store suites pass 54 tests. This
+still needs live StoreKit sandbox testing.
+AGI Work start failures now preserve only the known empty-goal validation copy;
+the task run tests pass 15 cases. The unreachable Mobile auto-tag client and
+tag utility for three retired routes were removed.
+Memory import now handles malformed export shapes and shows fixed file-read,
+parse, and partial-import recovery copy; the parser suite passes 34 cases.
+Archived chats now distinguish a failed restore from a successful restore
+followed by a failed chat-list refresh; its focused screen and bulk suites pass
+12 tests, including safe load errors and retry.
+Workspace switching now distinguishes a failed switch from a successful switch
+whose chat refresh failed; its focused suite passes four tests.
+Voice file transcription now keeps the transcript visible after a failed send
+and offers a working retry. Report flagging and translation show fixed local
+failure copy, and a locally failed report-status write no longer negates a
+server-accepted report. Reflect, Reports, Skills, notification settings, and
+tool approval settings no longer show raw server exception text. Focused voice,
+report, Skills, notification, and reminder tests pass; Mobile typecheck and
+lint pass. The scanner is syntactic and does not prove every indirect error
+path safe.
+Voice now displays complete user and assistant text from its own session in a
+scrollable panel while capture controls stay available. The 12-case focused
+voice suite passes, including a long, untruncated reply; Mobile typecheck and
+targeted lint pass. This does not yet overlay the originating chat or expose
+its earlier messages and actions, and a signed-device layout check remains.
+The raw-error guard now inspects native alerts and Android toasts, including
+their visible copy without mistaking confirmation callbacks for alert text.
+It exposed file sharing, local-data export, Cloud account, archive, and Library
+alerts that forwarded exception messages. Those alerts now use fixed recovery
+copy. A failed conversation share also leaves its export sheet open for retry.
+The focused export, image, account, and reminder tests and the guard unit tests
+pass; signed-device failure flows remain unverified.
+The guard now also checks raw exception text rendered directly in JSX. This
+exposed the Auth, Public, and root Mobile error boundaries and a Web workspace
+switch alert. Those boundaries now show recovery copy; the shared section
+boundary keeps development diagnostics in the console. Camera and Scan no
+longer navigate to a conversation when the message store refuses an image
+turn. They retain the captured image and prompt; camera capture, OCR, and send
+failures no longer show native exception text. Focused boundary, camera, Scan,
+onboarding, and workspace tests cover those paths. Signed-device image sends
+and OCR failures remain unverified.
+Scheduled tasks and Memory screens also held raw service and storage error
+messages in their state stores, outside the syntactic guard's reach. Their
+visible errors now use task-specific recovery copy. Memory update and pin
+failures retain that copy after the list refresh, and account changes are
+rechecked before setting it. The focused schedule and Memory suites passed
+20 assertions; Jest reported an existing open handle after the assertions and
+was stopped to free memory. Mobile typecheck and lint pass. Live failure and
+recovery flows remain unverified.
+The schedule edit screen now waits for a confirmed delete result before leaving;
+a failed deletion restores the task and keeps the editor open with recovery
+copy. Its focused store and screen tests pass nine cases under a forced Jest
+exit because of that existing open handle. A signed-in device deletion failure
+still needs verification.
+Scheduled run history now maps server-provided failure details to fixed
+status-specific recovery copy before those runs enter Mobile state. A failed or
+timed-out run can no longer display provider diagnostics in the run row. The
+focused schedule service and account-bound Free catalogue suites pass 19
+cases; live run-history recovery and Qwen provider-quota behavior remain open.
+The Cloud Work task store also maps unexpected run failures to fixed retry copy.
+Manual Local-to-Cloud chat sync now binds the operation to the signed-in account
+and stops if that account changes during conversation creation or message upload;
+its results and alerts cannot surface in a successor account. Unexpected sync,
+manual Desktop pairing, and local-wipe errors now show app-owned recovery copy
+instead of transport or storage diagnostics. Focused sync, pairing, storage,
+and Cloud Work store tests pass; these failure and account-switch paths still
+need signed-device validation.
+Library page failures now show fixed retry copy instead of raw API text, while
+retaining a cached page only for its owning account. Cloud Project sources
+preserve app-owned file validation messages but hide unknown API diagnostics.
+The Project source load failure now has a retry control, and late responses
+from a previously selected project cannot overwrite the current project.
+Focused Library and Project source suites pass 24 cases. These recovery flows
+still need a signed-in device check.
+Attachment upload state also retained raw transport exception messages after
+retry exhaustion and session expiry. It now records fixed connection or
+sign-in guidance, including from the composer retry path. Focused upload and
+composer suites pass 69 cases and two snapshots; live failed-upload recovery
+remains unverified.
+Image and video turns now write fixed recovery messages when a provider returns
+an error or throws, so provider diagnostics cannot enter the assistant transcript.
+The chat banner preserves specific app-owned account admission messages without
+showing raw provider failures. Focused media-turn tests cover both returned and
+thrown provider errors; a live provider failure remains unverified.
+The Account Security screen now shows fixed recovery copy for failed status,
+device, timeout, revocation, and password operations. Native Billing does the
+same for unknown waitlist and code-redemption failures while retaining typed,
+app-owned validation messages. Focused screen tests cover raw API diagnostics
+containing internal paths and a rejected device revocation.
+The draft iOS and Android store-review notes previously described Restore as
+absent and receipt verification as gated by new-sales availability. Both claims
+were stale. The notes and listing preparation fields now describe the current
+behavior and distinguish checked-in defaults from unverified live store and
+deployment state. The public descriptions still say purchases are unavailable;
+those descriptions and the store IAP disclosures must be changed together with
+product registration and activation before a purchase-enabled submission.
+The private preparation fields and reviewer notes now enumerate the disabled
+catalog reasons, Billing loading state, and plan-change labels. The store
+submission-copy and production-config tests pass after their fixtures were
+aligned with the configured HTTPS router origin.
 
 ## CHECKLIST-REAUDIT-2026-09-23
 
@@ -1316,11 +2155,44 @@ confidence 0.89, request
 The [current QwenCloud free-quota rules](https://docs.qwencloud.com/resources/free-quota)
 state that quota expires or depletes, pay-as-you-go can follow, and the
 `Free quota only` stop is disabled by default. Built-in tool fees are outside
-the token quota. The current worktree has no account-bound local quota
-verification artifact. Consequently, its catalogued promotional offerings
-are not eligible as an automatic Managed Free fallback on this evidence;
-account-key matching, current remaining quota, stop protection and tool
-contract must be verified first.
+the token quota. A local account-bound verification file matches the current
+development API key, but was checked on 2026-09-20, covers only two offerings,
+and exceeds the configured one-hour evidence window. Consequently, its
+catalogued promotional offerings are not eligible as an automatic Managed Free
+fallback on this evidence; current remaining quota, stop protection for each
+intended offering, production account-key matching and tool contract must be
+verified first.
+
+The founder reported on 2026-09-27 that `Free quota only` is enabled in the
+QwenCloud account. This confirms their intended setting, but does not identify
+the covered offerings or bind the deployed API key to that account; a current
+account-bound quota verification and mobile inference run are still required.
+
+Mobile now reads the same account-scoped Free catalogue as Web when its Cloud
+model picker opens. Only server-ready promotional chat offerings appear and a
+send refreshes that catalogue before using the dedicated Free completion route;
+it cannot fall through to the billed managed-chat endpoint. The route requires
+a server conversation, which mobile verifies or creates before sending. If
+another device has deleted the conversation, the create route now refuses its
+tombstoned ID with HTTP 409 and mobile stops before appending or streaming the
+turn, asking the user to start a new chat. Focused server and mobile tests cover
+that recovery. The mobile Free text and image paths have type, lint, catalogue
+and transport tests, but have not passed a live signed-in Qwen send on a device.
+Mobile now refreshes the account-scoped catalogue before every promotional Free
+chat send, even if a prior picker load showed the offering ready; if the
+refresh fails or the provider-funded quota has closed, it stops before starting
+the turn. The focused catalogue, send-strand, and stream-routing tests pass.
+Qwen availability remains
+blocked by the account-bound quota and hard-stop verification above, so this
+path must not be advertised as live until the provider settings, deployment,
+and an actual mobile turn have been checked.
+
+The mobile capability-switch refresh now runs only with an active Cloud account,
+Cloud access, and Cloud Mode. Local Mode no longer attempts a managed-host
+request on mount or resume; an in-flight response is discarded after account
+change or cache clear, and sign-out clears the cached switches. The focused
+capability and teardown regressions pass. This does not close the signed-in
+device inference or provider quota gates above.
 
 A fresh localhost QA run on 2026-09-22 isolated a separate configuration
 blocker before inference. The QA ticket established a client session, but the

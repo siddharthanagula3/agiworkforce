@@ -26,6 +26,14 @@ vi.mock('workflow', () => ({
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', () => ({
+  applyToolResultSecretPolicy: vi.fn(
+    async (_userId: string, _name: string, content: string) => content,
+  ),
+  hasPrivateContext: vi.fn(() => false),
+  hasUntrustedContext: vi.fn(() => false),
+  toolResultEvent: vi.fn(() => ''),
+  toolStatusEvent: vi.fn(() => ''),
+  trimToolResultHistory: vi.fn(),
   runToolLoop: mocks.runToolLoop,
   mapWithConcurrency: vi.fn(),
 }));
@@ -37,6 +45,7 @@ vi.mock('./cloud-agent-workflow-stream', () => ({
   projectCloudAgentWorkflowChunk: mocks.projectChunk,
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  takeCloudAgentRunSteers: vi.fn(async () => []),
   APPROVAL_CHECKPOINT_TTL_HOURS: 24,
   appendCloudAgentEvent: mocks.appendEvent,
   appendCloudAgentEvents: vi.fn(),

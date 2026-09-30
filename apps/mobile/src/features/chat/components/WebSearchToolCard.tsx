@@ -1,7 +1,9 @@
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Globe, Loader2, SearchX, CircleSlash, TriangleAlert } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import type { ToolCall, ToolSearchResult } from '@/types/chat';
@@ -46,7 +48,7 @@ function SourceChip({ result }: { result: ToolSearchResult }) {
   };
 
   return (
-    <Pressable
+    <PressableBox
       onPress={open}
       accessibilityRole="link"
       accessibilityLabel={`Open source ${hostname}, ${result.title}`}
@@ -65,10 +67,13 @@ function SourceChip({ result }: { result: ToolSearchResult }) {
       }}
     >
       <Globe size={10} color={colors.textMuted} />
-      <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textSecondary, maxWidth: 150 }}>
+      <Text
+        numberOfLines={1}
+        style={{ fontSize: typeScale.caption, color: colors.textSecondary, maxWidth: 150 }}
+      >
         {hostname}
       </Text>
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -135,17 +140,22 @@ export function WebSearchToolCard({ tool, showSources }: { tool: ToolCall; showS
           <View style={{ paddingTop: 1 }}>
             <LineIcon size={12} strokeWidth={1.75} color={toneColor} />
           </View>
-          <Text style={{ flex: 1, fontSize: 12, color: toneColor }}>{line.text}</Text>
+          <Text style={{ flex: 1, fontSize: typeScale.caption, color: toneColor }}>
+            {line.text}
+          </Text>
         </View>
       ) : null}
       {query && tool.status === 'failed' ? (
-        <Text numberOfLines={2} style={{ fontSize: 12, color: colors.textSecondary }}>
+        <Text
+          numberOfLines={2}
+          style={{ fontSize: typeScale.caption, color: colors.textSecondary }}
+        >
           {`“${query}”`}
         </Text>
       ) : null}
       {visibleSources.length > 0 ? (
         <>
-          <Text style={{ fontSize: 11, color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
             {visibleSources.length === 1 ? '1 source' : `${visibleSources.length} sources`}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>

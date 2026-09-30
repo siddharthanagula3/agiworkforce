@@ -14,7 +14,9 @@ import {
 } from '@/src/features/model-picker/installStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
+import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuotaCatalogue';
 import { useThemeColors } from '@/src/ui/theme';
 import {
   AUTO_MODES,
@@ -53,6 +55,8 @@ export default function ModelsScreen() {
   const setModel = useModelStore((s) => s.setModel);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const subscriptionTier = useTierStore((s) => s.tier);
+  const freeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.catalogue);
+  const refreshFreeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.refresh);
   const favorites = useModelStore((s) => s.favorites);
   const recentModels = useModelStore((s) => s.recentModels);
   const installJobs = useModelInstallStore((s) => s.jobs);
@@ -65,14 +69,21 @@ export default function ModelsScreen() {
     void hydrateInstalledModels();
   }, [hydrateInstalledModels]);
 
+  useEffect(() => {
+    if (cloudUnlocked) void refreshFreeQuotaCatalogue();
+  }, [cloudUnlocked, refreshFreeQuotaCatalogue]);
+
   const handleBack = useGoBack('/(app)/settings/general');
 
   const openPicker = useCallback(() => {
+    if (cloudUnlocked && !useFreeQuotaCatalogueStore.getState().loading) {
+      void refreshFreeQuotaCatalogue();
+    }
     pickerRef.current?.snapToIndex(0);
-  }, []);
+  }, [cloudUnlocked, refreshFreeQuotaCatalogue]);
 
   const handleOpenCloudAccess = useCallback(() => {
-    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+    router.push(beginCloudPostAuthIntent('cloud-models'));
   }, [router]);
 
   const resolvedLabel = getDisplayName(selectedModel);
@@ -100,7 +111,7 @@ export default function ModelsScreen() {
       ? `${selectedLocalModel.detailLabel} - ${statusLabelFor(selectedLocalModel)}`
       : (selectedModelDef?.detailLabel ?? 'Model'));
 
-  const catalog = getModelListForCloudAccess(cloudUnlocked, subscriptionTier);
+  const catalog = getModelListForCloudAccess(cloudUnlocked, subscriptionTier, freeQuotaCatalogue);
   const favoriteModels = catalog.filter((m) => favorites.includes(m.id)).slice(0, 5);
   const recentModelDefs = recentModels
     .map((id) => catalog.find((m) => m.id === id))
@@ -153,7 +164,7 @@ export default function ModelsScreen() {
       <View style={{ flex: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16 }}>
         <Card>
           <Text
-            className="text-[11px] uppercase font-semibold mb-3"
+            className="text-xs uppercase font-semibold mb-3"
             style={{ color: c.textMuted, letterSpacing: 0 }}
           >
             Active Model
@@ -192,7 +203,7 @@ export default function ModelsScreen() {
         {favoriteModels.length > 0 && (
           <Card>
             <Text
-              className="text-[11px] uppercase font-semibold mb-3"
+              className="text-xs uppercase font-semibold mb-3"
               style={{ color: c.textMuted, letterSpacing: 0 }}
             >
               Favorites
@@ -225,7 +236,7 @@ export default function ModelsScreen() {
         {recentModelDefs.length > 0 && (
           <Card>
             <Text
-              className="text-[11px] uppercase font-semibold mb-3"
+              className="text-xs uppercase font-semibold mb-3"
               style={{ color: c.textMuted, letterSpacing: 0 }}
             >
               Recent

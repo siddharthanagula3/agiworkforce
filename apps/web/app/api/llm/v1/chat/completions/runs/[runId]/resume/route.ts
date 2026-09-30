@@ -16,6 +16,7 @@ import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
   buildSpendLimitGateResponse,
+  resolveWorkspaceControlsForRequest,
 } from '@/lib/managed-compute-gate';
 import { resolveAuthenticatedSurface } from '../../../lib/request-surface';
 import { logger } from '@/lib/logger';
@@ -25,6 +26,7 @@ import { withManagedTurnSlot } from '../../../lib/turn-slot';
 import { processRequest } from '../../../lib/request-processor';
 import { loadMcpToolDefs } from '../../../lib/tool-loop';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
+import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -45,7 +47,10 @@ import { boundDurableTurnStream } from '@/lib/workflows/durable-stream-bounds';
 import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from '../../../lib/sse-heartbeat';
 import { withStreamEnvelope } from '../../../lib/stream-envelope';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
-import { loadConnectorToolPermissions } from '../../../lib/connector-tool-permissions';
+import {
+  loadConnectorToolPermissions,
+  scopeConnectorPermissionsToTurn,
+} from '../../../lib/connector-tool-permissions';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../../../lib/tool-approval-policy';
 import {
   checkpointRequestForResume,
@@ -191,7 +196,19 @@ async function handlePausedRunResume(
     throw error;
   }
 
-  const processResult = await processRequest(buildSyntheticRequest(request, claim), authResult);
+  // Resumed under the same workspace controls as the turn it continues.
+  const workspaceControls = await resolveWorkspaceControlsForRequest(
+    userId,
+    request,
+    getSecurityHeaders(),
+  );
+  if (!workspaceControls.ok) {
+    await releaseClaim(db, userId, claim);
+    return workspaceControls.response;
+  }
+  const processResult = await processRequest(buildSyntheticRequest(request, claim), authResult, {
+    workspaceControls: workspaceControls.controls,
+  });
   if (!processResult.ok) {
     await releaseClaim(db, userId, claim);
     return processResult.response;
@@ -202,14 +219,26 @@ async function handlePausedRunResume(
 
   let discovery;
   try {
-    const permissions = await loadConnectorToolPermissions(db, userId);
+    const permissions = scopeConnectorPermissionsToTurn(
+      await loadConnectorToolPermissions(db, userId, processed.organizationId ?? null),
+      {
+        temporary: processed.conversationIsTemporary === true,
+        disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
+      },
+    );
+    const connectorsAllowed =
+      processed.chatRequest.connector_tools_enabled !== false &&
+      (await connectorsAllowedForTurn(request, userId, processed));
     const [operatorTools, connectorTools] = await Promise.all([
       loadMcpToolDefs(),
-      loadUserConnectorToolDefs(userId, {
-        customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
-        planTier: processed.subscriptionTier,
-        isToolDenied: permissions.isConnectorToolDenied,
-      }),
+      connectorsAllowed
+        ? loadUserConnectorToolDefs(userId, {
+            customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
+            planTier: processed.subscriptionTier,
+            isToolDenied: permissions.isConnectorToolDenied,
+            googleUserDataRouted: processed.googleUserData === true,
+          })
+        : Promise.resolve([]),
     ]);
     discovery = { mcpTools: [...operatorTools, ...connectorTools], permissions };
   } catch (error) {

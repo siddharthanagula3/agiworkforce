@@ -6,19 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S15.03: Model-family grouping.
-
-- Done when: Models are grouped by family (e.g. all versions of one model line together) so related models sit side by side.
-- Wave: 3
-- Already works on: web, desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Group models by family; the sheet groups cloud models by routing tier and puts on-device models in their own section. | ui |
-| cli | partial | Group models by family; the picker groups by access mode and provider. | ui |
-
-Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:63-89`, `apps/cli/src/tui/widgets/model_picker.rs:123-135`
-
 ## S15.04: Searchable model list.
 
 - Done when: The user can type to filter the model list by name.
@@ -57,26 +44,11 @@ Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:63-
 
 - Done when: The selector highlights a short list of recommended models for the user.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mark recommended models; the sheet leads with Auto profiles but labels no model as recommended. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:670-678`
-
-## S15.09: Default-profile option.
-
-- Done when: The user can set which model or profile new chats start with, as a lasting default.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Add an explicit default model setting; today the last model picked carries over (persisted model-store) and there is no separate default. | ui |
-
-Code: `apps/mobile/src/features/model-picker/store.ts:189-203`, `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:383-393`
 
 ## S15.12: Input-modality badges.
 
@@ -137,18 +109,6 @@ Code: `apps/mobile/src/features/model-picker/store.ts:189-203`, `apps/mobile/src
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S15.18: Plan-eligibility information.
-
-- Done when: Models the user's plan cannot use are marked with the plan that unlocks them.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Tell signed-in Free and Basic users which plan unlocks a model; the popover labels every cloud group "Unavailable" with "Sign in or add a provider key", even when they are signed in. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1163-1180`
-
 ## S15.19: Preview or experimental badge.
 
 - Done when: Preview or experimental models carry a visible badge in the selector.
@@ -195,7 +155,7 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:11
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /fast toggles between the session model and a fast model (original_model is restored on the way back); it does not enable a faster tier of the chosen model. Same reading as the Chrome cell. |  |
+| cli | partial | Waits on the c-platform fast tier (per-model fast tier and price in the registry, speed or service_tier in the gateway, provider payloads and billing); then /fast switches to that tier of the same model. |  |
 | vscode | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
 
@@ -255,14 +215,11 @@ Code: `apps/cli/src/tui/tui_app.rs:3431-3443`, `apps/cli/src/agent/mod.rs:1779-1
 
 - Done when: The user can choose to send turns through their own provider key, supplied in the product.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Let users enter a provider key in VS Code; the "Your providers" route appears only for keys already set up in the CLI (Set API Key stores the AGI key, not a provider key). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1172-1180`, `apps/extension-vscode/src/core/commandSetup.ts:1062-1062`
 
 ## S15.31: Per-turn model override.
 
@@ -281,15 +238,12 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:11
 
 - Done when: Each answer shows which model actually produced it.
 - Wave: 3
-- Already works on: web, desktop, mobile, api
+- Already works on: web, desktop, mobile, cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Name the model on each answer; the status line shows the session model and a banner appears only when a turn falls back. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:1847-1859`
 
 ## S15.33: Fallback disclosure.
 

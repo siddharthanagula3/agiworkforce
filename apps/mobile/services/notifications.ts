@@ -242,7 +242,14 @@ const ALLOWED_ROUTE_PREFIXES: ReadonlyArray<{ prefix: string; flag: FeatureKey |
   { prefix: '/(app)/notifications', flag: 'cloudChat' },
   { prefix: '/(app)/schedules', flag: 'schedules' },
   { prefix: '/(app)/tasks', flag: 'cloudTasks' },
+  { prefix: '/(app)/chat/', flag: null },
+  { prefix: '/(app)/reports', flag: null },
+  { prefix: '/(app)/cloud-code', flag: null },
+  { prefix: '/(app)/library', flag: null },
+  { prefix: '/(app)/artifacts', flag: null },
 ];
+
+const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isAllowedRoute(route: string): boolean {
   return ALLOWED_ROUTE_PREFIXES.some(
@@ -309,6 +316,22 @@ function approvalRoute(data: NotificationData): Parameters<typeof router.push>[0
   return { pathname: '/(app)/companion' as const };
 }
 
+const CLOUD_RUN_NOTIFICATION_TYPES: readonly NotificationEventType[] = [
+  'agent_approval_needed',
+  'agent_paused',
+  'agent_failed',
+  'task_completed',
+];
+
+export function cloudRunNotificationRoute(
+  data: NotificationData,
+): Parameters<typeof router.push>[0] | null {
+  const runId = readIdentifier(data, 'runId');
+  if (!runId || !CLOUD_RUN_NOTIFICATION_TYPES.includes(data.type)) return null;
+  if (!isAllowedRoute('/(app)/tasks')) return null;
+  return { pathname: '/(app)/tasks', params: { runId } } as Parameters<typeof router.push>[0];
+}
+
 function readIdentifier(data: NotificationData, key: string): string | null {
   const value = data[key];
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
@@ -345,6 +368,12 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
 
   if (readIdentifier(data, 'threadId') && readIdentifier(data, 'rootId')) {
     safeNavigate(approvalRoute(data) as Parameters<typeof router.push>[0]);
+    return;
+  }
+
+  const runRoute = cloudRunNotificationRoute(data);
+  if (runRoute) {
+    safeNavigate(runRoute);
     return;
   }
 
@@ -395,7 +424,12 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
       break;
 
     case 'chat_message':
-      if (data.route && typeof data.route === 'string') {
+      if (typeof data.conversationId === 'string' && CONVERSATION_ID.test(data.conversationId)) {
+        safeNavigate({
+          pathname: '/(app)/chat/[id]',
+          params: { id: data.conversationId },
+        } as Parameters<typeof router.push>[0]);
+      } else if (data.route && typeof data.route === 'string') {
         if (isAllowedRoute(data.route)) {
           safeNavigate(data.route as Parameters<typeof router.push>[0]);
         } else {

@@ -6,101 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S59.03: Per-session approval.
-
-- Done when: The user can allow a tool for the rest of the current session so it stops asking until the session ends.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Allow for this chat is built as post-codex/chat-gates-s59.03-mobile-after-s59.patch (applies after chat-gates-s59.patch); its handler lives in Codex-held MessageBubble.tsx. | ui |
-
-Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`
-
-## S59.04: Per-application permission.
-
-- Done when: The user can set allow/ask/deny per connected app (and per tool within it), and the runtime enforces it.
-- Wave: 3
-- Already works on: web, desktop, mobile, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | MCP tools ask per server/tool and Always Allow can be saved per command prefix, but there is no per-app allow/ask/deny setting screen. | ui |
-| vscode | partial | Session approvals are scoped per MCP server tool, but VS Code has no standing per-app permission setting. | ui |
-
-Code: `apps/cli/src/features/exec/tools/mod.rs:1010-1016`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:36-38`
-
-## S59.05: Per-folder permission.
-
-- Done when: The agent can touch only folders the user granted, and the user grants or revokes each folder.
-- Wave: 3
-- Already works on: desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The criterion needs grant AND revoke. VS Code only relays the runtime's TrustDirectory/untrusted-workspace approval (a grant, approvalScope.ts:18; exec/tools/mod.rs:930-972); no VS Code control lists or revokes trusted folders. trust::revoke is reached only from the REPL /trust revoke\|/untrust (repl/registry.rs:494). remaining: 'Folders can be trusted from the approval prompt but not revoked from VS Code; add a trusted-folders setting with remove.' |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:18-18`
-
 ## S59.06: Per-domain permission.
 
 - Done when: The user can allow or block specific websites/domains the agent may act on or fetch, and it is enforced.
 - Wave: 3
-- Already works on: web, cli, chrome
+- Already works on: web, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | partial | Desktop cloud chats send web_search and web_fetch to the server, so the workspace site rules bind them. BYOK and local desktop turns attach the provider's hosted web_search and web_fetch in the Tauri client (server_tools.rs), which does not read the workspace lists; the client would have to withhold hosted search or pass the lists as allowed_domains or blocked_domains. The native browser gate still asks per command and reads no site rule. | local |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | The runtime asks only for internal fetch destinations; no per-domain setting. | ui |
 
-Code: `apps/desktop/src/api/cloudApi.ts:965-965`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4174-4176`, `apps/desktop/src-tauri/src/core/llm/server_tools.rs:207-207`, `apps/cli/src/features/exec/tools/mod.rs:706-711`
-
-## S59.09: Read-only mode.
-
-- Done when: The user can switch the agent into a read-only mode in which write, send and execute tools are refused.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile offers only the three approval policies; none refuses writes outright. | handler |
-
-Code: `apps/mobile/app/(app)/settings/auto-approve.tsx:47-55`
-
-## S59.22: Ask for an alternative.
-
-- Done when: Instead of just denying, the user can tell the agent what to do instead, and the agent continues with that guidance.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Guidance input and resume wiring are held in post-codex/chat-gates-s59.patch because the handler lives in Codex-held files ([id].tsx, streaming.ts, MessageBubble.tsx, chatExecutionStore.ts, chatStore.ts). | ui |
-
-Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`
-
-## S59.23: Approval expiration.
-
-- Done when: A pending approval expires after a set time, the UI shows it expired, and the action cannot run from it.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Only the app-server runtime (used by VS Code) times approvals out, after 10 minutes; the terminal prompt waits indefinitely. | handler |
-
-Code: `apps/cli/src/app_server/developer_host.rs:68-68`
-
-## S59.26: Approval from another device.
-
-- Done when: An approval raised on one device can be answered from another signed-in device, and the first device sees the result.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | A CLI session's approvals can be answered from the phone companion, but the CLI cannot answer approvals raised by cloud runs on other devices. | ui |
-
-Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`
+Code: `apps/desktop/src/api/cloudApi.ts:965-965`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4174-4176`, `apps/desktop/src-tauri/src/core/llm/server_tools.rs:207-207`

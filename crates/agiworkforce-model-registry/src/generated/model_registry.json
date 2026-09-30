@@ -196,6 +196,72 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
+    "claude-opus-5-5": {
+      "identity": {
+        "key": "claude-opus-5-5",
+        "displayName": "Claude Opus 5.5",
+        "provider": "anthropic",
+        "developer": "anthropic",
+        "providerModelId": "claude-opus-5-5",
+        "openRouterSlug": "anthropic/claude-opus-5-5",
+        "kind": "reasoning",
+        "familyPartner": "claude-sonnet-5",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": ["anthropic/claude-opus-5-5"],
+        "family": "claude-opus",
+        "version": "5.5"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-29",
+        "stageSource": "https://platform.claude.com/docs/en/about-claude/pricing",
+        "replacedBy": null
+      },
+      "speed": "slow",
+      "residencyRegions": null,
+      "evidenceRefs": []
+    },
+    "claude-opus-4-8": {
+      "identity": {
+        "key": "claude-opus-4-8",
+        "displayName": "Claude Opus 4.8",
+        "provider": "anthropic",
+        "developer": "anthropic",
+        "providerModelId": "claude-opus-4-8",
+        "openRouterSlug": "anthropic/claude-opus-4-8",
+        "kind": "reasoning",
+        "familyPartner": "claude-sonnet-5",
+        "openWeight": false,
+        "license": "proprietary",
+        "aliases": ["anthropic/claude-opus-4-8"],
+        "family": "claude-opus",
+        "version": "4.8"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "June 2026",
+        "deprecationDate": null,
+        "deprecated": false,
+        "releasedOn": null,
+        "deprecatedOn": null,
+        "stage": "registered",
+        "stagedOn": "2026-09-29",
+        "stageSource": "https://platform.claude.com/docs/en/about-claude/pricing",
+        "replacedBy": null
+      },
+      "speed": "slow",
+      "residencyRegions": null,
+      "evidenceRefs": []
+    },
     "claude-sonnet-5": {
       "identity": {
         "key": "claude-sonnet-5",
@@ -12792,7 +12858,14 @@
       "gpt-live-1",
       "gpt-4o-mini-transcribe"
     ],
-    "anthropic": ["claude-fable-5-1", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
+    "anthropic": [
+      "claude-fable-5-1",
+      "claude-opus-5",
+      "claude-opus-5-5",
+      "claude-opus-4-8",
+      "claude-sonnet-5",
+      "claude-haiku-4-5"
+    ],
     "google": [
       "gemini-embedding-2",
       "gemini-3.1-pro-preview",
@@ -13855,6 +13928,50 @@
         "outputPerMillion": 25,
         "cacheReadPerMillion": 0.5,
         "cacheWritePerMillion": 6.25
+      }
+    },
+    "anthropic/claude-opus-5-5": {
+      "modelKey": "claude-opus-5-5",
+      "provider": "anthropic",
+      "providerModelId": "claude-opus-5-5",
+      "harnessId": "anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 4,
+        "outputPerMillion": 20,
+        "cacheReadPerMillion": 0.2,
+        "cacheWritePerMillion": 5,
+        "cacheWrite1hPerMillion": 8
+      }
+    },
+    "anthropic/claude-opus-4-8": {
+      "modelKey": "claude-opus-4-8",
+      "provider": "anthropic",
+      "providerModelId": "claude-opus-4-8",
+      "harnessId": "anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true,
+      "isDefault": true,
+      "cacheClass": "provider_explicit_prompt_cache",
+      "commercialStatus": "agi_direct",
+      "dataRetention": "provider_default",
+      "pricing": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "inputPerMillion": 5,
+        "outputPerMillion": 25,
+        "cacheReadPerMillion": 0.5,
+        "cacheWritePerMillion": 6.25,
+        "cacheWrite1hPerMillion": 10
       }
     },
     "anthropic/claude-sonnet-5": {
@@ -25069,6 +25186,54 @@
       "codeExecution": true,
       "promptCaching": true
     },
+    "claude-opus-5-5": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
+    },
+    "claude-opus-4-8": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
+      "imageEditing": null,
+      "realtime": null,
+      "reranking": null,
+      "toolSchemaSupport": null,
+      "computerUse": true,
+      "agentic": true,
+      "webSearch": true,
+      "deepResearch": true,
+      "codeExecution": true,
+      "promptCaching": true
+    },
     "claude-sonnet-5": {
       "textInput": true,
       "imageInput": true,
@@ -35184,6 +35349,24 @@
       "cacheWritePerMillion": 6.25,
       "cacheWrite1hPerMillion": 10
     },
+    "claude-opus-5-5": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 4,
+      "outputPerMillion": 20,
+      "cacheReadPerMillion": 0.2,
+      "cacheWritePerMillion": 5,
+      "cacheWrite1hPerMillion": 8
+    },
+    "claude-opus-4-8": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 5,
+      "outputPerMillion": 25,
+      "cacheReadPerMillion": 0.5,
+      "cacheWritePerMillion": 6.25,
+      "cacheWrite1hPerMillion": 10
+    },
     "claude-sonnet-5": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -38285,6 +38468,18 @@
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-05"
     },
+    "claude-opus-5-5": {
+      "contextTokens": 1000000,
+      "maxInputTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-05"
+    },
+    "claude-opus-4-8": {
+      "contextTokens": 1000000,
+      "maxInputTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-01"
+    },
     "claude-sonnet-5": {
       "contextTokens": 1000000,
       "maxInputTokens": 1000000,
@@ -38921,6 +39116,8 @@
     "gpt-5.6-luna": {},
     "claude-fable-5-1": {},
     "claude-opus-5": {},
+    "claude-opus-5-5": {},
+    "claude-opus-4-8": {},
     "claude-sonnet-5": {},
     "claude-haiku-4-5": {},
     "gemini-embedding-2": {},

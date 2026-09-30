@@ -12,24 +12,12 @@ describe('Screenshot 01, local demo chat', () => {
   });
 
   it('produces the locked frame', async () => {
-    await waitFor(element(by.id('chat-message-list')))
+    await waitFor(element(by.id('chat.composer.input')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await waitFor(element(by.id('chat.mode-toggle.local')))
       .toBeVisible()
       .withTimeout(5000);
-    await element(by.id('nav.chat.new')).tap();
-    await element(by.id('chat.composer.model.badge')).tap();
-    await waitFor(element(by.text('Models')))
-      .toBeVisible()
-      .withTimeout(5000);
-    await element(by.text('AGI Standard')).tap();
-    await element(by.id('chat.composer.input')).typeText(
-      'Explain why a local AI workspace helps daily work.',
-    );
-    await element(by.id('chat.composer.send')).tap();
-    await waitFor(element(by.id('chat.message.assistant.0.done')))
-      .toBeVisible()
-      .withTimeout(20000);
-
-    await element(by.id('chat.list')).scrollTo('top');
 
     await device.takeScreenshot('01-local-demo-chat');
     console.log(`Captured to ${capturePath}`);

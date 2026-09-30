@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Check, Palette } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -6,6 +7,7 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import type { AccentColor } from '@/stores/settingsStore';
 import { getAccentSwatch, useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 
 const ACCENTS: Array<{ value: AccentColor; label: string }> = [
@@ -40,7 +42,7 @@ export default function AccentColorScreen() {
         {ACCENTS.map((accent, index) => {
           const selected = accentColor === accent.value;
           return (
-            <Pressable
+            <PressableBox
               key={accent.value}
               onPress={() => setAccentColor(accent.value)}
               accessibilityRole="button"
@@ -66,11 +68,11 @@ export default function AccentColorScreen() {
                   borderColor: colors.border,
                 }}
               />
-              <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+              <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
                 {accent.label}
               </Text>
               {selected ? <Check size={18} color={colors.teal} /> : null}
-            </Pressable>
+            </PressableBox>
           );
         })}
       </SettingsGroup>

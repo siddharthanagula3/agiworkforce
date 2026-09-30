@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { View, ScrollView, Pressable, Alert } from 'react-native';
+import { View, ScrollView, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -36,7 +37,7 @@ import {
 import { useAgentStore } from '@/stores/agentStore';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { sendAgentCommand, requestAgentRefresh } from '@/services/companion';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
@@ -119,14 +120,14 @@ export default function AgentDetailScreen() {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
         <View className="flex-row items-center px-3 h-12">
-          <Pressable
+          <PressableBox
             onPress={handleBack}
             className="p-2 rounded-lg active:bg-white/5"
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
             <ArrowLeft size={20} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
           <Text variant="subheading" className="ml-2 flex-1">
             Agent Detail
           </Text>
@@ -136,7 +137,7 @@ export default function AgentDetailScreen() {
           <Text className="text-white/50 text-center text-sm mt-4">
             This agent is no longer running.
           </Text>
-          <Pressable
+          <PressableBox
             onPress={handleBack}
             className="mt-4 px-5 py-2.5 rounded-xl"
             style={({ pressed }) => ({
@@ -147,7 +148,7 @@ export default function AgentDetailScreen() {
             <Text className="text-sm font-medium" style={{ color: colors.teal }}>
               Back to Dashboard
             </Text>
-          </Pressable>
+          </PressableBox>
         </View>
       </SafeAreaView>
     );
@@ -170,25 +171,25 @@ export default function AgentDetailScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <View className="flex-row items-center px-3 h-12">
-        <Pressable
+        <PressableBox
           onPress={handleBack}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
         <Text variant="subheading" className="ml-2 flex-1" numberOfLines={1}>
           {agent.name}
         </Text>
-        <Pressable
+        <PressableBox
           onPress={handleRefresh}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Refresh agent status"
           accessibilityRole="button"
         >
           <RefreshCw size={18} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
       </View>
 
       <ScrollView
@@ -197,7 +198,7 @@ export default function AgentDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Status card */}
-        <Animated.View entering={FadeIn.duration(200)}>
+        <Animated.View entering={FadeIn.duration(motion.quick)}>
           <Card variant="elevated" className="mb-4">
             {/* Agent name + status */}
             <View className="flex-row items-center gap-3 mb-3">
@@ -235,13 +236,13 @@ export default function AgentDetailScreen() {
                 <ProgressBar progress={agent.progress} />
                 <View className="flex-row items-center justify-between mt-1.5">
                   {agent.totalSteps != null && agent.stepsCompleted != null ? (
-                    <Text className="text-[10px] text-white/40">
+                    <Text className="text-xs text-white/40">
                       Step {agent.stepsCompleted} of {agent.totalSteps}
                     </Text>
                   ) : (
                     <View />
                   )}
-                  <Text className="text-[10px] text-white/40">{agent.progress}%</Text>
+                  <Text className="text-xs text-white/40">{agent.progress}%</Text>
                 </View>
               </View>
             )}
@@ -250,7 +251,7 @@ export default function AgentDetailScreen() {
             {agent.currentAction ? (
               <View className="flex-row items-center gap-1.5 px-2 py-1.5 rounded-lg bg-blue-500/8">
                 <Zap size={11} color={colors.agentActive} />
-                <Text className="text-[11px] text-blue-400 flex-1" numberOfLines={2}>
+                <Text className="text-xs text-blue-400 flex-1" numberOfLines={2}>
                   {agent.currentAction}
                 </Text>
               </View>
@@ -264,11 +265,11 @@ export default function AgentDetailScreen() {
 
         {/* Controls */}
         {isControllable && (
-          <Animated.View entering={FadeIn.duration(200).delay(60)} className="mb-4">
+          <Animated.View entering={FadeIn.duration(motion.quick).delay(60)} className="mb-4">
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">Controls</Text>
             <View className="flex-row gap-3">
               {agent.status === 'running' ? (
-                <Pressable
+                <PressableBox
                   onPress={() => handleCommand('pause')}
                   className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-amber-500/10 active:bg-amber-500/20"
                   accessibilityLabel="Pause agent"
@@ -276,9 +277,9 @@ export default function AgentDetailScreen() {
                 >
                   <Pause size={14} color={colors.agentWarning} />
                   <Text className="text-sm text-amber-400 font-medium">Pause</Text>
-                </Pressable>
+                </PressableBox>
               ) : (
-                <Pressable
+                <PressableBox
                   onPress={() => handleCommand('resume')}
                   className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl"
                   style={({ pressed }) => ({
@@ -291,9 +292,9 @@ export default function AgentDetailScreen() {
                   <Text className="text-sm font-medium" style={{ color: colors.teal }}>
                     Resume
                   </Text>
-                </Pressable>
+                </PressableBox>
               )}
-              <Pressable
+              <PressableBox
                 onPress={handleCancelWithConfirm}
                 className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 active:bg-red-500/20"
                 accessibilityLabel="Cancel agent"
@@ -301,14 +302,14 @@ export default function AgentDetailScreen() {
               >
                 <Square size={14} color={colors.agentError} />
                 <Text className="text-sm text-red-400 font-medium">Cancel</Text>
-              </Pressable>
+              </PressableBox>
             </View>
           </Animated.View>
         )}
 
         {/* Run Artifacts */}
         {agent.artifacts && agent.artifacts.length > 0 && (
-          <Animated.View entering={FadeIn.duration(200).delay(80)} className="mb-4">
+          <Animated.View entering={FadeIn.duration(motion.quick).delay(80)} className="mb-4">
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
               Run Artifacts ({agent.artifacts.length})
             </Text>
@@ -324,11 +325,11 @@ export default function AgentDetailScreen() {
                           {artifact.label}
                         </Text>
                         {artifact.detail && (
-                          <Text className="text-[10px] text-white/40 mt-0.5" numberOfLines={2}>
+                          <Text className="text-xs text-white/40 mt-0.5" numberOfLines={2}>
                             {artifact.detail}
                           </Text>
                         )}
-                        <Text className="text-[10px] text-white/30 mt-0.5">
+                        <Text className="text-xs text-white/30 mt-0.5">
                           {formatArtifactTime(artifact.timestamp)}
                         </Text>
                       </View>
@@ -343,7 +344,7 @@ export default function AgentDetailScreen() {
 
         {/* Tool Call Log */}
         {agent.toolCalls && agent.toolCalls.length > 0 && (
-          <Animated.View entering={FadeIn.duration(200).delay(100)} className="mb-4">
+          <Animated.View entering={FadeIn.duration(motion.quick).delay(100)} className="mb-4">
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
               Tool Calls ({agent.toolCalls.length})
             </Text>
@@ -355,7 +356,7 @@ export default function AgentDetailScreen() {
 
         {/* Steps */}
         {agent.steps && agent.steps.length > 0 && (
-          <Animated.View entering={FadeIn.duration(200).delay(120)}>
+          <Animated.View entering={FadeIn.duration(motion.quick).delay(120)}>
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
               Steps ({agent.steps.length})
             </Text>
@@ -379,7 +380,7 @@ export default function AgentDetailScreen() {
                       <View className="flex-1">
                         <Text className="text-xs text-white/80">{step.message}</Text>
                         {step.detail && (
-                          <Text className="text-[11px] text-white/50 mt-0.5" numberOfLines={2}>
+                          <Text className="text-xs text-white/50 mt-0.5" numberOfLines={2}>
                             {step.detail}
                           </Text>
                         )}
@@ -396,7 +397,7 @@ export default function AgentDetailScreen() {
                         }}
                       >
                         <Text
-                          className="text-[9px] uppercase"
+                          className="text-xs uppercase"
                           style={{
                             color:
                               step.status === 'completed'

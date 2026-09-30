@@ -8,11 +8,15 @@ import {
 
 const mocks = vi.hoisted(() => ({ embed: vi.fn(), readRegion: vi.fn() }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/server/data-region', () => ({ readOrganizationRegion: mocks.readRegion }));
-vi.mock('@/lib/services/retrieval-embedding-service', async () => {
+vi.mock('@/lib/server/data-region', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readOrganizationRegion: mocks.readRegion,
+}));
+vi.mock('@/lib/services/retrieval-embedding-service', async (importOriginal) => {
   class RetrievalEmbeddingError extends Error {
     constructor(
       message: string,
@@ -21,7 +25,11 @@ vi.mock('@/lib/services/retrieval-embedding-service', async () => {
       super(message);
     }
   }
-  return { embedTextsMetered: mocks.embed, RetrievalEmbeddingError };
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    embedTextsMetered: mocks.embed,
+    RetrievalEmbeddingError,
+  };
 });
 
 const { buildTsQuery, createPostgresSearchProvider } = await import('../retrieval-search-service');
@@ -62,9 +70,13 @@ const ROWS = [
   },
 ];
 
-function scopedDb(options: { embeddingsPresent: boolean }) {
+function scopedDb(options: { embeddingsPresent: boolean; googleMarked?: boolean | 'unreadable' }) {
   const query = vi.fn(async (sql: string, _params?: unknown[]): Promise<unknown[]> => {
     if (sql.includes('as present')) return [{ present: options.embeddingsPresent }];
+    if (sql.includes('google_user_data_at') && sql.includes('as holds')) {
+      if (options.googleMarked === 'unreadable') throw new Error('connection reset');
+      return [{ holds: options.googleMarked === true }];
+    }
     return ROWS;
   });
   const adapter = {
@@ -135,6 +147,33 @@ describe('createPostgresSearchProvider', () => {
     expect(String(params[6]).startsWith('[0.5,')).toBe(true);
   });
 
+  it.each([
+    ['holds a chat marked as carrying Google data', true, true],
+    ['holds no such chat', false, false],
+    ['cannot be checked', 'unreadable' as const, true],
+  ])(
+    'embeds the query with providers that keep inputs out of training when the account %s',
+    async (_label, googleMarked, forced) => {
+      mocks.embed.mockResolvedValue({
+        vectors: [Array.from({ length: RETRIEVAL_EMBEDDING_DIMENSIONS }, () => 0.5)],
+        model: 'embedding-model',
+        routeId: 'route',
+      });
+      const { adapter } = scopedDb({ embeddingsPresent: true, googleMarked });
+
+      await createPostgresSearchProvider({
+        db: adapter,
+        userId: 'user-1',
+        organizationId: null,
+        semantic: true,
+      }).search({ text: 'quarterly invoice', limit: 5 });
+
+      expect(mocks.embed).toHaveBeenCalledWith(
+        expect.objectContaining({ purpose: 'query', forceNoTraining: forced }),
+      );
+    },
+  );
+
   it('ranks by full text alone when the query embedding is refused', async () => {
     mocks.embed.mockRejectedValue(new RetrievalEmbeddingError('no credits', 'billing_refused'));
     const { query, adapter } = scopedDb({ embeddingsPresent: true });
@@ -149,7 +188,7 @@ describe('createPostgresSearchProvider', () => {
     expect(response.semantic).toBe('unavailable');
     const [sql, params] = query.mock.calls.at(-1) as unknown as [string, unknown[]];
     expect(sql).not.toContain('semantic as (');
-    expect(params).toHaveLength(6);
+    expect(params).toHaveLength(8);
   });
 
   it('never pays for a query embedding when nothing in scope is embedded', async () => {
@@ -346,5 +385,37 @@ describe('passagesFromIndexedHits', () => {
         budgetChars: 500,
       }),
     ).toBeNull();
+  });
+});
+
+describe('documents holding Google user data', () => {
+  function run(googleUserData?: 'include' | 'exclude') {
+    mocks.embed.mockRejectedValue(new RetrievalEmbeddingError('no embedding', 'billing_refused'));
+    const { query, adapter } = scopedDb({ embeddingsPresent: false });
+    return createPostgresSearchProvider({
+      db: adapter,
+      userId: 'user-1',
+      organizationId: null,
+      semantic: false,
+      ...(googleUserData ? { googleUserData } : {}),
+    })
+      .search({ text: 'pricing', limit: 5 })
+      .then((response) => ({ response, query }));
+  }
+
+  it('are left out by default: a marked origin chat or a Google-imported project file', async () => {
+    const { query } = await run();
+    const [sql, params] = query.mock.calls.at(-1) as unknown as [string, unknown[]];
+    expect(sql).toContain('and not (exists (');
+    expect(sql).toContain('google_origin.google_user_data_at is not null');
+    expect(sql).toContain('google_file.id = d.project_knowledge_file_id');
+    expect(params.at(-1)).toEqual(expect.arrayContaining(['google-drive', 'gmail']));
+  });
+
+  it('are searched and tagged when the caller serves only models that do not train', async () => {
+    const { query } = await run('include');
+    const [sql] = query.mock.calls.at(-1) as unknown as [string, unknown[]];
+    expect(sql).not.toContain('and not (exists (');
+    expect(sql).toContain('as google_user_data');
   });
 });

@@ -47,6 +47,7 @@ export function groupAuditEntries(entries: AuditLogEntry[]): GroupedAuditEntry[]
 export interface AccountSecurityStatus {
   twoFactorEnabled: boolean;
   backupCodesReady: boolean;
+  enrollmentAvailable: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -60,6 +61,7 @@ export function parseAccountSecurityStatus(value: unknown): AccountSecurityStatu
   return {
     twoFactorEnabled: value['enabled'],
     backupCodesReady: value['backup_codes_ready'] === true,
+    enrollmentAvailable: value['enrollment_available'] === true,
   };
 }
 
@@ -207,4 +209,95 @@ export async function fetchLockdownMode(): Promise<boolean> {
 
 export async function saveLockdownMode(enabled: boolean): Promise<void> {
   await savePreferenceNamespace(LOCKDOWN_PREFERENCE_NAMESPACE, { enabled });
+}
+
+export interface SignInIdentity {
+  id: string;
+  provider: string;
+  lastAuthenticatedAt: string | null;
+}
+
+export interface SignInKey {
+  id: string;
+  name: string;
+  kind: 'passkey' | 'security_key';
+}
+
+export interface SignInMethods {
+  identities: SignInIdentity[];
+  keys: SignInKey[];
+}
+
+function readIdentities(value: unknown): SignInIdentity[] {
+  const identities = (value as { identities?: unknown } | null)?.identities;
+  if (!Array.isArray(identities)) return [];
+  return identities.flatMap((entry) => {
+    const row = entry as Record<string, unknown>;
+    return typeof row['id'] === 'string' && typeof row['provider'] === 'string'
+      ? [
+          {
+            id: row['id'],
+            provider: row['provider'],
+            lastAuthenticatedAt:
+              typeof row['lastAuthenticatedAt'] === 'string' ? row['lastAuthenticatedAt'] : null,
+          },
+        ]
+      : [];
+  });
+}
+
+function readKeys(value: unknown): SignInKey[] {
+  const credentials = (value as { credentials?: unknown } | null)?.credentials;
+  if (!Array.isArray(credentials)) return [];
+  return credentials.flatMap((entry) => {
+    const row = entry as Record<string, unknown>;
+    const kind = row['kind'];
+    return typeof row['id'] === 'string' &&
+      typeof row['name'] === 'string' &&
+      (kind === 'passkey' || kind === 'security_key')
+      ? [{ id: row['id'], name: row['name'], kind }]
+      : [];
+  });
+}
+
+export async function fetchSignInMethods(signal?: AbortSignal): Promise<SignInMethods> {
+  const [identities, security] = await Promise.all([
+    api.get<unknown>('/api/settings/identities', { signal }),
+    api.get<unknown>('/api/account-security', { signal }).catch(() => null),
+  ]);
+  return { identities: readIdentities(identities), keys: readKeys(security) };
+}
+
+function readBackupCodes(value: unknown): string[] {
+  const codes = isRecord(value) ? value['backup_codes'] : null;
+  if (!Array.isArray(codes) || !codes.every((code) => typeof code === 'string')) {
+    throw new Error('Account security returned no backup codes.');
+  }
+  return codes;
+}
+
+export async function startAuthenticatorSetup(
+  headers: Record<string, string>,
+): Promise<{ secret: string; otpauthUrl: string }> {
+  const response = await api.post<unknown>('/api/settings/2fa/setup', {}, { headers });
+  const secret = isRecord(response) ? response['secret'] : null;
+  const otpauthUrl = isRecord(response) ? response['otpauth_url'] : null;
+  if (typeof secret !== 'string' || typeof otpauthUrl !== 'string') {
+    throw new Error('Account security returned an invalid setup key.');
+  }
+  return { secret, otpauthUrl };
+}
+
+export async function verifyAuthenticatorCode(code: string): Promise<string[]> {
+  return readBackupCodes(await api.post<unknown>('/api/settings/2fa/verify', { code }));
+}
+
+export async function regenerateBackupCodes(headers: Record<string, string>): Promise<string[]> {
+  return readBackupCodes(
+    await api.post<unknown>('/api/settings/2fa/backup-codes', {}, { headers }),
+  );
+}
+
+export async function turnOffTwoFactor(headers: Record<string, string>): Promise<void> {
+  await api.delete('/api/settings/2fa', { headers });
 }

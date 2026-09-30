@@ -1,4 +1,3 @@
-
 export type ImportSource = 'chatgpt' | 'claude' | 'gemini' | 'text';
 
 export interface ImportedFact {
@@ -14,6 +13,10 @@ export interface ImportResult {
 
 const MAX_FACT_CHARS = 2000;
 const MAX_FACTS = 500;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 function truncate(text: string): string {
   return text.length > MAX_FACT_CHARS ? text.slice(0, MAX_FACT_CHARS).trimEnd() + '…' : text;
@@ -67,9 +70,7 @@ export function parseChatGPTExport(jsonText: string): ImportResult {
   const facts: ImportedFact[] = [];
   let skipped = 0;
 
-  const conversations: ChatGPTConversation[] = Array.isArray(parsed)
-    ? (parsed as ChatGPTConversation[])
-    : [];
+  const conversations: ChatGPTConversation[] = Array.isArray(parsed) ? parsed.filter(isRecord) : [];
 
   for (const conv of conversations) {
     const memFacts = parseChatGPTMemoryField(conv.memory, source);
@@ -114,11 +115,13 @@ export function parseClaudeExport(jsonText: string): ImportResult {
   const facts: ImportedFact[] = [];
   let skipped = 0;
 
-  const data = parsed as ClaudeExport;
-  const conversations = data.conversations ?? [];
+  const data = isRecord(parsed) ? (parsed as ClaudeExport) : null;
+  const conversations = Array.isArray(data?.conversations)
+    ? data.conversations.filter(isRecord)
+    : [];
 
   for (const conv of conversations) {
-    if (conv.system_prompt && isNonEmpty(conv.system_prompt)) {
+    if (typeof conv.system_prompt === 'string' && isNonEmpty(conv.system_prompt)) {
       if (facts.length < MAX_FACTS) {
         facts.push({ fact: truncate(conv.system_prompt.trim()), source });
       } else {
@@ -126,10 +129,12 @@ export function parseClaudeExport(jsonText: string): ImportResult {
       }
     }
 
-    for (const msg of conv.chat_messages ?? []) {
+    for (const msg of Array.isArray(conv.chat_messages)
+      ? conv.chat_messages.filter(isRecord)
+      : []) {
       if (!msg.starred) continue;
       const content = msg.content;
-      if (!content || !isNonEmpty(content)) continue;
+      if (typeof content !== 'string' || !isNonEmpty(content)) continue;
       if (facts.length >= MAX_FACTS) {
         skipped++;
         continue;
@@ -174,11 +179,15 @@ export function parseGeminiExport(jsonText: string): ImportResult {
   const facts: ImportedFact[] = [];
   let skipped = 0;
 
-  const data = parsed as GeminiExport;
-  for (const conv of data.conversations ?? []) {
-    for (const msg of conv.messages ?? []) {
+  const data = isRecord(parsed) ? (parsed as GeminiExport) : null;
+  for (const conv of Array.isArray(data?.conversations)
+    ? data.conversations.filter(isRecord)
+    : []) {
+    for (const msg of Array.isArray(conv.messages) ? conv.messages.filter(isRecord) : []) {
       if (msg.author !== 'user' && msg.author !== '0') continue;
-      const text = (msg.content ?? msg.text ?? '').trim();
+      const content = typeof msg.content === 'string' ? msg.content : msg.text;
+      if (typeof content !== 'string') continue;
+      const text = content.trim();
       if (!isNonEmpty(text) || !looksLikeFact(text)) continue;
       if (facts.length >= MAX_FACTS) {
         skipped++;

@@ -173,6 +173,48 @@ describe('exchangeClerkSessionForCloudCredential', () => {
     expect(failure.message).toMatch(/did not accept the sign-in session/i);
   });
 
+  it('names the terms step and its link when approve answers 403 for terms', async () => {
+    scriptInvoke({
+      approve: {
+        status: 403,
+        body: JSON.stringify({
+          error: {
+            code: 'TERMS_ACCEPTANCE_REQUIRED',
+            message: 'Review and accept the current Terms of Service before approving a device.',
+          },
+          acceptanceUrl: '/login/complete?redirectTo=%2Fauth%2Fdevice',
+        }),
+      },
+    });
+
+    const failure = (await exchangeClerkSessionForCloudCredential(CLERK_SESSION).catch(
+      (error: unknown) => error,
+    )) as NativeSignInExchangeError;
+
+    expect(failure.status).toBe(403);
+    expect(failure.message).toContain('Terms of Service');
+    expect(failure.message).toContain('/login/complete?redirectTo=');
+    expect(failure.message).not.toMatch(/sign-in session/i);
+  });
+
+  it("says why when approve answers 403 for the account's own setting", async () => {
+    scriptInvoke({
+      approve: {
+        status: 403,
+        body: JSON.stringify({
+          error: {
+            code: 'DEVICE_SIGNIN_DISABLED',
+            message: 'Device sign-in is turned off for this account.',
+          },
+        }),
+      },
+    });
+
+    await expect(exchangeClerkSessionForCloudCredential(CLERK_SESSION)).rejects.toThrow(
+      /Device sign-in is turned off/,
+    );
+  });
+
   it('surfaces a 4xx approve message from the server verbatim', async () => {
     scriptInvoke({
       approve: { status: 409, body: '{"error":"This device code has already been processed"}' },

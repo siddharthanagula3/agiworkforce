@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
@@ -32,6 +33,7 @@ import {
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 interface ProfileRowProps {
@@ -132,7 +134,7 @@ export default function ProfileScreen() {
           paddingHorizontal: 8,
         }}
       >
-        <Pressable
+        <PressableBox
           onPress={goBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -140,8 +142,12 @@ export default function ProfileScreen() {
           style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
         >
           <ArrowLeft size={21} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '700' }}>Profile</Text>
+        </PressableBox>
+        <Text
+          style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
+        >
+          Profile
+        </Text>
       </View>
 
       <ScrollView
@@ -177,11 +183,14 @@ export default function ProfileScreen() {
           <View style={{ alignItems: 'center', gap: 3 }}>
             <Text
               numberOfLines={1}
-              style={{ color: colors.textPrimary, fontSize: 22, fontWeight: '700' }}
+              style={{ color: colors.textPrimary, fontSize: typeScale.title2, fontWeight: '700' }}
             >
               {displayName}
             </Text>
-            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 14 }}>
+            <Text
+              numberOfLines={1}
+              style={{ color: colors.textMuted, fontSize: typeScale.subhead }}
+            >
               {subtitle}
             </Text>
           </View>
@@ -277,10 +286,18 @@ export default function ProfileScreen() {
           >
             <UserRound size={19} color={colors.textSecondary} />
             <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
+              <Text
+                style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '700' }}
+              >
                 Local profile
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 19,
+                }}
+              >
                 Your local profile, chats, and memory stay separate from AGI Cloud.
               </Text>
             </View>
@@ -302,10 +319,18 @@ export default function ProfileScreen() {
           >
             <UserRound size={19} color={colors.textSecondary} />
             <View style={{ flex: 1, gap: 3 }}>
-              <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
+              <Text
+                style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '700' }}
+              >
                 AGI Cloud profile
               </Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 19,
+                }}
+              >
                 Cloud profile, chats, memory, and account settings stay separate from Local Mode.
               </Text>
             </View>
@@ -322,7 +347,7 @@ function SectionTitle({ title }: { title: string }) {
     <Text
       style={{
         color: colors.textMuted,
-        fontSize: 13,
+        fontSize: typeScale.footnote,
         fontWeight: '600',
         marginBottom: 8,
         paddingHorizontal: 2,
@@ -361,7 +386,7 @@ function ProfileRow({
   const colors = useThemeColors();
   const tint = tone === 'danger' ? colors.agentError : colors.textSecondary;
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={[label, value].filter(Boolean).join('. ')}
@@ -381,20 +406,23 @@ function ProfileRow({
         style={{
           flex: 1,
           color: tone === 'danger' ? colors.agentError : colors.textPrimary,
-          fontSize: 15,
+          fontSize: typeScale.body,
         }}
       >
         {label}
       </Text>
       {value ? (
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13, maxWidth: 110 }}>
+        <Text
+          numberOfLines={1}
+          style={{ color: colors.textMuted, fontSize: typeScale.footnote, maxWidth: 110 }}
+        >
           {value}
         </Text>
       ) : null}
       {/* Log Out raises a confirm Alert instead of pushing a screen, so the
           danger tone carries no chevron, matching the Settings root. */}
       {tone === 'danger' ? null : <ChevronRight size={17} color={colors.textMuted} />}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -416,14 +444,14 @@ function ProfileStat({
       <Text
         style={{
           color: colors.textPrimary,
-          fontSize: 22,
+          fontSize: typeScale.title2,
           fontWeight: '700',
           fontVariant: ['tabular-nums'],
         }}
       >
         {value}
       </Text>
-      <Text style={{ color: colors.textMuted, fontSize: 12 }}>{label}</Text>
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>{label}</Text>
     </View>
   );
 }

@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const webRoot = resolve(import.meta.dirname, '../../..');
+const mobileRoot = resolve(webRoot, '../mobile');
 
 /**
  * The autotag routes classified a conversation into a topic and stored it in
@@ -20,6 +21,12 @@ describe('the autotag api surface is gone', () => {
   ]) {
     it(`${gone} is gone`, () => {
       expect(existsSync(join(webRoot, gone))).toBe(false);
+    });
+  }
+
+  for (const gone of ['services/autotag.ts', 'lib/tagUtils.ts']) {
+    it(`mobile/${gone} is gone`, () => {
+      expect(existsSync(join(mobileRoot, gone))).toBe(false);
     });
   }
 

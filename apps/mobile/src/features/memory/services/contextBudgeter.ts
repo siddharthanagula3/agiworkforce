@@ -1,4 +1,3 @@
-
 import {
   computeContextBudget as computeSharedContextBudget,
   estimateTextTokens,
@@ -11,6 +10,7 @@ import type { ChatMessage } from '@/types/chat';
 export type BudgetStatus = 'ok' | 'warn' | 'compact';
 
 export interface ContextBudget {
+  contextWindowTokens: number;
   hardCapTokens: number;
   warnThresholdTokens: number;
   usedTokens: number;
@@ -45,6 +45,31 @@ function getContextWindow(modelId: string): number {
  * @param messages - Current conversation messages
  * @param systemPromptTokens - Estimated tokens for any system prompt (default 0)
  */
+export interface ContextBreakdownRow {
+  key: 'user' | 'assistant' | 'attachments';
+  label: string;
+  count: number;
+  tokens: number;
+}
+
+export function summarizeContext(messages: ChatMessage[]): ContextBreakdownRow[] {
+  const rows: Record<ContextBreakdownRow['key'], ContextBreakdownRow> = {
+    user: { key: 'user', label: 'Your messages', count: 0, tokens: 0 },
+    assistant: { key: 'assistant', label: 'Replies', count: 0, tokens: 0 },
+    attachments: { key: 'attachments', label: 'Attachments', count: 0, tokens: 0 },
+  };
+  for (const message of messages) {
+    const row =
+      message.role === 'user' ? rows.user : message.role === 'assistant' ? rows.assistant : null;
+    if (row) {
+      row.count += 1;
+      row.tokens += estimateTokens(message.content ?? '');
+    }
+    rows.attachments.count += message.attachments?.length ?? 0;
+  }
+  return [rows.user, rows.assistant, rows.attachments];
+}
+
 export function computeContextBudget(
   modelId: string,
   messages: ChatMessage[],
@@ -71,7 +96,14 @@ export function computeContextBudget(
     status = 'warn';
   }
 
-  return { hardCapTokens, warnThresholdTokens, usedTokens, usedFraction, status };
+  return {
+    contextWindowTokens: contextWindow,
+    hardCapTokens,
+    warnThresholdTokens,
+    usedTokens,
+    usedFraction,
+    status,
+  };
 }
 
 export function needsCompaction(

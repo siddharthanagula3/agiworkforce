@@ -86,6 +86,24 @@ export interface ManagedCloudProjectsClient {
   ): Promise<ProjectsSyncPushResponse>;
 }
 
+const PROJECT_LIST_PAGE_SIZE = 100;
+const PROJECT_LIST_MAX_OFFSET = 10_000;
+
+export async function listAllManagedCloudProjects(
+  client: Pick<ManagedCloudProjectsClient, 'listProjects'>,
+  options: ManagedCloudProjectsRequestOptions = {},
+): Promise<ManagedCloudProject[]> {
+  const projects: ManagedCloudProject[] = [];
+  let offset = 0;
+  while (offset <= PROJECT_LIST_MAX_OFFSET) {
+    const page = await client.listProjects({ limit: PROJECT_LIST_PAGE_SIZE, offset }, options);
+    projects.push(...page);
+    if (page.length < PROJECT_LIST_PAGE_SIZE) return projects;
+    offset += page.length;
+  }
+  throw new Error('Project pagination exceeded the supported account limit.');
+}
+
 export class ManagedCloudProjectsHttpError extends Error {
   constructor(
     message: string,

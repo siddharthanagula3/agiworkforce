@@ -22,40 +22,31 @@ nothing is left.
 
 - Done when: Plain-text files open in a readable in-product view.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 ## S25.03: Markdown reader.
 
 - Done when: Markdown files render formatted in the product.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 ## S25.04: Source-code reader.
 
 - Done when: Source-code files open with syntax-aware display.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 ## S25.05: Image viewer.
 
@@ -72,15 +63,12 @@ Code: `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
 
 - Done when: Video files play in an in-product player.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Generated videos open in the in-app browser; Library videos go to the OS share sheet; no in-app player. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:1-21`, `apps/mobile/src/features/library/index.tsx:140-152`
 
 ## S25.08: Spreadsheet preview.
 
@@ -105,17 +93,6 @@ Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:1-21`, `apps/
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S25.13: Page navigation.
-
-- Done when: Users can navigate pages of a multi-page document.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -155,18 +132,6 @@ Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:1-21`, `apps/
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S25.22: Citation-linked highlighting.
-
-- Done when: Opening a citation highlights the cited passage in the file.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S25.25: Full-screen mode.
 
 - Done when: Viewers offer a full-screen mode.
@@ -177,19 +142,6 @@ Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:1-21`, `apps/
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S25.26: Download original.
-
-- Done when: Users can download the original file.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `agi artifacts show --out` saves an artifact's content to disk; uploaded or Library files cannot be downloaded. | ui |
-| chrome | partial | Only files generated in a chat can be opened or downloaded from their chat bubble; there is no file store to download originals from. | ui |
-
-Code: `apps/cli/src/lib.rs:1914-1938`, `apps/extension/src/features/side-panel/bubbles.ts:441-454`
 
 ## S25.27: Download converted representation.
 
@@ -212,9 +164,6 @@ Code: `apps/cli/src/lib.rs:1914-1938`, `apps/extension/src/features/side-panel/b
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| chrome | partial | The artifacts drawer copies an artifact's whole content; there is no reader to select part of it. | ui |
-
-Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-212`
 
 ## S25.29: Open in native application.
 

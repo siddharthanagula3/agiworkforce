@@ -13,6 +13,7 @@ import {
   ALL_KILL_SWITCH_CAPABILITIES,
   TENANT_LOCKDOWN_FLAG_KEY,
   capabilityKillSwitchKey,
+  WORK_CAPABILITY,
   modelKillSwitchKey,
   providerKillSwitchKey,
 } from '../kill-switches';
@@ -102,7 +103,7 @@ describe('which keys a reader spells', () => {
 
 describe('what a stored definition contradicts', () => {
   it('accepts a definition that matches its namespace', () => {
-    expect(flagConfigProblems(definition(capabilityKillSwitchKey('work')))).toEqual([]);
+    expect(flagConfigProblems(definition(capabilityKillSwitchKey(WORK_CAPABILITY)))).toEqual([]);
   });
 
   it('names the reader when the key is under a reserved prefix but unread', () => {

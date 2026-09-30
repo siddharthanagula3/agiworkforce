@@ -5,8 +5,8 @@ import { accessLabel, statusLabel, tokenCeilingLabel } from '../lib/model-presen
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 
 const HEAD_CLASS =
-  'whitespace-nowrap px-3 py-2 text-left text-xs font-normal text-muted-foreground';
-const CELL_CLASS = 'whitespace-nowrap px-3 py-2 text-left text-sm text-foreground';
+  'whitespace-nowrap px-3 py-2 text-start text-xs font-normal text-muted-foreground';
+const CELL_CLASS = 'whitespace-nowrap px-3 py-2 text-start text-sm text-foreground';
 const PRESENT_LABEL = 'Yes';
 const ABSENT_LABEL = 'No';
 const AVAILABLE_LABEL = 'Available';
@@ -44,7 +44,7 @@ export function ModelCompareTable({ entries, planLabel }: ModelCompareTableProps
               <th
                 key={entry.id}
                 scope="col"
-                className="px-3 py-2 text-left text-sm text-foreground"
+                className="px-3 py-2 text-start text-sm text-foreground"
               >
                 {entry.displayName}
               </th>

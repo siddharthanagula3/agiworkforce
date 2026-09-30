@@ -8,12 +8,14 @@ export interface SensitiveDataConnector {
   readonly authorizationTtlSeconds?: number;
 }
 
+export const HEALTHEX_CONNECTOR_ID = 'healthex';
+
 const COUNTRY_HEADER = 'x-vercel-ip-country';
 const UNITED_STATES = 'US';
 const HEALTHEX_AUTHORIZATION_TTL_SECONDS = 30 * 60;
 
 export const SENSITIVE_DATA_CONNECTORS: Readonly<Record<string, SensitiveDataConnector>> = {
-  healthex: {
+  [HEALTHEX_CONNECTOR_ID]: {
     regionRefusal: 'HealthEx is available in the United States only.',
     authorizationTtlSeconds: HEALTHEX_AUTHORIZATION_TTL_SECONDS,
   },

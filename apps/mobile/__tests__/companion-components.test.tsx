@@ -69,6 +69,7 @@ jest.mock('@clerk/expo', () => ({
 }));
 
 jest.mock('@/src/ui/theme', () => ({
+  ...jest.requireActual('@/src/ui/theme/tokens'),
   colors: {
     teal: '#14b8a6',
     agentWarning: '#f59e0b',

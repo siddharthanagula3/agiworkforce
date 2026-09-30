@@ -292,6 +292,10 @@ struct RegistryModel {
 #[serde(rename_all = "camelCase")]
 struct RegistryIdentity {
     provider: String,
+    #[serde(default)]
+    family: Option<String>,
+    #[serde(default)]
+    provider_model_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -535,6 +539,17 @@ pub fn is_auto_routing_selection(selection: &str) -> bool {
 /// Return canonical model keys for a provider in registry-defined order.
 /// Provider membership is generated from model identities, so Rust consumers
 /// do not need to maintain provider-specific model tables.
+pub fn model_family(model: &str) -> Result<Option<String>, RegistryError> {
+    let registry = registry()?;
+    Ok(registry
+        .models
+        .iter()
+        .find(|(key, entry)| {
+            key.as_str() == model || entry.identity.provider_model_id.as_deref() == Some(model)
+        })
+        .and_then(|(_, entry)| entry.identity.family.clone()))
+}
+
 pub fn model_keys_for_provider(provider: &str) -> Result<Option<Vec<String>>, RegistryError> {
     let registry = registry()?;
     Ok(registry.provider_model_keys.get(provider).cloned())

@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { UNAVAILABLE_PRESENCE, type SupportPresenceView } from '../lib/contract';
+import {
+  UNAVAILABLE_PRESENCE,
+  type SupportPresenceView,
+} from '@agiworkforce/cloud-contracts/support';
 import { fetchPresence } from '../lib/support-client';
 
 export interface SupportPresenceState {

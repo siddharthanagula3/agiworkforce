@@ -185,6 +185,14 @@ jest.mock('../storage/installedModels', () => ({
 
 import OnboardingScreen from '../app/(public)/onboarding';
 
+async function skipAboutYou(getByTestId: (id: string) => unknown) {
+  await waitFor(() => expect(getByTestId('onboarding-about-you-screen')).toBeTruthy());
+  await act(async () => {
+    fireEvent.press(getByTestId('about-you-skip-btn') as never);
+    await Promise.resolve();
+  });
+}
+
 describe('Onboarding → tier2 ExecuTorch download flow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -197,6 +205,7 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
       fireEvent.press(utils.getByTestId('hero-start-chatting-btn'));
       await Promise.resolve();
     });
+    await skipAboutYou(utils.getByTestId);
     await waitFor(() => utils.getByTestId('onboarding-device-tier-screen'));
     return utils;
   }
@@ -313,7 +322,10 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
     });
     await waitFor(() => {
       const errEl = getByTestId('download-error');
-      expect(errEl.props.children).toContain('Network error downloading model shard');
+      expect(errEl.props.children).toContain(
+        'Download failed. You can try again or continue without the model.',
+      );
+      expect(errEl.props.children).not.toContain('model shard');
     });
   });
 

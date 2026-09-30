@@ -1,90 +1,11 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { createServer } from 'node:net';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 
-const serviceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+import { serviceRoot, startServer, type RunningServer } from './harness.js';
+
 const INTERNAL_SECRET = 'test-internal-secret-value';
-
-async function freePort(): Promise<number> {
-  return new Promise((resolvePort, reject) => {
-    const probe = createServer();
-    probe.on('error', reject);
-    probe.listen(0, '127.0.0.1', () => {
-      const address = probe.address();
-      if (typeof address === 'string' || address === null) {
-        probe.close(() => reject(new Error('no port')));
-        return;
-      }
-      const { port } = address;
-      probe.close(() => resolvePort(port));
-    });
-  });
-}
-
-interface RunningServer {
-  port: number;
-  stop: () => void;
-}
-
-async function startServer(overrides: Record<string, string>): Promise<RunningServer> {
-  const port = await freePort();
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) env[key] = value;
-  }
-  delete env['ALLOWED_ORIGINS'];
-  delete env['TRUST_PROXY'];
-  delete env['ADMIN_API_KEY'];
-  delete env['SIGNALING_INTERNAL_SECRET'];
-  Object.assign(
-    env,
-    {
-      NODE_ENV: 'production',
-      PORT: String(port),
-      SIGNALING_PORT: String(port),
-      SIGNALING_HOST: '127.0.0.1',
-      SIGNALING_WS_PATH: '/ws',
-      NEON_DATABASE_URL: 'postgresql://test:test@127.0.0.1:54321/test',
-    },
-    overrides,
-  );
-
-  const child: ChildProcessWithoutNullStreams = spawn(
-    resolve(serviceRoot, 'node_modules/.bin/tsx'),
-    ['src/index.ts'],
-    { cwd: serviceRoot, env, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-
-  let stderr = '';
-  child.stderr.on('data', (chunk: Buffer) => {
-    stderr += chunk.toString();
-  });
-  child.stdout.on('data', () => {});
-
-  const deadline = Date.now() + 20000;
-  for (;;) {
-    if (child.exitCode !== null) {
-      throw new Error(`signaling server exited early (${child.exitCode}): ${stderr}`);
-    }
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/ready`);
-      if (response.status === 200) break;
-    } catch {
-      /* not listening yet */
-    }
-    if (Date.now() > deadline) {
-      child.kill('SIGKILL');
-      throw new Error(`signaling server never became ready: ${stderr}`);
-    }
-    await new Promise((r) => setTimeout(r, 150));
-  }
-
-  return { port, stop: () => child.kill('SIGKILL') };
-}
 
 type Probe = { outcome: 'open' } | { outcome: 'closed'; code: number; reason: string };
 
@@ -140,6 +61,20 @@ describe('WebSocket origin policy with no ALLOWED_ORIGINS in production', () => 
   it('still admits an internal client presenting the correct secret', async () => {
     const result = await probeWs(server.port, { 'x-signaling-internal-secret': INTERNAL_SECRET });
     expect(result).toEqual({ outcome: 'open' });
+  });
+
+  it('is live but never ready while the pairing store is unreachable', async () => {
+    const live = await fetch(`http://127.0.0.1:${server.port}/live`);
+    expect(live.status).toBe(200);
+
+    const ready = await fetch(`http://127.0.0.1:${server.port}/ready`);
+    const body = (await ready.json()) as {
+      status: string;
+      checks: { database: { status: string } };
+    };
+    expect(ready.status).toBe(503);
+    expect(body.status).toBe('not_ready');
+    expect(body.checks.database.status).toBe('down');
   });
 });
 

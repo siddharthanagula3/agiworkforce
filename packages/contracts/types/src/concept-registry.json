@@ -289,6 +289,7 @@
         "user_connectors",
         "user_custom_connectors",
         "connector_oauth_grants",
+        "bank_account_items",
         "connector_tool_permissions"
       ],
       "writeFunctions": [],
@@ -328,11 +329,17 @@
       "label": "Artifact",
       "schema": "packages/contracts/types/src/artifacts.ts",
       "symbol": "SharedArtifact",
-      "tables": ["web_artifacts", "web_artifact_versions", "published_artifacts"],
+      "tables": [
+        "web_artifacts",
+        "web_artifact_versions",
+        "published_artifacts",
+        "published_artifact_storage"
+      ],
       "writeFunctions": [],
       "mutators": [
         "apps/web/lib/services/published-artifact-service.ts",
-        "apps/web/app/api/chat/sync/route.ts"
+        "apps/web/app/api/chat/sync/route.ts",
+        "apps/web/lib/services/artifact-runtime-service.ts"
       ],
       "projections": ["packages/contracts/cloud-contracts/src/artifact-index.ts"],
       "providerCopies": [],
@@ -1263,6 +1270,7 @@
         "device_registrations",
         "desktop_devices",
         "mobile_devices",
+        "mobile_intent_tokens",
         "device_refresh_tokens",
         "device_authorization_codes"
       ],
@@ -1471,6 +1479,16 @@
   ],
   "columnExemptions": [
     {
+      "table": "bank_account_items",
+      "exempt": [],
+      "why": "a Plaid item its owner linked; only the owner's own link, relink, account choice and removal write it, so there is no creator distinct from the owner, and no client edits it under an If-Match precondition"
+    },
+    {
+      "table": "mobile_intent_tokens",
+      "exempt": [],
+      "why": "a hashed Ask from Siri credential its owner's app requests for one install; it is never edited, only revoked or replaced by the next rotation, so there is no creator distinct from the owner and nothing to version"
+    },
+    {
       "table": "billing_disputes",
       "exempt": [],
       "why": "the processor's dispute on a payment, written only by the Stripe webhook from the event; no principal other than the processor creates it and nothing edits it under an If-Match precondition"
@@ -1501,6 +1519,11 @@
       "why": "recorded by the server for the account that reached the resource, so its creator is always its owner, and no client edits a reference under an If-Match precondition: a repeat sighting refreshes it in place"
     },
     {
+      "table": "published_artifact_storage",
+      "exempt": ["owner", "createdBy", "version"],
+      "why": "the value a published app saved under one key, written by the app through the runtime bridge and replaced whole: owner_user_id names the viewer it belongs to (null for the app's shared value), updated_by names the last writer, and no client edits it under an If-Match precondition"
+    },
+    {
       "table": "slack_account_links",
       "exempt": [],
       "why": "created only by its owner, when they confirm a link on the web or install the app into Slack, so its creator is always its owner, and it is never edited: a change is an unlink and a new link, which no If-Match precondition quotes"
@@ -1509,6 +1532,26 @@
       "table": "slack_assistant_runs",
       "exempt": [],
       "why": "written by the server for the linked account when the app takes up a Slack message, so its creator is always its owner, and no client edits it under an If-Match precondition: its status moves only through the server's own transitions"
+    },
+    {
+      "table": "account_security_enrollments",
+      "exempt": [],
+      "why": "one row per account, written only by that account's own enrollment, recovery and key changes, so its creator is always its owner, and each change is a single statement that no If-Match precondition quotes"
+    },
+    {
+      "table": "account_security_credentials",
+      "exempt": [],
+      "why": "a passkey or security key its owner registered; after that only a verified assertion moves its signature counter and only its owner removes it, so there is no creator distinct from the owner and no edit to version"
+    },
+    {
+      "table": "account_security_sessions",
+      "exempt": [],
+      "why": "one row per identity session that passed a passkey check, written by that check and swept once it expires; nothing edits it, so there is no creator distinct from the owner and nothing to version"
+    },
+    {
+      "table": "account_security_challenges",
+      "exempt": [],
+      "why": "a single-use WebAuthn challenge or browser handoff, created and consumed within minutes by the ceremony that minted it for its owner, so there is nothing to version"
     }
   ],
   "tableDispositions": [
@@ -1814,6 +1857,26 @@
       "table": "billing_refund_requests",
       "disposition": "operational",
       "why": "a request about a payment rather than an object of its own; it is decided and closed, never synced or versioned"
+    },
+    {
+      "table": "account_security_enrollments",
+      "disposition": "identity",
+      "why": "how the account proves who it is once Advanced Account Security is on; the row records that choice, its recovery key hashes and any recovery hold, not a product object"
+    },
+    {
+      "table": "account_security_credentials",
+      "disposition": "identity",
+      "why": "the public half of a passkey or security key the account signs in with; a sign-in method, not a product object"
+    },
+    {
+      "table": "account_security_sessions",
+      "disposition": "identity",
+      "why": "the local record that one identity session completed a passkey check and until when it counts"
+    },
+    {
+      "table": "account_security_challenges",
+      "disposition": "identity",
+      "why": "the local record of one sign-in ceremony in flight, deleted when it is used or expires"
     }
   ],
   "uiStateColumns": [

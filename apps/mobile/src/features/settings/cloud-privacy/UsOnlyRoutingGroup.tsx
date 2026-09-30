@@ -7,24 +7,27 @@ import {
   isBillingPlanTier,
   normalizeSubscriptionAccessTier,
 } from '@agiworkforce/types';
+import {
+  ME_ROUTING_PREFERENCES_PATH,
+  RoutingPreferencesSchema,
+  type RoutingPreferences,
+} from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { api } from '@/services/api';
 import { useTierStore } from '@/src/features/billing/store';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
-const ROUTING_PREFERENCES_PATH = '/api/me/routing-preferences';
+const ROUTING_PREFERENCES_PATH = ME_ROUTING_PREFERENCES_PATH;
 const LABEL = 'Only use AI providers based in the US';
 const US_ONLY_PLAN_LABELS = US_ONLY_ROUTING_TIERS.flatMap((tier) =>
   isBillingPlanTier(tier) ? [BILLING_PLAN_PRICING[tier].label] : [],
 ).join(' and ');
 
-type RoutingPreferences = Record<string, unknown> & { us_only?: boolean };
-
 function readPreferences(body: unknown): RoutingPreferences {
-  return body && typeof body === 'object' && !Array.isArray(body)
-    ? (body as RoutingPreferences)
-    : {};
+  const parsed = RoutingPreferencesSchema.safeParse(body);
+  return parsed.success ? parsed.data : {};
 }
 
 export function UsOnlyRoutingGroup() {
@@ -69,9 +72,10 @@ export function UsOnlyRoutingGroup() {
   return (
     <View style={{ marginBottom: 18 }}>
       <Text
+        accessibilityRole="header"
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           fontWeight: '700',
           textTransform: 'uppercase',
           marginBottom: 8,
@@ -93,7 +97,7 @@ export function UsOnlyRoutingGroup() {
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           lineHeight: 17,
           marginTop: 8,
           paddingHorizontal: 2,
@@ -106,7 +110,12 @@ export function UsOnlyRoutingGroup() {
       {error ? (
         <Text
           accessibilityRole="alert"
-          style={{ color: colors.agentError, fontSize: 12, lineHeight: 17, marginTop: 4 }}
+          style={{
+            color: colors.agentError,
+            fontSize: typeScale.caption,
+            lineHeight: 17,
+            marginTop: 4,
+          }}
         >
           {error}
         </Text>

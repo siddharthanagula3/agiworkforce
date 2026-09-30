@@ -1,10 +1,14 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { MOBILE_IAP_PRODUCT_DEFINITIONS } from '@agiworkforce/types';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const mockFetchCatalog = jest.fn();
 const mockVerifyPurchase = jest.fn();
-const mockRefreshTier = jest.fn().mockResolvedValue(undefined);
+const mockRefreshTier = jest.fn().mockResolvedValue(true);
 const mockFinishTransaction = jest.fn().mockResolvedValue(undefined);
 let mockCallbacks: Record<string, (...args: unknown[]) => void> = {};
 const mockIapState: Record<string, unknown> = {
@@ -72,6 +76,8 @@ function strandedPurchase(isAcknowledgedAndroid: boolean | null) {
 describe('native purchase acknowledgement and idempotency', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('billing-acknowledgement-account');
     mockFinishTransaction.mockResolvedValue(undefined);
     Object.assign(mockIapState, {
       connected: true,

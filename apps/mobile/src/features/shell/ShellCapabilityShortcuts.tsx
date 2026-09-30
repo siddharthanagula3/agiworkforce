@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { usePathname } from 'expo-router';
 import {
   Camera,
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   useShellShortcuts,
   type ShellShortcutKey,
@@ -53,7 +55,7 @@ export function ShellCapabilityShortcuts({
         const Icon = SHORTCUT_ICONS[shortcut.key];
         const active = isShortcutActive(shortcut.route, pathname);
         return (
-          <Pressable
+          <PressableBox
             key={shortcut.key}
             onPress={() => onOpen(shortcut.route)}
             accessibilityRole="button"
@@ -81,18 +83,18 @@ export function ShellCapabilityShortcuts({
               numberOfLines={1}
               style={{
                 color: active ? colors.textPrimary : colors.textSecondary,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: active ? '600' : '400',
               }}
             >
               {shortcut.label}
             </Text>
-          </Pressable>
+          </PressableBox>
         );
       })}
 
       {overflow.length > 0 ? (
-        <Pressable
+        <PressableBox
           onPress={() => setSheetOpen(true)}
           accessibilityRole="button"
           accessibilityLabel={MORE_LABEL}
@@ -108,7 +110,7 @@ export function ShellCapabilityShortcuts({
           }}
         >
           <MoreHorizontal size={18} color={colors.textPrimary} strokeWidth={1.8} />
-        </Pressable>
+        </PressableBox>
       ) : null}
 
       {sheetOpen ? (

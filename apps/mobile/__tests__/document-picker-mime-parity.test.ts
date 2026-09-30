@@ -6,7 +6,11 @@ jest.mock('expo-file-system/legacy', () => ({
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { PICKABLE_DOCUMENT_MIME_TYPES, isParseableDocument } from '../services/docParser';
+import {
+  PICKABLE_DOCUMENT_MIME_TYPES,
+  isParseableDocument,
+  pickableDocumentMimeTypes,
+} from '../services/docParser';
 import { isAcceptableAttachment } from '../src/features/chat/utils/attachmentValidation';
 
 const WORD_MIME_TYPES = [
@@ -45,25 +49,32 @@ describe('document picker MIME allowlist', () => {
     },
   );
 
-  it.each(WORD_MIME_TYPES)('does not advertise Word documents: %s', (mimeType) => {
-    expect(PICKABLE_DOCUMENT_MIME_TYPES).not.toContain(mimeType);
-    expect(isParseableDocument('file:///report.docx', mimeType)).toBe(false);
-    expect(
-      isAcceptableAttachment({
-        fileName: 'report.docx',
-        mimeType,
-        uri: 'file:///report.docx',
-        fileSize: 1024,
-      }),
-    ).not.toBe(true);
+  it('does not advertise legacy Word documents: application/msword', () => {
+    expect(pickableDocumentMimeTypes('cloud')).not.toContain('application/msword');
+    expect(pickableDocumentMimeTypes('local')).not.toContain('application/msword');
+  });
+
+  it('offers .docx only to Cloud chats, which the server reads', () => {
+    const docx = WORD_MIME_TYPES[1]!;
+    const attachment = {
+      fileName: 'report.docx',
+      mimeType: docx,
+      uri: 'file:///report.docx',
+      fileSize: 1024,
+    };
+    expect(PICKABLE_DOCUMENT_MIME_TYPES).not.toContain(docx);
+    expect(pickableDocumentMimeTypes('local')).not.toContain(docx);
+    expect(pickableDocumentMimeTypes('cloud')).toContain(docx);
+    expect(isParseableDocument('file:///report.docx', docx)).toBe(false);
+    expect(isAcceptableAttachment(attachment, 'cloud')).toBe(true);
+    expect(isAcceptableAttachment(attachment, 'local')).not.toBe(true);
   });
 });
 
 describe('chat screens derive their picker filter from the shared allowlist', () => {
-  it.each(CHAT_SCREENS)('%s uses PICKABLE_DOCUMENT_MIME_TYPES and no Word type', (screenPath) => {
+  it.each(CHAT_SCREENS)('%s uses pickableDocumentMimeTypes and no Word type', (screenPath) => {
     const source = readFileSync(screenPath, 'utf8');
-    expect(source).toContain('PICKABLE_DOCUMENT_MIME_TYPES');
-    expect(source).toContain('type: [...PICKABLE_DOCUMENT_MIME_TYPES]');
+    expect(source).toContain('type: pickableDocumentMimeTypes(');
     for (const mimeType of WORD_MIME_TYPES) {
       expect(source).not.toContain(mimeType);
     }

@@ -1,12 +1,15 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { type Readable, type Writable } from 'node:stream';
 import { z } from 'zod';
+import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type {
   AgentEventApprovalRiskLevel,
+  AgentEventEnvelope,
   TurnFailureAction,
   TurnFailureCode,
 } from '@agiworkforce/types/protocol';
 import type {
+  AgentEventSource,
   AppServerCapabilities,
   AppServerNotification,
   ApprovalResponseParams,
@@ -56,8 +59,9 @@ import {
   MINIMUM_SUPPORTED_RUNTIME_VERSION as MINIMUM_SUPPORTED_CLI_VERSION_LABEL,
   PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
   isSupportedRuntimeVersion as isSupportedCliVersion,
+  messageKindForAgentEvent,
 } from '@agiworkforce/types';
-import { redactSecrets } from '../core/telemetry';
+import { redactTelemetryText } from '../core/telemetry';
 import { trackRuntimeChild } from './runtimeProcessRegistry';
 
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
@@ -159,7 +163,32 @@ const capabilitiesSchema = z.object({
   savedPermissions: z.boolean().optional(),
   mcpInspect: z.boolean().optional(),
   pluginUpdates: z.boolean().optional(),
+  permissionRules: z.boolean().optional(),
+  trust: z.boolean().optional(),
+  turnToolFilters: z.boolean().optional(),
+  providerKeys: z.boolean().optional(),
+  questions: z.boolean().optional(),
+  planDecisions: z.boolean().optional(),
+  pullRequests: z.boolean().optional(),
 });
+
+const worktreeSummarySchema = z.object({
+  name: z.string().min(1),
+  path: z.string().min(1),
+  branch: z.string(),
+  hasWork: z.boolean(),
+});
+
+const worktreeListSchema = z.object({ worktrees: z.array(worktreeSummarySchema) });
+
+export type WorktreeSummary = z.infer<typeof worktreeSummarySchema>;
+
+const memoryAddResponseSchema = z.object({
+  scope: z.enum(['user', 'project', 'local']),
+  path: z.string().min(1),
+});
+
+export type MemoryAddResult = z.infer<typeof memoryAddResponseSchema>;
 
 const initializeResponseSchema = z.object({
   serverInfo: z.object({ name: z.string(), title: z.string(), version: z.string() }),
@@ -308,7 +337,7 @@ const threadReadResponseSchema = z.object({
     .array(
       z.object({
         path: z.string(),
-        kind: z.enum(['created', 'modified']),
+        kind: z.enum(['created', 'modified', 'deleted']),
         tool: z.string(),
         toolCallId: z.string(),
         changedAt: z.string(),
@@ -357,6 +386,8 @@ const threadSearchResponseSchema = z.object({
 
 export type ThreadSearchResults = z.infer<typeof threadSearchResponseSchema>;
 
+const PULL_REQUEST_TIMEOUT_MS = 240_000;
+
 const savedPermissionsResponseSchema = z.object({
   permissions: z
     .array(
@@ -371,6 +402,75 @@ const savedPermissionsResponseSchema = z.object({
 });
 
 export type SavedPermissionList = z.infer<typeof savedPermissionsResponseSchema>;
+
+const permissionRulesResponseSchema = z.object({
+  rules: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(512),
+        kind: z.enum(['command', 'domain', 'file', 'exec_policy', 'mcp']),
+        target: z.string().max(4_000),
+        label: z.string().max(4_000),
+        decision: z.enum(['allow', 'ask', 'deny']),
+      }),
+    )
+    .max(5_000),
+});
+
+export type PermissionRuleList = z.infer<typeof permissionRulesResponseSchema>;
+export type PermissionRule = PermissionRuleList['rules'][number];
+
+const trustListResponseSchema = z.object({
+  folders: z
+    .array(
+      z.object({
+        path: z.string().min(1).max(16_384),
+        trustedAt: z.string().max(200).nullish(),
+        trustedBy: z.string().max(200).nullish(),
+      }),
+    )
+    .max(5_000),
+});
+
+export type TrustedFolderList = z.infer<typeof trustListResponseSchema>;
+
+const providerKeysResponseSchema = z.object({
+  providers: z
+    .array(
+      z.object({
+        provider: z.string().min(1).max(200),
+        label: z.string().max(200),
+        envVar: z.string().max(200),
+        configured: z.boolean(),
+      }),
+    )
+    .max(200),
+  storage: z.string().max(200),
+});
+
+export type ProviderKeyList = z.infer<typeof providerKeysResponseSchema>;
+
+const pullRequestPlanSchema = z.object({
+  remote: z.string(),
+  branch: z.string(),
+  head: z.string(),
+  base: z.string().optional(),
+  commits: z.array(z.object({ commit: z.string(), subject: z.string() })).max(10_000),
+  needsPush: z.boolean(),
+  notices: z.array(z.string()),
+  blocked: z.string().optional(),
+});
+
+export type PullRequestPlan = z.infer<typeof pullRequestPlanSchema>;
+
+const pullRequestResultSchema = z.object({
+  url: z.string().url(),
+  created: z.boolean(),
+  pushed: z.boolean(),
+  note: z.string().optional(),
+});
+
+export type PullRequestResult = z.infer<typeof pullRequestResultSchema>;
 
 const mcpServerInspectionSchema = z.object({
   name: z.string().min(1).max(512),
@@ -387,28 +487,6 @@ const mcpServerInspectionSchema = z.object({
 });
 
 export type McpServerInspection = z.infer<typeof mcpServerInspectionSchema>;
-
-const threadReconnectResponseSchema = z.object({
-  activeTurn: z
-    .object({
-      turnId: z.string().min(1),
-      partialResponse: z.string(),
-      pendingApprovals: z
-        .array(
-          z.object({
-            requestId: z.string().min(1),
-            summary: z.string(),
-            detail: z.string(),
-          }),
-        )
-        .default([]),
-    })
-    .optional(),
-});
-
-export type ThreadActiveTurn = NonNullable<
-  z.infer<typeof threadReconnectResponseSchema>['activeTurn']
->;
 
 const threadRewindResponseSchema = z.object({
   thread: threadSummarySchema,
@@ -523,6 +601,10 @@ const skillListResponseSchema = z.object({
         path: z.string().min(1).max(16_384),
         enabled: z.boolean(),
         consented: z.boolean(),
+        requiredTools: z.array(z.string().max(200)).max(200).default([]),
+        requiredEnvVars: z.array(z.string().max(200)).max(200).default([]),
+        missingTools: z.array(z.string().max(200)).max(200).default([]),
+        missingEnvVars: z.array(z.string().max(200)).max(200).default([]),
       }),
     )
     .max(2_000),
@@ -571,17 +653,22 @@ const pluginUpdateResponseSchema = pluginListResponseSchema.extend({
 
 export type PluginUpdate = z.infer<typeof pluginUpdateResponseSchema>;
 
-const mcpServerStatusSchema = z.enum(['configured', 'authorized', 'needs_auth']);
+const mcpServerStatusSchema = z.enum(['configured', 'authorized', 'needs_auth', 'blocked']);
 const mcpServerListResponseSchema = z.object({
   servers: z
     .array(
-      z.object({
-        name: z.string().min(1).max(200),
-        transport: z.string().min(1).max(32),
-        scope: z.enum(['project', 'user', 'plugin']),
-        status: mcpServerStatusSchema,
-        url: z.string().max(16_384).optional(),
-      }),
+      z
+        .object({
+          name: z.string().min(1).max(200),
+          transport: z.string().min(1).max(32),
+          scope: z.enum(['project', 'user', 'plugin']),
+          status: mcpServerStatusSchema,
+          policyRefusal: z.string().min(1).max(4_096).optional(),
+          url: z.string().max(16_384).optional(),
+        })
+        .refine((server) => server.status !== 'blocked' || server.policyRefusal !== undefined, {
+          message: 'Blocked MCP servers must explain the workspace policy refusal',
+        }),
     )
     .max(1_000),
 });
@@ -690,6 +777,7 @@ const outputDeltaEventSchema = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),
   delta: z.string(),
+  index: z.number().int().nonnegative().optional(),
 });
 // Keyed by the protocol's own unions, so a code the CLI learns to send fails
 // the typecheck here instead of making the whole terminal event unparsable,
@@ -779,7 +867,42 @@ const approvalRequestedEventSchema = z.object({
   proposedContent: z.string().max(1_000_000).optional().catch(undefined),
   editable: z.boolean().optional().catch(undefined),
   alwaysAllowSaved: z.boolean().optional().catch(undefined),
+  question: z
+    .object({
+      question: z.string().max(8_000),
+      options: z.array(z.string().max(1_000)).max(50).default([]),
+    })
+    .nullish()
+    .catch(undefined),
 });
+const threadReconnectResponseSchema = z.object({
+  activeTurn: z
+    .object({
+      turnId: z.string().min(1),
+      partialResponse: z.string(),
+      nextDeltaIndex: z.number().int().nonnegative().optional(),
+      pendingApprovals: z
+        .array(
+          z.object({
+            requestId: z.string().min(1),
+            kind: z.string().default(''),
+            summary: z.string(),
+            detail: z.string(),
+            riskLevel: z.enum(APPROVAL_RISK_LEVELS).optional().catch(undefined),
+            reversible: z.boolean().optional().catch(undefined),
+            proposedContent: z.string().max(1_000_000).optional().catch(undefined),
+            alwaysAllowSaved: z.boolean().optional().catch(undefined),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
+});
+
+export type ThreadActiveTurn = NonNullable<
+  z.infer<typeof threadReconnectResponseSchema>['activeTurn']
+>;
+
 const turnInterruptedEventSchema = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),
@@ -828,19 +951,16 @@ const progressUpdateSchema = z.object({
   detail: z.string().optional(),
   status: z.enum(['running', 'completed', 'failed']),
 });
+const agentEventSourceSchema: z.ZodType<AgentEventSource> = z.object({
+  url: z.string().min(1).max(8_192),
+  title: z.string().max(2_000),
+  snippet: z.string().max(8_000).optional(),
+});
 const sourceListSchema = z.object({
   type: z.literal('source-list'),
   toolCallId: z.string().max(200).optional(),
   query: z.string().max(2_000).optional(),
-  sources: z
-    .array(
-      z.object({
-        url: z.string().min(1).max(8_192),
-        title: z.string().max(2_000),
-        snippet: z.string().max(8_000).optional(),
-      }),
-    )
-    .max(500),
+  sources: z.array(agentEventSourceSchema).max(500),
 });
 
 const agentEventEnvelopeSchema = z.object({
@@ -869,6 +989,7 @@ export type LocalRuntimeEvent =
       turnId: string;
       sequence: number;
       emittedAtMs: number;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof toolExecutionStartSchema>, 'type'>)
   | ({
       type: 'tool_execution_end';
@@ -876,6 +997,7 @@ export type LocalRuntimeEvent =
       turnId: string;
       sequence: number;
       emittedAtMs: number;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof toolExecutionEndSchema>, 'type'>)
   | ({
       type: 'progress_update';
@@ -883,16 +1005,19 @@ export type LocalRuntimeEvent =
       turnId: string;
       sequence: number;
       emittedAtMs: number;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof progressUpdateSchema>, 'type'>)
   | ({
       type: 'source_list';
       threadId: string;
       turnId: string;
+      envelope?: AgentEventEnvelope;
     } & Omit<z.infer<typeof sourceListSchema>, 'type'>)
   | ({
       type: 'mcp_status';
       status: 'loading' | 'ready' | 'unavailable';
     } & z.infer<typeof mcpStatusEventSchema>)
+  | { type: 'agent_event'; threadId: string; turnId: string; envelope: AgentEventEnvelope }
   | { type: 'runtime_disconnected'; error: string };
 
 function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEvent | undefined {
@@ -913,12 +1038,25 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
     return parsed.success ? { type: 'approval_requested', ...parsed.data } : undefined;
   }
   if (notification.method === 'turn/agent_event') {
+    const shared = parseAgentEventDelta(notification.params);
+    const envelope = shared === null ? {} : { envelope: shared };
     const parsed = agentEventEnvelopeSchema.safeParse(notification.params);
-    if (!parsed.success) return undefined;
+    if (!parsed.success) {
+      return shared === null
+        ? undefined
+        : {
+            type: 'agent_event',
+            threadId: shared.sessionId,
+            turnId: shared.turnId,
+            envelope: shared,
+          };
+    }
     const { sessionId: threadId, turnId, sequence, emittedAtMs, event } = parsed.data;
-    if (event.type === 'tool-execution-start') {
+    const kind = messageKindForAgentEvent(event.type);
+    if (kind === 'tool_call' && event.type === 'tool-execution-start') {
       return {
         type: 'tool_execution_start',
+        ...envelope,
         threadId,
         turnId,
         sequence,
@@ -930,9 +1068,10 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
         input: event.input,
       };
     }
-    if (event.type === 'source-list') {
+    if (kind === 'citation' && event.type === 'source-list') {
       return {
         type: 'source_list',
+        ...envelope,
         threadId,
         turnId,
         sources: event.sources,
@@ -940,9 +1079,10 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
         ...(event.toolCallId === undefined ? {} : { toolCallId: event.toolCallId }),
       };
     }
-    if (event.type === 'tool-execution-end') {
+    if (kind === 'tool_result' && event.type === 'tool-execution-end') {
       return {
         type: 'tool_execution_end',
+        ...envelope,
         threadId,
         turnId,
         sequence,
@@ -954,8 +1094,10 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
         elapsedMs: event.elapsedMs,
       };
     }
+    if (event.type !== 'progress-update') return undefined;
     return {
       type: 'progress_update',
+      ...envelope,
       threadId,
       turnId,
       sequence,
@@ -1113,7 +1255,7 @@ class JsonlConnection {
       this.close(
         new Error(
           `AGI local runtime emitted malformed JSON on its protocol stream: ${JSON.stringify(
-            redactSecrets(line.slice(0, MAX_REJECTED_LINE_CHARS)),
+            redactTelemetryText(line.slice(0, MAX_REJECTED_LINE_CHARS)),
           )}`,
         ),
       );
@@ -1183,6 +1325,7 @@ export type TerminateLocalRuntimeTree = (child: ChildProcessWithoutNullStreams) 
 export interface LocalRuntimeClientOptions {
   cliPath: string | (() => string);
   memoryEnabled?: () => boolean;
+  bypassPermissionsAvailable?: () => boolean;
   cwd: string;
   clientVersion: string;
   environmentLabel?: string;
@@ -1201,6 +1344,7 @@ export class LocalRuntimeClient {
   private readonly eventListeners = new Set<(value: LocalRuntimeEvent) => void>();
   private stderrTail = '';
   private disposed = false;
+  private launchedBypassPermissionsAvailable = false;
 
   constructor(private readonly options: LocalRuntimeClientOptions) {}
 
@@ -1286,6 +1430,38 @@ export class LocalRuntimeClient {
     );
   }
 
+  async decidePlan(
+    threadId: string,
+    decision: 'approve' | 'reject',
+    feedback?: string,
+  ): Promise<void> {
+    const connection = await this.readyConnection();
+    await connection.request(
+      'plan/decide',
+      feedback === undefined ? { threadId, decision } : { threadId, decision, feedback },
+    );
+  }
+
+  async planPullRequest(): Promise<PullRequestPlan> {
+    const connection = await this.readyConnection();
+    return pullRequestPlanSchema.parse(await connection.request('git/pullRequest/plan', {}));
+  }
+
+  async createPullRequest(request: {
+    title: string;
+    body?: string;
+    base: string;
+    confirmedRemote: string;
+    confirmedBranch: string;
+    confirmedHead: string;
+    confirmedCommits: number;
+  }): Promise<PullRequestResult> {
+    const connection = await this.readyConnection();
+    return pullRequestResultSchema.parse(
+      await connection.request('git/pullRequest', request, PULL_REQUEST_TIMEOUT_MS),
+    );
+  }
+
   async listSavedPermissions(): Promise<SavedPermissionList> {
     const connection = await this.readyConnection();
     return savedPermissionsResponseSchema.parse(await connection.request('permissions/list', {}));
@@ -1296,6 +1472,53 @@ export class LocalRuntimeClient {
     return savedPermissionsResponseSchema.parse(
       await connection.request('permissions/remove', { id }),
     );
+  }
+
+  async listPermissionRules(): Promise<PermissionRuleList> {
+    const connection = await this.readyConnection();
+    return permissionRulesResponseSchema.parse(await connection.request('permissions/rules', {}));
+  }
+
+  async addPermissionRule(rule: {
+    kind: 'command' | 'domain' | 'mcp';
+    target: string;
+    decision: PermissionRule['decision'];
+  }): Promise<PermissionRuleList> {
+    const connection = await this.readyConnection();
+    return permissionRulesResponseSchema.parse(await connection.request('permissions/add', rule));
+  }
+
+  async listTrustedFolders(): Promise<TrustedFolderList> {
+    const connection = await this.readyConnection();
+    return trustListResponseSchema.parse(await connection.request('trust/list', {}));
+  }
+
+  async revokeTrustedFolder(path: string): Promise<TrustedFolderList> {
+    const connection = await this.readyConnection();
+    return trustListResponseSchema.parse(await connection.request('trust/revoke', { path }));
+  }
+
+  async listProviderKeys(): Promise<ProviderKeyList> {
+    const connection = await this.readyConnection();
+    return providerKeysResponseSchema.parse(await connection.request('providers/list', {}));
+  }
+
+  async setProviderKey(provider: string, apiKey: string): Promise<ProviderKeyList> {
+    const connection = await this.readyConnection();
+    const keys = providerKeysResponseSchema.parse(
+      await connection.request('providers/setKey', { provider, apiKey }),
+    );
+    await this.listLocalModels({ refresh: true });
+    return keys;
+  }
+
+  async removeProviderKey(provider: string): Promise<ProviderKeyList> {
+    const connection = await this.readyConnection();
+    const keys = providerKeysResponseSchema.parse(
+      await connection.request('providers/removeKey', { provider }),
+    );
+    await this.listLocalModels({ refresh: true });
+    return keys;
   }
 
   async unarchiveThread(threadId: string): Promise<void> {
@@ -1389,6 +1612,7 @@ export class LocalRuntimeClient {
 
   async startTurn(params: TurnStartParams): Promise<TurnSummary> {
     const connection = await this.readyConnection();
+    this.assertPermissionAuthority();
     const result = await connection.request('turn/start', params);
     return turnStartResponseSchema.parse(result).turn as TurnSummary;
   }
@@ -1400,6 +1624,7 @@ export class LocalRuntimeClient {
 
   async steerTurn(params: TurnSteerParams): Promise<TurnSummary> {
     const connection = await this.readyConnection();
+    this.assertPermissionAuthority();
     const result = await connection.request('turn/steer', params);
     return turnStartResponseSchema.parse(result).turn as TurnSummary;
   }
@@ -1608,6 +1833,30 @@ export class LocalRuntimeClient {
     ) as SlashCommandListResponse;
   }
 
+  async createWorktree(): Promise<WorktreeSummary> {
+    const connection = await this.readyConnection();
+    return worktreeSummarySchema.parse(await connection.request('worktree/create', {}));
+  }
+
+  async listWorktrees(): Promise<WorktreeSummary[]> {
+    const connection = await this.readyConnection();
+    return worktreeListSchema.parse(await connection.request('worktree/list', {})).worktrees;
+  }
+
+  async removeWorktree(name: string, force: boolean): Promise<WorktreeSummary[]> {
+    const connection = await this.readyConnection();
+    return worktreeListSchema.parse(
+      await connection.request('worktree/remove', force ? { name, force } : { name }),
+    ).worktrees;
+  }
+
+  async addMemory(text: string): Promise<MemoryAddResult> {
+    const connection = await this.readyConnection();
+    return memoryAddResponseSchema.parse(
+      await connection.request('memory/add', { text, scope: 'project' }),
+    );
+  }
+
   async runCommand(name: string, args?: string): Promise<SlashCommandRunResponse> {
     const connection = await this.readyConnection();
     return slashCommandRunResponseSchema.parse(
@@ -1623,6 +1872,22 @@ export class LocalRuntimeClient {
   onEvent(listener: (value: LocalRuntimeEvent) => void): { dispose(): void } {
     this.eventListeners.add(listener);
     return { dispose: () => this.eventListeners.delete(listener) };
+  }
+
+  requiresPermissionRestart(): boolean {
+    return (
+      this.child !== undefined &&
+      this.launchedBypassPermissionsAvailable !==
+        (this.options.bypassPermissionsAvailable?.() === true)
+    );
+  }
+
+  private assertPermissionAuthority(): void {
+    if (this.requiresPermissionRestart()) {
+      throw new Error(
+        'Agent permissions changed. Run AGI Workforce: Restart Local Runtime to apply them before starting or steering a turn. Restarting stops running local turns.',
+      );
+    }
   }
 
   restart(): Promise<void> {
@@ -1785,9 +2050,13 @@ export class LocalRuntimeClient {
       );
     }
     let child: ChildProcessWithoutNullStreams;
+    const bypassPermissionsAvailable = this.options.bypassPermissionsAvailable?.() === true;
     try {
       const memoryArgs = this.options.memoryEnabled?.() === false ? ['--no-memory'] : [];
-      child = spawnRuntime(cliPath, ['app-server', ...memoryArgs], {
+      const permissionArgs = bypassPermissionsAvailable
+        ? ['--allow-dangerously-skip-permissions']
+        : [];
+      child = spawnRuntime(cliPath, [...permissionArgs, 'app-server', ...memoryArgs], {
         cwd: this.options.cwd,
         env: process.env,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -1803,6 +2072,7 @@ export class LocalRuntimeClient {
     }
     this.stderrTail = '';
     this.child = child;
+    this.launchedBypassPermissionsAvailable = bypassPermissionsAvailable;
     const releaseTracking = trackRuntimeChild(child);
     let resolveChildExit!: () => void;
     const childExitPromise = new Promise<void>((resolve) => {

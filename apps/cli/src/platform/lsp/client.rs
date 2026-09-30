@@ -8,7 +8,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
+use tokio::process::{ChildStdin, ChildStdout, Command};
 use tokio::sync::RwLock;
 
 use crate::lsp::types::Diagnostic;
@@ -57,15 +57,36 @@ pub(crate) fn path_to_file_uri(path: &Path) -> String {
         .collect();
     let encoded_path = encoded.join("/");
 
-    if has_drive {
+    if has_drive || !encoded_path.starts_with('/') {
         // `C:/foo bar` -> `file:///C:/foo%20bar`
         format!("file:///{encoded_path}")
     } else {
         // Absolute unix path: the split keeps a leading empty segment so the
-        // join already yields `/...`, giving `file:///foo%20bar`. A relative or
-        // non-rooted path simply keeps the authority empty.
+        // join already yields `/...`, giving `file:///foo%20bar`.
         format!("file://{encoded_path}")
     }
+}
+
+fn response_for(frame: &Value, id: i64) -> Option<Result<Value>> {
+    if frame.get("method").is_some() || frame.get("id").and_then(Value::as_i64) != Some(id) {
+        return None;
+    }
+    if let Some(error) = frame.get("error") {
+        let code = error.get("code").and_then(Value::as_i64);
+        let message = error.get("message").and_then(Value::as_str);
+        return Some(Err(match (code, message) {
+            (Some(code), Some(message)) => {
+                anyhow::anyhow!("language server error {code}: {message}")
+            }
+            _ => anyhow::anyhow!("language server error: {error}"),
+        }));
+    }
+    Some(
+        frame
+            .get("result")
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("malformed LSP response to id {id}: no result")),
+    )
 }
 
 /// In-memory buffer for LSP publishDiagnostics notifications.
@@ -107,9 +128,18 @@ impl DiagnosticsBuffer {
 #[allow(dead_code)]
 pub struct LspClient {
     child: crate::process_tree::ProcessTreeChild,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
     next_id: AtomicI64,
     diagnostics_buffer: DiagnosticsBuffer,
 }
+
+// Upper bound on a single LSP frame to cap memory: a malicious/buggy
+// server could otherwise send a multi-GB Content-Length and OOM us.
+const MAX_CONTENT_LENGTH: usize = 32 * 1024 * 1024;
+// Bound how many interleaved notifications/other responses we skip
+// before giving up on finding our id.
+const MAX_FRAMES: usize = 1024;
 
 impl LspClient {
     pub async fn spawn(
@@ -117,114 +147,156 @@ impl LspClient {
         server_args: &[&str],
         workspace_root: &Path,
     ) -> Result<Self> {
-        let mut cmd = Command::new(server_cmd);
-        cmd.args(server_args)
-            .stdin(std::process::Stdio::piped())
+        let workspace = workspace_root.canonicalize()?;
+        let manager = crate::sandbox::SandboxManager::for_agent_command(
+            workspace.clone(),
+            crate::sandbox::NetworkPolicy::Deny,
+        )?;
+        let server_args: Vec<String> = server_args.iter().map(|arg| (*arg).to_string()).collect();
+        let command = crate::sandbox::background_command(
+            Some(&manager),
+            crate::sandbox::Invocation::Program {
+                program: server_cmd,
+                args: &server_args,
+            },
+            &workspace,
+            None,
+        )?;
+        let mut cmd = Command::from(command);
+        cmd.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             // This client never reads stderr. Inheriting a pipe lets a noisy
             // server fill it and deadlock the turn.
             .stderr(std::process::Stdio::null());
         let mut child = crate::process_tree::ProcessTreeChild::spawn(cmd)
             .with_context(|| format!("spawn {server_cmd}"))?;
-        let stdin = child.child_mut().stdin.as_mut().context("stdin")?;
-        let init_req = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "processId": std::process::id(),
-                "rootUri": path_to_file_uri(workspace_root),
-                "capabilities": {},
-            },
-        });
-        let body = serde_json::to_string(&init_req)?;
-        let header = format!("Content-Length: {}\r\n\r\n", body.len());
-        stdin.write_all(header.as_bytes()).await?;
-        stdin.write_all(body.as_bytes()).await?;
-        stdin.flush().await?;
-        // Don't block waiting for the response here, many tests will mock; the
-        // returned client lets the caller drive further requests.
-        Ok(Self {
+        let stdin = child.child_mut().stdin.take().context("stdin")?;
+        let stdout = child.child_mut().stdout.take().context("stdout")?;
+        let mut client = Self {
             child,
+            stdin,
+            stdout: BufReader::new(stdout),
             next_id: AtomicI64::new(2),
             diagnostics_buffer: DiagnosticsBuffer::new(),
-        })
+        };
+        let params = serde_json::json!({
+            "processId": std::process::id(),
+            "rootUri": path_to_file_uri(workspace_root),
+            "capabilities": {},
+        });
+        tokio::time::timeout(LSP_REQUEST_TIMEOUT, client.call(1, "initialize", params))
+            .await
+            .map_err(|_| anyhow::anyhow!("LSP initialize timed out"))?
+            .context("LSP initialize failed")?;
+        client.notify("initialized", serde_json::json!({})).await?;
+        Ok(client)
     }
 
     pub async fn request(&mut self, method: &str, params: Value) -> Result<Value> {
-        tokio::time::timeout(LSP_REQUEST_TIMEOUT, self.request_inner(method, params))
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        tokio::time::timeout(LSP_REQUEST_TIMEOUT, self.call(id, method, params))
             .await
             .map_err(|_| anyhow::anyhow!("LSP request `{method}` timed out"))?
     }
 
-    async fn request_inner(&mut self, method: &str, params: Value) -> Result<Value> {
-        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-        let req = serde_json::json!({
+    pub async fn notify(&mut self, method: &str, params: Value) -> Result<()> {
+        self.send(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+        }))
+        .await
+    }
+
+    pub async fn open_document(&mut self, uri: &str, language_id: &str, text: &str) -> Result<()> {
+        self.notify(
+            "textDocument/didOpen",
+            serde_json::json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": language_id,
+                    "version": 1,
+                    "text": text,
+                },
+            }),
+        )
+        .await
+    }
+
+    async fn call(&mut self, id: i64, method: &str, params: Value) -> Result<Value> {
+        self.send(&serde_json::json!({
             "jsonrpc": "2.0",
             "id": id,
             "method": method,
             "params": params,
-        });
-        let stdin = self.child.child_mut().stdin.as_mut().context("stdin")?;
-        let body = serde_json::to_string(&req)?;
-        let header = format!("Content-Length: {}\r\n\r\n", body.len());
-        stdin.write_all(header.as_bytes()).await?;
-        stdin.write_all(body.as_bytes()).await?;
-        stdin.flush().await?;
-        let stdout = self.child.child_mut().stdout.as_mut().context("stdout")?;
-        let mut reader = BufReader::new(stdout);
-        // Upper bound on a single LSP frame to cap memory: a malicious/buggy
-        // server could otherwise send a multi-GB Content-Length and OOM us.
-        const MAX_CONTENT_LENGTH: usize = 32 * 1024 * 1024; // 32 MiB
-                                                            // Bound how many interleaved notifications/other responses we skip
-                                                            // before giving up on finding our id.
-        const MAX_FRAMES: usize = 1024;
+        }))
+        .await?;
         for _ in 0..MAX_FRAMES {
-            // Read this frame's headers.
-            let mut header_line = String::new();
-            let mut content_length: usize = 0;
-            loop {
-                header_line.clear();
-                let n = reader.read_line(&mut header_line).await?;
-                if n == 0 {
-                    anyhow::bail!("LSP server closed stdout before responding to id {id}");
-                }
-                if header_line == "\r\n" || header_line.trim().is_empty() {
-                    break;
-                }
-                if let Some(rest) = header_line.strip_prefix("Content-Length: ") {
-                    content_length = rest
-                        .trim()
-                        .parse()
-                        .context("invalid LSP Content-Length header")?;
-                }
+            let frame = self.read_frame().await?.with_context(|| {
+                format!("LSP server closed stdout before responding to id {id}")
+            })?;
+            if let Some(outcome) = response_for(&frame, id) {
+                return outcome;
             }
-            if content_length > MAX_CONTENT_LENGTH {
-                anyhow::bail!(
-                    "LSP Content-Length {content_length} exceeds maximum {MAX_CONTENT_LENGTH} bytes"
-                );
-            }
-            let mut buf = vec![0u8; content_length];
-            reader.read_exact(&mut buf).await?;
-            let resp: Value = serde_json::from_slice(&buf)?;
-            // Skip notifications (no `id`) and responses to other requests;
-            // only return the frame whose `id` matches this request.
-            match resp.get("id").and_then(Value::as_i64) {
-                Some(resp_id) if resp_id == id => {
-                    return Ok(resp.get("result").cloned().unwrap_or(Value::Null));
-                }
-                _ => continue,
-            }
+            self.decline_server_request(&frame).await?;
         }
         anyhow::bail!("LSP server produced no response matching id {id} within {MAX_FRAMES} frames")
     }
 
+    async fn decline_server_request(&mut self, frame: &Value) -> Result<()> {
+        let (Some(id), Some(method)) =
+            (frame.get("id"), frame.get("method").and_then(Value::as_str))
+        else {
+            return Ok(());
+        };
+        self.send(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "error": {"code": -32601, "message": format!("{method} is not supported by this client")},
+        }))
+        .await
+    }
+
+    async fn send(&mut self, message: &Value) -> Result<()> {
+        let body = serde_json::to_string(message)?;
+        let header = format!("Content-Length: {}\r\n\r\n", body.len());
+        self.stdin.write_all(header.as_bytes()).await?;
+        self.stdin.write_all(body.as_bytes()).await?;
+        self.stdin.flush().await?;
+        Ok(())
+    }
+
+    async fn read_frame(&mut self) -> Result<Option<Value>> {
+        let mut header_line = String::new();
+        let mut content_length: usize = 0;
+        loop {
+            header_line.clear();
+            if self.stdout.read_line(&mut header_line).await? == 0 {
+                return Ok(None);
+            }
+            if header_line.trim().is_empty() {
+                break;
+            }
+            if let Some(rest) = header_line.strip_prefix("Content-Length: ") {
+                content_length = rest
+                    .trim()
+                    .parse()
+                    .context("invalid LSP Content-Length header")?;
+            }
+        }
+        if content_length > MAX_CONTENT_LENGTH {
+            anyhow::bail!(
+                "LSP Content-Length {content_length} exceeds maximum {MAX_CONTENT_LENGTH} bytes"
+            );
+        }
+        let mut buf = vec![0u8; content_length];
+        self.stdout.read_exact(&mut buf).await?;
+        Ok(Some(serde_json::from_slice(&buf)?))
+    }
+
     pub async fn shutdown(mut self) -> Result<()> {
-        let _ = tokio::time::timeout(
-            LSP_SHUTDOWN_GRACE,
-            self.request_inner("shutdown", Value::Null),
-        )
-        .await;
+        let _ =
+            tokio::time::timeout(LSP_SHUTDOWN_GRACE, self.request("shutdown", Value::Null)).await;
         self.child.terminate().await;
         Ok(())
     }
@@ -265,8 +337,202 @@ impl LspClient {
 
 #[cfg(test)]
 mod tests {
-    use super::path_to_file_uri;
+    use super::{path_to_file_uri, response_for, LspClient};
+    use serde_json::json;
     use std::path::Path;
+
+    #[test]
+    fn a_relative_path_never_becomes_the_uri_host() {
+        assert_eq!(
+            path_to_file_uri(Path::new("src/main.rs")),
+            "file:///src/main.rs"
+        );
+    }
+
+    #[test]
+    fn an_error_frame_is_an_error_not_an_empty_answer() {
+        let frame = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "error": {"code": -32601, "message": "Unhandled method textDocument/formatting"}
+        });
+
+        let error = response_for(&frame, 2)
+            .expect("the frame answers id 2")
+            .expect_err("an error frame must not become Ok(null)");
+
+        assert!(error.to_string().contains("-32601"), "{error}");
+        assert!(
+            error
+                .to_string()
+                .contains("Unhandled method textDocument/formatting"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn response_frames_are_told_apart_from_everything_else() {
+        assert_eq!(
+            response_for(&json!({"id": 2, "result": null}), 2)
+                .expect("answers id 2")
+                .expect("an explicit null result is a valid empty answer"),
+            json!(null)
+        );
+        assert_eq!(
+            response_for(&json!({"id": 2, "result": [{"uri": "file:///a.rs"}]}), 2)
+                .expect("answers id 2")
+                .expect("result"),
+            json!([{"uri": "file:///a.rs"}])
+        );
+        assert!(response_for(
+            &json!({"id": 2, "result": [], "error": {"code": -32603, "message": "x"}}),
+            2
+        )
+        .expect("answers id 2")
+        .is_err());
+        assert!(response_for(&json!({"id": 2}), 2)
+            .expect("answers id 2")
+            .is_err());
+        assert!(response_for(&json!({"id": 2, "method": "workspace/configuration"}), 2).is_none());
+        assert!(response_for(&json!({"method": "window/logMessage"}), 2).is_none());
+        assert!(response_for(&json!({"id": 1, "result": {}}), 2).is_none());
+    }
+
+    const FAKE_SERVER: &str = r#"
+import json
+import sys
+
+MODE = sys.argv[1] if len(sys.argv) > 1 else "ok"
+
+def read_frame():
+    length = 0
+    while True:
+        line = sys.stdin.buffer.readline()
+        if not line:
+            sys.exit(0)
+        line = line.decode().strip()
+        if not line:
+            break
+        if line.lower().startswith("content-length:"):
+            length = int(line.split(":", 1)[1])
+    return json.loads(sys.stdin.buffer.read(length))
+
+def write_frame(frame):
+    body = json.dumps(frame).encode()
+    sys.stdout.buffer.write(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+    sys.stdout.buffer.flush()
+
+seen = []
+initialize = read_frame()
+seen.append(initialize["method"])
+write_frame({"jsonrpc": "2.0", "id": initialize["id"], "result": {"capabilities": {}}})
+write_frame({"jsonrpc": "2.0", "method": "window/logMessage", "params": {"type": 3, "message": "ready"}})
+opened = None
+while True:
+    frame = read_frame()
+    seen.append(frame.get("method"))
+    if frame.get("method") == "textDocument/didOpen":
+        opened = frame["params"]["textDocument"]["uri"]
+    if "id" in frame:
+        break
+request = frame
+write_frame({"jsonrpc": "2.0", "id": request["id"], "method": "workspace/configuration", "params": {"items": []}})
+declined = read_frame()
+if MODE == "error":
+    write_frame({"jsonrpc": "2.0", "id": request["id"], "error": {"code": -32601, "message": "Unhandled method " + request["method"]}})
+else:
+    write_frame({"jsonrpc": "2.0", "id": request["id"], "result": {"seen": seen, "opened": opened, "declined": declined.get("error", {}).get("code")}})
+while True:
+    frame = read_frame()
+    if frame.get("method") == "shutdown":
+        write_frame({"jsonrpc": "2.0", "id": frame["id"], "result": None})
+"#;
+
+    fn python3_available() -> bool {
+        std::process::Command::new("python3")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
+    #[tokio::test]
+    async fn language_server_cannot_write_outside_its_workspace() {
+        assert!(
+            python3_available(),
+            "python3 is required for this isolation regression"
+        );
+        let workspace = tempfile::tempdir().unwrap();
+        let private = tempfile::tempdir().unwrap();
+        let marker = private.path().join("server-wrote-outside");
+        let marker_literal = serde_json::to_string(&marker.to_string_lossy()).unwrap();
+        let script = format!(
+            "from pathlib import Path\ntry:\n Path({marker_literal}).write_text('controlled fixture')\nexcept OSError:\n pass\n{FAKE_SERVER}"
+        );
+        let client = LspClient::spawn("python3", &["-u", "-c", &script, "ok"], workspace.path())
+            .await
+            .unwrap();
+        client.shutdown().await.unwrap();
+        assert!(
+            !marker.exists(),
+            "language server wrote outside its workspace"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_request_follows_the_handshake_and_the_opened_document() {
+        if !python3_available() {
+            return;
+        }
+        let root = tempfile::tempdir().expect("workspace");
+        let mut client = LspClient::spawn("python3", &["-u", "-c", FAKE_SERVER, "ok"], root.path())
+            .await
+            .expect("initialize handshake");
+
+        client
+            .open_document("file:///workspace/main.rs", "rust", "fn main() {}\n")
+            .await
+            .expect("didOpen");
+        let answer = client
+            .request("textDocument/hover", json!({}))
+            .await
+            .expect("hover");
+
+        assert_eq!(
+            answer["seen"],
+            json!([
+                "initialize",
+                "initialized",
+                "textDocument/didOpen",
+                "textDocument/hover"
+            ])
+        );
+        assert_eq!(answer["opened"], json!("file:///workspace/main.rs"));
+        assert_eq!(answer["declined"], json!(-32601));
+        client.shutdown().await.expect("shutdown");
+    }
+
+    #[tokio::test]
+    async fn a_language_server_error_reaches_the_caller() {
+        if !python3_available() {
+            return;
+        }
+        let root = tempfile::tempdir().expect("workspace");
+        let mut client =
+            LspClient::spawn("python3", &["-u", "-c", FAKE_SERVER, "error"], root.path())
+                .await
+                .expect("initialize handshake");
+
+        let error = client
+            .request("textDocument/formatting", json!({}))
+            .await
+            .expect_err("an error response must not read as an empty answer");
+
+        assert!(error.to_string().contains("-32601"), "{error}");
+        client.shutdown().await.expect("shutdown");
+    }
 
     #[test]
     fn encodes_spaces_and_reserved_chars_in_segments() {

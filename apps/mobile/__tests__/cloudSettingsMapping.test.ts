@@ -32,11 +32,16 @@ describe('cloudSettingsMapping, language namespace', () => {
     useCloudSettingsStore.setState({ speechLanguage: 'en' });
   });
 
-  it('publishes the speech language as speechLocale, never as locale', () => {
+  it('publishes the speech language under its own key, never as locale or the legacy key', () => {
     const projected = projectionOf('fr');
 
-    expect(projected.language?.speechLocale).toBe('fr');
+    expect(projected.language?.speechLanguage).toBe('fr');
+    expect(projected.language?.speechLocale).toBeUndefined();
     expect(projected.language?.locale).toBeUndefined();
+  });
+
+  it('publishes Automatic as Automatic', () => {
+    expect(projectionOf('auto').language?.speechLanguage).toBe('auto');
   });
 
   it('ignores a pulled interface locale so Desktop cannot retune mobile voices', () => {
@@ -45,10 +50,26 @@ describe('cloudSettingsMapping, language namespace', () => {
     expect(useCloudSettingsStore.getState().speechLanguage).toBe('en');
   });
 
-  it('applies a pulled speechLocale', () => {
-    applyCloudSettings({ language: { speechLocale: 'fr' } });
-
+  it('applies a pulled speech language, Automatic included', () => {
+    applyCloudSettings({ language: { speechLanguage: 'fr' } });
     expect(useCloudSettingsStore.getState().speechLanguage).toBe('fr');
+
+    applyCloudSettings({ language: { speechLanguage: 'auto' } });
+    expect(useCloudSettingsStore.getState().speechLanguage).toBe('auto');
+  });
+
+  it('keeps a legacy pick but reads the legacy default "en" as Automatic', () => {
+    applyCloudSettings({ language: { speechLocale: 'fr' } });
+    expect(useCloudSettingsStore.getState().speechLanguage).toBe('fr');
+
+    applyCloudSettings({ language: { speechLocale: 'en' } });
+    expect(useCloudSettingsStore.getState().speechLanguage).toBe('auto');
+  });
+
+  it('lets the current key win over the legacy one in the same document', () => {
+    applyCloudSettings({ language: { speechLocale: 'en', speechLanguage: 'en' } });
+
+    expect(useCloudSettingsStore.getState().speechLanguage).toBe('en');
   });
 
   it('leaves the interface locale untouched when both keys arrive together', () => {

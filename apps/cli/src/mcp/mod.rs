@@ -195,17 +195,11 @@ impl McpServerConfig {
     }
 }
 
-pub fn server_host(config: &McpServerConfig) -> Option<String> {
-    match config.as_transport() {
-        McpTransport::Stdio { .. } => None,
-        McpTransport::Sse { url, .. } | McpTransport::Http { url, .. } => reqwest::Url::parse(&url)
-            .ok()
-            .and_then(|url| url.host_str().map(str::to_string)),
-    }
-}
-
-pub fn policy_refusal(config: &McpServerConfig) -> Option<String> {
-    crate::cloud::workspace_policy::mcp_server_refusal(server_host(config).as_deref())
+pub fn policy_refusal(name: &str, config: &McpServerConfig) -> Option<String> {
+    crate::cloud::workspace_policy::cached_mcp_server_refusal(
+        name,
+        remote_config_url(config).as_deref(),
+    )
 }
 
 /// Whether a configured MCP transport may be opened inside the active trust
@@ -539,6 +533,21 @@ fn remote_credential_state(url: &str, headers: &HashMap<String, String>) -> McpC
 /// project scope; passing it explicitly keeps this usable from a host that
 /// must not depend on the process working directory.
 pub fn discover_servers(project_dir: &std::path::Path) -> Vec<DiscoveredMcpServer> {
+    #[cfg(test)]
+    if let Some(configs) = TEST_CONFIGS.with(|cell| cell.borrow().clone()) {
+        let mut entries: Vec<_> = configs.into_iter().collect();
+        entries.sort_by(|left, right| left.0.cmp(&right.0));
+        return entries
+            .into_iter()
+            .map(|(name, config)| DiscoveredMcpServer {
+                url: mcp_server_url(&config),
+                credential: credential_state(&config),
+                name,
+                config,
+                origin: McpServerOrigin::User,
+            })
+            .collect();
+    }
     let mut servers: Vec<DiscoveredMcpServer> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
 
@@ -617,6 +626,17 @@ pub async fn login_to_remote_server_for_client(
     Ok(credential_state(config))
 }
 
+fn remote_config_url(config: &McpServerConfig) -> Option<String> {
+    match config.as_transport() {
+        McpTransport::Stdio { .. } => None,
+        McpTransport::Sse { url, .. } | McpTransport::Http { url, .. } => Some(url),
+    }
+}
+
+pub fn is_remote_server(config: &McpServerConfig) -> bool {
+    !matches!(config.as_transport(), McpTransport::Stdio { .. })
+}
+
 /// Authorize a registered remote MCP server and leave its token in the store
 /// every later connection reads.
 pub async fn login_to_remote_server(name: &str, config: &McpServerConfig) -> Result<()> {
@@ -633,6 +653,14 @@ async fn sign_in(
 ) -> Result<()> {
     if matches!(config.as_transport(), McpTransport::Stdio { .. }) {
         bail!("MCP server '{name}' runs locally over stdio and has nothing to sign in to");
+    }
+    if let Some(refusal) = crate::cloud::workspace_policy::mcp_server_refusal(
+        name,
+        remote_config_url(config).as_deref(),
+    )
+    .await
+    {
+        bail!(refusal);
     }
     let hooks = build_client_hooks_with_browser(Arc::new(AutoDeclineHandler), browser);
     if let TransportConfig::Http {
@@ -721,15 +749,62 @@ fn remember_step_up(error: &anyhow::Error) -> Option<String> {
     Some(scope.to_string())
 }
 
-/// Forget the stored OAuth token for a remote MCP server. Returns whether a
-/// token was actually held.
-pub fn logout_from_remote_server(server_url: &str) -> Result<bool> {
-    let had_token = KeyringTokenStore.get(server_url).is_some();
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum McpRevocation {
+    Revoked,
+    NotOffered,
+    Failed(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpLogout {
+    pub had_token: bool,
+    pub revocation: Option<McpRevocation>,
+}
+
+pub async fn logout_from_remote_server(
+    server_url: &str,
+    config: Option<&McpServerConfig>,
+) -> Result<McpLogout> {
+    let token = KeyringTokenStore.get(server_url);
+    let revocation = match &token {
+        Some(token) => Some(revoke_at_provider(server_url, config, token).await),
+        None => None,
+    };
     McpServerOAuthStore::new()?.delete(server_url)?;
     let mut legacy = McpOAuthStore::load()?;
     legacy.remove(server_url);
     legacy.save()?;
-    Ok(had_token)
+    Ok(McpLogout {
+        had_token: token.is_some(),
+        revocation,
+    })
+}
+
+fn revocation_oauth_config(config: Option<&McpServerConfig>) -> OAuthConfig {
+    match config.map(to_transport_config) {
+        Some(TransportConfig::Http {
+            oauth: Some(oauth), ..
+        }) => oauth,
+        _ => OAuthConfig::default(),
+    }
+}
+
+async fn revoke_at_provider(
+    server_url: &str,
+    config: Option<&McpServerConfig>,
+    token: &OAuthToken,
+) -> McpRevocation {
+    let oauth = revocation_oauth_config(config);
+    let attempt = agiworkforce_mcp::oauth::revoke_token(token, &oauth, server_url);
+    match tokio::time::timeout(std::time::Duration::from_secs(30), attempt).await {
+        Ok(Ok(true)) => McpRevocation::Revoked,
+        Ok(Ok(false)) => McpRevocation::NotOffered,
+        Ok(Err(error)) => McpRevocation::Failed(format!("{error:#}")),
+        Err(_) => McpRevocation::Failed(
+            "the authorization server did not answer in 30 seconds".to_string(),
+        ),
+    }
 }
 
 /// Build the host capability bundle handed to `McpClient::connect`.
@@ -807,6 +882,14 @@ impl McpConnection {
         config: &McpServerConfig,
         elicitation: Arc<dyn ElicitationHandler>,
     ) -> Result<Self> {
+        if let Some(refusal) = crate::cloud::workspace_policy::mcp_server_refusal(
+            name,
+            remote_config_url(config).as_deref(),
+        )
+        .await
+        {
+            bail!(refusal);
+        }
         let transport = sandboxed_transport_config(config)
             .with_context(|| format!("MCP server '{name}' must run sandboxed"))?;
         let timeouts = McpTimeouts::default();
@@ -1162,6 +1245,15 @@ fn parse_mcp_config_contents(
             return Ok(configs);
         };
         for (name, config) in servers {
+            if let Err(error) = registry::ensure_no_rule_separator(name) {
+                if strict {
+                    return Err(error).with_context(|| {
+                        format!("Invalid MCP server in explicit config {}", path.display())
+                    });
+                }
+                eprintln!("MCP: skipped a server in {}: {error}", path.display());
+                continue;
+            }
             let config = normalize_nested_transport(config).unwrap_or_else(|| config.clone());
             match serde_json::from_value::<McpServerConfig>(config) {
                 Ok(server_config) => {
@@ -1195,7 +1287,20 @@ fn parse_mcp_config_contents(
             other => other,
         };
         match serde_json::from_value::<HashMap<String, McpServerConfig>>(normalized) {
-            Ok(parsed_configs) => configs.extend(parsed_configs),
+            Ok(parsed_configs) => {
+                for (name, config) in parsed_configs {
+                    if let Err(error) = registry::ensure_no_rule_separator(&name) {
+                        if strict {
+                            return Err(error).with_context(|| {
+                                format!("Invalid MCP server in explicit config {}", path.display())
+                            });
+                        }
+                        eprintln!("MCP: skipped a server in {}: {error}", path.display());
+                        continue;
+                    }
+                    configs.insert(name, config);
+                }
+            }
             Err(err) if strict => {
                 return Err(err).with_context(|| {
                     format!(
@@ -1295,6 +1400,10 @@ impl McpManager {
 
     /// Load MCP server configurations from project/global MCP JSON files.
     pub fn load_configs() -> Result<HashMap<String, McpServerConfig>> {
+        #[cfg(test)]
+        if let Some(configs) = TEST_CONFIGS.with(|cell| cell.borrow().clone()) {
+            return Ok(configs);
+        }
         Self::load_configs_with_options(&McpConfigLoadOptions::default())
     }
 
@@ -1361,15 +1470,6 @@ impl McpManager {
                     eprintln!(
                         "  MCP server '{}': blocked in Local privacy mode; use an explicit BYOK or Managed continuation before connecting a remote MCP server",
                         name
-                    );
-                }
-                continue;
-            }
-            if let Some(reason) = policy_refusal(config) {
-                if !quiet {
-                    eprintln!(
-                        "  MCP server '{}': not started: {reason}",
-                        crate::terminal_text::sanitize_terminal_text(name)
                     );
                 }
                 continue;
@@ -1587,6 +1687,10 @@ impl McpManager {
 
     /// Every resource the connected servers allowed in `privacy_mode` list,
     /// paired with the server that owns it.
+    pub fn has_server(&self, server_name: &str) -> bool {
+        self.connections.contains_key(server_name)
+    }
+
     pub async fn list_resources(
         &mut self,
         privacy_mode: crate::agent::PrivacyMode,
@@ -1917,6 +2021,24 @@ fn normalize_mcp_prompt_part(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn logout_revocation_needs_no_parsable_registry_entry() {
+        let fallback = super::revocation_oauth_config(None);
+        assert!(fallback.client_id.is_none() && fallback.token_url.is_none());
+        let config: super::McpServerConfig = serde_json::from_value(serde_json::json!({
+            "transport": "http",
+            "url": "https://mcp.example.com/mcp",
+            "auth": { "client_id": "cli-client" }
+        }))
+        .expect("http config");
+        assert_eq!(
+            super::revocation_oauth_config(Some(&config))
+                .client_id
+                .as_deref(),
+            Some("cli-client")
+        );
+    }
+
     use super::*;
 
     #[test]
@@ -2162,6 +2284,21 @@ mod tests {
         // Should not crash even if no config files exist.
         let configs = McpManager::load_configs().unwrap();
         let _ = configs;
+    }
+
+    #[test]
+    fn project_config_server_names_with_the_rule_separator_are_refused() {
+        let path = std::path::Path::new(".mcp.json");
+        let contents =
+            r#"{"mcpServers":{"github__x":{"command":"node"},"docs":{"command":"node"}}}"#;
+        let loaded = parse_mcp_config_contents(contents, path, false).expect("lenient load");
+        assert!(loaded.contains_key("docs"));
+        assert!(!loaded.contains_key("github__x"));
+        let flat = parse_mcp_config_contents(r#"{"a__b":{"command":"node"}}"#, path, false)
+            .expect("lenient flat load");
+        assert!(flat.is_empty());
+        let error = parse_mcp_config_contents(contents, path, true).expect_err("strict load");
+        assert!(format!("{error:#}").contains("must not contain '__'"));
     }
 
     #[test]
@@ -2535,4 +2672,26 @@ while True:
         assert_eq!(server_name, "files");
         assert_eq!(tool_name, "tool_16");
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_CONFIGS: std::cell::RefCell<Option<HashMap<String, McpServerConfig>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) fn with_test_configs<T>(
+    configs: HashMap<String, McpServerConfig>,
+    run: impl FnOnce() -> T,
+) -> T {
+    struct Restore(Option<HashMap<String, McpServerConfig>>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            TEST_CONFIGS.with(|cell| cell.replace(self.0.take()));
+        }
+    }
+    let previous = TEST_CONFIGS.with(|cell| cell.replace(Some(configs)));
+    let _restore = Restore(previous);
+    run()
 }

@@ -96,7 +96,7 @@ describe('notifyAgentRunEvent, consent', () => {
 describe('notifyAgentRunEvent, payload the mobile client can route', () => {
   const cases: Array<[AgentRunNotificationEvent, string, string]> = [
     ['approval_required', 'agent_approval_needed', 'high'],
-    ['input_required', 'agent_paused', 'high'],
+    ['input_required', 'agent_approval_needed', 'high'],
     ['completed', 'task_completed', 'normal'],
     ['failed', 'agent_failed', 'critical'],
   ];
@@ -122,7 +122,7 @@ describe('notifyAgentRunEvent, payload the mobile client can route', () => {
       '/(app)/settings',
       '/(app)/notifications',
       '/(app)/schedules',
-      '/(app)/agents',
+      '/(app)/tasks',
     ];
 
     for (const [event] of cases) {

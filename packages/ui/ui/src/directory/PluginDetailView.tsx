@@ -31,6 +31,7 @@ import {
   PLUGIN_SETTINGS_LOADING_LABEL,
   PLUGIN_SKILL_TOGGLE_PREFIX,
   PLUGIN_AGENTS_LABEL,
+  PLUGIN_AGENTS_NOTE,
   PLUGIN_COMMANDS_LABEL,
   PLUGIN_COMMAND_COPIED_LABEL,
   PLUGIN_COMMAND_COPIED_RESET_MS,
@@ -151,7 +152,15 @@ function componentRows(
     rows.push({ label: PLUGIN_COMMANDS_LABEL, body: String(components.commands) });
   }
   if (components.agents > 0) {
-    rows.push({ label: PLUGIN_AGENTS_LABEL, body: String(components.agents) });
+    rows.push({
+      label: PLUGIN_AGENTS_LABEL,
+      body: (
+        <>
+          {components.agents}
+          <span className="block text-xs text-muted-foreground">{PLUGIN_AGENTS_NOTE}</span>
+        </>
+      ),
+    });
   }
   if (components.mcpServers.length > 0) {
     rows.push({
@@ -231,7 +240,7 @@ function InstallFromCli({
         <p className="text-sm font-medium text-foreground">{PLUGIN_INSTALL_COMMAND_LABEL}</p>
         {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
         {command ? (
-          <div className="flex items-center gap-1 rounded-md border border-border bg-background py-1 pl-2.5 pr-1">
+          <div className="flex items-center gap-1 rounded-md border border-border bg-background py-1 ps-2.5 pe-1">
             <code
               data-testid="plugin-install-command"
               className="min-w-0 flex-1 truncate font-mono text-xs text-foreground"
@@ -294,7 +303,7 @@ function ScanSection({ scan }: { scan: DirectoryPluginScan | null }) {
             {PLUGIN_SCAN_VERDICT_LABELS[scan.verdict]}
           </p>
           {scan.findings.length > 0 ? (
-            <ul className="flex list-disc flex-col gap-1 pl-4 text-xs text-foreground">
+            <ul className="flex list-disc flex-col gap-1 ps-4 text-xs text-foreground">
               {scan.findings.map((finding) => (
                 <li key={finding} className="break-words">
                   {finding}

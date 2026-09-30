@@ -498,3 +498,34 @@ describe('organization Code controls', () => {
     }
   });
 });
+
+describe('opt-in workspace features', () => {
+  const override = (layer: WorkspacePolicyOverride['layer']): WorkspacePolicyOverride => ({
+    id: 'override-1',
+    organizationId: 'org-1',
+    subjectType: 'role',
+    subjectId: 'member',
+    layer,
+    updatedAt: '2026-09-29T00:00:00.000Z',
+  });
+
+  it('holds fast mode off until the workspace turns it on, and lets overrides only narrow it', () => {
+    expect(resolveWorkspaceControls(DEFAULT_WORKSPACE_CONTROLS, []).featureAccess.fast_mode).toBe(
+      false,
+    );
+    const enabled: WorkspaceControls = {
+      ...DEFAULT_WORKSPACE_CONTROLS,
+      featureAccess: { ...DEFAULT_WORKSPACE_CONTROLS.featureAccess, fast_mode: true },
+    };
+    expect(resolveWorkspaceControls(enabled, []).featureAccess.fast_mode).toBe(true);
+    expect(
+      resolveWorkspaceControls(enabled, [override({ featureAccess: { fast_mode: false } })])
+        .featureAccess.fast_mode,
+    ).toBe(false);
+    expect(
+      resolveWorkspaceControls(DEFAULT_WORKSPACE_CONTROLS, [
+        override({ featureAccess: { fast_mode: true } }),
+      ]).featureAccess.fast_mode,
+    ).toBe(false);
+  });
+});

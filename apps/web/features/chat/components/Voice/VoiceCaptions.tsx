@@ -42,7 +42,7 @@ export function VoiceCaptions({ lines }: VoiceCaptionsProps) {
                 : 'text-[var(--chat-text-secondary)]',
             )}
           >
-            <span className="mr-2 text-sm font-medium text-[var(--chat-text-muted)]">
+            <span className="me-2 text-sm font-medium text-[var(--chat-text-muted)]">
               {line.role === 'assistant' ? LABEL.assistant : LABEL.you}
             </span>
             {line.text}

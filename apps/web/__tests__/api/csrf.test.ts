@@ -21,6 +21,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/lib/error-handler', () => ({
+  handleError: vi.fn(),
   withErrorHandler:
     (handler: (req: NextRequest, ctx: unknown) => Promise<Response>) =>
     (req: NextRequest, ctx: unknown) =>
@@ -43,6 +44,7 @@ vi.mock('@/lib/api-auth', () => ({
 const mockMemoryNeonQuery = vi.fn();
 const mockMemoryNeonExecute = vi.fn();
 vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockMemoryNeonQuery(...args),
     execute: (...args: unknown[]) => mockMemoryNeonExecute(...args),

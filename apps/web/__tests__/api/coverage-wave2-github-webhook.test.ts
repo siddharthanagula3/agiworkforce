@@ -29,6 +29,7 @@ const mockDbExecute = vi.fn();
 const mockDbTransaction = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockDbQuery(...args),
     execute: (...args: unknown[]) => mockDbExecute(...args),

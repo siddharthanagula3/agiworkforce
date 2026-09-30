@@ -1,12 +1,14 @@
 import { useCallback } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { X, AudioLines, Info } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { colors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
 import { useSettingsStore } from '@/stores/settingsStore';
 
@@ -30,7 +32,14 @@ function FeatureRow({ icon, children }: { icon: React.ReactNode; children: React
   return (
     <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
       <View style={{ width: 28, alignItems: 'center', paddingTop: 2 }}>{icon}</View>
-      <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 16, lineHeight: 23 }}>
+      <Text
+        style={{
+          flex: 1,
+          color: colors.textSecondary,
+          fontSize: typeScale.callout,
+          lineHeight: 23,
+        }}
+      >
         {children}
       </Text>
     </View>
@@ -45,12 +54,14 @@ const PILL = {
 };
 const PILL_LABEL = {
   color: colors.black,
-  fontSize: 17,
+  fontSize: typeScale.headline,
   fontWeight: '600' as const,
   textAlign: 'center' as const,
 };
 
 export type VoiceOnboardingMode = 'on-device' | 'live';
+
+export type VoiceOnboardingPurpose = 'voice' | 'dictation';
 
 export const VOICE_DISCLOSURE: Record<VoiceOnboardingMode, string> = {
   'on-device':
@@ -58,9 +69,21 @@ export const VOICE_DISCLOSURE: Record<VoiceOnboardingMode, string> = {
   live: 'In live voice your microphone is sent to AGI Cloud while you talk, and the transcript is saved to this chat. Audio is not kept.',
 };
 
+const INTRO: Record<VoiceOnboardingPurpose, { title: string; body: string }> = {
+  voice: {
+    title: 'Meet Voice',
+    body: "Say what's on your mind. AGI listens, responds, and keeps the conversation flowing naturally.",
+  },
+  dictation: {
+    title: 'Dictation',
+    body: 'Speak instead of typing. Your words appear as text in your message.',
+  },
+};
+
 export interface VoiceOnboardingSheetProps {
   visible: boolean;
   mode: VoiceOnboardingMode;
+  purpose?: VoiceOnboardingPurpose;
   onContinue: () => void;
   onDismiss: () => void;
 }
@@ -68,21 +91,24 @@ export interface VoiceOnboardingSheetProps {
 export function VoiceOnboardingSheet({
   visible,
   mode,
+  purpose = 'voice',
   onContinue,
   onDismiss,
 }: VoiceOnboardingSheetProps) {
   const insets = useSafeAreaInsets();
   const sheetSlideIn = useSheetSlideIn({ visible });
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const setVoiceOnboardingSeen = useSettingsStore((s) => s.setVoiceOnboardingSeen);
+  const markSeen = useSettingsStore((s) =>
+    purpose === 'dictation' ? s.setDictationOnboardingSeen : s.setVoiceOnboardingSeen,
+  );
 
   const handleContinue = useCallback(() => {
     if (hapticsEnabled) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    setVoiceOnboardingSeen(true);
+    markSeen(true);
     onContinue();
-  }, [hapticsEnabled, setVoiceOnboardingSeen, onContinue]);
+  }, [hapticsEnabled, markSeen, onContinue]);
 
   return (
     <Modal
@@ -94,7 +120,7 @@ export function VoiceOnboardingSheet({
       accessibilityViewIsModal
     >
       <Animated.View
-        entering={FadeIn.duration(160)}
+        entering={FadeIn.duration(motion.quick)}
         style={{ flex: 1, backgroundColor: colors.scrim }}
       >
         <Animated.View
@@ -112,10 +138,10 @@ export function VoiceOnboardingSheet({
           ]}
         >
           <View style={{ alignItems: 'flex-end', paddingTop: 16 }}>
-            <Pressable
+            <PressableBox
               onPress={onDismiss}
               accessibilityRole="button"
-              accessibilityLabel="Close voice introduction"
+              accessibilityLabel={`Close ${purpose} introduction`}
               hitSlop={12}
               style={{
                 width: 36,
@@ -127,7 +153,7 @@ export function VoiceOnboardingSheet({
               }}
             >
               <X size={20} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           <View style={{ flex: 1, minHeight: 120, alignItems: 'center', justifyContent: 'center' }}>
@@ -137,36 +163,35 @@ export function VoiceOnboardingSheet({
           <Text
             style={{
               color: colors.textPrimary,
-              fontSize: 34,
+              fontSize: typeScale.largeTitle,
               fontWeight: '700',
               textAlign: 'center',
               marginBottom: 28,
             }}
             accessibilityRole="header"
           >
-            Meet Voice
+            {INTRO[purpose].title}
           </Text>
 
           <View style={{ gap: 22, marginBottom: 32 }}>
             <FeatureRow icon={<AudioLines size={22} color={colors.textMuted} />}>
-              Say what&apos;s on your mind. AGI listens, responds, and keeps the conversation
-              flowing naturally.
+              {INTRO[purpose].body}
             </FeatureRow>
             <FeatureRow icon={<Info size={22} color={colors.textMuted} />}>
               {VOICE_DISCLOSURE[mode]}
             </FeatureRow>
           </View>
 
-          <Pressable
+          <PressableBox
             onPress={handleContinue}
             accessibilityRole="button"
-            accessibilityLabel="Continue to voice"
+            accessibilityLabel={`Continue to ${purpose}`}
             style={{ flexShrink: 0 }}
           >
             <View style={PILL}>
               <Text style={PILL_LABEL}>Continue</Text>
             </View>
-          </Pressable>
+          </PressableBox>
         </Animated.View>
       </Animated.View>
     </Modal>

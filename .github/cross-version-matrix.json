@@ -50,15 +50,15 @@
       "title": "Old mobile plus new backend",
       "status": "blocked",
       "reason": "No mobile build has ever been released. There is no N-1 mobile artifact to install against the current backend, so any job here would be running the current mobile source twice.",
-      "unblockedBy": "Founder action: ship mobile 1.2.0 to TestFlight and Play internal testing, so the next build has a released predecessor to pair with."
+      "unblockedBy": "Ship mobile 0.0.1 to TestFlight and Play internal testing and retain the artifacts, so the next build has a predecessor to pair with."
     },
     {
       "row": 1762,
       "id": "old-desktop-new-backend",
       "title": "Old desktop plus new backend",
       "status": "blocked",
-      "reason": "v-desktop-1.2.0 is the only Tauri release and it carries the same version apps/desktop builds today, so the released artifact is not a predecessor. The Electron shell has never been released at all.",
-      "unblockedBy": "The next desktop release. Once a second release exists, 1.2.0 becomes the N-1 artifact this job downloads."
+      "reason": "The founder reports that the earlier GitHub desktop release was removed on 2026-09-26. No retained desktop release artifact is verified for N-1 testing. The Electron shell has never been released.",
+      "unblockedBy": "Ship and retain a 0.0.1 desktop artifact, then create a later release to test against it."
     },
     {
       "row": 1763,

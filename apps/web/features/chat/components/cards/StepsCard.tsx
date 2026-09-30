@@ -354,7 +354,7 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
                     <CollapsibleTrigger asChild>
                       <button
                         type="button"
-                        className="flex flex-1 items-center gap-2 text-left"
+                        className="flex flex-1 items-center gap-2 text-start"
                         aria-expanded={isExpanded}
                       >
                         <span className="text-xs font-semibold text-muted-foreground min-w-[1.5rem]">
@@ -384,7 +384,7 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
                   {/* Expandable details */}
                   {hasDetails && (
                     <CollapsibleContent>
-                      <div className="px-3 pb-3 pl-[3.75rem]">
+                      <div className="px-3 pb-3 ps-[3.75rem]">
                         <ul className="space-y-1.5">
                           {step.details.map((detail, di) => (
                             <li

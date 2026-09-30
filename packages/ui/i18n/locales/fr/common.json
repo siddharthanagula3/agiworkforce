@@ -99,6 +99,7 @@
   "navImages": "Images",
   "navModels": "Modèles",
   "navSchedules": "Planifications",
+  "navHealth": "Santé",
   "navAdmin": "Administration",
   "navWorkspaceSection": "Espace de travail",
   "navLoadingWorkspaces": "Chargement des espaces de travail…",
@@ -169,7 +170,13 @@
     "toolsAwaitingApproval_one": "Un outil attend votre validation.",
     "toolsAwaitingApproval_other": "{{count}} outils attendent votre validation.",
     "unsentMessages_one": "Vous avez un message non envoyé.",
-    "unsentMessages_other": "Vous avez {{count}} messages non envoyés."
+    "unsentMessages_other": "Vous avez {{count}} messages non envoyés.",
+    "packages_one": "{{count}} paquet",
+    "packages_other": "{{count}} paquets",
+    "unreadNotifications_one": "{{count}} notification non lue",
+    "unreadNotifications_other": "{{count}} notifications non lues",
+    "textBlocks_one": "{{count}} bloc de texte",
+    "textBlocks_other": "{{count}} blocs de texte"
   },
   "relative": {
     "minutesAgo_one": "il y a {{count}} minute",

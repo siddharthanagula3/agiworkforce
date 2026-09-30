@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { requireAutoMode } from '../test-utils/modelFixtures';
 
 const mockPush = jest.fn();
@@ -8,6 +9,8 @@ const AUTO_MODEL_ID = requireAutoMode().id;
 const mockLoadConversations = jest.fn();
 const mockCreateConversation = jest.fn(async () => 'conv-1');
 const mockSendMessage = jest.fn();
+const mockSetWorkMode = jest.fn();
+let mockWorkMode: 'chat' | 'agiwork' = 'chat';
 const mockBeginImageGeneration = jest.fn(() => 'assistant-msg-1');
 const mockCompleteImageGeneration = jest.fn();
 const mockFailImageGeneration = jest.fn();
@@ -48,6 +51,8 @@ jest.mock('@/stores/chatStore', () => ({
       loadConversations: mockLoadConversations,
       createConversation: mockCreateConversation,
       sendMessage: mockSendMessage,
+      workMode: mockWorkMode,
+      setWorkMode: mockSetWorkMode,
       beginImageGeneration: mockBeginImageGeneration,
       completeImageGeneration: mockCompleteImageGeneration,
       failImageGeneration: mockFailImageGeneration,
@@ -204,6 +209,7 @@ describe('Chat tab mode toggle', () => {
     mockChatInputOnOpenCompare = undefined;
     mockChatInputSelectedSkillName = undefined;
     mockChatFeatures = { imageGen: true };
+    mockWorkMode = 'chat';
     useChatAppModeStore.setState({ appMode: 'local' });
     useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
     useAuthStore.setState({
@@ -251,6 +257,67 @@ describe('Chat tab mode toggle', () => {
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
     expect(queryByTestId('project-selector-bar')).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
+  });
+
+  it('shows Chat and Work in the header and selects Work only for a Cloud Pro session', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+
+    const screen = render(<ChatTabScreen />);
+    expect(screen.getByTestId('chat.work-mode.chat').props.accessibilityState.selected).toBe(true);
+    fireEvent.press(screen.getByTestId('chat.work-mode.agiwork'));
+    expect(mockSetWorkMode).toHaveBeenCalledWith('agiwork');
+  });
+
+  it('sends an ineligible Work selection to the existing Cloud billing gate', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'free' });
+
+    const screen = render(<ChatTabScreen />);
+    fireEvent.press(screen.getByTestId('chat.work-mode.agiwork'));
+    expect(mockSetWorkMode).not.toHaveBeenCalledWith('agiwork');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+  });
+
+  it('clears a persisted Work selection when the Cloud account no longer has Work access', () => {
+    mockWorkMode = 'agiwork';
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'free' });
+
+    const screen = render(<ChatTabScreen />);
+    expect(screen.getByTestId('chat.work-mode.chat').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByTestId('chat.work-mode.agiwork').props.accessibilityState.selected).toBe(
+      false,
+    );
+    expect(mockSetWorkMode).toHaveBeenCalledWith('chat');
+  });
+
+  it('asks before moving a Local chat to Cloud for Work', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const screen = render(<ChatTabScreen />);
+    fireEvent.press(screen.getByTestId('chat.work-mode.agiwork'));
+    expect(mockSetWorkMode).not.toHaveBeenCalledWith('agiwork');
+    expect(alert).toHaveBeenCalledWith(
+      'Work uses AGI Cloud',
+      'Switch to Cloud to start work with AGI.',
+      expect.any(Array),
+    );
+    alert.mockRestore();
+  });
+
+  it('keeps Work behind the signed-in Cloud gate even for an eligible plan', () => {
+    useWaitlistStore.setState({ cloudUnlocked: false });
+    const screen = render(<ChatTabScreen />);
+    fireEvent.press(screen.getByTestId('chat.work-mode.agiwork'));
+
+    expect(mockSetWorkMode).not.toHaveBeenCalledWith('agiwork');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT },
+    });
   });
 
   it('does not overwrite a persisted Cloud preference while Clerk is still loading', async () => {
@@ -440,11 +507,14 @@ describe('Chat tab mode toggle', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/chat/conv-1');
 
     await waitFor(() => {
-      expect(mockGenerateImage).toHaveBeenCalledWith({
-        prompt: 'a red circle on a white background',
-        model: expect.any(String),
-        aspect_ratio: expect.any(String),
-      });
+      expect(mockGenerateImage).toHaveBeenCalledWith(
+        {
+          prompt: 'a red circle on a white background',
+          model: expect.any(String),
+          aspect_ratio: expect.any(String),
+        },
+        { operationId: expect.any(String) },
+      );
     });
     await waitFor(() => {
       expect(mockCompleteImageGeneration).toHaveBeenCalledWith(
@@ -488,11 +558,14 @@ describe('Chat tab mode toggle', () => {
       );
     });
     expect(mockSendMessage).not.toHaveBeenCalled();
-    expect(mockGenerateImage).toHaveBeenCalledWith({
-      prompt: 'Create an image of a blue observatory on Mars',
-      model: expect.any(String),
-      aspect_ratio: expect.any(String),
-    });
+    expect(mockGenerateImage).toHaveBeenCalledWith(
+      {
+        prompt: 'Create an image of a blue observatory on Mars',
+        model: expect.any(String),
+        aspect_ratio: expect.any(String),
+      },
+      { operationId: expect.any(String) },
+    );
   });
 
   it.each([

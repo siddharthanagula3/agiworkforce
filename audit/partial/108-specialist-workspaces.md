@@ -13,12 +13,12 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | billing/no-yearly f4a1e5e5b3: /chat/finance is a read-only product view of the connected bank accounts: current and available balances per account, spending and income for 30 days, 90 days or 12 months, by category and month, and recent transactions, read from Plaid (/accounts/get, /transactions/get). It is gated on the same owner steps as S56.47 (Plaid agreement, production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV); until then the page says bank accounts are not set up. ChatGPT's personal finance pages refuse fetches (help.openai.com and openai.com 403, 2026-09-28) | flag-off |
-| desktop | partial | billing/no-yearly f4a1e5e5b3: /chat/finance is a read-only product view of the connected bank accounts: current and available balances per account, spending and income for 30 days, 90 days or 12 months, by category and month, and recent transactions, read from Plaid (/accounts/get, /transactions/get). It is gated on the same owner steps as S56.47 (Plaid agreement, production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV); until then the page says bank accounts are not set up. ChatGPT's personal finance pages refuse fetches (help.openai.com and openai.com 403, 2026-09-28) | flag-off |
+| web | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
+| desktop | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/finance/page.tsx:17-17`, `apps/web/features/finance/components/FinanceDashboard.tsx:140-140`, `apps/web/app/api/finance/overview/route.ts:34-34`, `apps/web/lib/connectors/bank-accounts.ts:448-448`
+Code: `apps/web/lib/connectors/plaid-config.ts:32-32`
 
 ## S108.02: Connected accounts.
 
@@ -27,12 +27,12 @@ Code: `apps/web/app/chat/finance/page.tsx:17-17`, `apps/web/features/finance/com
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | billing/no-yearly f4a1e5e5b3 on top of p-mcp-web's Plaid Link connector (S56.47): the user links bank and card accounts in Settings, Connectors; the finance page offers the link when none is connected and a toast offers the page after linking, and the assistant reads balances and transactions through the connector's read tools. Gated on the S56.47 owner steps | flag-off |
-| desktop | partial | billing/no-yearly f4a1e5e5b3 on top of p-mcp-web's Plaid Link connector (S56.47): the user links bank and card accounts in Settings, Connectors; the finance page offers the link when none is connected and a toast offers the page after linking, and the assistant reads balances and transactions through the connector's read tools. Gated on the S56.47 owner steps | flag-off |
+| web | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
+| desktop | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/connectors/hooks/use-connectors.ts:449-449`, `apps/web/features/finance/components/FinanceDashboard.tsx:101-101`, `apps/web/lib/connectors/bank-accounts.ts:448-448`
+Code: `apps/web/lib/connectors/plaid-config.ts:32-32`
 
 ## S108.03: Spending analysis.
 
@@ -41,12 +41,12 @@ Code: `apps/web/features/connectors/hooks/use-connectors.ts:449-449`, `apps/web/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | billing/no-yearly f4a1e5e5b3: spending is analysed by Plaid personal finance category and by month for the chosen period (posted outflows in the main currency, transfers, loan payments and income left out) and shown on /chat/finance. Gated on the S56.47 owner steps | flag-off |
-| desktop | partial | billing/no-yearly f4a1e5e5b3: spending is analysed by Plaid personal finance category and by month for the chosen period (posted outflows in the main currency, transfers, loan payments and income left out) and shown on /chat/finance. Gated on the S56.47 owner steps | flag-off |
+| web | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
+| desktop | partial | owner: sign Plaid's agreement, get production transactions access, finish the Dashboard compliance center and GLBA Safeguards legal review, then set PLAID_CLIENT_ID, PLAID_SECRET and PLAID_ENV (apps/web/lib/connectors/plaid-config.ts:32); owner has said bank stays off for now | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/services/finance-overview-service.ts:64-64`, `apps/web/features/finance/components/FinanceDashboard.tsx:177-177`, `apps/web/features/finance/components/FinanceDashboard.tsx:213-213`
+Code: `apps/web/lib/connectors/plaid-config.ts:32-32`
 
 ## S108.09: Financial research workspace.
 
@@ -75,12 +75,12 @@ Code: `apps/web/lib/services/finance-overview-service.ts:64-64`, `apps/web/featu
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Epic FHIR/Cerner connectors exist only if the deployment supplies their endpoint in CONNECTOR_OAUTH_PROVIDERS_JSON (no built-in endpoint). There is no health-record view; records reach the model only as connector tool calls. | ui, flag-off |
-| desktop | partial | Epic FHIR/Cerner connectors exist only if the deployment supplies their endpoint in CONNECTOR_OAUTH_PROVIDERS_JSON (no built-in endpoint). There is no health-record view; records reach the model only as connector tool calls. | ui, flag-off |
+| web | partial | owner: HealthEx agreement and FTC Health Breach Notification Rule legal sign-off, register a client at api.healthex.io/oauth/register and add the healthex entry with CONNECTOR_OAUTH_HEALTHEX_CLIENT_ID; owner has said Health stays off | ui, flag-off |
+| desktop | partial | owner: HealthEx agreement and FTC Health Breach Notification Rule legal sign-off, register a client at api.healthex.io/oauth/register and add the healthex entry with CONNECTOR_OAUTH_HEALTHEX_CLIENT_ID; owner has said Health stays off | ui, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/connectors/data/connectors.ts:1145-1154`, `apps/web/lib/connectors/catalog.ts:244-245`, `apps/web/lib/connectors/oauth-setup.ts:166-181`
+Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:234-234`
 
 ## S108.17: Legal research workspace.
 
@@ -165,15 +165,3 @@ Code: `apps/web/features/connectors/data/connectors.ts:1145-1154`, `apps/web/lib
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-
-## S108.33: Travel planning and reservations.
-
-- Done when: The user plans a trip (itinerary, places, routes) and can make reservations from the product.
-- Wave: 3
-- Already works on: web, desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | billing/no-yearly fd41d3eda renders itinerary cards natively on mobile (synced cloud chats show them now); mobile turns produce them once post-codex/no-yearly-s108-33-mobile-itinerary.patch adds itinerary.v1 to x_interactive_cards.supported in apps/mobile/stores/chat/chatExecutionStore.ts, which Codex holds | handler |
-
-Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:361-361`, `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:554-554`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:950-950`

@@ -74,7 +74,15 @@
     "runtimeConsent": "Это приложение хочет использовать ИИ с вашим аккаунтом. Каждый запрос учитывается в использовании вашего тарифа.",
     "runtimeConsentConnectors": "Это приложение хочет использовать ИИ с вашим аккаунтом и читать или изменять данные в {{apps}}. Оно видит, что возвращают эти приложения, и каждый запрос учитывается в использовании вашего тарифа.",
     "runtimeAllow": "Разрешить",
-    "runtimeDecline": "Не разрешать"
+    "runtimeDecline": "Не разрешать",
+    "runtimeConnectorsLoading": "Проверяем подключённые приложения",
+    "runtimeConnectorNotConnected": "Не подключено. Подключите его в разделе «Настройки», «Коннекторы», чтобы использовать эту часть приложения.",
+    "runtimeToolNeedsApproval": "Спрашивает перед каждым использованием, поэтому это приложение не может его использовать.",
+    "runtimeToolBlocked": "Заблокировано в ваших настройках.",
+    "runtimeManageConnectors": "Подключённые приложения",
+    "saveCopy": "Сохранить копию в мои чаты",
+    "saveCopyBusy": "Копирование…",
+    "saveCopyFailed": "Не удалось скопировать этот артефакт."
   },
   "sidebar": {
     "activeConversation": "Активный чат",
@@ -561,6 +569,10 @@
     "viewSources_many": "Показать {{count}} источников",
     "viewSources_one": "Показать {{count}} источник",
     "viewSources_other": "Показать {{count}} источника",
+    "folderFilesLeftOut_one": "{{count}} файл из {{folder}} не прикреплён. Прикрепите его из локальной папки.",
+    "folderFilesLeftOut_few": "{{count}} файла из {{folder}} не прикреплены. Прикрепите их из локальной папки.",
+    "folderFilesLeftOut_many": "{{count}} файлов из {{folder}} не прикреплены. Прикрепите их из локальной папки.",
+    "folderFilesLeftOut_other": "{{count}} файла из {{folder}} не прикреплены. Прикрепите их из локальной папки.",
     "savedMemoriesUsed_one": "Использовано {{count}} сохранённое воспоминание",
     "savedMemoriesUsed_few": "Использовано {{count}} сохранённых воспоминания",
     "savedMemoriesUsed_many": "Использовано {{count}} сохранённых воспоминаний",
@@ -568,7 +580,27 @@
     "moreSavedMemories_one": "И ещё {{count}}",
     "moreSavedMemories_few": "И ещё {{count}}",
     "moreSavedMemories_many": "И ещё {{count}}",
-    "moreSavedMemories_other": "И ещё {{count}}"
+    "moreSavedMemories_other": "И ещё {{count}}",
+    "filesCreated_one": "{{count}} файл создан",
+    "filesCreated_few": "{{count}} файла создано",
+    "filesCreated_many": "{{count}} файлов создано",
+    "filesCreated_other": "{{count}} файла создано",
+    "foundSources_one": "Найден {{count}} источник",
+    "foundSources_few": "Найдено {{count}} источника",
+    "foundSources_many": "Найдено {{count}} источников",
+    "foundSources_other": "Найдено {{count}} источника",
+    "mapPreviewPlaces_one": "Предпросмотр карты с {{count}} местом",
+    "mapPreviewPlaces_few": "Предпросмотр карты с {{count}} местами",
+    "mapPreviewPlaces_many": "Предпросмотр карты с {{count}} местами",
+    "mapPreviewPlaces_other": "Предпросмотр карты с {{count}} места",
+    "lines_one": "{{count}} строка",
+    "lines_few": "{{count}} строки",
+    "lines_many": "{{count}} строк",
+    "lines_other": "{{count}} строки",
+    "words_one": "{{count}} слово",
+    "words_few": "{{count}} слова",
+    "words_many": "{{count}} слов",
+    "words_other": "{{count}} слова"
   },
   "markdownTable": {
     "label": "Таблица",
@@ -590,7 +622,9 @@
     "expand": "Развернуть код",
     "close": "Закрыть развёрнутый код",
     "codeTitle": "Код {{language}}",
-    "codeBlockLabel": "Блок кода {{language}}"
+    "codeBlockLabel": "Блок кода {{language}}",
+    "edit": "Изменить",
+    "editLabel": "Изменить этот код рядом с чатом"
   },
   "streaming": {
     "reconnecting": "Переподключение…",

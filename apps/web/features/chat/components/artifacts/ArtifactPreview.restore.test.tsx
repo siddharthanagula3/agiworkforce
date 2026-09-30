@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { EditorView } from '@codemirror/view';
 import { ArtifactPreview } from './ArtifactPreview';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 
@@ -88,14 +89,22 @@ describe('restoring an older artifact version', () => {
     expect(versions[versions.length - 1]?.content).toBe('<p>v1</p>');
   });
 
-  it('says an unsaved edit will be discarded', () => {
+  it('says an unsaved edit will be discarded', async () => {
     seedVersions();
     renderPanel();
 
     fireEvent.click(screen.getByLabelText('Source'));
     fireEvent.click(screen.getByTestId('artifact-edit-source'));
-    fireEvent.change(screen.getByTestId('artifact-source-editor'), {
-      target: { value: '<p>unsaved work</p>' },
+    const host = await screen.findByTestId('artifact-source-editor');
+    const editor = await waitFor(() => {
+      const view = EditorView.findFromDOM(host.querySelector<HTMLElement>('.cm-editor')!);
+      if (!view) throw new Error('The source editor has not mounted yet');
+      return view;
+    });
+    act(() => {
+      editor.dispatch({
+        changes: { from: 0, to: editor.state.doc.length, insert: '<p>unsaved work</p>' },
+      });
     });
     openOlderVersion();
     fireEvent.click(screen.getByTestId('artifact-restore-version'));

@@ -1,404 +1,109 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Image, Pressable, Alert, ActivityIndicator, ScrollView } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import { Plug, Link, CheckCircle, ChevronRight, RefreshCw } from 'lucide-react-native';
+import { View, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
+import {
+  Plug,
+  Link,
+  CheckCircle,
+  ChevronRight,
+  RefreshCw,
+  AlertTriangle,
+  ShieldCheck,
+} from 'lucide-react-native';
+import { toolApprovalPolicyOption } from '@agiworkforce/types';
 import { useRouter } from 'expo-router';
+import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { BottomSearchBar, useBottomSearchBarSpace } from '@/src/shared/components/BottomSearchBar';
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,
+  SettingsGroup,
   SettingsInfo,
+  SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import * as WebBrowser from 'expo-web-browser';
+import { toUserMessage } from '@/services/userMessage';
 import { AddCustomConnectorModal } from './AddCustomConnectorModal';
+import { ConnectorLogo } from './ConnectorLogo';
+import { connectionStatus, formatConnectorName } from './connectorStatus';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import { useAuthStore } from '@/src/features/auth/store';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
-  connectConnector,
+  browseConnectorListings,
+  connectorListingIconUrl,
   fetchConnectorDirectory,
-  getGitHubInstallWebUrl,
+  linkBankAccountsInApp,
   type ConnectedConnector,
   type ConnectorDirectory,
+  type ConnectorListing,
+  type ConnectorListingCategory,
 } from '@/services/connectors';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { BANK_ACCOUNTS_CONNECTOR_ID } from '@agiworkforce/cloud-contracts';
 
-const SI: Record<string, { path: string; hex: string }> = {
-  gmail: {
-    hex: 'EA4335',
-    path: 'M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z',
-  },
-  'google-drive': {
-    hex: '4285F4',
-    path: 'M6.28 4.788 0 15.513l3.78 6.55 6.28-10.878zm11.44 0H6.28l-3.779 6.55h11.44zm-.84 6.55-3.78 6.55 3.78.013L24 6.325zm3.78 6.55L24 15.512l-6.28-10.726-3.78 6.55z',
-  },
-  notion: {
-    hex: '000000',
-    path: 'M3.913 3.93c.709.574 1.343.496 2.514.417l13.67-.808c.275 0 .046-.274-.046-.315l-2.27-1.648c-.432-.313-.997-.667-2.088-.588L3.11 1.79c-.459.04-.55.275-.367.432zm.733 2.975v14.367c0 .77.386 1.055 1.26.998l15.038-.866c.874-.04.979-.55.979-1.156V5.891c0-.6-.234-.918-.753-.874l-15.77.904c-.563.04-.754.314-.754.984zm14.84.785c.09.41 0 .82-.41.87l-.68.137v9.95c-.591.313-1.136.49-1.589.49-.727 0-.91-.229-1.453-.912l-4.457-7.002v6.776l1.413.314s0 .82-1.136.82l-3.132.183c-.09-.183 0-.636.315-.726l.818-.225V9.317L8.91 9.11c-.09-.41.136-1.001.773-1.046l3.362-.226 4.63 7.093V8.86l-1.184-.136c-.091-.504.272-.87.726-.91zM2.24 1.104l13.764-1.02c1.69-.142 2.124-.047 3.182.726l4.384 3.09c.726.507.962.644.962 1.19v16.298c0 1.022-.369 1.62-1.664 1.712L5.095 24c-.952.047-1.41-.096-1.908-.736L.37 20.21C-.27 19.343 0 18.753 0 17.988V2.807C0 1.97.39 1.285 2.24 1.104z',
-  },
-  github: {
-    hex: '181717',
-    path: 'M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12',
-  },
-  gitlab: {
-    hex: 'FC6D26',
-    path: 'M23.955 13.587l-1.342-4.135-2.664-8.189a.455.455 0 0 0-.867 0L16.418 9.45H7.582L4.918 1.263a.455.455 0 0 0-.867 0L1.386 9.45.044 13.587a.924.924 0 0 0 .331 1.023L12 23.054l11.625-8.443a.924.924 0 0 0 .33-1.024',
-  },
-  slack: {
-    hex: '4A154B',
-    path: 'M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z',
-  },
-  jira: {
-    hex: '0052CC',
-    path: 'M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.762a1.005 1.005 0 0 0-1.001-1.005zM23.013 0H11.455a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 24.017 12.49V1.005A1.001 1.001 0 0 0 23.013 0z',
-  },
-  linear: {
-    hex: '5E6AD2',
-    path: 'M0 14.008 9.99 24l14.01-14.01L14.008 0 0 14.008ZM.875 16.246l7.182 7.182-1.667-9.043-5.515 1.861ZM9.793 23.125 1.875 15.207l1.711-9.293 15.604 15.604-9.397 1.607ZM17.582 21.11 2.89 6.418l9.31-1.59L23.11 15.74l-5.528 5.37ZM15.753 2.69 7.762.866l-1.86 5.514 9.043 1.668-1.192-5.358Z',
-  },
-  notion_fallback: { hex: '000000', path: '' }, // handled via URL below
-  stripe: {
-    hex: '635BFF',
-    path: 'M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305h.003z',
-  },
-  shopify: {
-    hex: '96BF48',
-    path: 'M15.337 23.979l7.216-1.561s-2.604-17.613-2.625-17.73c-.018-.116-.114-.192-.211-.192-.098 0-1.87-.038-1.87-.038s-1.254-1.218-1.388-1.35v20.871h-.001l-.001-.001zm-3.001.021l1.501-.312V.906c-.13.024-2.16.412-2.16.412L8.35 22.399l4.01 1.601-.024-.001v.001zm-5.3-9.646l.78-2.439s.858.469 1.912.469c1.515 0 1.592-1.018 1.592-1.258 0-1.651-3.459-2.283-3.459-5.818 0-2.876 1.817-4.723 4.313-4.723 1.893 0 2.878.969 2.878.969l-.779 2.614s-1.278-.974-2.369-.974c-1.302 0-1.573.902-1.573 1.279 0 1.786 3.516 2.322 3.516 5.643 0 2.721-1.624 4.953-4.518 4.953-2.108 0-3.293-1.271-3.293-1.271v-.001z',
-  },
-  hubspot: {
-    hex: 'FF7A59',
-    path: 'M22.162 5.656a9.686 9.686 0 0 0-1.753-.812V2.996a1.703 1.703 0 0 0 .983-1.536 1.71 1.71 0 0 0-1.71-1.71 1.711 1.711 0 0 0-1.71 1.71c0 .666.38 1.234.938 1.524v1.853c-.91.174-1.77.535-2.516 1.062l-5.02-3.913a1.947 1.947 0 0 0 .063-.487A1.953 1.953 0 0 0 9.484 0a1.953 1.953 0 0 0-1.953 1.953 1.953 1.953 0 0 0 1.953 1.953c.31 0 .594-.074.852-.198l4.934 3.847a7.25 7.25 0 0 0-1.243 4.16 7.262 7.262 0 0 0 2.137 5.16 7.282 7.282 0 0 0 5.151 2.137 7.282 7.282 0 0 0 5.151-2.136 7.281 7.281 0 0 0 2.137-5.161 7.262 7.262 0 0 0-6.445-7.219zm-2.437 11.7a4.19 4.19 0 0 1-4.19-4.19 4.19 4.19 0 0 1 4.19-4.19 4.19 4.19 0 0 1 4.19 4.19 4.19 4.19 0 0 1-4.19 4.19z',
-  },
-  figma: {
-    hex: 'F24E1E',
-    path: 'M5.333 24C7.355 24 9 22.355 9 20.333V16.5H5.333C3.311 16.5 1.667 18.145 1.667 20.167 1.667 22.188 3.311 24 5.333 24zM1.667 12c0-2.022 1.645-3.667 3.667-3.667H9V15.5H5.333C3.311 15.5 1.667 13.855 1.667 12zm7.333-8.5C9 1.478 10.645 0 12.667 0c2.022 0 3.667 1.645 3.667 3.667V7.5H9V3.5zM12.667 8.5c2.022 0 3.666 1.645 3.666 3.667 0 2.022-1.644 3.666-3.666 3.666-2.022 0-3.667-1.644-3.667-3.666 0-2.022 1.645-3.667 3.667-3.667zm3.666-8.5c2.022 0 3.667 1.645 3.667 3.667V7.5h-7.333V3.667C12.667 1.645 14.311 0 16.333 0z',
-  },
-  discord: {
-    hex: '5865F2',
-    path: 'M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z',
-  },
-  zoom: {
-    hex: '2D8CFF',
-    path: 'M24 12c0 6.627-5.373 12-12 12S0 18.627 0 12 5.373 0 12 0s12 5.373 12 12zM7.111 9.778v4.89l2.222-2.224v2.334c0 .614.498 1.111 1.112 1.111h5.333A1.111 1.111 0 0 0 16.89 14.78V9.89a1.111 1.111 0 0 0-1.112-1.112H8.222A1.111 1.111 0 0 0 7.11 9.89v-.112zm10.667 1.111L24 8v8l-6.222-2.889V10.89z',
-  },
-  notion2: {
-    hex: '000000',
-    path: 'M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.934zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952l1.449.327s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L8.596 9.5c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.14c-.094-.514.28-.887.747-.933z',
-  },
-  airtable: {
-    hex: '18BFFF',
-    path: 'M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12c0-3.48.85-6.22 2.529-8.16C5.808 1.773 8.34.5 11.5.5c3.14 0 5.317.988 6.47 2.94.827 1.405 1.024 3.006.993 3.98l-.003.072c-.018.464-.17.85-.434 1.105a1.155 1.155 0 0 1-.833.302l-.038-.002-5.437-.323c-.447-.027-.883-.234-1.216-.582l-.039-.044a1.826 1.826 0 0 1-.44-1.434l.003-.035c.116-1.113.495-1.74 1.13-1.74h.042c.44.02.736.19.878.51.12.276.17.655.145 1.127l.004.022-.002.021a.27.27 0 0 0 .261.297l5.443.342-.01-.046c-.076-1.057-.38-2.162-1.01-3.054-1.049-1.476-2.987-2.26-5.607-2.26-2.52 0-4.576.895-5.944 2.59C5.28 6.08 4.5 8.587 4.5 12c0 3.513.78 6.134 2.32 7.79 1.333 1.43 3.206 2.18 5.66 2.18.14 0 .28-.003.422-.008.2-.008.381-.012.545-.012 2.45 0 4.275-.654 5.42-1.944 1.177-1.327 1.67-3.393 1.49-6.142l-.008-.11c-.053-.82-.168-1.554-.347-2.183h-6.565c-.34 0-.617-.277-.617-.617s.277-.617.617-.617h7.172c.31 0 .563.228.61.535.24 1.527.357 2.93.357 4.146 0 3.237-.761 5.718-2.263 7.373-1.507 1.66-3.757 2.503-6.687 2.503z',
-  },
-  trello: {
-    hex: '0052CC',
-    path: 'M21 0H3C1.343 0 0 1.343 0 3v18c0 1.656 1.343 3 3 3h18c1.656 0 3-1.344 3-3V3c0-1.657-1.344-3-3-3zM10.44 18.18c0 .795-.645 1.44-1.44 1.44H4.56c-.795 0-1.44-.645-1.44-1.44V5.76c0-.795.645-1.44 1.44-1.44H9c.795 0 1.44.645 1.44 1.44v12.42zm10.44-6c0 .795-.645 1.44-1.44 1.44H15c-.795 0-1.44-.645-1.44-1.44V5.76c0-.795.645-1.44 1.44-1.44h4.44c.795 0 1.44.645 1.44 1.44v6.42z',
-  },
-  asana: {
-    hex: 'F06A6A',
-    path: 'M11.994 0C5.375 0 0 5.376 0 12c0 6.626 5.375 12 11.994 12C18.625 24 24 18.626 24 12c0-6.624-5.375-12-12.006-12zm0 4.682c1.942 0 3.516 1.57 3.516 3.508 0 1.94-1.574 3.51-3.516 3.51-1.94 0-3.514-1.57-3.514-3.51 0-1.938 1.574-3.508 3.514-3.508zm5.994 11.634a6.77 6.77 0 0 1-5.994 3.63 6.77 6.77 0 0 1-5.994-3.63h11.988z',
-  },
-  todoist: {
-    hex: 'DB4035',
-    path: 'M1.675 0C.75 0 0 .75 0 1.675v20.65C0 23.25.75 24 1.675 24h20.65C23.25 24 24 23.25 24 22.325V1.675C24 .75 23.25 0 22.325 0zm5.4 7.2l1.5 1.5-4.2 4.2-1.5-1.5zm11.85 0l1.5 1.5L8.7 21.6l-1.5-1.5zm-5.925 2.925l1.5 1.5-6.225 6.225-1.5-1.5z',
-  },
-  dropbox: {
-    hex: '0061FF',
-    path: 'M12 2.295L6.009 6.09 12 9.885l-5.991 3.795L0 9.885l6.009-3.795L0 2.295 6.009-1.5zm0 0l5.991 3.795L12 9.885l5.991-3.795L24 9.885l-6.009 3.795L24 17.475l-5.991-3.795L12 17.475l-5.991-3.795L0 17.475l6.009-3.795z',
-  },
-};
+const BANK_LINK_LABEL = 'Link a bank account';
+const BANK_LINK_HINT =
+  'Read-only balances and transactions from US banks, linked through Plaid. Nothing can move money.';
 
-const LOGO_URLS: Record<string, string> = {
-  slack: 'https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png',
-  outlook:
-    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Outlook%20%282018%E2%80%93present%29.svg',
-  onedrive:
-    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20OneDrive%20%282019%E2%80%93present%29.svg',
-  teams:
-    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Teams%20%282025%E2%80%93present%29.svg',
-  salesforce: 'https://upload.wikimedia.org/wikipedia/commons/f/f9/Salesforce.com_logo.svg',
-  openai: 'https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg',
-  linkedin: 'https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png',
-  canva: 'https://www.google.com/s2/favicons?domain=canva.com&sz=64',
-  adobe: 'https://upload.wikimedia.org/wikipedia/commons/8/8d/Adobe_Corporate_Logo.png',
-  aws: 'https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg',
-  monday: 'https://upload.wikimedia.org/wikipedia/commons/c/c6/Monday_logo.svg',
-  azure: 'https://upload.wikimedia.org/wikipedia/commons/a/a8/Microsoft_Azure_Logo.svg',
-  freshdesk: 'https://www.google.com/s2/favicons?domain=freshdesk.com&sz=64',
-  pipedrive: 'https://www.google.com/s2/favicons?domain=pipedrive.com&sz=64',
-  twilio: 'https://www.google.com/s2/favicons?domain=twilio.com&sz=64',
-  sendgrid: 'https://www.google.com/s2/favicons?domain=sendgrid.com&sz=64',
-  segment: 'https://www.google.com/s2/favicons?domain=segment.com&sz=64',
-  plaid: 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
-};
+const ALL_FILTER = 'All';
+const CONNECTED_FILTER = 'Connected';
+const CUSTOM_FILTER = 'Custom';
+const CUSTOM_CONNECTOR_DESCRIPTION = 'Your encrypted remote MCP endpoint';
 
-interface ConnectorEntry {
-  id: string;
+interface ConnectorRow {
+  key: string;
+  routeId: string;
+  logoId: string;
   name: string;
+  publisher: string | null;
   description: string;
-  category: string;
-  iconBg?: string;
-  iconText?: string;
+  iconUrl: string | null;
+  connection: ConnectedConnector | null;
 }
 
-const CATALOG: ConnectorEntry[] = [
-  {
-    id: 'notion',
-    name: 'Notion',
-    description: 'Search and create content on Notion pages',
-    category: 'Productivity',
-    iconBg: '#1a1a1a',
-    iconText: 'No',
-  },
-  {
-    id: 'airtable',
-    name: 'Airtable',
-    description: 'Query and update Airtable bases',
-    category: 'Productivity',
-    iconBg: '#18BFFF20',
-    iconText: 'Ai',
-  },
-  {
-    id: 'trello',
-    name: 'Trello',
-    description: 'Manage cards, lists, and boards',
-    category: 'Productivity',
-    iconBg: '#0052CC20',
-    iconText: 'Tr',
-  },
-  {
-    id: 'asana',
-    name: 'Asana',
-    description: 'Track tasks, projects, and team progress',
-    category: 'Productivity',
-    iconBg: '#F06A6A20',
-    iconText: 'As',
-  },
-  {
-    id: 'todoist',
-    name: 'Todoist',
-    description: 'Manage tasks and projects',
-    category: 'Productivity',
-    iconBg: '#DB403520',
-    iconText: 'To',
-  },
-  {
-    id: 'linear',
-    name: 'Linear',
-    description: 'Plan and track issues and team workflows',
-    category: 'Developer',
-    iconBg: '#5E6AD220',
-    iconText: 'Li',
-  },
-  {
-    id: 'jira',
-    name: 'Jira',
-    description: 'Plan and track projects, tasks, and workflows',
-    category: 'Developer',
-    iconBg: '#0052CC20',
-    iconText: 'Ji',
-  },
-  {
-    id: 'github',
-    name: 'GitHub',
-    description: 'Search and manage your repositories',
-    category: 'Developer',
-    iconBg: '#18181720',
-    iconText: 'GH',
-  },
-  {
-    id: 'gitlab',
-    name: 'GitLab',
-    description: 'Search repos, issues, and pipelines',
-    category: 'Developer',
-    iconBg: '#FC6D2620',
-    iconText: 'GL',
-  },
-  {
-    id: 'figma',
-    name: 'Figma',
-    description: 'Browse files and leave design comments',
-    category: 'Design',
-    iconBg: '#F24E1E20',
-    iconText: 'Fi',
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    description: 'Search and post across your Slack workspace',
-    category: 'Communication',
-    iconBg: '#4A154B20',
-    iconText: 'Sl',
-  },
-  {
-    id: 'discord',
-    name: 'Discord',
-    description: 'Read and post messages in Discord servers',
-    category: 'Communication',
-    iconBg: '#5865F220',
-    iconText: 'Di',
-  },
-  {
-    id: 'zoom',
-    name: 'Zoom',
-    description: 'Schedule and manage Zoom meetings',
-    category: 'Communication',
-    iconBg: '#2D8CFF20',
-    iconText: 'Zo',
-  },
-  {
-    id: 'teams',
-    name: 'Microsoft Teams',
-    description: 'Search and send messages in Teams',
-    category: 'Communication',
-    iconBg: '#6264A720',
-    iconText: 'MT',
-  },
-  {
-    id: 'gmail',
-    name: 'Gmail',
-    description: 'Search, create, and manage your emails',
-    category: 'Email',
-    iconBg: '#EA433520',
-    iconText: 'Gm',
-  },
-  {
-    id: 'google-drive',
-    name: 'Google Drive',
-    description: 'Search and access Drive files',
-    category: 'Cloud Storage',
-    iconBg: '#4285F420',
-    iconText: 'GD',
-  },
-  {
-    id: 'dropbox',
-    name: 'Dropbox',
-    description: 'Access and search Dropbox content',
-    category: 'Cloud Storage',
-    iconBg: '#0061FF20',
-    iconText: 'Db',
-  },
-  {
-    id: 'onedrive',
-    name: 'OneDrive',
-    description: 'Access OneDrive files and folders',
-    category: 'Cloud Storage',
-    iconBg: '#0078D420',
-    iconText: 'OD',
-  },
-  {
-    id: 'hubspot',
-    name: 'HubSpot',
-    description: 'Manage contacts, deals, and pipelines',
-    category: 'CRM',
-    iconBg: '#FF7A5920',
-    iconText: 'Hs',
-  },
-  {
-    id: 'salesforce',
-    name: 'Salesforce',
-    description: 'Access and update CRM records',
-    category: 'CRM',
-    iconBg: '#00A1E020',
-    iconText: 'SF',
-  },
-  {
-    id: 'stripe',
-    name: 'Stripe',
-    description: 'View payments, customers, and subscriptions',
-    category: 'Finance',
-    iconBg: '#635BFF20',
-    iconText: 'St',
-  },
-];
+function listingRow(
+  listing: ConnectorListing,
+  connection: ConnectedConnector | null,
+): ConnectorRow {
+  return {
+    key: connection ? `connection:${connection.id}` : `listing:${listing.id}`,
+    routeId: connection?.connectorId ?? listing.id,
+    logoId: listing.id,
+    name: listing.name,
+    publisher: listing.publisher || null,
+    description: listing.description,
+    iconUrl: connectorListingIconUrl(listing),
+    connection,
+  };
+}
 
-const CATEGORIES = Array.from(new Set(CATALOG.map((c) => c.category)));
-
-function ConnectorLogo({ id, name, iconBg }: { id: string; name: string; iconBg?: string }) {
-  const colors = useThemeColors();
-  const [urlFailed, setUrlFailed] = useState(false);
-
-  const normalId = id.toLowerCase();
-  const siEntry = SI[normalId];
-  const logoUrl = LOGO_URLS[normalId];
-
-  if (siEntry?.path) {
-    const hex = siEntry.hex.toUpperCase();
-    const fill =
-      hex === '000000' || hex === '181717' || hex === '181818'
-        ? colors.textPrimary
-        : `#${siEntry.hex}`;
-    return (
-      <View
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 10,
-          backgroundColor: colors.neutralSurface,
-          borderWidth: 1,
-          borderColor: colors.border,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Svg width={20} height={20} viewBox="0 0 24 24">
-          <Path d={siEntry.path} fill={fill} />
-        </Svg>
-      </View>
-    );
-  }
-
-  if (logoUrl && !urlFailed) {
-    return (
-      <View
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 10,
-          backgroundColor: colors.neutralSurface,
-          borderWidth: 1,
-          borderColor: colors.border,
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-        }}
-      >
-        <Image
-          source={{ uri: logoUrl }}
-          style={{ width: 26, height: 26 }}
-          resizeMode="contain"
-          onError={() => setUrlFailed(true)}
-          accessibilityLabel={`${name} logo`}
-        />
-      </View>
-    );
-  }
-
-  const bg = iconBg ?? colors.neutralSurface;
-  const initials = name.slice(0, 2).toUpperCase();
-  return (
-    <View
-      style={{
-        width: 40,
-        height: 40,
-        borderRadius: 10,
-        backgroundColor: bg,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '700' }}>{initials}</Text>
-    </View>
-  );
+function connectionRow(
+  connection: ConnectedConnector,
+  listing: ConnectorListing | undefined,
+): ConnectorRow {
+  if (listing) return listingRow(listing, connection);
+  return {
+    key: `connection:${connection.id}`,
+    routeId: connection.connectorId,
+    logoId: connection.connectorId,
+    name: connection.name || formatConnectorName(connection.connectorId),
+    publisher: null,
+    description: connection.source === 'custom' ? CUSTOM_CONNECTOR_DESCRIPTION : '',
+    iconUrl: null,
+    connection,
+  };
 }
 
 const ROW_PADDING_X = 16;
@@ -407,47 +112,33 @@ const ROW_ICON_SIZE = 40;
 const ROW_ICON_GAP = 12;
 const ROW_DIVIDER_INSET = ROW_PADDING_X + ROW_ICON_SIZE + ROW_ICON_GAP;
 
-function ConnectorCard({
-  entry,
-  connected,
-  connectedAt,
-  needsReauthorization = false,
-  available,
-  busy,
-  onPress,
-}: {
-  entry: ConnectorEntry;
-  connected: boolean;
-  connectedAt?: string;
-  needsReauthorization?: boolean;
-  available: boolean;
-  busy: boolean;
-  onPress?: () => void;
-}) {
+function ConnectorCard({ row, onPress }: { row: ConnectorRow; onPress: () => void }) {
   const colors = useThemeColors();
-  const status = connected
-    ? needsReauthorization
-      ? 'Authorization expired'
-      : 'Connected'
-    : busy
-      ? 'Connecting'
-      : available
-        ? 'Connect'
-        : 'Coming soon';
-  const actionable = !busy && (connected || available);
-  const connectedLabel = needsReauthorization
-    ? 'Authorization expired, reconnect'
-    : connectedAt
-      ? `Connected ${new Date(connectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-      : 'Connected';
+  const status = row.connection ? connectionStatus(row.connection) : null;
+  const connectedAt = row.connection?.connectedAt;
+  const statusLabel =
+    status === 'needs-reauthorization'
+      ? 'Authorization expired, reconnect'
+      : status === 'not-responding'
+        ? 'Not responding'
+        : status === 'connected'
+          ? connectedAt
+            ? `Connected ${new Date(connectedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+            : 'Connected'
+          : null;
+  const statusColor =
+    status === 'needs-reauthorization'
+      ? colors.agentError
+      : status === 'not-responding'
+        ? colors.agentWarning
+        : colors.textMuted;
+  const detail = statusLabel ?? row.description;
 
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
-      disabled={!actionable}
-      accessibilityRole={actionable ? 'button' : 'text'}
-      accessibilityLabel={`${entry.name}. ${status}`}
-      accessibilityState={{ disabled: !actionable }}
+      accessibilityRole="button"
+      accessibilityLabel={`${row.name}${row.publisher ? `, ${row.publisher}` : ''}. ${statusLabel ?? 'Not connected'}`}
     >
       {({ pressed }) => (
         <View
@@ -458,26 +149,32 @@ function ConnectorCard({
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: ROW_ICON_GAP }}>
-            <ConnectorLogo id={entry.id} name={entry.name} iconBg={entry.iconBg} />
+            <ConnectorLogo id={row.logoId} name={row.name} iconUrl={row.iconUrl} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 numberOfLines={1}
-                style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+                style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
               >
-                {entry.name}
+                {row.name}
               </Text>
-              <Text
-                numberOfLines={1}
-                style={{
-                  color: connected && needsReauthorization ? colors.agentError : colors.textMuted,
-                  fontSize: 12,
-                  marginTop: 2,
-                }}
-              >
-                {connected ? connectedLabel : entry.description}
-              </Text>
+              {row.publisher ? (
+                <Text
+                  numberOfLines={1}
+                  style={{ color: colors.textSecondary, fontSize: typeScale.caption, marginTop: 1 }}
+                >
+                  {row.publisher}
+                </Text>
+              ) : null}
+              {detail ? (
+                <Text
+                  numberOfLines={1}
+                  style={{ color: statusColor, fontSize: typeScale.caption, marginTop: 2 }}
+                >
+                  {detail}
+                </Text>
+              ) : null}
             </View>
-            {connected ? (
+            {status ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
                 <View
                   style={{
@@ -486,46 +183,38 @@ function ConnectorCard({
                     borderRadius: 14,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: needsReauthorization
-                      ? colors.dangerSurface
-                      : colors.successSurface,
+                    backgroundColor:
+                      status === 'needs-reauthorization'
+                        ? colors.dangerSurface
+                        : status === 'not-responding'
+                          ? colors.warningSurface
+                          : colors.successSurface,
                     borderWidth: 1,
-                    borderColor: needsReauthorization ? colors.dangerBorder : colors.successBorder,
+                    borderColor:
+                      status === 'needs-reauthorization'
+                        ? colors.dangerBorder
+                        : status === 'not-responding'
+                          ? colors.warningBorder
+                          : colors.successBorder,
                   }}
                 >
-                  {needsReauthorization ? (
+                  {status === 'needs-reauthorization' ? (
                     <RefreshCw size={15} color={colors.agentError} />
+                  ) : status === 'not-responding' ? (
+                    <AlertTriangle size={15} color={colors.agentWarning} />
                   ) : (
                     <CheckCircle size={15} color={colors.agentSuccess} />
                   )}
                 </View>
                 <ChevronRight size={17} color={colors.textMuted} />
               </View>
-            ) : available || busy ? (
-              <View
-                style={{
-                  minHeight: 30,
-                  paddingVertical: 4,
-                  paddingHorizontal: 16,
-                  borderRadius: 15,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.textPrimary,
-                }}
-              >
-                <Text style={{ color: colors.background, fontSize: 13, fontWeight: '700' }}>
-                  {busy ? 'Connecting…' : 'Connect'}
-                </Text>
-              </View>
             ) : (
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>
-                Coming soon
-              </Text>
+              <ChevronRight size={17} color={colors.textMuted} />
             )}
           </View>
         </View>
       )}
-    </Pressable>
+    </PressableBox>
   );
 }
 
@@ -546,11 +235,23 @@ function WaitlistPlaceholder() {
     >
       <Link size={32} color={colors.textMuted} />
       <Text
-        style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600', textAlign: 'center' }}
+        style={{
+          color: colors.textPrimary,
+          fontSize: typeScale.body,
+          fontWeight: '600',
+          textAlign: 'center',
+        }}
       >
         Connectors, AGI Cloud
       </Text>
-      <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, textAlign: 'center' }}>
+      <Text
+        style={{
+          color: colors.textMuted,
+          fontSize: typeScale.footnote,
+          lineHeight: 18,
+          textAlign: 'center',
+        }}
+      >
         Connect Gmail, GitHub, Notion, Slack, and 80+ services to AGI Cloud. Available with cloud
         access.
       </Text>
@@ -577,46 +278,66 @@ export default function CloudConnectorsScreen({
   const isTierRefreshing = useTierStore((s) => s.isRefreshing);
   const lastTierRefreshAt = useTierStore((s) => s.lastRefreshedAt);
   const refreshTier = useTierStore((s) => s.refreshTier);
+  const toolApprovalPolicy = useSettingsStore((s) => s.toolApprovalPolicy);
   const capabilityRefreshOwnerRef = useRef<string | null>(null);
   const capabilityHandshakePending =
     isClerkSignedIn && isCloudModeActive && (isTierRefreshing || lastTierRefreshAt === null);
 
   const [directory, setDirectory] = useState<ConnectorDirectory | null>(null);
   const [loading, setLoading] = useState(false);
-  const [connectingId, setConnectingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<string>('All');
+  const [activeFilter, setActiveFilter] = useState<string>(ALL_FILTER);
   const [search, setSearch] = useState('');
+  const [listingSearch, setListingSearch] = useState('');
   const [addCustomVisible, setAddCustomVisible] = useState(false);
+  const [listings, setListings] = useState<ConnectorListing[]>([]);
+  const [knownListings, setKnownListings] = useState<ReadonlyMap<string, ConnectorListing>>(
+    () => new Map(),
+  );
+  const [listingCategories, setListingCategories] = useState<ConnectorListingCategory[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [listingsLoading, setListingsLoading] = useState(false);
+  const [listingsError, setListingsError] = useState<string | null>(null);
+  const listingRequestRef = useRef(0);
 
-  const load = useCallback(async (): Promise<ConnectorDirectory | null> => {
+  const load = useCallback(async (): Promise<void> => {
     const account = captureCloudAccountEpoch();
-    if (!account) return null;
+    if (!account) return;
     setLoading(true);
     setError(null);
     try {
       const nextDirectory = await fetchConnectorDirectory();
-      if (!isCloudAccountEpochCurrent(account)) return null;
+      if (!isCloudAccountEpochCurrent(account)) return;
       setDirectory(nextDirectory);
-      return nextDirectory;
-    } catch (err) {
-      if (!isCloudAccountEpochCurrent(account)) return null;
-      setError(err instanceof Error ? err.message : 'Could not load connectors');
-      return null;
+    } catch {
+      if (!isCloudAccountEpochCurrent(account)) return;
+      setError('Could not load connectors. Retry.');
     } finally {
       if (isCloudAccountEpochCurrent(account)) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    listingRequestRef.current += 1;
     setDirectory(null);
     setLoading(false);
-    setConnectingId(null);
     setError(null);
-    setActiveFilter('All');
+    setActiveFilter(ALL_FILTER);
     setSearch('');
+    setListingSearch('');
     setAddCustomVisible(false);
+    setListings([]);
+    setKnownListings(new Map());
+    setListingCategories([]);
+    setNextCursor(null);
+    setListingsLoading(false);
+    setListingsError(null);
   }, [clerkUserId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setListingSearch(search.trim()), SEARCH_INPUT_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     if (!FEATURES.connectors || !isClerkSignedIn || !clerkUserId || !isCloudModeActive) {
@@ -659,11 +380,82 @@ export default function CloudConnectorsScreen({
     canUseConnectors,
   ]);
 
+  const directoryVisible =
+    FEATURES.connectors &&
+    isClerkSignedIn &&
+    Boolean(clerkUserId) &&
+    isCloudModeActive &&
+    !capabilityHandshakePending &&
+    canUseConnectors &&
+    !error;
+
+  const listingCategory = useMemo(
+    () => listingCategories.find((category) => category === activeFilter) ?? null,
+    [activeFilter, listingCategories],
+  );
+  const browsesListings = activeFilter === ALL_FILTER || listingCategory !== null;
+
+  const loadListings = useCallback(
+    async (cursor: string | null) => {
+      const account = captureCloudAccountEpoch();
+      if (!account) return;
+      listingRequestRef.current += 1;
+      const request = listingRequestRef.current;
+      const isCurrent = () =>
+        request === listingRequestRef.current && isCloudAccountEpochCurrent(account);
+      setListingsLoading(true);
+      setListingsError(null);
+      try {
+        const page = await browseConnectorListings({
+          search: listingSearch,
+          category: listingCategory,
+          cursor,
+        });
+        if (!isCurrent()) return;
+        setListings((current) => (cursor ? [...current, ...page.entries] : page.entries));
+        setKnownListings(
+          (current) =>
+            new Map([...current, ...page.entries.map((entry) => [entry.id, entry] as const)]),
+        );
+        setListingCategories(page.categories);
+        setNextCursor(page.nextCursor);
+      } catch {
+        if (!isCurrent()) return;
+        setListingsError('Could not load the connector directory. Retry.');
+      } finally {
+        if (isCurrent()) setListingsLoading(false);
+      }
+    },
+    [listingCategory, listingSearch],
+  );
+
+  useEffect(() => {
+    if (!directoryVisible || !browsesListings) return;
+    setListings([]);
+    setNextCursor(null);
+    void loadListings(null);
+  }, [browsesListings, clerkUserId, directoryVisible, loadListings]);
+
   const connections = directory?.connectors ?? null;
-  const availableIds = useMemo(() => new Set(directory?.available ?? []), [directory]);
+  const bankLinkOffered =
+    (directory?.available.includes(BANK_ACCOUNTS_CONNECTOR_ID) ?? false) &&
+    !(connections ?? []).some((c) => c.connectorId === BANK_ACCOUNTS_CONNECTOR_ID);
+
+  const openBankLinking = useCallback(async () => {
+    try {
+      const outcome = await linkBankAccountsInApp();
+      if (outcome === 'connected') await load();
+    } catch (error) {
+      Alert.alert(
+        'Bank not linked',
+        toUserMessage(error, 'The bank link did not finish. Try again.'),
+      );
+    }
+  }, [load]);
 
   const connectionFor = useCallback(
-    (id: string) => connections?.find((c) => c.connectorId === id),
+    (listingId: string) =>
+      connections?.find((c) => c.connectorId === listingId || c.directoryId === listingId) ?? null,
     [connections],
   );
 
@@ -673,116 +465,60 @@ export default function CloudConnectorsScreen({
     );
   }, []);
 
-  const handlePress = useCallback(
-    (entry: ConnectorEntry) => {
-      const account = captureCloudAccountEpoch();
-      if (!isConnectorActionCurrent(account)) return;
-      const connection = connectionFor(entry.id);
-      if (connection) {
-        router.push({
-          pathname: '/(app)/connectors/[id]',
-          params: { id: connection.connectorId },
-        } as unknown as Parameters<typeof router.push>[0]);
-      } else if (!availableIds.has(entry.id)) {
-        return;
-      } else if (entry.id === 'github') {
-        void (async () => {
-          try {
-            await WebBrowser.openBrowserAsync(getGitHubInstallWebUrl());
-          } catch (err) {
-            void err;
-          }
-          if (isConnectorActionCurrent(account)) void load();
-        })();
-      } else {
-        setConnectingId(entry.id);
-        connectConnector(entry.id)
-          .then(async (result) => {
-            if (!isConnectorActionCurrent(account)) return;
-            if (result.kind === 'connected') {
-              await load();
-              return;
-            }
-            const opened = await openUntrustedUrlInAppBrowser(result.authorizeUrl);
-            if (!isConnectorActionCurrent(account)) return;
-            if (!opened) {
-              Alert.alert(
-                `Could not open ${entry.name} authorization`,
-                'No browser was available to complete the authorization. Nothing was connected.',
-              );
-              return;
-            }
-            const refreshed = await load();
-            if (!isConnectorActionCurrent(account) || refreshed === null) return;
-            const granted = refreshed.connectors.some((c) => c.connectorId === entry.id);
-            if (!granted) {
-              Alert.alert(
-                `${entry.name} is not connected yet`,
-                'The authorization was not completed. If the browser asked you to sign in to AGI Cloud, finish signing in there and try again.',
-              );
-            }
-          })
-          .catch((err: unknown) => {
-            if (!isConnectorActionCurrent(account)) return;
-            Alert.alert(
-              `Could not connect ${entry.name}`,
-              err instanceof Error ? err.message : 'Please try again.',
-            );
-          })
-          .finally(() => {
-            if (isConnectorActionCurrent(account)) setConnectingId(null);
-          });
-      }
+  const openConnector = useCallback(
+    (row: ConnectorRow) => {
+      if (!isConnectorActionCurrent(captureCloudAccountEpoch())) return;
+      router.push({
+        pathname: '/(app)/connectors/[id]',
+        params: { id: row.routeId },
+      } as unknown as Parameters<typeof router.push>[0]);
     },
-    [availableIds, connectionFor, isConnectorActionCurrent, load, router],
+    [isConnectorActionCurrent, router],
   );
 
   const filters = useMemo(
     () => [
-      'All',
-      'Connected',
-      ...(connections?.some((connector) => connector.source === 'custom') ? ['Custom'] : []),
-      ...CATEGORIES,
+      ALL_FILTER,
+      CONNECTED_FILTER,
+      ...(connections?.some((connector) => connector.source === 'custom') ? [CUSTOM_FILTER] : []),
+      ...listingCategories,
     ],
-    [connections],
+    [connections, listingCategories],
   );
 
-  const visibleEntries = useMemo(() => {
+  const visibleRows = useMemo(() => {
+    if (!connections) return [];
     const q = search.trim().toLowerCase();
-    const customEntries: ConnectorEntry[] =
-      connections
-        ?.filter((connector) => connector.source === 'custom')
-        .map((connector) => ({
-          id: connector.connectorId,
-          name: connector.name || 'Custom MCP',
-          description: 'Your encrypted remote MCP endpoint',
-          category: 'Custom',
-          iconText: 'MC',
-        })) ?? [];
-    return [...customEntries, ...CATALOG].filter((entry) => {
-      if (activeFilter === 'Connected' && !connectionFor(entry.id)) return false;
-      if (activeFilter !== 'All' && activeFilter !== 'Connected' && entry.category !== activeFilter)
-        return false;
-      if (
-        q &&
-        !entry.name.toLowerCase().includes(q) &&
-        !entry.description.toLowerCase().includes(q)
+    const matches = (row: ConnectorRow) =>
+      !q ||
+      [row.name, row.publisher ?? '', row.description].some((value) =>
+        value.toLowerCase().includes(q),
+      );
+    const connectedRows = connections
+      .map((connection) =>
+        connectionRow(
+          connection,
+          knownListings.get(connection.connectorId) ??
+            (connection.directoryId ? knownListings.get(connection.directoryId) : undefined),
+        ),
       )
-        return false;
-      return true;
-    });
-  }, [activeFilter, connections, search, connectionFor]);
+      .filter(matches);
+    if (activeFilter === CONNECTED_FILTER) return connectedRows;
+    if (activeFilter === CUSTOM_FILTER) {
+      return connectedRows.filter((row) => row.connection?.source === 'custom');
+    }
+    const listedRows = listings.map((listing) => listingRow(listing, connectionFor(listing.id)));
+    return activeFilter === ALL_FILTER
+      ? [...connectedRows, ...listedRows.filter((row) => row.connection === null)]
+      : listedRows;
+  }, [activeFilter, connectionFor, connections, knownListings, listings, search]);
+
+  const listingsPending =
+    connections === null || (browsesListings && (listingsLoading || listingsError !== null));
 
   const handleSignIn = useCallback(() => {
-    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+    router.push(beginCloudPostAuthIntent('cloud-connectors'));
   }, [router]);
-
-  const directoryVisible =
-    FEATURES.connectors &&
-    isCloudModeActive &&
-    !capabilityHandshakePending &&
-    canUseConnectors &&
-    !error;
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
@@ -805,9 +541,26 @@ export default function CloudConnectorsScreen({
       <SettingsScreenShell title="Connectors" backHref={backHref}>
         <SettingsInfo
           title="Connect your tools to AGI Cloud"
-          body="Only providers marked Connect are configured in this deployment. Custom MCP tokens are encrypted and never shown again."
+          body="Open a connector to see what it can do before you connect it. Custom MCP tokens are encrypted and never shown again."
           icon={Plug}
         />
+
+        {FEATURES.connectors && (
+          <SettingsGroup>
+            <SettingsRow
+              label="Action approvals"
+              value={toolApprovalPolicyOption(toolApprovalPolicy).shortLabel}
+              icon={ShieldCheck}
+              onPress={() => router.push('/(app)/settings/auto-approve')}
+              isLast
+            />
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+                Choose when AGI asks before a connected tool acts.
+              </Text>
+            </View>
+          </SettingsGroup>
+        )}
 
         {!FEATURES.connectors && <WaitlistPlaceholder />}
 
@@ -821,7 +574,7 @@ export default function CloudConnectorsScreen({
             style={{ alignItems: 'center', gap: 10, paddingVertical: 32 }}
           >
             <ActivityIndicator size="large" color={colors.teal} />
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
               Checking connector access…
             </Text>
           </View>
@@ -841,7 +594,7 @@ export default function CloudConnectorsScreen({
                 marginBottom: 18,
               }}
             >
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
                 Connectors are not available for this account.
               </Text>
             </View>
@@ -873,8 +626,10 @@ export default function CloudConnectorsScreen({
                 marginBottom: 18,
               }}
             >
-              <Text style={{ color: colors.agentError, fontSize: 13 }}>{error}</Text>
-              <Pressable
+              <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
+                {error}
+              </Text>
+              <PressableBox
                 onPress={() => void load()}
                 disabled={loading}
                 accessibilityLabel="Retry loading connectors"
@@ -888,21 +643,22 @@ export default function CloudConnectorsScreen({
                 }}
               >
                 <RefreshCw size={14} color={colors.agentError} />
-                <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.agentError,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
                   {loading ? 'Retrying…' : 'Retry'}
                 </Text>
-              </Pressable>
+              </PressableBox>
             </View>
           )}
 
         {directoryVisible && (
           <>
-            {/* Search moved to the bottom-anchored pill below, it used to sit
-              inside this ScrollView and scrolled away on a long directory. */}
-
-            {/* Add a user-owned custom remote-MCP connector (works today; no OAuth
-              app registration needed, server validates the HTTPS URL). */}
-            <Pressable
+            <PressableBox
               onPress={() => setAddCustomVisible(true)}
               accessibilityRole="button"
               accessibilityLabel="Add custom MCP connector"
@@ -920,12 +676,46 @@ export default function CloudConnectorsScreen({
               }}
             >
               <Link size={16} color={colors.teal} />
-              <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 15 }}>
+              <Text
+                style={{ color: colors.textPrimary, fontWeight: '600', fontSize: typeScale.body }}
+              >
                 Add custom MCP
               </Text>
-            </Pressable>
+            </PressableBox>
 
-            {/* Filter chips (All | Connected | categories) */}
+            {bankLinkOffered ? (
+              <PressableBox
+                onPress={() => void openBankLinking()}
+                accessibilityRole="button"
+                accessibilityLabel={BANK_LINK_LABEL}
+                accessibilityHint={BANK_LINK_HINT}
+                style={{
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  marginBottom: 14,
+                  gap: 4,
+                }}
+              >
+                <Text
+                  style={{ color: colors.textPrimary, fontWeight: '600', fontSize: typeScale.body }}
+                >
+                  {BANK_LINK_LABEL}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    lineHeight: 18,
+                  }}
+                >
+                  {BANK_LINK_HINT}
+                </Text>
+              </PressableBox>
+            ) : null}
+
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -934,7 +724,7 @@ export default function CloudConnectorsScreen({
               {filters.map((f) => {
                 const active = f === activeFilter;
                 return (
-                  <Pressable
+                  <PressableBox
                     key={f}
                     onPress={() => setActiveFilter(f)}
                     accessibilityRole="button"
@@ -953,24 +743,25 @@ export default function CloudConnectorsScreen({
                     <Text
                       style={{
                         color: active ? colors.background : colors.textSecondary,
-                        fontSize: 13,
+                        fontSize: typeScale.footnote,
                         fontWeight: '600',
                       }}
                     >
                       {f}
                     </Text>
-                  </Pressable>
+                  </PressableBox>
                 );
               })}
             </ScrollView>
 
-            {/* Filtered flat list */}
-            {visibleEntries.length === 0 ? (
+            {visibleRows.length === 0 && !listingsPending ? (
               <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
                 <Link size={28} color={colors.textMuted} />
-                <Text style={{ color: colors.textMuted, fontSize: 14 }}>No connectors found</Text>
+                <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
+                  No connectors found
+                </Text>
               </View>
-            ) : (
+            ) : visibleRows.length > 0 ? (
               <View
                 style={{
                   borderRadius: 14,
@@ -980,8 +771,8 @@ export default function CloudConnectorsScreen({
                   overflow: 'hidden',
                 }}
               >
-                {visibleEntries.map((entry, idx) => (
-                  <View key={entry.id}>
+                {visibleRows.map((row, idx) => (
+                  <View key={row.key}>
                     {idx > 0 && (
                       <View
                         style={{
@@ -991,27 +782,85 @@ export default function CloudConnectorsScreen({
                         }}
                       />
                     )}
-                    <ConnectorCard
-                      entry={entry}
-                      connected={!!connectionFor(entry.id)}
-                      connectedAt={connectionFor(entry.id)?.connectedAt}
-                      needsReauthorization={connectionFor(entry.id)?.needsReauthorization === true}
-                      available={availableIds.has(entry.id)}
-                      busy={connectingId === entry.id}
-                      onPress={
-                        connectionFor(entry.id) || availableIds.has(entry.id)
-                          ? () => handlePress(entry)
-                          : undefined
-                      }
-                    />
+                    <ConnectorCard row={row} onPress={() => openConnector(row)} />
                   </View>
                 ))}
               </View>
-            )}
+            ) : null}
 
-            {/* Matches the paddingBottom the other list screens give their
-              content containers: the pinned field overlays this ScrollView, so
-              without it the last connector row cannot be scrolled clear. */}
+            {browsesListings && listingsError ? (
+              <View
+                style={{
+                  borderRadius: 12,
+                  backgroundColor: colors.dangerSurface,
+                  borderWidth: 1,
+                  borderColor: colors.dangerBorder,
+                  padding: 12,
+                  marginTop: 14,
+                }}
+              >
+                <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
+                  {listingsError}
+                </Text>
+                <PressableBox
+                  onPress={() => void loadListings(listings.length > 0 ? nextCursor : null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading the connector directory"
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 6,
+                    minHeight: 44,
+                  }}
+                >
+                  <RefreshCw size={14} color={colors.agentError} />
+                  <Text
+                    style={{
+                      color: colors.agentError,
+                      fontSize: typeScale.footnote,
+                      fontWeight: '600',
+                    }}
+                  >
+                    Retry
+                  </Text>
+                </PressableBox>
+              </View>
+            ) : browsesListings && listingsLoading ? (
+              <View
+                accessibilityLabel="Loading connectors"
+                style={{ alignItems: 'center', paddingVertical: 24 }}
+              >
+                <ActivityIndicator color={colors.teal} />
+              </View>
+            ) : browsesListings && nextCursor ? (
+              <PressableBox
+                onPress={() => void loadListings(nextCursor)}
+                accessibilityRole="button"
+                accessibilityLabel="Show more connectors"
+                style={({ pressed }) => ({
+                  minHeight: 44,
+                  marginTop: 14,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                  }}
+                >
+                  Show more
+                </Text>
+              </PressableBox>
+            ) : null}
+
             <View style={{ height: bottomSearchSpace }} />
           </>
         )}

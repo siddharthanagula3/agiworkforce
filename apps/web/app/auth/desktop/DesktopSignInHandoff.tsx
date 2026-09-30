@@ -1,6 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  accountSecurityVerifyPageHref,
+  readPasskeyRequired,
+} from '@agiworkforce/cloud-contracts/account-security';
 import { DESKTOP_SIGN_IN_PATH, desktopSignInLink } from '@agiworkforce/local-runtime-contract';
 import { Spinner } from '@agiworkforce/ui';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
@@ -22,6 +26,8 @@ const INVALID_DETAIL =
 
 type HandoffState = { kind: 'preparing' } | { kind: 'ready' } | { kind: 'failed'; message: string };
 
+type GrantResult = { kind: 'granted'; code: string } | { kind: 'passkey_required' };
+
 function readErrorMessage(body: unknown): string | null {
   if (!body || typeof body !== 'object') return null;
   const error = (body as { error?: unknown }).error;
@@ -33,7 +39,7 @@ function readErrorMessage(body: unknown): string | null {
   return null;
 }
 
-async function requestGrant(challenge: string): Promise<string> {
+async function requestGrant(challenge: string): Promise<GrantResult> {
   const response = await fetch(GRANT_PATH, {
     method: 'POST',
     credentials: 'include',
@@ -41,16 +47,20 @@ async function requestGrant(challenge: string): Promise<string> {
     body: JSON.stringify({ challenge }),
   });
   const body: unknown = await response.json().catch(() => null);
+  if (response.status === 403 && readPasskeyRequired(body)) return { kind: 'passkey_required' };
   const code = body && typeof body === 'object' ? (body as { code?: unknown }).code : undefined;
   if (!response.ok || typeof code !== 'string') {
     throw new Error(readErrorMessage(body) ?? GRANT_FAILED);
   }
-  return code;
+  return { kind: 'granted', code };
+}
+
+function returnPathFor(challenge: string): string {
+  return `${DESKTOP_SIGN_IN_PATH}?${new URLSearchParams({ challenge }).toString()}`;
 }
 
 function signInUrlFor(challenge: string): string {
-  const returnTo = `${DESKTOP_SIGN_IN_PATH}?${new URLSearchParams({ challenge }).toString()}`;
-  return `/login?${new URLSearchParams({ redirectTo: returnTo }).toString()}`;
+  return `/login?${new URLSearchParams({ redirectTo: returnPathFor(challenge) }).toString()}`;
 }
 
 export function DesktopSignInHandoff({ challenge }: { challenge: string | null }) {
@@ -61,8 +71,12 @@ export function DesktopSignInHandoff({ challenge }: { challenge: string | null }
   const handOff = useCallback(async (): Promise<HandoffState> => {
     if (challenge === null) return { kind: 'failed', message: GRANT_FAILED };
     try {
-      const code = await requestGrant(challenge);
-      window.location.assign(desktopSignInLink(code));
+      const grant = await requestGrant(challenge);
+      if (grant.kind === 'passkey_required') {
+        window.location.assign(accountSecurityVerifyPageHref(returnPathFor(challenge)));
+        return { kind: 'preparing' };
+      }
+      window.location.assign(desktopSignInLink(grant.code, challenge));
       return { kind: 'ready' };
     } catch (cause) {
       return { kind: 'failed', message: toUserMessage(cause, GRANT_FAILED) };

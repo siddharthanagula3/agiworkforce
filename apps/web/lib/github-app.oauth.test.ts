@@ -83,6 +83,62 @@ describe('GitHub App user authorization ownership proof', () => {
     expect(body.get('redirect_uri')).toBe('https://app.example.com/api/github/oauth/callback');
   });
 
+  it('sends the PKCE verifier on exchange only when one is given', async () => {
+    const tokenResponse = () =>
+      new Response(JSON.stringify({ access_token: 'ghu_ephemeral', token_type: 'bearer' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    mockFetch.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce(tokenResponse());
+    const github = await loadConfiguredGitHubApp();
+    const callback = 'https://app.example.com/api/github/oauth/callback';
+
+    await github.exchangeGitHubOAuthCode('one-time-code', callback, 'row-verifier');
+    await github.exchangeGitHubOAuthCode('one-time-code', callback);
+
+    const withVerifier = (mockFetch.mock.calls[0] as [string, RequestInit])[1]
+      .body as URLSearchParams;
+    const without = (mockFetch.mock.calls[1] as [string, RequestInit])[1].body as URLSearchParams;
+    expect(withVerifier.get('code_verifier')).toBe('row-verifier');
+    expect(without.has('code_verifier')).toBe(false);
+  });
+
+  it('asks GitHub for an S256 PKCE challenge only when one is given', async () => {
+    const github = await loadConfiguredGitHubApp();
+    const callback = 'https://app.example.com/api/github/oauth/callback';
+
+    const withChallenge = new URL(
+      github.getGitHubUserAuthorizationUrl('a'.repeat(64), callback, 'challenge-value'),
+    );
+    const without = new URL(github.getGitHubUserAuthorizationUrl('a'.repeat(64), callback));
+
+    expect(withChallenge.searchParams.get('code_challenge')).toBe('challenge-value');
+    expect(withChallenge.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(without.searchParams.has('code_challenge')).toBe(false);
+    expect(without.searchParams.has('code_challenge_method')).toBe(false);
+  });
+
+  it("names an installation's account from the app's own view of it", async () => {
+    mockFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: 987654, account: { login: 'acme', type: 'Organization' } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const github = await loadConfiguredGitHubApp(Buffer.from(TEST_PRIVATE_KEY).toString('base64'));
+
+    await expect(github.getGitHubInstallationAccount(987654)).resolves.toEqual({
+      accountLogin: 'acme',
+      accountType: 'Organization',
+    });
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/app/installations/987654');
+    expect((init.headers as Record<string, string>)['Authorization']).toMatch(/^Bearer /);
+
+    mockFetch.mockResolvedValue(new Response('{}', { status: 404 }));
+    await expect(github.getGitHubInstallationAccount(987654)).resolves.toBeNull();
+  });
+
   it('checks every page of user-accessible installations and returns GitHub metadata', async () => {
     const firstPage = Array.from({ length: 100 }, (_, index) => ({
       id: index + 1,

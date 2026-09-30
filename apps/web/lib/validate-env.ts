@@ -1125,6 +1125,15 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     validate: isBooleanish,
     description: 'whether the server accepts a checkout or top-up request at all',
   }),
+  published('AGI_BILLING_WAITLIST_OPEN', {
+    type: 'enum',
+    owner: 'apps/web/lib/server/billing-waitlist-access.ts',
+    defaultValue: null,
+    requiredIn: [],
+    validate: oneOf('0', '1'),
+    description:
+      'launch switch: 1 opens paid upgrades to every account; unset keeps the waitlist on',
+  }),
   published('NEXT_PUBLIC_CHECKOUT_ENABLED', {
     type: 'boolean',
     owner: 'apps/web/lib/billing',

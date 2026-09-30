@@ -55,6 +55,7 @@ const MAX_BACKGROUND_MESSAGES = 100;
 const MAX_CONVERSATION_TITLE_CHARS = 80;
 const MAX_CONVERSATION_PROJECT_ID_CHARS = 128;
 const BACKGROUND_DELIVERY_ID_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
+const AUTO_ROUTE_REASON_PATTERN = /^[a-z_]{1,40}$/;
 export const BACKGROUND_ANSWER_TRUNCATION_NOTICE =
   '\n\n[Answer truncated because it exceeded the browser-local history limit.]';
 
@@ -84,6 +85,8 @@ export interface HistoryMessage {
   managedQuickMode?: boolean;
   agiWorkPlanDeclined?: boolean;
   model?: string;
+  autoRouteReason?: string;
+  movedFromModel?: string;
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
@@ -107,6 +110,8 @@ export interface ConversationCloudSyncState {
   createAcknowledged?: boolean;
   syncedTitle?: string;
   syncedProjectId?: string | null;
+  syncedPinned?: boolean;
+  syncedArchived?: boolean;
   state: 'idle' | 'pending' | 'error' | 'blocked';
   blockedReason?: 'non-cloud-runtime' | 'auth' | 'not-found' | 'workspace';
   lastError?: string;
@@ -374,6 +379,18 @@ function normalizeHistoryMessage(
         normalized.provider = modelMetadata.provider;
       }
     }
+    if (
+      typeof message['autoRouteReason'] === 'string' &&
+      AUTO_ROUTE_REASON_PATTERN.test(message['autoRouteReason'])
+    ) {
+      normalized.autoRouteReason = message['autoRouteReason'];
+    }
+    if (
+      isSafeModelReference(message['movedFromModel']) &&
+      getModelMetadataById(message['movedFromModel'])
+    ) {
+      normalized.movedFromModel = message['movedFromModel'];
+    }
     const rawGeneratedFiles = message['generatedFiles'];
     const generatedFiles = parseGeneratedFilesDelta({
       files: Array.isArray(rawGeneratedFiles)
@@ -625,6 +642,10 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   } else {
     const syncedProjectId = normalizeConversationProjectId(raw['syncedProjectId']);
     if (syncedProjectId) normalized.syncedProjectId = syncedProjectId;
+  }
+  if (typeof raw['syncedPinned'] === 'boolean') normalized.syncedPinned = raw['syncedPinned'];
+  if (typeof raw['syncedArchived'] === 'boolean') {
+    normalized.syncedArchived = raw['syncedArchived'];
   }
   if (
     raw['blockedReason'] === 'non-cloud-runtime' ||
@@ -1524,6 +1545,14 @@ export function conversationProjectNeedsSync(entry: ConversationEntry): boolean 
   return (entry.projectId ?? null) !== (synced === undefined ? null : synced);
 }
 
+export function conversationFlagsNeedSync(entry: ConversationEntry): boolean {
+  if (entry.cloudSync?.conversationId === undefined) return false;
+  return (
+    (entry.pinned === true) !== (entry.cloudSync.syncedPinned === true) ||
+    (entry.archived === true) !== (entry.cloudSync.syncedArchived === true)
+  );
+}
+
 export async function listConversationsNeedingCloudSync(
   owner: ManagedCloudOwner,
 ): Promise<ConversationEntry[]> {
@@ -1544,6 +1573,7 @@ export async function listConversationsNeedingCloudSync(
       (entry.cloudSync?.conversationId !== undefined &&
         (entry.cloudSync.syncedTitle !== entry.title ||
           conversationProjectNeedsSync(entry) ||
+          conversationFlagsNeedSync(entry) ||
           entry.cloudSync.organizationId === undefined ||
           entry.cloudSync.createAcknowledged !== true))
     );

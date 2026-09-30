@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
-  Pressable,
   StyleSheet,
   Linking,
   TextInput,
@@ -10,6 +9,7 @@ import {
   Alert,
   useWindowDimensions,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
@@ -19,6 +19,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatMessageStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { recognizeText, type OcrRegion } from '@/src/features/image/services/ocr';
@@ -28,6 +29,7 @@ import type { Attachment } from '@/src/features/chat/components/AttachmentPrevie
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { translatePlural } from '@/src/i18n/plural';
 
 type ScanPhase = 'camera' | 'processing' | 'preview';
 
@@ -93,9 +95,8 @@ export default function ScanScreen() {
       setPromptText(prefill);
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'OCR failed';
-      setOcrError(msg);
+    } catch {
+      setOcrError('Text could not be read from this image. Retake the scan or type your question.');
       setPromptText('');
     }
 
@@ -118,12 +119,8 @@ export default function ScanScreen() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, exif: false });
       if (!photo?.uri) return;
       await scanImage(photo.uri);
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'The camera could not capture the image. Please try again.';
-      Alert.alert('Capture failed', message);
+    } catch {
+      Alert.alert('Capture failed', 'The camera could not capture the image. Please try again.');
     } finally {
       setIsCapturing(false);
     }
@@ -191,11 +188,18 @@ export default function ScanScreen() {
         fileName: `scan_${now}.jpg`,
       };
 
-      await sendMessage(conversationId, content, selectedModel, [attachment]);
+      const accepted = await sendMessage(conversationId, content, selectedModel, [attachment]);
+      if (!accepted) {
+        Alert.alert('Send failed', 'The scan could not be sent. Check your model and try again.');
+        setIsSending(false);
+        return;
+      }
       router.replace(`/(app)/chat/${conversationId}` as Parameters<typeof router.replace>[0]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'The scan could not be sent.';
-      Alert.alert('Send failed', message);
+    } catch {
+      Alert.alert(
+        'Send failed',
+        'The scan could not be sent. Check your connection and try again.',
+      );
       setIsSending(false);
     }
   }, [capturedUri, isSending, createConversation, sendMessage, selectedModel, promptText, router]);
@@ -247,7 +251,7 @@ export default function ScanScreen() {
             Allow camera access to scan and extract text from documents, signs, and screens.
           </Text>
           <View style={styles.permissionButtons}>
-            <Pressable
+            <PressableBox
               onPress={requestPermission}
               style={styles.primaryButton}
               accessibilityRole="button"
@@ -256,8 +260,8 @@ export default function ScanScreen() {
               <Text className="font-semibold text-sm" style={{ color: c.accentText }}>
                 Allow Access
               </Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               onPress={() => Linking.openSettings()}
               style={styles.outlineButton}
               accessibilityRole="button"
@@ -266,12 +270,16 @@ export default function ScanScreen() {
               <Text className="text-sm" style={{ color: c.cameraOverlayTextMuted }}>
                 Open Settings
               </Text>
-            </Pressable>
-            <Pressable {...chrome.close} className="items-center py-3" style={chrome.close.style}>
+            </PressableBox>
+            <PressableBox
+              {...chrome.close}
+              className="items-center py-3"
+              style={chrome.close.style}
+            >
               <Text className="text-sm" style={{ color: c.cameraOverlayTextMuted }}>
                 Cancel
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </SafeAreaView>
@@ -325,15 +333,18 @@ export default function ScanScreen() {
           {/* Top bar */}
           <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
             <View style={styles.topBar}>
-              <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
+              <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
                 <X size={22} color={c.cameraOverlayText} />
-              </Pressable>
+              </PressableBox>
 
               <View style={styles.topBadge}>
                 <ScanText size={14} color={c.teal} />
                 <Text style={styles.topBadgeText}>
                   {regions.length > 0
-                    ? `${regions.length} text block${regions.length !== 1 ? 's' : ''}`
+                    ? translatePlural('common', 'counts.textBlocks', regions.length, {
+                        one: '{{count}} text block',
+                        other: '{{count}} text blocks',
+                      })
                     : ocrError
                       ? 'No text found'
                       : 'No text detected'}
@@ -341,9 +352,9 @@ export default function ScanScreen() {
               </View>
 
               {chrome.cancel ? (
-                <Pressable {...chrome.cancel} style={[styles.iconButton, chrome.cancel.style]}>
+                <PressableBox {...chrome.cancel} style={[styles.iconButton, chrome.cancel.style]}>
                   <RotateCcw size={20} color={c.cameraOverlayText} />
-                </Pressable>
+                </PressableBox>
               ) : null}
             </View>
           </SafeAreaView>
@@ -353,7 +364,7 @@ export default function ScanScreen() {
             <View style={styles.bottomStack}>
               {/* Copy-text pill, only if OCR found text */}
               {extractedText.trim().length > 0 && (
-                <Pressable
+                <PressableBox
                   onPress={handleCopy}
                   style={styles.copyPill}
                   accessibilityRole="button"
@@ -363,7 +374,7 @@ export default function ScanScreen() {
                   <Text style={[styles.copyPillText, copied && { color: c.teal }]}>
                     {copied ? 'Copied' : 'Copy text'}
                   </Text>
-                </Pressable>
+                </PressableBox>
               )}
 
               {/* Composer */}
@@ -378,7 +389,7 @@ export default function ScanScreen() {
                   style={styles.promptInput}
                   accessibilityLabel="Prompt for AI"
                 />
-                <Pressable
+                <PressableBox
                   onPress={handleSend}
                   disabled={isSending}
                   style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
@@ -390,7 +401,7 @@ export default function ScanScreen() {
                   ) : (
                     <Send size={20} color={c.accentText} />
                   )}
-                </Pressable>
+                </PressableBox>
               </View>
             </View>
           </SafeAreaView>
@@ -421,14 +432,14 @@ export default function ScanScreen() {
       {/* Top bar */}
       <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
         <View style={styles.topBar}>
-          <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
+          <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
             <X size={22} color={c.cameraOverlayText} />
-          </Pressable>
+          </PressableBox>
 
           <Text style={styles.screenTitle}>Scan Text</Text>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Pressable
+            <PressableBox
               testID="scan-facing-toggle"
               onPress={toggleFacing}
               style={styles.iconButton}
@@ -438,9 +449,9 @@ export default function ScanScreen() {
               }
             >
               <SwitchCamera size={20} color={c.cameraOverlayText} />
-            </Pressable>
+            </PressableBox>
 
-            <Pressable
+            <PressableBox
               onPress={toggleFlash}
               style={styles.iconButton}
               accessibilityRole="button"
@@ -451,7 +462,7 @@ export default function ScanScreen() {
               ) : (
                 <ZapOff size={20} color={c.cameraOverlayText} />
               )}
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </SafeAreaView>
@@ -470,7 +481,7 @@ export default function ScanScreen() {
       {/* Bottom: shutter */}
       <SafeAreaView style={styles.bottomBarSafeArea} edges={['bottom']}>
         <View style={styles.bottomBar}>
-          <Pressable
+          <PressableBox
             onPress={handleCapture}
             disabled={isCapturing || !cameraReady}
             style={[
@@ -487,7 +498,7 @@ export default function ScanScreen() {
             ) : (
               <ScanText size={26} color={c.accentText} />
             )}
-          </Pressable>
+          </PressableBox>
         </View>
       </SafeAreaView>
     </View>
@@ -629,7 +640,7 @@ function createStyles(colors: ColorScheme) {
     },
     processingLabel: {
       color: colors.cameraOverlayText,
-      fontSize: 15,
+      fontSize: typeScale.body,
       fontWeight: '500',
     },
 
@@ -649,7 +660,7 @@ function createStyles(colors: ColorScheme) {
     },
     screenTitle: {
       color: colors.cameraOverlayText,
-      fontSize: 16,
+      fontSize: typeScale.callout,
       fontWeight: '600',
     },
     iconButton: {
@@ -673,7 +684,7 @@ function createStyles(colors: ColorScheme) {
     },
     topBadgeText: {
       color: colors.cameraOverlayText,
-      fontSize: 12,
+      fontSize: typeScale.caption,
       fontWeight: '500',
     },
 
@@ -740,7 +751,7 @@ function createStyles(colors: ColorScheme) {
     },
     hintText: {
       color: colors.cameraOverlayTextMuted,
-      fontSize: 13,
+      fontSize: typeScale.footnote,
       fontWeight: '400',
     },
 
@@ -800,7 +811,7 @@ function createStyles(colors: ColorScheme) {
     },
     copyPillText: {
       color: colors.cameraOverlayText,
-      fontSize: 12,
+      fontSize: typeScale.caption,
       fontWeight: '500',
     },
     promptContainer: {
@@ -817,7 +828,7 @@ function createStyles(colors: ColorScheme) {
     promptInput: {
       flex: 1,
       color: colors.cameraOverlayText,
-      fontSize: 15,
+      fontSize: typeScale.body,
       lineHeight: 22,
       maxHeight: 140,
       paddingVertical: 0,

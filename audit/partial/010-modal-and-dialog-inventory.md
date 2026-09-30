@@ -45,29 +45,23 @@ nothing is left.
 
 - Done when: Archiving asks to confirm, or confirms afterwards with a way to undo, and says where archived items can be found.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Archive runs immediately from the menu with no confirmation or undo; only a failure alert. | states |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/conversation-actions/useConversationActions.ts:129-129`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:100-100`
 
 ## S10.08: Share conversation.
 
 - Done when: A share dialog creates a link to the conversation, shows it for copying, and states who can open it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Share' exports the chat as a file through the OS share sheet; creating a share link is only possible on web. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/chat/[id].tsx:1599-1604`
 
 ## S10.09: Share file or folder.
 
@@ -80,18 +74,6 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/ch
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S10.10: Share artifact.
-
-- Done when: An artifact share dialog publishes it to a link, lets the user copy it and choose who can open it, and can take it down.
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Publish, copy link and share link work, but mobile has no way to unpublish an artifact or choose who can open it (workspace vs anyone). | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
 
 ## S10.11: Publish generated application.
 
@@ -119,27 +101,21 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`,
 
 - Done when: An invite dialog takes an email and role, sends the invitation, and lists pending invites to revoke or renew.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile cannot send, list, renew or revoke invitations: on iOS "Add" attaches an existing AGI account directly ("There is no invitation email") and on Android it opens web team settings. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:129-160`, `apps/mobile/src/features/team/service.ts:149-155`
 
 ## S10.14: Change member role.
 
 - Done when: A role dialog changes a member's role after confirmation, and the server enforces the new role.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile changes a member between the built-in roles only and shows no role permissions; it also offers "Owner", which the server always refuses (ownership moves only by transfer). | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:163-177`, `apps/mobile/src/features/team/service.ts:5-5`, `apps/mobile/src/features/team/service.ts:161-161`
 
 ## S10.15: Transfer ownership.
 
@@ -165,18 +141,6 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:163-177`, `apps/mobile/src/f
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S10.17: Upload from device.
-
-- Done when: Choosing upload opens the device file chooser and the picked files attach to the message.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | needs the R2 upload host in manifest connect-src and host_permissions (permission prompt on update, owner call) or a server upload proxy accepting the extension token | document upload |
-
-Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_panel.ts:5258-5298`
-
 ## S10.19: Reauthorize connection.
 
 - Done when: An expired connection offers a reconnect dialog that re-runs authorization and keeps its settings.
@@ -185,9 +149,9 @@ Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_pan
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/mcp-web 7eb7ec7c1: an expired connection's detail now offers Reconnect beside Disconnect, with a note that reconnecting signs in again and keeps its settings and tool permissions; a connector that is only not responding is not offered it. Still owed: a browser pass against a real expired grant. | states |
+| web | partial | live-check: with a revoked or expired OAuth grant (e.g. Google Drive), open Connectors on web and in Electron: Reconnect shows beside Disconnect and re-runs OAuth, settings and tool permissions persist, and chat shows the agi_reconnect card | states |
 
-Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:251-251`, `apps/web/features/directory/services/connectors-directory.ts:664-664`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1101-1101`
+Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:293-293`
 
 ## S10.21: Install Plugin.
 
@@ -234,13 +198,13 @@ Code: `packages/ui/ui/src/directory/ConnectorDetailView.tsx:251-251`, `apps/web/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
-| desktop | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/ui/src/directory/DirectoryPanel.tsx:381-387`, `apps/web/features/directory/hooks/useDirectoryAdapter.ts:1223-1238`, `apps/web/app/api/skills/route.ts:161-179`, `apps/web/lib/services/user-skill-service.ts:68-72`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S10.25: Skill edit.
 
@@ -249,14 +213,13 @@ Code: `packages/ui/ui/src/directory/DirectoryPanel.tsx:381-387`, `apps/web/featu
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The skill editor (name, description, instructions) only appears with AGI_USER_SKILL_AUTHORING=1 (default 0); Create plugin can author skills once but they cannot be edited afterwards. | flag-off |
-| desktop | partial | The skill editor (name, description, instructions) only appears with AGI_USER_SKILL_AUTHORING=1 (default 0); Create plugin can author skills once but they cannot be edited afterwards. | flag-off |
+| web | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
+| desktop | partial | switch-on: set AGI_USER_SKILL_AUTHORING=1 in Vercel Production (read at apps/web/lib/services/user-skill-authoring.ts:10); confirm migration 0157 is applied first | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No in-product editor; users write SKILL.md files in their own editor. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps/web/features/skills/hooks/use-skills-settings-adapter.tsx:160-163`, `apps/web/lib/services/user-skill-authoring.ts:3-7`, `packages/ui/ui/src/directory/CreatePluginDialog.tsx:179-210`
+Code: `apps/web/lib/services/user-skill-authoring.ts:10-10`
 
 ## S10.26: Model incompatibility warning.
 
@@ -274,14 +237,11 @@ Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps
 
 - Done when: As a conversation nears or passes the model's context limit, the user gets a clear warning with what to do (trim, compact, new chat).
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the on-device Apple Intelligence path explains an over-long chat, after it fails; warn before sending, for every model. | states |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`
 
 ## S10.29: Credit-purchase dialog.
 
@@ -290,11 +250,11 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:584-584`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: buying extra usage needs an active Stripe-billed paid plan, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: buying extra usage needs an active Stripe-billed paid plan, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
-| mobile | partial | Native top-up products exist but are gated off by default (MOBILE_IAP_ENABLED unset), so mobile cannot sell extra usage. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
+| web | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
+| desktop | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
+| mobile | partial | Owner and switch-on: waitlist hold plus MOBILE_IAP_ENABLED and store products. | flag-off |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:976-990`, `apps/web/features/chat/components/InlinePaywallCard.tsx:237-241`, `apps/web/app/api/billing/top-up/route.ts:156-180`, `apps/web/app/api/billing/top-up/route.ts:128-137`
+Code: `apps/web/lib/server/billing-waitlist-access.ts:22-24`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
 ## S10.30: Upgrade comparison.
 
@@ -304,7 +264,7 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:976-990`, `apps/we
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Build a plan comparison in the app; mobile shows only the current plan, and the native product list (name, interval, price, no features) is gated off by MOBILE_IAP_ENABLED. | ui, flag-off |
+| mobile | partial | Owner: plan prices and pick action depend on FEATURES.billing and the native product list (waitlist hold). | ui, flag-off |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 
@@ -316,7 +276,7 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile sends cancellation to the store (store-billed) or to web billing (Stripe-billed); no cancel in the app. | surface-only |
+| mobile | partial | D-2026-09-28-27: cancellation links out to the store or web billing. | surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`
 
@@ -328,7 +288,7 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows no card; management is behind FEATURES.billing and otherwise opens web billing. | flag-off, surface-only |
+| mobile | partial | D-2026-09-28-27: card and payment method link out to web billing. | flag-off, surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
 
@@ -351,49 +311,28 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Credential files and untrusted workspaces are blocked from leaving outright; there is no approve-this-transfer prompt for other sensitive content. | ui |
-
-Code: `apps/extension-vscode/src/core/outboundContentGuard.ts:10-10`, `apps/extension-vscode/src/core/runInlineCommand.ts:42-42`
-
-## S10.40: Remote-device pairing.
-
-- Done when: A pairing dialog links a phone or another device to this machine by code or QR, bound to the signed-in account.
-- Wave: 3
-- Already works on: desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Fix the pairing instructions: the phone says to open Desktop "Settings and select Connections" and /pair says "Mobile companion", but the code is generated in Desktop Settings > Capabilities (Connections opens Connectors). | ui |
-
-Code: `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:98-112`, `apps/mobile/services/manualPairing.ts:152-170`
 
 ## S10.41: Unsaved-changes warning.
 
 - Done when: Leaving an editor with unsaved edits warns the user and lets them keep editing or discard.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the Personalization screen asks before discarding edits; other edit screens do not. | states |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:260-260`, `apps/mobile/src/features/settings/personalization/index.tsx:259-259`
 
 ## S10.42: Edit-conflict resolution.
 
 - Done when: When the same item was changed elsewhere, the user sees both versions and chooses which to keep (or merges).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | `agi sync import` keeps the local file on a conflict and lists it in the report; the user cannot compare or pick the imported version. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
 
 ## S10.43: Export options.
 
@@ -422,40 +361,21 @@ Code: `apps/cli/src/sync.rs:273-273`, `apps/cli/src/sync.rs:361-361`
 
 - Done when: A feedback dialog, reachable product-wide, sends the user's message to the team's feedback store.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
-| vscode | partial | Feedback opens a GitHub issue rather than the product feedback store; whether that repository accepts public issues is unconfirmed. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/claude_parity.rs:129-131`, `apps/extension-vscode/src/core/commandSetup.ts:1328-1330`, `apps/extension-vscode/src/core/commandSetup.ts:1354-1362`
-
-## S10.46: Diagnostic-sharing consent.
-
-- Done when: Before diagnostics or crash reports leave the device, the user is told what is included and chooses (or sets a preference that is honoured).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Diagnostics leave only when the user taps Export Diagnostics and shares the file, but nothing says what the bundle contains before sharing. | ui |
-
-Code: `apps/mobile/src/features/settings/index.tsx:618-618`, `apps/mobile/src/features/settings/diagnostics/shareDiagnostics.ts:40-40`
 
 ## S10.47: Data-export request.
 
 - Done when: A data-export dialog requests a copy of the account's data and delivers it as a download.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI cannot download the account data export; it can only write the current session with /export in the --no-tui REPL and dump its own settings with `agi sync export`. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/slash_commands.rs:149-151`
 
 ## S10.48: Account-deletion request.
 

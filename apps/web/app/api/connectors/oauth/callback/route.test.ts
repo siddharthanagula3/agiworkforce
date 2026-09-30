@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     }
   }
   return {
+    appReturnOwner: vi.fn(async (..._args: unknown[]): Promise<string | null> => null),
     authUser: vi.fn(),
     consumePending: vi.fn(),
     upsertGrant: vi.fn(),
@@ -34,7 +35,10 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a) }));
+vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
+  getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a),
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -52,6 +56,7 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  appReturnOwner: (...a: unknown[]) => mocks.appReturnOwner(...a),
   ConnectorOAuthStoreUnavailableError: mocks.ConnectorOAuthStoreUnavailableError,
   consumePendingAuthorization: (...a: unknown[]) => mocks.consumePending(...a),
   upsertConnectorOAuthGrant: (...a: unknown[]) => mocks.upsertGrant(...a),
@@ -129,6 +134,25 @@ afterEach(() => {
 });
 
 describe('GET /api/connectors/oauth/callback', () => {
+  it('hands an app-started sign-in back to the app without finishing it here', async () => {
+    mocks.appReturnOwner.mockResolvedValueOnce('user-1');
+
+    const response = await GET(
+      request(`?state=${STATE}&code=auth-code&iss=https%3A%2F%2Fauth.example.com`),
+    );
+
+    const target = new URL(response.headers.get('location') as string);
+    expect(`${target.protocol}//${target.host}${target.pathname}`).toBe(
+      'agiworkforce://connectors/oauth',
+    );
+    expect(target.searchParams.get('state')).toBe(STATE);
+    expect(target.searchParams.get('code')).toBe('auth-code');
+    expect(target.searchParams.get('iss')).toBe('https://auth.example.com');
+    expect(mocks.authUser).not.toHaveBeenCalled();
+    expect(mocks.consumePending).not.toHaveBeenCalled();
+    expect(mocks.exchange).not.toHaveBeenCalled();
+  });
+
   it('stores an encrypted grant and returns to the connectors surface', async () => {
     mocks.consumePending.mockResolvedValue(pending());
     mocks.exchange.mockResolvedValue({
@@ -204,10 +228,13 @@ describe('GET /api/connectors/oauth/callback', () => {
   });
 
   it('refuses to bind a grant when the callback arrives on a different account', async () => {
-    mocks.consumePending.mockResolvedValue(pending({ userId: 'victim-user' }));
+    mocks.consumePending.mockImplementation(async (_state: string, userId: string) =>
+      userId === 'victim-user' ? pending({ userId: 'victim-user' }) : null,
+    );
 
     const response = await GET(request(`?state=${STATE}&code=auth-code`));
 
+    expect(mocks.consumePending).toHaveBeenCalledWith(STATE, 'user-1');
     expect(location(response).searchParams.get('status')).toBe('invalid_state');
     expect(mocks.exchange).not.toHaveBeenCalled();
     expect(mocks.upsertGrant).not.toHaveBeenCalled();

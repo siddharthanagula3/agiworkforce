@@ -1,16 +1,25 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockDispatch = jest.fn();
+const mockSetActiveLocal = jest.fn();
+const mockSetActiveCloud = jest.fn();
+const mockLoadMissingCloudProject = jest.fn();
+let mockSignedIn = false;
 
 let mockSearchParams: { id?: string } = { id: 'proj_snapshot' };
-let mockFeaturesAuth = true;
-let mockFeaturesCrossDeviceSync = true;
+let mockLocalProjects = [{ id: 'proj_snapshot', name: 'Snapshot project', sources: [] }];
+let mockCloudProjects: Array<{
+  id: string;
+  name: string;
+  deletedAt: string | null;
+  updatedAt?: string;
+}> = [];
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -39,6 +48,7 @@ jest.mock('expo-document-picker', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
   SafeAreaView: ({ children, ...rest }: { children: React.ReactNode; [key: string]: unknown }) => {
     const { View } = require('react-native');
     return <View {...rest}>{children}</View>;
@@ -63,7 +73,40 @@ jest.mock('lucide-react-native', () => {
     Plus: factory('plus'),
     SquarePen: factory('square-pen'),
     Trash2: factory('trash-2'),
+    Type: factory('type'),
     Users: factory('users'),
+    Check: factory('check'),
+    ...Object.fromEntries(
+      [
+        'BookOpen',
+        'Brain',
+        'Calendar',
+        'CalendarClock',
+        'Camera',
+        'Code',
+        'Code2',
+        'Database',
+        'FileCode',
+        'FileSpreadsheet',
+        'FolderOpen',
+        'GitBranch',
+        'GitFork',
+        'Globe',
+        'Image',
+        'LayoutList',
+        'LibraryBig',
+        'ListChecks',
+        'Monitor',
+        'Palette',
+        'Plug',
+        'ShieldCheck',
+        'Sparkles',
+        'Star',
+        'Terminal',
+        'TerminalSquare',
+        'Video',
+      ].map((name) => [name, factory(name)]),
+    ),
   };
 });
 
@@ -82,25 +125,29 @@ jest.mock('@/src/ui/theme', () => {
   };
 });
 
-jest.mock('@/lib/v1FeatureFlags', () => ({
-  get FEATURES() {
-    return { auth: mockFeaturesAuth, crossDeviceSync: mockFeaturesCrossDeviceSync };
-  },
-}));
-
-const mockFetchProject = jest.fn();
-jest.mock('@/src/features/projects/service', () => ({
-  fetchProject: (id: string) => mockFetchProject(id),
-}));
-
 jest.mock('@/src/features/projects/store', () => ({
   useProjectStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
-      projects: [{ id: 'proj_snapshot', name: 'Snapshot project', sources: [] }],
+      projects: mockLocalProjects,
       activeProjectId: null,
-      setActiveProject: jest.fn(),
+      setActiveProject: mockSetActiveLocal,
       addSource: jest.fn(),
       removeSource: jest.fn(),
+    }),
+  useProjectSourceTarget: (id: string) =>
+    mockLocalProjects.some((project) => project.id === id)
+      ? 'local'
+      : mockCloudProjects.some((project) => project.id === id && project.deletedAt === null)
+        ? 'cloud'
+        : 'unknown',
+}));
+
+jest.mock('@/stores/projects/cloudProjectStore', () => ({
+  useCloudProjectStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      projects: mockCloudProjects,
+      details: {},
+      setActiveCloudProject: mockSetActiveCloud,
     }),
 }));
 
@@ -111,55 +158,130 @@ jest.mock('@/stores/chatStore', () => ({
     selector({ conversations: [] }),
 }));
 
-import ProjectDetailScreen from '@/app/(app)/projects/[id]';
+jest.mock('@/src/features/auth/store', () => ({
+  useAuthStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ isClerkSignedIn: mockSignedIn }),
+}));
 
-const FIXTURE_PROJECT = {
-  id: 'proj_snapshot',
-  ownerUserId: 'user_1',
-  name: 'Snapshot project',
-  description: 'Stays on this device.',
-  defaultPrivacyMode: 'local' as const,
-  defaultProviderMode: 'Local' as const,
-  allowedSurfaces: ['web', 'desktop', 'mobile'] as Array<'web' | 'desktop' | 'mobile'>,
-  knowledgeFileCount: 2,
-  memberCount: 1,
-  importedFrom: 'manual' as const,
-  accentColor: 'emerald' as const,
-  createdAt: '2026-05-01T00:00:00Z',
-  updatedAt: '2026-05-20T00:00:00Z',
-};
+jest.mock('@/src/features/projects/service', () => ({
+  loadMissingCloudProject: (...args: unknown[]) => mockLoadMissingCloudProject(...args),
+  refreshCloudProjectDetails: jest.fn(async () => undefined),
+}));
+
+import ProjectDetailScreen from '@/app/(app)/projects/[id]';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 describe('Mobile project-detail screen snapshots (round-17)', () => {
   beforeEach(() => {
     mockSearchParams = { id: 'proj_snapshot' };
-    mockFeaturesAuth = true;
-    mockFeaturesCrossDeviceSync = true;
-    mockFetchProject.mockReset();
+    mockLocalProjects = [{ id: 'proj_snapshot', name: 'Snapshot project', sources: [] }];
+    mockCloudProjects = [];
+    mockSignedIn = false;
+    mockLoadMissingCloudProject.mockReset();
+    useChatAppModeStore.setState({ appMode: 'local' });
     mockPush.mockReset();
     mockReplace.mockReset();
     mockBack.mockReset();
     mockDispatch.mockReset();
+    mockSetActiveLocal.mockReset();
+    mockSetActiveCloud.mockReset();
   });
 
-  it('locks the success tree after fetchProject resolves', async () => {
-    mockFetchProject.mockResolvedValueOnce(FIXTURE_PROJECT);
+  it('shows local project chats only in Local mode', async () => {
     const { toJSON, getByTestId } = render(<ProjectDetailScreen />);
     await waitFor(() => getByTestId('project-detail-scroll'));
+    expect(getByTestId('project-detail-local-fallback')).toBeTruthy();
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it('locks the local-only fallback tree when FEATURES.auth is false', async () => {
-    mockFeaturesAuth = false;
-    const { toJSON, getByTestId } = render(<ProjectDetailScreen />);
-    await waitFor(() => getByTestId('project-detail-local-fallback'));
+  it('requires an explicit switch before opening a Local project from Cloud mode', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { toJSON, getByLabelText, queryByLabelText } = render(<ProjectDetailScreen />);
+    expect(queryByLabelText('New chat in this project')).toBeNull();
     expect(toJSON()).toMatchSnapshot();
+    fireEvent.press(getByLabelText('Switch to Local mode'));
+    await waitFor(() => expect(getByLabelText('New chat in this project')).toBeTruthy());
+    fireEvent.press(getByLabelText('New chat in this project'));
+    expect(mockSetActiveLocal).toHaveBeenCalledWith('proj_snapshot');
+    expect(mockSetActiveCloud).not.toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
   });
 
-  it('never fetches cloud project details when cross-device sync is disabled', async () => {
-    mockFeaturesCrossDeviceSync = false;
-    const { getByTestId } = render(<ProjectDetailScreen />);
-    await waitFor(() => getByTestId('project-detail-local-fallback'));
-    expect(mockFetchProject).not.toHaveBeenCalled();
+  it('requires an explicit switch before opening a Cloud project from Local mode', async () => {
+    mockLocalProjects = [];
+    mockCloudProjects = [
+      {
+        id: 'proj_snapshot',
+        name: 'Cloud project',
+        deletedAt: null,
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
+    ];
+    const { getByLabelText, getByTestId, queryByLabelText } = render(<ProjectDetailScreen />);
+    expect(getByTestId('project-detail-cloud-header')).toBeTruthy();
+    expect(queryByLabelText('New chat in this project')).toBeNull();
+    fireEvent.press(getByLabelText('Switch to Cloud mode'));
+    await waitFor(() => expect(getByLabelText('New chat in this project')).toBeTruthy());
+    fireEvent.press(getByLabelText('New chat in this project'));
+    expect(mockSetActiveCloud).toHaveBeenCalledWith('proj_snapshot');
+    expect(mockSetActiveLocal).not.toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+  });
+
+  it('does not offer chat or source actions for an unavailable project', () => {
+    mockLocalProjects = [];
+    const { getByText, queryByLabelText } = render(<ProjectDetailScreen />);
+    expect(getByText('Project unavailable')).toBeTruthy();
+    expect(queryByLabelText('New chat in this project')).toBeNull();
+    expect(queryByLabelText('Sources')).toBeNull();
+    fireEvent.press(getByText('Open Projects'));
+    expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/projects');
+  });
+
+  it('loads a Cloud project found by server search before offering chat actions', async () => {
+    mockLocalProjects = [];
+    mockSignedIn = true;
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    let finishLoad: () => void = () => undefined;
+    mockLoadMissingCloudProject.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLoad = () => {
+            mockCloudProjects = [
+              {
+                id: 'proj_snapshot',
+                name: 'Remote project',
+                deletedAt: null,
+                updatedAt: '2026-09-01T00:00:00.000Z',
+              },
+            ];
+            resolve();
+          };
+        }),
+    );
+
+    const screen = render(<ProjectDetailScreen />);
+    expect(screen.getByText('Loading Cloud project')).toBeTruthy();
+    expect(screen.queryByLabelText('New chat in this project')).toBeNull();
+    await waitFor(() =>
+      expect(mockLoadMissingCloudProject).toHaveBeenCalledWith('proj_snapshot', expect.anything()),
+    );
+    await act(async () => finishLoad());
+    screen.rerender(<ProjectDetailScreen />);
+    expect(screen.getByLabelText('New chat in this project')).toBeTruthy();
+  });
+
+  it('offers retry when loading an unsynced Cloud project fails', async () => {
+    mockLocalProjects = [];
+    mockSignedIn = true;
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockLoadMissingCloudProject.mockRejectedValue(new Error('offline'));
+
+    const { getByLabelText, getByText, queryByLabelText } = render(<ProjectDetailScreen />);
+    await waitFor(() => expect(getByText('Project unavailable')).toBeTruthy());
+    expect(queryByLabelText('New chat in this project')).toBeNull();
+    fireEvent.press(getByLabelText('Retry loading project'));
+    await waitFor(() => expect(mockLoadMissingCloudProject).toHaveBeenCalledTimes(2));
   });
 
   it('locks the no-id empty tree when no params are provided', () => {

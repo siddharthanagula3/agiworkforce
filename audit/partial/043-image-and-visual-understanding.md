@@ -14,11 +14,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.02: Multiple-image comparison.
 
@@ -28,11 +28,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| mobile | partial | Up to 5 photos per pick, but cloud images need the upload scanner (UPLOAD_SCAN_WEBHOOK_URL) in production. | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.03: Screenshot interpretation.
 
@@ -42,11 +42,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.04: Document-image interpretation.
 
@@ -56,11 +56,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.05: Chart interpretation.
 
@@ -70,11 +70,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.06: Diagram interpretation.
 
@@ -84,11 +84,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.07: Handwriting recognition.
 
@@ -98,11 +98,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.08: Visual text extraction.
 
@@ -112,10 +112,10 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`
 
 ## S43.12: Object counting.
 
@@ -125,11 +125,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.13: Scene comparison.
 
@@ -139,11 +139,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.14: Visual troubleshooting.
 
@@ -153,11 +153,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| desktop | partial | done once the scanner is deployed and the two Vercel env vars are set | flag-off |
-| mobile | partial | Cloud images go through the same upload scanner gate (UPLOAD_SCAN_WEBHOOK_URL); Local mode only OCRs text. | flag-off |
+| web | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| desktop | partial | live-check after the website deploy: attach the image(s) in production chat (web, and in the Electron app) and ask the question this cell names; expect no upload_scanner refusal (UPLOAD_SCAN_WEBHOOK_URL is read at apps/web/lib/security/upload-scan.ts:274) and an answer read from the image by a vision model | flag-off |
+| mobile | partial | live check (owner): provision the upload scanner and set UPLOAD_SCAN_WEBHOOK_URL in production, then attach a photo on the phone in a Cloud chat and ask the question this cell names; the code path is the web's (presigned upload to file part) | flag-off |
 
-Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/src/server.ts:106-106`, `services/upload-scanner/src/server.ts:124-124`, `services/upload-scanner/src/server.ts:99-99`
+Code: `apps/web/lib/security/upload-scan.ts:274-274`, `apps/web/lib/security/upload-scan.ts:264-264`, `apps/mobile/services/api.ts:651-651`
 
 ## S43.17: Reference-image selection for another task.
 
@@ -174,14 +174,11 @@ Code: `services/upload-scanner/src/server.ts:183-183`, `services/upload-scanner/
 
 - Done when: Images are processed at a resolution suited to the task, with a high-detail vs reduced-detail choice honoured end to end.
 - Wave: 3
-- Already works on: api
+- Already works on: cli, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Images are always resized to fit before sending; there is no high-detail option. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:4695-4703`, `apps/cli/src/tui/tui_app.rs:3703-3710`

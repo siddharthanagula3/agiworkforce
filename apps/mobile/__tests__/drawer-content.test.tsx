@@ -86,6 +86,7 @@ import {
   getDefaultCloudModelIdForTier,
 } from '../src/features/model-picker/service';
 import { useTierStore } from '../src/features/billing/store';
+import { useCloudUsageStore } from '../src/features/settings/cloud-usage/store';
 
 function renderDrawer() {
   return render(<DrawerContent {...({ navigation: { closeDrawer: mockCloseDrawer } } as never)} />);
@@ -95,6 +96,7 @@ describe('DrawerContent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPathname = '/chat';
+    useTierStore.setState({ grantedCapabilities: [] });
 
     useChatCloudMessageStore.setState({
       conversations: [
@@ -188,6 +190,7 @@ describe('DrawerContent', () => {
       favorites: [],
     } as never);
     useChatAppModeStore.setState({ appMode: 'local' });
+    useCloudUsageStore.getState().clear();
   });
 
   it('renders the AGI mobile drawer structure', () => {
@@ -215,6 +218,11 @@ describe('DrawerContent', () => {
 
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useTierStore.setState({ tier: 'max' });
+    const ungranted = renderDrawer();
+    expect(ungranted.queryByText('AGI Work')).toBeNull();
+    ungranted.unmount();
+
+    useTierStore.setState({ grantedCapabilities: ['canUseAgiWork'] });
     const cloud = renderDrawer();
 
     expect(cloud.getByLabelText('AGI Work. Cloud')).toBeTruthy();
@@ -222,6 +230,45 @@ describe('DrawerContent', () => {
     expect(cloud.getByLabelText('Skills. Cloud')).toBeTruthy();
     expect(cloud.getByLabelText('Projects')).toBeTruthy();
     expect(cloud.queryByText('Launch demo')).toBeNull();
+  });
+
+  it('shows account-scoped remaining Cloud usage and opens the full usage screen', () => {
+    useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'user-1' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useCloudUsageStore.setState({
+      ownerId: 'user-1',
+      snapshot: {
+        planTier: 'pro',
+        usagePercentage: 20,
+        usageResetAt: '2026-10-01T00:00:00Z',
+        hasUsageRemaining: true,
+        periodStart: null,
+        periodEnd: null,
+        subscriptionStatus: 'active',
+        sessionUsagePercentage: 0,
+        sessionResetAt: null,
+        weeklyUsagePercentage: 65,
+        weeklyResetAt: '2026-09-29T00:00:00Z',
+        flagshipWeeklyUsagePercentage: 0,
+        flagshipWeeklyResetAt: null,
+        credits: null,
+      },
+    });
+
+    const drawer = renderDrawer();
+    fireEvent.press(drawer.getByLabelText('Usage remaining · Week 35%'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/settings/cloud-usage');
+    drawer.unmount();
+
+    useCloudUsageStore.setState({ ownerId: 'another-user' });
+    const switched = renderDrawer();
+    expect(switched.queryByText('Usage remaining · Week 35%')).toBeNull();
+    expect(switched.getByLabelText('Usage remaining')).toBeTruthy();
+    switched.unmount();
+
+    useChatAppModeStore.setState({ appMode: 'local' });
+    expect(renderDrawer().queryByLabelText('Usage remaining')).toBeNull();
   });
 
   it('opens Cloud schedules from the drawer', () => {
@@ -245,7 +292,7 @@ describe('DrawerContent', () => {
 
   it('opens the durable agent-run list from AGI Work', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
-    useTierStore.setState({ tier: 'max' });
+    useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseAgiWork'] });
     const { getByLabelText } = renderDrawer();
 
     fireEvent.press(getByLabelText('AGI Work. Cloud'));
@@ -298,11 +345,14 @@ describe('DrawerContent', () => {
       })),
     });
 
-    const { getByText, queryByText } = renderDrawer();
+    const { getByText, getByLabelText, queryByText } = renderDrawer();
 
     expect(getByText('Local recent 1')).toBeTruthy();
     expect(getByText('Local recent 8')).toBeTruthy();
     expect(queryByText('Local recent 9')).toBeNull();
+    fireEvent.press(getByLabelText('See all chats'));
+    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/chats');
   });
 
   it('opens the full global-search and chat-history surface', () => {
@@ -349,7 +399,7 @@ describe('DrawerContent', () => {
     });
   });
 
-  it('opens Chats with the search field focused from the icon-only search button', () => {
+  it('opens the dedicated search screen from the icon-only search button', () => {
     const { getByLabelText, queryByPlaceholderText } = renderDrawer();
 
     expect(queryByPlaceholderText(/search/i)).toBeNull();
@@ -357,10 +407,7 @@ describe('DrawerContent', () => {
     fireEvent.press(getByLabelText('Search'));
 
     expect(mockCloseDrawer).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenCalledWith({
-      pathname: '/(app)/chats',
-      params: { focusSearch: '1' },
-    });
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/search');
   });
 
   it('gives the notification centre its own row, separate from notification settings', () => {

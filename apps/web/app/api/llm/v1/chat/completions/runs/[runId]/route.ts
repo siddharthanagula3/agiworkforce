@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { CloudAgentRunReply, CloudAgentRunSnapshotReply } from '@agiworkforce/cloud-contracts';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -58,13 +59,10 @@ async function handleGet(request: NextRequest, context: RouteContext) {
   if (!snapshot) throw createError.notFound('Cloud agent run not found');
   const nextAfterSequence = snapshot.events.at(-1)?.sequence ?? afterSequence;
 
-  return NextResponse.json(
-    {
-      ...snapshot,
-      nextAfterSequence,
-    },
-    { headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
-  );
+  const page: CloudAgentRunSnapshotReply = { ...snapshot, nextAfterSequence };
+  return NextResponse.json(page, {
+    headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  });
 }
 
 async function handleCancel(request: NextRequest, context: RouteContext) {
@@ -91,13 +89,11 @@ async function handleCancel(request: NextRequest, context: RouteContext) {
       request,
       detail: { resourceId: runId, status: 'cancellation_requested' },
     });
-    return NextResponse.json(
-      { run },
-      {
-        status: 202,
-        headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
-      },
-    );
+    const reply: CloudAgentRunReply = { run };
+    return NextResponse.json(reply, {
+      status: 202,
+      headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+    });
   } catch (error) {
     if (error instanceof CloudAgentRunNotFoundError) {
       throw createError.notFound('Cloud agent run not found');

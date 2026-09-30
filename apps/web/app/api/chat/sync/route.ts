@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { markSyncedConversationsGoogleUserData } from '@/lib/connectors/google-user-data';
 import {
+  CHAT_SYNC_CONVERSATIONS_SCOPE,
   ChatSyncPullResponseSchema,
   ChatSyncPushRequestSchema,
   ChatSyncPushResponseSchema,
@@ -20,6 +22,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
+import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
+import { revokeSharesOfDeletedConversations } from '@/lib/services/shared-session-revocation';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
@@ -81,6 +85,7 @@ async function handlePull(request: NextRequest) {
     throw createError.validation('Invalid chat sync cursor', parsedSince.error);
   }
   const since = parsedSince.data;
+  const conversationsOnly = url.searchParams.get('scope') === CHAT_SYNC_CONVERSATIONS_SCOPE;
 
   try {
     const [conversations, messages, artifacts] = await Promise.all([
@@ -96,8 +101,10 @@ async function handlePull(request: NextRequest) {
       `,
         [userId, since],
       ),
-      db.query<MessageDelta>(
-        `
+      conversationsOnly
+        ? Promise.resolve<MessageDelta[]>([])
+        : db.query<MessageDelta>(
+            `
         select m.id, m.conversation_id, m.parent_id::text as parent_id,
                m.role, m.content, m.model, m.provider,
                m.input_tokens, m.output_tokens, m.metadata,
@@ -108,10 +115,12 @@ async function handlePull(request: NextRequest) {
         order by m.server_version asc
         limit ${MAX_MESSAGES_PULL}
       `,
-        [userId, since],
-      ),
-      db.query<ArtifactDelta>(
-        `
+            [userId, since],
+          ),
+      conversationsOnly
+        ? Promise.resolve<ArtifactDelta[]>([])
+        : db.query<ArtifactDelta>(
+            `
         select id, conversation_id, message_id, title, artifact_type, language, content,
                current_version, pinned, tags, created_at, updated_at, deleted_at, server_version
         from web_artifacts
@@ -123,8 +132,8 @@ async function handlePull(request: NextRequest) {
         order by server_version asc
         limit ${MAX_ARTIFACTS_PULL}
       `,
-        [userId, since],
-      ),
+            [userId, since],
+          ),
     ]);
 
     const convSaturated = conversations.length >= MAX_CONVERSATIONS_PULL;
@@ -528,8 +537,12 @@ async function handlePush(request: NextRequest) {
 
   try {
     if (conversations.length > 0) {
-      const rows = await db.query<BatchRow<ConversationDelta>>(
-        `
+      const deletedIds = new Set(
+        conversations.filter((conversation) => conversation.isDeleted).map(({ id }) => id),
+      );
+      const pushConversations = async (tx: typeof db) => {
+        const pushed = await tx.query<BatchRow<ConversationDelta>>(
+          `
           with input as materialized (
             select (item ->> 'id')::uuid as id,
                    item ->> 'title' as title,
@@ -610,12 +623,24 @@ async function handlePush(request: NextRequest) {
           union all
           select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-        [userId, JSON.stringify(conversations), organizationId],
-      );
+          [userId, JSON.stringify(conversations), organizationId],
+        );
+        const deletedNow = pushed
+          .filter((row) => row.kind === 'applied' && deletedIds.has(row.id))
+          .map((row) => row.id);
+        if (deletedNow.length > 0) {
+          await unpublishArtifactsForConversations(tx, { userId, conversationIds: deletedNow });
+          await revokeSharesOfDeletedConversations(tx, { userId, organizationId });
+        }
+        return pushed;
+      };
+      const rows =
+        deletedIds.size > 0 ? await db.transaction(pushConversations) : await pushConversations(db);
       collectBatchRows(rows, applied.conversations, conflicts.conversations);
     }
 
     if (messages.length > 0) {
+      await markSyncedConversationsGoogleUserData(db, userId, organizationId ?? null, messages);
       const rows = await pushMessages(db, userId, messages);
       collectBatchRows(rows, applied.messages, conflicts.messages);
 

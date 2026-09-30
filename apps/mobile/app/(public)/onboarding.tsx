@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Pressable, Platform, StyleSheet, ScrollView } from 'react-native';
+import { View, Platform, StyleSheet, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -9,7 +10,11 @@ import type BottomSheet from '@gorhom/bottom-sheet';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useTheme, type ColorScheme } from '@/src/ui/theme';
+import { Input } from '@/components/ui/input';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
+import { useTheme, type ColorScheme, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   assertDownloadAllowed,
   downloadModel,
@@ -126,7 +131,7 @@ function formatBytes(bytes: number): string {
   return `${Math.round(mb)} MB`;
 }
 
-type ScreenId = 'hero' | 'device-tier' | 'download';
+type ScreenId = 'hero' | 'about-you' | 'device-tier' | 'download';
 
 export default function OnboardingScreen() {
   const { colors, isDark } = useTheme();
@@ -255,7 +260,7 @@ export default function OnboardingScreen() {
   const handleHeroCTA = useCallback(() => {
     const alreadySatisfied = isDisclosureSatisfied(mmkvDisclosureLedger, false);
     if (alreadySatisfied) {
-      setScreen('device-tier');
+      setScreen('about-you');
       return;
     }
     const copy = composeFirstRunDisclosure({
@@ -279,10 +284,22 @@ export default function OnboardingScreen() {
         chineseHqProvidersAccepted: acceptedProviderIds,
       });
       applyChineseHqProviderConsent(acceptedProviderIds);
-      setScreen('device-tier');
+      setScreen('about-you');
     },
     [disclosureCopy],
   );
+
+  const handleAboutYouDone = useCallback((preferredName: string, workDescription: string) => {
+    const partial = {
+      ...(preferredName ? { nickname: preferredName } : {}),
+      ...(workDescription ? { occupation: workDescription } : {}),
+    };
+    if (Object.keys(partial).length > 0) {
+      useLocalSettingsStore.getState().setPersonalization(partial);
+      useCloudSettingsStore.getState().setPersonalization(partial);
+    }
+    setScreen('device-tier');
+  }, []);
 
   const handleDisclosureDecline = useCallback(() => {
     setDisclosureVisible(false);
@@ -333,10 +350,9 @@ export default function OnboardingScreen() {
             setTier2Loading(false);
             finishOnboarding(recommendedModel.id);
           })
-          .catch((err: unknown) => {
+          .catch(() => {
             setTier2Loading(false);
-            const msg = err instanceof Error ? err.message : 'Download failed. Please try again.';
-            setDownloadError(msg);
+            setDownloadError('Download failed. You can try again or continue without the model.');
           });
         return;
       }
@@ -393,8 +409,8 @@ export default function OnboardingScreen() {
     <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: colors.background }}>
       <Reanimated.View
         key={screen}
-        entering={FadeIn.duration(280)}
-        exiting={FadeOut.duration(160)}
+        entering={FadeIn.duration(motion.moved)}
+        exiting={FadeOut.duration(motion.quick)}
         style={{ flex: 1 }}
       >
         {screen === 'hero' && (
@@ -402,6 +418,13 @@ export default function OnboardingScreen() {
             colors={colors}
             primaryButtonTextColor={primaryButtonTextColor}
             onStartChatting={handleHeroCTA}
+          />
+        )}
+        {screen === 'about-you' && (
+          <AboutYouScreen
+            colors={colors}
+            primaryButtonTextColor={primaryButtonTextColor}
+            onDone={handleAboutYouDone}
           />
         )}
         {screen === 'device-tier' && (
@@ -483,7 +506,7 @@ function HeroScreen({
       </Text>
 
       {/* Primary CTA, full-width pill */}
-      <Pressable
+      <PressableBox
         testID="hero-start-chatting-btn"
         onPress={onStartChatting}
         accessibilityRole="button"
@@ -491,7 +514,7 @@ function HeroScreen({
         style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
       >
         <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Start chatting</Text>
-      </Pressable>
+      </PressableBox>
 
       <Text testID="hero-footer" style={[styles.footer, { color: colors.textMuted }]}>
         Made by AGI Automation LLC, USA
@@ -526,6 +549,84 @@ function AgiNativeMark({
         />
       ))}
     </Svg>
+  );
+}
+
+function AboutYouScreen({
+  colors,
+  primaryButtonTextColor,
+  onDone,
+}: {
+  colors: ColorScheme;
+  primaryButtonTextColor: string;
+  onDone: (preferredName: string, workDescription: string) => void;
+}) {
+  const [preferredName, setPreferredName] = useState(
+    () => useLocalSettingsStore.getState().personalization.nickname ?? '',
+  );
+  const [workDescription, setWorkDescription] = useState(
+    () => useLocalSettingsStore.getState().personalization.occupation ?? '',
+  );
+
+  return (
+    <ScrollView
+      testID="onboarding-about-you-screen"
+      style={{ flex: 1 }}
+      contentContainerStyle={[styles.deviceTierRoot, { paddingBottom: 48, gap: 16 }]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.title2, fontWeight: '700' }}>
+        What should AGI call you?
+      </Text>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.body, lineHeight: 21 }}>
+        Answers use your name and fit your work. You can change both later in Settings,
+        Personalization.
+      </Text>
+      <Input
+        label="Your name"
+        value={preferredName}
+        onChangeText={setPreferredName}
+        autoComplete="given-name"
+        textContentType="givenName"
+        maxLength={60}
+        returnKeyType="next"
+      />
+      <Input
+        label="What best describes your work?"
+        value={workDescription}
+        onChangeText={setWorkDescription}
+        placeholder="For example, product design"
+        maxLength={120}
+        returnKeyType="done"
+      />
+      <PressableBox
+        testID="about-you-continue-btn"
+        onPress={() => onDone(preferredName.trim(), workDescription.trim())}
+        accessibilityRole="button"
+        accessibilityLabel="Continue"
+        disabled={!preferredName.trim()}
+        style={[
+          styles.ctaBtn,
+          {
+            backgroundColor: colors.teal,
+            marginTop: 8,
+            opacity: preferredName.trim() ? 1 : 0.5,
+          },
+        ]}
+      >
+        <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Continue</Text>
+      </PressableBox>
+      <PressableBox
+        testID="about-you-skip-btn"
+        accessibilityRole="button"
+        accessibilityLabel="Skip for now"
+        onPress={() => onDone('', '')}
+        style={styles.secondaryBtn}
+      >
+        <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>Skip for now</Text>
+      </PressableBox>
+    </ScrollView>
   );
 }
 
@@ -603,7 +704,7 @@ function DeviceTierScreen({
 
       {/* Cellular toggle is off by default so large model downloads prefer Wi-Fi. */}
       {model.needsDownload && (
-        <Pressable
+        <PressableBox
           testID="device-tier-cellular-toggle"
           onPress={() => setCellularEnabled((v) => !v)}
           accessibilityRole="switch"
@@ -615,11 +716,11 @@ function DeviceTierScreen({
             Download over cellular too
           </Text>
           <Switch value={cellularEnabled} onValueChange={setCellularEnabled} />
-        </Pressable>
+        </PressableBox>
       )}
 
       {/* Primary CTA */}
-      <Pressable
+      <PressableBox
         testID="device-tier-download-btn"
         onPress={() => onDownload(cellularEnabled)}
         accessibilityRole="button"
@@ -629,10 +730,10 @@ function DeviceTierScreen({
         <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>
           {model.needsDownload ? `Download ${model.displayName}` : 'Continue'}
         </Text>
-      </Pressable>
+      </PressableBox>
 
       {/* Secondary: model picker */}
-      <Pressable
+      <PressableBox
         testID="device-tier-pick-model-btn"
         accessibilityRole="button"
         accessibilityLabel="Pick a different model"
@@ -642,11 +743,11 @@ function DeviceTierScreen({
         <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
           Pick a different model
         </Text>
-      </Pressable>
+      </PressableBox>
 
       {/* Cloud path, reach catalog-selected hosted models + cloud tools/web
           search without downloading a local model. Sign-in is the entitlement. */}
-      <Pressable
+      <PressableBox
         testID="device-tier-cloud-btn"
         accessibilityRole="button"
         accessibilityLabel="Sign in to use Cloud"
@@ -654,7 +755,7 @@ function DeviceTierScreen({
         style={styles.secondaryBtn}
       >
         <Text style={[styles.secondaryBtnText, { color: colors.teal }]}>Sign in to use Cloud</Text>
-      </Pressable>
+      </PressableBox>
     </ScrollView>
   );
 }
@@ -740,7 +841,7 @@ function DownloadScreen({
         </Text>
       )}
 
-      <Pressable
+      <PressableBox
         testID="download-skip-btn"
         onPress={onSkip}
         disabled={skipDisabled}
@@ -753,7 +854,7 @@ function DownloadScreen({
         ]}
       >
         <Text style={[styles.skipBtnText, { color: colors.textSecondary }]}>Continue to chat</Text>
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }
@@ -822,7 +923,7 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   wordmark: {
-    fontSize: 94,
+    fontSize: typeScale.display,
     // Same face as the launch lockup and the chat empty state. A bold sans here
     // made the brand change typeface between the splash and the first screen.
     fontFamily: 'Newsreader_600SemiBold',
@@ -830,14 +931,14 @@ const styles = StyleSheet.create({
     lineHeight: 108,
   },
   tagline: {
-    fontSize: 20,
+    fontSize: typeScale.title3,
     fontWeight: '600',
     lineHeight: 27,
     textAlign: 'center',
     marginBottom: 10,
   },
   heroSubcopy: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     lineHeight: 22,
     fontWeight: '400',
     textAlign: 'center',
@@ -853,10 +954,10 @@ const styles = StyleSheet.create({
   },
   ctaBtnText: {
     fontWeight: '600',
-    fontSize: 17,
+    fontSize: typeScale.headline,
   },
   footer: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     textAlign: 'center',
     position: 'absolute',
     bottom: Platform.OS === 'android' ? 24 : 16,
@@ -867,14 +968,14 @@ const styles = StyleSheet.create({
     paddingTop: 56,
   },
   tierHeadline: {
-    fontSize: 26,
+    fontSize: typeScale.title1,
     lineHeight: 34,
     fontWeight: '700',
     letterSpacing: 0,
     marginBottom: 8,
   },
   tierSubhead: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     lineHeight: 20,
     marginBottom: 24,
   },
@@ -892,7 +993,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   modelName: {
-    fontSize: 17,
+    fontSize: typeScale.headline,
     fontWeight: '600',
     flex: 1,
   },
@@ -902,11 +1003,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   tierBadgeText: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     fontWeight: '600',
   },
   modelDetail: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     lineHeight: 18,
   },
   cellularRow: {
@@ -916,7 +1017,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   cellularLabel: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     flex: 1,
   },
   secondaryBtn: {
@@ -924,7 +1025,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryBtnText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
 
   downloadRoot: {
@@ -942,7 +1043,7 @@ const styles = StyleSheet.create({
   },
   downloadPct: {
     position: 'absolute',
-    fontSize: 38,
+    fontSize: typeScale.largeTitle,
     lineHeight: 46,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -950,21 +1051,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   downloadModelName: {
-    fontSize: 16,
+    fontSize: typeScale.callout,
     fontWeight: '600',
     textAlign: 'center',
   },
   downloadMeta: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     textAlign: 'center',
   },
   downloadReassurance: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     textAlign: 'center',
     marginTop: 8,
   },
   downloadHint: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     textAlign: 'center',
     opacity: 0.7,
   },
@@ -975,7 +1076,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   skipBtnText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontWeight: '500',
   },
 });

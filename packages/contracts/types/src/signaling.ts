@@ -69,6 +69,7 @@ export type SignalingEvent =
   /** Client successfully registered with the signaling server */
   | {
       type: 'registered';
+      pairToken: string;
       expiresAt: number;
       peerConnected: boolean;
     }
@@ -210,4 +211,5 @@ export interface SignalingClientOptions {
   onEvent: (event: SignalingEvent) => void;
   heartbeatIntervalMs?: number;
   createSocket?: (wsUrl: string) => WebSocket;
+  allowInsecureLoopback?: boolean;
 }

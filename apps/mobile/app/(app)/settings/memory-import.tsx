@@ -9,11 +9,12 @@ import { ArrowLeft, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-re
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { parseImportFile, type ImportSource } from '@/src/features/memory/services/memoryImport';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { translatePlural } from '@/src/i18n/plural';
 
 type ImportStatus = 'idle' | 'picking' | 'parsing' | 'importing' | 'done' | 'error';
 
@@ -92,16 +93,26 @@ export default function MemoryImportScreen() {
       content = await FileSystem.readAsStringAsync(asset.uri, {
         encoding: FileSystem.EncodingType.UTF8,
       });
-    } catch (err) {
+    } catch {
       setState((s) => ({
         ...s,
         status: 'error',
-        errorMessage: err instanceof Error ? err.message : 'Could not read file',
+        errorMessage: 'Could not read this file. Choose another file and try again.',
       }));
       return;
     }
 
-    const importResult = await parseImportFile(content, fileName);
+    let importResult: Awaited<ReturnType<typeof parseImportFile>>;
+    try {
+      importResult = await parseImportFile(content, fileName);
+    } catch {
+      setState((s) => ({
+        ...s,
+        status: 'error',
+        errorMessage: 'Could not parse this export. Check the file format and try again.',
+      }));
+      return;
+    }
     const { facts, source } = importResult;
 
     if (facts.length === 0) {
@@ -117,7 +128,16 @@ export default function MemoryImportScreen() {
 
     Alert.alert(
       'Import Preview',
-      `Found ${facts.length} fact${facts.length !== 1 ? 's' : ''} from ${SOURCE_LABELS[source]}.\n\nPreview:\n• ${facts
+      `${translatePlural(
+        'settings',
+        'counts.factsFound',
+        facts.length,
+        {
+          one: 'Found {{count}} fact from {{source}}.',
+          other: 'Found {{count}} facts from {{source}}.',
+        },
+        { source: SOURCE_LABELS[source] },
+      )}\n\nPreview:\n• ${facts
         .slice(0, 3)
         .map((f) => f.fact.slice(0, 80))
         .join('\n• ')}${facts.length > 3 ? `\n… and ${facts.length - 3} more` : ''}`,
@@ -137,11 +157,12 @@ export default function MemoryImportScreen() {
                 source === 'text' ? 'other' : source,
               );
               setState((s) => ({ ...s, status: 'done', inserted, skipped }));
-            } catch (err) {
+            } catch {
               setState((s) => ({
                 ...s,
                 status: 'error',
-                errorMessage: err instanceof Error ? err.message : 'Import failed',
+                errorMessage:
+                  'Import could not finish. Some memories may have been saved. Check your memories before trying again.',
               }));
             }
           },
@@ -193,7 +214,7 @@ export default function MemoryImportScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Privacy notice */}
-        <Animated.View entering={FadeIn.duration(300)} className="mb-5 mt-2">
+        <Animated.View entering={FadeIn.duration(motion.moved)} className="mb-5 mt-2">
           <View
             className="rounded-xl px-4 py-3"
             style={{
@@ -243,7 +264,7 @@ export default function MemoryImportScreen() {
 
         {/* Result display */}
         {state.status === 'done' && (
-          <Animated.View entering={FadeIn.duration(300)} className="mt-5">
+          <Animated.View entering={FadeIn.duration(motion.moved)} className="mt-5">
             <View
               className="rounded-xl px-4 py-4 items-center"
               style={{
@@ -262,7 +283,10 @@ export default function MemoryImportScreen() {
                 </Text>
               )}
               <Text className="text-sm mt-3 text-center" style={{ color: colors.textSecondary }}>
-                Added {state.inserted} {state.inserted === 1 ? 'memory' : 'memories'}
+                {translatePlural('settings', 'counts.memoriesAdded', state.inserted, {
+                  one: 'Added {{count}} memory',
+                  other: 'Added {{count}} memories',
+                })}
                 {state.skipped > 0 ? `, ${state.skipped} skipped` : ''}
               </Text>
             </View>
@@ -286,7 +310,7 @@ export default function MemoryImportScreen() {
         )}
 
         {state.status === 'error' && state.errorMessage && (
-          <Animated.View entering={FadeIn.duration(300)} className="mt-5">
+          <Animated.View entering={FadeIn.duration(motion.moved)} className="mt-5">
             <View
               className="rounded-xl px-4 py-4 items-center"
               style={{

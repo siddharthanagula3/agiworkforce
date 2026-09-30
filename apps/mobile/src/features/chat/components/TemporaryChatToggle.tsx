@@ -1,10 +1,12 @@
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { EyeOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   TEMPORARY_CHAT_CLOUD_EXPLAINER,
   TEMPORARY_CHAT_LOCAL_EXPLAINER,
@@ -31,7 +33,7 @@ export function TemporaryChatToggle() {
   };
 
   return (
-    <Pressable
+    <PressableBox
       onPress={handlePress}
       hitSlop={8}
       style={{
@@ -51,11 +53,14 @@ export function TemporaryChatToggle() {
     >
       <EyeOff size={16} color={isTemporaryChat ? colors.purple : colors.textMuted} />
       {isTemporaryChat ? (
-        <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
+        <Animated.View
+          entering={FadeIn.duration(motion.quick)}
+          exiting={FadeOut.duration(motion.quick)}
+        >
           <View>
             <Text
               style={{
-                fontSize: 11,
+                fontSize: typeScale.caption,
                 fontWeight: '600',
                 color: colors.purple,
                 letterSpacing: 0.2,
@@ -66,6 +71,6 @@ export function TemporaryChatToggle() {
           </View>
         </Animated.View>
       ) : null}
-    </Pressable>
+    </PressableBox>
   );
 }

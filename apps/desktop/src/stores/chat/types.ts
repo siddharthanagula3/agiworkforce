@@ -1,6 +1,5 @@
-
 import type { Artifact } from '../../types/chat';
-import type { ChatExecutionMode } from '@agiworkforce/types';
+import type { AgentEventSource, ChatExecutionMode } from '@agiworkforce/types';
 
 export interface ChatWidgetData {
   id: string;
@@ -74,12 +73,7 @@ export interface Operation {
 }
 
 export type MessageReaction =
-  | 'thumbsUp'
-  | 'thumbsDown'
-  | 'heart'
-  | 'laugh'
-  | 'thinking'
-  | 'celebrate';
+  'thumbsUp' | 'thumbsDown' | 'heart' | 'laugh' | 'thinking' | 'celebrate';
 
 export interface InlinePanelContent {
   terminal?: {
@@ -251,12 +245,10 @@ export interface PendingUserMessage {
   conversation_id?: number;
 }
 
-export interface Citation {
+export interface Citation extends Omit<AgentEventSource, 'title'> {
   id: string;
   index: number;
-  url: string;
   title?: string;
-  snippet?: string;
   favicon?: string;
   timestamp: Date;
 }

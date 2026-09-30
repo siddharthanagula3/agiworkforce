@@ -10,41 +10,21 @@ nothing is left.
 
 - Done when: The user can view and edit their account profile (name, photo, email) on the surface, and the change is saved to the account.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | partials/auth 68949fe36: the Full Name field now saves to the account display name through PATCH /api/me; there is still no profile photo upload on mobile | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | The side panel shows the signed-in name, email and initials read-only; name and photo can only be changed on the web, and Chrome has no link to that page. | ui |
-| api | partial | GET /api/me (documented) returns the profile; updating the name or photo (PATCH /api/me) works for signed-in clients but is not part of the documented public API. | api |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/extension/src/side_panel.ts:8320-8325`, `apps/extension/src/features/cloud-bridge/clerkAuth.ts:215-228`, `apps/web/app/api/me/route.ts:347-347`
-
-## S85.02: Custom instructions.
-
-- Done when: The user can write custom instructions on the surface and they are applied to that surface's chats until changed or switched off.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome cannot view or edit custom instructions; ones saved on web or mobile are applied by the server to Chrome Managed Cloud chats. | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2453-2461`, `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts:24-33`
 
 ## S85.03: Communication style.
 
 - Done when: The user can choose how the assistant communicates (tone, length, formatting) on the surface and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Chrome has no style control; the style saved on web or mobile is applied by the server to Chrome Managed Cloud chats. | ui |
-
-Code: `apps/web/lib/server/user-identity.ts:214-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-surface.ts:24-33`
 
 ## S85.04: Writing-style personalization.
 
@@ -55,24 +35,8 @@ Code: `apps/web/lib/server/user-identity.ts:214-227`, `apps/web/app/api/llm/v1/c
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Custom output styles exist only as hand-written markdown files in ~/.agiworkforce/output-styles/; the CLI cannot derive a style from a writing sample. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/output_styles.rs:1-20`, `apps/cli/src/agent/mod.rs:1264-1279`
-
-## S85.05: Saved Memory.
-
-- Done when: The user can see, add, edit and delete saved memories on the surface and turn memory on or off, and saved memories are used in that surface's chats.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | In Cloud mode the "Memory" switch is only stored on the phone (never synced), so turning it off does not stop the server from reading or learning account memories; the "Search and reference chats" switch is what actually writes the account memory setting. | handler |
-| cli | partial | F1: the cited MemorySubcommand enum (lib.rs:1072-1089) has List, Add and Forget only; there is no edit and no way to turn account memory on or off in the CLI (no memory key in config.rs), while the criterion requires edit and an on/off switch. Memories are used (context_prompt injected into the system prompt), so partial. |  |
-
-Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:41-72`, `apps/mobile/stores/settings/cloudSettingsStore.ts:79-84`, `apps/mobile/services/cloudSettingsMapping.ts:133-139`, `apps/cli/src/lib.rs:1072-1089`
 
 ## S85.06: Past-chat reference.
 
@@ -102,14 +66,11 @@ Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:41-72`,
 
 - Done when: The user can choose whether their chats are kept in history (and synced to the account) or not saved.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | F1: the cited toggle is 'Save Managed Cloud chats to my account' (cloud mirroring); with it off, flushConversation skips the account sync but chats are still written to the extension's local history in chrome.storage, and the extension has no temporary/not-saved option. The criterion is 'kept in history ... or not saved'; only the sync half exists: partial. |  |
-
-Code: `apps/extension/src/features/options/data-handling-section.ts:147-158`, `apps/extension/src/features/cloud-bridge/conversationSync.ts:120-130`
 
 ## S85.16: Temporary-chat preferences.
 
@@ -136,42 +97,33 @@ Code: `apps/extension/src/features/options/data-handling-section.ts:147-158`, `a
 
 - Done when: One action deletes every chat in the user's history (active and archived) after confirmation, and the copy states truthfully whether they can be restored.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Delete all works, but the confirmation says chats are "permanently deleted. This cannot be undone" while the server only soft-deletes them (restorable on web under Recently deleted); mobile has no Recently deleted screen. | states |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/data-controls/index.tsx:167-195`, `apps/mobile/src/features/archived-chats/service.ts:92-97`, `apps/web/app/api/chat/conversations/bulk/route.ts:53-66`
 
 ## S85.19: Shared-link management.
 
 - Done when: The user can list the chat links (and published pages) they have shared and revoke any of them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI can publish and unpublish artifact pages (agi artifacts publish/unpublish) but cannot list or revoke shared chat links. | ui, handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1998-2000`
 
 ## S85.20: Data export.
 
 - Done when: The user can download a copy of their account data (chats, memory, files, settings) from the surface.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The CLI cannot download the account data export; it can only write the current session with /export in the --no-tui REPL and dump its own settings with `agi sync export`. | ui, handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/repl/slash_commands.rs:149-151`
 
 ## S85.22: Import Memory.
 
@@ -195,9 +147,6 @@ Code: `apps/cli/src/repl/slash_commands.rs:149-151`
 | desktop | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Log out removes the account session and saved keys; there is no control to clear the chat history kept in chrome.storage (only one-by-one delete). | ui |
-
-Code: `apps/extension/src/options.ts:1426-1441`
 
 ## S85.26: Delete account.
 

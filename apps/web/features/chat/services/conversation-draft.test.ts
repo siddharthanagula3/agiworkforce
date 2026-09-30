@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/client/csrf', () => ({
+  CsrfTokenError: vi.fn(),
+  clearCsrfToken: vi.fn(),
+  getCsrfToken: vi.fn(),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit) => headers),
 }));
 

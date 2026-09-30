@@ -5,6 +5,14 @@ export interface JobQueuePolicy {
   backoffMaxSeconds: number;
   leaseSeconds: number;
   retainFinishedDays: number;
+  /**
+   * How long a dead letter waits for review in the admin background-jobs view
+   * before it is deleted. A dead event-trigger or routine job can carry Google
+   * user data (Gmail From, To, Subject and snippet), which Limited Use lets us
+   * keep no longer than the work needs, so no queue may exceed 30 days: the
+   * longest window any queue already keeps a settled job.
+   */
+  retainDeadDays: number;
 }
 
 export const JOB_QUEUE_POLICIES = {
@@ -15,6 +23,7 @@ export const JOB_QUEUE_POLICIES = {
     backoffMaxSeconds: 1_800,
     leaseSeconds: 30,
     retainFinishedDays: 7,
+    retainDeadDays: 30,
   },
   email: {
     maxConcurrency: 5,
@@ -23,6 +32,7 @@ export const JOB_QUEUE_POLICIES = {
     backoffMaxSeconds: 6 * 3_600,
     leaseSeconds: 30,
     retainFinishedDays: 7,
+    retainDeadDays: 30,
   },
   webhooks: {
     maxConcurrency: 4,
@@ -31,6 +41,7 @@ export const JOB_QUEUE_POLICIES = {
     backoffMaxSeconds: 6 * 3_600,
     leaseSeconds: 45,
     retainFinishedDays: 7,
+    retainDeadDays: 30,
   },
   'data-deletion': {
     maxConcurrency: 2,
@@ -39,6 +50,7 @@ export const JOB_QUEUE_POLICIES = {
     backoffMaxSeconds: 24 * 3_600,
     leaseSeconds: 240,
     retainFinishedDays: 30,
+    retainDeadDays: 30,
   },
   'file-processing': {
     maxConcurrency: 5,
@@ -47,6 +59,7 @@ export const JOB_QUEUE_POLICIES = {
     backoffMaxSeconds: 6 * 3_600,
     leaseSeconds: 30,
     retainFinishedDays: 7,
+    retainDeadDays: 30,
   },
   research: {
     maxConcurrency: 5,
@@ -55,6 +68,7 @@ export const JOB_QUEUE_POLICIES = {
     backoffMaxSeconds: 3_600,
     leaseSeconds: 30,
     retainFinishedDays: 7,
+    retainDeadDays: 30,
   },
   'event-triggers': {
     maxConcurrency: 4,
@@ -63,6 +77,7 @@ export const JOB_QUEUE_POLICIES = {
     backoffMaxSeconds: 3_600,
     leaseSeconds: 60,
     retainFinishedDays: 14,
+    retainDeadDays: 30,
   },
   'media-generation': {
     maxConcurrency: 3,
@@ -71,6 +86,7 @@ export const JOB_QUEUE_POLICIES = {
     backoffMaxSeconds: 900,
     leaseSeconds: 180,
     retainFinishedDays: 7,
+    retainDeadDays: 30,
   },
   'data-export': {
     maxConcurrency: 2,
@@ -79,6 +95,7 @@ export const JOB_QUEUE_POLICIES = {
     backoffMaxSeconds: 1_800,
     leaseSeconds: 240,
     retainFinishedDays: 7,
+    retainDeadDays: 30,
   },
 } as const satisfies Record<string, JobQueuePolicy>;
 
@@ -103,6 +120,7 @@ export const JOB_KINDS = {
   'data-export.build-archive': 'data-export',
   'data-export.expire-archive': 'data-export',
   'email.data-export-ready': 'email',
+  'webhooks.signaling-device-revoke': 'webhooks',
 } as const satisfies Record<string, JobQueueName>;
 
 export type JobKind = keyof typeof JOB_KINDS;

@@ -52,18 +52,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S34.06: Search connected company sources.
-
-- Done when: The assistant can search the user's connected work sources (Drive, Slack, Notion...) during a chat once they are connected.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Only MCP servers configured for the local CLI runtime; the first-party web connectors are not offered. | handler |
-
-Code: `apps/extension-vscode/package.json:638-639`
-
 ## S34.15: Date-range filters.
 
 - Done when: The user can limit a search to a date range and get only results inside it.
@@ -76,18 +64,6 @@ Code: `apps/extension-vscode/package.json:638-639`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S34.19: User-selected source collections.
-
-- Done when: The user can put chosen sources into a named collection (e.g. a project's knowledge) and have chats search only/also that collection.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome can reopen a project's chats (which stay grounded in its sources) but cannot start a chat in a project or add/choose sources. | ui |
-
-Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:472-474`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2550-2555`
 
 ## S34.20: Search suggestions.
 
@@ -182,15 +158,3 @@ Code: `apps/extension/src/features/side-panel/projectsDrawer.ts:472-474`, `apps/
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S34.32: Empty-results and unavailable-source states.
-
-- Done when: Searches that find nothing, or whose source/provider is unavailable, show a clear empty or unavailable state instead of silence.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Session search shows an empty notice, but web search has no no-results or unavailable state beyond the prompt telling the model to say so. | states |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:2407-2407`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4162-4162`

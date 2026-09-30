@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   Archive,
   ArrowUpFromLine,
@@ -14,6 +15,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { exportAllUserData } from '@/services/dsarExport';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { buildLocalDataExportSnapshot } from './localDataSnapshot';
 import { syncLocalConversationsToCloud } from './localCloudSyncService';
 import {
@@ -27,6 +29,11 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { archiveAllConversations, deleteAllConversations } from '@/src/features/archived-chats';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 type BulkChatAction = 'archive' | 'delete';
 
@@ -66,9 +73,15 @@ export default function DataControlsScreen() {
           text: 'Sync to Cloud',
           style: 'default',
           onPress: () => {
+            const account = captureCloudAccountEpoch();
+            if (!account) {
+              Alert.alert('AGI Cloud required', 'Sign in to AGI Cloud before syncing local chats.');
+              return;
+            }
             setSyncing(true);
             syncLocalConversationsToCloud()
               .then((result) => {
+                if (!isCloudAccountEpochCurrent(account)) return;
                 if (result.errors.length > 0) {
                   Alert.alert(
                     'Sync completed with errors',
@@ -82,6 +95,7 @@ export default function DataControlsScreen() {
                 }
               })
               .catch(() => {
+                if (!isCloudAccountEpochCurrent(account)) return;
                 Alert.alert('Sync failed', 'Could not reach AGI Cloud. Check your connection.');
               })
               .finally(() => setSyncing(false));
@@ -110,12 +124,19 @@ export default function DataControlsScreen() {
   }, [appMode, cloudUnlocked]);
 
   const runBulkChatAction = useCallback(
-    (action: BulkChatAction) => {
+    (action: BulkChatAction, account: CloudAccountEpoch) => {
+      if (
+        !isCloudAccountEpochCurrent(account) ||
+        useChatAppModeStore.getState().appMode !== 'cloud'
+      )
+        return;
       setBulkAction(action);
       const request = action === 'archive' ? archiveAllConversations() : deleteAllConversations();
       request
         .then(async (affectedCount) => {
+          if (!isCloudAccountEpochCurrent(account)) return;
           await loadConversations();
+          if (!isCloudAccountEpochCurrent(account)) return;
           const noun = affectedCount === 1 ? 'chat' : 'chats';
           Alert.alert(
             action === 'archive' ? 'Chats archived' : 'Chats deleted',
@@ -125,6 +146,7 @@ export default function DataControlsScreen() {
           );
         })
         .catch(() => {
+          if (!isCloudAccountEpochCurrent(account)) return;
           Alert.alert(
             action === 'archive' ? 'Could not archive chats' : 'Could not delete chats',
             'AGI could not reach your AGI Cloud chat history. Check your connection and try again.',
@@ -137,6 +159,8 @@ export default function DataControlsScreen() {
 
   const handleArchiveAll = useCallback(() => {
     if (!requireCloudChats()) return;
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
     Alert.alert(
       'Archive all chats?',
       'Every chat in AGI Cloud moves into Archived chats. Nothing is deleted, and you can restore any of them later.',
@@ -154,7 +178,7 @@ export default function DataControlsScreen() {
                 {
                   text: 'Yes, archive all',
                   style: 'destructive',
-                  onPress: () => runBulkChatAction('archive'),
+                  onPress: () => runBulkChatAction('archive', account),
                 },
               ],
             );
@@ -166,9 +190,11 @@ export default function DataControlsScreen() {
 
   const handleDeleteAll = useCallback(() => {
     if (!requireCloudChats()) return;
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
     Alert.alert(
       'Delete all chats?',
-      'Every chat in AGI Cloud, including archived ones, and all of their messages will be permanently deleted. This cannot be undone.',
+      'Every chat in AGI Cloud, including archived ones, and all of their messages are removed from every device on this account. You can restore them from Recently deleted in Settings on the web for 30 days.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -183,7 +209,7 @@ export default function DataControlsScreen() {
                 {
                   text: 'Yes, delete all chats',
                   style: 'destructive',
-                  onPress: () => runBulkChatAction('delete'),
+                  onPress: () => runBulkChatAction('delete', account),
                 },
               ],
             );
@@ -198,8 +224,8 @@ export default function DataControlsScreen() {
   return (
     <SettingsScreenShell title="Data Controls">
       <SettingsInfo
-        title="Model training is always off"
-        body="AGI does not use customer prompts, responses, or files to train AGI-owned models. This is a product policy, not an optional setting."
+        title="Model training"
+        body="AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats in Privacy settings."
         icon={ShieldCheck}
       />
       <SettingsInfo
@@ -208,7 +234,7 @@ export default function DataControlsScreen() {
         icon={Database}
       />
       <SettingsGroup>
-        <Pressable
+        <PressableBox
           onPress={handleExport}
           disabled={exporting}
           accessibilityRole="button"
@@ -225,10 +251,10 @@ export default function DataControlsScreen() {
           }}
         >
           <Download size={19} color={colors.textSecondary} />
-          <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+          <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
             {exporting ? 'Exporting…' : 'Export Local Data'}
           </Text>
-        </Pressable>
+        </PressableBox>
         <SettingsRow
           label="Storage"
           icon={Trash2}
@@ -242,13 +268,6 @@ export default function DataControlsScreen() {
         />
       </SettingsGroup>
 
-      {/*
-        Chat history acts on AGI Cloud conversations only. The server already
-        validates all three bulk actions
-        (apps/web/app/api/chat/conversations/bulk/route.ts); Mobile previously
-        posted only `delete_archived`, so archive-all and delete-all were
-        unreachable here despite working on web.
-      */}
       <SettingsInfo
         title="Chat history"
         body="These act on chats stored in AGI Cloud. Chats that only exist on this device are never sent to AGI and are wiped from Settings → Storage."
@@ -262,7 +281,7 @@ export default function DataControlsScreen() {
             router.push('/(app)/settings/archived-chats' as Parameters<typeof router.push>[0])
           }
         />
-        <Pressable
+        <PressableBox
           onPress={handleArchiveAll}
           disabled={bulkBusy}
           accessibilityRole="button"
@@ -281,17 +300,17 @@ export default function DataControlsScreen() {
         >
           <Archive size={19} color={cloudUnlocked ? colors.teal : colors.textMuted} />
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.textPrimary, fontSize: 15 }}>
+            <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>
               {bulkAction === 'archive' ? 'Archiving…' : 'Archive all chats'}
             </Text>
             {!cloudUnlocked ? (
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
                 Requires AGI Cloud sign-in
               </Text>
             ) : null}
           </View>
-        </Pressable>
-        <Pressable
+        </PressableBox>
+        <PressableBox
           onPress={handleDeleteAll}
           disabled={bulkBusy}
           accessibilityRole="button"
@@ -311,18 +330,18 @@ export default function DataControlsScreen() {
             <Text
               style={{
                 color: cloudUnlocked ? colors.agentError : colors.textPrimary,
-                fontSize: 15,
+                fontSize: typeScale.body,
               }}
             >
               {bulkAction === 'delete' ? 'Deleting…' : 'Delete all chats'}
             </Text>
             {!cloudUnlocked ? (
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
                 Requires AGI Cloud sign-in
               </Text>
             ) : null}
           </View>
-        </Pressable>
+        </PressableBox>
       </SettingsGroup>
 
       {/*
@@ -336,7 +355,7 @@ export default function DataControlsScreen() {
         icon={Cloud}
       />
       <SettingsGroup>
-        <Pressable
+        <PressableBox
           onPress={handleSyncToCloud}
           disabled={syncing}
           accessibilityRole="button"
@@ -353,16 +372,37 @@ export default function DataControlsScreen() {
         >
           <ArrowUpFromLine size={19} color={cloudUnlocked ? colors.teal : colors.textMuted} />
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.textPrimary, fontSize: 15 }}>
+            <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>
               {syncing ? 'Syncing...' : 'Sync Local Chats to Cloud'}
             </Text>
             {!cloudUnlocked ? (
-              <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
                 Requires AGI Cloud sign-in
               </Text>
             ) : null}
           </View>
-        </Pressable>
+        </PressableBox>
+      </SettingsGroup>
+
+      <SettingsInfo
+        title="AGI Cloud account"
+        body="Export your Cloud data or request account deletion from your account settings. Deleting your Cloud account does not erase data kept only on this device."
+        icon={Cloud}
+      />
+      <SettingsGroup>
+        <SettingsRow
+          label="Export Cloud data"
+          icon={Download}
+          value={cloudUnlocked ? undefined : 'Sign in required'}
+          onPress={() => router.push('/(app)/settings/cloud-account')}
+        />
+        <SettingsRow
+          label="Delete account"
+          icon={Trash2}
+          value={cloudUnlocked ? undefined : 'Sign in required'}
+          onPress={() => router.push('/(app)/settings/cloud-account')}
+          isLast
+        />
       </SettingsGroup>
     </SettingsScreenShell>
   );

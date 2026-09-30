@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { View, Pressable, type GestureResponderEvent } from 'react-native';
+import { View, type GestureResponderEvent } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Clock, Trash2, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Clock, Trash2, ChevronDown, ChevronUp, Play } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,10 +11,12 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { ScheduleRunHistory } from './ScheduleRunHistory';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
-import type { Schedule } from '../store';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { useScheduleStore, type Schedule } from '../store';
+import { triggerScheduleNow } from '../service';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
+import { toUserMessage } from '@/services/userMessage';
 
 interface ScheduleCardProps {
   schedule: Schedule;
@@ -24,6 +27,7 @@ interface ScheduleCardProps {
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const RUN_NOW_FAILED = 'The run could not start. Try again.';
 
 function formatTime(timeOfDay: string): string {
   const [hoursStr, minutesStr] = timeOfDay.split(':');
@@ -53,7 +57,7 @@ function formatRecurrence(schedule: Schedule): string {
       if (schedule.scheduledAt) {
         const date = parseValidDate(schedule.scheduledAt);
         if (!date) return `Once at ${time}`;
-        const month = date.toLocaleDateString('en-US', { month: 'short' });
+        const month = date.toLocaleDateString(undefined, { month: 'short' });
         const day = date.getDate();
         return `Once on ${month} ${day} at ${time}`;
       }
@@ -162,6 +166,32 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
   const statusBadge = getStatusBadge(schedule.lastRunStatus);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const hasLegacyCadence = !isMobileScheduleRecurrenceSupported(schedule.recurrence);
+  const fetchRuns = useScheduleStore((s) => s.fetchRuns);
+  const fetchSchedules = useScheduleStore((s) => s.fetchSchedules);
+  const [starting, setStarting] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+
+  const handleRunNow = useCallback(
+    async (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      if (starting) return;
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      setStarting(true);
+      setRunError(null);
+      try {
+        await triggerScheduleNow(schedule.id);
+        setHistoryExpanded(true);
+        await Promise.all([fetchRuns(schedule.id), fetchSchedules()]);
+      } catch (error) {
+        setRunError(toUserMessage(error, RUN_NOW_FAILED));
+      } finally {
+        setStarting(false);
+      }
+    },
+    [starting, hapticsEnabled, schedule.id, fetchRuns, fetchSchedules],
+  );
 
   const handleDelete = useCallback(
     (event: GestureResponderEvent) => {
@@ -187,11 +217,11 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(300)
+      entering={FadeInDown.duration(motion.moved)
         .delay(index * 60)
         .springify()}
     >
-      <Pressable
+      <PressableBox
         onPress={() => onPress(schedule.id)}
         className="mb-3 active:opacity-80"
         accessibilityLabel={`Schedule: ${schedule.name}, ${formatRecurrence(schedule)}`}
@@ -234,7 +264,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             <Badge label={getManagedDisplayName(schedule.model)} color="gray" />
             <Badge label={statusBadge.label} color={statusBadge.color} />
             {formatLastRun(schedule.lastRunAt) ? (
-              <Text className="text-[11px]" style={{ color: colors.textMuted }}>
+              <Text className="text-xs" style={{ color: colors.textMuted }}>
                 Last run {formatLastRun(schedule.lastRunAt)}
               </Text>
             ) : null}
@@ -242,26 +272,38 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
 
           {/* Footer: Next run + history toggle + delete */}
           <View className="flex-row items-center justify-between mt-1">
-            <Text className="text-[11px] text-white/30">
+            <Text className="text-xs text-white/30">
               Next run: {formatRelativeTime(schedule.nextRunAt)}
             </Text>
             <View className="flex-row items-center gap-1">
+              <PressableBox
+                onPress={handleRunNow}
+                disabled={starting}
+                hitSlop={8}
+                className="flex-row items-center gap-1 px-2 py-1 rounded-md active:bg-white/5"
+                accessibilityLabel={starting ? 'Starting a run' : 'Run now'}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: starting, busy: starting }}
+              >
+                <Play size={11} color={colors.textMuted} />
+                <Text className="text-xs text-white/40">{starting ? 'Starting…' : 'Run now'}</Text>
+              </PressableBox>
               {/* History toggle */}
-              <Pressable
+              <PressableBox
                 onPress={handleToggleHistory}
                 hitSlop={8}
                 className="flex-row items-center gap-1 px-2 py-1 rounded-md active:bg-white/5"
                 accessibilityLabel={historyExpanded ? 'Hide run history' : 'Show run history'}
                 accessibilityRole="button"
               >
-                <Text className="text-[10px] text-white/40">History</Text>
+                <Text className="text-xs text-white/40">History</Text>
                 {historyExpanded ? (
                   <ChevronUp size={11} color={colors.textMuted} />
                 ) : (
                   <ChevronDown size={11} color={colors.textMuted} />
                 )}
-              </Pressable>
-              <Pressable
+              </PressableBox>
+              <PressableBox
                 onPress={handleDelete}
                 hitSlop={12}
                 className="p-1.5 rounded-md active:bg-red-500/10"
@@ -269,9 +311,15 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
                 accessibilityRole="button"
               >
                 <Trash2 size={14} color={colors.agentError} />
-              </Pressable>
+              </PressableBox>
             </View>
           </View>
+
+          {runError ? (
+            <Text className="mt-2 text-xs leading-4" style={{ color: colors.agentError }}>
+              {runError}
+            </Text>
+          ) : null}
 
           {/* Expandable run history */}
           {historyExpanded && (
@@ -281,7 +329,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             </>
           )}
         </Card>
-      </Pressable>
+      </PressableBox>
     </Animated.View>
   );
 }

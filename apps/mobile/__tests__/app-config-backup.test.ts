@@ -40,20 +40,27 @@ describe('app.config.js, Android backup is disabled', () => {
   it('iOS advertises only the canonical non-redirecting App Link host', () => {
     const previousAppEnv = process.env['APP_ENV'];
     const previousClerkKey = process.env['EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY'];
+    const previousApiUrl = process.env['EXPO_PUBLIC_API_URL'];
 
     try {
       process.env['APP_ENV'] = 'production';
       process.env['EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_live_contract_test';
+      process.env['EXPO_PUBLIC_API_URL'] = 'https://agiworkforce.com';
       jest.isolateModules(() => {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const releaseConfig = require('../app.config.js') as typeof appConfig;
-        expect(releaseConfig.expo.ios!.associatedDomains).toEqual(['applinks:agiworkforce.com']);
+        expect(releaseConfig.expo.ios!.associatedDomains).toEqual([
+          'applinks:agiworkforce.com',
+          'webcredentials:agiworkforce.com',
+        ]);
       });
     } finally {
       if (previousAppEnv === undefined) delete process.env['APP_ENV'];
       else process.env['APP_ENV'] = previousAppEnv;
       if (previousClerkKey === undefined) delete process.env['EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY'];
       else process.env['EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY'] = previousClerkKey;
+      if (previousApiUrl === undefined) delete process.env['EXPO_PUBLIC_API_URL'];
+      else process.env['EXPO_PUBLIC_API_URL'] = previousApiUrl;
     }
   });
 });

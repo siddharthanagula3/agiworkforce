@@ -34,8 +34,16 @@ jest.mock('../src/features/auth/store', () => ({
 }));
 
 const mockDeleteAccount = jest.fn();
+const mockGetDeletionStatus = jest.fn();
+const mockGetMe = jest.fn();
+const mockPatchMe = jest.fn();
+const mockCancelDeletion = jest.fn();
 jest.mock('../services/api', () => ({
   api: {
+    get: (path: string) =>
+      path === '/api/me?surface=mobile' ? mockGetMe(path) : mockGetDeletionStatus(path),
+    patch: (...args: unknown[]) => mockPatchMe(...args),
+    post: (...args: unknown[]) => mockCancelDeletion(...args),
     delete: (...args: unknown[]) => mockDeleteAccount(...args),
   },
 }));
@@ -43,6 +51,16 @@ jest.mock('../services/api', () => ({
 const mockExportCloudUserData = jest.fn();
 jest.mock('../services/cloudDataExport', () => ({
   exportCloudUserData: (...args: unknown[]) => mockExportCloudUserData(...args),
+}));
+
+const mockSyncNow = jest.fn().mockResolvedValue(undefined);
+let mockSyncStatus: 'idle' | 'error' = 'idle';
+jest.mock('../services/cloudSyncEngine', () => ({
+  syncNow: () => mockSyncNow(),
+}));
+jest.mock('../stores/chat/cloudSyncStateStore', () => ({
+  useCloudSyncStateStore: (selector: (state: unknown) => unknown) =>
+    selector({ status: mockSyncStatus, lastSyncAt: null }),
 }));
 
 let mockAppMode: 'local' | 'cloud' = 'cloud';
@@ -116,13 +134,18 @@ jest.mock('lucide-react-native', () => {
     Download: Icon,
     LogOut: Icon,
     Mail: Icon,
+    Pencil: Icon,
     Smartphone: Icon,
     Trash2: Icon,
+    Undo2: Icon,
     UserRound: Icon,
   };
 });
 
+import { router } from 'expo-router';
 import CloudAccountScreen from '../src/features/settings/cloud-account';
+import { useCloudProfileStore } from '../src/features/settings/cloud-account/cloudProfileStore';
+import { httpErrorFrom } from '../services/apiErrors';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -144,6 +167,7 @@ describe('Cloud Account destructive action ownership', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     __resetCloudAccountSessionForTests();
     activateCloudAccount('account-a');
+    useCloudProfileStore.getState().reset();
     mockClerkUser = {
       id: 'account-a',
       primaryEmailAddress: { emailAddress: 'a@example.com' },
@@ -153,11 +177,62 @@ describe('Cloud Account destructive action ownership', () => {
     };
     mockSignOut.mockResolvedValue(undefined);
     mockExportCloudUserData.mockResolvedValue(undefined);
+    mockGetDeletionStatus.mockResolvedValue({
+      pending: false,
+      canCancel: false,
+      requestedAt: null,
+      scheduledFor: null,
+    });
+    mockGetMe.mockResolvedValue({
+      id: 'account-a',
+      email: 'a@example.com',
+      name: 'Account A',
+      profile: { display_name: 'Account A', preferred_name: null, work_description: null },
+      avatar_url: null,
+      created_at: null,
+      updated_at: 1,
+      plan: { tier: 'free', display_name: 'Free', status: 'active', current_period_end: null },
+      feature_flags: { advanced_model_access: false },
+      routing_preferences: {},
+    });
+    mockPatchMe.mockResolvedValue({});
+    mockCancelDeletion.mockResolvedValue({ cancelled: true });
     mockAppMode = 'cloud';
+    mockSyncStatus = 'idle';
+  });
+
+  it('shows failed Cloud sync on the account page and retries it', async () => {
+    mockSyncStatus = 'error';
+    render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(screen.getByLabelText('Last synced'));
+    expect(mockSyncNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves the editable display name to the Cloud profile', async () => {
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByText('Account A')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('cloud-account-edit-name'));
+    fireEvent.changeText(screen.getByTestId('cloud-account-name-input'), 'New Account Name');
+    fireEvent.press(screen.getByTestId('cloud-account-save-name'));
+
+    await waitFor(() => {
+      expect(mockPatchMe).toHaveBeenCalledWith('/api/me', {
+        display_name: 'New Account Name',
+      });
+      expect(screen.getByText('New Account Name')).toBeTruthy();
+    });
   });
 
   it('exports the visible Cloud account before the destructive action', async () => {
     render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     fireEvent.press(screen.getByLabelText('Export Cloud Data'));
 
@@ -169,9 +244,12 @@ describe('Cloud Account destructive action ownership', () => {
     );
   });
 
-  it('requires an explicit mode switch before contacting AGI Cloud', () => {
+  it('requires an explicit mode switch before contacting AGI Cloud', async () => {
     mockAppMode = 'local';
     render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     fireEvent.press(screen.getByLabelText('Export Cloud Data'));
 
@@ -183,9 +261,11 @@ describe('Cloud Account destructive action ownership', () => {
     );
   });
 
-  it('prompts users to export Cloud data before account deletion', () => {
+  it('prompts users to export Cloud data before account deletion', async () => {
     render(<CloudAccountScreen />);
-
+    await act(async () => {
+      await Promise.resolve();
+    });
     fireEvent.press(screen.getByLabelText('Delete Account'));
 
     expect(Alert.alert).toHaveBeenCalledWith(
@@ -195,8 +275,11 @@ describe('Cloud Account destructive action ownership', () => {
     );
   });
 
-  it('does not execute account A’s retained delete confirmation as account B', () => {
+  it('does not execute account A’s retained delete confirmation as account B', async () => {
     const view = render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
     fireEvent.press(screen.getByLabelText('Delete Account'));
     const deleteAccountA = destructiveActionFor('Delete Account');
 
@@ -212,6 +295,9 @@ describe('Cloud Account destructive action ownership', () => {
       view.rerender(<CloudAccountScreen />);
       deleteAccountA();
     });
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     expect(mockDeleteAccount).not.toHaveBeenCalled();
     expect(Alert.alert).toHaveBeenLastCalledWith(
@@ -220,8 +306,11 @@ describe('Cloud Account destructive action ownership', () => {
     );
   });
 
-  it('confirms the current email before handing account management to Web', () => {
+  it('confirms the current email before handing account management to Web', async () => {
     render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
     fireEvent.press(screen.getByLabelText('Email'));
 
     expect(Alert.alert).toHaveBeenCalledWith(
@@ -246,6 +335,9 @@ describe('Cloud Account destructive action ownership', () => {
       }),
     );
     const view = render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
     fireEvent.press(screen.getByLabelText('Delete Account'));
 
     await act(async () => {
@@ -265,6 +357,9 @@ describe('Cloud Account destructive action ownership', () => {
       view.rerender(<CloudAccountScreen />);
     });
     await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
       resolveDeletion({ message: 'Account A deletion scheduled' });
       await Promise.resolve();
     });
@@ -274,5 +369,155 @@ describe('Cloud Account destructive action ownership', () => {
       'Account changed',
       expect.stringContaining('No action was applied to the new account'),
     );
+  });
+
+  it('reports immediate erasure accurately when the server did not schedule deletion', async () => {
+    mockDeleteAccount.mockResolvedValueOnce({ message: 'Account deleted successfully.' });
+    render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => {
+      destructiveActionFor('Delete Account')();
+    });
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith('Account deleted', 'Account deleted successfully.');
+  });
+
+  it('shows why a paid plan blocks deletion and offers Billing', async () => {
+    const refusal =
+      'Cancel your pro plan before deleting your account. Nothing was deleted, and billing ' +
+      'continues until you cancel in Settings > Billing. Email support@agiworkforce.com if you need help.';
+    mockDeleteAccount.mockRejectedValueOnce(
+      httpErrorFrom(
+        409,
+        JSON.stringify({
+          error: refusal,
+          reason: 'active_subscription',
+          planTier: 'pro',
+          status: 'active',
+          cancelAtPeriodEnd: false,
+        }),
+      ),
+    );
+    render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => {
+      destructiveActionFor('Delete Account')();
+    });
+
+    expect(Alert.alert).toHaveBeenLastCalledWith('Could not delete account', refusal, [
+      { text: 'OK', style: 'cancel' },
+      { text: 'Open Billing', onPress: expect.any(Function) },
+    ]);
+    const buttons = (Alert.alert as jest.Mock).mock.lastCall?.[2] as Array<{
+      text?: string;
+      onPress?: () => void;
+    }>;
+    buttons.find((button) => button.text === 'Open Billing')?.onPress?.();
+    expect(router.push).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it('shows why sole workspace ownership blocks deletion', async () => {
+    const refusal =
+      'You are the only owner of the workspace Acme. Nothing was deleted. Make someone else an ' +
+      'owner in Settings > Organization, or delete the workspace there first, then delete your account.';
+    mockDeleteAccount.mockRejectedValueOnce(
+      httpErrorFrom(
+        409,
+        JSON.stringify({
+          error: refusal,
+          reason: 'sole_organization_owner',
+          workspaces: [{ id: 'workspace-1', name: 'Acme' }],
+        }),
+      ),
+    );
+    render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => {
+      destructiveActionFor('Delete Account')();
+    });
+
+    expect(Alert.alert).toHaveBeenLastCalledWith('Could not delete account', refusal, undefined);
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it('lets the signed-in owner cancel a pending deletion after confirmation', async () => {
+    mockGetDeletionStatus.mockResolvedValueOnce({
+      pending: true,
+      canCancel: true,
+      requestedAt: '2026-09-27T18:00:00.000Z',
+      scheduledFor: '2026-09-28T18:00:00.000Z',
+    });
+    render(<CloudAccountScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+    expect(screen.queryByLabelText('Delete Account')).toBeNull();
+    fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+    expect(mockCancelDeletion).not.toHaveBeenCalled();
+    const confirmation = (Alert.alert as jest.Mock).mock.calls.findLast(
+      ([title]) => title === 'Cancel account deletion?',
+    );
+    const buttons = confirmation?.[2] as Array<{ text?: string; onPress?: () => void }>;
+    await act(async () => {
+      buttons.find((button) => button.text === 'Cancel deletion')?.onPress?.();
+    });
+
+    expect(mockCancelDeletion).toHaveBeenCalledWith('/api/user/delete-account/cancel');
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it('does not offer cancellation after the grace window closes', async () => {
+    mockGetDeletionStatus.mockResolvedValueOnce({
+      pending: true,
+      canCancel: false,
+      requestedAt: '2026-09-25T18:00:00.000Z',
+      scheduledFor: '2026-09-26T18:00:00.000Z',
+    });
+    render(<CloudAccountScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText('Cancellation window closed')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Cancellation window closed'));
+    expect(Alert.alert).not.toHaveBeenCalledWith(
+      'Cancel account deletion?',
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(mockCancelDeletion).not.toHaveBeenCalled();
+  });
+
+  it('does not offer deletion when the server sends an inconsistent status', async () => {
+    mockGetDeletionStatus.mockResolvedValueOnce({
+      pending: false,
+      canCancel: false,
+      requestedAt: null,
+      scheduledFor: '2026-09-28T18:00:00.000Z',
+    });
+    render(<CloudAccountScreen />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Could not check deletion status. Retry')).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+
+    expect(Alert.alert).not.toHaveBeenCalledWith(
+      'Delete Account',
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(mockDeleteAccount).not.toHaveBeenCalled();
   });
 });

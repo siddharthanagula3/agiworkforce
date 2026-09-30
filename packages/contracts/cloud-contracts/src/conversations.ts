@@ -6,12 +6,15 @@ import {
 } from '@agiworkforce/types';
 import { CloudAgentWorkModeSchema, type CloudAgentWorkMode } from './cloud-agent-runs';
 
+export const CONVERSATION_TITLE_MAX_LENGTH = 500;
+
 export const MANAGED_CLOUD_DEFAULT_MODEL_SELECTION = getDefaultAutoRoutingProfile().id;
 
 export const MANAGED_CLOUD_CHAT_BASE_PATH = '/api/chat/conversations';
 export const MANAGED_CLOUD_ORGANIZATION_HEADER = 'x-agi-organization-id';
 export const MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE = 'personal';
 export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH = 100_000;
+export const MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH = 1_000_000;
 
 /**
  * A draft is unsent text, so it is capped well below a message: the composer
@@ -95,7 +98,7 @@ export const ManagedCloudMessageWireSchema = z.object({
   id: z.string().min(1),
   parent_id: z.string().uuid().nullable().optional(),
   role: ManagedCloudMessageRoleSchema,
-  content: z.string().max(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH),
+  content: z.string().max(MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH),
   model: z.string().nullable(),
   provider: z.string().nullable(),
   input_tokens: z.coerce.number(),
@@ -109,6 +112,7 @@ export const ManagedCloudConversationListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE).optional(),
   offset: z.coerce.number().int().min(0).optional(),
+  cursor: z.string().min(1).max(512).optional(),
   includeHistoryStats: z.boolean().optional(),
   archived: z.enum(['include', 'only', 'exclude']).optional(),
   projectId: z.string().trim().min(1).max(128).optional(),
@@ -119,7 +123,7 @@ export type ManagedCloudConversationListQuery = z.infer<
 
 export const ManagedCloudCreateConversationRequestSchema = z.object({
   id: z.string().uuid().optional(),
-  title: z.string().max(500).optional().default('New conversation'),
+  title: z.string().max(CONVERSATION_TITLE_MAX_LENGTH).optional().default('New conversation'),
   model: z.string().min(1).optional().default(MANAGED_CLOUD_DEFAULT_MODEL_SELECTION),
   selectedRouteId: z.string().min(1).max(256).nullable().optional(),
   projectId: z.string().max(200).nullable().optional(),
@@ -130,7 +134,7 @@ export type ManagedCloudCreateConversationRequest = z.input<
 >;
 
 export const ManagedCloudUpdateConversationRequestSchema = z.object({
-  title: z.string().max(500).optional(),
+  title: z.string().max(CONVERSATION_TITLE_MAX_LENGTH).optional(),
   model: z.string().min(1).optional(),
   selectedRouteId: z.string().min(1).max(256).nullable().optional(),
   projectId: z.string().max(200).nullable().optional(),
@@ -184,6 +188,7 @@ export const ManagedCloudConversationListResponseSchema = z.object({
   conversations: z.array(ManagedCloudConversationWireSchema).max(MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE),
   hasMore: z.boolean(),
   nextOffset: z.number().int().nonnegative(),
+  nextCursor: z.string().min(1).nullable().optional(),
   historyStats: ManagedCloudConversationHistoryStatsSchema.optional(),
 });
 export type ManagedCloudConversationListResponse = z.infer<
@@ -218,7 +223,7 @@ export const ManagedCloudDeleteMessageResponseSchema = ManagedCloudDeleteConvers
 
 export const ManagedCloudConversationBranchItemSchema = z.object({
   conversationId: z.string().uuid(),
-  title: z.string().min(1).max(500),
+  title: z.string().min(1).max(CONVERSATION_TITLE_MAX_LENGTH),
 });
 export type ManagedCloudConversationBranchItem = z.infer<
   typeof ManagedCloudConversationBranchItemSchema

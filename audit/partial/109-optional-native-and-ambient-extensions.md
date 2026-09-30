@@ -6,19 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S109.03: Menu-bar quick actions.
-
-- Done when: A menu-bar (or equivalent quick menu) offers one-click AGI actions such as new chat, quick ask, screenshot and voice.
-- Wave: 3
-- Already works on: desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The auditor scoped every mobile search to apps/mobile/app, which excludes apps/mobile/native where the iOS App Shortcuts provider lives. AGIAppShortcuts registers one-tap actions (Start Chat, Ask AGI, Scan, Summarize...) that iOS surfaces in Spotlight, the Shortcuts app and Siri, each opening the app on the right screen via agiworkforce://intent/<verb>; the config plugin ships those files. That is the phone equivalent of a quick-action menu, and the same auditor credited exactly this code as partial for S109.11 and done for S109.07. Still partial: no home-screen quick actions (UIApplicationShortcutItems) and nothing on Android. |  |
-| chrome | partial | Quick actions (ask, explain, translate, summarize) live only in the page right-click menu; the toolbar button just opens the side panel with no quick-action list. | ui |
-
-Code: `apps/extension/src/background.ts:4526-4533`, `apps/extension/src/background.ts:4602-4617`
-
 ## S109.05: Compact floating assistant.
 
 - Done when: A compact assistant floats over other content (other apps or pages) and can take a prompt without opening the full app.
@@ -33,64 +20,32 @@ Code: `apps/extension/src/background.ts:4526-4533`, `apps/extension/src/backgrou
 
 - Done when: Dictation to AGI can be started from anywhere on the device (global shortcut or system voice command) without first opening the app.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Siri "Ask/Talk to AGI" takes a spoken prompt from anywhere, but it opens the prompt for review in chat instead of starting dictation or voice mode; Android has no voice entry. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:3-19`, `apps/mobile/app/_layout.tsx:529-544`
-
-## S109.08: Selected-text rewrite shortcut.
-
-- Done when: Text selected in any app can be rewritten by AGI with a shortcut and the result put back in place.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | missing | Not built on this surface. |  |
-| mobile | partial | On Android, selected text can be sent to AGI and opens in a chat review screen, but nothing rewrites it and puts it back; iOS has no selected-text action. | handler |
-| chrome | partial | Right-click on a selection offers Ask, Explain and Translate in the side panel, but there is no rewrite action, no keyboard shortcut and nothing replaces the text on the page. | handler |
-
-Code: `apps/mobile/app.config.js:182-186`, `apps/mobile/native/android/withAGIShareIntent.cjs:48-52`, `apps/extension/src/background.ts:4526-4529`, `apps/extension/src/background.ts:4602-4617`
-
-## S109.09: Screenshot-to-chat shortcut.
-
-- Done when: A shortcut captures the screen and attaches it to an AGI chat.
-- Wave: 3
-- Already works on: desktop, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A screenshot can reach chat only by sharing it to AGI from the share sheet; no shortcut captures the screen into a chat. | ui |
-
-Code: `apps/mobile/app.config.js:166-176`
 
 ## S109.11: Hardware shortcut/macropad integration.
 
 - Done when: A hardware button or macropad (Stream Deck, iPhone Action Button, etc.) can trigger AGI actions through a supported integration.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | iOS exposes AGI App Shortcuts (Ask, Start Chat, Scan...) that the Action Button or Shortcuts app can run, but nothing in the app explains it and Android has no equivalent. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`, `apps/mobile/app/_layout.tsx:529-544`
 
 ## S109.13: Headset/earbud invocation.
 
 - Done when: The user can start talking to AGI from a headset or earbuds (button or voice command) without touching the phone or computer.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Saying "Hey Siri, talk to AGI Workforce" through AirPods works, but the intent opens the app for review, so the phone must be unlocked and nothing is spoken back; there is no headset-button trigger and no Android path. | handler |
-
-Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:3-19`, `apps/mobile/native/ios/AGIAppIntents/AppShortcuts.swift:26-35`
 
 ## S109.16: Messaging-platform access.
 
@@ -99,9 +54,9 @@ Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:3-19`, `apps/mobi
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
+| web | partial | owner: create the Slack app per docs/runbooks/connector-oauth-apps.md:249-256 (bot scopes only), set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET, subscribe to app_mention and message.im; migration 0333 must be applied before deploy | owner |
 
-Code: `apps/web/lib/slack/slack-events.ts:67-67`, `apps/web/lib/slack/slack-events.ts:68-68`, `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/lib/slack/slack-assistant.ts:313-313`
+Code: `apps/web/app/api/github/webhook/route.ts:253-253`
 
 ## S109.18: Local-model download manager.
 
@@ -140,26 +95,12 @@ Code: `apps/web/lib/slack/slack-events.ts:67-67`, `apps/web/lib/slack/slack-even
 
 - Done when: The user can load a local model into memory and unload it to free resources.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Models load automatically on first use and swap when another is chosen; the runtime can release a model (tier3Release) but no control lets the user load or unload one. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `packages/platform/local-llm/src/tier3.ts:228-238`, `packages/platform/local-llm/src/tier3.ts:83-96`
-
-## S109.22: Local runtime health.
-
-- Done when: The app shows whether the local model runtime is running and healthy, with errors when it is not.
-- Wave: 3
-- Already works on: cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Performance shows device tier, runtimes and thermal state, but not whether a model is actually loaded or failing; "No local model loaded" is based on the selection, not the runtime. | ui |
-
-Code: `apps/mobile/app/(app)/settings/performance.tsx:512-523`, `apps/mobile/app/(app)/settings/performance.tsx:636-642`
 
 ## S109.25: Local resource/compute dashboard.
 
@@ -168,8 +109,8 @@ Code: `apps/mobile/app/(app)/settings/performance.tsx:512-523`, `apps/mobile/app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Performance runs a benchmark and shows thermal state, but the tok/s, latency and memory charts stay empty because nothing records real inferences (recordPerfEvent has no caller) and peak memory is always 0. | handler |
+| mobile | partial | tok/s, first-token latency and thermal state now recorded for every local reply; peak memory stays 0 because no runtime reports it and no memory sampler is installed (needs a native module or an approved dependency) | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/services/performanceMonitor.ts:74-81`, `apps/mobile/services/performanceMonitor.ts:159-169`, `apps/mobile/app/(app)/settings/performance.tsx:355-385`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:2116-2116`

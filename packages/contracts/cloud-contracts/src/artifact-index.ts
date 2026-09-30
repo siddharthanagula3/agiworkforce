@@ -99,3 +99,40 @@ export function managedCloudArtifactIndexQueryString(
   if (query.projectId !== undefined) params.set('projectId', query.projectId);
   return params.size > 0 ? `?${params.toString()}` : '';
 }
+
+export function managedCloudPublishedArtifactVersionsPath(token: string): string {
+  return `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/${encodeURIComponent(token)}/versions`;
+}
+
+export const ManagedCloudPublishedArtifactVersionSchema = z.object({
+  version: z.number().int().min(1),
+  title: z.string(),
+  kind: z.string(),
+  createdAt: z.string().min(1),
+  live: z.boolean(),
+});
+export type ManagedCloudPublishedArtifactVersion = z.infer<
+  typeof ManagedCloudPublishedArtifactVersionSchema
+>;
+
+export const ManagedCloudPublishedArtifactVersionListResponseSchema = z.object({
+  versions: z.array(ManagedCloudPublishedArtifactVersionSchema),
+});
+export type ManagedCloudPublishedArtifactVersionListResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactVersionListResponseSchema
+>;
+
+export function managedCloudPublishedArtifactVersionPath(token: string, version: number): string {
+  return `${managedCloudPublishedArtifactVersionsPath(token)}/${version}`;
+}
+
+export const ManagedCloudPublishedArtifactVersionDetailSchema = z.object({
+  version: z.number().int().min(1),
+  title: z.string(),
+  kind: z.string(),
+  language: z.string().nullable(),
+  content: z.string(),
+});
+export type ManagedCloudPublishedArtifactVersionDetail = z.infer<
+  typeof ManagedCloudPublishedArtifactVersionDetailSchema
+>;

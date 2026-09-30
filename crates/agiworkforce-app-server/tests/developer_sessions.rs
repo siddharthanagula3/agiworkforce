@@ -94,6 +94,7 @@ fn thread(id: &str) -> ThreadSummary {
         updated_at: "2026-07-14T12:01:00Z".to_string(),
         created_by: DeveloperSessionSource::Vscode,
         status: ThreadStatus::Idle,
+        location: None,
     }
 }
 
@@ -349,6 +350,13 @@ fn capabilities() -> AppServerCapabilities {
         saved_permissions: false,
         mcp_inspect: false,
         plugin_updates: false,
+        permission_rules: false,
+        trust: false,
+        turn_tool_filters: false,
+        provider_keys: false,
+        questions: false,
+        plan_decisions: false,
+        pull_requests: false,
     }
 }
 
@@ -585,6 +593,7 @@ async fn every_websocket_reader_of_a_host_receives_its_live_events() {
                 auth_token: Some("test-secret".to_string()),
                 allowed_origins: Vec::new(),
                 allow_query_token: false,
+                allow_public_listen: false,
             },
             server_host,
             capabilities(),
@@ -920,6 +929,7 @@ async fn websocket_transport_carries_typed_approval_round_trips() {
                 auth_token: Some("test-secret".to_string()),
                 allowed_origins: Vec::new(),
                 allow_query_token: false,
+                allow_public_listen: false,
             },
             server_host,
             capabilities(),
@@ -1203,6 +1213,10 @@ impl DeveloperSessionHost for SurfaceHost {
                 path: "/home/dev/.agiworkforce/skills/release-notes/SKILL.md".to_string(),
                 enabled: true,
                 consented: true,
+                required_tools: Vec::new(),
+                required_env_vars: Vec::new(),
+                missing_tools: Vec::new(),
+                missing_env_vars: Vec::new(),
             }],
         })
     }
@@ -1253,6 +1267,7 @@ impl DeveloperSessionHost for SurfaceHost {
                 transport: "http".to_string(),
                 scope: McpServerScope::User,
                 status: McpServerConfiguredStatus::NeedsAuth,
+                policy_refusal: None,
                 url: Some("https://api.githubcopilot.com/mcp".to_string()),
             }],
         })
@@ -1561,6 +1576,60 @@ async fn account_token_is_refused_on_a_connection_that_did_not_prove_header_auth
 }
 
 #[tokio::test]
+async fn rules_keys_and_trust_are_not_changed_over_a_connection_that_did_not_prove_header_auth() {
+    let mut processor = DeveloperSessionProcessor::new_with_trust(
+        Arc::new(SurfaceHost::new()),
+        capabilities(),
+        DeveloperConnectionTrust::Untrusted,
+    );
+    processor.process(initialize()).await;
+
+    for (id, method, params) in [
+        (
+            2,
+            method::PERMISSIONS_ADD,
+            serde_json::json!({ "kind": "command", "target": "git status", "decision": "allow" }),
+        ),
+        (
+            6,
+            method::GIT_PULL_REQUEST,
+            serde_json::json!({ "threadId": "thread-1" }),
+        ),
+        (
+            4,
+            method::PROVIDERS_REMOVE_KEY,
+            serde_json::json!({ "provider": "openai" }),
+        ),
+        (
+            5,
+            method::TRUST_REVOKE,
+            serde_json::json!({ "path": "/tmp/project" }),
+        ),
+        (
+            3,
+            method::PROVIDERS_SET_KEY,
+            serde_json::json!({ "provider": "openai", "apiKey": "sk-test" }),
+        ),
+    ] {
+        let refused = processor.process(request(id, method, params)).await;
+        let error = refused.error.expect("the write must be refused");
+        assert_eq!(error.code, -32006, "{method}");
+        assert!(refused.result.is_none(), "{method}");
+    }
+    let plan = processor
+        .process(request(
+            7,
+            method::GIT_PULL_REQUEST_PLAN,
+            serde_json::json!({}),
+        ))
+        .await;
+    assert!(
+        plan.error.is_none_or(|error| error.code != -32006),
+        "planning a pull request only reads, so it stays open"
+    );
+}
+
+#[tokio::test]
 async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
     let host = Arc::new(SurfaceHost::new());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -1573,6 +1642,7 @@ async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
             auth_token: Some("secret-token".to_string()),
             allowed_origins: Vec::new(),
             allow_query_token: false,
+            allow_public_listen: false,
         },
         host,
         capabilities(),
@@ -1615,6 +1685,51 @@ async fn an_unauthenticated_websocket_never_reaches_the_account_surface() {
         response["result"]["token"],
         serde_json::json!("fixture-token")
     );
+
+    server.abort();
+}
+
+#[tokio::test]
+async fn a_websocket_upgrade_that_names_another_host_is_refused() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind loopback listener");
+    let addr = listener.local_addr().expect("listener address");
+    let server = tokio::spawn(agiworkforce_app_server::serve_developer_session_websocket(
+        listener,
+        agiworkforce_app_server::WebSocketSecurity {
+            auth_token: Some("secret-token".to_string()),
+            ..Default::default()
+        },
+        Arc::new(SurfaceHost::new()),
+        capabilities(),
+    ));
+
+    let upgrade = |host: String| {
+        let mut request = format!("ws://{addr}/ws")
+            .into_client_request()
+            .expect("client request");
+        request
+            .headers_mut()
+            .insert("host", HeaderValue::from_str(&host).expect("host header"));
+        request.headers_mut().insert(
+            "x-agi-app-server-token",
+            HeaderValue::from_static("secret-token"),
+        );
+        request
+    };
+
+    assert!(
+        tokio_tungstenite::connect_async(upgrade(format!("attacker.example:{}", addr.port())))
+            .await
+            .is_err(),
+        "a DNS-rebound page carries its own host name and must not upgrade"
+    );
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(upgrade(format!("localhost:{}", addr.port())))
+            .await
+            .expect("a loopback host name for the bound port upgrades");
+    socket.close(None).await.expect("close");
 
     server.abort();
 }

@@ -62,6 +62,8 @@ export type NativeMessageType =
   | 'STOP_RECORDING'
   | 'GET_RECORDED_ACTIONS'
   | 'SELECT_OPTION'
+  | 'FIND_ELEMENTS'
+  | 'FILL_FIELDS'
   | 'CHECK'
   | 'UNCHECK'
   | 'FOCUS'
@@ -94,6 +96,7 @@ export type NativeMessageType =
   | 'GET_QUICK_MODE'
   | 'SET_QUICK_MODE'
   | 'SYNC_CONVERSATION'
+  | 'ENSURE_CLOUD_CONVERSATION'
   | 'DELETE_CLOUD_CONVERSATION'
   | 'START_DOWNLOAD'
   | 'LIST_DOWNLOADS'
@@ -595,6 +598,7 @@ export type InPagePromptOutcome =
   | 'plan_required'
   | 'quota_exceeded'
   | 'account_unavailable'
+  | 'terms_required'
   | 'rate_limited'
   | 'cancelled'
   | 'request_rejected'
@@ -655,6 +659,16 @@ export interface RecordingResponse {
   recording?: boolean;
   actions?: RecordedAction[];
   error?: string;
+}
+
+export interface FindElementsMessage extends BaseMessage {
+  type: 'FIND_ELEMENTS';
+  query?: string;
+}
+
+export interface FillFieldsMessage extends BaseMessage {
+  type: 'FILL_FIELDS';
+  fields: Array<{ selector: string; value: string }>;
 }
 
 export interface SelectOptionMessage extends BaseMessage {
@@ -903,6 +917,12 @@ export interface SyncConversationMessage extends BaseMessage {
   streaming?: boolean;
 }
 
+export interface EnsureCloudConversationMessage extends BaseMessage {
+  type: 'ENSURE_CLOUD_CONVERSATION';
+  owner: ManagedCloudOwner;
+  conversationId: string;
+}
+
 export interface DeleteCloudConversationMessage extends BaseMessage {
   type: 'DELETE_CLOUD_CONVERSATION';
   owner: ManagedCloudOwner;
@@ -1081,6 +1101,8 @@ export type ExtensionMessage =
   | StopRecordingMessage
   | GetRecordedActionsMessage
   | SelectOptionMessage
+  | FindElementsMessage
+  | FillFieldsMessage
   | CheckMessage
   | UncheckMessage
   | FocusMessage
@@ -1108,6 +1130,7 @@ export type ExtensionMessage =
   | GetQuickModeMessage
   | SetQuickModeMessage
   | SyncConversationMessage
+  | EnsureCloudConversationMessage
   | DeleteCloudConversationMessage
   | RunAutofillMessage
   | StartComputerUseMessage

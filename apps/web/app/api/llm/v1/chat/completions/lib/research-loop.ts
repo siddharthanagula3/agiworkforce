@@ -45,6 +45,8 @@
 
 import 'server-only';
 
+import { createHash } from 'node:crypto';
+
 import type {
   Citation,
   ResearchDeliverableSpec,
@@ -78,6 +80,7 @@ import {
 import { classifyToolLoopInputs } from './tool-loop-routing';
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
 import {
@@ -140,6 +143,7 @@ import { classifyAttachedSearchTool, nativeSearchToolName } from '@/lib/web-sear
 import {
   accumulateObservedProviderUsage,
   createObservedProviderUsage,
+  mergeObservedProviderUsage,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import type { ProcessedRequest } from './request-processor';
@@ -317,7 +321,108 @@ export interface ResearchLoopOptions {
   guidance?: string;
   sources?: ResearchSourceRequest;
   readConnectorSources?: (queries: readonly string[]) => Promise<readonly ResearchConnectorRead[]>;
+  operations?: ResearchOperationExecutor;
+  resumeFrom?: ResearchLoopCheckpoint;
+  invocation?: ResearchInvocationLimits;
+  reloadConnectorPermissions?: () => Promise<ConnectorToolPermissions>;
 }
+
+export interface ResearchLoopCheckpoint {
+  stage: 'gathering' | 'synthesis';
+  round: number;
+  iteration: number;
+  startedAtMs: number;
+  nextEventSequence: number;
+  nextOperationOrdinal: number;
+  plan: ResearchStep[];
+  sources: ResearchSourceEntry[];
+  messages: ProcessedRequest['llmRequest']['messages'];
+  totalSearches: number;
+  totalFetches: number;
+  rewritesUsed: number;
+  newSourcesPerRound: number[];
+  cutShortReason: string | null;
+  lastTurnError: string | null;
+  sensitiveSourceAvailable: boolean;
+  untrustedContentInContext: boolean;
+}
+
+export interface ResearchInvocationLimits {
+  startedAtMs: number;
+  handOffAfterMs: number;
+  synthesisStartsWithinMs: number;
+  deadlineMs: number;
+  onCheckpoint: (checkpoint: ResearchLoopCheckpoint) => Promise<void>;
+}
+
+export interface ResearchTurnRecord {
+  text: string;
+  finishReason: string | null;
+  searchEvents: number;
+  hadToolCalls: boolean;
+  toolCalls: ResearchToolCall[];
+  promptTokens: number;
+  completionTokens: number;
+  canonicalText: string;
+  thinkingBlocks: ThinkingBlock[];
+  sourceAdds: ResearchSourceEntry[];
+  usage: ObservedProviderUsage;
+}
+
+export interface ResearchToolRecord {
+  content: string;
+  isError: boolean;
+  sourceAdds: ResearchSourceEntry[];
+  readsUntrustedContent: boolean;
+  outcome: 'ran' | 'refused';
+}
+
+export interface ResearchOperation<T> {
+  operationKey: string;
+  payload: unknown;
+  execute: () => Promise<T>;
+}
+
+export interface ResearchSteerRecord {
+  steers: ToolLoopSteerMessage[];
+}
+
+export interface ResearchOperationExecutor {
+  turn(operation: ResearchOperation<ResearchTurnRecord>): Promise<ResearchTurnRecord>;
+  tool(operation: ResearchOperation<ResearchToolRecord>): Promise<ResearchToolRecord>;
+  steers(operation: ResearchOperation<ResearchSteerRecord>): Promise<ResearchSteerRecord>;
+}
+
+const DIRECT_RESEARCH_OPERATIONS: ResearchOperationExecutor = {
+  turn: (operation) => operation.execute(),
+  tool: (operation) => operation.execute(),
+  steers: (operation) => operation.execute(),
+};
+
+const failedTurnUsage = new WeakMap<object, ObservedProviderUsage>();
+
+export function usageOfFailedResearchTurn(error: unknown): ObservedProviderUsage | null {
+  return typeof error === 'object' && error !== null ? (failedTurnUsage.get(error) ?? null) : null;
+}
+
+function threadShape(messages: ProcessedRequest['llmRequest']['messages']): unknown[] {
+  return messages.map((message) => ({
+    role: message.role,
+    toolCalls: Array.isArray(message.tool_calls)
+      ? message.tool_calls.map((call) =>
+          typeof call === 'object' && call !== null && 'id' in call ? call.id : null,
+        )
+      : [],
+    toolCallId: message.tool_call_id ?? null,
+  }));
+}
+
+function contextDigest(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+export const RESEARCH_STATUS_PROGRESS_ID = 'research';
+export const RESEARCH_STEP_PROGRESS_PREFIX = 'research-step:';
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
 
@@ -932,7 +1037,7 @@ export function rankResearchResults(
 
 async function* collectTurn(
   stream: ReadableStream,
-  sources: SourceAggregator,
+  sources: Pick<SourceAggregator, 'add'>,
   forwardContent: boolean,
   queryText: string,
   emitPublicText?: (delta: string) => string,
@@ -1313,8 +1418,8 @@ export interface QueryRewriteBudget {
   admit(query: string, plannedQueries: readonly string[]): boolean;
 }
 
-export function createQueryRewriteBudget(limit: number): QueryRewriteBudget {
-  let used = 0;
+export function createQueryRewriteBudget(limit: number, alreadyUsed = 0): QueryRewriteBudget {
+  let used = alreadyUsed;
   return {
     get used() {
       return used;
@@ -1443,6 +1548,62 @@ function uniqueStepId(plan: readonly ResearchStep[], base: string): string {
  * route owns durable financial settlement; this loop only updates quota
  * counters in its finally block so cancellation cannot skip accounting.
  */
+async function* streamWhile<T>(
+  run: (emit: (chunk: Uint8Array) => void) => Promise<T>,
+): AsyncGenerator<Uint8Array, T> {
+  const queue: Uint8Array[] = [];
+  let wake: (() => void) | null = null;
+  let settled = false;
+  const running = run((chunk) => {
+    queue.push(chunk);
+    wake?.();
+  }).finally(() => {
+    settled = true;
+    wake?.();
+  });
+  running.catch(() => undefined);
+  for (;;) {
+    while (queue.length > 0) yield queue.shift()!;
+    if (settled) return await running;
+    await new Promise<void>((resolve) => {
+      wake = resolve;
+    });
+    wake = null;
+  }
+}
+
+function recordingAggregator(
+  sources: SourceAggregator,
+  adds: ResearchSourceEntry[],
+): Pick<SourceAggregator, 'add'> {
+  return {
+    add: (entry, chosenByReader) => {
+      const kept = sources.add(entry, chosenByReader);
+      const held =
+        kept || (typeof entry.url === 'string' && sources.positionOf(entry.url) !== undefined);
+      if (held && typeof entry.url === 'string') {
+        adds.push({
+          url: entry.url,
+          title: typeof entry.title === 'string' ? entry.title : '',
+          ...(typeof entry.snippet === 'string' ? { snippet: entry.snippet } : {}),
+          ...(typeof entry.date === 'string' ? { date: entry.date } : {}),
+          ...(typeof entry.retrievedAt === 'string' ? { retrievedAt: entry.retrievedAt } : {}),
+        });
+      }
+      return kept;
+    },
+  };
+}
+
+function progressStatusOf(
+  status: ResearchStep['status'],
+): 'running' | 'completed' | 'failed' | null {
+  if (status === 'running') return 'running';
+  if (status === 'completed') return 'completed';
+  if (status === 'failed' || status === 'dropped') return 'failed';
+  return null;
+}
+
 export async function* runResearchLoop(
   processed: ProcessedRequest,
   _billing: { userId: string; token: string },
@@ -1451,14 +1612,20 @@ export async function* runResearchLoop(
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
   const now = options.now ?? Date.now;
-  const startedAt = now();
+  const resume = options.resumeFrom ?? null;
+  const startedAt = resume?.startedAtMs ?? now();
   const turnId = processed.requestId || crypto.randomUUID();
   const eventStream = createAgentEventStreamEmitter({
     sessionId: processed.conversationId ?? turnId,
     turnId,
     responseModel,
     now,
+    ...(resume ? { initialSequence: resume.nextEventSequence } : {}),
   });
+  const operations = options.operations ?? DIRECT_RESEARCH_OPERATIONS;
+  let operationOrdinal = resume?.nextOperationOrdinal ?? 0;
+  const nextOperationKey = (kind: string): string => `research:${kind}:${operationOrdinal++}`;
+  let handedOff = false;
 
   const maxIterations =
     options.maxIterations ??
@@ -1533,10 +1700,10 @@ export async function* runResearchLoop(
     0,
     12,
   );
-  const rewriteBudget = createQueryRewriteBudget(maxQueryRewrites);
-  let totalSearches = 0;
-  let totalFetches = 0;
-  let iteration = 0;
+  const rewriteBudget = createQueryRewriteBudget(maxQueryRewrites, resume?.rewritesUsed ?? 0);
+  let totalSearches = resume?.totalSearches ?? 0;
+  let totalFetches = resume?.totalFetches ?? 0;
+  let iteration = resume?.iteration ?? 0;
   const observedUsage = options.usage ?? createObservedProviderUsage();
   let cancellationEmitted = false;
 
@@ -1544,8 +1711,11 @@ export async function* runResearchLoop(
   // their citation numbers stay stable and the model is told not to redo the
   // searches that already succeeded. Seeded FIRST so prior sources keep the
   // lowest positions.
-  for (const priorSource of options.priorSources ?? []) {
+  for (const priorSource of resume ? [] : (options.priorSources ?? [])) {
     sources.add(priorSource);
+  }
+  for (const handedOffSource of resume?.sources ?? []) {
+    sources.add(handedOffSource, true);
   }
   /** Queries a previous attempt already completed, never re-run. */
   const carriedQueries = (options.priorSteps ?? [])
@@ -1559,9 +1729,11 @@ export async function* runResearchLoop(
    * retry are restored verbatim; new steps come from this run's planning turn.
    */
   const deliverable: ResearchDeliverableSpec = options.deliverable ?? DEFAULT_RESEARCH_DELIVERABLE;
-  const plan: ResearchStep[] = (options.priorSteps ?? [])
-    .filter((step) => step.status === 'completed')
-    .map((step) => ({ ...step }));
+  const plan: ResearchStep[] = resume
+    ? resume.plan.map((step) => ({ ...step }))
+    : (options.priorSteps ?? [])
+        .filter((step) => step.status === 'completed')
+        .map((step) => ({ ...step }));
   const firstApprovedStepNumber = nextPlanStepNumber(plan);
   const approvedPlan = (options.approvedPlan ?? [])
     .filter(
@@ -1578,7 +1750,7 @@ export async function* runResearchLoop(
       id: `plan-${firstApprovedStepNumber + index}`,
       status: 'pending' as const,
     }));
-  plan.push(...approvedPlan);
+  if (!resume) plan.push(...approvedPlan);
   const continuingRun = approvedPlan.length > 0 || carriedQueries.length > 0;
   const resumingRun = carriedQueries.length > 0 || (options.priorSources?.length ?? 0) > 0;
   const sourceSelection: ResearchSourceRequest = options.sources ?? {
@@ -1587,9 +1759,29 @@ export async function* runResearchLoop(
     denyDomains: [],
     connectors: [],
   };
+  const emittedStepProgress = new Map<string, string>();
+  const planProgress = (): string => {
+    let events = '';
+    for (const step of plan) {
+      const progress = progressStatusOf(step.status);
+      if (!progress) continue;
+      const signature = `${progress}:${step.note ?? ''}`;
+      if (emittedStepProgress.get(step.id) === signature) continue;
+      emittedStepProgress.set(step.id, signature);
+      events += eventStream.emit({
+        type: 'progress-update',
+        progressId: `${RESEARCH_STEP_PROGRESS_PREFIX}${step.id}`,
+        summary: step.description,
+        ...(step.note ? { detail: step.note } : {}),
+        status: progress,
+      });
+    }
+    return events;
+  };
   const planEvent = (): Uint8Array =>
     encoder.encode(
-      researchPlanEvent(plan, responseModel, { sources: sourceSelection, deliverable }),
+      researchPlanEvent(plan, responseModel, { sources: sourceSelection, deliverable }) +
+        planProgress(),
     );
   const gapEvent = (content: string): Uint8Array =>
     encoder.encode(researchGapsEvent(deriveResearchGaps(plan, content), responseModel));
@@ -1722,9 +1914,17 @@ export async function* runResearchLoop(
   }
 
   async function takeSteers(): Promise<readonly ToolLoopSteerMessage[]> {
-    if (!options.takeSteerMessages) return [];
+    const takeSteerMessages = options.takeSteerMessages;
+    if (!takeSteerMessages) return [];
     try {
-      return await options.takeSteerMessages();
+      const record = await operations.steers({
+        operationKey: nextOperationKey('steers'),
+        payload: { kind: 'steers' },
+        execute: async () => ({
+          steers: (await takeSteerMessages()).map((steer) => ({ id: steer.id, text: steer.text })),
+        }),
+      });
+      return record.steers;
     } catch (error) {
       logger.warn(
         { requestId: processed.requestId, error: error instanceof Error ? error.message : error },
@@ -1772,12 +1972,14 @@ export async function* runResearchLoop(
     tool_choice: undefined,
     stream: true,
   };
-  const messages: ProcessedRequest['llmRequest']['messages'] = [...baseRequest.messages];
+  const messages: ProcessedRequest['llmRequest']['messages'] = resume
+    ? resume.messages.map((message) => ({ ...message }))
+    : [...baseRequest.messages];
 
   // §24 File sources. Seeded before planning so the plan already knows what the
   // account holds, and added to the aggregator so the report cites a saved file
   // by the same numbers it cites a web page.
-  const fileSourcesPrompt = researchFileSourcesPrompt(options.fileSources ?? []);
+  const fileSourcesPrompt = resume ? '' : researchFileSourcesPrompt(options.fileSources ?? []);
   if (fileSourcesPrompt) {
     messages.unshift({ role: 'system', content: fileSourcesPrompt });
     for (const fileSource of options.fileSources ?? []) {
@@ -1786,11 +1988,38 @@ export async function* runResearchLoop(
   }
 
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
-  const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+  let connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+
+  async function refreshConnectorPermissions(): Promise<void> {
+    if (!options.reloadConnectorPermissions) return;
+    try {
+      connectorPermissions = await options.reloadConnectorPermissions();
+    } catch (error) {
+      logger.warn(
+        { requestId: processed.requestId, error: error instanceof Error ? error.message : error },
+        '[research-loop] tool permissions could not be read mid-run; refusing tool calls',
+      );
+      connectorPermissions = LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS;
+    }
+  }
+
+  function toolCallSignal(): AbortSignal | undefined {
+    const invocation = options.invocation;
+    if (!invocation) return options.signal;
+    const remaining = Math.max(1, invocation.deadlineMs - (now() - invocation.startedAtMs));
+    const deadline = AbortSignal.timeout(remaining);
+    return options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+  }
+  function toolCallSignalOption(): { signal?: AbortSignal } {
+    const signal = toolCallSignal();
+    return signal ? { signal } : {};
+  }
   const approvalMode = classifyToolLoopInputs([], researchTools, toolApprovalPolicy).approvalMode;
   let sensitiveSourceAvailable =
-    hasPrivateContext(processed, messages) || (options.fileSources?.length ?? 0) > 0;
-  let untrustedContentInContext = hasUntrustedContext(processed, messages);
+    resume?.sensitiveSourceAvailable ??
+    (hasPrivateContext(processed, messages) || (options.fileSources?.length ?? 0) > 0);
+  let untrustedContentInContext =
+    resume?.untrustedContentInContext ?? hasUntrustedContext(processed, messages);
   const approvedQueries = new Set(approvedPlan.map((step) => normalizedQuery(step.description)));
 
   function gateResearchCall(
@@ -1830,6 +2059,19 @@ export async function* runResearchLoop(
       : `Tool "${call.name}" was not run: this account asks before actions like this one, and a research run cannot stop partway through to ask. Only the searches approved on the research plan run, exactly as written. Continue with the material already gathered.`;
   }
 
+  let emittedStatusProgress = '';
+  const statusProgress = (phase: ResearchPhase, label: string): string => {
+    const progress = phase === 'error' ? 'failed' : phase === 'complete' ? 'completed' : 'running';
+    const signature = `${progress}:${label}`;
+    if (signature === emittedStatusProgress) return '';
+    emittedStatusProgress = signature;
+    return eventStream.emit({
+      type: 'progress-update',
+      progressId: RESEARCH_STATUS_PROGRESS_ID,
+      summary: label,
+      status: progress,
+    });
+  };
   const status = (phase: ResearchPhase, label: string): Uint8Array =>
     encoder.encode(
       researchStatusEvent(
@@ -1844,11 +2086,12 @@ export async function* runResearchLoop(
           elapsedMs: now() - startedAt,
         },
         responseModel,
-      ),
+      ) + statusProgress(phase, label),
     );
 
   /** Run one provider turn, forwarding per collectTurn rules. */
   async function* runTurn(
+    kind: string,
     turnMessages: typeof messages,
     forwardContent: boolean,
     turnOptions: { withoutTools?: boolean } = {},
@@ -1862,11 +2105,63 @@ export async function* runResearchLoop(
     const stepRequest = turnOptions.withoutTools
       ? { ...baseRequest, tools: undefined, messages: turnMessages }
       : { ...baseRequest, messages: turnMessages };
-    const callsBefore = observedUsage.providerCalls;
+    const operationKey = nextOperationKey(kind);
+    let executed = false;
+    let record: ResearchTurnRecord;
+    try {
+      record = yield* streamWhile((emit) =>
+        operations.turn({
+          operationKey,
+          payload: {
+            kind,
+            withoutTools: turnOptions.withoutTools === true,
+            context: contextDigest(threadShape(stepRequest.messages)),
+          },
+          execute: async () => {
+            executed = true;
+            return executeTurn(stepRequest, forwardContent, emit);
+          },
+        }),
+      );
+    } catch (error) {
+      const failedUsage = usageOfFailedResearchTurn(error);
+      if (failedUsage) mergeObservedProviderUsage(observedUsage, failedUsage);
+      throw error;
+    }
+    if (!executed) {
+      for (const added of record.sourceAdds) sources.add(added, true);
+    }
+    mergeObservedProviderUsage(observedUsage, record.usage);
+    if (record.searchEvents > 0) untrustedContentInContext = true;
+    const { sourceAdds: _sourceAdds, usage: _usage, ...turn } = record;
+    return turn;
+  }
+
+  async function executeTurn(
+    stepRequest: typeof baseRequest,
+    forwardContent: boolean,
+    emit: (chunk: Uint8Array) => void,
+  ): Promise<ResearchTurnRecord> {
+    const turnUsage = createObservedProviderUsage();
+    try {
+      return await streamTurn(stepRequest, forwardContent, emit, turnUsage);
+    } catch (error) {
+      if (typeof error === 'object' && error !== null) failedTurnUsage.set(error, turnUsage);
+      throw error;
+    }
+  }
+
+  async function streamTurn(
+    stepRequest: typeof baseRequest,
+    forwardContent: boolean,
+    emit: (chunk: Uint8Array) => void,
+    turnUsage: ObservedProviderUsage,
+  ): Promise<ResearchTurnRecord> {
+    const sourceAdds: ResearchSourceEntry[] = [];
     const stepSink: ToolLoopStepSink = {
       thinkingBlocks: [],
       text: '',
-      usage: observedUsage,
+      usage: turnUsage,
     };
     // AUDIT-FIX SYS-21 + BUG-1: rotate to the resolver's next managed-failover
     // candidate when the provider fails on an availability-class error, and
@@ -1876,7 +2171,17 @@ export async function* runResearchLoop(
     // attempt can never leak partial text. Research turns carry the url_fetch
     // tool definition, so `createFailoverPlan` keeps rotation within the same
     // provider by construction.
-    const streamMs = nestedDeadlineMs(PROVIDER_STREAM_DEADLINE_MS, budgetMs, now() - startedAt);
+    const runStreamMs = nestedDeadlineMs(PROVIDER_STREAM_DEADLINE_MS, budgetMs, now() - startedAt);
+    const streamMs = options.invocation
+      ? Math.min(
+          runStreamMs,
+          nestedDeadlineMs(
+            runStreamMs,
+            options.invocation.deadlineMs,
+            now() - options.invocation.startedAtMs,
+          ),
+        )
+      : runStreamMs;
     const armed = armProviderDeadlines(
       {
         firstTokenMs: nestedDeadlineMs(PROVIDER_FIRST_TOKEN_DEADLINE_MS, streamMs, 0),
@@ -1916,8 +2221,12 @@ export async function* runResearchLoop(
       throw error;
     }
     armed.markFirstToken();
-    const gen = collectTurn(stream, sources, forwardContent, userQuery, (delta) =>
-      eventStream.emit({ type: 'text-delta', delta }),
+    const gen = collectTurn(
+      stream,
+      recordingAggregator(sources, sourceAdds),
+      forwardContent,
+      userQuery,
+      (delta) => eventStream.emit({ type: 'text-delta', delta }),
     );
     try {
       while (true) {
@@ -1929,11 +2238,11 @@ export async function* runResearchLoop(
           // canonical StreamChunk usage still get a wire-level fallback. Do
           // not add it when the canonical sink already recorded this call.
           if (
-            observedUsage.providerCalls === callsBefore &&
+            turnUsage.providerCalls === 0 &&
             (next.value.promptTokens > 0 || next.value.completionTokens > 0)
           ) {
             accumulateObservedProviderUsage(
-              observedUsage,
+              turnUsage,
               {
                 inputTokens: next.value.promptTokens,
                 outputTokens: next.value.completionTokens,
@@ -1944,7 +2253,6 @@ export async function* runResearchLoop(
               },
             );
           }
-          if (next.value.searchEvents > 0) untrustedContentInContext = true;
           return {
             ...next.value,
             // Same fallback shape as the usage reconciliation above: prefer the
@@ -1952,16 +2260,37 @@ export async function* runResearchLoop(
             // for streams that cannot fill the sink.
             canonicalText: stepSink.text || stripThinkingTags(next.value.text),
             thinkingBlocks: stepSink.thinkingBlocks,
+            sourceAdds,
+            usage: turnUsage,
           };
         }
-        yield encoder.encode(next.value);
+        emit(encoder.encode(next.value));
       }
     } finally {
       armed.release();
-      // Best-effort cleanup when the run is cancelled mid-turn (client abort
-      // finalizes this generator while suspended in the yield above).
       void gen.return(undefined as never).catch(() => {});
     }
+  }
+
+  async function runToolOperation(
+    kind: 'search' | 'fetch',
+    call: ResearchToolCall,
+    execute: (sourceAdds: ResearchSourceEntry[]) => Promise<ResearchToolRecord>,
+  ): Promise<ResearchToolRecord> {
+    let executed = false;
+    const record = await operations.tool({
+      operationKey: nextOperationKey(kind),
+      payload: { name: call.name, args: call.args },
+      execute: () => {
+        executed = true;
+        return execute([]);
+      },
+    });
+    if (!executed) {
+      for (const added of record.sourceAdds) sources.add(added, true);
+    }
+    if (record.readsUntrustedContent) untrustedContentInContext = true;
+    return record;
   }
 
   /**
@@ -2003,6 +2332,7 @@ export async function* runResearchLoop(
     }
     turnMessages.push(assistantMessage);
 
+    await refreshConnectorPermissions();
     const refusals = new Map(
       calls
         .filter(
@@ -2074,60 +2404,72 @@ export async function* runResearchLoop(
           // Deep research runs unattended and searches in bulk, so its calls
           // are charged at the rate card rather than included.
           const searchOrdinal = totalSearches + roundCounts.searches;
-          const searchCharge = await admitResearchSearch(searchOrdinal);
-          if (!searchCharge.admitted) {
-            content = await applyToolResultSecretPolicy(
-              _billing.userId,
-              call.name,
-              searchUnaffordableMessage(),
-            );
-            isError = true;
-            yield encoder.encode(
-              toolResultEvent(call.id, call.name, content, isError, responseModel),
-            );
-            continue;
-          }
           yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
-          const outcome = await executeWebSearch(call.args, {
-            domainPolicy,
-            ...(options.signal ? { signal: options.signal } : {}),
+          const record = await runToolOperation('search', call, async (sourceAdds) => {
+            const searchCharge = await admitResearchSearch(searchOrdinal);
+            if (!searchCharge.admitted) {
+              return {
+                content: await applyToolResultSecretPolicy(
+                  _billing.userId,
+                  call.name,
+                  searchUnaffordableMessage(),
+                ),
+                isError: true,
+                sourceAdds,
+                readsUntrustedContent: false,
+                outcome: 'refused',
+              };
+            }
+            const outcome = await executeWebSearch(call.args, {
+              domainPolicy,
+              ...toolCallSignalOption(),
+            });
+            await settlePerplexitySearchCall({
+              userId: _billing.userId,
+              organizationId: processed.organizationId ?? null,
+              admission: searchCharge.admission,
+              billableCalls: outcome.billableCalls,
+              answered: outcome.ok,
+              turnRef: turnId,
+              callOrdinal: searchOrdinal,
+              surface: processed.chatSurface,
+              attribution: processed.managedUsage?.attribution,
+              db: researchScopedDb(),
+            });
+            if (outcome.ok) {
+              const fetched = webSearchResultsToFetchedSources(outcome);
+              const ranked = rankSources(
+                fetched.map((result) => ({
+                  ...result,
+                  ...(result.date ? { publishedDate: result.date } : {}),
+                  ...(publisherFromTitle(result.title)
+                    ? { publisher: publisherFromTitle(result.title) }
+                    : {}),
+                })),
+                { queryText: outcome.query },
+              );
+              const recorder = recordingAggregator(sources, sourceAdds);
+              for (const { originalIndex } of ranked) recorder.add(fetched[originalIndex]!);
+            }
+            return {
+              content: await applyToolResultSecretPolicy(
+                _billing.userId,
+                call.name,
+                formatWebSearchResultForModel(outcome, (url) => sources.positionOf(url)),
+              ),
+              isError: !outcome.ok,
+              sourceAdds,
+              readsUntrustedContent: outcome.ok,
+              outcome: 'ran',
+            };
           });
-          await settlePerplexitySearchCall({
-            userId: _billing.userId,
-            organizationId: processed.organizationId ?? null,
-            admission: searchCharge.admission,
-            billableCalls: outcome.billableCalls,
-            answered: outcome.ok,
-            turnRef: turnId,
-            callOrdinal: searchOrdinal,
-            surface: processed.chatSurface,
-            attribution: processed.managedUsage?.attribution,
-            db: researchScopedDb(),
-          });
-          if (outcome.ok) {
-            const fetched = webSearchResultsToFetchedSources(outcome);
-            const ranked = rankSources(
-              fetched.map((result) => ({
-                ...result,
-                ...(result.date ? { publishedDate: result.date } : {}),
-                ...(publisherFromTitle(result.title)
-                  ? { publisher: publisherFromTitle(result.title) }
-                  : {}),
-              })),
-              { queryText: outcome.query },
+          content = record.content;
+          isError = record.isError;
+          if (record.outcome === 'ran') {
+            yield encoder.encode(
+              loopToolStatusEvent(call.name, isError ? 'failed' : 'completed', responseModel),
             );
-            for (const { originalIndex } of ranked) sources.add(fetched[originalIndex]!);
-            untrustedContentInContext = true;
           }
-          isError = !outcome.ok;
-          content = await applyToolResultSecretPolicy(
-            _billing.userId,
-            call.name,
-            formatWebSearchResultForModel(outcome, (url) => sources.positionOf(url)),
-          );
-          yield encoder.encode(
-            loopToolStatusEvent(call.name, isError ? 'failed' : 'completed', responseModel),
-          );
           yield encoder.encode(
             toolResultEvent(call.id, call.name, content, isError, responseModel),
           );
@@ -2165,26 +2507,36 @@ export async function* runResearchLoop(
         totalFetches += 1;
         roundCounts.fetches += 1;
         yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
-        const outcome = await executeUrlFetch(call.args, {
-          maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS,
-          domainPolicy,
-          ...(options.signal ? { signal: options.signal } : {}),
-        });
-        if (outcome.ok) {
-          sources.add({
-            url: outcome.url,
-            title: outcome.title,
-            ...(outcome.snippet ? { snippet: outcome.snippet } : {}),
-            ...(outcome.date ? { date: outcome.date } : {}),
+        const record = await runToolOperation('fetch', call, async (sourceAdds) => {
+          const outcome = await executeUrlFetch(call.args, {
+            maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS,
+            domainPolicy,
+            ...toolCallSignalOption(),
           });
-          content = fenceFetchedPage(outcome.url, outcome.title, outcome.content);
-          isError = false;
-          untrustedContentInContext = true;
-        } else {
-          content = `Fetch failed (${outcome.errorCode}): ${outcome.error}`;
-          isError = true;
-        }
-        content = await applyToolResultSecretPolicy(_billing.userId, call.name, content);
+          if (outcome.ok) {
+            recordingAggregator(sources, sourceAdds).add({
+              url: outcome.url,
+              title: outcome.title,
+              ...(outcome.snippet ? { snippet: outcome.snippet } : {}),
+              ...(outcome.date ? { date: outcome.date } : {}),
+            });
+          }
+          return {
+            content: await applyToolResultSecretPolicy(
+              _billing.userId,
+              call.name,
+              outcome.ok
+                ? fenceFetchedPage(outcome.url, outcome.title, outcome.content)
+                : `Fetch failed (${outcome.errorCode}): ${outcome.error}`,
+            ),
+            isError: !outcome.ok,
+            sourceAdds,
+            readsUntrustedContent: outcome.ok,
+            outcome: 'ran',
+          };
+        });
+        content = record.content;
+        isError = record.isError;
         yield encoder.encode(
           loopToolStatusEvent(call.name, isError ? 'failed' : 'completed', responseModel),
         );
@@ -2295,6 +2647,7 @@ export async function* runResearchLoop(
         .filter((step) => step.type === 'search' && step.status === 'completed')
         .map((step) => step.description);
       const replanTurn = yield* runTurn(
+        'replan',
         [
           ...messages,
           {
@@ -2383,99 +2736,107 @@ export async function* runResearchLoop(
       return;
     }
 
-    yield status('planning', 'Planning research');
+    if (resume) {
+      yield status('searching', 'Continuing the research');
+      yield planEvent();
+      const carried = sources.toSearchResultsEvent(responseModel);
+      if (carried) yield encoder.encode(carried);
+    } else {
+      yield status('planning', 'Planning research');
 
-    for (const step of plan) {
-      if (step.type === 'analyze' && step.status === 'completed') {
-        messages.push({ role: 'user', content: guidanceNote(step.description) });
+      for (const step of plan) {
+        if (step.type === 'analyze' && step.status === 'completed') {
+          messages.push({ role: 'user', content: guidanceNote(step.description) });
+        }
       }
-    }
-    if (resumingRun) {
-      messages.push({ role: 'user', content: resumeContextNote(carriedQueries, sources) });
-    }
-    if (options.guidance?.trim()) {
-      if (yield* flushCancellationIfRequested()) return;
-      yield* applyGuidance(options.guidance.trim());
-      if (yield* flushCancellationIfRequested()) return;
-    }
+      if (resumingRun) {
+        messages.push({ role: 'user', content: resumeContextNote(carriedQueries, sources) });
+      }
+      if (options.guidance?.trim()) {
+        if (yield* flushCancellationIfRequested()) return;
+        yield* applyGuidance(options.guidance.trim());
+        if (yield* flushCancellationIfRequested()) return;
+      }
 
-    // ── Planning turn (CAP-045 slice 2) ──
-    // One tool-free model call that commits to the searches this run will make.
-    // Its output becomes the `x_research_plan` queue the user watches. A failed
-    // or unparseable plan is NEVER fatal and is never guessed at: the run falls
-    // back to showing the round it actually executes.
-    if (planningTurnEnabled && !continuingRun) {
-      iteration = 1;
-      try {
-        if (yield* flushCancellationIfRequested()) return;
-        const planTurn = yield* runTurn(
-          [...messages, { role: 'user', content: planningDirective(carriedQueries) }],
-          false,
-          { withoutTools: true },
-        );
-        if (yield* flushCancellationIfRequested()) return;
-        const queries = parsePlanQueries(planTurn.canonicalText).filter(
-          (query) =>
-            !carriedQueries.some((carried) => carried.toLowerCase() === query.toLowerCase()),
-        );
-        const firstNumber = nextPlanStepNumber(plan);
-        for (const [index, query] of queries.entries()) {
+      // ── Planning turn (CAP-045 slice 2) ──
+      // One tool-free model call that commits to the searches this run will make.
+      // Its output becomes the `x_research_plan` queue the user watches. A failed
+      // or unparseable plan is NEVER fatal and is never guessed at: the run falls
+      // back to showing the round it actually executes.
+      if (planningTurnEnabled && !continuingRun) {
+        iteration = 1;
+        try {
+          if (yield* flushCancellationIfRequested()) return;
+          const planTurn = yield* runTurn(
+            'plan',
+            [...messages, { role: 'user', content: planningDirective(carriedQueries) }],
+            false,
+            { withoutTools: true },
+          );
+          if (yield* flushCancellationIfRequested()) return;
+          const queries = parsePlanQueries(planTurn.canonicalText).filter(
+            (query) =>
+              !carriedQueries.some((carried) => carried.toLowerCase() === query.toLowerCase()),
+          );
+          const firstNumber = nextPlanStepNumber(plan);
+          for (const [index, query] of queries.entries()) {
+            plan.push({
+              id: `plan-${firstNumber + index}`,
+              type: 'search',
+              description: query,
+              status: 'pending',
+            });
+          }
+          if (queries.length === 0) {
+            logger.warn(
+              { provider: processed.provider, requestId: processed.requestId },
+              '[research-loop] planning turn produced no parseable queries',
+            );
+          }
+        } catch (err) {
+          logger.error(
+            {
+              provider: processed.provider,
+              error: err instanceof Error ? err.message : String(err),
+            },
+            '[research-loop] planning turn failed; continuing without a query plan',
+          );
+        }
+      }
+
+      // ── Approval gate ──
+      // The plan is the user's to accept: searching costs their budget, so the
+      // run stops here and the client re-sends the approved steps as
+      // `research_resume`.
+      //
+      // This gate must not fail open. It used to also require a parsed plan, so
+      // two paths reached the network with approval still outstanding: a budget
+      // too small to afford a planning turn at all, and a planning turn whose
+      // output did not parse into steps. Both spent the user's budget on searches
+      // they never saw, which is the decision the gate exists to protect.
+      //
+      // When there is nothing to show, the run still stops and says so. The user
+      // decides whether to proceed blind; the loop does not decide for them.
+      if (options.requirePlanApproval && !continuingRun) {
+        if (pendingPlanStepIds().length === 0) {
           plan.push({
-            id: `plan-${firstNumber + index}`,
+            id: `plan-${nextPlanStepNumber(plan)}`,
             type: 'search',
-            description: query,
+            description: 'Search for sources on this question',
             status: 'pending',
           });
         }
-        if (queries.length === 0) {
-          logger.warn(
-            { provider: processed.provider, requestId: processed.requestId },
-            '[research-loop] planning turn produced no parseable queries',
-          );
-        }
-      } catch (err) {
-        logger.error(
-          {
-            provider: processed.provider,
-            error: err instanceof Error ? err.message : String(err),
-          },
-          '[research-loop] planning turn failed; continuing without a query plan',
-        );
+        awaitingApproval = true;
+        yield planEvent();
+        yield status('awaiting_approval', 'Review the plan to start searching');
+        yield encoder.encode(eventStream.emit({ type: 'lifecycle', phase: 'paused' }));
+        yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'end-turn' }));
+        yield encoder.encode(sseDone());
+        return;
       }
     }
 
-    // ── Approval gate ──
-    // The plan is the user's to accept: searching costs their budget, so the
-    // run stops here and the client re-sends the approved steps as
-    // `research_resume`.
-    //
-    // This gate must not fail open. It used to also require a parsed plan, so
-    // two paths reached the network with approval still outstanding: a budget
-    // too small to afford a planning turn at all, and a planning turn whose
-    // output did not parse into steps. Both spent the user's budget on searches
-    // they never saw, which is the decision the gate exists to protect.
-    //
-    // When there is nothing to show, the run still stops and says so. The user
-    // decides whether to proceed blind; the loop does not decide for them.
-    if (options.requirePlanApproval && !continuingRun) {
-      if (pendingPlanStepIds().length === 0) {
-        plan.push({
-          id: `plan-${nextPlanStepNumber(plan)}`,
-          type: 'search',
-          description: 'Search for sources on this question',
-          status: 'pending',
-        });
-      }
-      awaitingApproval = true;
-      yield planEvent();
-      yield status('awaiting_approval', 'Review the plan to start searching');
-      yield encoder.encode(eventStream.emit({ type: 'lifecycle', phase: 'paused' }));
-      yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'end-turn' }));
-      yield encoder.encode(sseDone());
-      return;
-    }
-
-    let cutShortReason: string | null = null;
+    let cutShortReason: string | null = resume?.cutShortReason ?? null;
     /**
      * The real provider error from the last gathering round that threw.
      *
@@ -2489,251 +2850,300 @@ export async function* runResearchLoop(
      * suggested retry could never have succeeded. Keep the cause so the failure
      * branch can name it instead of guessing.
      */
-    let lastTurnError: string | null = null;
+    let lastTurnError: string | null = resume?.lastTurnError ?? null;
 
     /** Sources this round added that the run did not already hold. */
-    const newSourcesPerRound: number[] = [];
+    const newSourcesPerRound: number[] = [...(resume?.newSourcesPerRound ?? [])];
 
-    // ── Gathering rounds ──
-    for (let round = 1; round <= maxGatherRounds; round++) {
-      if (yield* pauseIfRequested()) return;
-      yield* applySteers(true);
-      if (yield* flushCancellationIfRequested()) return;
-      iteration = planningTurnEnabled ? round + 1 : round;
-      if (round === 1 && options.readConnectorSources) {
-        if (yield* flushCancellationIfRequested()) return;
-        const plannedQueries = pendingPlannedQueries().map((step) => step.description);
-        yield* readConnectedApps(plannedQueries.length > 0 ? plannedQueries : [userQuery]);
-      }
-      const sourcesBeforeRound = sources.size;
+    const handOffIfDue = async (
+      stage: ResearchLoopCheckpoint['stage'],
+      round: number,
+      afterMs: number,
+    ): Promise<boolean> => {
+      const invocation = options.invocation;
+      if (!invocation || now() - invocation.startedAtMs < afterMs) return false;
+      await invocation.onCheckpoint({
+        stage,
+        round,
+        iteration,
+        startedAtMs: startedAt,
+        nextEventSequence: eventStream.nextSequence(),
+        nextOperationOrdinal: operationOrdinal,
+        plan: plan.map((step) => ({ ...step })),
+        sources: sources.list().map(({ position: _position, ...entry }) => entry),
+        messages: messages.map((message) => ({ ...message })),
+        totalSearches,
+        totalFetches,
+        rewritesUsed: rewriteBudget.used,
+        newSourcesPerRound: [...newSourcesPerRound],
+        cutShortReason,
+        lastTurnError,
+        sensitiveSourceAvailable,
+        untrustedContentInContext,
+      });
+      handedOff = true;
+      return true;
+    };
 
-      // Plan bookkeeping. Round 1 executes the planned queries as one batch:
-      // provider-native search does not attribute results back to an individual
-      // query, so per-query completion cannot be observed and is not claimed.
-      // the batch moves together. Later rounds are gap-filling work the plan did
-      // not contain, so each appends its own honest step.
-      let roundStepIds: string[];
-      if (round === 1) {
-        if (plan.every((step) => step.status !== 'pending')) {
-          plan.push({
-            id: uniqueStepId(plan, `round-${round}`),
-            type: 'search',
-            description: resumingRun
-              ? 'Follow-up searches to close remaining gaps'
-              : 'Initial web searches',
-            status: 'pending',
-          });
-        }
-        roundStepIds = pendingPlanStepIds();
-      } else if (pendingPlannedQueries().length > 0) {
-        // The plan still owes searches, so this round is those searches rather
-        // than free-form gap filling. This is what makes the stop rule
-        // plan-driven: the loop keeps returning to the plan until every query
-        // has been run or dropped on the record.
-        roundStepIds = pendingPlannedQueries().map((step) => step.id);
-      } else {
-        const followUpStepId = uniqueStepId(plan, `round-${round}`);
-        plan.push({
-          id: followUpStepId,
-          type: 'search',
-          description: `Follow-up searches to close remaining gaps (round ${round})`,
-          status: 'pending',
-        });
-        roundStepIds = [followUpStepId];
-      }
-      markPlanSteps(roundStepIds, 'running');
-      yield planEvent();
-
-      yield status(
-        'searching',
-        round === 1 ? 'Searching the web' : `Searching the web (round ${round})`,
-      );
-      yield encoder.encode(toolStatusEvent('running', responseModel, round));
-
-      let turn: ResearchTurn;
-      let roundSearchEvents = 0;
-      /** Queries the loop itself issued this round, when the model has no native search. */
-      let roundExecutedQueries: string[] = [];
-      try {
-        if (yield* flushCancellationIfRequested()) return;
-        // Directives ride as 'user' turns: several providers (e.g. Google)
-        // only honor the FIRST system message and silently drop the rest, so
-        // a trailing system directive would never reach the model.
-        const turnMessages: typeof messages = [
-          ...messages,
-          {
-            role: 'user',
-            content: gatheringDirective(
-              round,
-              maxGatherRounds,
-              sources,
-              fetchAvailable,
-              runtimeSearchAvailable,
-              plan
-                .filter((step) => roundStepIds.includes(step.id) && step.id.startsWith('plan-'))
-                .map((step) => step.description),
-              domainPolicy,
-              resumingRun,
-            ),
-          },
-        ];
-        turn = yield* runTurn(turnMessages, false);
-        if (yield* flushCancellationIfRequested()) return;
-        roundSearchEvents += turn.searchEvents;
-
-        // Tool resolution passes: when the turn ended on tool_calls, execute
-        // them (bounded), feed the results back, and let the model finish its
-        // notes for this round. Search results and fetched text live only in
-        // this round's turnMessages, the persistent thread gets the capped
-        // notes below, so the token budget stays under control.
-        let toolPasses = 0;
-        const roundCounts = { fetches: 0, searches: 0, queries: [] as string[] };
-        while (
-          turn.finishReason === 'tool_calls' &&
-          turn.toolCalls.length > 0 &&
-          toolPasses < MAX_TOOL_PASSES_PER_ROUND
+    const firstRound = resume?.round ?? 1;
+    if (resume?.stage !== 'synthesis') {
+      // ── Gathering rounds ──
+      for (let round = firstRound; round <= maxGatherRounds; round++) {
+        if (
+          round > firstRound &&
+          (await handOffIfDue('gathering', round, options.invocation?.handOffAfterMs ?? 0))
         ) {
-          toolPasses += 1;
-          if (yield* runToolCalls(turn.toolCalls, turn, turnMessages, roundCounts)) return;
-          const cumulativeAfterTools = sources.toSearchResultsEvent(responseModel);
-          if (cumulativeAfterTools) yield encoder.encode(cumulativeAfterTools);
-          if (yield* flushCancellationIfRequested()) return;
-          turn = yield* runTurn(turnMessages, false);
-          if (yield* flushCancellationIfRequested()) return;
-          roundSearchEvents += turn.searchEvents;
-        }
-        roundSearchEvents += roundCounts.searches;
-        roundExecutedQueries = roundCounts.queries;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const safeMessage = safeUpstreamErrorMessage(
-          err,
-          servingProcessed.provider,
-          processed.requestedModel,
-        );
-        logger.error(
-          { provider: processed.provider, round, error: msg },
-          '[research-loop] gathering turn failed',
-        );
-        yield encoder.encode(toolStatusEvent('failed', responseModel, round));
-        markPlanSteps(roundStepIds, 'failed');
-        yield planEvent();
-        if (round === 1) {
-          // Nothing gathered: surface an honest error and stop.
-          yield status('error', 'Research failed before any results were gathered');
-          yield encoder.encode(
-            sseData({
-              choices: [
-                {
-                  delta: {
-                    content: `Deep research failed before any results were gathered: ${safeMessage}`,
-                  },
-                  index: 0,
-                },
-              ],
-              model: responseModel,
-            }),
-          );
-          await persistRun('failed', '', safeMessage);
-          yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'error' }));
-          yield encoder.encode(sseDone());
           return;
         }
-        // Partial material exists: keep it and synthesize what we have.
-        lastTurnError = safeMessage;
-        cutShortReason = 'a web search round failed mid-run';
-        break;
-      }
+        if (yield* pauseIfRequested()) return;
+        yield* applySteers(true);
+        if (yield* flushCancellationIfRequested()) return;
+        iteration = planningTurnEnabled ? round + 1 : round;
+        if (round === 1 && options.readConnectorSources) {
+          if (yield* flushCancellationIfRequested()) return;
+          const plannedQueries = pendingPlannedQueries().map((step) => step.description);
+          yield* readConnectedApps(plannedQueries.length > 0 ? plannedQueries : [userQuery]);
+        }
+        const sourcesBeforeRound = sources.size;
 
-      totalSearches += roundSearchEvents;
-      newSourcesPerRound.push(Math.max(0, sources.size - sourcesBeforeRound));
-      await sources.enrichTitles();
-      yield encoder.encode(toolStatusEvent('completed', responseModel, round));
+        // Plan bookkeeping. Round 1 executes the planned queries as one batch:
+        // provider-native search does not attribute results back to an individual
+        // query, so per-query completion cannot be observed and is not claimed.
+        // the batch moves together. Later rounds are gap-filling work the plan did
+        // not contain, so each appends its own honest step.
+        let roundStepIds: string[];
+        if (round === 1) {
+          if (plan.every((step) => step.status !== 'pending')) {
+            plan.push({
+              id: uniqueStepId(plan, `round-${round}`),
+              type: 'search',
+              description: resumingRun
+                ? 'Follow-up searches to close remaining gaps'
+                : 'Initial web searches',
+              status: 'pending',
+            });
+          }
+          roundStepIds = pendingPlanStepIds();
+        } else if (pendingPlannedQueries().length > 0) {
+          // The plan still owes searches, so this round is those searches rather
+          // than free-form gap filling. This is what makes the stop rule
+          // plan-driven: the loop keeps returning to the plan until every query
+          // has been run or dropped on the record.
+          roundStepIds = pendingPlannedQueries().map((step) => step.id);
+        } else {
+          const followUpStepId = uniqueStepId(plan, `round-${round}`);
+          plan.push({
+            id: followUpStepId,
+            type: 'search',
+            description: `Follow-up searches to close remaining gaps (round ${round})`,
+            status: 'pending',
+          });
+          roundStepIds = [followUpStepId];
+        }
+        markPlanSteps(roundStepIds, 'running');
+        yield planEvent();
 
-      // What this round covered, and what it did not. Provider-native search
-      // does not say which query produced which result, so a round covers as
-      // many planned queries as it ran searches, in plan order, and the rest
-      // stay pending. Claiming the whole plan for one search was how a run
-      // could report a completed plan it had not executed.
-      const plannedThisRound = roundStepIds.filter((id) => id.startsWith('plan-'));
-      const unplannedThisRound = roundStepIds.filter((id) => !id.startsWith('plan-'));
-      const coveredThisRound = coveredPlanStepIds(
-        plannedThisRound,
-        roundExecutedQueries,
-        roundSearchEvents,
-        (id) => plan.find((step) => step.id === id)?.description ?? '',
-      );
-      markPlanSteps([...unplannedThisRound, ...coveredThisRound], 'completed');
-      // A planned query this round did not reach goes back to pending, which is
-      // what it is. Left running it would read as work in progress forever, and
-      // the loop would take it for finished.
-      for (const step of plan) {
-        if (plannedThisRound.includes(step.id) && !coveredThisRound.includes(step.id)) {
-          step.status = 'pending';
-          delete step.startedAt;
+        yield status(
+          'searching',
+          round === 1 ? 'Searching the web' : `Searching the web (round ${round})`,
+        );
+        yield encoder.encode(toolStatusEvent('running', responseModel, round));
+
+        let turn: ResearchTurn;
+        let roundSearchEvents = 0;
+        /** Queries the loop itself issued this round, when the model has no native search. */
+        let roundExecutedQueries: string[] = [];
+        try {
+          if (yield* flushCancellationIfRequested()) return;
+          // Directives ride as 'user' turns: several providers (e.g. Google)
+          // only honor the FIRST system message and silently drop the rest, so
+          // a trailing system directive would never reach the model.
+          const turnMessages: typeof messages = [
+            ...messages,
+            {
+              role: 'user',
+              content: gatheringDirective(
+                round,
+                maxGatherRounds,
+                sources,
+                fetchAvailable,
+                runtimeSearchAvailable,
+                plan
+                  .filter((step) => roundStepIds.includes(step.id) && step.id.startsWith('plan-'))
+                  .map((step) => step.description),
+                domainPolicy,
+                resumingRun,
+              ),
+            },
+          ];
+          turn = yield* runTurn('round', turnMessages, false);
+          if (yield* flushCancellationIfRequested()) return;
+          roundSearchEvents += turn.searchEvents;
+
+          // Tool resolution passes: when the turn ended on tool_calls, execute
+          // them (bounded), feed the results back, and let the model finish its
+          // notes for this round. Search results and fetched text live only in
+          // this round's turnMessages, the persistent thread gets the capped
+          // notes below, so the token budget stays under control.
+          let toolPasses = 0;
+          const roundCounts = { fetches: 0, searches: 0, queries: [] as string[] };
+          while (
+            turn.finishReason === 'tool_calls' &&
+            turn.toolCalls.length > 0 &&
+            toolPasses < MAX_TOOL_PASSES_PER_ROUND
+          ) {
+            toolPasses += 1;
+            if (yield* runToolCalls(turn.toolCalls, turn, turnMessages, roundCounts)) return;
+            const cumulativeAfterTools = sources.toSearchResultsEvent(responseModel);
+            if (cumulativeAfterTools) yield encoder.encode(cumulativeAfterTools);
+            if (yield* flushCancellationIfRequested()) return;
+            turn = yield* runTurn('round', turnMessages, false);
+            if (yield* flushCancellationIfRequested()) return;
+            roundSearchEvents += turn.searchEvents;
+          }
+          roundSearchEvents += roundCounts.searches;
+          roundExecutedQueries = roundCounts.queries;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const safeMessage = safeUpstreamErrorMessage(
+            err,
+            servingProcessed.provider,
+            processed.requestedModel,
+          );
+          logger.error(
+            { provider: processed.provider, round, error: msg },
+            '[research-loop] gathering turn failed',
+          );
+          yield encoder.encode(toolStatusEvent('failed', responseModel, round));
+          markPlanSteps(roundStepIds, 'failed');
+          yield planEvent();
+          if (round === 1) {
+            // Nothing gathered: surface an honest error and stop.
+            yield status('error', 'Research failed before any results were gathered');
+            yield encoder.encode(
+              sseData({
+                choices: [
+                  {
+                    delta: {
+                      content: `Deep research failed before any results were gathered: ${safeMessage}`,
+                    },
+                    index: 0,
+                  },
+                ],
+                model: responseModel,
+              }),
+            );
+            await persistRun('failed', '', safeMessage);
+            yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'error' }));
+            yield encoder.encode(sseDone());
+            return;
+          }
+          // Partial material exists: keep it and synthesize what we have.
+          lastTurnError = safeMessage;
+          cutShortReason = 'a web search round failed mid-run';
+          break;
+        }
+
+        totalSearches += roundSearchEvents;
+        newSourcesPerRound.push(Math.max(0, sources.size - sourcesBeforeRound));
+        await sources.enrichTitles();
+        yield encoder.encode(toolStatusEvent('completed', responseModel, round));
+
+        // What this round covered, and what it did not. Provider-native search
+        // does not say which query produced which result, so a round covers as
+        // many planned queries as it ran searches, in plan order, and the rest
+        // stay pending. Claiming the whole plan for one search was how a run
+        // could report a completed plan it had not executed.
+        const plannedThisRound = roundStepIds.filter((id) => id.startsWith('plan-'));
+        const unplannedThisRound = roundStepIds.filter((id) => !id.startsWith('plan-'));
+        const coveredThisRound = coveredPlanStepIds(
+          plannedThisRound,
+          roundExecutedQueries,
+          roundSearchEvents,
+          (id) => plan.find((step) => step.id === id)?.description ?? '',
+        );
+        markPlanSteps([...unplannedThisRound, ...coveredThisRound], 'completed');
+        // A planned query this round did not reach goes back to pending, which is
+        // what it is. Left running it would read as work in progress forever, and
+        // the loop would take it for finished.
+        for (const step of plan) {
+          if (plannedThisRound.includes(step.id) && !coveredThisRound.includes(step.id)) {
+            step.status = 'pending';
+            delete step.startedAt;
+          }
+        }
+        const dropped = parseDroppedPlanSteps(turn.canonicalText, pendingPlannedQueries());
+        for (const { id, reason } of dropped) dropPlanSteps([id], reason);
+        yield planEvent();
+
+        // Append the model's notes (truncated) so later turns build on them.
+        const notes = stripMarkers(turn.canonicalText).slice(0, MAX_NOTE_CHARS);
+        messages.push({
+          role: 'assistant',
+          content: notes || '(no notes recorded this round)',
+        });
+
+        const cumulative = sources.toSearchResultsEvent(responseModel);
+        if (cumulative) yield encoder.encode(cumulative);
+        yield status('searching', `Found ${sources.size} source${sources.size === 1 ? '' : 's'}`);
+
+        // The stop rule is the plan's, not the model's. READY_TO_REPORT says the
+        // model believes it has enough; it ends the gathering phase only once
+        // every planned query has been searched or dropped on the record. One
+        // model family emitted the marker after a single round and the loop
+        // stopped there while another ran three, which made coverage a property
+        // of the provider rather than of the question.
+        if (
+          turn.canonicalText.includes(READY_MARKER) &&
+          pendingPlannedQueries().length === 0 &&
+          sources.size >= deliverable.minSources
+        ) {
+          break;
+        }
+        if (totalSearches >= maxSearches) {
+          cutShortReason = 'the search budget was reached';
+          break;
+        }
+        if (now() - startedAt >= budgetMs) {
+          cutShortReason = 'the time budget was reached';
+          break;
+        }
+        // Diminishing returns, measured: a round that added no source the run did
+        // not already hold means another round of the same searching buys nothing.
+        if (
+          deliverable.stopWhenNoNewSources &&
+          pendingPlannedQueries().length === 0 &&
+          hasDiminishingReturns(newSourcesPerRound)
+        ) {
+          cutShortReason = 'a further round of searching stopped finding new sources';
+          break;
         }
       }
-      const dropped = parseDroppedPlanSteps(turn.canonicalText, pendingPlannedQueries());
-      for (const { id, reason } of dropped) dropPlanSteps([id], reason);
-      yield planEvent();
 
-      // Append the model's notes (truncated) so later turns build on them.
-      const notes = stripMarkers(turn.canonicalText).slice(0, MAX_NOTE_CHARS);
-      messages.push({
-        role: 'assistant',
-        content: notes || '(no notes recorded this round)',
-      });
+      // Whatever the plan still owes when gathering ends was not searched, and
+      // the report says so with the reason rather than carrying a pending step
+      // nobody explains.
+      const unsearched = pendingPlannedQueries();
+      if (unsearched.length > 0) {
+        const reason = cutShortReason
+          ? `not searched: ${cutShortReason}`
+          : 'not searched: the run reached its last gathering round';
+        dropPlanSteps(
+          unsearched.map((step) => step.id),
+          reason,
+        );
+        yield planEvent();
+      }
 
-      const cumulative = sources.toSearchResultsEvent(responseModel);
-      if (cumulative) yield encoder.encode(cumulative);
-      yield status('searching', `Found ${sources.size} source${sources.size === 1 ? '' : 's'}`);
-
-      // The stop rule is the plan's, not the model's. READY_TO_REPORT says the
-      // model believes it has enough; it ends the gathering phase only once
-      // every planned query has been searched or dropped on the record. One
-      // model family emitted the marker after a single round and the loop
-      // stopped there while another ran three, which made coverage a property
-      // of the provider rather than of the question.
       if (
-        turn.canonicalText.includes(READY_MARKER) &&
-        pendingPlannedQueries().length === 0 &&
-        sources.size >= deliverable.minSources
+        await handOffIfDue(
+          'synthesis',
+          maxGatherRounds + 1,
+          options.invocation?.synthesisStartsWithinMs ?? 0,
+        )
       ) {
-        break;
+        return;
       }
-      if (totalSearches >= maxSearches) {
-        cutShortReason = 'the search budget was reached';
-        break;
-      }
-      if (now() - startedAt >= budgetMs) {
-        cutShortReason = 'the time budget was reached';
-        break;
-      }
-      // Diminishing returns, measured: a round that added no source the run did
-      // not already hold means another round of the same searching buys nothing.
-      if (
-        deliverable.stopWhenNoNewSources &&
-        pendingPlannedQueries().length === 0 &&
-        hasDiminishingReturns(newSourcesPerRound)
-      ) {
-        cutShortReason = 'a further round of searching stopped finding new sources';
-        break;
-      }
-    }
-
-    // Whatever the plan still owes when gathering ends was not searched, and
-    // the report says so with the reason rather than carrying a pending step
-    // nobody explains.
-    const unsearched = pendingPlannedQueries();
-    if (unsearched.length > 0) {
-      const reason = cutShortReason
-        ? `not searched: ${cutShortReason}`
-        : 'not searched: the run reached its last gathering round';
-      dropPlanSteps(
-        unsearched.map((step) => step.id),
-        reason,
-      );
-      yield planEvent();
     }
 
     yield* applySteers(false);
@@ -2754,6 +3164,7 @@ export async function* runResearchLoop(
     try {
       if (yield* flushCancellationIfRequested()) return;
       const synthesis = yield* runTurn(
+        'synthesis',
         [
           ...messages,
           {
@@ -2908,7 +3319,7 @@ export async function* runResearchLoop(
     // every terminal path above. Whatever the run really gathered is still
     // persisted as `interrupted` so a retry can resume from it. `persistRun`
     // is a no-op once a terminal path already wrote the row.
-    if (!reportPersisted && !awaitingApproval && options.persistReport) {
+    if (!reportPersisted && !awaitingApproval && !handedOff && options.persistReport) {
       await persistRun('interrupted', '', 'Research stopped before the report was written.');
     }
     // Financial settlement and every enforced usage window belong to the

@@ -52,8 +52,8 @@ describe('ModeToggle', () => {
     expect(onTapCloud).toHaveBeenCalledTimes(1);
   });
 
-  it('does not frame locked cloud access with a waitlist rank (public alpha = sign in)', () => {
-    const { getByTestId } = render(<ModeToggle cloudJoined waitlistRank={42} />);
+  it('frames locked cloud access as sign in, never as a waitlist position', () => {
+    const { getByTestId } = render(<ModeToggle />);
 
     expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityLabel).toBe(
       'AGI Cloud, sign in required',

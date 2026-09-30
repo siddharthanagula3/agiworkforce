@@ -9,13 +9,14 @@ import {
   getModelContextLimits,
   getModelCostRates,
   getModelMetadataById,
-  getAutoRoutingProfileTiers,
   getPickerModelTier,
+  autoAliasForRoutingProfile,
+  ROUTING_PROFILE_CHOICE_OPTIONS,
+  type RoutingProfileChoice,
   isAutoModeModelId,
   normalizeModelId,
   evaluateModelEnvironment,
   PROVIDER_DISPLAY,
-  type AutoRoutingProfileView,
   type ModelAvailability,
   type DeveloperReasoningEffort,
   type ModelSpeed,
@@ -62,7 +63,7 @@ export function isAutoReachableForTier(autoId: string, tier: string | undefined)
   if (tier === 'local' || !canUseBillingPlanCapability(tier, 'developer_surfaces')) return false;
   return (
     getAutoCapabilityEnvelope({
-      selection: autoId,
+      selection: autoEnvelopeSelection(autoId),
       subscriptionTier: tier,
       trustMode: 'managed_cloud',
       runtimeProfileId: 'vscode/managed-chat',
@@ -90,7 +91,7 @@ function manualModelOptions(
 }
 
 export function isModelReachableForTier(modelId: string, tier: string | undefined): boolean {
-  if (isAutoModeModelId(modelId)) return isAutoReachableForTier(modelId, tier);
+  if (isAutoPickerModelId(modelId)) return isAutoReachableForTier(modelId, tier);
   if (tier === undefined) return true;
   if (tier === 'byok') return true;
   if (tier === 'local' || !canUseBillingPlanCapability(tier, 'developer_surfaces')) return false;
@@ -197,19 +198,20 @@ export function buildGroupedQuickPickItems(
   const usable: GroupedQuickPickItem[] = [];
   const locked = new Map<string, { lock: ModelLock; items: GroupedQuickPickItem[] }>();
 
+  const [autoRow, ...choiceRows] = AUTO_CHOICE_ROWS;
   const autoItem: GroupedQuickPickItem = {
-    label: '$(sparkle) Auto',
-    description: 'Routes each message to the best model for the task and your plan',
+    label: `$(sparkle) ${autoRow?.label ?? 'Auto'}`,
+    description: autoRow?.description ?? '',
     detail: 'Recommended',
     modelId: 'auto',
     ...(autoLock === undefined ? {} : { disabled: true, lock: autoLock }),
   };
-  const profileItems: GroupedQuickPickItem[] = AUTO_PROFILE_TIERS.map((profile) => {
-    const lock = isAutoReachableForTier(profile.id, tier) ? undefined : planLock(tier);
+  const profileItems: GroupedQuickPickItem[] = choiceRows.map((row) => {
+    const lock = isAutoReachableForTier(row.id, tier) ? undefined : planLock(tier);
     return {
-      label: `$(sparkle) Auto · ${profile.label}`,
-      description: profile.description,
-      modelId: profile.id,
+      label: `$(sparkle) ${row.label}`,
+      description: row.description,
+      modelId: row.id,
       ...(lock === undefined ? {} : { disabled: true, lock }),
     };
   });
@@ -433,17 +435,33 @@ const AUTO_ENVELOPE = getAutoCapabilityEnvelope({
   runtimeProfileId: 'vscode/managed-chat',
 });
 
-const AUTO_PROFILE_TIERS: readonly AutoRoutingProfileView[] = getAutoRoutingProfileTiers().filter(
-  (profile) => profile.profile !== 'balanced',
-);
+const AUTO_SPEED_MODEL_ID = 'auto-speed';
 
-const ROUTING_PROFILE_BY_AUTO_PROFILE: Readonly<
-  Record<AutoRoutingProfileView['profile'], 'auto' | 'quality' | 'cost'>
-> = { balanced: 'auto', premium: 'quality', economy: 'cost' };
+function autoChoiceModelId(choice: RoutingProfileChoice): string {
+  if (choice === 'auto') return 'auto';
+  if (choice === 'speed') return AUTO_SPEED_MODEL_ID;
+  return autoAliasForRoutingProfile(choice) ?? 'auto';
+}
 
-export function routingProfileForModel(modelId: string): 'auto' | 'quality' | 'cost' | undefined {
-  const profile = AUTO_PROFILE_TIERS.find((candidate) => candidate.id === modelId)?.profile;
-  return profile === undefined ? undefined : ROUTING_PROFILE_BY_AUTO_PROFILE[profile];
+const AUTO_CHOICE_ROWS = ROUTING_PROFILE_CHOICE_OPTIONS.map((option) => ({
+  id: autoChoiceModelId(option.choice),
+  choice: option.choice,
+  label: option.choice === 'auto' ? option.label : `Auto · ${option.label}`,
+  description: option.description,
+  selection:
+    option.choice === 'auto' ? 'auto' : (autoAliasForRoutingProfile(option.choice) ?? 'auto'),
+}));
+
+export function isAutoPickerModelId(modelId: string): boolean {
+  return isAutoModeModelId(modelId) || modelId === AUTO_SPEED_MODEL_ID;
+}
+
+export function routingProfileForModel(modelId: string): RoutingProfileChoice | undefined {
+  return AUTO_CHOICE_ROWS.find((row) => row.id === modelId)?.choice;
+}
+
+function autoEnvelopeSelection(modelId: string): string {
+  return AUTO_CHOICE_ROWS.find((row) => row.id === modelId)?.selection ?? modelId;
 }
 
 function autoProfileEnvelope(modelId: string): ReturnType<typeof getAutoCapabilityEnvelope> {
@@ -488,11 +506,11 @@ export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
     detail: 'Recommended: AGI Workforce picks the optimal model automatically',
     availability: 'live',
   },
-  ...AUTO_PROFILE_TIERS.map((profile) => ({
-    id: profile.id,
-    label: `Auto · ${profile.label}`,
-    description: profile.description,
-    detail: profile.description,
+  ...AUTO_CHOICE_ROWS.filter((row) => row.choice !== 'auto').map((row) => ({
+    id: row.id,
+    label: row.label,
+    description: row.description,
+    detail: row.description,
     availability: 'live' as ModelAvailability,
   })),
   ...MANUAL_MODEL_OPTIONS.map((option) => ({
@@ -559,9 +577,9 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   ...manualContextLimits,
   auto: AUTO_ENVELOPE?.contextWindow ?? DEFAULT_CONTEXT_LIMIT,
   ...Object.fromEntries(
-    AUTO_PROFILE_TIERS.map((profile) => [
-      profile.id,
-      autoProfileEnvelope(profile.id)?.contextWindow ?? DEFAULT_CONTEXT_LIMIT,
+    AUTO_CHOICE_ROWS.filter((row) => row.choice !== 'auto').map((row) => [
+      row.id,
+      autoProfileEnvelope(row.selection)?.contextWindow ?? DEFAULT_CONTEXT_LIMIT,
     ]),
   ),
 };
@@ -575,9 +593,9 @@ export const MODEL_COST_RATES: Record<string, { input: number; output: number }>
   ),
   auto: getAutoCostRate(AUTO_ENVELOPE?.reachableModelKeys ?? []),
   ...Object.fromEntries(
-    AUTO_PROFILE_TIERS.map((profile) => [
-      profile.id,
-      getAutoCostRate(autoProfileEnvelope(profile.id)?.reachableModelKeys ?? []),
+    AUTO_CHOICE_ROWS.filter((row) => row.choice !== 'auto').map((row) => [
+      row.id,
+      getAutoCostRate(autoProfileEnvelope(row.selection)?.reachableModelKeys ?? []),
     ]),
   ),
 };

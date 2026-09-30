@@ -19,7 +19,7 @@ import {
 } from '@/lib/services/organization-policy-override-service';
 import { policyScopeSubjectExists } from '../policy-subject';
 import { requireWorkspaceConsolePermission } from '../../workspace-access';
-import { ControlsPatchSchema } from '../controls-schema';
+import { ControlsPatchSchema, assertOwnerTurnsOnFastMode } from '../controls-schema';
 
 export const runtime = 'nodejs';
 
@@ -60,6 +60,7 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse | Respon
   );
   const input = await readValidatedJsonBody(request, OverrideSchema, 'Invalid policy exception');
   const layer = parseWorkspaceControlsLayer(input.layer);
+  assertOwnerTurnsOnFastMode(access.role, false, layer.featureAccess?.fast_mode);
   if (Object.keys(layer).length === 0) {
     throw createError.validation('A policy exception must set at least one control.');
   }

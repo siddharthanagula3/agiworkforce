@@ -6,18 +6,26 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./account-security": "./src/account-security.ts",
     "./client-request": "./src/client-request.ts",
-    "./me": "./src/me.ts"
+    "./me": "./src/me.ts",
+    "./support": "./src/support.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "typesVersions": {
     "*": {
+      "account-security": [
+        "./src/account-security.ts"
+      ],
       "client-request": [
         "./src/client-request.ts"
       ],
       "me": [
         "./src/me.ts"
+      ],
+      "support": [
+        "./src/support.ts"
       ],
       "*": [
         "./src/index.ts"

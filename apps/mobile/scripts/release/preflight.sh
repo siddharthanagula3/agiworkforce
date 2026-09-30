@@ -150,11 +150,27 @@ fi
 # hiding real store surfaces from its users.
 
 if [[ "${PROFILE}" == "production" || "${PROFILE}" == "beta" ]]; then
+  require_env EXPO_PUBLIC_API_URL
+  if [[ "${PLATFORM}" == "ios" || "${PLATFORM}" == "all" ]]; then
+    require_env EXPO_PUBLIC_AGI_AUTH_PROVIDERS
+    if node "${MOBILE_DIR}/scripts/release/check-ios-login-service.mjs"; then
+      log_ok "iOS release includes the configured Apple login option"
+    else
+      die "configure and verify Apple login before releasing iOS with social sign-in"
+    fi
+  fi
+  log "checking the deployed Cloud API routes required by Mobile..."
+  if node "${MOBILE_DIR}/scripts/release/check-cloud-api.mjs"; then
+    log_ok "Mobile Cloud API routes answer with authentication challenges"
+  else
+    die "the deployed Cloud API is not ready for Mobile sign-in and provider-funded Free models"
+  fi
+
   log "reconciling the store release-state registry with the live stores..."
   if node "${MOBILE_DIR}/scripts/release/verify-store-listings.mjs"; then
     log_ok "release-state registry matches the live App Store and Play listings"
   else
-    die "store release-state registry disagrees with the live stores, update apps/mobile/src/features/release-state/mobileReleaseState.json deliberately before releasing"
+    die "store release-state registry could not be verified against the live stores; inspect the lookup failure before releasing"
   fi
 fi
 

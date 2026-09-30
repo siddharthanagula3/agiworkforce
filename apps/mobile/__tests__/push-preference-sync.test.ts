@@ -1,4 +1,5 @@
 import { AppState } from 'react-native';
+import { MobilePushPreferencesSchema } from '@agiworkforce/cloud-contracts';
 
 const mockApiPost = jest.fn();
 let capturedNotificationHandler:
@@ -105,7 +106,7 @@ describe('push delivery preference sync', () => {
         return { remove: jest.fn() } as unknown as ReturnType<typeof AppState.addEventListener>;
       });
     useNotificationPrefsStore.setState({
-      categoryEnabled: { approvals: true, task_updates: true, errors: true, status: false },
+      categoryEnabled: { chat_replies: true, tasks: true, product: false },
       quietHours: {
         enabled: true,
         days: EVERY_DAY,
@@ -129,11 +130,11 @@ describe('push delivery preference sync', () => {
     const body = bodyOfCall(0);
     expect(body.pushToken).toBe('expo-token-a');
     expect(body.preferences.categories).toEqual({
-      approvals: true,
-      task_updates: true,
-      errors: true,
-      status: false,
+      chat_replies: true,
+      tasks: true,
+      product: false,
     });
+    expect(MobilePushPreferencesSchema.safeParse(body.preferences).success).toBe(true);
     expect(body.preferences.quietHours).toEqual({
       enabled: true,
       days: EVERY_DAY,
@@ -162,21 +163,38 @@ describe('push delivery preference sync', () => {
     await registerForPushNotifications(makeContext());
     expect(mockApiPost).toHaveBeenCalledTimes(1);
 
-    useNotificationPrefsStore.getState().setCategoryEnabled('task_updates', false);
+    useNotificationPrefsStore.getState().setCategoryEnabled('tasks', false);
     jest.runOnlyPendingTimers();
     await settle();
 
     expect(mockApiPost).toHaveBeenCalledTimes(2);
     const body = bodyOfCall(1);
-    expect(body.preferences.categories.task_updates).toBe(false);
+    expect(body.preferences.categories.tasks).toBe(false);
     expect(body.preferences.eventTypes.task_completed).toBe(false);
-    expect(body.preferences.eventTypes.chat_message).toBe(false);
+    expect(body.preferences.eventTypes.agent_approval_needed).toBe(false);
+    expect(body.preferences.eventTypes.schedule_run).toBe(false);
+    expect(body.preferences.eventTypes.chat_message).toBe(true);
+  });
+
+  it('turns off only chat reply pushes when chat replies are switched off', async () => {
+    await registerForPushNotifications(makeContext());
+
+    useNotificationPrefsStore.getState().setCategoryEnabled('chat_replies', false);
+    jest.runOnlyPendingTimers();
+    await settle();
+
+    expect(mockApiPost).toHaveBeenCalledTimes(2);
+    const { categories, eventTypes } = bodyOfCall(1).preferences;
+    expect(categories.chat_replies).toBe(false);
+    expect(eventTypes.chat_message).toBe(false);
+    expect(eventTypes.task_completed).toBe(true);
+    expect(eventTypes.agent_approval_needed).toBe(true);
   });
 
   it('does not re-post when nothing about the preferences changed', async () => {
     await registerForPushNotifications(makeContext());
 
-    useNotificationPrefsStore.getState().setCategoryEnabled('approvals', true);
+    useNotificationPrefsStore.getState().setCategoryEnabled('tasks', true);
     jest.runOnlyPendingTimers();
     await settle();
 
@@ -206,7 +224,7 @@ describe('push delivery preference sync', () => {
     await registerForPushNotifications(makeContext({ isCurrent: () => current }));
     current = false;
 
-    useNotificationPrefsStore.getState().setCategoryEnabled('errors', false);
+    useNotificationPrefsStore.getState().setCategoryEnabled('tasks', false);
     jest.runOnlyPendingTimers();
     await settle();
 
@@ -226,7 +244,7 @@ describe('push delivery preference sync', () => {
     })) as { shouldShowAlert: boolean };
     expect(suppressedByCategory.shouldShowAlert).toBe(false);
 
-    useNotificationPrefsStore.getState().setCategoryEnabled('approvals', false);
+    useNotificationPrefsStore.getState().setCategoryEnabled('tasks', false);
     const suppressedAfterToggle = (await capturedNotificationHandler?.({
       request: { content: { data: { type: 'agent_approval_needed' } } },
     })) as { shouldShowAlert: boolean };

@@ -40,6 +40,10 @@ vi.mock(
 );
 
 const mockLoadUserConnectorToolCatalog = vi.fn();
+const mockConnectorsAllowed = vi.fn();
+vi.mock('@/lib/connectors/connector-capability', () => ({
+  connectorsAllowedWithoutRequest: (...args: unknown[]) => mockConnectorsAllowed(...args),
+}));
 vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/user-connector-tools')>()),
   loadUserConnectorToolCatalog: (...args: unknown[]) => mockLoadUserConnectorToolCatalog(...args),
@@ -232,6 +236,7 @@ describe('scheduled agent tool access', () => {
     routeTo(TOOL_CAPABLE_MODEL);
     mockLoadMcpToolDefs.mockResolvedValue([]);
     mockLoadUserConnectorToolCatalog.mockResolvedValue({ tools: [], dropped: [], limit: null });
+    mockConnectorsAllowed.mockResolvedValue(true);
     mockLoadConnectorToolPermissions.mockResolvedValue(permissions());
     vi.mocked(reserveManagedUsageRequest).mockResolvedValue({
       db: { query: vi.fn() },
@@ -322,6 +327,25 @@ describe('scheduled agent tool access', () => {
     await executeScheduledAgent(task, new AbortController().signal, 'run-3', executionScope);
 
     expect(toolNames(mockBuildToolLoopStream.mock.calls[0]?.[2])).toContain(
+      CONNECTOR_TOOL.qualifiedName,
+    );
+  });
+
+  it('offers no connector tool when the connector decision is closed', async () => {
+    mockConnectorsAllowed.mockResolvedValue(false);
+    mockLoadUserConnectorToolCatalog.mockResolvedValue({
+      tools: [CONNECTOR_TOOL],
+      dropped: [],
+      limit: null,
+    });
+    mockBuildToolLoopStream.mockResolvedValue(
+      sseStreamFrom([chunk({ content: 'done' }), chunk({}, 'stop')]),
+    );
+
+    await executeScheduledAgent(task, new AbortController().signal, 'run-4', executionScope);
+
+    expect(mockLoadUserConnectorToolCatalog).not.toHaveBeenCalled();
+    expect(toolNames(mockBuildToolLoopStream.mock.calls[0]?.[2])).not.toContain(
       CONNECTOR_TOOL.qualifiedName,
     );
   });

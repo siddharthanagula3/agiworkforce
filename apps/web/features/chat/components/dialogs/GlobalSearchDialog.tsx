@@ -384,7 +384,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
           <div className="border-b bg-muted/30 px-6 py-4">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   ref={searchInputRef}
                   aria-label="Search messages and conversations"
@@ -397,13 +397,13 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                       void handleSearch();
                     }
                   }}
-                  className="pl-9 pr-9"
+                  className="ps-9 pe-9"
                 />
                 {query && (
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
+                    className="absolute end-1 top-1/2 h-7 w-7 -translate-y-1/2"
                     onClick={handleClear}
                     aria-label="Clear search"
                   >
@@ -417,12 +417,12 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                 onClick={() => setShowFilters(!showFilters)}
                 className="relative"
               >
-                <Filter className="mr-2 h-4 w-4" />
+                <Filter className="me-2 h-4 w-4" />
                 Filters
                 {activeFilterCount > 0 && (
                   <Badge
                     variant="destructive"
-                    className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center p-0 text-xs"
+                    className="absolute -end-2 -top-2 flex h-5 w-5 items-center justify-center p-0 text-xs"
                   >
                     {activeFilterCount}
                   </Badge>
@@ -463,11 +463,11 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                         <Button
                           variant="outline"
                           className={cn(
-                            'h-9 w-full justify-start text-left font-normal',
+                            'h-9 w-full justify-start text-start font-normal',
                             !startDate && 'text-muted-foreground',
                           )}
                         >
-                          <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                          <CalendarIcon className="me-2 h-3.5 w-3.5" />
                           {startDate ? format(startDate, 'MMM d, yyyy') : 'Select date'}
                         </Button>
                       </PopoverTrigger>
@@ -490,11 +490,11 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                         <Button
                           variant="outline"
                           className={cn(
-                            'h-9 w-full justify-start text-left font-normal',
+                            'h-9 w-full justify-start text-start font-normal',
                             !endDate && 'text-muted-foreground',
                           )}
                         >
-                          <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                          <CalendarIcon className="me-2 h-3.5 w-3.5" />
                           {endDate ? format(endDate, 'MMM d, yyyy') : 'Select date'}
                         </Button>
                       </PopoverTrigger>
@@ -563,7 +563,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                         onClick={requestClearHistory}
                         className="h-7 px-2 text-xs text-muted-foreground hover:text-danger"
                       >
-                        <Trash2 className="mr-1 h-3 w-3" />
+                        <Trash2 className="me-1 h-3 w-3" />
                         Clear
                       </Button>
                     </div>
@@ -577,7 +577,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                           <Clock className="h-3 w-3 text-muted-foreground group-hover:text-primary" />
                           <span className="max-w-[150px] truncate">{search.query}</span>
                           {search.resultCount > 0 && (
-                            <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-caption">
+                            <Badge variant="secondary" className="ms-1 px-1.5 py-0 text-caption">
                               {search.resultCount}
                             </Badge>
                           )}
@@ -605,7 +605,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                           <span className="max-w-[150px] truncate">{search.query}</span>
                           <Badge
                             variant="outline"
-                            className="ml-1 border-primary/20 px-1.5 py-0 text-caption text-muted-foreground"
+                            className="ms-1 border-primary/20 px-1.5 py-0 text-caption text-muted-foreground"
                           >
                             {search.searchCount} searches
                           </Badge>
@@ -654,7 +654,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                   <button
                     key={`search-result-${result.type}-${result.sessionId}-${result.messageId || result.matchedText.slice(0, 20)}`}
                     onClick={() => handleResultClick(result)}
-                    className="group w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent"
+                    className="group w-full rounded-lg border p-3 text-start transition-colors hover:bg-accent"
                   >
                     {/* Header */}
                     <div className="mb-2 flex items-start justify-between gap-2">

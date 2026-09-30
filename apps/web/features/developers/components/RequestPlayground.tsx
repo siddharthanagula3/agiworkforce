@@ -17,6 +17,7 @@ import {
 import { sendAuthorizedJson } from '@features/auth/step-up-fetch';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { toUserMessage } from '@/lib/user-error-message';
+import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 
 const CHAT_COMPLETIONS_PATH = '/api/llm/v1/chat/completions';
 const MODELS_PATH = '/api/llm/v1/models';
@@ -189,7 +190,7 @@ export function RequestPlayground() {
   });
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<PlaygroundResult | null>(null);
-  const [error, setError] = useState<PlaygroundError | null>(null);
+  const [failure, setFailure] = useState<PlaygroundError | null>(null);
   const [showCode, setShowCode] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
@@ -201,19 +202,28 @@ export function RequestPlayground() {
   const send = async () => {
     if (!canSend) return;
     setSending(true);
-    setError(null);
+    setFailure(null);
     const started = performance.now();
     try {
       const response = await sendAuthorizedJson(
         CHAT_COMPLETIONS_PATH,
         { method: 'POST', body: { ...buildRequestBody(draft), personalization: false } },
-        { 'Idempotency-Key': crypto.randomUUID() },
+        {
+          'Idempotency-Key': createManagedChatIdempotencyKey({
+            surface: 'web',
+            purpose: 'send',
+            operationId: crypto.randomUUID(),
+          }),
+        },
       );
       const latencyMs = Math.round(performance.now() - started);
       const payload = (await response.json().catch(() => null)) as CompletionPayload | null;
       if (!response.ok) {
         setResult(null);
-        setError({ status: response.status, message: gatewayErrorCopy(payload, response.status) });
+        setFailure({
+          status: response.status,
+          message: gatewayErrorCopy(payload, response.status),
+        });
         return;
       }
       setResult({
@@ -228,7 +238,7 @@ export function RequestPlayground() {
       });
     } catch (reason) {
       setResult(null);
-      setError({
+      setFailure({
         status: null,
         message: toUserMessage(reason, 'The request could not be sent. Try again.'),
       });
@@ -353,7 +363,7 @@ export function RequestPlayground() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="submit" disabled={!canSend} aria-busy={sending}>
-              {sending ? <Spinner size="sm" className="mr-2" aria-hidden="true" /> : null}
+              {sending ? <Spinner size="sm" className="me-2" aria-hidden="true" /> : null}
               {sending ? 'Sending' : 'Send request'}
             </Button>
             <Button
@@ -388,9 +398,9 @@ export function RequestPlayground() {
         ) : null}
 
         <div aria-live="polite" className="mt-4">
-          {error ? (
+          {failure ? (
             <p role="alert" className="text-sm text-danger">
-              {error.status ? `${error.status}: ${error.message}` : error.message}
+              {failure.status ? `${failure.status}: ${failure.message}` : failure.message}
             </p>
           ) : null}
           {result ? (

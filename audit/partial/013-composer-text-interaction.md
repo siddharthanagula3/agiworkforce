@@ -112,17 +112,17 @@ nothing is left.
 
 - Done when: The product offers prompt suggestions (e.g. follow-up questions) that the user can pick to fill or send the next message.
 - Wave: 2
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/contrast 76fe32596, 1eb78b28f: built. Every reply that shows suggestions asks the server, which writes questions from the answer alone when there are no sources, on the cheapest managed utility route, recorded as platform cost with a customer charge of zero, never for a temporary chat, cached on the turn (empty included). Settings > General has "Show follow-up suggestions in chats", synced to the account, which turns them off (ChatGPT's setting, per the lead's ruling). Left: the lead's final switch-on, FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT at ChatMessageList.tsx:1048 to true; until then ordinary replies show none and searched turns keep generated ones. | flag-off |
-| desktop | partial | partials/contrast 76fe32596, 1eb78b28f: built. Every reply that shows suggestions asks the server, which writes questions from the answer alone when there are no sources, on the cheapest managed utility route, recorded as platform cost with a customer charge of zero, never for a temporary chat, cached on the turn (empty included). Settings > General has "Show follow-up suggestions in chats", synced to the account, which turns them off (ChatGPT's setting, per the lead's ruling). Left: the lead's final switch-on, FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT at ChatMessageList.tsx:1048 to true; until then ordinary replies show none and searched turns keep generated ones. | flag-off |
+| web | partial | switch-on (deploy step 'follow-ups on'): change FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true at apps/web/features/chat/components/messages/ChatMessageList.tsx:1048; generator and settings toggle are built | flag-off |
+| desktop | partial | switch-on (deploy step 'follow-ups on'): change FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT to true at apps/web/features/chat/components/messages/ChatMessageList.tsx:1048; generator and settings toggle are built | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Blind re-search: chatParticipant.ts registers a followupProvider that returns three clickable follow-up prompts after every reply in VS Code's Chat view (the same participant the auditor credited for S13.24). That is a real prompt-suggestion surface, so missing is wrong; the sidebar webview still has none and the list is static, hence partial. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1396-1396`, `apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts:74-74`, `apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts:45-45`, `apps/web/app/api/chat/conversations/[id]/messages/lib/generate-follow-ups.ts:170-170`
+Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 
 ## S13.21: Prompt-template insertion.
 
@@ -138,14 +138,11 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1396-1396`
 
 - Done when: The user can explicitly invoke a Skill from the composer so the next message runs with it.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The add-to-chat sheet's Skills row (5799eb1bf8) shows once a screen passes onOpenSkills. post-codex/chat-gates-s13.23-mobile-skill-in-conversation.patch passes it on both chat screens, returns from Skills to the composer, and sends the chosen skill from an existing conversation (Codex holds chat.tsx, [id].tsx, Composer.tsx and SkillsScreen.tsx). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:959-959`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:74-74`
 
 ## S13.24: Agent or assistant mention.
 
@@ -169,7 +166,6 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:959-959`, `ap
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Blind re-search with the repo's own vocabulary (activeProject, projectContextStrip): VS Code can scope turns to a hosted project via 'Use in chat' (applyProjectToChat -> setActiveCloudProject), shows it as an 'Active project' chip in the composer strip, and prepends its instructions through customInstructions.ts. Not a typed mention and no knowledge files, so partial, not missing. |  |
 
 ## S13.26: File mention.
 
@@ -186,57 +182,35 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:959-959`, `ap
 
 - Done when: Typing a mention in the composer can reference a folder, whose contents are made available to the message.
 - Wave: 3
-- Already works on: cli
+- Already works on: desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Let the composer mention a folder; in the desktop app a granted local folder can be browsed to attach files ("Attach from local folder"), but not referenced as a folder. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:691-708`, `apps/desktop/electron/runtime/dispatcher.ts:704-720`
-
-## S13.29: Browser-tab mention.
-
-- Done when: The user can reference an open browser tab (choosing which one) as context for the message.
-- Wave: 3
-- Already works on: chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Let the user pick which tab; the desktop "Use the browser" dialog can read the paired browser's current page and attach it, but not choose or mention other tabs. | ui |
-| cli | partial | Needs a list-tabs call in the Chrome bridge protocol and extension before the composer can offer tabs. | ui, api |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:5255-5259`, `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:44-60`, `apps/cli/src/features/exec/tools/mod.rs:685-689`, `apps/cli/src/platform/runtime/tool_catalog.rs:180-182`
 
 ## S13.30: Connected-app mention.
 
 - Done when: The user can reference a connected app (connector/MCP server) or one of its resources inline in the composer.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Needs McpManager::list_resources/read_resource in apps/cli/src/mcp (p-mcp-rust's files); the crate client already has both (crates/agiworkforce-mcp/src/client.rs:168,182). | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:2637-2650`, `apps/cli/src/tui/tui_app.rs:4086-4088`
 
 ## S13.32: Selected-source chips.
 
 - Done when: Sources chosen for the next message (e.g. web search, connector resources, a page) are shown as chips before sending.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Show chosen sources as chips; the composer only shows tool status chips (Research, Code), not which sources a message will use. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
 
 ## S13.33: Selected-tool chips.
 
@@ -253,42 +227,33 @@ Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:210-231`
 
 - Done when: Before sending, the user can choose the output format for the reply (e.g. table, document, code, slides).
 - Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The add-to-chat Output choice (document, presentation, spreadsheet, from the shared list now in cloud-contracts, 82cb7643d7) appears once the screens pass offersOutputFormat and the store sends office_format, in post-codex/chat-gates-s13.34-mobile-output-format.patch. apps/web/lib/chat-output-format.ts should re-export CHAT_OUTPUT_FORMATS and CHAT_OUTPUT_FORMAT_LABEL from @agiworkforce/cloud-contracts so the list lives once. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:892-892`, `packages/contracts/cloud-contracts/src/skills.ts:20-20`
-
-## S13.36: Dictation control.
-
-- Done when: A microphone control dictates speech into the composer text (without sending) for review.
-- Wave: 2
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done: /dictate records into the composer without sending, transcribing on the account for Managed sessions. Stays flag-off until the voice cargo feature ships. | flag-off |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:4945-4945`, `apps/cli/src/voice.rs:299-299`
-
-## S13.37: Voice-conversation control.
-
-- Done when: A control starts a hands-free voice conversation (speak, hear the reply) from the composer.
-- Wave: 2
 - Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Account transcription added in 572286763; flag-off until the voice cargo feature ships. | flag-off |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:880-880`
+## S13.36: Dictation control.
+
+- Done when: A microphone control dictates speech into the composer text (without sending) for review.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, chrome
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| vscode | missing | Not built on this surface. |  |
+
+## S13.37: Voice-conversation control.
+
+- Done when: A control starts a hands-free voice conversation (speak, hear the reply) from the composer.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| vscode | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
 
 ## S13.38: Queued next prompt.
 
@@ -305,27 +270,12 @@ Code: `apps/cli/src/voice.rs:320-320`, `apps/cli/src/voice.rs:880-880`
 
 - Done when: A queued message can be edited or cancelled before it is sent.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add Edit for queued messages; each queued message can only be cancelled. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/ChatInput.tsx:871-887`, `apps/mobile/src/features/chat/components/ChatInput.tsx:409-412`
-
-## S13.40: Mid-task steering input.
-
-- Done when: While an agent is working, the user can send guidance that steers the running task without stopping it.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A running agent turn offers Message the agent in its timeline (24f4239b00): the text goes to the run's steer queue and the agent reads it at its next step. It shows once MessageBubble passes the run id, in post-codex/chat-gates-s13.40-mobile-steer-running-turn.patch. The Tasks screen already steers runs. | ui |
-
-Code: `apps/mobile/src/features/chat/components/RunSteerInput.tsx:24-24`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:523-523`
 
 ## S13.41: Separate side question that does not modify the main task.
 

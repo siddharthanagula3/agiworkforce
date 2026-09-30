@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, View, Pressable } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -11,19 +12,28 @@ import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuotaCatalogue';
+import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAccountSession';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAgentControlStore, type PickerEffort } from '@/stores/agentControlStore';
 import {
+  EFFORT_DESCRIPTION,
   EFFORT_LABEL,
+  ROUTING_PROFILE_CHOICE_OPTIONS,
   canAccessAutoRoutingProfileForTier,
   getAutoRoutingProfileTiers,
+  getModelFamilySlotForModel,
   getModelReasoning,
+  listPickerRecommendedModelIds,
+  type RoutingProfileChoice,
 } from '@agiworkforce/types';
 import {
   AUTO_MODES,
   CLOUD_LOCK_REASON,
+  DEFAULT_AUTO_MODE_ID,
   getModelByIdForCloudAccess,
   getModelListForCloudAccess,
   isAutoMode,
@@ -31,6 +41,7 @@ import {
   type ModelDef,
 } from '@/src/features/model-picker/service';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const EFFORT_LADDER_ORDER: readonly string[] = [
   'none',
@@ -42,20 +53,33 @@ const EFFORT_LADDER_ORDER: readonly string[] = [
   'max',
 ];
 
-const REASONING_EFFORT_TRADEOFF: Readonly<Record<string, string>> = {
-  none: 'Answers straight away. Cheapest, weakest on hard problems.',
-  minimal: 'Barely pauses to think. Best for quick lookups and rewrites.',
-  low: 'A short think. Faster and cheaper than the default.',
-  medium: 'Balanced thinking time for everyday work.',
-  high: 'Thinks longer. Better on tricky reasoning, slower and pricier.',
-  xhigh: 'Thinks much longer. Use when accuracy matters more than the wait.',
-  max: 'Thinks as long as it can. Slowest and most expensive.',
-};
+const ROUTING_PROFILE_OPTIONS_UNDER_AUTO = ROUTING_PROFILE_CHOICE_OPTIONS.filter(
+  (option) => option.choice !== 'auto',
+);
 
 function sortEffortLadder(efforts: readonly string[]): PickerEffort[] {
   return [...efforts]
     .sort((a, b) => EFFORT_LADDER_ORDER.indexOf(a) - EFFORT_LADDER_ORDER.indexOf(b))
     .map((effort) => effort as PickerEffort);
+}
+
+function byModelFamily(models: ModelDef[]): ModelDef[] {
+  const firstIndex = new Map<string, number>();
+  models.forEach((model, index) => {
+    const family = getModelFamilySlotForModel(model.id) ?? model.id;
+    if (!firstIndex.has(family)) firstIndex.set(family, index);
+  });
+  return models
+    .map((model, index) => ({ model, index }))
+    .sort((left, right) => {
+      const leftFamily = getModelFamilySlotForModel(left.model.id) ?? left.model.id;
+      const rightFamily = getModelFamilySlotForModel(right.model.id) ?? right.model.id;
+      return (
+        (firstIndex.get(leftFamily) ?? 0) - (firstIndex.get(rightFamily) ?? 0) ||
+        left.index - right.index
+      );
+    })
+    .map(({ model }) => model);
 }
 
 function groupBySurface(
@@ -83,7 +107,7 @@ function groupBySurface(
     sections.push({
       sectionId: `cloud-${tierId}`,
       sectionLabel: label,
-      models: [...available, ...locked],
+      models: [...byModelFamily(available), ...byModelFamily(locked)],
     });
   };
   for (const tier of getAutoRoutingProfileTiers()) pushTier(tier.profile, tier.label);
@@ -102,7 +126,7 @@ function AutoModeRow({
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${mode.name}: ${mode.description}`}
@@ -133,18 +157,72 @@ function AutoModeRow({
         <Text
           style={{
             color: selected ? colors.teal : colors.textPrimary,
-            fontSize: 15,
+            fontSize: typeScale.body,
             fontWeight: '700',
           }}
         >
           {mode.name}
         </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+        <Text
+          style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+          numberOfLines={1}
+        >
           {mode.description}
         </Text>
       </View>
       {selected ? <Check size={17} color={colors.teal} /> : null}
-    </Pressable>
+    </PressableBox>
+  );
+}
+
+function RoutingProfileRow({
+  label,
+  description,
+  selected,
+  onPress,
+}: {
+  label: string;
+  description: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <PressableBox
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Auto, ${label}: ${description}`}
+      accessibilityState={{ selected }}
+      style={{
+        minHeight: 52,
+        paddingLeft: 58,
+        paddingRight: 16,
+        paddingVertical: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: selected ? colors.accentSurface : colors.transparent,
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        <Text
+          style={{
+            color: selected ? colors.teal : colors.textPrimary,
+            fontSize: typeScale.subhead,
+            fontWeight: '600',
+          }}
+        >
+          {label}
+        </Text>
+        <Text
+          style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+          numberOfLines={2}
+        >
+          {description}
+        </Text>
+      </View>
+      {selected ? <Check size={17} color={colors.teal} /> : null}
+    </PressableBox>
   );
 }
 
@@ -155,6 +233,7 @@ interface ModelPickerSheetProps {
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
   modelScope?: 'local' | 'cloud' | 'all';
   conversationId?: string;
+  offerRoutingProfiles?: boolean;
 }
 
 export function ModelPickerSheet({
@@ -164,16 +243,24 @@ export function ModelPickerSheet({
   onOpenCloudAccess,
   modelScope = 'local',
   conversationId,
+  offerRoutingProfiles = false,
 }: ModelPickerSheetProps) {
   const colors = useThemeColors();
   const router = useRouter();
   const snapPoints = useMemo(() => ['58%', '90%'], []);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const routingProfile = useModelStore((s) => s.routingProfile);
+  const setRoutingProfile = useModelStore((s) => s.setRoutingProfile);
   const favorites = useModelStore((s) => s.favorites);
   const recentModels = useModelStore((s) => s.recentModels);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const freeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.catalogue);
+  const freeQuotaAccount = useFreeQuotaCatalogueStore((s) => s.account);
+  const freeQuotaLoading = useFreeQuotaCatalogueStore((s) => s.loading);
+  const freeQuotaError = useFreeQuotaCatalogueStore((s) => s.error);
+  const refreshFreeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.refresh);
   const subscriptionTier = useTierStore((s) => s.tier);
   const setModel = useModelStore((s) => s.setModel);
   const toggleFavorite = useModelStore((s) => s.toggleFavorite);
@@ -203,8 +290,8 @@ export function ModelPickerSheet({
     [conversationId],
   );
   const completeModelList = useMemo(
-    () => getModelListForCloudAccess(cloudUnlocked, subscriptionTier),
-    [cloudUnlocked, subscriptionTier],
+    () => getModelListForCloudAccess(cloudUnlocked, subscriptionTier, freeQuotaCatalogue),
+    [cloudUnlocked, subscriptionTier, freeQuotaCatalogue],
   );
   // Auto's plan floor is a managed cloud rule: on-device routing costs nothing,
   // so the local picker offers Auto on every plan.
@@ -217,6 +304,12 @@ export function ModelPickerSheet({
           ),
     [modelScope, subscriptionTier],
   );
+  const showRoutingProfiles =
+    offerRoutingProfiles &&
+    modelScope === 'cloud' &&
+    selectableAutoModes.some((mode) => mode.id === DEFAULT_AUTO_MODE_ID);
+  const activeRoutingProfile: RoutingProfileChoice =
+    showRoutingProfiles && selectedModel === DEFAULT_AUTO_MODE_ID ? routingProfile : 'auto';
 
   const selectedReasoning = useMemo(() => getModelReasoning(selectedModel), [selectedModel]);
   const effortOptions = useMemo(
@@ -265,10 +358,11 @@ export function ModelPickerSheet({
 
   useEffect(() => {
     if (!openSignal) return;
+    if (cloudUnlocked && modelScope !== 'local') void refreshFreeQuotaCatalogue();
     requestAnimationFrame(() => {
       sheetRef.current?.snapToIndex(0);
     });
-  }, [openSignal, sheetRef]);
+  }, [cloudUnlocked, modelScope, openSignal, refreshFreeQuotaCatalogue, sheetRef]);
 
   const query = search.trim().toLowerCase();
   const filteredModels = useMemo(() => {
@@ -297,11 +391,27 @@ export function ModelPickerSheet({
     [favorites, filteredModels],
   );
 
-  const nonFavoriteModels = useMemo(() => {
+  const recommendedModels = useMemo(() => {
+    if (query) return [];
     const pinnedIds = new Set([...favorites, ...recentModelDefs.map((model) => model.id)]);
+    const byId = new Map(filteredModels.map((model) => [model.id, model]));
+    return listPickerRecommendedModelIds()
+      .map((id) => byId.get(id))
+      .filter(
+        (model): model is ModelDef =>
+          model !== undefined && model.availability !== 'locked' && !pinnedIds.has(model.id),
+      );
+  }, [favorites, filteredModels, query, recentModelDefs]);
+
+  const nonFavoriteModels = useMemo(() => {
+    const pinnedIds = new Set([
+      ...favorites,
+      ...recentModelDefs.map((model) => model.id),
+      ...recommendedModels.map((model) => model.id),
+    ]);
     if (pinnedIds.size === 0) return filteredModels;
     return filteredModels.filter((model) => !pinnedIds.has(model.id));
-  }, [favorites, filteredModels, recentModelDefs]);
+  }, [favorites, filteredModels, recentModelDefs, recommendedModels]);
 
   const groupedModels = useMemo(() => groupBySurface(nonFavoriteModels), [nonFavoriteModels]);
 
@@ -322,7 +432,7 @@ export function ModelPickerSheet({
         onOpenCloudAccess('invite');
         return;
       }
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent());
     });
   }, [onOpenCloudAccess, router, sheetRef]);
 
@@ -381,13 +491,14 @@ export function ModelPickerSheet({
   );
 
   const handleSelectAutoMode = useCallback(
-    (id: string) => {
+    (id: string, profile: RoutingProfileChoice = 'auto') => {
       setExpandedModelId(null);
+      if (showRoutingProfiles || !onSelect) setRoutingProfile(profile);
       if (onSelect) onSelect(id);
       else setModel(id);
       sheetRef.current?.close();
     },
-    [onSelect, setModel, sheetRef],
+    [onSelect, setModel, setRoutingProfile, sheetRef, showRoutingProfiles],
   );
 
   const clearSearch = useCallback(() => {
@@ -476,7 +587,7 @@ export function ModelPickerSheet({
             <Text
               style={{
                 color: colors.textPrimary,
-                fontSize: 17,
+                fontSize: typeScale.headline,
                 fontWeight: '600',
                 flex: 1,
                 textAlign: 'center',
@@ -484,7 +595,7 @@ export function ModelPickerSheet({
             >
               Models
             </Text>
-            <Pressable
+            <PressableBox
               onPress={() => sheetRef.current?.close()}
               testID="model-picker-close"
               accessible
@@ -501,15 +612,49 @@ export function ModelPickerSheet({
               }}
             >
               <XIcon size={16} color={colors.textSecondary} />
-            </Pressable>
+            </PressableBox>
           </View>
-          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
             {modelScope === 'cloud'
               ? 'AGI Cloud models are managed separately from Local Mode.'
               : modelScope === 'all'
                 ? 'Local and AGI Cloud models are shown in separate groups.'
                 : 'Local models run on this device. AGI Cloud is managed separately.'}
           </Text>
+          {cloudUnlocked && modelScope !== 'local' && freeQuotaLoading ? (
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}>
+              Checking provider-funded Free models…
+            </Text>
+          ) : null}
+          {cloudUnlocked && modelScope !== 'local' && freeQuotaError ? (
+            <View style={{ marginTop: 6 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
+                {freeQuotaError}
+              </Text>
+              <PressableBox
+                onPress={() => void refreshFreeQuotaCatalogue()}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading provider-funded Free models"
+                style={{ minHeight: 40, justifyContent: 'center' }}
+              >
+                <Text style={{ color: colors.teal, fontSize: typeScale.caption }}>
+                  Retry Free models
+                </Text>
+              </PressableBox>
+            </View>
+          ) : null}
+          {cloudUnlocked &&
+          modelScope !== 'local' &&
+          isCloudAccountEpochCurrent(freeQuotaAccount) &&
+          !freeQuotaLoading &&
+          !freeQuotaError &&
+          !freeQuotaCatalogue?.models.some(
+            (model) => model.category === 'chat' && model.status === 'ready',
+          ) ? (
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}>
+              No provider-funded Free chat models are available right now.
+            </Text>
+          ) : null}
         </View>
 
         <View
@@ -537,7 +682,7 @@ export function ModelPickerSheet({
               flex: 1,
               minHeight: 32,
               color: colors.textPrimary,
-              fontSize: 16,
+              fontSize: typeScale.callout,
               lineHeight: 21,
               letterSpacing: 0,
               paddingTop: 0,
@@ -556,9 +701,9 @@ export function ModelPickerSheet({
             accessibilityValue={{ text: search }}
           />
           {search.length > 0 ? (
-            <Pressable onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={8}>
+            <PressableBox onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={8}>
               <XIcon size={14} color={colors.textMuted} />
-            </Pressable>
+            </PressableBox>
           ) : null}
         </View>
 
@@ -585,19 +730,23 @@ export function ModelPickerSheet({
                 paddingBottom: 4,
               }}
             >
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>
+              <Text
+                style={{ color: colors.textMuted, fontSize: typeScale.caption, fontWeight: '700' }}
+              >
                 Effort
               </Text>
               {selectedRequiresReasoning ? (
-                <Text style={{ color: colors.textMuted, fontSize: 11 }}>Always on</Text>
+                <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+                  Always on
+                </Text>
               ) : null}
             </View>
             {effortOptions.map((effort) => {
               const label = EFFORT_LABEL[effort] ?? effort;
-              const tradeoff = REASONING_EFFORT_TRADEOFF[effort];
+              const tradeoff = EFFORT_DESCRIPTION[effort];
               const active = effort === selectedEffort;
               return (
-                <Pressable
+                <PressableBox
                   key={effort}
                   testID={`model-picker-effort-${effort}`}
                   onPress={() => handleSelectEffort(effort)}
@@ -627,14 +776,20 @@ export function ModelPickerSheet({
                         <Text
                           style={{
                             color: active ? colors.teal : colors.textPrimary,
-                            fontSize: 14,
+                            fontSize: typeScale.subhead,
                             fontWeight: active ? '600' : '500',
                           }}
                         >
                           {label}
                         </Text>
                         {tradeoff ? (
-                          <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
+                          <Text
+                            style={{
+                              color: colors.textMuted,
+                              fontSize: typeScale.caption,
+                              marginTop: 2,
+                            }}
+                          >
                             {tradeoff}
                           </Text>
                         ) : null}
@@ -642,7 +797,7 @@ export function ModelPickerSheet({
                       {active ? <Check size={16} color={colors.teal} /> : null}
                     </View>
                   )}
-                </Pressable>
+                </PressableBox>
               );
             })}
           </View>
@@ -656,7 +811,9 @@ export function ModelPickerSheet({
             accessibilityLabel="Loading models"
           >
             <ActivityIndicator size="small" color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading models…</Text>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+              Loading models…
+            </Text>
           </View>
         ) : null}
 
@@ -671,10 +828,21 @@ export function ModelPickerSheet({
                 <AutoModeRow
                   key={mode.id}
                   mode={mode}
-                  selected={selectedModel === mode.id}
+                  selected={selectedModel === mode.id && activeRoutingProfile === 'auto'}
                   onPress={() => handleSelectAutoMode(mode.id)}
                 />
               ))}
+              {showRoutingProfiles
+                ? ROUTING_PROFILE_OPTIONS_UNDER_AUTO.map((option) => (
+                    <RoutingProfileRow
+                      key={option.choice}
+                      label={option.label}
+                      description={option.description}
+                      selected={activeRoutingProfile === option.choice}
+                      onPress={() => handleSelectAutoMode(DEFAULT_AUTO_MODE_ID, option.choice)}
+                    />
+                  ))
+                : null}
             </View>
           ) : null}
 
@@ -683,7 +851,7 @@ export function ModelPickerSheet({
               <Text
                 style={{
                   color: colors.textMuted,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   fontWeight: '700',
                   paddingHorizontal: 16,
                   paddingVertical: 6,
@@ -695,12 +863,30 @@ export function ModelPickerSheet({
             </View>
           ) : null}
 
+          {recommendedModels.length > 0 ? (
+            <View style={{ marginBottom: 6 }}>
+              <Text
+                accessibilityRole="header"
+                style={{
+                  color: colors.textMuted,
+                  fontSize: typeScale.caption,
+                  fontWeight: '700',
+                  paddingHorizontal: 16,
+                  paddingVertical: 6,
+                }}
+              >
+                Recommended
+              </Text>
+              {recommendedModels.map((model) => renderModelRow(model, 'recommended'))}
+            </View>
+          ) : null}
+
           {favoriteModels.length > 0 ? (
             <View style={{ marginBottom: 6 }}>
               <Text
                 style={{
                   color: colors.textMuted,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   fontWeight: '700',
                   paddingHorizontal: 16,
                   paddingVertical: 6,
@@ -720,7 +906,7 @@ export function ModelPickerSheet({
                 <Text
                   style={{
                     color: colors.textMuted,
-                    fontSize: 12,
+                    fontSize: typeScale.caption,
                     fontWeight: '700',
                     paddingHorizontal: 16,
                     paddingVertical: 6,
@@ -742,7 +928,13 @@ export function ModelPickerSheet({
                 paddingHorizontal: 28,
               }}
             >
-              <Text style={{ color: colors.textMuted, fontSize: 14, textAlign: 'center' }}>
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: typeScale.subhead,
+                  textAlign: 'center',
+                }}
+              >
                 No models matching “{search}”
               </Text>
             </View>

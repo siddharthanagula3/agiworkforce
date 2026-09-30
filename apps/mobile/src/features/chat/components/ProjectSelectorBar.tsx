@@ -8,7 +8,9 @@ import { Text } from '@/components/ui/text';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useChatStore } from '@/stores/chatStore';
+import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface ProjectOption {
   id: string;
@@ -62,7 +64,12 @@ function ProjectDropdownItem({ project, isActive, colors, onSelect }: ProjectDro
         </Text>
         {project.description ? (
           <Text
-            style={{ color: colors.textMuted, fontSize: 11, lineHeight: 15, marginTop: 2 }}
+            style={{
+              color: colors.textMuted,
+              fontSize: typeScale.caption,
+              lineHeight: 15,
+              marginTop: 2,
+            }}
             numberOfLines={1}
           >
             {project.description}
@@ -76,14 +83,17 @@ function ProjectDropdownItem({ project, isActive, colors, onSelect }: ProjectDro
 
 interface ProjectSelectorBarProps {
   openSignal?: number;
+  conversation?: { id: string; projectId?: string; executionMode: 'local' | 'cloud' };
 }
 
-export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {}) {
+export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelectorBarProps = {}) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
 
-  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const appModeIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const isCloud = conversation ? conversation.executionMode === 'cloud' : appModeIsCloud;
+  const setConversationProject = useChatStore((s) => s.setConversationProject);
   const localProjects = useProjectStore((s) => s.projects);
   const localActiveId = useProjectStore((s) => s.activeProjectId);
   const setLocalActive = useProjectStore((s) => s.setActiveProject);
@@ -104,8 +114,20 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
           })),
     [isCloud, cloudProjects, localProjects],
   );
-  const activeProjectId = isCloud ? cloudActiveId : localActiveId;
-  const setActiveProject = isCloud ? setCloudActive : setLocalActive;
+  const activeProjectId = conversation
+    ? (conversation.projectId ?? null)
+    : isCloud
+      ? cloudActiveId
+      : localActiveId;
+  const setGlobalActiveProject = isCloud ? setCloudActive : setLocalActive;
+  const conversationId = conversation?.id;
+  const setActiveProject = useCallback(
+    (id: string | null) => {
+      setGlobalActiveProject(id);
+      if (conversationId) void setConversationProject(conversationId, id);
+    },
+    [conversationId, setConversationProject, setGlobalActiveProject],
+  );
 
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const isSheetDriven = openSignal !== undefined;
@@ -145,7 +167,7 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
     <>
       <View className="px-4 pb-1" style={{ display: isSheetDriven ? 'none' : 'flex' }}>
         {activeProject ? (
-          <Animated.View entering={FadeIn.duration(200)}>
+          <Animated.View entering={FadeIn.duration(motion.quick)}>
             <Pressable
               onPress={handleOpenDropdown}
               className="flex-row items-center gap-2 self-start rounded-full px-3 py-1.5 active:opacity-70"
@@ -186,7 +208,7 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
             accessibilityRole="button"
           >
             <FolderMinus size={12} color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted, fontSize: 11 }}>No project</Text>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>No project</Text>
             <ChevronDown size={11} color={colors.textMuted} />
           </Pressable>
         )}
@@ -250,13 +272,19 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
                   paddingBottom: 10,
                 }}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.title3,
+                    fontWeight: '700',
+                  }}
+                >
                   Projects
                 </Text>
                 <Text
                   style={{
                     color: colors.textSecondary,
-                    fontSize: 13,
+                    fontSize: typeScale.footnote,
                     lineHeight: 18,
                     marginTop: 3,
                   }}
@@ -277,7 +305,13 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
                   borderBottomColor: colors.border,
                 }}
               >
-                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
                   Select project
                 </Text>
                 <Pressable
@@ -328,7 +362,14 @@ export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {})
                 >
                   <FolderMinus size={16} color={colors.textMuted} />
                 </View>
-                <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 19, flex: 1 }}>
+                <Text
+                  style={{
+                    color: colors.textMuted,
+                    fontSize: typeScale.subhead,
+                    lineHeight: 19,
+                    flex: 1,
+                  }}
+                >
                   No project
                 </Text>
                 {!activeProjectId && <Check size={16} color={colors.textMuted} />}

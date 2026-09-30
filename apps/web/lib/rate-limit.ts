@@ -121,6 +121,16 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: true,
   },
+  'mobile-intent-token': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  'mobile-intent-ask': {
+    limit: 6,
+    window: '1 m',
+    failClosed: true,
+  },
   'mobile-push-token': {
     limit: 30,
     window: '1 m', // 30 push-token updates per minute (mirrors api-gateway limiter)
@@ -425,6 +435,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  'health-space': {
+    limit: 30,
+    window: '1 m',
+    failClosed: false,
+  },
   'map-tile': {
     limit: 600,
     window: '1 m',
@@ -580,6 +595,36 @@ export const rateLimitConfigs = {
   // Ending every session is one deliberate act, not something anybody repeats,
   // and it is the loudest thing a stolen session can do.
   'settings-sessions-revoke-all': {
+    limit: 5,
+    window: '1 h',
+    failClosed: true,
+  },
+  'account-security-read': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'account-security-write': {
+    limit: 20,
+    window: '1 m',
+    failClosed: true,
+  },
+  'account-security-verify': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  'account-security-recovery': {
+    limit: 5,
+    window: '1 h',
+    failClosed: true,
+  },
+  'account-security-handoff': {
+    limit: 20,
+    window: '1 m',
+    failClosed: true,
+  },
+  'account-security-email': {
     limit: 5,
     window: '1 h',
     failClosed: true,

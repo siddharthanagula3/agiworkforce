@@ -6,82 +6,30 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S68.01: Shared session identifier across supported clients.
-
-- Done when: One session identifier names the same coding session on every supported client.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
-
-## S68.02: Same conversation history.
-
-- Done when: Opening the session on any client shows the same conversation history.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
-
-## S68.03: Same active branch.
-
-- Done when: Every client shows and works on the same active git branch for the session.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
-
-## S68.04: Same repository association.
-
-- Done when: Every client associates the session with the same repository.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:197-197`
-
 ## S68.05: Same worktree association.
 
 - Done when: Every client associates the session with the same git worktree.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | The thread schema carries worktreeRoot, but the runtime reports worktrees:false and the extension never uses it. | handler |
-
-Code: `apps/extension-vscode/src/integrations/localRuntimeClient.ts:202-202`
 
 ## S68.06: Same model and instruction configuration.
 
 - Done when: Every client runs the session with the same model and the same instruction files.
-- Wave: 2
-- Already works on: mobile, vscode
+- Wave: 3
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
-| desktop | partial | The thread keeps its model and each runtime loads the folder's instruction files, but each client can switch the model per turn and cloud sessions are not covered. | surface-only |
-| cli | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/lib/services/cloud-code-agent-service.ts:790-790`, `apps/web/lib/services/cloud-code-agent-loop.ts:172-172`, `apps/web/features/code/components/LocalSessionPanel.tsx:125-125`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S68.07: Same task plan and checkpoints.
 
@@ -98,28 +46,26 @@ Code: `apps/web/lib/services/cloud-code-agent-service.ts:790-790`, `apps/web/lib
 ## S68.08: Same pending approvals.
 
 - Done when: An approval pending in the session shows on every attached client and can be answered from any of them.
-- Wave: 2
-- Already works on: mobile, vscode
+- Wave: 3
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
-| cli | partial | The TUI runs turns in its own process with a per-turn approval broker; another client on the same thread cannot see or answer them until a cross-process transport exists (TUI turns through the app-server, or Remote Control for local threads). | handler |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/app/api/code/sessions/[sessionId]/agent/approvals/route.ts:139-139`, `apps/web/features/code/CloudCodePage.tsx:354-354`, `apps/cli/src/tui/tui_app.rs:5940-5940`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S68.09: Same tool activity.
 
 - Done when: Tool activity of a running turn streams to every attached client.
-- Wave: 2
-- Already works on: mobile, vscode
+- Wave: 3
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
-| cli | partial | Tool events of a TUI-run turn reach only that terminal (and the JSON stream); streaming them to other attached clients needs the same cross-process transport as S68.08. | handler |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/components/CodeTranscript.tsx:344-344`, `apps/cli/src/agent/chat.rs:2835-2835`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S68.12: Execution-owner indicator.
 
@@ -137,29 +83,29 @@ Code: `apps/web/features/code/components/CodeTranscript.tsx:344-344`, `apps/cli/
 ## S68.15: Continue cloud execution from desktop.
 
 - Done when: From the desktop app, the user continues a coding session that runs in the cloud.
-- Wave: 2
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
-| desktop | partial | Works once AGI_E2B_EXECUTION is on in production | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
+| desktop | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | switch-on |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:124-124`, `apps/web/features/code/CloudCodePage.tsx:796-796`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S68.16: Move work to cloud through an explicit handoff.
 
 - Done when: The user explicitly hands a local session over to cloud execution, seeing what moves.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /continue-with-cloud moves the CONVERSATION to the managed cloud model with a reviewed payload; tools still run locally, and the app-server's cloud handoff record has no client that issues or accepts it. | handler |
 | vscode | partial | Continue in the Cloud now also sits in the Sessions sheet header on the Cloud tab (044fdca03). Session creation needs AGI_E2B_EXECUTION on in production. | flag-off |
 
-Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:399-411`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4431-4431`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:996-996`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4431-4431`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:996-996`, `apps/extension-vscode/src/extension.ts:199-199`
 
 ## S68.17: Bring cloud results back to local workspace.
 
@@ -175,73 +121,49 @@ Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:39
 
 - Done when: Before a transfer, the user reviews which files, context and environment will move.
 - Wave: 3
-- Already works on: vscode
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | The cloud-continuation draft lists included/omitted messages and the destination for review before sending; files and environment are never listed. | ui |
-
-Code: `apps/cli/src/claude_parity.rs:428-436`
 
 ## S68.19: Remote-machine discovery.
 
 - Done when: The user sees which of their machines are available to run sessions.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Account settings list linked devices with status and capabilities, but you cannot start or route a session to one. | handler |
-| desktop | partial | Same hosted-web devices list; no way to pick a machine for a session. | handler |
-| mobile | partial | The phone connects to one desktop by scanning its code; there is no list of machines to choose from. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:152-152`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:136-139`, `apps/mobile/app/(app)/companion/index.tsx:246-251`
 
 ## S68.20: Remote-machine card.
 
 - Done when: Each remote machine appears as a card with its name, platform and status.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The paired desktop gets a card (name, OS, arch, capabilities); no other machine is shown. | surface-only |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:21-26`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`
-
-## S68.21: Host capabilities.
-
-- Done when: Each machine advertises what it can host (local models, browser, MCP, computer use, code sessions).
-- Wave: 3
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only the code-sessions capability gates the AGI Code card. | surface-only |
-| vscode | partial | The extension heartbeats its device profile only. | ui |
-
-Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`, `apps/extension-vscode/src/features/device-registry/deviceHeartbeat.ts:35-37`
 
 ## S68.22: Device pairing.
 
 - Done when: The user pairs a phone or another client with a machine so it can reach that machine's sessions.
-- Wave: 2
+- Wave: 3
+- Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner settings SIGNALING_HTTP_URL and SIGNALING_INTERNAL_SECRET | flag-off |
-| desktop | partial | Remote Control pairs one phone at a time; no computer-to-computer pairing. | surface-only |
-| mobile | partial | Scans the desktop's code to pair; only phone-to-desktop. | surface-only |
+| web | partial | live-check after the website deploy: open /code/computer on web and in Electron and pair a phone or browser; claim returns 200 (not 503 'Pairing is not configured') and the device shows online | live-check |
+| desktop | partial | live-check after the website deploy: open /code/computer on web and in Electron and pair a phone or browser; claim returns 200 (not 503 'Pairing is not configured') and the device shows online | live-check |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Remote Control in VS Code pairs a phone through /api/pair/initiate with the account token, by QR code or pairing link, but only one phone at a time and with no computer-to-computer pairing. That is the same limit the desktop cell records. | surface-only |
 
-Code: `apps/web/app/api/pair/initiate/route.ts:73-73`, `apps/web/app/api/pair/claim/route.ts:72-72`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:74-77`, `apps/desktop/electron/runtime/dispatcher.ts:874-875`
+Code: `apps/web/app/api/pair/claim/route.ts:70-70`
 
 ## S68.23: Pairing revocation.
 
@@ -263,19 +185,6 @@ Code: `apps/web/app/api/pair/initiate/route.ts:73-73`, `apps/web/app/api/pair/cl
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-## S68.26: Resume after reconnect.
-
-- Done when: After a dropped connection, the client reconnects and resumes the same session state.
-- Wave: 3
-- Already works on: desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The app-server advertises reconnect support for its clients; a restarted CLI resumes via agi resume. | surface-only |
-| vscode | partial | Restart Local Runtime reconnects to the runtime and the thread can be reopened from history. | surface-only |
-
-Code: `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:829-835`, `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`
 
 ## S68.27: Session export.
 

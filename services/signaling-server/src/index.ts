@@ -10,7 +10,7 @@ if (!process.env['NODE_ENV']) {
 import cors from 'cors';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { createServer, type Server } from 'http';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -20,16 +20,20 @@ import {
   issuePairToken as mintPairToken,
   pairingAccountId,
   verifyPairToken as checkPairToken,
+  freshPairCredential,
+  pairCredential,
+  withPairCredential,
+  type PairCredential,
 } from './pair-token.js';
 import {
-  bindSessionDevice,
+  rotatePairCredential,
   deleteSessionByCode,
   deleteSessionsForDevice,
   getSessionByCode,
-  getSessionExpiresAtByCode,
   extendSessionExpiry,
   insertSession,
   listStoredSessionCodes,
+  probeDatabase,
 } from './db.js';
 import {
   deviceIdSchema,
@@ -38,7 +42,7 @@ import {
   withPairingDevice,
 } from './pairing-device.js';
 import { isProxyTrusted, resolveClientIp, resolveTrustedProxyHops } from './client-ip.js';
-import { logger, generateCorrelationId } from './logger.js';
+import { logger, generateCorrelationId, logUnhandledRejection } from './logger.js';
 import { DEVICE_REVOKED_REASON, connectionManager } from './connection-manager.js';
 import { metrics } from './metrics.js';
 import { buildInfoMetric, canonicalEndpoint, releaseIdentity } from './release.js';
@@ -58,7 +62,13 @@ import {
   DEFAULT_HOST,
   DEFAULT_PORT,
   DEFAULT_WS_PATH,
-  MAX_MESSAGE_SIZE_BYTES,
+  MAX_MESSAGE_SIZE_CHARS,
+  MAX_SOCKET_BUFFERED_BYTES,
+  WS_MAX_PAYLOAD_BYTES,
+  REHYDRATION_TIMEOUT_MS,
+  DB_CHECK_TTL_MS,
+  DB_STARTUP_RETRY_BASE_MS,
+  DB_STARTUP_RETRY_MAX_MS,
   MAX_SDP_SIZE,
   MAX_ICE_CANDIDATE_SIZE,
   MAX_SDP_MID_SIZE,
@@ -72,6 +82,7 @@ import {
   RATE_LIMIT_WINDOW_MS,
   RATE_LIMIT_RETRY_AFTER_SECONDS,
   RATE_LIMIT_PAIRING_CREATE,
+  RATE_LIMIT_PAIRING_CLAIM,
   RATE_LIMIT_PAIRING_LOOKUP,
   RATE_LIMIT_PAIRING_DELETE,
   RATE_LIMIT_DEVICE_REVOKE,
@@ -91,6 +102,8 @@ import {
   PENDING_APPROVAL_TTL_MS,
 } from './constants.js';
 import { controlPayloadSchema } from './control-payload.js';
+import { createDatabaseCheck, registerProbeRoutes } from './probes.js';
+import { lookupSession } from './rehydration.js';
 
 type Role = 'desktop' | 'mobile';
 
@@ -135,16 +148,39 @@ function constantTimeCompare(a: string, b: string): boolean {
   return timingSafeEqual(ha, hb);
 }
 
-const REQUIRE_PAIR_TOKEN =
-  (process.env['SIGNALING_REQUIRE_PAIR_TOKEN'] ?? '1').toLowerCase() === '1' ||
-  process.env['NODE_ENV'] === 'production';
+function isInternalCaller(req: Request): boolean {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  return Boolean(SIGNALING_SECRET && token && constantTimeCompare(token, SIGNALING_SECRET));
+}
+
+const MAX_RATE_LIMIT_SUBJECT_LENGTH = 200;
+
+function internalCallerKey(subjectOf: (req: Request) => unknown) {
+  return (req: Request): string => {
+    const subject = isInternalCaller(req) ? subjectOf(req) : null;
+    if (
+      typeof subject === 'string' &&
+      subject.length > 0 &&
+      subject.length <= MAX_RATE_LIMIT_SUBJECT_LENGTH
+    ) {
+      return `subject:${subject}`;
+    }
+    return `ip:${ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? 'unknown')}`;
+  };
+}
 
 function buildPairTokenSecret(): string {
   return SIGNALING_SECRET ?? COMPARE_KEY.toString('hex');
 }
 
-function issuePairToken(code: string, role: Role, createdAt: number, accountId: string): string {
-  return mintPairToken(buildPairTokenSecret(), { code, role, createdAt, accountId });
+function issuePairToken(
+  code: string,
+  role: Role,
+  createdAt: number,
+  accountId: string,
+  credential: PairCredential,
+): string {
+  return mintPairToken(buildPairTokenSecret(), { code, role, createdAt, accountId, ...credential });
 }
 
 function verifyPairToken(
@@ -153,10 +189,16 @@ function verifyPairToken(
   role: Role,
   createdAt: number,
   accountId: string | null,
+  credential: PairCredential | null,
 ): boolean {
-  if (!REQUIRE_PAIR_TOKEN) return true;
-  if (!accountId) return false;
-  return checkPairToken(buildPairTokenSecret(), presented, { code, role, createdAt, accountId });
+  if (!accountId || !credential) return false;
+  return checkPairToken(buildPairTokenSecret(), presented, {
+    code,
+    role,
+    createdAt,
+    accountId,
+    ...credential,
+  });
 }
 
 const DEFAULT_TTL_SECONDS = Number(
@@ -282,6 +324,9 @@ const pairingCreateLimiter = rateLimit({
   max: RATE_LIMIT_PAIRING_CREATE,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: internalCallerKey((req) =>
+    pairingAccountId((req.body as { metadata?: Record<string, unknown> } | undefined)?.metadata),
+  ),
   message: {
     error: 'RATE_LIMIT_EXCEEDED',
     message: `Too many pairing requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
@@ -301,11 +346,27 @@ const pairingLookupLimiter = rateLimit({
   },
 });
 
+const pairingClaimLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_PAIRING_CLAIM,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: internalCallerKey(
+    (req) => (req.body as { accountId?: unknown } | undefined)?.accountId,
+  ),
+  message: {
+    error: 'RATE_LIMIT_EXCEEDED',
+    message: `Too many claim requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
+    retryAfter: RATE_LIMIT_RETRY_AFTER_SECONDS,
+  },
+});
+
 const pairingDeleteLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_PAIRING_DELETE,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: internalCallerKey((req) => req.params['code']),
   message: {
     error: 'RATE_LIMIT_EXCEEDED',
     message: `Too many delete requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
@@ -318,6 +379,7 @@ const deviceRevokeLimiter = rateLimit({
   max: RATE_LIMIT_DEVICE_REVOKE,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: internalCallerKey((req) => req.params['deviceId']),
   message: {
     error: 'RATE_LIMIT_EXCEEDED',
     message: `Too many revocation requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
@@ -357,17 +419,32 @@ const adminLimiter = rateLimit({
 });
 
 const server: Server = createServer(app);
-const wss = new WebSocketServer({ server, path: wsPath });
+const wss = new WebSocketServer({ server, path: wsPath, maxPayload: WS_MAX_PAYLOAD_BYTES });
 
 const activeSessions = new Map<string, Session>();
 const clients = new WeakMap<WebSocket, ConnectedClient>();
+const registeringClients = new WeakSet<WebSocket>();
 
 const pendingApprovals = new Map<string, PendingApproval[]>();
 
+type RehydrationOutcome =
+  | { kind: 'session'; session: Session }
+  | { kind: 'missing' }
+  | { kind: 'expired' }
+  | { kind: 'unavailable'; reason: 'timeout' | 'db_error' };
+
 const pendingRehydrations = new Map<
   string,
-  { promise: Promise<Session | null>; createdAt: number }
+  {
+    promise: Promise<RehydrationOutcome>;
+    createdAt: number;
+    state: { valid: boolean; revoking?: boolean };
+  }
 >();
+const pendingDeletions = new Map<string, ReturnType<typeof deleteSessionByCode>>();
+type CredentialClaimState = { valid: boolean; deviceIds: readonly string[] };
+const pendingCredentialClaims = new Map<string, Set<CredentialClaimState>>();
+const credentialAdmissions = new Set<string>();
 
 metrics.setConnectionCountCallback(() => connectionManager.getConnectionCount());
 metrics.setSessionCountCallback(() => activeSessions.size);
@@ -385,6 +462,7 @@ const metadataSchema = z
 const pairingRoleSchema = z.enum(['desktop', 'mobile']);
 
 const pairingRequestSchema = z.object({
+  initiator: pairingRoleSchema.default('desktop'),
   ttlSeconds: z.number().min(30).max(900).optional(),
   metadata: metadataSchema,
   device: z.object({ role: pairingRoleSchema, id: deviceIdSchema }).strict().optional(),
@@ -449,51 +527,38 @@ const endPairingMessageSchema = z.object({
 type RegisterMessage = z.infer<typeof registerMessageSchema>;
 type SignalMessage = z.infer<typeof signalMessageSchema>;
 
-app.get('/live', (_req, res) => {
-  res.status(200).json({ status: 'alive', timestamp: Date.now() });
-});
+const databaseCheck = createDatabaseCheck({ probe: probeDatabase, ttlMs: DB_CHECK_TTL_MS });
 
-app.get('/ready', (_req, res) => {
-  if (isShuttingDown) {
-    return res.status(503).json({ status: 'shutting_down', timestamp: Date.now() });
-  }
-  if (!isReady) {
-    return res.status(503).json({ status: 'not_ready', timestamp: Date.now() });
-  }
-  return res.status(200).json({ status: 'ready', timestamp: Date.now() });
-});
-
-app.get('/health', healthLimiter, (_req, res) => {
-  const memUsage = process.memoryUsage();
-  const stats = connectionManager.getStats();
-  const topCloseReasons = Array.from(stats.closeReasons.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([reason, count]) => ({ reason, count }));
-
-  const healthStatus = {
-    status: isShuttingDown ? 'shutting_down' : isReady ? 'healthy' : 'starting',
-    uptime: metrics.getUptimeSeconds(),
-    timestamp: Date.now(),
-    deployment: release,
-    connections: {
-      total: stats.totalConnections,
-      uniqueIps: stats.uniqueIps,
-      topCloseReasons,
-    },
-    sessions: {
-      active: activeSessions.size,
-    },
-    memory: {
-      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-      heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-      rss: Math.round(memUsage.rss / 1024 / 1024),
-      unit: 'MB',
-    },
-  };
-
-  const httpStatus = isShuttingDown ? 503 : isReady ? 200 : 503;
-  return res.status(httpStatus).json(healthStatus);
+registerProbeRoutes(app, {
+  lifecycle: () => (isShuttingDown ? 'shutting_down' : isReady ? 'ready' : 'starting'),
+  database: databaseCheck,
+  healthLimiter,
+  healthDetail: () => {
+    const memUsage = process.memoryUsage();
+    const stats = connectionManager.getStats();
+    const topCloseReasons = Array.from(stats.closeReasons.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([reason, count]) => ({ reason, count }));
+    return {
+      uptime: metrics.getUptimeSeconds(),
+      deployment: release,
+      connections: {
+        total: stats.totalConnections,
+        uniqueIps: stats.uniqueIps,
+        topCloseReasons,
+      },
+      sessions: {
+        active: activeSessions.size,
+      },
+      memory: {
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        unit: 'MB',
+      },
+    };
+  },
 });
 
 app.get(
@@ -535,7 +600,7 @@ app.get('/admin/status', adminLimiter, adminAuthMiddleware, (_req, res) => {
     },
     config: {
       defaultTtl: DEFAULT_TTL_SECONDS,
-      maxMessageSize: MAX_MESSAGE_SIZE_BYTES,
+      maxMessageSize: MAX_MESSAGE_SIZE_CHARS,
       allowedOrigins,
     },
     security: {
@@ -573,10 +638,7 @@ app.post('/admin/blacklist', adminLimiter, adminAuthMiddleware, (req, res) => {
 });
 
 app.post('/pairings', pairingCreateLimiter, async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+  if (!isInternalCaller(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -592,7 +654,11 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
     return res.status(400).json({ error: z.treeifyError(parseResult.error) });
   }
 
-  const { ttlSeconds = DEFAULT_TTL_SECONDS, metadata, device } = parseResult.data;
+  const { ttlSeconds = DEFAULT_TTL_SECONDS, metadata, device, initiator } = parseResult.data;
+
+  if (device && device.role !== initiator) {
+    return res.status(400).json({ error: 'initiator_device_mismatch' });
+  }
 
   const accountId = pairingAccountId(metadata);
   if (!accountId) {
@@ -603,9 +669,14 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
 
   logger.info({ correlationId, ttlSeconds }, 'Creating pairing session');
 
+  const credential = freshPairCredential(device?.id ?? null);
   const result = await insertSessionWithRetry(
     ttlSeconds,
-    device ? withPairingDevice(metadata, device.role, device.id) : metadata,
+    withPairCredential(
+      device ? withPairingDevice(metadata, device.role, device.id) : metadata,
+      initiator,
+      credential,
+    ),
   );
 
   if ('error' in result) {
@@ -621,8 +692,7 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
   logger.info({ correlationId, code, expiresAt }, 'Pairing session created');
   metrics.recordPairingRequest(true);
 
-  const desktopPairToken = issuePairToken(code, 'desktop', createdAt, accountId);
-  const mobilePairToken = issuePairToken(code, 'mobile', createdAt, accountId);
+  const initiatorPairToken = issuePairToken(code, initiator, createdAt, accountId, credential);
 
   return res.json({
     code,
@@ -635,10 +705,7 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
       httpUrl: publicHttpUrl,
       wsUrl: publicWsUrl,
     },
-    pairTokens: {
-      desktop: desktopPairToken,
-      mobile: mobilePairToken,
-    },
+    pairTokens: { [initiator]: initiatorPairToken },
   });
 });
 
@@ -656,7 +723,13 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
 
   const code = codeValidation.data;
 
-  const { data: sessionData } = await getSessionByCode(code);
+  const { data: sessionData, error: lookupError } = await getSessionByCode(code);
+
+  if (lookupError) {
+    logger.error({ code, error: lookupError }, 'Pairing lookup failed on the store');
+    metrics.recordError('db_unavailable');
+    return res.status(503).json({ error: 'persistence_unavailable' });
+  }
 
   if (!sessionData) {
     return res.status(404).json(generic404);
@@ -681,11 +754,8 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
 // Minting a pair token is minting the right to take part in someone's pairing,
 // so the caller states which account it has authenticated and must be the one
 // the session was created for. A code alone is not a credential.
-app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+app.post('/pairings/:code/claim', pairingClaimLimiter, async (req, res) => {
+  if (!isInternalCaller(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -697,7 +767,12 @@ app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
   }
 
   const code = codeValidation.data;
-  const { data: sessionData } = await getSessionByCode(code);
+  const { data: sessionData, error: lookupError } = await getSessionByCode(code);
+  if (lookupError) {
+    logger.error({ code, error: lookupError }, 'Pairing claim lookup failed on the store');
+    metrics.recordError('db_unavailable');
+    return res.status(503).json({ error: 'persistence_unavailable' });
+  }
   if (!sessionData || sessionData.expires_at <= Date.now()) {
     return res.status(404).json(generic404);
   }
@@ -712,50 +787,94 @@ app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
     return res.status(403).json({ error: claim.reason });
   }
 
-  const activeSession = activeSessions.get(code);
-  if (activeSession?.participants.mobile) {
-    return res.status(409).json({ error: 'pairing_role_in_use' });
-  }
-
-  const deviceId = parsedBody.data.deviceId ?? null;
-  const heldBy = pairingDeviceId(sessionData.metadata, 'mobile');
-  if (heldBy !== null && heldBy !== deviceId) {
-    return res.status(409).json({ error: 'pairing_role_in_use' });
-  }
-  if (deviceId !== null && heldBy === null) {
-    const bound = await bindSessionDevice(
-      code,
-      'mobile',
-      deviceId,
-      withPairingDevice(sessionData.metadata, 'mobile', deviceId),
-    );
-    if (bound.error) {
-      logger.error({ code, error: bound.error }, 'Failed to record the device claiming a pairing');
-      return res.status(500).json({ error: 'db_update_error' });
-    }
-    if (!bound.data) {
+  const releaseAdmission = admitCredentialMutation(code, parsedBody.data.role);
+  if (!releaseAdmission) return res.status(409).json({ error: 'pairing_role_in_use' });
+  try {
+    const activeSession = activeSessions.get(code);
+    if (activeSession?.participants.mobile) {
       return res.status(409).json({ error: 'pairing_role_in_use' });
     }
-    await pendingRehydrations.get(code)?.promise.catch(() => null);
-    const live = activeSessions.get(code);
-    if (live) live.metadata = withPairingDevice(live.metadata, 'mobile', deviceId);
-  }
-  if (deviceId !== null) connectionManager.reinstateDevice(deviceId);
 
-  return res.json({
-    code,
-    role: parsedBody.data.role,
-    pairToken: issuePairToken(code, parsedBody.data.role, sessionData.created_at, claim.accountId),
-    expiresAt: sessionData.expires_at,
-    wsUrl: publicWsUrl,
-  });
+    const deviceId = parsedBody.data.deviceId ?? null;
+    const heldBy = pairingDeviceId(sessionData.metadata, 'mobile');
+    if (heldBy !== null && heldBy !== deviceId) {
+      return res.status(409).json({ error: 'pairing_role_in_use' });
+    }
+    const previous = pairCredential(sessionData.metadata, 'mobile');
+    if (
+      previous !== null &&
+      (heldBy === null || deviceId === null || previous.deviceId !== deviceId)
+    ) {
+      return res.status(409).json({ error: 'pairing_role_in_use' });
+    }
+    if (
+      pairingDeviceIds(sessionData.metadata).some((id) => connectionManager.isDeviceRevoked(id)) ||
+      (deviceId !== null && connectionManager.isDeviceRevoked(deviceId))
+    ) {
+      return res.status(403).json({ error: 'device_revoked' });
+    }
+    return await trackCredentialClaim(
+      code,
+      [...pairingDeviceIds(sessionData.metadata), ...(deviceId === null ? [] : [deviceId])],
+      async (state) => {
+        const credential = freshPairCredential(deviceId);
+        invalidatePairingSnapshot(code);
+        const rotated = await rotatePairCredential(
+          sessionData,
+          'mobile',
+          claim.accountId,
+          previous,
+          credential,
+          deviceId,
+        );
+        if (rotated.error) return res.status(503).json({ error: 'persistence_unavailable' });
+        if (!rotated.data) return res.status(409).json({ error: 'pairing_role_in_use' });
+        const live = activeSessions.get(code);
+        if (
+          !state.valid ||
+          pendingDeletions.has(code) ||
+          sessionData.expires_at <= Date.now() ||
+          (activeSession !== undefined && live !== activeSession)
+        ) {
+          return res.status(404).json(generic404);
+        }
+        if (live?.participants.mobile)
+          return res.status(409).json({ error: 'pairing_role_in_use' });
+        if (
+          pairingDeviceIds(rotated.data.metadata).some((id) =>
+            connectionManager.isDeviceRevoked(id),
+          )
+        ) {
+          return res.status(403).json({ error: 'device_revoked' });
+        }
+        if (live) {
+          live.metadata = withPairCredential(live.metadata, 'mobile', credential);
+          if (deviceId !== null)
+            live.metadata = withPairingDevice(live.metadata, 'mobile', deviceId);
+        }
+
+        return res.json({
+          code,
+          role: parsedBody.data.role,
+          pairToken: issuePairToken(
+            code,
+            parsedBody.data.role,
+            sessionData.created_at,
+            claim.accountId,
+            credential,
+          ),
+          expiresAt: sessionData.expires_at,
+          wsUrl: publicWsUrl,
+        });
+      },
+    );
+  } finally {
+    releaseAdmission();
+  }
 });
 
 app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+  if (!isInternalCaller(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -771,13 +890,7 @@ app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
 
   const code = codeValidation.data;
 
-  const active = activeSessions.get(code);
-  if (active) {
-    disconnectParticipants(active);
-    activeSessions.delete(code);
-  }
-
-  const { error } = await deleteSessionByCode(code);
+  const { error } = await deleteStoredPairing(code);
 
   if (error) {
     logger.error({ code, error }, 'Failed to delete pairing session');
@@ -789,10 +902,7 @@ app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
 });
 
 app.post('/devices/:deviceId/revoke', deviceRevokeLimiter, async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-
-  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+  if (!isInternalCaller(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -806,13 +916,32 @@ app.post('/devices/:deviceId/revoke', deviceRevokeLimiter, async (req, res) => {
   const reason = bodyValidation.data.reason ?? DEVICE_REVOKED_REASON;
   const closed = connectionManager.revokeDevice(deviceId, reason);
   const endedCodes = new Set(endPairingsNamingDevice(deviceId));
+  for (const pending of pendingRehydrations.values()) {
+    pending.state.valid = false;
+    pending.state.revoking = true;
+  }
 
+  for (const claims of pendingCredentialClaims.values()) {
+    for (const state of claims) {
+      if (state.deviceIds.includes(deviceId)) state.valid = false;
+    }
+  }
   const { data: deletedCodes, error } = await deleteSessionsForDevice(deviceId);
   if (error) {
     logger.error({ deviceId, error }, 'Failed to delete the pairings of a revoked device');
     return res.status(500).json({ error: 'db_delete_error', closed });
   }
-  for (const code of deletedCodes ?? []) endedCodes.add(code);
+  for (const code of deletedCodes ?? []) {
+    for (const state of pendingCredentialClaims.get(code) ?? []) state.valid = false;
+    const pending = pendingRehydrations.get(code);
+    if (pending) {
+      pending.state.valid = false;
+      pending.state.revoking = false;
+    }
+    const active = activeSessions.get(code);
+    if (active) endPairing(active);
+    endedCodes.add(code);
+  }
 
   logger.info({ deviceId, reason, closed, pairingsEnded: endedCodes.size }, 'Device revoked');
   return res.json({ closed, pairingsEnded: endedCodes.size });
@@ -823,6 +952,16 @@ app.use((_req: Request, res: Response) => {
 });
 
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const parserType = 'type' in err ? err.type : null;
+  if (parserType === 'entity.parse.failed' || parserType === 'entity.too.large') {
+    logger.warn({ path: req.path, method: req.method, parserType }, 'Request body rejected');
+    res.status(parserType === 'entity.too.large' ? 413 : 400).json({
+      error: parserType === 'entity.too.large' ? 'PAYLOAD_TOO_LARGE' : 'INVALID_JSON',
+      message: parserType === 'entity.too.large' ? 'Request body too large' : 'Invalid JSON body',
+    });
+    return;
+  }
+
   if (err instanceof z.ZodError) {
     logger.warn({ path: req.path, method: req.method }, 'Request validation failed');
     res.status(400).json({
@@ -838,6 +977,27 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 });
 
 wss.on('connection', (socket, request) => {
+  const correlationId = generateCorrelationId();
+
+  socket.on('error', (error) => {
+    logger.error({ correlationId, error: error.message }, 'WebSocket error');
+    metrics.recordError(
+      'code' in error && error.code === 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH'
+        ? 'message_too_large'
+        : 'websocket_error',
+    );
+
+    const client = clients.get(socket);
+    if (client) {
+      const session = activeSessions.get(client.code);
+      if (session && session.participants[client.role]?.socket === socket) {
+        delete session.participants[client.role];
+        notifyPeer(session, client.role, { type: 'peer_left', role: client.role, reason: 'error' });
+      }
+      clients.delete(socket);
+    }
+  });
+
   if (isShuttingDown) {
     socket.send(JSON.stringify({ type: 'error', error: 'server_shutting_down' }));
     socket.close(1001, 'server_shutting_down');
@@ -900,7 +1060,6 @@ wss.on('connection', (socket, request) => {
     return;
   }
 
-  const correlationId = generateCorrelationId();
   connectionManager.addConnection(socket, ip, correlationId);
 
   const connectionSpan = startSpan(
@@ -912,21 +1071,6 @@ wss.on('connection', (socket, request) => {
 
   logger.debug({ ip, correlationId }, 'WebSocket connection established');
   metrics.recordMessage('connection');
-
-  socket.on('error', (error) => {
-    logger.error({ correlationId, error: error.message }, 'WebSocket error');
-    metrics.recordError('websocket_error');
-
-    const client = clients.get(socket);
-    if (client) {
-      const session = activeSessions.get(client.code);
-      if (session && session.participants[client.role]?.socket === socket) {
-        delete session.participants[client.role];
-        notifyPeer(session, client.role, { type: 'peer_left', role: client.role, reason: 'error' });
-      }
-      clients.delete(socket);
-    }
-  });
 
   socket.on('pong', () => {
     connectionManager.updateActivity(socket);
@@ -955,7 +1099,7 @@ wss.on('connection', (socket, request) => {
 
     const rawStr = raw.toString();
 
-    if (rawStr.length > MAX_MESSAGE_SIZE_BYTES) {
+    if (rawStr.length > MAX_MESSAGE_SIZE_CHARS) {
       logger.warn({ correlationId, size: rawStr.length }, 'Message too large');
       metrics.recordError('message_too_large');
       socket.send(JSON.stringify({ type: 'error', error: 'message_too_large' }));
@@ -973,12 +1117,23 @@ wss.on('connection', (socket, request) => {
     }
 
     if (!clients.has(socket)) {
+      if (registeringClients.has(socket)) {
+        socket.send(JSON.stringify({ type: 'error', error: 'registration_in_progress' }));
+        return;
+      }
       const parsed = registerMessageSchema.safeParse(data);
       if (!parsed.success) {
         socket.send(JSON.stringify({ type: 'error', error: 'registration_required' }));
         return;
       }
-      handleRegister(socket, parsed.data, correlationId);
+      registeringClients.add(socket);
+      void handleRegister(socket, parsed.data, correlationId)
+        .catch((error: unknown) => {
+          logger.error({ correlationId, error }, 'Registration failed');
+          metrics.recordError('register_failed');
+          refuseRetryably(socket);
+        })
+        .finally(() => registeringClients.delete(socket));
       return;
     }
 
@@ -1144,7 +1299,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
 
     clearTimeout(shutdownTimeout);
     logger.info('Graceful shutdown completed');
-    process.exit(0);
+    process.exit(signal === 'SIGTERM' || signal === 'SIGINT' ? 0 : 1);
   } catch (error) {
     clearTimeout(shutdownTimeout);
     logger.error({ error }, 'Error during graceful shutdown');
@@ -1152,22 +1307,39 @@ async function gracefulShutdown(signal: string): Promise<void> {
   }
 }
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
 
 process.on('uncaughtException', (error) => {
   logger.fatal({ error: error.message, stack: error.stack }, 'Uncaught exception');
-  gracefulShutdown('uncaughtException');
+  void gracefulShutdown('uncaughtException');
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  logger.fatal({ reason, promise }, 'Unhandled promise rejection');
-  gracefulShutdown('unhandledRejection');
+process.on('unhandledRejection', (reason) => {
+  logUnhandledRejection(reason);
+  void gracefulShutdown('unhandledRejection');
 });
+
+async function awaitDatabase(attempt = 0): Promise<void> {
+  const state = await databaseCheck.refresh();
+  if (isShuttingDown) return;
+  if (state.status === 'ok') {
+    isReady = true;
+    logger.info({ latencyMs: state.latencyMs }, 'Pairing store reachable; relay ready');
+    return;
+  }
+  const retryInMs = Math.min(DB_STARTUP_RETRY_BASE_MS * 2 ** attempt, DB_STARTUP_RETRY_MAX_MS);
+  logger.error(
+    { reason: state.reason, retryInMs },
+    'Pairing store unreachable at startup; relay not ready',
+  );
+  metrics.recordError('db_unavailable');
+  setTimeout(() => void awaitDatabase(attempt + 1), retryInMs);
+}
 
 server.listen(port, host, () => {
   connectionManager.start();
-  isReady = true;
+  void awaitDatabase();
   logger.info(
     {
       host,
@@ -1219,7 +1391,31 @@ function validateSignalPayload(kind: string, payload: unknown): boolean {
   }
 }
 
+function admitCredentialMutation(code: string, role: Role): (() => void) | null {
+  const key = `${code}:${role}`;
+  if (credentialAdmissions.has(key)) return null;
+  credentialAdmissions.add(key);
+  return () => credentialAdmissions.delete(key);
+}
+
 async function handleRegister(
+  socket: WebSocket,
+  message: RegisterMessage,
+  correlationId: string,
+): Promise<void> {
+  const releaseAdmission = admitCredentialMutation(message.code, message.role);
+  if (!releaseAdmission) {
+    refuseRetryably(socket);
+    return;
+  }
+  try {
+    await registerWithCredential(socket, message, correlationId);
+  } finally {
+    releaseAdmission();
+  }
+}
+
+async function registerWithCredential(
   socket: WebSocket,
   message: RegisterMessage,
   correlationId: string,
@@ -1229,83 +1425,33 @@ async function handleRegister(
   let session = activeSessions.get(message.code);
 
   if (!session) {
-    let pendingEntry = pendingRehydrations.get(message.code);
-
-    if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) {
-      const now = Date.now();
-      for (const [code, entry] of pendingRehydrations.entries()) {
-        if (now - entry.createdAt > PENDING_REHYDRATION_TTL_MS) {
-          pendingRehydrations.delete(code);
-        }
-      }
-      if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) {
-        logger.error({ correlationId }, 'Server overloaded with pending rehydrations');
-        socket.send(JSON.stringify({ type: 'error', error: 'server_overloaded' }));
-        socket.close();
-        return;
-      }
-    }
-
-    if (!pendingEntry) {
-      const rehydrationPromise = (async (): Promise<Session | null> => {
-        const existingSession = activeSessions.get(message.code);
-        if (existingSession) {
-          return existingSession;
-        }
-
-        const DB_QUERY_TIMEOUT_MS = 10_000;
-        const dbQuery = getSessionByCode(message.code);
-        const timeout = new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error('Rehydration DB query timed out')),
-            DB_QUERY_TIMEOUT_MS,
-          ),
-        );
-        const { data: dbSession } = await Promise.race([dbQuery, timeout]);
-
-        if (!dbSession) {
-          return null;
-        }
-
-        if (dbSession.expires_at <= Date.now()) {
-          return null;
-        }
-
-        const rehydratedSession: Session = {
-          code: dbSession.code,
-          createdAt: dbSession.created_at,
-          expiresAt: dbSession.expires_at,
-          participants: {},
-          metadata: dbSession.metadata,
-          lastHeartbeatAt: Date.now(),
-        };
-        activeSessions.set(message.code, rehydratedSession);
-        return rehydratedSession;
-      })();
-
-      pendingEntry = { promise: rehydrationPromise, createdAt: Date.now() };
-      pendingRehydrations.set(message.code, pendingEntry);
-
-      rehydrationPromise.finally(() => {
-        pendingRehydrations.delete(message.code);
-      });
-    }
-
-    session = (await pendingEntry.promise) ?? undefined;
-
-    if (!session) {
-      const { data: dbSession } = await getSessionExpiresAtByCode(message.code);
-
-      if (!dbSession) {
-        logger.warn({ correlationId, code: message.code }, 'Pairing not found');
-        socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
-      } else {
-        logger.warn({ correlationId, code: message.code }, 'Pairing expired');
-        socket.send(JSON.stringify({ type: 'error', error: 'pairing_expired' }));
-      }
+    const rehydration = rehydrateSession(message.code);
+    if (!rehydration) {
+      logger.error({ correlationId }, 'Server overloaded with pending rehydrations');
+      socket.send(JSON.stringify({ type: 'error', error: 'server_overloaded' }));
       socket.close();
       return;
     }
+
+    const outcome = await rehydration;
+    if (socket.readyState !== WebSocket.OPEN) return;
+    if (outcome.kind === 'unavailable') {
+      logger.error(
+        { correlationId, code: message.code, reason: outcome.reason },
+        'Pairing store unavailable during registration',
+      );
+      metrics.recordError('rehydration_unavailable');
+      refuseRetryably(socket);
+      return;
+    }
+    if (outcome.kind !== 'session') {
+      const error = outcome.kind === 'expired' ? 'pairing_expired' : 'pairing_not_found';
+      logger.warn({ correlationId, code: message.code }, `Registration refused: ${error}`);
+      socket.send(JSON.stringify({ type: 'error', error }));
+      socket.close();
+      return;
+    }
+    session = outcome.session;
   }
 
   if (isSessionExpired(session)) {
@@ -1322,6 +1468,7 @@ async function handleRegister(
       message.role,
       session.createdAt,
       pairingAccountId(session.metadata),
+      pairCredential(session.metadata, message.role),
     )
   ) {
     logger.warn(
@@ -1374,6 +1521,51 @@ async function handleRegister(
     return;
   }
 
+  const accountId = pairingAccountId(session.metadata);
+  const previous = pairCredential(session.metadata, message.role);
+  if (!accountId || !previous || (deviceId !== null && previous.deviceId !== deviceId)) {
+    socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
+    socket.close();
+    return;
+  }
+  const credential = freshPairCredential(previous.deviceId);
+  invalidatePairingSnapshot(message.code);
+  const rotated = await rotatePairCredential(
+    { code: session.code, created_at: session.createdAt },
+    message.role,
+    accountId,
+    previous,
+    credential,
+    deviceId,
+  );
+  if (socket.readyState !== WebSocket.OPEN) return;
+  if (rotated.error) {
+    refuseRetryably(socket);
+    return;
+  }
+  if (
+    !rotated.data ||
+    activeSessions.get(message.code) !== session ||
+    pendingDeletions.has(message.code) ||
+    isSessionExpired(session)
+  ) {
+    socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
+    socket.close();
+    return;
+  }
+  if (pairingDeviceIds(rotated.data.metadata).some((id) => connectionManager.isDeviceRevoked(id))) {
+    socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
+    socket.close();
+    return;
+  }
+  if (session.participants[message.role]) {
+    socket.send(JSON.stringify({ type: 'error', error: 'role_already_connected' }));
+    socket.close();
+    return;
+  }
+  if (deviceId !== null && !connectionManager.bindDevice(socket, deviceId)) return;
+  session.metadata = withPairCredential(session.metadata, message.role, credential);
+
   const participant: Participant = {
     socket,
     role: message.role,
@@ -1394,6 +1586,13 @@ async function handleRegister(
   socket.send(
     JSON.stringify({
       type: 'registered',
+      pairToken: issuePairToken(
+        message.code,
+        message.role,
+        session.createdAt,
+        accountId,
+        credential,
+      ),
       role: message.role,
       code: message.code,
       expiresAt: session.expiresAt,
@@ -1502,17 +1701,114 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
   });
 }
 
+async function trackCredentialClaim<T>(
+  code: string,
+  deviceIds: readonly string[],
+  work: (state: CredentialClaimState) => Promise<T>,
+): Promise<T> {
+  const state: CredentialClaimState = { valid: true, deviceIds };
+  const claims = pendingCredentialClaims.get(code) ?? new Set<CredentialClaimState>();
+  claims.add(state);
+  pendingCredentialClaims.set(code, claims);
+  try {
+    return await work(state);
+  } finally {
+    claims.delete(state);
+    if (claims.size === 0) pendingCredentialClaims.delete(code);
+  }
+}
+
+function invalidatePairingSnapshot(code: string): void {
+  const pending = pendingRehydrations.get(code);
+  if (pending) {
+    pending.state.valid = false;
+    pending.state.revoking = true;
+  }
+}
+
+function rehydrateSession(code: string): Promise<RehydrationOutcome> | null {
+  if (pendingDeletions.has(code)) {
+    return Promise.resolve({ kind: 'unavailable', reason: 'db_error' });
+  }
+  const pending = pendingRehydrations.get(code);
+  if (pending) return pending.promise;
+
+  if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) {
+    const now = Date.now();
+    for (const [pendingCode, entry] of pendingRehydrations.entries()) {
+      if (now - entry.createdAt > PENDING_REHYDRATION_TTL_MS) {
+        pendingRehydrations.delete(pendingCode);
+      }
+    }
+    if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) return null;
+  }
+
+  const state = { valid: true };
+  const entry = { promise: loadSession(code, state), createdAt: Date.now(), state };
+  pendingRehydrations.set(code, entry);
+  const clear = () => {
+    if (pendingRehydrations.get(code) === entry) pendingRehydrations.delete(code);
+  };
+  void entry.promise.then(clear, clear);
+  return entry.promise;
+}
+
+async function loadSession(
+  code: string,
+  state: { valid: boolean; revoking?: boolean },
+): Promise<RehydrationOutcome> {
+  const existing = activeSessions.get(code);
+  if (existing) return { kind: 'session', session: existing };
+
+  const lookup = await lookupSession(() => getSessionByCode(code), REHYDRATION_TIMEOUT_MS);
+  if (!state.valid) {
+    return state.revoking ? { kind: 'unavailable', reason: 'db_error' } : { kind: 'missing' };
+  }
+  if (pendingDeletions.has(code)) return { kind: 'missing' };
+  if (lookup.kind !== 'found') return lookup;
+  if (lookup.row.expires_at <= Date.now()) return { kind: 'expired' };
+
+  const live = activeSessions.get(code);
+  if (live) return { kind: 'session', session: live };
+
+  const session: Session = {
+    code: lookup.row.code,
+    createdAt: lookup.row.created_at,
+    expiresAt: lookup.row.expires_at,
+    participants: {},
+    metadata: lookup.row.metadata,
+    lastHeartbeatAt: Date.now(),
+  };
+  activeSessions.set(code, session);
+  return { kind: 'session', session };
+}
+
+function refuseRetryably(socket: WebSocket): void {
+  if (socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({ type: 'error', error: 'service_unavailable' }));
+  socket.close(1013, 'try_again_later');
+}
+
 function getPeer(session: Session, role: Role): Participant | undefined {
   return role === 'desktop' ? session.participants.mobile : session.participants.desktop;
 }
 
 function notifyParticipant(participant: Participant, payload: Record<string, unknown>): void {
-  if (participant.socket.readyState === WebSocket.OPEN) {
-    try {
-      participant.socket.send(JSON.stringify(payload));
-    } catch (error) {
-      logger.warn({ error, role: participant.role }, 'Failed to send message to participant');
-    }
+  const { socket } = participant;
+  if (socket.readyState !== WebSocket.OPEN) return;
+  if (socket.bufferedAmount > MAX_SOCKET_BUFFERED_BYTES) {
+    logger.warn(
+      { role: participant.role, bufferedAmount: socket.bufferedAmount },
+      'Dropping a participant that stopped reading',
+    );
+    metrics.recordError('slow_consumer_dropped');
+    socket.terminate();
+    return;
+  }
+  try {
+    socket.send(JSON.stringify(payload));
+  } catch (error) {
+    logger.warn({ error, role: participant.role }, 'Failed to send message to participant');
   }
 }
 
@@ -1598,6 +1894,26 @@ function endPairing(session: Session): void {
   pendingApprovals.delete(session.code);
 }
 
+function deleteStoredPairing(code: string): ReturnType<typeof deleteSessionByCode> {
+  for (const state of pendingCredentialClaims.get(code) ?? []) state.valid = false;
+  const existing = pendingDeletions.get(code);
+  if (existing) return existing;
+  const pending = pendingRehydrations.get(code);
+  if (pending) {
+    pending.state.valid = false;
+    pending.state.revoking = false;
+  }
+  const active = activeSessions.get(code);
+  if (active) endPairing(active);
+  const operation = deleteSessionByCode(code);
+  pendingDeletions.set(code, operation);
+  const clear = () => {
+    if (pendingDeletions.get(code) === operation) pendingDeletions.delete(code);
+  };
+  void operation.then(clear, clear);
+  return operation;
+}
+
 async function handleEndPairing(socket: WebSocket, correlationId: string): Promise<void> {
   metrics.recordMessage('end_pairing');
   const client = clients.get(socket);
@@ -1610,13 +1926,13 @@ async function handleEndPairing(socket: WebSocket, correlationId: string): Promi
   const session = activeSessions.get(client.code);
   if (session) endPairing(session);
 
-  const { error } = await deleteSessionByCode(client.code);
+  const { error } = await deleteStoredPairing(client.code);
   if (error) logger.error({ code: client.code, error }, 'Failed to delete an ended pairing');
 }
 
 async function endRevokedPairing(session: Session): Promise<void> {
   endPairing(session);
-  const { error } = await deleteSessionByCode(session.code);
+  const { error } = await deleteStoredPairing(session.code);
   if (error) logger.error({ code: session.code, error }, 'Failed to delete a revoked pairing');
 }
 

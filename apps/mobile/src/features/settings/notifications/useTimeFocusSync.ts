@@ -52,7 +52,7 @@ export function useTimeFocusSync(): TimeFocusSync {
       } catch (caught) {
         if (cancelled) return;
         setStatus('error');
-        setError(caught instanceof Error ? caught.message : 'Could not load time and focus.');
+        setError('Could not load time and focus settings. Check your connection and try again.');
       }
     })();
 
@@ -85,7 +85,7 @@ export function useTimeFocusSync(): TimeFocusSync {
         .then(() => setStatus('synced'))
         .catch((caught: unknown) => {
           setStatus('error');
-          setError(caught instanceof Error ? caught.message : 'Could not save time and focus.');
+          setError('Could not save time and focus settings. Check your connection and try again.');
         });
     }, 600);
   }, [isCloud]);

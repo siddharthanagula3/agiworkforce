@@ -28,6 +28,7 @@ import {
 } from '@/features/connectors/lib/plaid-link';
 import { toUserMessage } from '@/lib/user-error-message';
 import { announceBankConnected } from '@features/finance/lib/announce-bank-connected';
+import { openConnectorAuthorization } from '../lib/open-connector-authorization';
 
 export interface ConnectorStatus {
   connectedIds: Set<string>;
@@ -446,7 +447,7 @@ export function useConnectors(): ConnectorStatus {
               if (await connectBankAccountsWithPlaid(plaidRoutes)) {
                 setConnectedIds((prev) => new Set([...prev, id]));
                 invalidateConnectorsCache();
-                announceBankConnected();
+                announceBankConnected((href) => router.push(href));
               }
             } catch (caught) {
               toast.error(toUserMessage(caught, BANK_CONNECT_FAILED));
@@ -460,11 +461,11 @@ export function useConnectors(): ConnectorStatus {
                 currentConnectorReturnPath(),
               );
               if (target) {
-                window.location.href = target;
+                openConnectorAuthorization(target, retry);
                 return;
               }
             } else if (body.installStartPath) {
-              window.location.href = body.installStartPath;
+              openConnectorAuthorization(body.installStartPath, retry);
               return;
             }
           }
@@ -491,7 +492,7 @@ export function useConnectors(): ConnectorStatus {
         });
       }
     },
-    [isSignedIn, router],
+    [isSignedIn, retry, router],
   );
 
   const connect = useCallback(

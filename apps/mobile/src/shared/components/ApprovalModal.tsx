@@ -1,13 +1,6 @@
 import { useState, useCallback } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, SlideInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -27,7 +20,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentStore } from '@/stores/agentStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { dialogPadding } from '@/src/ui/theme/tokens';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
 interface ApprovalModalProps {
@@ -117,10 +111,10 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
       >
         <View className="flex-1 justify-end" style={{ backgroundColor: colors.scrim }}>
           {/* Tap outside to dismiss */}
-          <Pressable accessible={false} className="flex-1" onPress={handleDismiss} />
+          <PressableBox accessible={false} className="flex-1" onPress={handleDismiss} />
 
           <Animated.View
-            entering={reducedMotion ? undefined : SlideInDown.duration(300).springify()}
+            entering={reducedMotion ? undefined : SlideInDown.duration(motion.moved).springify()}
             className="rounded-t-3xl overflow-hidden"
             style={{ backgroundColor: colors.surfaceElevated, maxHeight: '80%' }}
           >
@@ -132,7 +126,10 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
               />
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} bounces={false}>
+            <ScrollView
+              contentContainerStyle={{ padding: dialogPadding, paddingBottom: 40 }}
+              bounces={false}
+            >
               {/* Header */}
               <View className="items-center mb-5">
                 <View
@@ -179,7 +176,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
 
               {/* Reject reason input */}
               {showRejectInput && (
-                <Animated.View entering={FadeIn.duration(200)} className="mb-4">
+                <Animated.View entering={FadeIn.duration(motion.quick)} className="mb-4">
                   <Text className="text-xs mb-2" style={{ color: colors.textMuted }}>
                     Rejection reason (optional)
                   </Text>
@@ -206,7 +203,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
               {/* Action buttons */}
               <View className="gap-3">
                 {!showRejectInput && (
-                  <Pressable
+                  <PressableBox
                     onPress={handleApprove}
                     className="flex-row items-center justify-center gap-2 py-4 rounded-2xl active:opacity-80"
                     style={{ backgroundColor: colors.teal }}
@@ -220,10 +217,10 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
                     >
                       Approve
                     </Text>
-                  </Pressable>
+                  </PressableBox>
                 )}
 
-                <Pressable
+                <PressableBox
                   onPress={handleReject}
                   className="flex-row items-center justify-center gap-2 py-4 rounded-2xl border active:opacity-80"
                   style={{
@@ -244,10 +241,10 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
                   >
                     {showRejectInput ? 'Confirm Reject' : 'Reject'}
                   </Text>
-                </Pressable>
+                </PressableBox>
 
                 {showRejectInput && (
-                  <Pressable
+                  <PressableBox
                     onPress={() => {
                       setShowRejectInput(false);
                       setRejectReason('');
@@ -259,7 +256,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
                     <Text className="text-sm" style={{ color: colors.textMuted }}>
                       Cancel
                     </Text>
-                  </Pressable>
+                  </PressableBox>
                 )}
               </View>
             </ScrollView>

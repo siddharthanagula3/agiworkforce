@@ -243,8 +243,8 @@ describe('Memory API', () => {
       expect(data.error.message).toMatch(/[Cc]ontent/);
     });
 
-    it('should return 400 when content exceeds 10,000 characters', async () => {
-      const longContent = 'a'.repeat(10_001);
+    it('should return 400 when content exceeds 20,000 characters', async () => {
+      const longContent = 'a'.repeat(20_001);
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'POST',
         body: JSON.stringify({ content: longContent }),
@@ -255,7 +255,7 @@ describe('Memory API', () => {
       expect(response.status).toBe(400);
 
       const data = await response.json();
-      expect(data.error.message).toMatch(/10,000/);
+      expect(data.error.message).toMatch(/20,000/);
     });
 
     it('should return 400 for invalid JSON body', async () => {

@@ -106,7 +106,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-agent-core"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "agiworkforce-llm",
  "anyhow",
@@ -119,7 +119,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-app-server"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "agiworkforce-protocol",
  "anyhow",
@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-cli"
-version = "1.7.1"
+version = "0.0.1"
 dependencies = [
  "agiworkforce-agent-core",
  "agiworkforce-app-server",
@@ -153,6 +153,7 @@ dependencies = [
  "axum",
  "base64 0.23.1",
  "bytes",
+ "calamine",
  "chrono",
  "clap",
  "clap_complete",
@@ -175,11 +176,13 @@ dependencies = [
  "nix 0.31.3",
  "notify 7.0.0",
  "once_cell",
+ "pdf-extract",
  "pulldown-cmark",
  "rand 0.10.2",
  "ratatui",
  "regex",
  "reqwest",
+ "roxmltree",
  "rustyline 18.0.1",
  "seccompiler",
  "semver",
@@ -199,15 +202,16 @@ dependencies = [
  "urlencoding",
  "uuid",
  "webbrowser",
+ "zip 1.1.4",
 ]
 
 [[package]]
 name = "agiworkforce-command-registry"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "agiworkforce-desktop"
-version = "1.2.0"
+version = "0.0.1"
 dependencies = [
  "accessibility-sys",
  "aes-gcm",
@@ -351,7 +355,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-execpolicy"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "agiworkforce-utils-absolute-path",
  "anyhow",
@@ -374,7 +378,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-licensing"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.23.1",
  "ed25519-dalek 3.0.0",
@@ -385,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-llm"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -401,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-mcp"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "agiworkforce-protocol",
  "anyhow",
@@ -422,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-model-registry"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -431,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-protocol"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "agiworkforce-execpolicy",
  "agiworkforce-utils-absolute-path",
@@ -471,14 +475,14 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-sandbox-policy"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "agiworkforce-utils-absolute-path"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "dirs 6.0.0",
  "dunce",
@@ -493,7 +497,7 @@ dependencies = [
 
 [[package]]
 name = "agiworkforce-utils-image"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "base64 0.23.1",

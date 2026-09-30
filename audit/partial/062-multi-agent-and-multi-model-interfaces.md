@@ -38,17 +38,15 @@ nothing is left.
 
 - Done when: Each child agent is labelled with its role.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Subagent tasks show only their description, and only in the REPL /tasks list; no role label. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/subagent.rs:45-61`
 
 ## S62.04: Model labels.
 
@@ -113,11 +111,8 @@ Code: `apps/cli/src/subagent.rs:45-61`
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Compare shows only a rough token estimate (characters/4) and timing per model, not real usage or cost. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/compare/index.tsx:575-589`, `apps/mobile/src/features/compare/index.tsx:210-212`
 
 ## S62.10: Needs-input prioritization.
 
@@ -132,7 +127,8 @@ Code: `apps/mobile/src/features/compare/index.tsx:575-589`, `apps/mobile/src/fea
 ## S62.14: Agent handoff.
 
 - Done when: Work can be handed from one agent to another, and the receiving agent continues it.
-- Wave: 2
+- Wave: 3
+- Already works on: vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -140,26 +136,7 @@ Code: `apps/mobile/src/features/compare/index.tsx:575-589`, `apps/mobile/src/fea
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code can continue a cloud task locally (goal + plan draft, branch checkout), but nothing emits the /cloud-task link and the pull command is hidden, so the handoff cannot be triggered. | ui, mount |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/context-handoff/index.ts:62-70`, `apps/extension-vscode/src/extension.ts:140-150`
-
-## S62.15: Summary-only handoff.
-
-- Done when: A handoff can pass only a summary, not the full history, and the user can see that.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | Subagents return only their final result to the parent model, but the user cannot choose or see a summary-only handoff. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/subagent.rs:247-255`
 
 ## S62.16: Background fork.
 

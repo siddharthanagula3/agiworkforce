@@ -6,20 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S3.02: Create-account screen.
-
-- Done when: A new user can create an account (email or provider) from a sign-up screen on the surface, or is handed to one.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | A new user is handed to the web sign-up page through the device-code link, but sign-up does not return to the CLI: /signup drops redirectTo outside desktop, so the user lands on /welcome and must reopen the device link to finish signing in. | handler |
-| vscode | partial | A new user is handed to the web sign-up page through the device-code link, but sign-up does not return to VS Code: /signup drops redirectTo outside desktop, so the user lands on /welcome and must reopen the verification link. | handler |
-| chrome | partial | The side panel opens web sign-in, whose Create account link reaches /signup, but sign-up drops the /auth/chrome-extension redirect (buildSignupUrl keeps it only for desktop), so the user lands on /welcome instead of returning to the extension. | handler |
-
-Code: `apps/cli/src/lib.rs:3936-3940`, `apps/cli/src/oauth.rs:451-466`, `apps/web/features/auth/authRoutes.ts:39-45`, `apps/extension-vscode/src/core/commandSetup.ts:1035-1042`
-
 ## S3.03: Email verification screen.
 
 - Done when: After sign-up the user must confirm their email address on a verification screen before the account is usable.
@@ -109,7 +95,7 @@ Code: `apps/cli/src/lib.rs:3936-3940`, `apps/cli/src/oauth.rs:451-466`, `apps/we
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | handler |
+| mobile | partial | Owner: enable Authenticator and Backup codes in the Clerk Dashboard, then a live second-factor sign-in check; code path (MobileSignIn onNativeFallback) unchanged. | handler |
 
 Code: `apps/mobile/app/(auth)/login.tsx:207-209`, `apps/mobile/src/features/settings/account-security/service.ts:70-80`
 
@@ -136,13 +122,12 @@ Code: `apps/mobile/app/(auth)/login.tsx:207-209`, `apps/mobile/src/features/sett
 
 - Done when: Before first use the user reviews and accepts the current Terms (versioned), acceptance is recorded, and a terms change re-prompts.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Record Terms acceptance for mobile Cloud sign-ups: onboarding records only the AI-provider disclosure, Clerk AuthView sign-up never calls /api/terms/accept, and the gateway does not check terms, so a mobile-only user never accepts the versioned Terms. | handler |
-
-Code: `apps/mobile/app/(public)/onboarding.tsx:270-285`, `apps/mobile/app/(auth)/login.tsx:207-209`
+| chrome | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
+| api | partial | after Codex commits: apply post-codex/w-auth-S3.19-mobile-terms-acceptance.patch, remove 'mobile' from TERMS_GATE_EXEMPT_SURFACES in auth-gate.ts, and make Codex's GET /api/terms/accept report the standing (readTermsStanding) instead of strict current, or mobile sign-in hard-blocks every revision |  |
 
 ## S3.20: Age or eligibility verification where applicable.
 
@@ -158,54 +143,6 @@ Code: `apps/mobile/app/(public)/onboarding.tsx:270-285`, `apps/mobile/app/(auth)
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S3.21: Profile setup.
-
-- Done when: During onboarding the user sets up basic profile details (at least the name the assistant uses) and they are saved to the account.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Ask for a name during mobile first run: onboarding goes hero, AI disclosure, device model and download, and the name/occupation fields exist only in Settings > Personalization. | ui |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`, `apps/mobile/app/(public)/onboarding.tsx:232-240`
-
-## S3.23: Role or use-case selection.
-
-- Done when: Onboarding asks the user their role or intended use and uses the answer (e.g. to tailor replies or suggestions).
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Ask role or use case during mobile first run: an occupation field exists only in Settings > Personalization. | ui |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`
-
-## S3.24: Personalization setup.
-
-- Done when: Onboarding lets the user set personalization (name to use, what they do, preferred style) that then shapes replies.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Offer personalization in mobile first run: name, occupation, style and instructions exist only in Settings > Personalization. | ui |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:269-281`
-
-## S3.25: Memory setup.
-
-- Done when: During setup the user is told about memory and chooses whether and how it is used, with the choice changeable later.
-- Wave: 3
-- Already works on: cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Add memory to mobile first run: memory screens exist only under Settings. | ui |
-
-Code: `apps/mobile/app/(app)/settings/memory-import.tsx:130-135`
-
 ## S3.27: Recommended-app connection flow.
 
 - Done when: New users are shown a few recommended apps/connectors (e.g. based on their role) and can connect them in a guided flow.
@@ -218,18 +155,6 @@ Code: `apps/mobile/app/(app)/settings/memory-import.tsx:130-135`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S3.31: Mobile device pairing.
-
-- Done when: A phone can be paired with the desktop app by QR or short code, and the pairing is bound to the signed-in account.
-- Wave: 3
-- Already works on: desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | partials/auth 34de0ffbe fixed /pair; the phone's own checklist is in Codex-held ConnectionStateViews.tsx, patch saved as post-codex/p-auth-S3.31.patch | ui |
-
-Code: `apps/web/app/pair/pair-body.tsx:27-27`
 
 ## S3.36: Resumable onboarding checklist.
 

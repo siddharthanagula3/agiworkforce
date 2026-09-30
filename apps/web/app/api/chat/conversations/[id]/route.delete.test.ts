@@ -176,6 +176,7 @@ describe('DELETE /api/chat/conversations/[id]', () => {
     mocks.query.mockReset();
     mocks.query.mockResolvedValueOnce([]);
     mocks.query.mockResolvedValueOnce([{ id: CONVERSATION_ID }]);
+    mocks.query.mockResolvedValueOnce([]);
     mocks.unpublishForConversations.mockResolvedValue(['tokenaaaaaaaaaaaaaaaaaaa']);
 
     const retried = await DELETE(request(), context);
@@ -185,5 +186,21 @@ describe('DELETE /api/chat/conversations/[id]', () => {
       userId: 'user-1',
       conversationIds: [CONVERSATION_ID],
     });
+  });
+
+  it('revokes the shared links of the chat it deletes, in the same transaction', async () => {
+    mocks.query.mockReset();
+    mocks.query.mockResolvedValueOnce([{ id: CONVERSATION_ID }]);
+    mocks.query.mockResolvedValueOnce([]);
+    mocks.query.mockResolvedValueOnce([{ token: 'share-token-1' }]);
+
+    const response = await DELETE(request(), context);
+
+    expect(response.status).toBe(200);
+    const revocation = mocks.query.mock.calls.find(([sql]) =>
+      String(sql).includes('delete from public.shared_sessions'),
+    );
+    expect(revocation).toBeDefined();
+    expect(revocation?.[1]).toEqual(['user-1', null, CONVERSATION_ID]);
   });
 });

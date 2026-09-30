@@ -5,6 +5,7 @@ import {
   isContractPricedPlan,
   isEntitledSubscriptionStatus,
   isEntitledSubscriptionStatusForTier,
+  isFreeBillingPlanTier,
   isPerSeatBillingPlan,
   normalizeBillingPlanTier,
   type BillingPlanTier,
@@ -221,6 +222,12 @@ export interface EntitlementResolutionOptions {
    */
   includeSeats?: boolean;
   workspaceOrganizationId?: string | null;
+  /**
+   * A reply that tells a client its plan throws when the seat lookup fails for
+   * someone who belongs to a workspace, rather than reporting that member's own
+   * free row as their plan. A person with no membership keeps their own plan.
+   */
+  throwOnSeatLookupError?: boolean;
 }
 
 function bundleFrom(
@@ -315,6 +322,14 @@ async function isOwnSubscriptionEntitled(
  * and a seat for them within `licensed_seats`, then the user's own lapsed or
  * free row, then none.
  */
+async function holdsWorkspaceMembership(db: DatabaseAdapter, userId: string): Promise<boolean> {
+  const rows = await db.query<{ member: number }>(
+    'select 1 as member from public.organization_members where user_id = $1 limit 1',
+    [userId],
+  );
+  return rows.length > 0;
+}
+
 export async function resolveEntitlementBundle(
   db: DatabaseAdapter,
   userId: string,
@@ -326,7 +341,7 @@ export async function resolveEntitlementBundle(
     own
       ? bundleFrom(userId, own, 'subscription', ownEntitled)
       : bundleFrom(userId, null, 'none', false);
-  if (own && ownEntitled && normalizeBillingPlanTier(own.plan_tier) !== 'free') {
+  if (own && ownEntitled && !isFreeBillingPlanTier(normalizeBillingPlanTier(own.plan_tier))) {
     return settleOnOwn();
   }
   if (options.includeSeats === false) return settleOnOwn();
@@ -336,6 +351,7 @@ export async function resolveEntitlementBundle(
     seat = await resolveSeatSubscription(userId, options.workspaceOrganizationId ?? null);
   } catch (error) {
     logger.error({ error, userId }, 'Seat entitlement lookup failed; falling back to no seat');
+    if (options.throwOnSeatLookupError && (await holdsWorkspaceMembership(db, userId))) throw error;
     return settleOnOwn();
   }
 

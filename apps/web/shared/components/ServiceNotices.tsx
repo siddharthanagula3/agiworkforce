@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarClock, CircleAlert } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
+import { SERVICE_NOTICES_PATH, ServiceNoticeListSchema } from '@agiworkforce/cloud-contracts';
 import type { ServiceNotice } from '@/lib/service-notices/types';
 import { ProductNoticeCard } from './ProductNotice';
 
@@ -12,14 +13,14 @@ const NOTICES_REFRESH_MS = 5 * 60 * 1000;
 const DISMISSED_KEY = 'agi-dismissed-service-notices';
 
 async function readServiceNotices(): Promise<ServiceNotice[]> {
-  const response = await fetch('/api/status/notices');
+  const response = await fetch(SERVICE_NOTICES_PATH);
   if (!response.ok) {
     throw Object.assign(new Error('Service notices could not be read.'), {
       status: response.status,
     });
   }
-  const body = (await response.json()) as { notices?: unknown };
-  return Array.isArray(body.notices) ? (body.notices as ServiceNotice[]) : [];
+  const parsed = ServiceNoticeListSchema.safeParse(await response.json());
+  return parsed.success ? parsed.data.notices : [];
 }
 
 function readDismissed(): string[] {

@@ -99,6 +99,7 @@
   "navImages": "图片",
   "navModels": "模型",
   "navSchedules": "计划任务",
+  "navHealth": "健康",
   "navAdmin": "管理",
   "navWorkspaceSection": "工作区",
   "navLoadingWorkspaces": "正在加载工作区…",
@@ -169,7 +170,13 @@
     "toolsAwaitingApproval_one": "有一个工具正在等待您批准。",
     "toolsAwaitingApproval_other": "有 {{count}} 个工具正在等待您批准。",
     "unsentMessages_one": "您有一条未发送的消息。",
-    "unsentMessages_other": "您有 {{count}} 条未发送的消息。"
+    "unsentMessages_other": "您有 {{count}} 条未发送的消息。",
+    "packages_other": "{{count}} 个软件包",
+    "unreadNotifications_other": "{{count}} 条未读通知",
+    "packages_one": "{{count}} 个软件包",
+    "unreadNotifications_one": "{{count}} 条未读通知",
+    "textBlocks_one": "{{count}} 个文本块",
+    "textBlocks_other": "{{count}} 个文本块"
   },
   "relative": {
     "minutesAgo_one": "{{count}} 分钟前",

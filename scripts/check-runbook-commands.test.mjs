@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -163,6 +164,21 @@ test('a setting a runbook names but nothing in the tree reads fails', () => {
     failures.some((failure) => failure.includes('name setting AGI_RESTORE_DRILL_RENAMED_URL')),
     failures.join('\n'),
   );
+});
+
+test('ignored worktrees cannot satisfy a runbook setting', () => {
+  const root = makeRoot((state) => {
+    state.runbook = state.runbook.replaceAll(
+      'AGI_RESTORE_DRILL_SOURCE_URL',
+      'AGI_RESTORE_DRILL_IGNORED_URL',
+    );
+  });
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  fs.writeFileSync(path.join(root, '.gitignore'), '.worktrees/\n');
+  fs.mkdirSync(path.join(root, '.worktrees'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.worktrees', 'ignored.ts'), 'AGI_RESTORE_DRILL_IGNORED_URL\n');
+  const failures = runRunbookCommandsCheck(root);
+  assert.ok(failures.some((failure) => failure.includes('AGI_RESTORE_DRILL_IGNORED_URL')));
 });
 
 test('a runbook missing one of its three headers fails', () => {

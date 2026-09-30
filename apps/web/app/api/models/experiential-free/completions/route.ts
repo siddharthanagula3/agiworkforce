@@ -1,11 +1,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { assertAccountActive } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { readProviderTrainingOptOut } from '@/lib/server/provider-training-opt-out';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { freeQuotaPlanAllows, loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
 import {
@@ -31,6 +33,10 @@ import {
 import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
 import { logger } from '@/lib/logger';
+import {
+  conversationHoldsGoogleUserData,
+  GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE,
+} from '@/lib/connectors/google-user-data';
 import { persistFreeOfferingUser } from '@/lib/server/persist-free-offering-user';
 import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
 
@@ -108,6 +114,27 @@ async function handlePost(request: NextRequest): Promise<Response> {
     [body.conversation_id, scoped.userId, scoped.organizationId],
   );
   if (!conversation) return refusal(404, 'conversation_not_found', 'Conversation not found.');
+  if (!providerKeepsInputsOutOfTraining(selected.offering.provider)) {
+    if (await conversationHoldsGoogleUserData(scoped.db, scoped.userId, body.conversation_id)) {
+      return refusal(403, 'model_may_train', GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE);
+    }
+    const optedOut = await readProviderTrainingOptOut(scoped.db, scoped.userId).catch(
+      (error: unknown) => {
+        logger.warn(
+          { error, userId: scoped.userId },
+          '[experiential-free] training opt-out unreadable; refusing a provider that may train',
+        );
+        return true;
+      },
+    );
+    if (optedOut) {
+      return refusal(
+        403,
+        'model_may_train',
+        "This free model's provider may train on what you send. Choose another model, or turn off Only use models that do not train on your chats in Settings > Privacy. No model request was sent.",
+      );
+    }
+  }
 
   const privacy = await evaluateActiveWorkspacePolicy(
     scoped.db,

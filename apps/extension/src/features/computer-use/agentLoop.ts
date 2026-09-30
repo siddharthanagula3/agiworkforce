@@ -48,6 +48,7 @@ export interface AgentLoopOptions {
    * it rather than acting on an untrusted party's word.
    */
   siteTools?: readonly SiteToolDescriptor[];
+  refreshSiteTools?: () => Promise<void>;
   callSiteTool?: (pageName: string, args: Record<string, unknown>) => Promise<string>;
   /** Marks where a click or typing landed so the user can see it on the page. */
   onActionPoint?: (point: { x: number; y: number }) => void;
@@ -560,6 +561,7 @@ export async function runAgentLoop(
     // The run holds the capture open so read_console and read_network answer
     // for the whole run, not only for the moment the tool was called.
     await startPageWatch(tabId, 'run').catch(() => undefined);
+    await cdp.keepPageFocused(tabId, options.signal).catch(() => undefined);
     const gatewayBase = await runOwnedOperation(options, resolveGatewayBase);
 
     await runOwnedOperation(options, () => waitForStable(tabId, { signal: options.signal }));
@@ -616,7 +618,6 @@ export async function runAgentLoop(
     };
     history.push(systemMessage, initialUserMessage);
     await reportScreenshot(options, 0, initialScreenshot);
-    const siteTools = siteToolDefinitions(options);
 
     while (stepNumber < maxSteps) {
       await assertRunOwnership(options);
@@ -633,6 +634,9 @@ export async function runAgentLoop(
       }
       stepNumber++;
 
+      await options.refreshSiteTools?.();
+      await assertRunOwnership(options);
+      const siteTools = siteToolDefinitions(options);
       const token = await resolveCredential(options);
       // Observations older than the newest few are resent verbatim otherwise,
       // so a 20-step run pays for every screenshot it ever took on every step.

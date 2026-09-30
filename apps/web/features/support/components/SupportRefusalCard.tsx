@@ -1,6 +1,6 @@
 'use client';
 
-import type { SupportRefusedAction } from '../lib/contract';
+import type { SupportRefusedAction } from '@agiworkforce/cloud-contracts/support';
 import styles from './SupportWidget.module.css';
 
 export function SupportRefusalCard({ refusal }: { refusal: SupportRefusedAction }) {

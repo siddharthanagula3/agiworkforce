@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { normalizePromotionalChatHistory } from './promotional-chat-request';
 
-describe('text-only promotional chat history', () => {
+describe('promotional chat history', () => {
   it('preserves historical text while omitting unsupported prior files and images', () => {
     const result = normalizePromotionalChatHistory([
       {

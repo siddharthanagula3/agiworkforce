@@ -241,6 +241,39 @@ describe('managed Cloud agent-run client', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
+  it('reads a finished run to its last event instead of stopping after the first page', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          run: run('completed', 3),
+          events: [event(0), event(1)],
+          nextAfterSequence: 1,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          run: run('completed', 3),
+          events: [event(2), event(3)],
+          nextAfterSequence: 3,
+        }),
+      );
+    const seen: number[] = [];
+    const client = createManagedCloudAgentRunClient({ fetchImpl });
+
+    const result = await client.followRun(RUN_ID, {
+      pageSize: 2,
+      pollIntervalMs: 0,
+      onEvent: (envelope) => {
+        seen.push(envelope.sequence);
+      },
+    });
+
+    expect(seen).toEqual([0, 1, 2, 3]);
+    expect(result.lastSequence).toBe(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it('retries transient status failures with bounded backoff', async () => {
     const wait = vi.fn(async () => undefined);
     const fetchImpl = vi
@@ -399,6 +432,7 @@ describe('managed Cloud agent-run client', () => {
           body: JSON.stringify({
             run_id: RUN_ID,
             tool_approvals: [{ tool_call_id: 'call-1', decision: 'approved' }],
+            detached: true,
           }),
           headers: expect.objectContaining({ 'x-csrf-token': 'csrf-1' }),
         }),
@@ -420,6 +454,7 @@ describe('managed Cloud agent-run client', () => {
             run_id: RUN_ID,
             tool_approvals: [{ tool_call_id: 'call-1', decision: 'approved' }],
             guidance: 'Use the docs repo instead.',
+            detached: true,
           }),
         }),
       );

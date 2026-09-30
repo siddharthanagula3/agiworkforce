@@ -2,6 +2,10 @@
 import React from 'react';
 import { AppState } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+
+let mockAudioUri: string | undefined;
+let mockSelectedModel = 'test-model';
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -90,7 +94,12 @@ jest.mock('expo-router', () => ({
     back: jest.fn(),
     canGoBack: () => true,
   }),
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => ({ audioUri: mockAudioUri }),
+}));
+
+jest.mock('@/src/features/voice/services/voiceInput', () => ({
+  ...jest.requireActual('@/src/features/voice/services/voiceInput'),
+  transcribeAudioFile: jest.fn(),
 }));
 
 jest.mock('@/stores/chatStore', () => {
@@ -122,13 +131,19 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('@/src/features/model-picker/store', () => ({
   useModelStore: (selector: (s: { selectedModel: string }) => unknown) =>
-    selector({ selectedModel: 'test-model' }),
+    selector({ selectedModel: mockSelectedModel }),
 }));
 
 import VoiceScreen from '@/app/(app)/voice';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import { useSettingsStore } from '../stores/settingsStore';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import {
+  DEFAULT_LOCAL_MODEL_ID,
+  getDefaultCloudModelIdForTier,
+} from '@/src/features/model-picker/service';
+import { useTierStore } from '@/src/features/billing/store';
 
 const speechRecognitionMock = jest.requireMock('expo-speech-recognition') as {
   __fireResult: (event: {
@@ -164,15 +179,193 @@ function renderScreen(onSendMessage: jest.Mock) {
 
 describe('Voice conversation PTT + hands-free', () => {
   beforeEach(async () => {
+    mockAudioUri = undefined;
     await VoiceInput.cancelCapture();
     speechRecognitionMock.__clearListeners();
     jest.clearAllMocks();
+    chatState().messages = {};
+    chatState().error = null;
+    mockSelectedModel = 'test-model';
+    useChatAppModeStore.setState({ appMode: 'local' });
     useSettingsStore.setState({
       hapticsEnabled: false,
+      voiceEnabled: true,
       voicePushToTalk: false,
       selectedVoiceId: null,
       speechRate: 1,
     });
+  });
+
+  it('sends typed text through the selected Voice conversation when microphone input is off', async () => {
+    useSettingsStore.setState({ voiceEnabled: false });
+    const state = chatState();
+    state.createConversation.mockResolvedValue('voice-conv-1');
+    state.sendMessage.mockResolvedValue(true);
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), '  typed request  ');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    await waitFor(() =>
+      expect(state.sendMessage).toHaveBeenCalledWith(
+        'voice-conv-1',
+        'typed request',
+        expect.any(String),
+      ),
+    );
+    expect(state.createConversation).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Type a message').props.value).toBe('');
+    expect(ExpoSpeechRecognitionModule.start).not.toHaveBeenCalled();
+  });
+
+  it('shows the complete user and assistant turns in a scrollable voice transcript', async () => {
+    const state = chatState();
+    const fullReply =
+      'The complete answer remains visible while the voice session continues. '.repeat(5);
+    state.messages['voice-conv-1'] = [
+      { id: 'voice-user', role: 'user', content: 'What happened?' },
+      { id: 'voice-reply', role: 'assistant', content: fullReply },
+    ];
+    state.sendMessage.mockResolvedValue(true);
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'Continue');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    expect(screen.getByTestId('voice-session-transcript')).toBeTruthy();
+    expect(screen.getByText('What happened?')).toBeTruthy();
+    const reply = screen.getByText(fullReply);
+    expect(reply.props.numberOfLines).toBeUndefined();
+    expect(screen.getAllByText('You')).toHaveLength(1);
+    expect(screen.getAllByText('AGI')).toHaveLength(1);
+  });
+
+  it('uses a Local model when a stale Cloud model is selected before Voice opens', async () => {
+    mockSelectedModel = requireMobileCloudModel().id;
+    useSettingsStore.setState({ voiceEnabled: false });
+    const state = chatState();
+    state.sendMessage.mockResolvedValue(true);
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'local only');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    expect(state.sendMessage).toHaveBeenCalledWith(
+      'voice-conv-1',
+      'local only',
+      DEFAULT_LOCAL_MODEL_ID,
+    );
+  });
+
+  it('uses a Cloud model when a stale Local model is selected before Voice opens', async () => {
+    mockSelectedModel = DEFAULT_LOCAL_MODEL_ID;
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useTierStore.setState({ tier: 'pro' });
+    useSettingsStore.setState({ voiceEnabled: false });
+    const state = chatState();
+    state.sendMessage.mockResolvedValue(true);
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'cloud request');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    expect(state.sendMessage).toHaveBeenCalledWith(
+      'voice-conv-1',
+      'cloud request',
+      getDefaultCloudModelIdForTier('pro'),
+    );
+  });
+
+  it('keeps a typed draft after send failure and retries without creating another chat', async () => {
+    const state = chatState();
+    state.createConversation.mockResolvedValue('voice-conv-1');
+    state.sendMessage.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'please retry');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    await waitFor(() => expect(screen.getByText('Message was not sent. Try again.')).toBeTruthy());
+    expect(screen.getByLabelText('Type a message').props.value).toBe('please retry');
+
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    await waitFor(() => expect(state.sendMessage).toHaveBeenCalledTimes(2));
+    expect(state.createConversation).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Type a message').props.value).toBe('');
+  });
+
+  it('shows a new send error alongside earlier voice turns', async () => {
+    const state = chatState();
+    state.messages['voice-conv-1'] = [
+      { id: 'prior-user', role: 'user', content: 'Earlier question' },
+      { id: 'prior-reply', role: 'assistant', content: 'Earlier answer' },
+    ];
+    state.sendMessage.mockResolvedValue(false);
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'New question');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    expect(screen.getByText('Earlier answer')).toBeTruthy();
+    expect(screen.getByTestId('voice-transcript-preview').props.children).toBe(
+      'Message was not sent. Please try again.',
+    );
+    expect(screen.getByLabelText('Type a message').props.value).toBe('New question');
+  });
+
+  it('does not speak a delayed typed reply after the app backgrounds', async () => {
+    let appStateListener: ((state: string) => void) | undefined;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      appStateListener = listener as (state: string) => void;
+      return { remove: jest.fn() };
+    });
+    let finishSend: ((accepted: boolean) => void) | undefined;
+    const state = chatState();
+    state.messages = {};
+    state.createConversation.mockResolvedValue('voice-conv-1');
+    state.sendMessage.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishSend = resolve;
+        }),
+    );
+    const speech = jest.requireMock('expo-speech') as { speak: jest.Mock };
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'background request');
+    fireEvent.press(screen.getByLabelText('Send typed message'));
+    await waitFor(() => expect(state.sendMessage).toHaveBeenCalledTimes(1));
+
+    await act(async () => appStateListener?.('background'));
+    state.messages['voice-conv-1'] = [
+      { id: 'reply-1', role: 'assistant', content: 'Delayed reply', isStreaming: false },
+    ];
+    await act(async () => finishSend?.(true));
+
+    expect(speech.speak).not.toHaveBeenCalled();
+  });
+
+  it('preserves a file transcript and retries a failed send', async () => {
+    mockAudioUri = 'file:///recording.m4a';
+    (VoiceInput.transcribeAudioFile as jest.Mock).mockResolvedValue({ text: 'recorded request' });
+    const state = chatState();
+    state.createConversation.mockResolvedValue('voice-conv-1');
+    state.sendMessage.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    const { getByText, getByTestId, queryByText } = render(<VoiceScreen />);
+
+    await waitFor(() =>
+      expect(getByTestId('voice-transcript-preview').props.children).toBe('recorded request'),
+    );
+    await waitFor(() => expect(getByText('Retry sending')).toBeTruthy());
+    expect(state.sendMessage).toHaveBeenCalledTimes(1);
+
+    await act(async () => fireEvent.press(getByText('Retry sending')));
+
+    await waitFor(() => expect(state.sendMessage).toHaveBeenCalledTimes(2));
+    expect(queryByText('Retry sending')).toBeNull();
+    expect(getByTestId('voice-transcript-preview').props.children).toBe('recorded request');
   });
 
   it('push-to-talk: press-in starts capture, release stops and sends the transcript', async () => {

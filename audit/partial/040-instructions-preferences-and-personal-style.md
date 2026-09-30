@@ -46,15 +46,12 @@ nothing is left.
 
 - Done when: For one conversation the user can override their standing style/instructions without changing their defaults.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The chat Style sheet changes style for the next messages, but it is one global setting, not saved per conversation. | persistence |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/chat/[id].tsx:771-775`, `apps/mobile/stores/chat/chatExecutionStore.ts:388-393`
 
 ## S40.20: Writing-style examples.
 

@@ -51,13 +51,7 @@ const SERVER_PREFIXES = Object.freeze([
 const FIX =
   'read the stream with readServerSentEvents or ServerSentEventDecoder from @agiworkforce/client-runtime';
 
-export const PENDING = Object.freeze({
-  'apps/web/lib/hooks/useChatStream.ts': `p-mcp-web: ${FIX}`,
-  'apps/mobile/services/streaming.ts': `mobile, post-codex patch: ${FIX}`,
-  'apps/extension/src/features/cloud-bridge/boundedSseDecoder.ts': `p-chrome: delete this copy and import ServerSentEventDecoder, which carries the same bound`,
-  'apps/extension-vscode/src/utils/api.ts': `p-sessions: ${FIX}`,
-  'apps/desktop/src/api/cloudApi.ts': `p-electron: ${FIX}`,
-});
+export const PENDING = Object.freeze({});
 
 const SOURCE_FILE = /\.(?:tsx?|mts)$/;
 const TEST_FILE = /\.(?:test|spec)\.[cm]?tsx?$/;

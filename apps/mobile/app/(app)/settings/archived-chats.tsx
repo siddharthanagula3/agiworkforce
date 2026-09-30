@@ -9,7 +9,14 @@ import { ArrowLeft, Archive, Trash2, AlertCircle, RotateCcw } from 'lucide-react
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useAuthStore } from '@/src/features/auth/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { CloudAccountRequired, CloudSyncBlockedBanner } from '@/src/features/settings/common';
@@ -20,11 +27,22 @@ import {
   restoreArchivedConversation,
   type ArchivedConversation,
 } from '@/src/features/archived-chats';
+import { translatePlural } from '@/src/i18n/plural';
 
 type LoadState =
-  | { kind: 'loading' }
-  | { kind: 'ready'; conversations: ArchivedConversation[]; hasMore: boolean; nextOffset: number }
-  | { kind: 'error'; message: string };
+  | { kind: 'loading'; account: CloudAccountEpoch | null }
+  | {
+      kind: 'ready';
+      account: CloudAccountEpoch;
+      conversations: ArchivedConversation[];
+      hasMore: boolean;
+      nextOffset: number;
+    }
+  | { kind: 'error'; account: CloudAccountEpoch; message: string };
+
+function isCurrentCloudScope(account: CloudAccountEpoch | null): account is CloudAccountEpoch {
+  return isCloudAccountEpochCurrent(account) && useChatAppModeStore.getState().appMode === 'cloud';
+}
 
 function formatUpdatedAt(value: string): string {
   const date = new Date(value);
@@ -37,30 +55,36 @@ export default function ArchivedChatsScreen() {
   const { colors: c, statusBarStyle } = useTheme();
   const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const loadConversations = useChatMessageStore((state) => state.loadConversations);
 
-  const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  const [state, setState] = useState<LoadState>({ kind: 'loading', account: null });
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
   const load = useCallback(async (signal?: AbortSignal) => {
+    const account = captureCloudAccountEpoch();
+    if (!isCurrentCloudScope(account)) return;
+    setState({ kind: 'loading', account });
     try {
       const page = await fetchArchivedConversations(0, signal);
-      if (signal?.aborted) return;
+      if (signal?.aborted || !isCurrentCloudScope(account)) return;
       setState({
         kind: 'ready',
+        account,
         conversations: page.conversations,
         hasMore: page.hasMore,
         nextOffset: page.nextOffset,
       });
-    } catch (error) {
-      if (signal?.aborted) return;
+    } catch {
+      if (signal?.aborted || !isCurrentCloudScope(account)) return;
       setState({
         kind: 'error',
-        message: error instanceof Error ? error.message : 'Could not load archived chats.',
+        account,
+        message: 'Could not load archived chats. Retry.',
       });
     }
   }, []);
@@ -70,7 +94,7 @@ export default function ArchivedChatsScreen() {
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
-  }, [appMode, isClerkSignedIn, load]);
+  }, [appMode, clerkUserId, isClerkSignedIn, load]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -88,14 +112,23 @@ export default function ArchivedChatsScreen() {
 
   const handleLoadMore = useCallback(async () => {
     if (state.kind !== 'ready' || !state.hasMore) return;
+    const account = state.account;
+    if (!isCurrentCloudScope(account)) return;
     setLoadingMore(true);
     try {
       const page = await fetchArchivedConversations(state.nextOffset);
+      if (!isCurrentCloudScope(account)) return;
       setState((current) => {
-        if (current.kind !== 'ready') return current;
+        if (
+          current.kind !== 'ready' ||
+          current.account.ownerId !== account.ownerId ||
+          current.account.epoch !== account.epoch
+        )
+          return current;
         const seen = new Set(current.conversations.map((conversation) => conversation.id));
         return {
           kind: 'ready',
+          account,
           conversations: [
             ...current.conversations,
             ...page.conversations.filter((conversation) => !seen.has(conversation.id)),
@@ -104,19 +137,20 @@ export default function ArchivedChatsScreen() {
           nextOffset: page.nextOffset,
         };
       });
-    } catch (error) {
-      Alert.alert(
-        'Could not load more',
-        error instanceof Error ? error.message : 'Please try again.',
-      );
+    } catch {
+      if (isCurrentCloudScope(account)) {
+        Alert.alert('Could not load more', 'Refresh archived chats and try again.');
+      }
     } finally {
       setLoadingMore(false);
     }
   }, [state]);
 
-  const removeFromList = useCallback((id: string) => {
+  const removeFromList = useCallback((id: string, account: CloudAccountEpoch) => {
     setState((current) =>
-      current.kind === 'ready'
+      current.kind === 'ready' &&
+      current.account.ownerId === account.ownerId &&
+      current.account.epoch === account.epoch
         ? {
             ...current,
             conversations: current.conversations.filter((conversation) => conversation.id !== id),
@@ -127,19 +161,29 @@ export default function ArchivedChatsScreen() {
 
   const handleRestore = useCallback(
     (conversation: ArchivedConversation) => {
+      const account = captureCloudAccountEpoch();
+      if (!isCurrentCloudScope(account)) return;
       void (async () => {
         setBusyId(conversation.id);
         try {
           await restoreArchivedConversation(conversation.id);
-          removeFromList(conversation.id);
-          await loadConversations();
-        } catch (error) {
-          Alert.alert(
-            'Could not restore',
-            error instanceof Error ? error.message : 'Please try again.',
-          );
+          if (!isCurrentCloudScope(account)) return;
+          removeFromList(conversation.id, account);
+        } catch {
+          if (isCurrentCloudScope(account)) {
+            Alert.alert('Could not restore', 'The chat is still archived. Try again.');
+          }
+          return;
         } finally {
           setBusyId(null);
+        }
+        try {
+          if (!isCurrentCloudScope(account)) return;
+          await loadConversations();
+        } catch {
+          if (isCurrentCloudScope(account)) {
+            Alert.alert('Chat restored', 'Refresh your chats to see it in the list.');
+          }
         }
       })();
     },
@@ -148,25 +192,27 @@ export default function ArchivedChatsScreen() {
 
   const handleDelete = useCallback(
     (conversation: ArchivedConversation) => {
+      const account = captureCloudAccountEpoch();
+      if (!isCurrentCloudScope(account)) return;
       Alert.alert(
         'Delete this chat?',
-        `"${conversation.title}" and its messages will be permanently deleted.`,
+        `"${conversation.title}" and its messages are removed from every device on this account. You can restore it from Recently deleted in Settings on the web.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Delete',
             style: 'destructive',
             onPress: () => {
+              if (!isCurrentCloudScope(account)) return;
               void (async () => {
                 setBusyId(conversation.id);
                 try {
                   await deleteArchivedConversation(conversation.id);
-                  removeFromList(conversation.id);
-                } catch (error) {
-                  Alert.alert(
-                    'Could not delete',
-                    error instanceof Error ? error.message : 'Please try again.',
-                  );
+                  if (isCurrentCloudScope(account)) removeFromList(conversation.id, account);
+                } catch {
+                  if (isCurrentCloudScope(account)) {
+                    Alert.alert('Could not delete', 'Refresh archived chats and try again.');
+                  }
                 } finally {
                   setBusyId(null);
                 }
@@ -180,28 +226,40 @@ export default function ArchivedChatsScreen() {
   );
 
   const handleDeleteAll = useCallback(() => {
+    const account = captureCloudAccountEpoch();
+    if (!isCurrentCloudScope(account)) return;
     Alert.alert(
       'Delete all archived chats?',
-      'Every archived chat and its messages will be permanently deleted. This cannot be undone.',
+      'Every archived chat and its messages are removed from every device on this account. You can restore them from Recently deleted in Settings on the web.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete all',
           style: 'destructive',
           onPress: () => {
+            if (!isCurrentCloudScope(account)) return;
             void (async () => {
               try {
                 const deleted = await deleteAllArchivedConversations();
-                setState({ kind: 'ready', conversations: [], hasMore: false, nextOffset: 0 });
+                if (!isCurrentCloudScope(account)) return;
+                setState({
+                  kind: 'ready',
+                  account,
+                  conversations: [],
+                  hasMore: false,
+                  nextOffset: 0,
+                });
                 Alert.alert(
                   'Archived chats deleted',
-                  `${deleted} chat${deleted === 1 ? '' : 's'} deleted.`,
+                  translatePlural('settings', 'counts.deletedArchivedChats', deleted, {
+                    one: 'Deleted {{count}} archived chat.',
+                    other: 'Deleted {{count}} archived chats.',
+                  }),
                 );
-              } catch (error) {
-                Alert.alert(
-                  'Could not delete',
-                  error instanceof Error ? error.message : 'Please try again.',
-                );
+              } catch {
+                if (isCurrentCloudScope(account)) {
+                  Alert.alert('Could not delete', 'Refresh archived chats before trying again.');
+                }
               }
             })();
           },
@@ -209,6 +267,17 @@ export default function ArchivedChatsScreen() {
       ],
     );
   }, []);
+
+  const currentAccount = captureCloudAccountEpoch();
+  const visibleState: LoadState =
+    appMode === 'cloud' &&
+    isClerkSignedIn &&
+    currentAccount &&
+    state.account &&
+    currentAccount.ownerId === state.account.ownerId &&
+    currentAccount.epoch === state.account.epoch
+      ? state
+      : { kind: 'loading', account: null };
 
   const header = (
     <View style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
@@ -229,7 +298,13 @@ export default function ArchivedChatsScreen() {
         <ArrowLeft size={22} color={c.textPrimary} />
       </Pressable>
       <Text
-        style={{ flex: 1, color: c.textPrimary, fontSize: 20, fontWeight: '700', marginLeft: 4 }}
+        style={{
+          flex: 1,
+          color: c.textPrimary,
+          fontSize: typeScale.title3,
+          fontWeight: '700',
+          marginLeft: 4,
+        }}
       >
         Archived Chats
       </Text>
@@ -244,7 +319,7 @@ export default function ArchivedChatsScreen() {
         <View className="flex-1 px-4">
           <CloudAccountRequired
             isLoading={!isClerkLoaded}
-            onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+            onSignIn={() => router.push(beginCloudPostAuthIntent('cloud-archived-chats'))}
           />
         </View>
       </SafeAreaView>
@@ -270,13 +345,15 @@ export default function ArchivedChatsScreen() {
           </View>
         ) : null}
 
-        {state.kind === 'loading' && appMode === 'cloud' && (
-          <Text style={{ color: c.textSecondary, fontSize: 13, paddingVertical: 24 }}>
+        {visibleState.kind === 'loading' && appMode === 'cloud' && (
+          <Text
+            style={{ color: c.textSecondary, fontSize: typeScale.footnote, paddingVertical: 24 }}
+          >
             Loading your archived chats…
           </Text>
         )}
 
-        {state.kind === 'error' && (
+        {visibleState.kind === 'error' && (
           <View
             style={{
               borderRadius: 12,
@@ -286,16 +363,18 @@ export default function ArchivedChatsScreen() {
               padding: 14,
             }}
             accessible
-            accessibilityLabel={`Could not load archived chats. ${state.message}`}
+            accessibilityLabel={`Could not load archived chats. ${visibleState.message}`}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <AlertCircle size={14} color={c.agentWarning} />
-              <Text style={{ color: c.agentWarning, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{ color: c.agentWarning, fontSize: typeScale.footnote, fontWeight: '600' }}
+              >
                 Could not load archived chats
               </Text>
             </View>
-            <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
-              {state.message}
+            <Text style={{ color: c.textSecondary, fontSize: typeScale.caption, lineHeight: 17 }}>
+              {visibleState.message}
             </Text>
             <Pressable
               onPress={() => void load()}
@@ -303,12 +382,14 @@ export default function ArchivedChatsScreen() {
               accessibilityLabel="Retry loading archived chats"
               style={{ marginTop: 10, alignSelf: 'flex-start' }}
             >
-              <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>Retry</Text>
+              <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
+                Retry
+              </Text>
             </Pressable>
           </View>
         )}
 
-        {state.kind === 'ready' && state.conversations.length === 0 && (
+        {visibleState.kind === 'ready' && visibleState.conversations.length === 0 && (
           <Card>
             <View className="items-center py-8 gap-3">
               <View
@@ -325,7 +406,7 @@ export default function ArchivedChatsScreen() {
               </View>
               <Text
                 style={{
-                  fontSize: 17,
+                  fontSize: typeScale.headline,
                   fontWeight: '600',
                   color: c.textPrimary,
                   textAlign: 'center',
@@ -335,7 +416,7 @@ export default function ArchivedChatsScreen() {
               </Text>
               <Text
                 style={{
-                  fontSize: 13,
+                  fontSize: typeScale.footnote,
                   color: c.textSecondary,
                   textAlign: 'center',
                   lineHeight: 18,
@@ -349,17 +430,17 @@ export default function ArchivedChatsScreen() {
           </Card>
         )}
 
-        {state.kind === 'ready' &&
-          state.conversations.map((conversation) => (
+        {visibleState.kind === 'ready' &&
+          visibleState.conversations.map((conversation) => (
             <Card key={conversation.id}>
               <View style={{ padding: 14, gap: 8 }}>
                 <Text
-                  style={{ color: c.textPrimary, fontSize: 15, fontWeight: '600' }}
+                  style={{ color: c.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
                   numberOfLines={2}
                 >
                   {conversation.title}
                 </Text>
-                <Text style={{ color: c.textSecondary, fontSize: 12 }}>
+                <Text style={{ color: c.textSecondary, fontSize: typeScale.caption }}>
                   {formatUpdatedAt(conversation.updatedAt)}
                 </Text>
 
@@ -372,7 +453,9 @@ export default function ArchivedChatsScreen() {
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
                   >
                     <RotateCcw size={13} color={c.teal} />
-                    <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+                    <Text
+                      style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                    >
                       {busyId === conversation.id ? 'Working…' : 'Restore'}
                     </Text>
                   </Pressable>
@@ -384,7 +467,13 @@ export default function ArchivedChatsScreen() {
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
                   >
                     <Trash2 size={13} color={c.agentError} />
-                    <Text style={{ color: c.agentError, fontSize: 13, fontWeight: '600' }}>
+                    <Text
+                      style={{
+                        color: c.agentError,
+                        fontSize: typeScale.footnote,
+                        fontWeight: '600',
+                      }}
+                    >
                       Delete
                     </Text>
                   </Pressable>
@@ -393,7 +482,7 @@ export default function ArchivedChatsScreen() {
             </Card>
           ))}
 
-        {state.kind === 'ready' && state.hasMore && (
+        {visibleState.kind === 'ready' && visibleState.hasMore && (
           <Pressable
             onPress={() => void handleLoadMore()}
             disabled={loadingMore}
@@ -401,20 +490,20 @@ export default function ArchivedChatsScreen() {
             accessibilityLabel="Load more archived chats"
             style={{ alignSelf: 'center', paddingVertical: 14 }}
           >
-            <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+            <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
               {loadingMore ? 'Loading…' : 'Load more'}
             </Text>
           </Pressable>
         )}
 
-        {state.kind === 'ready' && state.conversations.length > 0 && (
+        {visibleState.kind === 'ready' && visibleState.conversations.length > 0 && (
           <Pressable
             onPress={handleDeleteAll}
             accessibilityRole="button"
             accessibilityLabel="Delete all archived chats"
             style={{ alignSelf: 'center', paddingVertical: 14, marginTop: 4 }}
           >
-            <Text style={{ color: c.agentError, fontSize: 13, fontWeight: '600' }}>
+            <Text style={{ color: c.agentError, fontSize: typeScale.footnote, fontWeight: '600' }}>
               Delete all archived chats
             </Text>
           </Pressable>

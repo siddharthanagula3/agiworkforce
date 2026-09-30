@@ -169,6 +169,25 @@ describe('runShellCommand', () => {
     expect(result.exitCode).toBe(0);
   });
 
+  it('asks for an allow-listed program when the server set a review for the step', async () => {
+    const approve = vi.fn().mockResolvedValue(false);
+    await expect(
+      runShellCommand({
+        runId: randomUUID(),
+        root,
+        relativePath: '',
+        command: 'node -e "console.log(1)"',
+        policy: allowEverything,
+        sandbox: hostSandbox,
+        network: 'deny',
+        approve,
+        emit: () => undefined,
+        review: 'Run node in sandbox',
+      }),
+    ).rejects.toThrow();
+    expect(approve).toHaveBeenCalledTimes(1);
+  });
+
   it('reports a missing program as a refusal, not a crash', async () => {
     await expect(
       run('node-that-does-not-exist --version', { policy: { allow: [], deny: [] }, approve: true }),

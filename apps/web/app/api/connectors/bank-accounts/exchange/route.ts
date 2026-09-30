@@ -1,9 +1,18 @@
 import 'server-only';
 
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import type { z } from 'zod';
+import {
+  BankAccountsExchangeRequestSchema,
+  type BankAccountsExchangeResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 
-import { bankAccountsUnavailableReason, connectBankAccounts } from '@/lib/connectors/bank-accounts';
+import {
+  bankAccountsUnavailableReason,
+  completeBankAccountsHostedLink,
+  connectBankAccounts,
+} from '@/lib/connectors/bank-accounts';
 import { BANK_ACCOUNTS_CONNECTOR_ID } from '@/lib/connectors/plaid-config';
 import { sensitiveDataRegionRefusal } from '@/lib/connectors/sensitive-data-connectors';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -18,13 +27,6 @@ import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-
 export const runtime = 'nodejs';
 
 const RATE_LIMIT_BUCKET = 'chat-conversation';
-const PUBLIC_TOKEN_MAX_LENGTH = 512;
-const INSTITUTION_NAME_MAX_LENGTH = 200;
-
-const BodySchema = z.object({
-  publicToken: z.string().trim().min(1).max(PUBLIC_TOKEN_MAX_LENGTH),
-  institutionName: z.string().trim().min(1).max(INSTITUTION_NAME_MAX_LENGTH).optional(),
-});
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request);
@@ -44,13 +46,28 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     organizationId,
     connectorId: BANK_ACCOUNTS_CONNECTOR_ID,
     request,
+    surface: resolveCloudChatSurface(request),
   });
   if (!policy.allowed) throw createError.forbidden(policy.reason).asUserSafe();
 
-  const parsed = BodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) throw createError.validation('publicToken is required');
+  const parsed = BankAccountsExchangeRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
+  if (!parsed.success) throw createError.validation('publicToken or linkToken is required');
 
-  await connectBankAccounts(userId, parsed.data.publicToken, parsed.data.institutionName ?? null);
+  if ('linkToken' in parsed.data) {
+    const outcome = await completeBankAccountsHostedLink(userId, parsed.data.linkToken);
+    if (outcome === 'not_finished') {
+      throw createError
+        .conflict('The bank link was not finished. Start linking again.')
+        .asUserSafe();
+    }
+    if (outcome === 'not_found') {
+      throw createError.notFound('This bank link has expired. Start linking again.').asUserSafe();
+    }
+  } else {
+    await connectBankAccounts(userId, parsed.data.publicToken, parsed.data.institutionName ?? null);
+  }
   await recordAuditEvent({
     userId,
     eventType: 'connector_added',
@@ -58,12 +75,13 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     detail: { resourceType: 'connector', connectorId: BANK_ACCOUNTS_CONNECTOR_ID, source: 'plaid' },
   });
 
-  return NextResponse.json(
-    {
-      connector: { connectorId: BANK_ACCOUNTS_CONNECTOR_ID, connectedAt: new Date().toISOString() },
-    },
-    { status: 201, headers: { 'Cache-Control': 'private, no-store' } },
-  );
+  const body: z.infer<typeof BankAccountsExchangeResponseSchema> = {
+    connector: { connectorId: BANK_ACCOUNTS_CONNECTOR_ID, connectedAt: new Date().toISOString() },
+  };
+  return NextResponse.json(body, {
+    status: 201,
+    headers: { 'Cache-Control': 'private, no-store' },
+  });
 }
 
 export const POST = withCorsRoute(withErrorHandler(handlePost));

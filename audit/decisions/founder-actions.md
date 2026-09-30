@@ -63,6 +63,30 @@ zero variables, and repository secrets cannot be listed with the agent token. Th
 **Impact** RELEASE-BLOCKING (CLI, both desktops, VS Code, Chrome, mobile)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [QwenCloud] Verify provider-funded Free quota for launch
+
+**Why founder assistance is required**
+QwenCloud's [Free quota rules](https://docs.qwencloud.com/resources/free-quota)
+say calls become paid after quota exhaustion unless the per-model `Free quota
+only` switch is enabled. The switch is disabled by default and its state is
+available in the account console, not through the inference API. Engineering
+cannot attest to the founder's account setting from a model response. The
+founder reported on 2026-09-27 that `Free quota only` is enabled; the exact
+offerings, account-key match, current balance and expiry remain unverified.
+**Exact action** In the QwenCloud Free Tier console, confirm `Free quota only`
+for each offering intended for AGI's provider-funded Free catalogue. Confirm
+the remaining quota and expiry for those offerings and that the API key in the
+deployment belongs to the checked account, without sharing the key itself.
+**Where** QwenCloud Free Tier and API Keys consoles.
+**How to verify completion** Record an account-bound, current attestation for
+the deployment key through the existing admin route; the catalogue then shows
+only server-ready offerings. Engineering performs a signed-in mobile test turn
+and checks the provider usage and response afterward.
+**What remains after founder action** Mobile inference verification and
+production deployment checks (agent).
+**Impact** FEATURE-BLOCKING (provider-funded Free Qwen models).
+**Status** FOUNDER ACTION REQUIRED
+
 ## [Infra] Remote Control relay host points nowhere (F11)
 
 **Why founder assistance is required**

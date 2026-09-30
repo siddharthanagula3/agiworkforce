@@ -112,7 +112,18 @@ test('a gap that closes fails until it is recorded as a reader', () => {
         'pub struct Me { pub capability_handshake: Option<String> }\n',
     },
   });
-  assert.ok(checkCapabilityConsumption(root).some((entry) => /the cli gap has closed/.test(entry)));
+  const readers = {
+    ...CAPABILITY_READERS,
+    cli: {
+      gap: 'The CLI resolves plan capabilities locally and does not read the served document yet.',
+      owner: 'apps/cli',
+    },
+  };
+  assert.ok(
+    checkCapabilityConsumption(root, { readers }).some((entry) =>
+      /the cli gap has closed/.test(entry),
+    ),
+  );
 });
 
 test('a recorded exception that is fixed fails until it is deleted', () => {

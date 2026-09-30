@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   AlertCircle,
   Check,
@@ -10,6 +11,7 @@ import {
   MessageSquare,
   Pause,
   Play,
+  Plus,
   RefreshCw,
   Search,
   Square,
@@ -19,6 +21,7 @@ import {
 import type { ResearchStep } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { radii, useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   formatResearchElapsed,
   isResearchRunActive,
@@ -27,7 +30,10 @@ import {
   type ResearchRunState,
 } from '@/src/features/chat/utils/researchRunState';
 
-export type ResearchPlanDecision = 'start' | 'cancel';
+export type ResearchPlanDecision = 'start' | 'cancel' | { steps: ResearchStep[] };
+
+const MAX_PLAN_STEPS = 6;
+const MAX_STEP_CHARS = 300;
 
 const STEP_STATUS_LABELS: Record<ResearchStep['status'], string> = {
   pending: 'Queued',
@@ -65,10 +71,23 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
         <View style={{ width: 14, alignItems: 'center', paddingTop: 2 }}>
           <MessageSquare size={13} color={colors.agentActive} />
         </View>
-        <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, color: colors.textPrimary }}>
+        <Text
+          style={{
+            flex: 1,
+            fontSize: typeScale.caption,
+            lineHeight: 17,
+            color: colors.textPrimary,
+          }}
+        >
           {step.description}
         </Text>
-        <Text style={{ fontSize: 10, color: colors.textMuted, textTransform: 'uppercase' }}>
+        <Text
+          style={{
+            fontSize: typeScale.caption,
+            color: colors.textMuted,
+            textTransform: 'uppercase',
+          }}
+        >
           Your guidance
         </Text>
       </View>
@@ -91,7 +110,7 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           style={{
-            fontSize: 12,
+            fontSize: typeScale.caption,
             lineHeight: 17,
             color: step.status === 'pending' ? colors.textSecondary : colors.textPrimary,
           }}
@@ -99,10 +118,14 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
           {step.description}
         </Text>
         {step.status === 'dropped' && step.note ? (
-          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{step.note}</Text>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted, marginTop: 2 }}>
+            {step.note}
+          </Text>
         ) : null}
       </View>
-      <Text style={{ fontSize: 10, color: colors.textMuted, textTransform: 'uppercase' }}>
+      <Text
+        style={{ fontSize: typeScale.caption, color: colors.textMuted, textTransform: 'uppercase' }}
+      >
         {STEP_STATUS_LABELS[step.status]}
       </Text>
     </View>
@@ -126,7 +149,7 @@ function ActionButton({
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
+    <PressableBox
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
@@ -150,14 +173,89 @@ function ActionButton({
       <Icon size={13} color={emphasis ? colors.background : colors.textPrimary} />
       <Text
         style={{
-          fontSize: 12,
+          fontSize: typeScale.caption,
           fontWeight: '600',
           color: emphasis ? colors.background : colors.textPrimary,
         }}
       >
         {label}
       </Text>
-    </Pressable>
+    </PressableBox>
+  );
+}
+
+function PlanEditor({
+  steps,
+  onChange,
+}: {
+  steps: ResearchStep[];
+  onChange: (steps: ResearchStep[]) => void;
+}) {
+  const colors = useThemeColors();
+  const edit = (id: string, description: string) =>
+    onChange(steps.map((step) => (step.id === id ? { ...step, description } : step)));
+  const remove = (id: string) => onChange(steps.filter((step) => step.id !== id));
+  const add = () =>
+    onChange([
+      ...steps,
+      {
+        id: `draft-${steps.length}-${Date.now()}`,
+        type: 'search',
+        description: '',
+        status: 'pending',
+      },
+    ]);
+  return (
+    <View
+      testID="research-plan-editor"
+      accessibilityLabel="Research plan, editable"
+      style={{ borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: 6, gap: 6 }}
+    >
+      <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+        Edit any step before it runs. What you start here is exactly what gets searched.
+      </Text>
+      {steps.map((step, index) => (
+        <View key={step.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <TextInput
+            value={step.description}
+            onChangeText={(text) => edit(step.id, text)}
+            maxLength={MAX_STEP_CHARS}
+            multiline
+            accessibilityLabel={`Step ${index + 1}`}
+            placeholder="Describe what to search"
+            placeholderTextColor={colors.textMuted}
+            style={{
+              flex: 1,
+              fontSize: typeScale.caption,
+              lineHeight: 17,
+              color: colors.textPrimary,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: radii.md,
+              paddingHorizontal: 8,
+              paddingVertical: 6,
+            }}
+          />
+          <PressableBox
+            onPress={() => remove(step.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove step ${index + 1}`}
+            hitSlop={8}
+            style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <X size={14} color={colors.textMuted} />
+          </PressableBox>
+        </View>
+      ))}
+      {steps.length < MAX_PLAN_STEPS ? (
+        <ActionButton
+          label="Add a step"
+          icon={Plus}
+          onPress={add}
+          testID="research-plan-add-step"
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -183,6 +281,7 @@ export function ResearchRunCard({
   const colors = useThemeColors();
   const active = isStreaming && isResearchRunActive(research);
   const [pauseRequested, setPauseRequested] = useState(false);
+  const [draftSteps, setDraftSteps] = useState<ResearchStep[] | null>(null);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -210,6 +309,10 @@ export function ResearchRunCard({
   const gaps = research.gaps ?? [];
   const canDecide = Boolean(onPlanDecision) && awaitingApproval && !isStreaming;
   const canRetry = Boolean(onRetry) && (failed || interrupted || paused) && !isStreaming;
+  const canRunAgain = Boolean(onRetry) && complete && !isStreaming;
+  const editedSteps =
+    draftSteps ?? steps.filter((step) => step.type === 'search' && step.status === 'pending');
+  const planReady = editedSteps.some((step) => step.description.trim() !== '');
   const canStop = Boolean(onStop) && active;
   const canPause = Boolean(onPause) && active && research.phase !== 'synthesizing';
 
@@ -250,37 +353,49 @@ export function ResearchRunCard({
           <Telescope size={14} color={tint} />
         )}
         <Text
-          style={{ flex: 1, fontSize: 13, fontWeight: '600', color: colors.textPrimary }}
+          style={{
+            flex: 1,
+            fontSize: typeScale.footnote,
+            fontWeight: '600',
+            color: colors.textPrimary,
+          }}
           numberOfLines={2}
         >
           {label}
         </Text>
         {elapsed > 0 ? (
-          <Text style={{ fontSize: 11, color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
             {formatResearchElapsed(elapsed)}
           </Text>
         ) : null}
       </View>
 
       {counts.length > 0 ? (
-        <Text testID="research-run-counts" style={{ fontSize: 11, color: colors.textSecondary }}>
+        <Text
+          testID="research-run-counts"
+          style={{ fontSize: typeScale.caption, color: colors.textSecondary }}
+        >
           {counts.join(' · ')}
         </Text>
       ) : null}
 
       {interrupted ? (
-        <Text style={{ fontSize: 11, color: colors.textMuted }}>Stopped before it finished.</Text>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+          Stopped before it finished.
+        </Text>
       ) : null}
       {paused ? (
-        <Text style={{ fontSize: 11, color: colors.textMuted }}>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
           Paused. Resume to continue from where it stopped.
         </Text>
       ) : null}
       {failed && research.error && research.error !== label ? (
-        <Text style={{ fontSize: 11, color: colors.textSecondary }}>{research.error}</Text>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
+          {research.error}
+        </Text>
       ) : null}
 
-      {steps.length > 0 ? (
+      {steps.length > 0 && !canDecide ? (
         <View
           testID="research-run-plan"
           accessibilityLabel="Research plan"
@@ -296,6 +411,8 @@ export function ResearchRunCard({
         </View>
       ) : null}
 
+      {canDecide ? <PlanEditor steps={editedSteps} onChange={setDraftSteps} /> : null}
+
       {gaps.length > 0 ? (
         <View
           testID="research-run-questions"
@@ -307,19 +424,33 @@ export function ResearchRunCard({
             gap: 6,
           }}
         >
-          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted }}>
+          <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}>
             Planned questions
           </Text>
           {gaps.map((gap) => (
             <View key={gap.id} style={{ gap: 2 }}>
-              <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textPrimary }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textPrimary }}>
+              <Text
+                style={{ fontSize: typeScale.caption, lineHeight: 17, color: colors.textPrimary }}
+              >
+                <Text
+                  style={{
+                    fontSize: typeScale.caption,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}
+                >
                   {gap.status === 'closed' ? 'Answered: ' : 'Not answered: '}
                 </Text>
                 {gap.question}
               </Text>
               {gap.status === 'open' ? (
-                <Text style={{ fontSize: 11, lineHeight: 16, color: colors.textSecondary }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.caption,
+                    lineHeight: 16,
+                    color: colors.textSecondary,
+                  }}
+                >
                   {gap.reason}
                 </Text>
               ) : null}
@@ -328,7 +459,7 @@ export function ResearchRunCard({
         </View>
       ) : null}
 
-      {canDecide || canRetry || canStop || canPause ? (
+      {canDecide || canRetry || canRunAgain || canStop || canPause ? (
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           {canDecide ? (
             <>
@@ -336,8 +467,18 @@ export function ResearchRunCard({
                 label={isResuming ? 'Starting…' : 'Approve plan'}
                 icon={Play}
                 emphasis
-                disabled={isResuming}
-                onPress={() => onPlanDecision?.('start')}
+                disabled={isResuming || !planReady}
+                onPress={() =>
+                  onPlanDecision?.(
+                    draftSteps === null
+                      ? 'start'
+                      : {
+                          steps: draftSteps
+                            .map((step) => ({ ...step, description: step.description.trim() }))
+                            .filter((step) => step.description !== ''),
+                        },
+                  )
+                }
                 testID="research-plan-approve"
               />
               <ActionButton
@@ -375,6 +516,14 @@ export function ResearchRunCard({
               disabled={isResuming}
               onPress={() => onRetry?.()}
               testID="research-run-retry"
+            />
+          ) : null}
+          {canRunAgain ? (
+            <ActionButton
+              label="Run again"
+              icon={RefreshCw}
+              onPress={() => onRetry?.()}
+              testID="research-run-again"
             />
           ) : null}
         </View>

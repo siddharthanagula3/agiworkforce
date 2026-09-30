@@ -52,8 +52,8 @@ fn slash_palette_matches_golden() {
 fn slash_palette_has_90_commands() {
     let count = builtin_slash_registry_commands().len();
     assert_eq!(
-        count, 96,
-        "Expected 96 implemented built-in slash commands after removing unimplemented placeholders; got {count}"
+        count, 107,
+        "Expected 107 implemented built-in slash commands after removing unimplemented placeholders; got {count}"
     );
 }
 
@@ -111,13 +111,19 @@ fn m22_targeted_commands_are_all_registered() {
 }
 
 #[test]
-fn unimplemented_background_command_is_not_advertised() {
+fn background_command_is_advertised_now_that_it_runs() {
     use agiworkforce_command_registry::CommandRegistry;
     let mut registry = CommandRegistry::default();
     registry.extend(builtin_slash_registry_commands());
 
-    assert!(registry.find("background").is_none());
-    assert!(registry.find("bg").is_none());
+    assert_eq!(
+        registry.find("background").map(|c| c.name.as_str()),
+        Some("background")
+    );
+    assert_eq!(
+        registry.find("bg").map(|c| c.name.as_str()),
+        Some("background")
+    );
 }
 
 #[test]

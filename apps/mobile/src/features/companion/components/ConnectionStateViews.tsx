@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { View, ActivityIndicator, Pressable, ScrollView } from 'react-native';
+import { View, ActivityIndicator, ScrollView } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import {
   QrCode,
   Wifi,
@@ -10,17 +11,16 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react-native';
-import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { PairingRiskDisclosure } from './PairingRiskDisclosure';
 
 export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
   const colors = useThemeColors();
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-1 items-center justify-center px-8"
     >
       <View className="w-20 h-20 rounded-2xl bg-amber-500/10 items-center justify-center mb-6">
@@ -45,10 +45,16 @@ export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
   );
 }
 
-export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
+export function DisconnectedView({
+  onScanPress,
+  onShowSetupSteps,
+}: {
+  onScanPress: () => void;
+  onShowSetupSteps?: () => void;
+}) {
   const colors = useThemeColors();
   return (
-    <Animated.View entering={FadeIn.duration(300)} className="flex-1">
+    <Animated.View entering={FadeIn.duration(motion.moved)} className="flex-1">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: 32,
@@ -98,7 +104,7 @@ export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
           className="mb-8"
           steps={[
             'Open Desktop in Managed Cloud',
-            'Go to Settings and select "Connections"',
+            'Go to Settings, select Capabilities and choose "Pair a phone"',
             'Generate and scan the short-lived code',
           ]}
         />
@@ -110,6 +116,17 @@ export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
           onPress={onScanPress}
           className="w-full"
         />
+
+        {onShowSetupSteps ? (
+          <PressableBox
+            accessibilityRole="button"
+            accessibilityLabel="Show desktop setup steps again"
+            onPress={onShowSetupSteps}
+            style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ color: colors.teal }}>Show desktop setup steps again</Text>
+          </PressableBox>
+        ) : null}
 
         <PairingRiskDisclosure className="mt-4" />
       </ScrollView>
@@ -148,7 +165,7 @@ export function ConnectingView({ onCancel }: { onCancel: () => void }) {
   const colors = useThemeColors();
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-1 items-center justify-center px-8"
     >
       <View className="w-20 h-20 rounded-2xl bg-amber-500/10 items-center justify-center mb-6">
@@ -171,12 +188,10 @@ export function ConnectingView({ onCancel }: { onCancel: () => void }) {
 export function ErrorView({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   const colors = useThemeColors();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const { user } = useUser();
-  const accountEmail = user?.primaryEmailAddress?.emailAddress ?? null;
 
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={FadeIn.duration(motion.moved)}
       className="flex-1 items-center justify-center px-8"
     >
       <View className="w-20 h-20 rounded-2xl bg-red-500/10 items-center justify-center mb-6">
@@ -192,10 +207,9 @@ export function ErrorView({ error, onRetry }: { error: string | null; onRetry: (
 
       <PairingChecklist
         steps={[
-          'Dispatch is turned on in Desktop → Settings → Connections',
-          accountEmail
-            ? `You're signed in as ${accountEmail}`
-            : "You're signed in on Desktop with the account you use here",
+          'Remote Control is on in Desktop → Settings → Capabilities',
+          'Desktop is signed in and in Managed Cloud',
+          'Use a new pairing code from Desktop; phone and Desktop accounts do not need to match',
           'Desktop is open and up to date',
         ]}
       />
@@ -210,7 +224,7 @@ export function ErrorView({ error, onRetry }: { error: string | null; onRetry: (
 
       {error && (
         <View className="w-full mt-4">
-          <Pressable
+          <PressableBox
             onPress={() => setDetailsOpen((open) => !open)}
             className="flex-row items-center justify-center gap-1 py-2"
             accessibilityRole="button"
@@ -223,7 +237,7 @@ export function ErrorView({ error, onRetry }: { error: string | null; onRetry: (
               <ChevronRight size={14} color={colors.textMuted} />
             )}
             <Text className="text-xs text-white/40">Details</Text>
-          </Pressable>
+          </PressableBox>
           {detailsOpen && (
             <Text className="text-xs text-white/40 text-center leading-5" selectable>
               {error}

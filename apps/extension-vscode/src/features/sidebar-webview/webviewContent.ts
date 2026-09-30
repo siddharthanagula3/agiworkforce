@@ -35,6 +35,16 @@ export function getNonce(): string {
   return randomBytes(24).toString('base64url');
 }
 
+const CODICON_DIR = ['out', 'codicons'] as const;
+const RENDER_SCRIPT_DIR = ['out', 'webview'] as const;
+
+export function webviewResourceRoots(extensionUri: vscode.Uri): vscode.Uri[] {
+  return [
+    vscode.Uri.joinPath(extensionUri, ...CODICON_DIR),
+    vscode.Uri.joinPath(extensionUri, ...RENDER_SCRIPT_DIR),
+  ];
+}
+
 /**
  * COLOUR POLICY: geometry and the terra brand accent are AGI-owned; surfaces,
  * text, controls, focus, and state colours follow the host theme. The sidebar
@@ -81,11 +91,11 @@ export function getWebviewContent(
   const followUpBehaviorLiteral = initialFollowUpBehavior === 'steer' ? 'steer' : 'queue';
 
   const codiconCssUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, 'out', 'codicons', 'codicon.css'),
+    vscode.Uri.joinPath(extensionUri, ...CODICON_DIR, 'codicon.css'),
   );
 
   const renderJsUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, 'out', 'webview', 'render.js'),
+    vscode.Uri.joinPath(extensionUri, ...RENDER_SCRIPT_DIR, 'render.js'),
   );
 
   return /* html */ `<!DOCTYPE html>
@@ -1827,6 +1837,8 @@ export function getWebviewContent(
     .plan-card__step--completed .plan-card__step-text { text-decoration: line-through; }
     .plan-card__status { color: var(--text-secondary); flex: 0 0 13px; text-align: center; }
     .plan-card__step--in-progress .plan-card__status { color: var(--accent-teal); }
+    .plan-card__decision { padding: 0 10px 10px; }
+    .plan-card__decision .approval-card__actions { margin-top: 0; }
     .plan-card__step--completed .plan-card__status { color: var(--success); }
 
     /* ── Empty state (design-spec §8) ── */
@@ -4031,6 +4043,29 @@ export function getWebviewContent(
         vscode.postMessage({ type: 'regenerate' });
       });
       row.appendChild(regenerate);
+      var branch = document.createElement('button');
+      branch.type = 'button';
+      branch.className = 'message-action';
+      branch.title = L10N.branchFromAnswer;
+      branch.setAttribute('aria-label', L10N.branchFromAnswerLabel);
+      var branchIcon = document.createElement('span');
+      branchIcon.className = 'codicon codicon-repo-forked';
+      branchIcon.setAttribute('aria-hidden', 'true');
+      branch.appendChild(branchIcon);
+      branch.addEventListener('click', function () {
+        var text = assistantSources.get(messageEl) || '';
+        var occurrence = 0;
+        var answers = messagesEl.querySelectorAll('.message.assistant');
+        for (var i = 0; i < answers.length; i++) {
+          if (answers[i] === messageEl) break;
+          if (assistantSources.get(answers[i]) === text) occurrence++;
+        }
+        vscode.postMessage({
+          type: 'messageAction',
+          payload: { action: 'branchAnswer', text: text, occurrence: occurrence },
+        });
+      });
+      row.appendChild(branch);
       if (meta && meta.label) {
         var metaEl = document.createElement('span');
         metaEl.className = 'message-meta';
@@ -4195,6 +4230,7 @@ export function getWebviewContent(
 
     function setStreaming(value) {
       streaming = value;
+      renderPlanDecision();
       if (!value && stopBtn && stopBtn.getAttribute('aria-busy') === 'true') {
         stopBtn.removeAttribute('aria-busy');
         stopBtn.setAttribute('aria-label', 'Stop response');
@@ -5728,6 +5764,92 @@ export function getWebviewContent(
       return card;
     }
 
+    function renderQuestionCard(payload) {
+      hideEmptyState();
+      var card = document.createElement('section');
+      card.className = 'approval-card';
+      card.dataset.requestId = payload.requestId;
+      card.setAttribute('role', 'group');
+      card.setAttribute('aria-label', 'AGI asks, ' + payload.question.text);
+
+      var head = document.createElement('div');
+      head.className = 'approval-card__head';
+      var icon = document.createElement('span');
+      icon.className = 'codicon codicon-question';
+      icon.setAttribute('aria-hidden', 'true');
+      var headText = document.createElement('h3');
+      headText.className = 'approval-card__title';
+      headText.textContent = 'AGI asks';
+      head.appendChild(icon);
+      head.appendChild(headText);
+      card.appendChild(head);
+
+      var summary = document.createElement('div');
+      summary.className = 'approval-card__summary';
+      summary.textContent = payload.question.text;
+      card.appendChild(summary);
+
+      function answer(text) {
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'once', answer: text },
+        });
+      }
+
+      var actions = document.createElement('div');
+      actions.className = 'approval-card__actions';
+      for (var i = 0; i < payload.question.options.length; i++) {
+        (function (option) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'approval-card__action';
+          button.textContent = option;
+          button.addEventListener('click', function () {
+            answer(option);
+          });
+          actions.appendChild(button);
+        })(payload.question.options[i]);
+      }
+      var skip = document.createElement('button');
+      skip.type = 'button';
+      skip.className = 'approval-card__action';
+      skip.textContent = 'Skip';
+      skip.title = 'Close the question without answering; AGI carries on with its best judgment.';
+      skip.addEventListener('click', function () {
+        vscode.postMessage({
+          type: 'respondToApproval',
+          payload: { requestId: payload.requestId, decision: 'deny' },
+        });
+      });
+      actions.appendChild(skip);
+      var typed = document.createElement('input');
+      typed.type = 'text';
+      typed.className = 'approval-card__guidance';
+      typed.maxLength = ${REMOTE_CODE_LIMITS.guidanceLength};
+      typed.placeholder =
+        payload.question.options.length > 0
+          ? 'Or type your own answer, then press Enter'
+          : 'Type your answer, then press Enter';
+      typed.setAttribute('aria-label', 'Your answer');
+      typed.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !typed.value.trim()) return;
+        event.preventDefault();
+        answer(typed.value.trim());
+      });
+      actions.appendChild(typed);
+      card.appendChild(actions);
+
+      approvalCards[payload.requestId] = { el: card, actions: actions, question: true };
+      messagesEl.appendChild(card);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (payload.question.options.length > 0) {
+        actions.querySelector('.approval-card__action').focus();
+      } else {
+        typed.focus();
+      }
+      return card;
+    }
+
     function restartPendingToolClocks() {
       var now = Date.now();
       var ids = Object.keys(toolCallMap);
@@ -5747,7 +5869,13 @@ export function getWebviewContent(
       entry.actions.remove();
       var outcomeEl = document.createElement('div');
       outcomeEl.className = 'approval-card__outcome';
-      outcomeEl.textContent = APPROVAL_OUTCOMES[outcome] || APPROVAL_OUTCOMES.expired;
+      outcomeEl.textContent = entry.question
+        ? outcome === 'once'
+          ? 'Answered.'
+          : outcome === 'deny'
+            ? 'Skipped.'
+            : APPROVAL_OUTCOMES.expired
+        : APPROVAL_OUTCOMES[outcome] || APPROVAL_OUTCOMES.expired;
       entry.el.appendChild(outcomeEl);
     }
 
@@ -6092,6 +6220,15 @@ export function getWebviewContent(
           'queued',
           msg.payload.queueRemaining > 0
         );
+      }
+
+      else if (msg.type === 'turnResumed') {
+        removeTyping();
+        showTyping();
+        setStreaming(true);
+        currentAssistantEl = null;
+        accumulatedContent = '';
+        activePlanCard = null;
       }
 
       else if (msg.type === 'token') {
@@ -6482,6 +6619,7 @@ export function getWebviewContent(
       else if (msg.type === 'modeChanged') {
         activeMode = msg.payload.mode;
         renderControlsSummary();
+        renderPlanDecision();
       }
 
       else if (msg.type === 'effortChanged') {
@@ -6521,7 +6659,8 @@ export function getWebviewContent(
 
       else if (msg.type === 'approvalRequested') {
         removeTyping();
-        renderApprovalCard(msg.payload);
+        if (msg.payload.question) renderQuestionCard(msg.payload);
+        else renderApprovalCard(msg.payload);
         // Anything the model says after this belongs below the card, not back
         // in the bubble it was writing before it asked.
         currentAssistantEl = null;
@@ -6726,14 +6865,30 @@ export function getWebviewContent(
         explanation.className = 'plan-card__explanation';
         var list = document.createElement('ol');
         list.className = 'plan-card__list';
+        var decision = document.createElement('div');
+        decision.className = 'plan-card__decision';
+        decision.hidden = true;
         card.appendChild(header);
         card.appendChild(explanation);
         card.appendChild(list);
+        card.appendChild(decision);
         messagesEl.appendChild(card);
-        activePlanCard = { card: card, count: count, explanation: explanation, list: list };
+        activePlanCard = {
+          card: card,
+          count: count,
+          explanation: explanation,
+          list: list,
+          decision: decision,
+          steps: 0,
+          decided: false,
+          revising: false
+        };
       }
 
       var steps = Array.isArray(plan.plan) ? plan.plan : [];
+      activePlanCard.steps = steps.length;
+      activePlanCard.decided = false;
+      activePlanCard.revising = false;
       var completed = steps.filter(function(item) { return item.status === 'completed'; }).length;
       activePlanCard.count.textContent = completed + '/' + steps.length + ' complete';
       activePlanCard.explanation.textContent = plan.explanation || '';
@@ -6766,7 +6921,66 @@ export function getWebviewContent(
           activePlanCard.list.appendChild(row);
         });
       }
+      renderPlanDecision();
       messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function planDecisionButton(label, primary, onClick) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'approval-card__action' + (primary ? ' approval-card__action--primary' : '');
+      button.textContent = label;
+      button.addEventListener('click', onClick);
+      return button;
+    }
+
+    function renderPlanDecision() {
+      if (!activePlanCard) return;
+      var panel = activePlanCard.decision;
+      var offered = !streaming && activeMode === 'plan' && activePlanCard.steps > 0 && !activePlanCard.decided;
+      panel.hidden = !offered;
+      panel.textContent = '';
+      if (!offered) return;
+      var planCard = activePlanCard;
+      if (planCard.revising) {
+        var feedback = document.createElement('textarea');
+        feedback.className = 'approval-card__guidance';
+        feedback.rows = 3;
+        feedback.maxLength = 4000;
+        feedback.placeholder = L10N.revisePlanPlaceholder;
+        feedback.setAttribute('aria-label', L10N.revisePlanPlaceholder);
+        var revisionActions = document.createElement('div');
+        revisionActions.className = 'approval-card__actions';
+        var send = planDecisionButton(L10N.sendRevision, true, function() {
+          var text = feedback.value.trim();
+          if (!text) { feedback.focus(); return; }
+          planCard.decided = true;
+          renderPlanDecision();
+          vscode.postMessage({ type: 'planDecision', payload: { decision: 'reject', feedback: text } });
+        });
+        var cancel = planDecisionButton(L10N.cancelRevision, false, function() {
+          planCard.revising = false;
+          renderPlanDecision();
+        });
+        revisionActions.appendChild(send);
+        revisionActions.appendChild(cancel);
+        panel.appendChild(feedback);
+        panel.appendChild(revisionActions);
+        feedback.focus();
+        return;
+      }
+      var actions = document.createElement('div');
+      actions.className = 'approval-card__actions';
+      actions.appendChild(planDecisionButton(L10N.approvePlan, true, function() {
+        planCard.decided = true;
+        renderPlanDecision();
+        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve' } });
+      }));
+      actions.appendChild(planDecisionButton(L10N.revisePlan, false, function() {
+        planCard.revising = true;
+        renderPlanDecision();
+      }));
+      panel.appendChild(actions);
     }
 
     var TOOL_ICONS = {

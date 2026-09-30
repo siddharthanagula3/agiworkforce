@@ -37,7 +37,7 @@ import {
   PUT as userPut,
 } from '../Users/[userId]/route';
 import { GET as groupsGet, POST as groupsPost } from '../Groups/route';
-import { PATCH as groupPatch } from '../Groups/[groupId]/route';
+import { GET as groupGet, PATCH as groupPatch } from '../Groups/[groupId]/route';
 import { GET as serviceProviderConfigGet } from '../ServiceProviderConfig/route';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -823,6 +823,199 @@ describe('SCIM listing', () => {
     );
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ scimType: 'invalidFilter' });
+  });
+});
+
+describe('SCIM listing reads memberships in one statement per page', () => {
+  const USER_COUNT = 25;
+  const GROUP_NAMES = ['Support', 'Design', 'Engineering'];
+  const FOREIGN_GROUP = '99999999-9999-4999-8999-999999999990';
+  const FOREIGN_USER = '99999999-9999-4999-8999-999999999991';
+  const CREATED = '2026-01-01T00:00:00.000Z';
+
+  function userId(index: number): string {
+    return `aaaaaaaa-0000-4000-8000-${index.toString(16).padStart(12, '0')}`;
+  }
+
+  function groupId(index: number): string {
+    return `bbbbbbbb-0000-4000-8000-${index.toString(16).padStart(12, '0')}`;
+  }
+
+  function isMember(user: number, group: number): boolean {
+    return user % 5 !== 4 && (user + group) % 3 !== 0;
+  }
+
+  function provisionedUser(id: string, userName: string, connection: string, org: string) {
+    return {
+      id,
+      connection_id: connection,
+      organization_id: org,
+      external_id: null,
+      user_name: userName,
+      email: null,
+      given_name: null,
+      family_name: null,
+      display_name: null,
+      active: true,
+      linked_user_id: null,
+      linked_at: null,
+      raw_attributes: null,
+      version: 1,
+      created_at: CREATED,
+      updated_at: CREATED,
+    };
+  }
+
+  function scimGroup(id: string, displayName: string, connection: string, org: string) {
+    return {
+      id,
+      connection_id: connection,
+      organization_id: org,
+      external_id: null,
+      display_name: displayName,
+      mapped_role: null,
+      version: 1,
+      created_at: CREATED,
+      updated_at: CREATED,
+    };
+  }
+
+  function edge(group: string, user: string, org: string) {
+    return { group_id: group, scim_user_id: user, organization_id: org, created_at: CREATED };
+  }
+
+  function seedDirectory(state: FakeScimDbState): void {
+    for (let index = 0; index < USER_COUNT; index += 1) {
+      state.scim_provisioned_users.push(
+        provisionedUser(
+          userId(index),
+          `user${String(index).padStart(2, '0')}@example.com`,
+          CONNECTION,
+          ORG,
+        ),
+      );
+    }
+    state.scim_provisioned_users.push(
+      provisionedUser(FOREIGN_USER, 'intruder@example.com', OTHER_CONNECTION, OTHER_ORG),
+    );
+    GROUP_NAMES.forEach((name, index) => {
+      state.scim_groups.push(scimGroup(groupId(index), name, CONNECTION, ORG));
+    });
+    state.scim_groups.push(
+      scimGroup(FOREIGN_GROUP, 'Other tenant admins', OTHER_CONNECTION, OTHER_ORG),
+    );
+    for (let user = 0; user < USER_COUNT; user += 1) {
+      GROUP_NAMES.forEach((_, group) => {
+        if (isMember(user, group)) {
+          state.scim_group_members.push(edge(groupId(group), userId(user), ORG));
+        }
+      });
+    }
+    state.scim_group_members.push(
+      edge(FOREIGN_GROUP, userId(0), ORG),
+      edge(groupId(0), userId(4), OTHER_ORG),
+      edge(groupId(1), FOREIGN_USER, ORG),
+    );
+  }
+
+  function membershipStatements(query: { mock: { calls: readonly unknown[][] } }): number {
+    return query.mock.calls.filter(([sql]) => String(sql).includes('from scim_group_members'))
+      .length;
+  }
+
+  function resourceById(resources: Array<Record<string, any>>, id: string): Record<string, any> {
+    const resource = resources.find((entry) => entry['id'] === id);
+    if (!resource) throw new Error(`resource ${id} not listed`);
+    return resource;
+  }
+
+  it('lists a full page of users with one membership statement, matching each user read', async () => {
+    const { rawToken, state, adapter } = await harness();
+    seedDirectory(state);
+    const query = vi.spyOn(adapter, 'query');
+
+    const response = await usersGet(scimRequest('/Users?count=200', { token: rawToken }));
+    const body = (await response.json()) as { Resources: Array<Record<string, any>> };
+
+    expect(response.status).toBe(200);
+    expect(body.Resources).toHaveLength(USER_COUNT);
+    expect(membershipStatements(query)).toBe(1);
+
+    for (const resource of body.Resources) {
+      const single = await userGet(scimRequest(`/Users/${resource['id']}`, { token: rawToken }), {
+        params: Promise.resolve({ userId: String(resource['id']) }),
+      });
+      expect(resource['groups']).toEqual(((await single.json()) as Record<string, any>)['groups']);
+    }
+    expect(resourceById(body.Resources, userId(0))['groups']).toEqual([
+      { value: groupId(1), display: 'Design' },
+      { value: groupId(2), display: 'Engineering' },
+    ]);
+    expect(resourceById(body.Resources, userId(1))['groups']).toEqual([
+      { value: groupId(1), display: 'Design' },
+      { value: groupId(0), display: 'Support' },
+    ]);
+    expect(resourceById(body.Resources, userId(4))['groups']).toEqual([]);
+    expect(body.Resources.filter((resource) => resource['groups'].length === 0)).toHaveLength(5);
+  });
+
+  it('issues the same statements for a page of three users as for a page of twenty-five', async () => {
+    const { rawToken, state, adapter } = await harness();
+    seedDirectory(state);
+    const query = vi.spyOn(adapter, 'query');
+
+    await usersGet(scimRequest('/Users?count=3', { token: rawToken }));
+    const smallPage = query.mock.calls.length;
+    query.mockClear();
+    await usersGet(scimRequest('/Users?count=200', { token: rawToken }));
+
+    expect(query.mock.calls.length).toBe(smallPage);
+  });
+
+  it('asks for no memberships when the page is empty', async () => {
+    const { rawToken, state, adapter } = await harness();
+    seedDirectory(state);
+    const query = vi.spyOn(adapter, 'query');
+
+    const response = await usersGet(scimRequest('/Users?count=0', { token: rawToken }));
+
+    expect(response.status).toBe(200);
+    expect(membershipStatements(query)).toBe(0);
+  });
+
+  it('lists groups with one membership statement, matching each group read', async () => {
+    const { rawToken, state, adapter } = await harness();
+    seedDirectory(state);
+    const query = vi.spyOn(adapter, 'query');
+
+    const response = await groupsGet(scimRequest('/Groups?count=200', { token: rawToken }));
+    const body = (await response.json()) as { Resources: Array<Record<string, any>> };
+
+    expect(response.status).toBe(200);
+    expect(body.Resources.map((resource) => resource['displayName'])).toEqual(GROUP_NAMES);
+    expect(membershipStatements(query)).toBe(1);
+
+    for (const resource of body.Resources) {
+      const single = await groupGet(scimRequest(`/Groups/${resource['id']}`, { token: rawToken }), {
+        params: Promise.resolve({ groupId: String(resource['id']) }),
+      });
+      expect(resource['members']).toEqual(
+        ((await single.json()) as Record<string, any>)['members'],
+      );
+    }
+    GROUP_NAMES.forEach((_, group) => {
+      const members = resourceById(body.Resources, groupId(group))['members'] as Array<{
+        value: string;
+        display: string;
+      }>;
+      const expected = Array.from({ length: USER_COUNT }, (_, user) => user).filter((user) =>
+        isMember(user, group),
+      );
+      expect(members.map((member) => member.value)).toEqual(expected.map(userId));
+      expect(members.map((member) => member.display)).toEqual(
+        [...members.map((member) => member.display)].sort(),
+      );
+    });
   });
 });
 

@@ -1,6 +1,6 @@
 import { platformRequestHeaders } from '../../platform/platformHeaders';
 /**
- * Shape of apps/web/lib/support/diagnostics/types.ts. The server validates and
+ * Shape of supportDiagnosticsSchema in packages/contracts/cloud-contracts/src/support.ts. The server validates and
  * redacts it, so the command never writes a file the server has not cleaned.
  */
 export interface VsCodeDiagnosticsBundle {

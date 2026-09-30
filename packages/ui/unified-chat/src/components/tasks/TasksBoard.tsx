@@ -150,7 +150,7 @@ export function TasksBoard({
                         aria-label={`View details for ${title}, ${taskStateLabel(workState)}`}
                         aria-pressed={selected}
                         onClick={() => onSelect(run.id)}
-                        className="flex min-w-0 flex-col gap-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="flex min-w-0 flex-col gap-1 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <span className="line-clamp-2 text-sm font-medium">{title}</span>
                         <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -188,7 +188,7 @@ export function TasksBoard({
                                 <Spinner size="sm" aria-label="Sending your decision" />
                               ) : (
                                 <>
-                                  <Check className="mr-1 h-3.5 w-3.5" aria-hidden />
+                                  <Check className="me-1 h-3.5 w-3.5" aria-hidden />
                                   {TOOL_APPROVAL_ACTION_LABELS.approve}
                                 </>
                               )}
@@ -220,11 +220,11 @@ export function TasksBoard({
                               <Spinner size="sm" aria-label="Updating task" />
                             ) : pauseRequested ? (
                               <>
-                                <Play className="mr-1 h-3.5 w-3.5" aria-hidden /> Keep working
+                                <Play className="me-1 h-3.5 w-3.5" aria-hidden /> Keep working
                               </>
                             ) : (
                               <>
-                                <Pause className="mr-1 h-3.5 w-3.5" aria-hidden /> Pause
+                                <Pause className="me-1 h-3.5 w-3.5" aria-hidden /> Pause
                               </>
                             )}
                           </Button>
@@ -242,7 +242,7 @@ export function TasksBoard({
                               <Spinner size="sm" aria-label="Resuming task" />
                             ) : (
                               <>
-                                <Play className="mr-1 h-3.5 w-3.5" aria-hidden /> Resume
+                                <Play className="me-1 h-3.5 w-3.5" aria-hidden /> Resume
                               </>
                             )}
                           </Button>
@@ -260,7 +260,7 @@ export function TasksBoard({
                               <Spinner size="sm" aria-label="Stopping task" />
                             ) : (
                               <>
-                                <X className="mr-1 h-3.5 w-3.5" aria-hidden /> Stop
+                                <X className="me-1 h-3.5 w-3.5" aria-hidden /> Stop
                               </>
                             )}
                           </Button>
@@ -278,7 +278,7 @@ export function TasksBoard({
                               <Spinner size="sm" aria-label="Restoring task" />
                             ) : (
                               <>
-                                <ArchiveRestore className="mr-1 h-3.5 w-3.5" aria-hidden /> Restore
+                                <ArchiveRestore className="me-1 h-3.5 w-3.5" aria-hidden /> Restore
                               </>
                             )}
                           </Button>
@@ -296,7 +296,7 @@ export function TasksBoard({
                               <Spinner size="sm" aria-label="Archiving task" />
                             ) : (
                               <>
-                                <Archive className="mr-1 h-3.5 w-3.5" aria-hidden /> Archive
+                                <Archive className="me-1 h-3.5 w-3.5" aria-hidden /> Archive
                               </>
                             )}
                           </Button>
@@ -309,7 +309,7 @@ export function TasksBoard({
                             aria-label={`Open chat: ${title}`}
                             onClick={() => onOpenConversation(run)}
                           >
-                            <MessageSquare className="mr-1 h-3 w-3" aria-hidden /> Open chat
+                            <MessageSquare className="me-1 h-3 w-3" aria-hidden /> Open chat
                           </Button>
                         ) : null}
                       </div>

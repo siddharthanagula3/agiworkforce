@@ -11,6 +11,12 @@ const mocks = vi.hoisted(() => ({
   customInstructions: vi.fn(),
   scopedQuery: vi.fn(),
   reserveManagedUsage: vi.fn(),
+  webDomains: vi.fn(),
+}));
+
+vi.mock('@/lib/services/connector-policy-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/connector-policy-service')>()),
+  readWorkspaceWebDomainPolicy: mocks.webDomains,
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
@@ -127,6 +133,7 @@ beforeEach(() => {
   mocks.loadPolicy.mockResolvedValue(DISABLED_POLICY);
   mocks.customInstructions.mockResolvedValue(null);
   mocks.scopedQuery.mockResolvedValue([]);
+  mocks.webDomains.mockResolvedValue(null);
   mocks.reserveManagedUsage.mockImplementation(
     async ({ estimatedCostCents }: { estimatedCostCents: number }) => ({
       db: {},
@@ -207,6 +214,78 @@ describe('device tools are bound to a declared desktop host', () => {
   });
 });
 
+describe('phone steps are bound to the mobile app', () => {
+  const PHONE: DesktopHostDeclaration = {
+    deviceId: 'install-phone-1',
+    deviceName: 'iPhone',
+    platform: 'ios',
+    appVersion: '1.0.0',
+    capabilities: ['calendar.read', 'calendar.write', 'reminders.write', 'shell.execute'],
+    roots: [],
+  };
+
+  function phoneRequest(key: string, surface: string): NextRequest {
+    return new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        'x-agi-surface': surface,
+        [DEVICE_HOST_HEADER]: encodeDesktopHostDeclaration(PHONE),
+      },
+      body: JSON.stringify({
+        model: PRO_CHAT_MODEL,
+        messages: [{ role: 'user', content: 'what is on my calendar tomorrow' }],
+        stream: true,
+      }),
+    });
+  }
+
+  it('offers the phone steps, and only those, to the mobile app', async () => {
+    const result = await processRequest(
+      phoneRequest('phone-mobile-1', 'mobile'),
+      auth({ boundSurface: 'mobile' }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.chatSurface).toBe('mobile');
+    expect(result.deviceHost?.capabilities).toEqual([
+      'calendar.read',
+      'calendar.write',
+      'reminders.write',
+    ]);
+    const names = toolNames(result.llmRequest.tools).filter((name) => name.startsWith('device_'));
+    expect(names.sort()).toEqual([
+      'device_calendar_availability',
+      'device_calendar_create_event',
+      'device_calendar_events',
+      'device_reminder_create',
+    ]);
+  });
+
+  it('offers no phone step to a desktop that claims one', async () => {
+    const result = await processRequest(phoneRequest('phone-desktop-1', 'desktop'), auth());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.deviceHost?.capabilities).toEqual(['shell.execute']);
+    expect(toolNames(result.llmRequest.tools)).not.toContain('device_calendar_events');
+  });
+
+  it('offers nothing to the mobile app when it declares only desktop steps', async () => {
+    const result = await processRequest(
+      chatRequest('phone-mobile-2', 'mobile', true),
+      auth({ boundSurface: 'mobile' }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.deviceHost).toBeUndefined();
+    expect(toolNames(result.llmRequest.tools)).not.toContain('device_read_file');
+  });
+});
+
 describe('workspace feature controls reach the turn', () => {
   const computerUseOff = {
     ...DEFAULT_WORKSPACE_CONTROLS,
@@ -248,6 +327,32 @@ describe('workspace feature controls reach the turn', () => {
           name !== 'device_search_text',
       ),
     ).toBe(false);
+  });
+
+  it('carries the workspace website rules to a desktop that may drive its browser', async () => {
+    const rules = { allow: [], deny: ['blocked.example'] };
+    mocks.webDomains.mockResolvedValue(rules);
+    const declared = { ...DECLARATION, capabilities: ['filesystem.read', 'browser.site'] };
+    const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'device-browser-rules-1',
+        'x-agi-surface': 'desktop',
+        [DEVICE_HOST_HEADER]: encodeDesktopHostDeclaration(declared as DesktopHostDeclaration),
+      },
+      body: JSON.stringify({
+        model: PRO_CHAT_MODEL,
+        messages: [{ role: 'user', content: 'open the report in my browser' }],
+        stream: true,
+      }),
+    });
+
+    const result = await processRequest(request, auth());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.deviceWebDomainPolicy).toEqual(rules);
   });
 
   it('refuses a Work turn before reserving anything when the workspace turned Work off', async () => {

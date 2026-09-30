@@ -7,6 +7,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { MobilePushPreferencesSchema } from '@agiworkforce/cloud-contracts';
 
 const PUSH_TOKEN_SCOPE = { resolveOrganization: false } as const;
 
@@ -15,6 +16,7 @@ const PushTokenSchema = z.object({
   pushToken: z.string().min(1).max(512),
   platform: z.enum(['ios', 'android']).optional(),
   name: z.string().max(120).optional(),
+  preferences: MobilePushPreferencesSchema.optional(),
 });
 
 async function handlePushToken(request: NextRequest) {
@@ -31,7 +33,7 @@ async function handlePushToken(request: NextRequest) {
   if (!parsed.success) {
     throw createError.badRequest('Invalid push-token payload', parsed.error.flatten());
   }
-  const { deviceId, pushToken, platform, name } = parsed.data;
+  const { deviceId, pushToken, platform, name, preferences } = parsed.data;
 
   // The device id comes from the client and the row that holds it may belong to
   // another account, which the caller's own scope cannot see. Reading it over
@@ -48,16 +50,28 @@ async function handlePushToken(request: NextRequest) {
   try {
     await db.query(
       `
-        insert into public.mobile_devices (id, user_id, platform, name, push_token, updated_at)
-        values ($1, $2, $3, $4, $5, now())
+        insert into public.mobile_devices
+          (id, user_id, platform, name, push_token, push_preferences, updated_at)
+        values ($1, $2, $3, $4, $5, $6::jsonb, now())
         on conflict (id) do update set
-          push_token = excluded.push_token,
-          platform   = coalesce(excluded.platform, public.mobile_devices.platform),
-          name       = coalesce(excluded.name, public.mobile_devices.name),
-          updated_at = now()
+          push_token       = excluded.push_token,
+          platform         = coalesce(excluded.platform, public.mobile_devices.platform),
+          name             = coalesce(excluded.name, public.mobile_devices.name),
+          push_preferences = coalesce(
+            excluded.push_preferences,
+            public.mobile_devices.push_preferences
+          ),
+          updated_at       = now()
         where public.mobile_devices.user_id = excluded.user_id
       `,
-      [deviceId, userId, platform ?? null, name ?? null, pushToken],
+      [
+        deviceId,
+        userId,
+        platform ?? null,
+        name ?? null,
+        pushToken,
+        preferences ? JSON.stringify(preferences) : null,
+      ],
     );
   } catch (error) {
     logger.error({ error, userId, deviceId }, 'Failed to upsert mobile push token');

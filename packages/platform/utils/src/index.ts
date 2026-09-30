@@ -33,6 +33,22 @@ export type {
 } from './managedMediaIdempotency';
 
 export { logger, redactSecrets, redactSecretsWithReport, scanSecrets } from './logger';
+export {
+  REDACTION_POLICIES,
+  SECRET_DETECTION_RULES,
+  SECRET_PATTERN_RULES,
+  globalRulePattern,
+  redactWithPolicy,
+  redactWithSteps,
+} from './secretRedaction';
+export type {
+  RedactionPolicy,
+  RedactionReplacement,
+  RedactionStep,
+  SecretPatternRule,
+  SecretRuleId,
+  SecretRuleSeverity,
+} from './secretRedaction';
 export type { LogLevel, SecretScanOptions, SecretScanResult } from './logger';
 
 export {

@@ -1,4 +1,14 @@
+import { settingsWithholdReason } from '../../data/contextExclusion';
 import * as path from 'node:path';
+import { realpath } from 'node:fs/promises';
+import { resolveContained } from '@agiworkforce/utils/path-containment';
+import {
+  applyAgentActivityEvent,
+  createMessageQueue,
+  type AgentActivityEntry,
+  type AgentActivityState,
+  type MessageQueue,
+} from '@agiworkforce/client-runtime';
 import * as vscode from 'vscode';
 import {
   formatRelativeTime,
@@ -15,6 +25,7 @@ import {
   MODEL_CONTEXT_LIMITS,
   providerDisplayLabel,
   routingProfileForModel,
+  isAutoPickerModelId,
   UNKNOWN_PROVIDER_BRAND_COLOR,
   type ModelRoute,
 } from '../model-picker/modelConstants';
@@ -24,10 +35,13 @@ import {
   capabilityDenialDescriptor,
   formatUsageRemaining,
   formatUsageResetIn,
-  isAutoModeModelId,
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  canAccessManualModelSelection,
+  getBillingPlanPricing,
   managedUsageBucketLabel,
   modelDisplayNameById,
   type AgentEventApprovalRiskLevel,
+  type AgentEventEnvelope,
   type AgentEventSource,
   type AgentEventToolCategory,
   type AgentMode,
@@ -57,6 +71,7 @@ import {
   writerConflictHolder,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
+  type ThreadActiveTurn,
   type ThreadCheckpointList,
   type ThreadRewindOutcome,
 } from '../../integrations/localRuntimeClient';
@@ -74,7 +89,10 @@ import {
 import { RETRY_LAST_MESSAGE_COMMAND, type ChatTurn } from '../chat/retry';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { EXTENSION_ID } from '../../platform/version';
-import { getContextPanelProvider } from '../trees/contextPanelProvider';
+import {
+  getContextPanelProvider,
+  validateWorkspaceContextFile,
+} from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import {
   accountIdentityForDisplay,
@@ -96,6 +114,7 @@ import {
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
 import { SHOW_ARCHIVED_SESSIONS_COMMAND } from '../trees/sessionPickers';
+import { isCloudThread, showCloudSession } from '../trees/cloudSessions';
 import { rememberTypedText, typedTextFor } from './typedMessages';
 import {
   CONTINUE_IN_CLOUD_COMMAND,
@@ -115,7 +134,8 @@ import { ONBOARDING_SEEN_KEY } from '../onboarding/onboardingState';
 import {
   buildContextAttachment,
   resolveContextMenuState,
-  resolveEditorContext,
+  captureEditorContext,
+  withholdGitIgnoredContext,
   type ContextMenuItemState,
   type EditorContextChip,
   type EditorContextSnapshot,
@@ -175,6 +195,7 @@ import {
   type ExtensionUsageMeter,
 } from '../../data/usageMeter';
 import { developerAccessPlanLabel, planDisplayLabel } from '../account-auth/planLabel';
+import { trackProductEvent } from '../analytics/productAnalytics';
 
 type DeveloperSessionTrustMode = ThreadSummary['trustMode'];
 
@@ -300,7 +321,12 @@ export type WebviewToExtMessage =
     }
   | {
       type: 'respondToApproval';
-      payload: { requestId: string; decision: ApprovalDecision; guidance?: string };
+      payload: {
+        requestId: string;
+        decision: ApprovalDecision;
+        guidance?: string;
+        answer?: string;
+      };
     }
   | {
       type: 'attachFiles';
@@ -321,7 +347,11 @@ export type WebviewToExtMessage =
   | { type: 'openArchivedSessions' }
   | {
       type: 'messageAction';
-      payload: { action: 'resend' | 'branch'; text: string; occurrence: number };
+      payload: { action: 'resend' | 'branch' | 'branchAnswer'; text: string; occurrence: number };
+    }
+  | {
+      type: 'planDecision';
+      payload: { decision: 'approve' } | { decision: 'reject'; feedback: string };
     }
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
@@ -420,6 +450,7 @@ export type ExtToWebviewMessage =
         notice: string;
       };
     }
+  | { type: 'turnResumed' }
   | {
       type: 'turnStarted';
       payload: {
@@ -535,6 +566,7 @@ export type ExtToWebviewMessage =
         reversible?: boolean;
         reviewable?: true;
         alwaysAllow?: true;
+        question?: { text: string; options: string[] };
       };
     }
   | {
@@ -638,6 +670,7 @@ export interface UsageMeterWebviewPayload {
 interface PendingAttachment {
   id: string;
   input: UserInput;
+  source?: { filePath: string; untitled?: boolean };
 }
 
 interface PendingChatSend {
@@ -649,7 +682,7 @@ interface PendingChatSend {
   browseWeb: boolean;
   references: WorkspaceFileReference[];
   attachments: PendingAttachment[];
-  editorContext: EditorContextSnapshot;
+  editorContext: Promise<EditorContextSnapshot>;
 }
 
 const USAGE_METER_UPGRADE_THRESHOLD = 0.2;
@@ -764,6 +797,15 @@ interface DeveloperThreadState {
   updatedAt: string;
 }
 
+function manualModelUnlockText(): string {
+  const tier = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find((candidate) =>
+    canAccessManualModelSelection(candidate),
+  );
+  return tier === undefined
+    ? 'Your plan uses Auto; upgrade your AGI plan to choose these models'
+    : `Your plan uses Auto; upgrade to ${getBillingPlanPricing(tier).label} to choose these models`;
+}
+
 export class ChatStateManager {
   private _thread?: DeveloperThreadState;
   private _transcriptSyncActive = false;
@@ -775,6 +817,7 @@ export class ChatStateManager {
     isUiSettled: () => boolean;
   };
   private _cancelRequested = false;
+  private _agentActivity?: AgentActivityState;
   private _conversationEpoch = 0;
 
   conversationEpoch(): number {
@@ -788,7 +831,13 @@ export class ChatStateManager {
   private _resumeAttemptSeq = 0;
   private _turnLifecycleActive = false;
   private _turnLifecycleEpoch: number | undefined;
-  private readonly _queuedSends: PendingChatSend[] = [];
+  /**
+   * Follow-ups wait in the shared client send queue, as they do on web, mobile
+   * and Chrome; the queue holds their order and each id's payload stays here,
+   * since editor context and attachments are not queue commands.
+   */
+  private readonly _sendQueue: MessageQueue = createMessageQueue({ laneCap: MAX_QUEUED_SENDS });
+  private readonly _queuedSendPayloads = new Map<string, PendingChatSend>();
   private _inFlightSend?: PendingChatSend;
   private readonly _steeringSends = new Set<PendingChatSend>();
   private _loadedConversation?: ConversationLoadedPayload;
@@ -812,6 +861,8 @@ export class ChatStateManager {
   private _recoveryHref: string | undefined;
   private readonly _dismissedEditorContext = new Set<string>();
   private readonly _sessionApprovals = new Set<string>();
+  private readonly _disallowedTools = new Map<string, readonly string[]>();
+  private _draftDisallowedTools: readonly string[] | undefined;
   private readonly _pendingApprovals = new Map<
     string,
     {
@@ -824,6 +875,7 @@ export class ChatStateManager {
     }
   >();
   private readonly _editorContextListeners: vscode.Disposable[] = [];
+  private _editorContextSequence = 0;
   private _answerRatings: Promise<void> = Promise.resolve();
   private readonly _activeModelChanged = new vscode.EventEmitter<string>();
   readonly onDidChangeActiveModel = this._activeModelChanged.event;
@@ -840,9 +892,9 @@ export class ChatStateManager {
     this._activeModel = Config.model();
     this._cliCapabilities = new CliCapabilityAdapter(this._localRuntimes);
     this._editorContextListeners.push(
-      vscode.window.onDidChangeActiveTextEditor(() => this.pushEditorContext()),
-      vscode.window.onDidChangeTextEditorSelection(() => this.pushEditorContext()),
-      vscode.languages.onDidChangeDiagnostics(() => this.pushEditorContext()),
+      vscode.window.onDidChangeActiveTextEditor(() => void this.pushEditorContext()),
+      vscode.window.onDidChangeTextEditorSelection(() => void this.pushEditorContext()),
+      vscode.languages.onDidChangeDiagnostics(() => void this.pushEditorContext()),
       onApprovalAnsweredOnPhone((answer) => this._approvalAnsweredOnPhone(answer)),
     );
     if (this._workspaceState !== undefined) {
@@ -957,7 +1009,7 @@ export class ChatStateManager {
         void this.pushStartSuggestions();
         void this.pushWebSearchSetup();
         this.pushActiveProject();
-        this.pushEditorContext();
+        void this.pushEditorContext();
         if (this._loadedConversation !== undefined && this._thread !== undefined) {
           this._postLoadedConversation();
           this._postProviderBadgeForSession(
@@ -1047,6 +1099,7 @@ export class ChatStateManager {
       case 'cancel': {
         this._resumeAttemptSeq++;
         this._dropSteeringSends('Steer cancelled by Stop.');
+        trackProductEvent('generation_stopped', this._thread?.trustMode);
         await this._interruptActiveTurn();
         break;
       }
@@ -1110,8 +1163,9 @@ export class ChatStateManager {
         this._pendingAttachments.splice(0);
         this._dismissedEditorContext.clear();
         this._sessionApprovals.clear();
+        this._draftDisallowedTools = undefined;
         this._clearPendingApprovals();
-        this.pushEditorContext();
+        void this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
         this._followDefaultModel();
         await this._pushUsageMeterOnBoundaryChange();
@@ -1149,8 +1203,9 @@ export class ChatStateManager {
         this._pendingAttachments.splice(0);
         this._dismissedEditorContext.clear();
         this._sessionApprovals.clear();
+        this._draftDisallowedTools = undefined;
         this._clearPendingApprovals();
-        this.pushEditorContext();
+        void this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
         this._followDefaultModel();
         await this._pushUsageMeterOnBoundaryChange();
@@ -1215,6 +1270,11 @@ export class ChatStateManager {
         break;
       }
 
+      case 'planDecision': {
+        await this._decidePlan(msg.payload);
+        break;
+      }
+
       case 'openSessionRow': {
         if (msg.payload.source === 'local') {
           await vscode.commands.executeCommand('agi-workforce.openConversation', msg.payload.id);
@@ -1241,16 +1301,16 @@ export class ChatStateManager {
       }
 
       case 'cancelQueuedMessage': {
-        const index = this._queuedSends.findIndex(
-          (request) => request.clientMessageId === msg.payload.clientMessageId,
+        const [command] = this._sendQueue.dequeueAllMatching(
+          (queued) => queued.id === msg.payload.clientMessageId,
         );
-        if (index === -1) break;
-        const [request] = this._queuedSends.splice(index, 1);
+        const request = command ? this._releaseQueuedPayload(command.id) : undefined;
         if (request !== undefined) this._dropSend(request, 'Queued follow-up cancelled.');
         break;
       }
 
       case 'regenerate': {
+        trackProductEvent('response_regenerated', this._thread?.trustMode);
         await vscode.commands.executeCommand(RETRY_LAST_MESSAGE_COMMAND);
         break;
       }
@@ -1279,7 +1339,11 @@ export class ChatStateManager {
       }
 
       case 'respondToApproval': {
-        const { requestId, decision, guidance } = msg.payload;
+        const { requestId, decision, guidance, answer } = msg.payload;
+        if (answer !== undefined) {
+          await this._resolveApproval(requestId, 'once', false, answer);
+          break;
+        }
         const pending = this._pendingApprovals.get(requestId);
         const noted =
           decision === 'deny' &&
@@ -1343,7 +1407,7 @@ export class ChatStateManager {
 
       case 'dismissEditorContext': {
         this._dismissedEditorContext.add(msg.payload.id);
-        this.pushEditorContext();
+        await this.pushEditorContext();
         break;
       }
 
@@ -1356,7 +1420,7 @@ export class ChatStateManager {
           });
           break;
         }
-        const id = this._pushTextAttachment(attachment.name, attachment.text);
+        const id = this._pushTextAttachment(attachment.name, attachment.text, attachment.source);
         this._post({ type: 'contextAttached', payload: { id, name: attachment.name } });
         break;
       }
@@ -1457,7 +1521,7 @@ export class ChatStateManager {
             models: allItems
               .filter(
                 (item): item is typeof item & { modelId: string } =>
-                  item.modelId !== undefined && isAutoModeModelId(item.modelId),
+                  item.modelId !== undefined && isAutoPickerModelId(item.modelId),
               )
               .map((item) => ({
                 id: item.modelId,
@@ -1509,7 +1573,7 @@ export class ChatStateManager {
           | undefined;
 
         for (const item of allItems) {
-          if (item.modelId !== undefined && isAutoModeModelId(item.modelId)) continue;
+          if (item.modelId !== undefined && isAutoPickerModelId(item.modelId)) continue;
           if (item.kind === vscode.QuickPickItemKind.Separator) {
             if (item.label !== '') {
               const reachableOnBoundary =
@@ -1530,7 +1594,9 @@ export class ChatStateManager {
                     ? 'Requests go directly to this provider using your key'
                     : reachableOnBoundary === 'cloud'
                       ? 'Prompts are sent to AGI infrastructure under your plan'
-                      : 'Sign in or add a provider key to unlock these models',
+                      : tier === 'free' || tier === 'basic'
+                        ? manualModelUnlockText()
+                        : 'Sign in or add a provider key to unlock these models',
                 boundary: reachableOnBoundary,
                 models: [],
               };
@@ -1679,7 +1745,7 @@ export class ChatStateManager {
         const index = this._pendingAttachments.findIndex((entry) => entry.id === id);
         if (index !== -1) this._pendingAttachments.splice(index, 1);
         this._removeOwnedAttachment(this._inFlightSend, id);
-        for (const queued of this._queuedSends) this._removeOwnedAttachment(queued, id);
+        for (const queued of this._queuedSendList()) this._removeOwnedAttachment(queued, id);
         for (const steering of this._steeringSends) this._removeOwnedAttachment(steering, id);
         break;
       }
@@ -1926,7 +1992,9 @@ export class ChatStateManager {
 
   private async _pushSessions(source: SessionListSource): Promise<void> {
     if (source === 'local') {
-      const threads = (await this._conversationTreeProvider?.getThreads()) ?? [];
+      const threads = ((await this._conversationTreeProvider?.getThreads()) ?? []).filter(
+        (thread) => !isCloudThread(thread),
+      );
       const inputs: SessionRowInput[] = threads.map((thread) => ({
         id: thread.id,
         title: thread.title,
@@ -1956,7 +2024,7 @@ export class ChatStateManager {
     }
     try {
       const [page, codeSessions, workspaceRepositories] = await Promise.all([
-        resolution.workspace.chat.listConversations({ limit: 50 }),
+        resolution.workspace.chat.listConversations({ limit: 50, archived: 'exclude' }),
         code.status === 'ready' ? code.api.list('open') : null,
         workspaceGitHubRepositories(),
       ]);
@@ -2122,6 +2190,10 @@ export class ChatStateManager {
       }
 
       const listed = resolved.response.thread;
+      if (isCloudThread(listed)) {
+        void showCloudSession(resolved.response);
+        return false;
+      }
       const statusError = resumeStatusError(listed);
       if (statusError !== undefined) return this._rejectResume(statusError, RUNTIME_REFUSAL);
       if (listed.trustMode === 'unknown') {
@@ -2226,6 +2298,7 @@ export class ChatStateManager {
       await this.pushUsageMeter(isCommittedAttempt);
       if (!isCommittedAttempt()) return false;
       this._postSessionBoundary(resumed.trustMode, resumed.provider);
+      void this._reattachRunningTurn(resolved.runtime, resumed.id, committedEpoch);
       return true;
     } catch (error) {
       if (!isCurrentAttempt()) return false;
@@ -2233,6 +2306,110 @@ export class ChatStateManager {
         error instanceof Error ? error.message : t('chatNotice.resumeFailed'),
         RUNTIME_REFUSAL,
       );
+    }
+  }
+
+  private async _reattachRunningTurn(
+    runtime: LocalRuntimeClient,
+    threadId: string,
+    epoch: number,
+  ): Promise<void> {
+    if (!(await runtime.offers('reconnect'))) return;
+    const buffered: LocalRuntimeEvent[] = [];
+    let snapshot: ThreadActiveTurn | null | undefined;
+    let attached = false;
+    let terminal = false;
+    let uiSettled = false;
+    let resolveCompletion!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    const complete = (): void => {
+      uiSettled = true;
+      if (!terminal) {
+        terminal = true;
+        resolveCompletion();
+      }
+    };
+    const deliver = (event: LocalRuntimeEvent): void => {
+      if (
+        event.type === 'output_delta' &&
+        event.index !== undefined &&
+        snapshot?.nextDeltaIndex !== undefined &&
+        event.index < snapshot.nextDeltaIndex
+      ) {
+        return;
+      }
+      void this._handleRuntimeEvent(runtime, event, complete);
+    };
+    const subscription = runtime.onEvent((event) => {
+      if (event.type === 'runtime_disconnected') {
+        if (attached) void this._handleRuntimeEvent(runtime, event, complete);
+        return;
+      }
+      if (event.type === 'mcp_status' || event.threadId !== threadId) return;
+      if (snapshot === undefined) {
+        buffered.push(event);
+        return;
+      }
+      if (attached && event.turnId === snapshot?.turnId) deliver(event);
+    });
+    try {
+      snapshot = await runtime.reconnectThread(threadId).catch(() => null);
+      if (
+        snapshot === null ||
+        epoch !== this._conversationEpoch ||
+        this._thread?.id !== threadId ||
+        this._thread.runtime !== runtime ||
+        this._turnLifecycleActive ||
+        this._activeTurn !== undefined
+      ) {
+        return;
+      }
+      const active = snapshot;
+      attached = true;
+      this._turnLifecycleActive = true;
+      this._turnLifecycleEpoch = epoch;
+      this._activeTurn = {
+        threadId,
+        turnId: active.turnId,
+        runtime,
+        complete,
+        isUiSettled: () => uiSettled,
+      };
+      this._post({ type: 'turnResumed' });
+      if (active.partialResponse !== '') {
+        this._post({ type: 'token', payload: { text: active.partialResponse } });
+      }
+      for (const approval of active.pendingApprovals) {
+        void this._handleRuntimeEvent(
+          runtime,
+          { type: 'approval_requested', threadId, turnId: active.turnId, ...approval },
+          complete,
+        );
+      }
+      for (const event of buffered.splice(0)) {
+        if (
+          event.type !== 'runtime_disconnected' &&
+          event.type !== 'mcp_status' &&
+          event.turnId === active.turnId
+        ) {
+          deliver(event);
+        }
+      }
+      await completion;
+      if (this._thread?.id === threadId && this._thread.runtime === runtime) {
+        await this._refreshLoadedConversation(runtime, threadId, true);
+      }
+    } finally {
+      subscription.dispose();
+      if (attached) {
+        if (this._activeTurn?.turnId === snapshot?.turnId) delete this._activeTurn;
+        this._turnLifecycleActive = false;
+        this._turnLifecycleEpoch = undefined;
+        const next = this._takeQueuedSend();
+        if (next !== undefined) void this._drainSendLifecycle(next, true);
+      }
     }
   }
 
@@ -2483,11 +2660,11 @@ export class ChatStateManager {
     };
   }
 
-  pushEditorContext(): void {
-    this._post({
-      type: 'editorContext',
-      payload: { chips: resolveEditorContext(this._dismissedEditorContext).chips },
-    });
+  async pushEditorContext(): Promise<void> {
+    const sequence = ++this._editorContextSequence;
+    const snapshot = await captureEditorContext(new Set(this._dismissedEditorContext));
+    if (sequence !== this._editorContextSequence) return;
+    this._post({ type: 'editorContext', payload: { chips: snapshot.chips } });
   }
 
   dispose(): void {
@@ -2608,6 +2785,28 @@ export class ChatStateManager {
     }
   }
 
+  sessionDisallowedTools(): readonly string[] {
+    const threadId = this._thread?.id;
+    return (
+      (threadId === undefined ? undefined : this._disallowedTools.get(threadId)) ??
+      this._draftDisallowedTools ??
+      []
+    );
+  }
+
+  setSessionDisallowedTools(tools: readonly string[]): void {
+    const threadId = this._thread?.id;
+    if (threadId === undefined) {
+      this._draftDisallowedTools = tools;
+      return;
+    }
+    this._disallowedTools.set(threadId, tools);
+  }
+
+  sessionAgentMode(): AgentMode {
+    return enforceAgentModeConsent(this._mode ?? Config.agentMode());
+  }
+
   async activeThreadReceipt(): Promise<SessionReceipt | undefined> {
     const thread = this._thread;
     if (thread === undefined) return undefined;
@@ -2645,8 +2844,9 @@ export class ChatStateManager {
     this._startNewEpoch();
     this._dismissedEditorContext.clear();
     this._sessionApprovals.clear();
+    this._draftDisallowedTools = undefined;
     this._clearPendingApprovals();
-    this.pushEditorContext();
+    void this.pushEditorContext();
     this._dropQueuedSends('Queued follow-up cancelled when the conversation was reset.');
     this._dropInFlightSend('Message cancelled when the conversation was reset.');
     this._dropSteeringSends('Steer cancelled when the conversation was reset.');
@@ -2679,7 +2879,11 @@ export class ChatStateManager {
    * wrapper, one truncation rule and one escape of the wrapper tag itself,
    * whether the text came from a dropped file or the composer context menu.
    */
-  private _pushTextAttachment(name: string, raw: string): string {
+  private _pushTextAttachment(
+    name: string,
+    raw: string,
+    source?: PendingAttachment['source'],
+  ): string {
     const selected = raw.slice(0, TEXT_ATTACHMENT_CHAR_LIMIT);
     const escaped = selected.replace(/<\/?untrusted_attachment[^>]*>/gi, (value) =>
       value.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
@@ -2688,6 +2892,7 @@ export class ChatStateManager {
     const id = `att-${++this._attachmentSeq}`;
     this._pendingAttachments.push({
       id,
+      ...(source === undefined ? {} : { source }),
       input: {
         type: 'text',
         text:
@@ -2700,8 +2905,9 @@ export class ChatStateManager {
   }
 
   private _dropQueuedSends(message: string): void {
-    for (const request of this._queuedSends.splice(0)) {
-      this._dropSend(request, message);
+    for (const command of this._sendQueue.dequeueAll()) {
+      const request = this._releaseQueuedPayload(command.id);
+      if (request !== undefined) this._dropSend(request, message);
     }
   }
 
@@ -2725,7 +2931,7 @@ export class ChatStateManager {
       payload: {
         kind: 'cancelled',
         message,
-        queueDepth: this._queuedSends.length,
+        queueDepth: this._sendQueue.size(),
         attachmentIds: [],
         clientMessageId: request.clientMessageId,
       },
@@ -2917,14 +3123,14 @@ export class ChatStateManager {
       browseWeb,
       references: Array.isArray(references) ? references.filter(isWorkspaceFileReference) : [],
       attachments: this._pendingAttachments.splice(0),
-      editorContext: resolveEditorContext(this._dismissedEditorContext),
+      editorContext: captureEditorContext(new Set(this._dismissedEditorContext)),
     };
     this._dismissedEditorContext.clear();
     this._lastUserTurn = { role: 'user', text, references: request.references };
-    this.pushEditorContext();
+    void this.pushEditorContext();
 
     if (this._turnLifecycleActive) {
-      if (this._queuedSends.length + this._steeringSends.size >= MAX_QUEUED_SENDS) {
+      if (this._sendQueue.size() + this._steeringSends.size >= MAX_QUEUED_SENDS) {
         this._rejectFollowUpCapacity(request);
         return;
       }
@@ -2967,7 +3173,7 @@ export class ChatStateManager {
             payload: {
               kind: 'error',
               message: t('chatNotice.queuedNotStarted'),
-              queueDepth: this._queuedSends.length,
+              queueDepth: this._sendQueue.size(),
               attachmentIds: [],
               clientMessageId: current.clientMessageId,
             },
@@ -2976,9 +3182,8 @@ export class ChatStateManager {
         this._restoreUnconsumedAttachments(current);
         delete this._inFlightSend;
         current =
-          conversationEpoch === this._conversationEpoch &&
-          this._queuedSends[0]?.epoch === conversationEpoch
-            ? this._queuedSends.shift()
+          conversationEpoch === this._conversationEpoch
+            ? this._takeQueuedSend((next) => next.epoch === conversationEpoch)
             : undefined;
         queued = current !== undefined;
       }
@@ -2989,18 +3194,24 @@ export class ChatStateManager {
       }
       this._turnLifecycleActive = false;
       this._turnLifecycleEpoch = undefined;
-      const nextEpochRequest = this._queuedSends.shift();
+      const nextEpochRequest = this._takeQueuedSend();
       if (nextEpochRequest !== undefined) void this._drainSendLifecycle(nextEpochRequest, true);
     }
   }
 
   private _enqueueSend(request: PendingChatSend, kind: 'queued' | 'queue-fallback'): void {
-    if (this._queuedSends.length >= MAX_QUEUED_SENDS) {
+    if (this._sendQueue.size() >= MAX_QUEUED_SENDS) {
       this._rejectFollowUpCapacity(request);
       return;
     }
-    this._queuedSends.push(request);
-    const queueDepth = this._queuedSends.length;
+    this._queuedSendPayloads.set(request.clientMessageId, request);
+    this._sendQueue.enqueue({
+      id: request.clientMessageId,
+      value: request.text,
+      mode: 'prompt',
+      priority: 'next',
+    });
+    const queueDepth = this._sendQueue.size();
     this._post({
       type: 'followUpStatus',
       payload: {
@@ -3016,6 +3227,29 @@ export class ChatStateManager {
     });
   }
 
+  private _releaseQueuedPayload(id: string): PendingChatSend | undefined {
+    const request = this._queuedSendPayloads.get(id);
+    this._queuedSendPayloads.delete(id);
+    return request;
+  }
+
+  private _queuedSendList(): PendingChatSend[] {
+    return this._sendQueue
+      .getSnapshot()
+      .flatMap((command) => this._queuedSendPayloads.get(command.id) ?? []);
+  }
+
+  /** The next follow-up in order, taken only when the head is one `accept` allows. */
+  private _takeQueuedSend(
+    accept: (request: PendingChatSend) => boolean = () => true,
+  ): PendingChatSend | undefined {
+    const head = this._sendQueue.peek();
+    const request = head ? this._queuedSendPayloads.get(head.id) : undefined;
+    if (head === undefined || request === undefined || !accept(request)) return undefined;
+    this._sendQueue.dequeueIf(head.id);
+    return this._releaseQueuedPayload(head.id);
+  }
+
   private _rejectFollowUpCapacity(request: PendingChatSend): void {
     const attachmentIds = request.attachments.map((entry) => entry.id);
     const message = tPlural('chatNotice.followUpCapacity', MAX_QUEUED_SENDS);
@@ -3025,7 +3259,7 @@ export class ChatStateManager {
       payload: {
         kind: 'error',
         message,
-        queueDepth: this._queuedSends.length,
+        queueDepth: this._sendQueue.size(),
         attachmentIds,
         clientMessageId: request.clientMessageId,
       },
@@ -3074,7 +3308,7 @@ export class ChatStateManager {
           message: turnStillActive
             ? 'Steering the active turn.'
             : 'Steer was accepted just as the active turn finished.',
-          queueDepth: this._queuedSends.length,
+          queueDepth: this._sendQueue.size(),
           attachmentIds: [],
           clientMessageId: request.clientMessageId,
         },
@@ -3096,7 +3330,7 @@ export class ChatStateManager {
         payload: {
           kind: 'error',
           message: error instanceof Error ? error.message : t('chatNotice.steerFailed'),
-          queueDepth: this._queuedSends.length,
+          queueDepth: this._sendQueue.size(),
           attachmentIds: [],
           clientMessageId: request.clientMessageId,
         },
@@ -3126,6 +3360,24 @@ export class ChatStateManager {
     ];
   }
 
+  private async _attachmentInputs(entries: readonly PendingAttachment[]): Promise<UserInput[]> {
+    const inputs: UserInput[] = [];
+    for (const entry of entries) {
+      if (entry.source !== undefined) {
+        if (entry.source.untitled === true) {
+          if (settingsWithholdReason(entry.source.filePath) !== undefined) continue;
+        } else {
+          const resolved = await validateWorkspaceContextFile(
+            vscode.Uri.file(entry.source.filePath),
+          );
+          if (!resolved.ok || resolved.uri.fsPath !== entry.source.filePath) continue;
+        }
+      }
+      inputs.push(entry.input);
+    }
+    return inputs;
+  }
+
   private async _buildFollowUpInputs(
     request: PendingChatSend,
     workspaceUri: vscode.Uri,
@@ -3137,7 +3389,7 @@ export class ChatStateManager {
     return [
       ...this._typedTextInputs(request.text, request.browseWeb),
       ...mentionInputs,
-      ...request.attachments.map((entry) => entry.input),
+      ...(await this._attachmentInputs(request.attachments)),
     ];
   }
 
@@ -3194,7 +3446,7 @@ export class ChatStateManager {
         payload: {
           kind: 'error',
           message,
-          queueDepth: this._queuedSends.length,
+          queueDepth: this._sendQueue.size(),
           attachmentIds: [],
           clientMessageId: request.clientMessageId,
         },
@@ -3380,19 +3632,27 @@ export class ChatStateManager {
 
       try {
         const attachmentEntries = [...request.attachments];
-        const attachmentInputs = attachmentEntries.map((entry) => entry.input);
+        const attachmentInputs = await this._attachmentInputs(attachmentEntries);
         const activeProject = getActiveCloudProject(this._context.workspaceState);
         const customInstructionInput = buildCustomInstructionInput(this._context, {
           projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
         });
-        const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.cachedFacts() ?? []);
-        const contextFiles = contextFilesForWorkspace(cwd, request.editorContext.contextFiles);
-        const editorContextInputs: UserInput[] = request.editorContext.texts.map((text) => ({
+        const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
+        const editorContext = await withholdGitIgnoredContext(await request.editorContext);
+        const contextFiles = await contextFilesForWorkspace(cwd, editorContext.contextFiles);
+        const editorContextInputs: UserInput[] = editorContext.texts.map((text) => ({
           type: 'text',
           text,
           text_elements: [],
         }));
         const routingProfile = routingProfileForModel(requestedModel);
+        if (this._draftDisallowedTools !== undefined && !this._disallowedTools.has(thread.id)) {
+          this._disallowedTools.set(thread.id, this._draftDisallowedTools);
+        }
+        this._draftDisallowedTools = undefined;
+        const disallowedTools = this._disallowedTools.get(thread.id);
+        const filtersTools =
+          disallowedTools !== undefined && (await runtime.offers('turnToolFilters'));
         const startTurn = runtime.startTurn({
           threadId: thread.id,
           cwd,
@@ -3407,15 +3667,18 @@ export class ChatStateManager {
           agentMode: enforceAgentModeConsent(this._mode ?? Config.agentMode()),
           reasoningEffort: supportedEffort(requestedModel, this._effort ?? Config.agentEffort()),
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
+          ...(filtersTools ? { disallowedTools: [...disallowedTools] } : {}),
           ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),
           ...(isAutoRoutingModel(requestedModel)
             ? {
-                model: requestedModel,
+                model: routingProfile === undefined ? requestedModel : 'auto',
                 routingTaskType: classifyDeveloperTurn(routingText, [
                   ...mentionInputs,
                   ...attachmentInputs,
                 ]),
-                ...(routingProfile === undefined ? {} : { routingProfile }),
+                ...(routingProfile === undefined || routingProfile === 'auto'
+                  ? {}
+                  : { routingProfile }),
               }
             : { model: requestedModel }),
         });
@@ -3457,7 +3720,7 @@ export class ChatStateManager {
             type: 'turnStarted',
             payload: {
               queued: true,
-              queueRemaining: this._queuedSends.length,
+              queueRemaining: this._sendQueue.size(),
               clientMessageId: request.clientMessageId,
               text: request.text,
             },
@@ -3568,8 +3831,46 @@ export class ChatStateManager {
     );
   }
 
+  private async _decidePlan(
+    decision: { decision: 'approve' } | { decision: 'reject'; feedback: string },
+  ): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined) {
+      void vscode.window.showWarningMessage(t('messageActions.notFound'));
+      return;
+    }
+    if (this.turnInFlight()) {
+      void vscode.window.showWarningMessage(t('messageActions.stopFirst'));
+      return;
+    }
+    if (!(await thread.runtime.offers('planDecisions'))) {
+      void vscode.window.showWarningMessage(t('plan.needsUpdate'));
+      return;
+    }
+    try {
+      if (decision.decision === 'approve') {
+        await thread.runtime.decidePlan(thread.id, 'approve');
+      } else {
+        await thread.runtime.decidePlan(thread.id, 'reject', decision.feedback);
+      }
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        t('messageActions.failed', {
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return;
+    }
+    const text =
+      decision.decision === 'approve'
+        ? t('plan.approvedMessage')
+        : t('plan.revisedMessage', { feedback: decision.feedback });
+    this._post({ type: 'addUserMessage', payload: { text } });
+    await this._handleSendMessage(text);
+  }
+
   private async _messageAction(action: {
-    action: 'resend' | 'branch';
+    action: 'resend' | 'branch' | 'branchAnswer';
     text: string;
     occurrence: number;
   }): Promise<void> {
@@ -3583,8 +3884,9 @@ export class ChatStateManager {
       void vscode.window.showWarningMessage(t('messageActions.stopFirst'));
       return;
     }
+    const role = action.action === 'branchAnswer' ? 'assistant' : 'user';
     const target = loaded.messages
-      .filter((message) => message.role === 'user' && message.text === action.text)
+      .filter((message) => message.role === role && message.text === action.text)
       .at(action.occurrence);
     if (target === undefined) {
       void vscode.window.showWarningMessage(t('messageActions.notFound'));
@@ -3596,7 +3898,9 @@ export class ChatStateManager {
     }
     try {
       if (action.action === 'resend') await this._resendMessage(thread, target.index, target.text);
-      else await this._branchFromMessage(thread, loaded.title, target.index, target.text);
+      else if (action.action === 'branchAnswer') {
+        await this._branchFromAnswer(thread, loaded.title, target.index);
+      } else await this._branchFromMessage(thread, loaded.title, target.index, target.text);
     } catch (error) {
       void vscode.window.showErrorMessage(
         t('messageActions.failed', {
@@ -3634,6 +3938,24 @@ export class ChatStateManager {
     if (await this.resumeConversation(thread.id)) {
       this._post({ type: 'composerDraft', payload: { text, references: [], submit: true } });
     }
+  }
+
+  private async _branchFromAnswer(
+    thread: DeveloperThreadState,
+    title: string,
+    messageIndex: number,
+  ): Promise<void> {
+    if (!(await thread.runtime.offers('forkAtMessage'))) {
+      void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
+      return;
+    }
+    const forked = await thread.runtime.forkThread(
+      thread.id,
+      t('messageActions.branchTitle', { title }),
+      messageIndex,
+    );
+    this._conversationTreeProvider?.refresh();
+    await this.resumeConversation(forked.id);
   }
 
   private async _branchFromMessage(
@@ -3791,6 +4113,26 @@ export class ChatStateManager {
     }
   }
 
+  private _foldAgentEvent(envelope: AgentEventEnvelope): boolean {
+    const previous = this._agentActivity;
+    const next = applyAgentActivityEvent(previous, envelope);
+    this._agentActivity = next;
+    return next !== previous;
+  }
+
+  private _activityEntry<K extends 'progress' | 'tool'>(
+    kind: K,
+    id: string,
+  ): Extract<AgentActivityEntry, { kind: K }> | undefined {
+    return this._agentActivity?.entries.find(
+      (entry): entry is Extract<AgentActivityEntry, { kind: K }> =>
+        entry.kind === kind &&
+        (entry.kind === 'tool'
+          ? entry.toolCallId === id
+          : entry.kind === 'progress' && entry.progressId === id),
+    );
+  }
+
   private async _handleRuntimeEvent(
     runtime: LocalRuntimeClient,
     event: LocalRuntimeEvent,
@@ -3816,6 +4158,17 @@ export class ChatStateManager {
       this._post({ type: 'token', payload: { text: event.delta } });
       return;
     }
+    if (event.type === 'agent_event') {
+      this._foldAgentEvent(event.envelope);
+      return;
+    }
+    if (
+      'envelope' in event &&
+      event.envelope !== undefined &&
+      !this._foldAgentEvent(event.envelope)
+    ) {
+      return;
+    }
     if (event.type === 'source_list') {
       this._post({
         type: 'sourceList',
@@ -3824,13 +4177,15 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'progress_update') {
+      const entry = this._activityEntry('progress', event.progressId);
+      const detail = entry?.detail ?? event.detail;
       this._post({
         type: 'progressUpdate',
         payload: {
           progressId: event.progressId,
-          summary: event.summary,
-          ...(event.detail === undefined ? {} : { detail: event.detail }),
-          status: event.status,
+          summary: entry?.summary ?? event.summary,
+          ...(detail === undefined ? {} : { detail }),
+          status: entry?.status === 'cancelled' ? 'failed' : (entry?.status ?? event.status),
         },
       });
       return;
@@ -3841,26 +4196,29 @@ export class ChatStateManager {
         this._post({ type: 'planUpdate', payload: plan });
         return;
       }
+      const entry = this._activityEntry('tool', event.toolCallId);
       this._post({
         type: 'toolCallStart',
         payload: {
           toolUseId: event.toolCallId,
-          name: event.name,
-          category: event.category,
-          summary: event.summary,
-          input: event.input,
+          name: entry?.name ?? event.name,
+          category: entry?.category ?? event.category,
+          summary: entry?.summary ?? event.summary,
+          input: entry?.input ?? event.input,
         },
       });
       return;
     }
     if (event.type === 'tool_execution_end') {
+      const entry = this._activityEntry('tool', event.toolCallId);
+      const elapsedMs = entry?.elapsedMs ?? event.elapsedMs;
       this._post({
         type: 'toolCallEnd',
         payload: {
           toolUseId: event.toolCallId,
-          output: event.output,
-          isError: event.isError,
-          ...(event.elapsedMs === undefined ? {} : { elapsedMs: event.elapsedMs }),
+          output: entry?.output ?? event.output,
+          isError: entry === undefined ? event.isError : entry.status === 'failed',
+          ...(elapsedMs === undefined ? {} : { elapsedMs }),
         },
       });
       return;
@@ -3886,8 +4244,14 @@ export class ChatStateManager {
         (await runtime.offers('approvalEdits'))
           ? { filePath: path.resolve(this._thread.cwd, filePath), content: event.proposedContent }
           : undefined;
+      const question =
+        event.question !== undefined && event.question !== null
+          ? { text: event.question.question, options: event.question.options }
+          : undefined;
       const alwaysAllow =
-        event.alwaysAllowSaved === true && (await runtime.offers('savedPermissions'));
+        question === undefined &&
+        event.alwaysAllowSaved === true &&
+        (await runtime.offers('savedPermissions'));
       this._pendingApprovals.set(event.requestId, {
         threadId: event.threadId,
         turnId: event.turnId,
@@ -3896,7 +4260,7 @@ export class ChatStateManager {
         label,
         ...(proposed === undefined ? {} : { proposed }),
       });
-      if (this._sessionApprovals.has(identity)) {
+      if (question === undefined && this._sessionApprovals.has(identity)) {
         await this._resolveApproval(event.requestId, 'once', true);
         return;
       }
@@ -3912,6 +4276,7 @@ export class ChatStateManager {
           ...(event.reversible === undefined ? {} : { reversible: event.reversible }),
           ...(proposed === undefined ? {} : { reviewable: true as const }),
           ...(alwaysAllow ? { alwaysAllow: true as const } : {}),
+          ...(question === undefined ? {} : { question }),
         },
       });
       return;
@@ -4082,14 +4447,31 @@ function sameTranscript(
   );
 }
 
-function contextFilesForWorkspace(cwd: string, editorFiles: readonly string[]): string[] {
-  const prefix =
-    cwd.endsWith('/') || cwd.endsWith('\\')
-      ? cwd
-      : `${cwd}${process.platform === 'win32' ? '\\' : '/'}`;
+async function contextFilesForWorkspace(
+  cwd: string,
+  editorFiles: readonly string[],
+): Promise<string[]> {
+  let root: string;
+  try {
+    root = await realpath(cwd);
+  } catch {
+    return [];
+  }
   const selected = new Set([
     ...(getContextPanelProvider()?.getContextFiles() ?? []),
     ...editorFiles,
   ]);
-  return [...selected].filter((filePath) => filePath === cwd || filePath.startsWith(prefix));
+  const allowed = new Set<string>();
+  for (const filePath of selected) {
+    if (
+      !resolveContained(cwd, filePath, { allowAbsolute: true }).ok &&
+      !resolveContained(root, filePath, { allowAbsolute: true }).ok
+    )
+      continue;
+    const resolved = await validateWorkspaceContextFile(vscode.Uri.file(filePath));
+    if (resolved.ok && resolveContained(root, resolved.uri.fsPath, { allowAbsolute: true }).ok) {
+      allowed.add(resolved.uri.fsPath);
+    }
+  }
+  return [...allowed];
 }

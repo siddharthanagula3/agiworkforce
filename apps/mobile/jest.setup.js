@@ -32,6 +32,9 @@ if (!NativeModules.UIManager) {
 if (!NativeModules.UIManager.getViewManagerConfig) {
   NativeModules.UIManager.getViewManagerConfig = () => ({});
 }
+NativeModules.SourceCode.getConstants = () => ({
+  scriptURL: 'http://localhost:8081/index.bundle',
+});
 
 const SUPPRESSED_WARNINGS = [
   'Attempted to import the module',

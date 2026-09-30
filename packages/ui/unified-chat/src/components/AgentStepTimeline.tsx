@@ -99,7 +99,7 @@ function StepItem({ step, isLast, compact }: StepItemProps) {
         />
         {!isLast && (
           <div
-            className="flex-1 border-l-2 border-slate-700 mt-1"
+            className="flex-1 border-s-2 border-slate-700 mt-1"
             style={{ minHeight: compact ? 12 : 16 }}
           />
         )}
@@ -110,7 +110,7 @@ function StepItem({ step, isLast, compact }: StepItemProps) {
         <button
           type="button"
           className={cn(
-            'flex flex-wrap items-center gap-1.5 w-full text-left',
+            'flex flex-wrap items-center gap-1.5 w-full text-start',
             hasDetails ? 'cursor-pointer' : 'cursor-default',
           )}
           onClick={hasDetails ? () => setExpanded((v) => !v) : undefined}

@@ -22,6 +22,8 @@ import {
 } from '../features/surfaces/accountAccess';
 import { signInToAgiCloud } from '../features/account-auth/deviceAuth';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
+import { manageMcpServers } from '../features/surfaces/capabilityManagement';
+import type { McpServerDetailsProvider } from '../features/surfaces/mcpServerDetails';
 
 vi.mock('../features/account-auth/deviceAuth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../features/account-auth/deviceAuth')>()),
@@ -343,5 +345,55 @@ describe('single sign-in', () => {
     await expect(signIn(secretsWith(undefined), adapter)).resolves.toBe(false);
 
     expect(signInToAgiCloud).toHaveBeenCalled();
+  });
+});
+
+describe('workspace MCP refusals', () => {
+  it('shows the reason and omits connection actions for a blocked server', async () => {
+    const policyRefusal =
+      "MCP server 'blocked' was not started: your workspace administrator has turned MCP servers off";
+    const offers = vi.fn(async () => true);
+    const call = vi.fn(async () => ({
+      status: 'ok',
+      value: {
+        servers: [
+          {
+            name: 'blocked',
+            status: 'blocked',
+            transport: 'http',
+            scope: 'user',
+            policyRefusal,
+            url: 'https://mcp.example.test/mcp',
+          },
+        ],
+      },
+    }));
+    const adapter = { offers, call } as unknown as CliCapabilityAdapter;
+    const details = {} as McpServerDetailsProvider;
+    const managed = manageMcpServers(adapter, details);
+    await vi.waitFor(() => {
+      const pick = vi.mocked(vscode.window.createQuickPick).mock.results.at(-1)?.value;
+      expect(pick?.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            label: '$(lock) blocked',
+            detail: expect.stringContaining(policyRefusal),
+          }),
+        ]),
+      );
+    });
+    const pick = vi.mocked(vscode.window.createQuickPick).mock.results.at(-1)?.value;
+    const blocked = pick?.items.find(
+      (item: vscode.QuickPickItem) => item.label === '$(lock) blocked',
+    );
+    expect(blocked?.description).toContain('Blocked by your workspace');
+    expect(blocked?.buttons?.map((button: vscode.QuickInputButton) => button.tooltip)).toEqual([
+      'Remove',
+    ]);
+    expect(blocked).not.toHaveProperty('run');
+    pick?.hide();
+    await managed;
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(call).toHaveBeenCalledWith('mcpServers');
   });
 });

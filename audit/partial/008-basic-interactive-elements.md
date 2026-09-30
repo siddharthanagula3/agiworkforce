@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S8.03: Destructive buttons.
-
-- Done when: Irreversible actions use a distinct destructive button style (danger colour before hover) whose label meets contrast.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Destructive actions confirm through VS Code's modal warning, whose buttons the extension cannot style; the webview itself has no danger button style. | ui |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:1171-1175`
-
 ## S8.06: Toggle buttons.
 
 - Done when: A toggle button (a button with an on/off pressed state announced to assistive tech) is used in shipped UI.
@@ -28,18 +16,6 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1171-1175`
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
-## S8.07: Button groups.
-
-- Done when: Related buttons are grouped into a labelled button group in shipped UI.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Choices are grouped as tab or radio sets (ModeToggle tablist, StyleSelector radiogroup), but there is no labelled group of ordinary action buttons. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:78-78`, `apps/mobile/src/features/chat/components/StyleSelector.tsx:136-136`
-
 ## S8.13: One-time-code fields.
 
 - Done when: A one-time-code field (short numeric code, one-time-code autofill or paste) is used where the product asks for a code.
@@ -48,18 +24,6 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:78-78`, `apps/mob
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S8.14: Checkboxes.
-
-- Done when: Checkboxes (independent on/off choices in a list, with checked state exposed) are used in shipped UI.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The only checkbox inputs are drawn as switch tracks in settings; there is no plain checkbox for multi-choice lists. | ui |
-
-Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:1164-1172`
 
 ## S8.15: Radio groups.
 
@@ -131,41 +95,23 @@ Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:116
 
 - Done when: A date picker (calendar or native date control) is used where a date is entered in shipped UI.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Schedule dates are typed into a text field (YYYY-MM-DD) and validated; add a native date picker. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:55-56`
 
 ## S8.26: Time pickers.
 
 - Done when: A time picker (native or custom time control) is used where a time is entered in shipped UI.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Schedule times are typed as HH:MM text and validated; add a native time picker. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:83-83`
-
-## S8.27: Timezone pickers.
-
-- Done when: A time zone picker (searchable list of zones, defaulting to the device zone) is used where schedules take a zone.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The time zone defaults to the device zone but is edited as free text validated against Intl; add a zone picker. | ui |
-
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:95-97`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:29-29`
 
 ## S8.28: Color pickers.
 
@@ -177,18 +123,6 @@ Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:95-97`, `a
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S8.31: Tabs.
-
-- Done when: Tabs (a tablist switching between panels, with the selected tab exposed) are used in shipped UI.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | /plugin prints a static tab header ("Discover Installed Marketplaces Errors, current: Installed") as a message; the tabs cannot be switched, although the keybindings screen advertises "←/→ Switch tabs". | handler |
-
-Code: `apps/cli/src/tui/widgets/screen_renderers.rs:497-497`, `apps/cli/src/tui/tui_app.rs:3788-3788`, `apps/cli/src/tui/widgets/screen_renderers.rs:881-881`
 
 ## S8.32: Accordions.
 
@@ -252,14 +186,11 @@ Code: `apps/cli/src/tui/widgets/screen_renderers.rs:497-497`, `apps/cli/src/tui/
 
 - Done when: Toasts (transient, non-blocking notifications that dismiss themselves) are used in shipped UI.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only Android's 'Press back again to exit' uses a toast; other transient feedback on both platforms is inline state or Alert dialogs. Add a cross-platform toast. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/_layout.tsx:671-671`
 
 ## S8.48: Pagination controls.
 
@@ -270,15 +201,3 @@ Code: `apps/mobile/app/_layout.tsx:671-671`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-
-## S8.50: Error states.
-
-- Done when: Error states (a view-level message with a recovery action when content fails to load or a request fails) are used in shipped UI.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Route error boundaries exist, but the main Chats list has no load-error or loading state: a failed load shows "No chats yet" (ListEmptyComponent) instead of an error with retry. | states |
-
-Code: `apps/mobile/app/(app)/_layout.tsx:9-9`, `apps/mobile/app/(app)/error.tsx:14-14`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:471-484`

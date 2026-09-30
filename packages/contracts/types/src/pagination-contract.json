@@ -96,11 +96,6 @@
       "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
     },
     {
-      "route": "apps/web/app/api/settings/approvals/route.ts",
-      "why": "Keyset paged; the web panel sends the cursor, and the offset parameter stays for the Chrome options page, which still pages by offset.",
-      "fix": "Drop the offset parameter once the Chrome options page sends the cursor."
-    },
-    {
       "route": "apps/web/app/api/settings/audit-logs/route.ts",
       "why": "The compliance reader pages by offset, so an event written during the read shifts the window and the export can miss a row.",
       "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."

@@ -21,6 +21,7 @@ export interface AdapterLlmResponse {
   codeExecutionRequests?: number;
   codeExecutionContainerIds?: string[];
   providerElapsedMs: number;
+  speed?: 'standard' | 'fast';
   citations?: unknown[];
   search_results?: unknown[];
 }
@@ -76,6 +77,7 @@ export async function drainToLlmResponse(
     codeExecutionRequests: usage.codeExecutionRequests,
     codeExecutionContainerIds: usage.codeExecutionContainerIds,
     providerElapsedMs: Date.now() - startedAt,
+    ...(usage.speed ? { speed: usage.speed } : {}),
     citations: response['citations'] as unknown[] | undefined,
     search_results: response['search_results'] as unknown[] | undefined,
   };

@@ -30,7 +30,7 @@ export function PlaceListCard({ place, selected, onSelect, buttonRef }: PlaceLis
       aria-pressed={selected}
       data-testid="places-list-card"
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-xl border p-2 text-left transition-colors',
+        'flex w-full items-center gap-2.5 rounded-xl border p-2 text-start transition-colors',
         'bg-[var(--chat-surface-elevated)] hover:bg-[var(--chat-surface-hover)]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
         selected ? 'border-[var(--chat-accent-primary)]' : 'border-[var(--chat-border-strong)]',

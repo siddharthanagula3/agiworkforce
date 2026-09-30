@@ -56,8 +56,8 @@ import {
   type CloudToolApprovalProjection,
   type ManagedCloudConversation,
   type ManagedCloudMessage,
-  MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   chatAttachmentAcceptAttribute,
   isSupportedChatAttachment,
   resolveVisibleThread,
@@ -103,6 +103,7 @@ import {
   ensureCloudConversation,
   isTemporaryCloudConversation,
   markCloudConversationReady,
+  readTemporaryChatPreference,
   updateCloudConversation,
   waitForCloudConversationReady,
   type CloudConversationBoundary,
@@ -245,15 +246,6 @@ function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessa
   return raw.parentId === undefined ? mapped : { ...mapped, parentId: raw.parentId };
 }
 
-async function readTemporaryChatPreference(): Promise<boolean> {
-  try {
-    const { useSettingsStore } = await import('../stores/settingsStore');
-    return useSettingsStore.getState().chatPreferences.temporaryChat === true;
-  } catch {
-    return false;
-  }
-}
-
 export class CloudRuntime implements ChatRuntime {
   private _disposed = false;
   private _boundary: CloudConversationBoundary | null = null;
@@ -294,7 +286,7 @@ export class CloudRuntime implements ChatRuntime {
   readonly attachmentPolicy = {
     accept: chatAttachmentAcceptAttribute(),
     maxFiles: MAX_CHAT_ATTACHMENT_COUNT,
-    maxTotalBytes: MAX_CHAT_ATTACHMENT_BYTES,
+    maxTotalBytes: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
     validate: (file: File) =>
       isSupportedChatAttachment(file.name, file.type)
         ? null
@@ -989,7 +981,11 @@ export class CloudRuntime implements ChatRuntime {
 
       uploadedAttachments =
         !isContinuation && options?.attachments?.length
-          ? await uploadDesktopCloudAttachments(options.attachments, controller.signal)
+          ? await uploadDesktopCloudAttachments(
+              options.attachments,
+              controller.signal,
+              conversationId,
+            )
           : [];
       if (shouldStopBeforeDispatch()) return;
       this.assertBoundary(boundary);

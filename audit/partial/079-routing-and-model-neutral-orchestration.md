@@ -10,90 +10,12 @@ nothing is left.
 
 - Done when: A project can set a default model that new chats in the project use.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The project header shows the project's default model, but chats in the project do not use it. | handler |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/projects/components/ProjectHeader.tsx:126-126`
-
-## S79.05: Speed-first profile.
-
-- Done when: A speed-first routing profile can be applied that prefers the fastest eligible route.
-- Wave: 3
-- Already works on: web, desktop, cli, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | partials/chat-gates a805b3efe moved speedFirstSlots into @agiworkforce/routing so the device resolver can prefer the fastest slots. Picker rows and the on-device routing_profile mapping are in post-codex/chat-gates-s79-routing-profile-mobile.patch; the Instant fastest-slot preference is in post-codex/chat-gates-s79.05-mobile-speed-first.patch (applies after it). ModelPickerSheet.tsx, chatExecutionStore.ts and cloudDispatchRouting.ts are Codex-held. | ui |
-| vscode | partial | turn/start routingProfile speed now resolves with the fastest slots first and keeps that preference (ccf4744297); VS Code adds its Fastest row to ROUTING_PROFILE_BY_AUTO_PROFILE (p-sessions) | handler |
-| chrome | partial | Quick mode routes to the economy (cheapest) alias, not a latency-optimised profile. | ui |
-
-Code: `packages/ai/routing/src/speed-first-slots.ts:6-6`, `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/cli/src/app_server/developer_host.rs:2354-2354`, `apps/cli/src/app_server/developer_host.rs:1200-1200`
-
-## S79.06: Quality-first profile.
-
-- Done when: A quality-first routing profile can be applied that prefers the most capable eligible route.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Same post-codex patch as S79.05. | ui |
-| chrome | partial | The premium profile is applied automatically for coding/reasoning on higher plans; this surface offers no quality-first choice. | ui |
-
-Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`, `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`, `packages/ai/routing/src/auto.ts:32-32`
-
-## S79.07: Cost-first profile.
-
-- Done when: A cost-first routing profile can be applied that prefers the cheapest eligible route.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Same post-codex patch as S79.05. | ui |
-
-Code: `packages/contracts/types/src/routing-profile-choice.ts:48-48`
-
-## S79.08: Privacy-first profile.
-
-- Done when: A privacy-first profile keeps requests on local models or zero-retention routes.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome always routes through the managed cloud; a workspace zero-retention policy applies server-side, but the panel offers no privacy-first choice. | ui |
-
-Code: `apps/extension/src/features/cloud-bridge/managedChatRouting.ts:28-30`, `packages/ai/routing/src/auto.ts:1070-1079`
-
-## S79.10: Classification of required tools.
-
-- Done when: Which tools a request needs (research, agentic work, code execution) changes the routing task.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The CLI classifier reads only the prompt text (tool/agent phrases); enabled tools do not change its routing task. | handler |
-
-Code: `apps/cli/src/routing/classify.rs:1-9`
-
-## S79.12: Complexity/effort classification.
-
-- Done when: Requests are classified by complexity so routing can set a quality floor or effort.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The CLI classifies task type only; the task-family quality floor runs only in the server resolver. | handler |
-
-Code: `apps/cli/src/routing/classify.rs:1-9`
 
 ## S79.17: Provider lock.
 
@@ -106,30 +28,6 @@ Code: `apps/cli/src/routing/classify.rs:1-9`
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S79.18: Route lock.
-
-- Done when: The user can lock requests to one specific provider route.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S79.21: Explicit model-switch offer.
-
-- Done when: When another model would work better, the user is offered an explicit one-click switch.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | A one-tap 'Use <model>' switch to the first edit-capable image model the registry lists is in post-codex/chat-gates-s79.21-mobile-image-model-switch.patch; both chat screens that raise the blocked alert are Codex-held. | ui |
-| chrome | partial | Chrome falls back to Auto silently and only suggests choosing another model after an outage; no switch action. | ui |
-
-Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:150-150`, `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest.ts:184-184`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
 ## S79.23: Specialist worker selection.
 
@@ -158,15 +56,11 @@ Code: `apps/mobile/src/features/chat/actions/resolveMobileImageGenerationRequest
 
 - Done when: The user can see why Auto chose (or moved to) a model.
 - Wave: 3
-- Already works on: web, desktop, cli, api
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Auto chose <model>' on assistant turns is in post-codex/chat-gates-s79.26-mobile-routing-receipt.patch (MessageBubble.tsx is Codex-held). | ui |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Routing metadata (model and reason) is validated and stored, but the panel shows only the model name, not why it was chosen. | ui |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`, `apps/extension/src/side_panel.ts:587-590`
 
 ## S79.27: Actual-model attribution.
 
@@ -177,16 +71,3 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1124-1124`, `apps/extension
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
-
-## S79.28: Routing-policy versioning.
-
-- Done when: Routing policies are versioned and each decision can be traced to the policy version that made it.
-- Wave: 3
-- Already works on: web, desktop, mobile, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The generated Rust registry now carries policies.release.policyVersion and routing_policy_version() reads it (ccf4744297); recording it on the CLI routing decision is p-mcp-rust's | handler |
-| chrome | partial | The routing policy is versioned in an append-only release ledger (policy version 16), but routing decisions do not record which version served them. | handler |
-
-Code: `crates/agiworkforce-model-registry/src/lib.rs:634-634`, `crates/agiworkforce-model-registry/src/generated/model_registry.json:1-2`, `apps/extension/src/side_panel.ts:6168-6173`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:55-55`

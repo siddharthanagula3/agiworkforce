@@ -6,7 +6,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { redactSecrets } from '@/lib/support/handoff/transcript';
+import { redactTranscriptText } from '@/lib/support/handoff/transcript';
 import { getOptionalAuthUser } from '@/lib/api-auth';
 import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
 import { secureFilenameSegment } from '@/lib/secure-random';
@@ -46,7 +46,7 @@ const FeedbackSchema = z.object({
   user_id: z.string().trim().max(200).nullish(),
   metadata: z
     .object({
-      source: z.enum(['desktop', 'web', 'vscode']).optional(),
+      source: z.enum(['desktop', 'web', 'vscode', 'cli']).optional(),
       platform: z.string().trim().max(100),
       version: z.string().trim().max(100),
       user_agent: z.string().trim().max(500),
@@ -125,9 +125,10 @@ async function handleSubmitFeedback(request: NextRequest) {
   }
   const { subject, message, user_id: claimedUserId, metadata, logs, screenshot } = parsed.data;
 
-  const safeSubject = redactSecrets(subject);
-  const safeMessage = redactSecrets(message);
-  const safeLogs = typeof logs === 'string' ? redactSecrets(logs).slice(0, MAX_LOGS_CHARS) : null;
+  const safeSubject = redactTranscriptText(subject);
+  const safeMessage = redactTranscriptText(message);
+  const safeLogs =
+    typeof logs === 'string' ? redactTranscriptText(logs).slice(0, MAX_LOGS_CHARS) : null;
 
   const userId = (await getOptionalAuthUser(request))?.userId ?? null;
   const screenshotKey = screenshot

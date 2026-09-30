@@ -139,9 +139,12 @@ jest.mock('@/src/features/auth/store', () => ({
 }));
 
 import CloudBillingScreen from '../src/features/settings/cloud-billing/index';
+import * as mobileIapHook from '../src/features/billing/useMobileIap';
+import * as mobileIapService from '../src/features/billing/mobileIapService';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { openExternalUrl } from '../lib/safeOpenURL';
 import { fetchPortalSessionUrl } from '../src/features/billing/service';
+import { ApiHttpError } from '../services/apiErrors';
 
 describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', () => {
   beforeEach(() => {
@@ -197,6 +200,47 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
     expect(openExternalUrl).toHaveBeenCalledWith('https://example.com/portal');
   });
 
+  it.each([
+    [
+      new ApiHttpError(
+        'This subscription is billed by Apple. Manage or cancel it with Apple before starting web billing.',
+        409,
+        'CONFLICT',
+      ),
+      'Billing managed elsewhere',
+      'This subscription is billed by Apple. Manage or cancel it with Apple before starting web billing.',
+    ],
+    [
+      new ApiHttpError('Paid upgrades are opening in stages.', 403, 'waitlist_access_required'),
+      'Upgrade access needed',
+      'Paid upgrades are opening in stages.',
+    ],
+    [
+      new ApiHttpError('Failed to create portal session', 500, 'INTERNAL_ERROR'),
+      'Billing portal unavailable',
+      'Please try again later.',
+    ],
+  ])('says why the billing portal did not open (%#)', async (error, title, message) => {
+    Object.assign(mockFeatures, { billing: true });
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'pro',
+      billingStatus: 'past_due',
+      billingSource: 'stripe',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    (fetchPortalSessionUrl as jest.Mock).mockRejectedValueOnce(error);
+
+    render(<CloudBillingScreen />);
+
+    const props = mockPaywallBottomSheet.mock.calls.at(-1)?.[0];
+    await act(async () => {
+      await (props?.onPrimaryAction as () => Promise<void>)();
+    });
+    expect(Alert.alert).toHaveBeenCalledWith(title, message);
+    expect(openExternalUrl).not.toHaveBeenCalled();
+  });
+
   it('keeps inactive store-owned recovery at the recorded owner instead of opening Stripe', async () => {
     Object.assign(mockFeatures, { billing: true });
     Object.assign(mockTierState, {
@@ -236,7 +280,10 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
     expect(queryByText('Free plan')).toBeNull();
     expect(mockRefreshTier).not.toHaveBeenCalled();
     fireEvent.press(getByLabelText('Sign in to AGI Cloud'));
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-billing' },
+    });
   });
 
   it('shows the Local Mode banner and does not refresh the tier while chat is set to Local', async () => {
@@ -284,7 +331,7 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
   it('always renders the plan badge, never swaps it for an indefinite spinner', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const { queryByText } = render(<CloudBillingScreen />);
-    expect(queryByText('Chat on web, iOS, Android, and desktop')).toBeTruthy();
+    expect(queryByText('Free plan')).toBeTruthy();
   });
 
   it('shows a canceled recorded plan without granting paid feature status', () => {
@@ -382,7 +429,7 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
     expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/settings/billing');
   });
 
-  it('shows exact Web proration and founder-set top-up terms for an active Stripe plan', () => {
+  it('shows exact Web proration and sends top-ups to the web for an active Stripe plan', () => {
     Object.assign(mockTierState, {
       tier: 'pro',
       billingTier: 'pro',
@@ -395,18 +442,13 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
 
     expect(getByText('How plan upgrades are charged')).toBeTruthy();
     expect(
-      getByText(/exact prorated charge for the rest of your current billing period/i),
+      getByText(
+        /new plan's price, minus a credit for the unused time on your current plan\. It starts a new billing period that day/i,
+      ),
     ).toBeTruthy();
     expect(getByText('Usage top-ups')).toBeTruthy();
-    // "units" became "credits" when the founder settled the pricing model on
-    // AGI Credits at 50 per dollar. The screen was updated and this assertion
-    // was not, so it has been failing on main since.
-    expect(getByText(/50 credits for every \$1/i)).toBeTruthy();
-    expect(getByText(/minimum top-up is \$10 \(500 credits\)/i)).toBeTruthy();
-    expect(getByText(/ordinary self-serve maximum is \$100/i)).toBeTruthy();
-    expect(
-      getByText(/native store shows the actual localized price and applicable tax/i),
-    ).toBeTruthy();
+    expect(getByText(/credits are bought on the web, in settings, billing/i)).toBeTruthy();
+    expect(queryByText(/minimum top-up/i)).toBeNull();
     expect(queryByText(/buy 500 units/i)).toBeNull();
   });
 
@@ -500,5 +542,97 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
     expect(getByLabelText('Upgrade plan').props.accessibilityState.disabled).toBe(false);
     expect(queryByText('Unavailable in the app')).toBeNull();
     expect(queryByText('Plan changes are not in this app yet')).toBeNull();
+  });
+
+  it('offers the waitlist and keeps upgrade API failures out of the screen', async () => {
+    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue({
+      connected: false,
+      loading: false,
+      restoring: false,
+      purchasingKey: null,
+      catalog: {
+        enabled: false,
+        platform: 'ios',
+        appAccountToken: null,
+        products: [],
+        unavailableReason: 'Paid upgrades are opening in stages.',
+        unavailableCode: 'waitlist_access_required',
+      },
+      storeProducts: new Map(),
+      priceFor: jest.fn(),
+      error: null,
+      lastResult: null,
+      purchase: jest.fn(),
+      restore: jest.fn(),
+      reload: jest.fn(),
+    });
+    const joinSpy = jest
+      .spyOn(mobileIapService, 'joinBillingUpgradeWaitlist')
+      .mockRejectedValue(new Error('Private waitlist route failed at /internal/billing'));
+    const redeemSpy = jest
+      .spyOn(mobileIapService, 'redeemBillingUpgradeCode')
+      .mockRejectedValue(new Error('Private access route failed at /internal/billing'));
+
+    try {
+      const screen = render(<CloudBillingScreen />);
+
+      expect(screen.getByLabelText('Join upgrade waitlist').props.accessibilityState.disabled).toBe(
+        false,
+      );
+      expect(screen.getByText('Or enter an access code below')).toBeTruthy();
+      expect(screen.queryByText('Plan changes are not in this app yet')).toBeNull();
+      await act(async () => fireEvent.press(screen.getByLabelText('Join upgrade waitlist')));
+      expect(joinSpy).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Could not join the waitlist. Try again.')).toBeTruthy();
+
+      fireEvent.changeText(screen.getByLabelText('Upgrade access code'), 'AGI2026');
+      await act(async () => fireEvent.press(screen.getByLabelText('Unlock upgrades')));
+      expect(redeemSpy).toHaveBeenCalledWith('AGI2026');
+      expect(screen.getByText('Could not redeem this code. Check it and try again.')).toBeTruthy();
+    } finally {
+      iapSpy.mockRestore();
+      joinSpy.mockRestore();
+      redeemSpy.mockRestore();
+    }
+  });
+
+  it('shows the server reason when an access code is refused', async () => {
+    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue({
+      connected: false,
+      loading: false,
+      restoring: false,
+      purchasingKey: null,
+      catalog: {
+        enabled: false,
+        platform: 'ios',
+        appAccountToken: null,
+        products: [],
+        unavailableReason: 'Paid upgrades are opening in stages.',
+        unavailableCode: 'waitlist_access_required',
+      },
+      storeProducts: new Map(),
+      priceFor: jest.fn(),
+      error: null,
+      lastResult: null,
+      purchase: jest.fn(),
+      restore: jest.fn(),
+      reload: jest.fn(),
+    });
+    const redeemSpy = jest
+      .spyOn(mobileIapService, 'redeemBillingUpgradeCode')
+      .mockRejectedValue(
+        new ApiHttpError('This access code has expired.', 400, 'VALIDATION_ERROR'),
+      );
+
+    try {
+      const screen = render(<CloudBillingScreen />);
+
+      fireEvent.changeText(screen.getByLabelText('Upgrade access code'), 'AGI2026');
+      await act(async () => fireEvent.press(screen.getByLabelText('Unlock upgrades')));
+      expect(screen.getByText('This access code has expired.')).toBeTruthy();
+    } finally {
+      iapSpy.mockRestore();
+      redeemSpy.mockRestore();
+    }
   });
 });

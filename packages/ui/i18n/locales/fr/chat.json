@@ -74,7 +74,15 @@
     "runtimeConsent": "Cette app souhaite utiliser l'IA avec votre compte. Chaque requête est comptée dans l'utilisation de votre forfait.",
     "runtimeConsentConnectors": "Cette app souhaite utiliser l'IA avec votre compte et lire ou modifier des données dans {{apps}}. Elle voit ce que ces apps renvoient, et chaque requête est comptée dans l'utilisation de votre forfait.",
     "runtimeAllow": "Autoriser",
-    "runtimeDecline": "Ne pas autoriser"
+    "runtimeDecline": "Ne pas autoriser",
+    "runtimeConnectorsLoading": "Vérification de vos applications connectées",
+    "runtimeConnectorNotConnected": "Non connectée. Connectez-la dans Paramètres, Connecteurs, pour utiliser cette partie de l'application.",
+    "runtimeToolNeedsApproval": "Demande une confirmation avant chaque utilisation, donc cette application ne peut pas l'utiliser.",
+    "runtimeToolBlocked": "Bloquée dans vos paramètres.",
+    "runtimeManageConnectors": "Applications connectées",
+    "saveCopy": "Enregistrer une copie dans mes discussions",
+    "saveCopyBusy": "Copie en cours…",
+    "saveCopyFailed": "Cet artefact n’a pas pu être copié."
   },
   "sidebar": {
     "activeConversation": "Conversation active",
@@ -441,10 +449,22 @@
     "videoModeAttachments_other": "La génération de vidéo n'utilise que votre invite. Les fichiers joints ne sont pas envoyés au modèle vidéo. Quittez d'abord le mode vidéo si vous voulez envoyer ces fichiers au modèle de chat.",
     "viewSources_one": "Voir {{count}} source",
     "viewSources_other": "Voir {{count}} sources",
+    "folderFilesLeftOut_one": "{{count}} fichier de {{folder}} n'a pas été joint. Joignez-le depuis un dossier local.",
+    "folderFilesLeftOut_other": "{{count}} fichiers de {{folder}} n'ont pas été joints. Joignez-les depuis un dossier local.",
     "savedMemoriesUsed_one": "{{count}} souvenir enregistré utilisé",
     "savedMemoriesUsed_other": "{{count}} souvenirs enregistrés utilisés",
     "moreSavedMemories_one": "Et {{count}} de plus",
-    "moreSavedMemories_other": "Et {{count}} de plus"
+    "moreSavedMemories_other": "Et {{count}} de plus",
+    "filesCreated_one": "{{count}} fichier créé",
+    "filesCreated_other": "{{count}} fichiers créés",
+    "foundSources_one": "{{count}} source trouvée",
+    "foundSources_other": "{{count}} sources trouvées",
+    "mapPreviewPlaces_one": "Aperçu de la carte avec {{count}} lieu",
+    "mapPreviewPlaces_other": "Aperçu de la carte avec {{count}} lieux",
+    "lines_one": "{{count}} ligne",
+    "lines_other": "{{count}} lignes",
+    "words_one": "{{count}} mot",
+    "words_other": "{{count}} mots"
   },
   "markdownTable": {
     "label": "Tableau",
@@ -466,7 +486,9 @@
     "expand": "Agrandir le code",
     "close": "Fermer le code agrandi",
     "codeTitle": "Code {{language}}",
-    "codeBlockLabel": "Bloc de code {{language}}"
+    "codeBlockLabel": "Bloc de code {{language}}",
+    "edit": "Modifier",
+    "editLabel": "Modifier ce code à côté de la conversation"
   },
   "streaming": {
     "reconnecting": "Reconnexion…",

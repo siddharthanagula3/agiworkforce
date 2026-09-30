@@ -25,6 +25,7 @@ jest.mock('expo-image', () => {
 });
 
 jest.mock('../src/ui/theme', () => ({
+  ...jest.requireActual('../src/ui/theme/tokens'),
   useThemeColors: () => ({
     surfaceBase: '#111',
     surfaceOverlay: '#222',
@@ -41,6 +42,12 @@ jest.mock('../src/ui/theme', () => ({
 }));
 
 jest.mock('@/services/api', () => ({ api: { uploadFile: jest.fn() } }));
+
+let mockAccountCurrent = true;
+jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
+  captureCloudAccountEpoch: () => ({ ownerId: 'account-a', epoch: 1 }),
+  isCloudAccountEpochCurrent: () => mockAccountCurrent,
+}));
 
 import { api } from '@/services/api';
 import {
@@ -101,6 +108,7 @@ function entry(id: string) {
 
 beforeEach(() => {
   mockUploadFile.mockReset();
+  mockAccountCurrent = true;
   useUploadLifecycleStore.getState().reset();
   jest.useRealTimers();
 });
@@ -218,6 +226,21 @@ describe('resume and retry', () => {
     expect(entry(ROWS_CSV.id)).toMatchObject({ phase: 'done', attempt: 2 });
   });
 
+  it('does not retry a file after the Cloud account changes during backoff', async () => {
+    jest.useFakeTimers();
+    mockUploadFile.mockRejectedValueOnce(new Error('Network request failed'));
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(mockUploadFile).toHaveBeenCalledTimes(1);
+    mockAccountCurrent = false;
+    await jest.advanceTimersByTimeAsync(1000);
+    const result = await pending;
+
+    expect(result).toBeNull();
+    expect(mockUploadFile).toHaveBeenCalledTimes(1);
+  });
+
   it('gives up after the retry budget and leaves the TXT resumable with the reason', async () => {
     jest.useFakeTimers();
     mockUploadFile.mockRejectedValue(new Error('Network request failed'));
@@ -228,7 +251,10 @@ describe('resume and retry', () => {
 
     expect(result).toBeNull();
     expect(mockUploadFile).toHaveBeenCalledTimes(3);
-    expect(entry(NOTES_TXT.id)).toMatchObject({ phase: 'failed', error: 'Network request failed' });
+    expect(entry(NOTES_TXT.id)).toMatchObject({
+      phase: 'failed',
+      error: 'Could not upload "notes.txt". Check your connection and try again.',
+    });
     expect(isResumable(entry(NOTES_TXT.id))).toBe(true);
     expect(uploadStatusLabel(entry(NOTES_TXT.id))).toBe('Upload failed');
   });
@@ -240,7 +266,10 @@ describe('resume and retry', () => {
       uploadWithRetry(fileInputFor(NOTES_TXT), NOTES_TXT.fileName, NOTES_TXT.id),
     ).rejects.toThrow('session expired');
     expect(mockUploadFile).toHaveBeenCalledTimes(1);
-    expect(entry(NOTES_TXT.id)?.phase).toBe('failed');
+    expect(entry(NOTES_TXT.id)).toMatchObject({
+      phase: 'failed',
+      error: 'Your session expired. Sign in again to upload files.',
+    });
   });
 
   it('offers Retry on a failed chip and not on one still uploading', () => {

@@ -405,6 +405,17 @@ describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
     wireAuthAndDb();
   });
 
+  it('returns the authoritative sync version with a project fetched by ID', async () => {
+    mockNeonQuery.mockResolvedValue([{ ...BASE_DB_ROW, server_version: '42' }]);
+
+    const res = await GET(makeProjectRequest('proj-1', 'GET'), {
+      params: Promise.resolve({ id: 'proj-1' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).project.serverVersion).toBe('42');
+  });
+
   it('does not return a soft-deleted project by direct ID', async () => {
     mockNeonQuery.mockImplementation(async (sql: string) =>
       sql.includes('deleted_at is null') ? [] : [{ ...BASE_DB_ROW, deleted_at: new Date() }],

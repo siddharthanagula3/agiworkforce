@@ -66,12 +66,14 @@ export interface ConnectorAccessDecision {
 export interface ConnectorOAuthStart {
   connectorId: string;
   authorizeUrl: string;
+  appReturn: boolean;
 }
 
 export type ConnectResult =
   | { kind: 'connected' }
-  | { kind: 'oauth-required'; connectorId: string; authorizeUrl: string }
-  | { kind: 'install-required'; connectorId: string; installUrl: string };
+  | { kind: 'oauth-required'; connectorId: string; authorizeUrl: string; appReturn: boolean }
+  | { kind: 'install-required'; connectorId: string; installUrl: string }
+  | { kind: 'credentials-required'; connectorId: string; credentialsPath: string };
 
 export type AddCustomConnectorInput = Pick<
   CreateCustomConnectorRequest,

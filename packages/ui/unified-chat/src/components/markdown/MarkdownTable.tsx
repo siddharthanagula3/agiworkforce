@@ -159,7 +159,7 @@ export function MarkdownTable({ children }: { children?: React.ReactNode }) {
           aria-describedby={undefined}
           className="inset-4 flex w-auto max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden bg-background p-0 backdrop-blur-none"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-border py-2 pl-4 pr-2">
+          <div className="flex items-center justify-between gap-2 border-b border-border py-2 ps-4 pe-2">
             <DialogTitle className="text-sm font-semibold">{tableLabel}</DialogTitle>
             <TableActions onCopy={handleCopy} onDownload={handleDownload} copyState={copyState}>
               <DialogClose asChild>

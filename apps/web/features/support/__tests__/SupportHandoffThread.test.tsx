@@ -9,7 +9,10 @@ vi.mock('@/lib/client/csrf', () => ({
 
 import { SupportHandoffPanel } from '../components/SupportHandoffPanel';
 import { SupportHandoffQueuePanel } from '../components/SupportHandoffQueuePanel';
-import { UNAVAILABLE_PRESENCE, type SupportHandoffView } from '../lib/contract';
+import {
+  UNAVAILABLE_PRESENCE,
+  type SupportHandoffView,
+} from '@agiworkforce/cloud-contracts/support';
 
 const SESSION_ID = 'sess-1';
 const REFERENCE = 'AGI-SUP-1';

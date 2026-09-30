@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -12,45 +11,7 @@ import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import { escalateToHuman, MissingContactEmailError } from '@/lib/support/handoff/handoff-service';
 import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
 import { resolveHandoffIdentity } from '@/lib/support/handoff/request-identity';
-
-const TurnSchema = z.object({
-  role: z.enum(['user', 'assistant', 'system']),
-  content: z.string().max(20_000),
-  at: z.string().max(40),
-});
-
-const HandoffRequestSchema = z.object({
-  surface: z.enum(['web-app', 'marketing']),
-  reason: z.enum([
-    'user_requested',
-    'hard_abstain',
-    'low_confidence',
-    'no_citation',
-    'action_refused',
-  ]),
-  summary: z.string().trim().min(1).max(1_000),
-  transcript: z.array(TurnSchema).max(500),
-  attemptedActions: z
-    .array(
-      z.object({
-        action: z.string().max(200),
-        outcome: z.enum(['succeeded', 'failed', 'refused', 'confirmation_pending']),
-        detail: z.string().max(2_000).optional(),
-        at: z.string().max(40),
-      }),
-    )
-    .max(100)
-    .optional(),
-  citations: z
-    .array(z.object({ title: z.string().max(300), url: z.string().max(2_000) }))
-    .max(50)
-    .optional(),
-  contactEmail: z.string().trim().max(254).optional(),
-  conversationId: z.string().max(200).optional(),
-  pagePath: z.string().max(2_000).optional(),
-  locale: z.string().max(35).optional(),
-  diagnostics: z.unknown().optional(),
-});
+import { SupportHandoffRequestSchema } from '@agiworkforce/cloud-contracts/support';
 
 async function handleCreateHandoff(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
@@ -62,7 +23,7 @@ async function handleCreateHandoff(request: NextRequest) {
   await requireHumanCaller(BOT_CHALLENGED_ENDPOINTS.supportHandoffCreate);
 
   const body = await request.json().catch(() => null);
-  const parsed = HandoffRequestSchema.safeParse(body);
+  const parsed = SupportHandoffRequestSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.badRequest('Invalid support handoff payload', parsed.error.flatten());
   }

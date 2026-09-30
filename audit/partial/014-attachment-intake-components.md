@@ -60,18 +60,6 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S14.09: Cloud-file picker.
-
-- Done when: The user can browse a cloud drive (Google Drive, OneDrive, Dropbox) from the composer and attach a file from it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
 ## S14.10: Library-file picker.
 
 - Done when: The user can pick a file already in their product Library and attach it to a message.
@@ -95,18 +83,6 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S14.15: Multiple-file selection.
-
-- Done when: One pick action can select several files, and all of them are attached.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The File picker allows several documents in one pick in post-codex/chat-gates-s12.19-s12.21-s14.15-mobile-new-chat.patch (both chat screens are held). | ui |
-
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-635`, `apps/mobile/app/(app)/chat/[id].tsx:851-851`
-
 ## S14.17: File-type icon.
 
 - Done when: Each non-image attachment shows an icon matching its file type (PDF, spreadsheet, code, other).
@@ -121,16 +97,11 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-635`, `apps/mobile/app/(app)/ch
 
 - Done when: Each attachment shows its file name and size before sending.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | image thumbnails show name and size only as a tooltip while document rows show them as text; a visible caption departs from the leaders' bare thumbnails (observed, undocumented), owner call. | ui |
-| desktop | partial | image thumbnails show name and size only as a tooltip while document rows show them as text; a visible caption departs from the leaders' bare thumbnails (observed, undocumented), owner call. | ui |
-| mobile | partial | As on web: documents show name and size as text; a photo thumbnail stays bare like ChatGPT's and Claude's and carries its name and size as its accessibility label. A visible caption on photos departs from both leaders (observed, undocumented), owner call. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`, `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:267-267`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx:169-169`
 
 ## S14.21: Indexing progress.
 
@@ -142,43 +113,16 @@ Code: `apps/web/features/chat/components/Composer/AttachmentPreview.tsx:200-200`
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S14.23: Partial-extraction notice.
-
-- Done when: When only part of a file could be read or it was cut to a size limit, the user is told.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Tell the user when a document was cut to 100,000 characters or could not be read on the device; today only the model sees "[truncated]" or "could not be extracted". | ui |
-
-Code: `apps/mobile/services/attachmentContext.ts:15-29`
-
-## S14.25: Password-protected-file notice.
-
-- Done when: A password-protected file produces a notice that says it is locked and how to fix it.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Tell the user a PDF is password protected; the on-device parser detects it (ENCRYPTED_PDF) but the message only tells the model the content could not be extracted. | ui |
-
-Code: `apps/mobile/services/docParser.ts:272-276`, `apps/mobile/services/attachmentContext.ts:24-27`
-
 ## S14.31: Duplicate-file treatment.
 
 - Done when: Adding the same file twice is detected and handled visibly (skipped, merged or flagged) rather than sent twice silently.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Warn or skip when the same file is added twice; the composer accepts it twice, and only the server quietly reuses the stored copy. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/uploads/chat-attachment/complete/route.ts:221-241`, `apps/mobile/src/features/chat/components/ChatInput.tsx:247-257`
 
 ## S14.33: Batch-upload summary.
 

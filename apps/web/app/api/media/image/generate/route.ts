@@ -14,6 +14,8 @@ import {
   buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
+import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { generateManagedImage } from '../lib/managed-image-generation';
 
@@ -87,6 +89,18 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     readBody: () => request.json(),
     idempotencyKey: request.headers.get('Idempotency-Key'),
     modelPolicyRefusal: (model) => buildModelPolicyGateResponse(userId, request, model, headers),
+    assertCapabilityOpen: async (plan) =>
+      assertCapabilityAvailable(
+        buildFlagSubject(request, {
+          userId,
+          workspaceId: (await callerScope()).organizationId ?? null,
+          role: null,
+          plan,
+          surface: resolveCloudChatSurface(request),
+        }),
+        'canUseImages',
+        'Image generation',
+      ),
   });
 }
 

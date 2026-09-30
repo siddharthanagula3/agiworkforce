@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { SUPPORT_MAX_MESSAGE_LENGTH } from '../lib/support-client';
-import type { SupportHandoffMessageView } from '../lib/contract';
+import type { SupportHandoffMessageView } from '@agiworkforce/cloud-contracts/support';
 import styles from './SupportWidget.module.css';
 
 function turnClass(author: SupportHandoffMessageView['author']): string | undefined {

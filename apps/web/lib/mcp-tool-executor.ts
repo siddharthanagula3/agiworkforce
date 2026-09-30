@@ -210,7 +210,11 @@ export interface WebMcpToolDef {
   origin?: 'operator' | 'connector';
   serverLabel?: string;
   inputSchema: Record<string, unknown>;
+  /** Served from a Google API host, so its results are Google user data. */
+  googleUserData?: true;
 }
+
+export const CONNECTOR_RECONNECT_TOOL_NAME = 'agi_reconnect';
 
 export function catalogToToolDefs(catalog: McpToolCatalog): WebMcpToolDef[] {
   return catalog.tools.map((t) => ({

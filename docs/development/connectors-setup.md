@@ -176,7 +176,8 @@ set the named variables in production and locally.
   unless bare): `openid`, `profile`, `email`, `userinfo.email`,
   `userinfo.profile`, then per connector Gmail `gmail.readonly`, `gmail.compose`
   (drafts), `gmail.send`;
-  Drive `drive.file`, `drive.metadata.readonly`; Calendar `calendar.readonly`,
+  Drive `drive.file`, `drive.readonly` (whole-Drive search, as Claude and
+  ChatGPT; `drive.metadata.readonly` stays allowed for older grants); Calendar `calendar.readonly`,
   `calendar.events`. AGI adds two Gmail tools beside Google's server, both
   calling the Gmail API with the same grant: `send_draft` sends a draft the
   user has seen (`drafts.send`, which needs `gmail.compose`) and

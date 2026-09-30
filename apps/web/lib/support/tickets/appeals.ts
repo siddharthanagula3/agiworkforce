@@ -5,10 +5,15 @@ import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { sendCustomerTicketEmail } from '@/lib/support/handoff/escalation-email';
 
-import { listTickets, openTicket, readTicket, replyToTicket, type TicketThread } from './service';
-import { APPEAL_FOLLOW_PATH, APPEAL_TICKET_SUBJECT, OPEN_TICKET_STATUSES } from './types';
+import { listTickets, openTicket, readTicket, replyToTicket } from './service';
+import {
+  APPEAL_FOLLOW_PATH,
+  APPEAL_TICKET_SUBJECT,
+  OPEN_TICKET_STATUSES,
+  type SupportTicketThread,
+} from '@agiworkforce/cloud-contracts/support';
 
-export async function readLatestAppeal(userId: string): Promise<TicketThread | null> {
+export async function readLatestAppeal(userId: string): Promise<SupportTicketThread | null> {
   const appeal = (await listTickets(userId)).find(
     (ticket) => ticket.subject === APPEAL_TICKET_SUBJECT,
   );
@@ -48,7 +53,7 @@ async function readSuspendedProfile(
 async function appendToAppeal(
   profile: AppealProfileRow & { email: string },
   message: string,
-): Promise<TicketThread> {
+): Promise<SupportTicketThread> {
   const latest = await readLatestAppeal(profile.id);
   if (latest && OPEN_TICKET_STATUSES.includes(latest.ticket.status)) {
     return replyToTicket({ ticketId: latest.ticket.id, userId: profile.id, message });
@@ -63,7 +68,10 @@ async function appendToAppeal(
   return readTicket(ticket.id, profile.id);
 }
 
-export async function submitAccountAppeal(userId: string, message: string): Promise<TicketThread> {
+export async function submitAccountAppeal(
+  userId: string,
+  message: string,
+): Promise<SupportTicketThread> {
   const profile = await readSuspendedProfile('id', userId);
   if (!profile?.email) throw new AppealContactMissingError();
   return appendToAppeal({ ...profile, email: profile.email }, message);

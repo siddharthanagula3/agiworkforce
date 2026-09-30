@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
-  Pressable,
   StyleSheet,
   Linking,
   TextInput,
@@ -9,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Alert,
 } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
@@ -83,12 +84,8 @@ export default function CameraScreen() {
       if (photo?.uri) {
         setCapturedUri(photo.uri);
       }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'The camera could not capture the image. Please try again.';
-      Alert.alert('Capture failed', message);
+    } catch {
+      Alert.alert('Capture failed', 'The camera could not capture the image. Please try again.');
     } finally {
       setIsCapturing(false);
     }
@@ -133,16 +130,25 @@ export default function CameraScreen() {
       };
 
       const messageContent = promptText.trim() || 'What do you see in this image?';
-      await sendMessage(conversationId, messageContent, selectedModel, [attachment]);
+      const accepted = await sendMessage(conversationId, messageContent, selectedModel, [
+        attachment,
+      ]);
+      if (!accepted) {
+        Alert.alert('Send failed', 'The image could not be sent. Check your model and try again.');
+        setIsSending(false);
+        return;
+      }
 
       if (conversationId === openConversationId && router.canGoBack()) {
         router.back();
         return;
       }
       router.replace(`/(app)/chat/${conversationId}` as Parameters<typeof router.replace>[0]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'The image could not be sent.';
-      Alert.alert('Send failed', message);
+    } catch {
+      Alert.alert(
+        'Send failed',
+        'The image could not be sent. Check your connection and try again.',
+      );
       setIsSending(false);
     }
   }, [
@@ -208,25 +214,29 @@ export default function CameraScreen() {
             Allow camera access to capture images for visual questions.
           </Text>
           <View style={styles.permissionButtons}>
-            <Pressable
+            <PressableBox
               onPress={requestPermission}
               style={styles.primaryButton}
               accessibilityRole="button"
               accessibilityLabel="Allow camera access"
             >
               <Text style={styles.primaryButtonText}>Allow Access</Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               onPress={() => Linking.openSettings()}
               style={styles.outlineButton}
               accessibilityRole="button"
               accessibilityLabel="Open device settings"
             >
               <Text style={styles.outlineButtonText}>Open Settings</Text>
-            </Pressable>
-            <Pressable {...chrome.close} className="items-center py-3" style={chrome.close.style}>
+            </PressableBox>
+            <PressableBox
+              {...chrome.close}
+              className="items-center py-3"
+              style={chrome.close.style}
+            >
               <Text style={styles.cancelButtonText}>Cancel</Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </SafeAreaView>
@@ -247,13 +257,13 @@ export default function CameraScreen() {
           {/* Top controls */}
           <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
             <View style={styles.topBar}>
-              <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
+              <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
                 <X size={22} color={c.cameraOverlayText} />
-              </Pressable>
+              </PressableBox>
               {chrome.cancel ? (
-                <Pressable {...chrome.cancel} style={[styles.iconButton, chrome.cancel.style]}>
+                <PressableBox {...chrome.cancel} style={[styles.iconButton, chrome.cancel.style]}>
                   <RotateCcw size={20} color={c.cameraOverlayText} />
-                </Pressable>
+                </PressableBox>
               ) : null}
             </View>
           </SafeAreaView>
@@ -271,7 +281,7 @@ export default function CameraScreen() {
                 style={styles.promptInput}
                 accessibilityLabel="Image prompt"
               />
-              <Pressable
+              <PressableBox
                 onPress={handleSend}
                 disabled={isSending}
                 style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
@@ -283,7 +293,7 @@ export default function CameraScreen() {
                 ) : (
                   <Send size={20} color={c.accentText} />
                 )}
-              </Pressable>
+              </PressableBox>
             </View>
           </SafeAreaView>
         </View>
@@ -306,12 +316,12 @@ export default function CameraScreen() {
       {/* Top bar: close + flash */}
       <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
         <View style={styles.topBar}>
-          <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
+          <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
             <X size={22} color={c.cameraOverlayText} />
-          </Pressable>
+          </PressableBox>
 
           <View style={styles.topBarActions}>
-            <Pressable
+            <PressableBox
               testID="camera-facing-toggle"
               onPress={toggleFacing}
               style={styles.iconButton}
@@ -321,10 +331,10 @@ export default function CameraScreen() {
               }
             >
               <SwitchCamera size={20} color={c.cameraOverlayText} />
-            </Pressable>
+            </PressableBox>
 
             {facing === 'back' && (
-              <Pressable
+              <PressableBox
                 testID="camera-torch-toggle"
                 onPress={toggleTorch}
                 style={styles.iconButton}
@@ -337,10 +347,10 @@ export default function CameraScreen() {
                 ) : (
                   <FlashlightOff size={20} color={c.cameraOverlayText} />
                 )}
-              </Pressable>
+              </PressableBox>
             )}
 
-            <Pressable
+            <PressableBox
               onPress={toggleFlash}
               style={styles.iconButton}
               accessibilityRole="button"
@@ -351,7 +361,7 @@ export default function CameraScreen() {
               ) : (
                 <ZapOff size={20} color={c.cameraOverlayText} />
               )}
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </SafeAreaView>
@@ -365,7 +375,7 @@ export default function CameraScreen() {
       {/* Bottom: capture button */}
       <SafeAreaView style={styles.bottomBarSafeArea} edges={['bottom']}>
         <View style={styles.bottomBar}>
-          <Pressable
+          <PressableBox
             onPress={handleCapture}
             disabled={isCapturing || !cameraReady}
             style={[
@@ -382,7 +392,7 @@ export default function CameraScreen() {
             ) : (
               <View style={styles.captureInner} />
             )}
-          </Pressable>
+          </PressableBox>
         </View>
       </SafeAreaView>
     </View>
@@ -422,14 +432,14 @@ function createStyles(colors: ColorScheme) {
     permissionTitle: {
       color: colors.textPrimary,
       textAlign: 'center',
-      fontSize: 16,
+      fontSize: typeScale.callout,
       fontWeight: '600',
       marginTop: 16,
     },
     permissionDescription: {
       color: colors.textSecondary,
       textAlign: 'center',
-      fontSize: 14,
+      fontSize: typeScale.subhead,
       lineHeight: 20,
       marginTop: 8,
     },
@@ -446,7 +456,7 @@ function createStyles(colors: ColorScheme) {
     },
     primaryButtonText: {
       color: colors.accentText,
-      fontSize: 14,
+      fontSize: typeScale.subhead,
       fontWeight: '600',
     },
     outlineButton: {
@@ -458,11 +468,11 @@ function createStyles(colors: ColorScheme) {
     },
     outlineButtonText: {
       color: colors.textSecondary,
-      fontSize: 14,
+      fontSize: typeScale.subhead,
     },
     cancelButtonText: {
       color: colors.textMuted,
-      fontSize: 14,
+      fontSize: typeScale.subhead,
     },
     topBarSafeArea: {
       position: 'absolute',
@@ -507,7 +517,7 @@ function createStyles(colors: ColorScheme) {
       overflow: 'hidden',
       paddingHorizontal: 14,
       paddingVertical: 8,
-      fontSize: 13,
+      fontSize: typeScale.footnote,
       fontWeight: '600',
     },
     bottomBarSafeArea: {
@@ -566,7 +576,7 @@ function createStyles(colors: ColorScheme) {
     promptInput: {
       flex: 1,
       color: colors.cameraOverlayText,
-      fontSize: 15,
+      fontSize: typeScale.body,
       lineHeight: 22,
       maxHeight: 120,
       paddingVertical: 0,

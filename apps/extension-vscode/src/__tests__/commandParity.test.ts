@@ -134,8 +134,8 @@ describe('package.json ↔ runtime command parity', () => {
     expect(dupes, `duplicate command registrations: ${dupes.join(', ')}`).toEqual([]);
   });
 
-  it('does not advertise unavailable checkpoint, worktree, or rewind controls', () => {
-    const unsupported = /checkpoint|worktree|rewind/i;
+  it('does not advertise an unavailable rewind control', () => {
+    const unsupported = /rewind/i;
     const declared = readDeclaredCommands().filter(
       (command) => unsupported.test(command.command) || unsupported.test(command.title ?? ''),
     );

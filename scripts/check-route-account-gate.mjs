@@ -70,6 +70,7 @@ export const MACHINE_PRINCIPALS = [
   ['apps/web/lib/services/openrouter-video-webhook-service.ts', 'verifyOpenRouterVideoWebhook'],
   ['apps/web/lib/server/mobile-iap-store-verification.ts', 'verifyAppleStoreNotification'],
   ['apps/web/lib/e2b/provider-proxy-token.ts', 'verifyProviderProxyToken'],
+  ['apps/web/lib/server/mobile-intent-tokens.ts', 'resolveMobileIntentToken'],
   ['apps/web/app/api/stripe-webhook/lib/verify.ts', 'verifyStripeSignature'],
 ];
 

@@ -66,6 +66,7 @@ pub enum OverlayResult {
     /// Memory settings chosen in `MemoriesSettingsView`.
     Memory(crate::tui::widgets::memories_settings::MemorySettings),
     DiffApproved(Vec<std::path::PathBuf>),
+    DiffReviewed(crate::tui::widgets::diff_review::DiffReviewOutcome),
 }
 
 /// Core trait. A view renders itself, reacts to keys, and signals

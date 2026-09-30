@@ -17,6 +17,17 @@ use crate::wire::{ContentBlock, Message, MessageContent, ToolDefinition};
 // Message conversion
 // ---------------------------------------------------------------------------
 
+const UNKNOWN_BLOCK: &str = "[content this version cannot show]";
+
+fn inline_document(name: &str, data_b64: &str) -> Option<Value> {
+    data_b64.is_empty().then(|| {
+        serde_json::json!({
+            "type": "text",
+            "text": format!("[attached file: {name}]"),
+        })
+    })
+}
+
 /// Convert an internal Message to Anthropic API JSON format.
 pub fn convert_message_to_anthropic(m: &Message) -> Value {
     match &m.content {
@@ -39,6 +50,26 @@ pub fn convert_message_to_anthropic(m: &Message) -> Value {
                             "media_type": mime,
                             "data": data_b64
                         }
+                    }),
+                    ContentBlock::Document {
+                        name,
+                        mime,
+                        data_b64,
+                        ..
+                    } => match inline_document(name, data_b64) {
+                        Some(placeholder) => placeholder,
+                        None => serde_json::json!({
+                            "type": "document",
+                            "title": name,
+                            "source": {
+                                "type": "base64",
+                                "media_type": mime,
+                                "data": data_b64
+                            }
+                        }),
+                    },
+                    ContentBlock::Unknown => serde_json::json!({
+                        "type": "text", "text": UNKNOWN_BLOCK
                     }),
                     ContentBlock::ToolUse { id, name, input } => serde_json::json!({
                         "type": "tool_use", "id": id, "name": name, "input": input
@@ -77,7 +108,9 @@ pub fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                         ContentBlock::Text { text } => {
                             text_parts.push(text.clone());
                         }
-                        ContentBlock::Image { .. } => {
+                        ContentBlock::Image { .. }
+                        | ContentBlock::Document { .. }
+                        | ContentBlock::Unknown => {
                             // Image blocks are not expected in assistant-role messages;
                             // skip to avoid emitting malformed API payloads.
                         }
@@ -182,7 +215,29 @@ pub fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                                 }
                             }));
                         }
-                        ContentBlock::ToolUse { .. } => {
+                        ContentBlock::Document {
+                            name,
+                            mime,
+                            data_b64,
+                            asset_id,
+                        } => {
+                            content_parts.push(match asset_id {
+                                Some(asset_id) => serde_json::json!({
+                                    "type": "file",
+                                    "file": { "asset_id": asset_id }
+                                }),
+                                None => inline_document(name, data_b64).unwrap_or_else(|| {
+                                    serde_json::json!({
+                                        "type": "file",
+                                        "file": {
+                                            "filename": name,
+                                            "file_data": format!("data:{mime};base64,{data_b64}")
+                                        }
+                                    })
+                                }),
+                            });
+                        }
+                        ContentBlock::ToolUse { .. } | ContentBlock::Unknown => {
                             // ToolUse blocks are not expected in user/tool-role messages;
                             // skip to avoid emitting malformed OpenAI API payloads.
                         }
@@ -234,6 +289,19 @@ pub fn convert_message_to_openai_responses(m: &Message) -> Vec<Value> {
                             "image_url": format!("data:{mime};base64,{data_b64}"),
                         }));
                     }
+                    ContentBlock::Document {
+                        name,
+                        mime,
+                        data_b64,
+                        ..
+                    } => content.push(inline_document(name, data_b64).unwrap_or_else(|| {
+                        serde_json::json!({
+                            "type": "input_file",
+                            "filename": name,
+                            "file_data": format!("data:{mime};base64,{data_b64}"),
+                        })
+                    })),
+                    ContentBlock::Unknown => {}
                     ContentBlock::ToolUse { id, name, input } => {
                         non_message_items.push(serde_json::json!({
                             "type": "function_call",
@@ -316,6 +384,20 @@ pub fn convert_message_to_gemini(m: &Message, tool_names: &HashMap<String, Strin
                             "data": data_b64
                         }
                     }),
+                    ContentBlock::Document {
+                        name,
+                        mime,
+                        data_b64,
+                        ..
+                    } => inline_document(name, data_b64).map_or_else(
+                        || {
+                            serde_json::json!({
+                                "inlineData": { "mimeType": mime, "data": data_b64 }
+                            })
+                        },
+                        |placeholder| serde_json::json!({ "text": placeholder["text"] }),
+                    ),
+                    ContentBlock::Unknown => serde_json::json!({ "text": UNKNOWN_BLOCK }),
                     ContentBlock::ToolUse { name, input, .. } => {
                         serde_json::json!({
                             "functionCall": { "name": name, "args": input }

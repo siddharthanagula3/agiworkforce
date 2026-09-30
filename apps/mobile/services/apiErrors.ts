@@ -6,6 +6,13 @@ import {
 
 export type ApiPaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing';
 
+export class CloudCredentialUnavailableError extends Error {
+  constructor() {
+    super('The mobile Cloud credential is unavailable.');
+    this.name = 'CloudCredentialUnavailableError';
+  }
+}
+
 const PAYWALL_BODY_KIND = 'paywall';
 const PAYWALL_DEFAULT_FEATURE = 'token_cap';
 const PAYWALL_DEFAULT_TIER = 'basic';
@@ -54,6 +61,7 @@ export class ApiFreeCapacityError extends Error {
 export interface ApiHttpErrorContext {
   retryAfterSeconds?: number;
   requestId?: string;
+  body?: Record<string, unknown>;
 }
 
 export class ApiHttpError extends Error {
@@ -61,6 +69,7 @@ export class ApiHttpError extends Error {
   readonly code: string | null;
   readonly retryAfterSeconds: number | undefined;
   readonly requestId: string | undefined;
+  readonly body: Record<string, unknown> | undefined;
 
   constructor(
     message: string,
@@ -74,6 +83,7 @@ export class ApiHttpError extends Error {
     this.code = code;
     this.retryAfterSeconds = context.retryAfterSeconds;
     this.requestId = context.requestId;
+    this.body = context.body;
   }
 }
 
@@ -88,6 +98,10 @@ const NO_MODEL_SWITCH_CODES = new Set([
   FREE_CAPACITY_UNAVAILABLE_CODE,
   // The Free plan has one model, so another model is not a way out of its spent pool.
   'free_allowance_exhausted',
+  'monthly_limit_exceeded',
+  'insufficient_credits',
+  'insufficient_quota',
+  'organization_spend_cap_reached',
 ]);
 
 export function offersModelSwitch(code: string | null | undefined): boolean {
@@ -124,6 +138,7 @@ export function httpErrorFrom(status: number, body: string): ApiHttpError {
   return new ApiHttpError(message ?? fallbackHttpMessage(status, retryAfterSeconds), status, code, {
     ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
     ...(typeof requestId === 'string' && requestId ? { requestId } : {}),
+    ...(parsed ? { body: parsed } : {}),
   });
 }
 

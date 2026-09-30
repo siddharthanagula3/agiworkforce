@@ -10,25 +10,10 @@ nothing is left.
 
 - Done when: Every interactive control exposes an accessible name (visible text, aria-label or platform equivalent) that says what it does.
 - Wave: 3
-- Already works on: vscode
+- Already works on: mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Controls are widely labelled, but notification rows omit their unread state and activity rows omit their status; include state in the label. | states |
-
-Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:145-145`
-
-## S11.02: Semantic heading hierarchy.
-
-- Done when: Each screen has a top heading and sections use nested headings, so screen-reader users can jump by heading.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Header roles appear only on onboarding, lock and consent screens; chat, settings and projects mark no headers. | ui |
-
-Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`
 
 ## S11.06: Focus restoration after panel closure.
 
@@ -38,18 +23,6 @@ Code: `apps/mobile/app/(public)/onboarding.tsx:471-471`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-
-## S11.07: Screen-reader announcements for completed events.
-
-- Done when: When something finishes (a reply, a tool step, a save, a connection), a screen reader hears a short announcement without moving focus.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only the benchmark screen announces; finished replies, tool steps and saves are never announced (no announceForAccessibility or live region in chat). | ui |
-
-Code: `apps/mobile/app/(app)/settings/performance.tsx:352-352`
 
 ## S11.08: Non-spammy streaming announcements.
 
@@ -61,29 +34,14 @@ Code: `apps/mobile/app/(app)/settings/performance.tsx:352-352`
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S11.09: Accessible tool and approval status.
-
-- Done when: Tool steps and approval requests expose their state (running, done, failed, waiting for approval) to assistive tech, with labelled approve and deny controls.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Approve and reject are labelled, but activity rows announce only "Show details for <step>", not whether it is running, done or failed. | states |
-
-Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:333-333`, `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:145-145`
-
 ## S11.12: Text resizing.
 
 - Done when: Text scales with the user's text-size setting (browser, OS or app) up to at least 200% without being cut off.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Text follows the OS font scale, but several labels cap it at 1.3-1.4x (maxFontSizeMultiplier), below the 200% target. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:104-104`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:406-406`
 
 ## S11.13: Browser-zoom reflow.
 
@@ -94,43 +52,15 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:104-104`, `apps/m
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 
-## S11.15: Captions.
-
-- Done when: Spoken audio (voice conversations) can be shown as live captions.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Prints "You said:" and the streamed reply text. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
-
-Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:213-213`
-
-## S11.16: Transcripts.
-
-- Done when: A voice conversation leaves a readable text transcript kept with the chat.
-- Wave: 2
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
-
-Code: `apps/cli/src/tui/tui_app.rs:5056-5056`
-
 ## S11.19: Right-to-left layouts.
 
 - Done when: In a right-to-left language the whole layout mirrors correctly (direction set and spacing uses logical start/end).
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Arabic sets dir="rtl" on the document, but layouts use physical left/right spacing (ml/mr/pl/pr classes in ~107 files, no ms/me/ps/pe), so mirrored screens misalign; switch to logical properties. | ui |
-| desktop | partial | Arabic sets dir="rtl" on the document, but layouts use physical left/right spacing (ml/mr/pl/pr classes in ~107 files, no ms/me/ps/pe), so mirrored screens misalign; switch to logical properties. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/i18n/index.ts:78-78`, `packages/ui/i18n/src/languages.ts:13-13`
 
 ## S11.20: Mixed-direction text handling.
 
@@ -147,39 +77,11 @@ Code: `apps/web/app/i18n/index.ts:78-78`, `packages/ui/i18n/src/languages.ts:13-
 
 - Done when: Dates, times and numbers are formatted for the user's locale rather than a fixed US format.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Usage, schedules and connector dates hard-code en-US; use the device locale. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:37-37`, `apps/mobile/src/features/schedules/components/ScheduleCard.tsx:56-56`
-
-## S11.23: Currency formatting.
-
-- Done when: Prices and money amounts show the right currency symbol and the user's number format.
-- Wave: 2
-- Already works on: web, desktop, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Store prices come from the store's localized displayPrice, but the billing screen is behind FEATURES.billing=false and its copy hard-codes $ amounts. | flag-off |
-
-Code: `apps/mobile/src/features/billing/storePricing.ts:66-66`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
-
-## S11.24: Pluralization.
-
-- Done when: Counted phrases follow each language's plural rules rather than an English "s" suffix.
-- Wave: 3
-- Already works on: web, desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Counts use English-only "=== 1 ? '' : 's'" suffixes; use the i18n plural rules (one/few/many) so translated counts read correctly. | ui |
-| chrome | partial | 56cd1c51f: tPlural over Intl.PluralRules in place; adding locales is outside this item | only an English locale ships |
-
-Code: `apps/mobile/app/(app)/notifications/index.tsx:307-307`, `apps/extension/src/i18n.ts:13-13`, `apps/extension/src/features/side-panel/projectsDrawer.ts:12-12`
 
 ## S11.25: Translated error messages.
 

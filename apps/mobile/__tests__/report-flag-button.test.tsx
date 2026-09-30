@@ -127,6 +127,22 @@ describe('ReportFlagButton', () => {
     expect(queryByText(/we (will )?(review|received)/i)).toBeNull();
   });
 
+  it('keeps local storage diagnostics private when a report cannot be saved', async () => {
+    mockSaveContentReport.mockRejectedValue(new Error('MMKV private storage path'));
+    const { getByLabelText, getByText, queryByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() =>
+      expect(
+        getByText('Report could not be saved on this device. Free up space and try again.'),
+      ).toBeTruthy(),
+    );
+    expect(queryByText(/MMKV private/)).toBeNull();
+    expect(queryByText('Report saved on this device')).toBeNull();
+  });
+
   it('offers the email hand-off from the saved state and reports its result', async () => {
     const { getByLabelText, getByTestId, getByText } = renderButton();
     fireEvent.press(getByLabelText('Report this response'));

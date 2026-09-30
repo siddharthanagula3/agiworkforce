@@ -16,7 +16,7 @@ pub const SYNC_PROTOCOL_VERSION: u8 = 2;
 const CONTENT_MAX_CHARS: usize = 20_000;
 const CATEGORY_MAX_CHARS: usize = 200;
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryPushItem {
     pub id: String,
@@ -31,7 +31,7 @@ pub struct MemoryPushItem {
     pub pinned: Option<bool>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MemoryPushRequest {
     pub protocol_version: u8,
@@ -52,6 +52,12 @@ pub struct MemoryDelta {
     pub is_deleted: bool,
     pub updated_at: String,
     pub server_version: String,
+    #[serde(default)]
+    pub source_conversation_id: Option<String>,
+    #[serde(default)]
+    pub source_conversation_title: Option<String>,
+    #[serde(default)]
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -62,6 +68,8 @@ pub struct MemoryPullResponse {
     pub cursor: String,
     #[serde(default)]
     pub has_more: bool,
+    #[serde(default)]
+    pub memory_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -82,6 +90,8 @@ pub struct RejectedMemory {
     pub id: String,
     #[serde(default)]
     pub term: Option<String>,
+    #[serde(default)]
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -100,6 +110,8 @@ pub struct MemoryPushResponse {
 pub struct MemoryCache {
     #[serde(default)]
     pub entries: Vec<CachedMemory>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub account_memory_off: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -113,6 +125,12 @@ pub struct CachedMemory {
     #[serde(default)]
     pub pinned: bool,
     pub updated_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_conversation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_conversation_title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
 }
 
 impl MemoryCache {
@@ -129,6 +147,9 @@ impl MemoryCache {
                 source: delta.source.clone(),
                 pinned: delta.pinned,
                 updated_at: delta.updated_at.clone(),
+                source_conversation_id: delta.source_conversation_id.clone(),
+                source_conversation_title: delta.source_conversation_title.clone(),
+                project_id: delta.project_id.clone(),
             });
         }
         self.entries.sort_by(|a, b| {
@@ -148,11 +169,24 @@ impl MemoryCache {
     /// The account memory as the block the CLI already injects into the system
     /// prompt beside the on-disk file.
     pub fn context_prompt(&self) -> String {
-        if self.entries.is_empty() {
+        self.render_context(self.entries.iter())
+    }
+
+    pub fn context_prompt_for(&self, project: Option<&str>) -> String {
+        self.render_context(self.entries.iter().filter(|entry| {
+            entry
+                .project_id
+                .as_deref()
+                .is_none_or(|owner| Some(owner) == project)
+        }))
+    }
+
+    fn render_context<'a>(&self, entries: impl Iterator<Item = &'a CachedMemory>) -> String {
+        let entries: Vec<&CachedMemory> = entries.collect();
+        if entries.is_empty() {
             return String::new();
         }
-        let lines = self
-            .entries
+        let lines = entries
             .iter()
             .map(|entry| format!("- {}", entry.content.replace(['\n', '\r'], " ").trim()))
             .collect::<Vec<_>>()
@@ -229,7 +263,6 @@ pub fn apply_push_response(response: &MemoryPushResponse, state: &mut SyncState)
             state.memories.record(&conflict.id, &current.server_version);
         }
     }
-    state.memories.advance(&response.cursor);
 }
 
 pub fn apply_pull_response(response: &MemoryPullResponse, state: &mut SyncState) {
@@ -258,6 +291,9 @@ pub fn refusals(request: &MemoryPushRequest, response: &MemoryPushResponse) -> V
                 .iter()
                 .find(|rejected| rejected.id == memory.id)
             {
+                if let Some(message) = rejected.message.as_deref() {
+                    return format!("'{preview}': {message}");
+                }
                 match rejected.term.as_deref() {
                     Some(term) => format!("'{preview}' was refused by your account's memory policy ({term})"),
                     None => format!("'{preview}' was refused by your account's memory policy"),
@@ -290,10 +326,12 @@ impl<'a> MemorySync<'a> {
             memories: Vec::new(),
             cursor: cursor.clone(),
             has_more: false,
+            memory_enabled: None,
         };
         loop {
             let page = self.pull(&cursor).await?;
             merged.memories.extend(page.memories.iter().cloned());
+            merged.memory_enabled = page.memory_enabled.or(merged.memory_enabled);
             let advanced = page.cursor != cursor;
             cursor = page.cursor.clone();
             merged.cursor = cursor.clone();
@@ -326,6 +364,9 @@ mod tests {
             is_deleted: deleted,
             updated_at: format!("2026-09-13T00:00:{version:0>2}Z"),
             server_version: version.to_string(),
+            source_conversation_id: None,
+            source_conversation_title: None,
+            project_id: None,
         }
     }
 
@@ -349,6 +390,9 @@ mod tests {
             source: None,
             pinned: false,
             updated_at: "2026-09-13T00:00:00Z".to_string(),
+            source_conversation_id: None,
+            source_conversation_title: None,
+            project_id: None,
         };
         let push = delete_memory(&entry, &state, "cli");
         assert!(push.is_deleted);
@@ -372,6 +416,23 @@ mod tests {
         cache.apply(&[delta("m1", "Prefers  tabs", "1", false)]);
         assert!(cache.contains("prefers tabs"));
         assert!(!cache.contains("prefers spaces"));
+    }
+
+    #[test]
+    fn a_turn_draws_only_on_account_wide_and_its_own_project_memories() {
+        let mut cache = MemoryCache::default();
+        let mut own = delta("m1", "project a fact", "1", false);
+        own.project_id = Some("project-a".to_string());
+        let mut other = delta("m2", "project b fact", "2", false);
+        other.project_id = Some("project-b".to_string());
+        cache.apply(&[own, other, delta("m3", "account fact", "3", false)]);
+        let linked = cache.context_prompt_for(Some("project-a"));
+        assert!(linked.contains("project a fact"));
+        assert!(linked.contains("account fact"));
+        assert!(!linked.contains("project b fact"));
+        let unlinked = cache.context_prompt_for(None);
+        assert!(unlinked.contains("account fact"));
+        assert!(!unlinked.contains("project a fact"));
     }
 
     #[test]
@@ -411,6 +472,7 @@ mod tests {
             rejected: vec![RejectedMemory {
                 id: request.memories[1].id.clone(),
                 term: Some("password".to_string()),
+                message: None,
             }],
             cursor: "10".to_string(),
         };
@@ -457,6 +519,58 @@ mod tests {
     }
 
     #[test]
+    fn a_push_leaves_the_pull_cursor_so_another_devices_delete_is_still_pulled() {
+        let mut state = SyncState::default();
+        apply_pull_response(
+            &MemoryPullResponse {
+                memories: vec![
+                    delta("m1", "one", "5", false),
+                    delta("m2", "two", "5", false),
+                ],
+                cursor: "5".to_string(),
+                has_more: false,
+                memory_enabled: None,
+            },
+            &mut state,
+        );
+        apply_push_response(
+            &MemoryPushResponse {
+                applied: vec![AppliedRow {
+                    id: "m1".to_string(),
+                    server_version: "7".to_string(),
+                }],
+                conflicts: Vec::new(),
+                rejected: Vec::new(),
+                cursor: "7".to_string(),
+            },
+            &mut state,
+        );
+        assert_eq!(state.memories.cursor, "5");
+        assert_eq!(state.memories.base_version("m1"), "7");
+
+        let pulled = MemoryPullResponse {
+            memories: vec![
+                delta("m2", "two", "6", true),
+                delta("m1", "one", "7", false),
+            ],
+            cursor: "7".to_string(),
+            has_more: false,
+            memory_enabled: None,
+        };
+        assert!(pulled
+            .memories
+            .iter()
+            .filter(|memory| super::super::state::version_greater(
+                &memory.server_version,
+                &state.memories.cursor
+            ))
+            .any(|memory| memory.id == "m2" && memory.is_deleted));
+        apply_pull_response(&pulled, &mut state);
+        assert_eq!(state.memories.base_version("m2"), "6");
+        assert_eq!(state.memories.cursor, "7");
+    }
+
+    #[test]
     fn a_push_request_serializes_to_the_hosted_field_names() {
         let request = MemoryPushRequest {
             protocol_version: SYNC_PROTOCOL_VERSION,
@@ -477,6 +591,7 @@ mod tests {
             memories: vec![delta("m1", "one", "8", false)],
             cursor: "8".to_string(),
             has_more: false,
+            memory_enabled: None,
         };
         apply_pull_response(&response, &mut state);
         assert_eq!(state.memories.base_version("m1"), "8");

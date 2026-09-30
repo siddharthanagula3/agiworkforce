@@ -39,13 +39,19 @@ describe('GET /api/cron/purge-temporary-chats', () => {
       .mockResolvedValueOnce([{ count: 0 }])
       .mockResolvedValueOnce([{ count: 0 }])
       .mockResolvedValueOnce([{ count: 3 }])
+      .mockResolvedValueOnce([{ count: 1 }])
       .mockResolvedValueOnce([{ count: 2 }]);
 
     const response = await GET(cronRequest());
-    const body = (await response.json()) as { purged: number; attachmentsRetired: number };
+    const body = (await response.json()) as {
+      purged: number;
+      jobsPurged: number;
+      attachmentsRetired: number;
+    };
 
     expect(response.status).toBe(200);
     expect(body.purged).toBe(3);
+    expect(body.jobsPurged).toBe(1);
     expect(body.attachmentsRetired).toBe(2);
 
     const purges = mockQuery.mock.calls.filter(
@@ -53,7 +59,12 @@ describe('GET /api/cron/purge-temporary-chats', () => {
     ) as Array<[string, unknown[]]>;
     const [conversationSql, conversationParams] = purges[0] as [string, unknown[]];
     expect(conversationSql).toMatch(/delete from web_conversations/i);
-    const [mediaSql, mediaParams] = purges[1] as [string, unknown[]];
+    expect(conversationSql).toMatch(/delete from public\.image_generation_jobs/i);
+    expect(conversationSql).toMatch(/delete from public\.video_generation_jobs/i);
+    const [jobsSql] = purges[1] as [string, unknown[]];
+    expect(jobsSql).toMatch(/job\.conversation_id is null/i);
+    expect(jobsSql).toMatch(/job\.temporary_chat/i);
+    const [mediaSql, mediaParams] = purges[2] as [string, unknown[]];
     expect(mediaSql).toMatch(/update public\.media_assets/i);
     expect(mediaSql).toMatch(/set deleted_at = now\(\)/i);
     expect(mediaSql).toMatch(/candidate\.temporary_chat/i);
@@ -70,7 +81,7 @@ describe('GET /api/cron/purge-temporary-chats', () => {
       (
         mockQuery.mock.calls.filter(
           ([sql]) => !/count\(\*\)::int as count\s+from public\.\w+ candidate/i.test(String(sql)),
-        )[1] as [string]
+        )[2] as [string]
       )[0],
     );
     expect(mediaSql).not.toMatch(/delete from public\.media_assets/i);

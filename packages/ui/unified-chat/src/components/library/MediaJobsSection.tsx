@@ -145,7 +145,7 @@ export function MediaJobsSection({ transport }: { transport: MediaJobsTransport 
                     size="sm"
                     onClick={() => transport.openConversation?.(conversationId)}
                   >
-                    <MessageSquare className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                    <MessageSquare className="me-1.5 h-3.5 w-3.5" aria-hidden />
                     Open chat
                   </Button>
                 ) : null}
@@ -156,7 +156,7 @@ export function MediaJobsSection({ transport }: { transport: MediaJobsTransport 
                     disabled={busyId === job.id}
                     onClick={() => void act(job, transport.retryMediaJob)}
                   >
-                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                    <RotateCcw className="me-1.5 h-3.5 w-3.5" aria-hidden />
                     Try again
                   </Button>
                 ) : null}
@@ -167,7 +167,7 @@ export function MediaJobsSection({ transport }: { transport: MediaJobsTransport 
                     disabled={busyId === job.id}
                     onClick={() => void act(job, transport.cancelMediaJob)}
                   >
-                    <X className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                    <X className="me-1.5 h-3.5 w-3.5" aria-hidden />
                     Cancel
                   </Button>
                 ) : null}

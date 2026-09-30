@@ -1,36 +1,47 @@
-import type { NotificationCategory } from '@/stores/notificationPrefsStore';
+import type { PushPreferenceGroup } from '@/stores/notificationPrefsStore';
 
-export interface NotificationCategoryCopy {
+export interface PushPreferenceGroupCopy {
   label: string;
   description: string;
 }
 
-export const NOTIFICATION_CATEGORY_COPY: Record<NotificationCategory, NotificationCategoryCopy> = {
-  approvals: {
-    label: 'Approvals',
-    description: 'Agent action approval requests',
+export const PUSH_PREFERENCE_GROUP_COPY: Record<PushPreferenceGroup, PushPreferenceGroupCopy> = {
+  chat_replies: {
+    label: 'Chat replies',
+    description: 'When a reply to your message is ready',
   },
-  task_updates: {
-    label: 'Work Updates',
-    description: 'Task results, schedule runs, and chat replies',
+  tasks: {
+    label: 'Task and approval updates',
+    description: 'Approval requests, finished or failed tasks, and scheduled runs',
   },
-  errors: {
-    label: 'Errors & Stops',
-    description: 'Agent failures and emergency stops',
-  },
-  status: {
-    label: 'Status Updates',
-    description: 'Heartbeat and connection info',
+  product: {
+    label: 'Product',
+    description: 'Service status and connection info',
   },
 };
 
-export const NOTIFICATION_CATEGORIES = Object.keys(
-  NOTIFICATION_CATEGORY_COPY,
-) as NotificationCategory[];
+export const PUSH_PREFERENCE_GROUPS = Object.keys(
+  PUSH_PREFERENCE_GROUP_COPY,
+) as PushPreferenceGroup[];
 
-export function isNotificationCategory(value: unknown): value is NotificationCategory {
+export function isPushPreferenceGroup(value: unknown): value is PushPreferenceGroup {
   return (
     typeof value === 'string' &&
-    Object.prototype.hasOwnProperty.call(NOTIFICATION_CATEGORY_COPY, value)
+    Object.prototype.hasOwnProperty.call(PUSH_PREFERENCE_GROUP_COPY, value)
   );
+}
+
+const LEGACY_PUSH_PREFERENCE_GROUP: Readonly<Record<string, PushPreferenceGroup>> = {
+  approvals: 'tasks',
+  task_updates: 'tasks',
+  errors: 'tasks',
+  status: 'product',
+};
+
+export function resolvePushPreferenceGroup(value: unknown): PushPreferenceGroup | null {
+  if (isPushPreferenceGroup(value)) return value;
+  if (typeof value !== 'string') return null;
+  return Object.prototype.hasOwnProperty.call(LEGACY_PUSH_PREFERENCE_GROUP, value)
+    ? (LEGACY_PUSH_PREFERENCE_GROUP[value] ?? null)
+    : null;
 }

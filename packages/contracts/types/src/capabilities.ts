@@ -12,6 +12,8 @@ export type PlatformCapability =
   // ── Web + Desktop (cloud tools) ─────────────────────────────────────────────
   | 'canUseWebSearch'
   | 'canUseDeepResearch'
+  | 'canUseAgiWork'
+  | 'canUseVideoGeneration'
   | 'canUseConnectors'
   | 'canUsePlugins'
   | 'canUseSkills'
@@ -46,6 +48,8 @@ const WEB: CapabilityRow = {
   canUseCloudExecution: true,
   canUseWebSearch: true,
   canUseDeepResearch: true,
+  canUseAgiWork: true,
+  canUseVideoGeneration: true,
   canUseConnectors: true,
   canUsePlugins: true,
   canUseSkills: true,
@@ -77,6 +81,8 @@ const DESKTOP: CapabilityRow = {
   canUseCloudExecution: true,
   canUseWebSearch: true,
   canUseDeepResearch: true,
+  canUseAgiWork: true,
+  canUseVideoGeneration: true,
   canUseConnectors: true,
   canUsePlugins: true,
   canUseSkills: true,
@@ -108,9 +114,11 @@ const MOBILE: CapabilityRow = {
   canUseCloudExecution: true,
   canUseWebSearch: true,
   canUseDeepResearch: true,
+  canUseAgiWork: true,
+  canUseVideoGeneration: true,
   canUseConnectors: true,
-  canUsePlugins: false, // SPEC-SILENT · current: not surfaced in mobile composer
-  canUseSkills: false, // SPEC-SILENT · current: not surfaced in mobile composer
+  canUsePlugins: true,
+  canUseSkills: true,
   canUseWorkingDirectory: false,
   canUseFileSystem: false,
   canRunLocalCode: false,
@@ -224,6 +232,14 @@ export const CAPABILITY_METADATA: Readonly<Record<PlatformCapability, Capability
       domain: 'networking',
       permissions: { longRunning: true, backgroundExecution: true },
     },
+    canUseAgiWork: {
+      domain: 'execution',
+      permissions: { longRunning: true, backgroundExecution: true },
+    },
+    canUseVideoGeneration: {
+      domain: 'media',
+      permissions: { longRunning: true, backgroundExecution: true },
+    },
     canUseConnectors: { domain: 'networking' },
     canUseTerminal: {
       domain: 'developer',
@@ -286,7 +302,7 @@ export const DISCOVERABLE_SURFACE_CAPABILITIES: Readonly<
     availability: Object.freeze({
       web: isCapabilityEnabled('web', 'canUsePlugins'),
       desktop: isCapabilityEnabled('desktop', 'canUsePlugins'),
-      mobile: isCapabilityEnabled('mobile', 'canUsePlugins'),
+      mobile: false,
       cli: false,
       vscode: false,
       chrome: false,

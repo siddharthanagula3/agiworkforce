@@ -150,12 +150,14 @@ import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPor
 import {
   BROWSER_COMMAND_POLL_WINDOW_MS,
   BROWSER_COMMAND_PROTOCOL_VERSION,
+  MAX_LISTED_BROWSER_TABS,
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
   NATIVE_BROWSER_UNPAIR_MESSAGE,
   NATIVE_PAGE_CAPTURE_MESSAGE,
   SITE_POLICY_ADMIN_UNAVAILABLE,
   evaluateSitePolicy,
+  type BrowserTabSummary,
   type SitePolicyAdminState,
 } from '@agiworkforce/types';
 import {
@@ -173,6 +175,7 @@ import {
 } from './features/cloud-bridge/freeTrialClient';
 import {
   abortConversationSyncForOwnerChange,
+  ensureCloudConversation,
   queueCloudConversationDeletion,
   scheduleConversationSync,
   sweepConversationSync,
@@ -2841,14 +2844,6 @@ async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<s
     rejectComputerUseOwnership(lease, 'tab_intent_changed');
   }
 
-  if (lease.windowId !== undefined) {
-    const activeTabs = await chrome.tabs.query({ active: true, windowId: lease.windowId });
-    computerUseRuns.assertCurrent(lease);
-    if (activeTabs[0]?.id !== lease.tabId) {
-      rejectComputerUseOwnership(lease, 'tab_intent_changed');
-    }
-  }
-
   return context.token;
 }
 
@@ -3087,7 +3082,33 @@ async function resolveBrowserToolTabId(explicitTabId: number | undefined): Promi
   }
 }
 
+/**
+ * The tabs, with `active` marking the one a page tool with no tab named acts
+ * on. That is resolveBrowserToolTabId's choice, not simply the focused window's
+ * tab, or the desktop would check one tab while the command acted on another.
+ */
+async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
+  const [focused] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const target = await resolveBrowserToolTabId(undefined);
+  const tabs = await chrome.tabs.query({});
+  return tabs
+    .filter((tab) => isWebTab(tab) && !tab.incognito)
+    .sort(
+      (a, b) =>
+        Number(b.windowId === focused?.windowId) - Number(a.windowId === focused?.windowId) ||
+        a.index - b.index,
+    )
+    .slice(0, MAX_LISTED_BROWSER_TABS)
+    .map((tab) => ({
+      tabId: tab.id as number,
+      title: tab.title ?? '',
+      url: tab.url as string,
+      active: tab.id === target,
+    }));
+}
+
 const DESKTOP_POLL_TIMEOUT_MS = BROWSER_COMMAND_POLL_WINDOW_MS + 10_000;
+const DESKTOP_HISTORY_SETTLE_MS = 5_000;
 const DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES = 3;
 
 let desktopPollRunning = false;
@@ -3127,7 +3148,8 @@ async function pollDesktopBrowserCommands(): Promise<void> {
       if (!command) continue;
 
       const result = await runDesktopBrowserCommand(command, {
-        resolveTabId: () => resolveBrowserToolTabId(undefined),
+        resolveTabId: (explicitTabId) => resolveBrowserToolTabId(explicitTabId),
+        listTabs: listDesktopBrowserTabs,
         send: async (tabId, message) =>
           (await handleMessageAsync({ ...message, tabId } as unknown as ExtensionMessage, {
             id: chrome.runtime.id,
@@ -3136,7 +3158,27 @@ async function pollDesktopBrowserCommands(): Promise<void> {
           })) as unknown as Record<string, unknown>,
         navigate: async (tabId, url) => {
           await chrome.tabs.update(tabId, { url });
+          // The address after any redirect is only known once the load ends,
+          // and the website rules are checked against that address.
+          const deadline = Date.now() + DESKTOP_HISTORY_SETTLE_MS;
+          while (Date.now() < deadline) {
+            const tab = await chrome.tabs.get(tabId);
+            if (tab.status === 'complete' && !tab.pendingUrl) return;
+            await sleep(100);
+          }
         },
+        history: async (tabId, direction) => {
+          const before = (await chrome.tabs.get(tabId)).url;
+          if (direction === 'back') await chrome.tabs.goBack(tabId);
+          else await chrome.tabs.goForward(tabId);
+          const deadline = Date.now() + DESKTOP_HISTORY_SETTLE_MS;
+          while (Date.now() < deadline) {
+            const tab = await chrome.tabs.get(tabId);
+            if (tab.url !== before && tab.status === 'complete') return;
+            await sleep(100);
+          }
+        },
+        tabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url ?? '',
         capture: (tabId) => captureThroughDebugger(tabId),
       });
 
@@ -3624,6 +3666,8 @@ async function handleMessageAsync(
     }
 
     case 'SELECT_OPTION':
+    case 'FIND_ELEMENTS':
+    case 'FILL_FIELDS':
     case 'CHECK':
     case 'UNCHECK':
     case 'FOCUS':
@@ -4046,6 +4090,27 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'ENSURE_CLOUD_CONVERSATION': {
+      const ensureMsg = message as import('./types').EnsureCloudConversationMessage;
+      const ensureOwner = normalizeManagedCloudOwner(ensureMsg.owner);
+      if (!ensureOwner || isRetiredManagedCloudOwner(ensureOwner)) {
+        return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
+      }
+      if (typeof ensureMsg.conversationId !== 'string' || ensureMsg.conversationId.length === 0) {
+        return { success: false, error: 'conversationId is required' } as ExtensionResponse;
+      }
+      const cloudConversationId = await ensureCloudConversation(
+        ensureOwner,
+        ensureMsg.conversationId,
+      );
+      return cloudConversationId
+        ? ({ success: true, cloudConversationId } as ExtensionResponse)
+        : ({
+            success: false,
+            error: 'This chat is not saved to your account yet.',
+          } as ExtensionResponse);
+    }
+
     case 'DELETE_CLOUD_CONVERSATION' as ExtensionMessage['type']: {
       const delCloudMsg = message as import('./types').DeleteCloudConversationMessage;
       const delOwner = normalizeManagedCloudOwner(delCloudMsg.owner);
@@ -4301,6 +4366,11 @@ async function handleMessageAsync(
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
         siteTools,
+        refreshSiteTools: async () => {
+          const tab = await chrome.tabs.get(cuTabId).catch(() => null);
+          if (!tab?.url) return;
+          siteTools.splice(0, siteTools.length, ...(await discoverRunSiteTools(cuTabId, tab.url)));
+        },
         callSiteTool: (pageName, args) => callRunSiteTool(cuTabId, pageName, args),
         runId: lease.runId,
         signal: lease.controller.signal,
@@ -4389,7 +4459,11 @@ async function handleMessageAsync(
         return { success: false, error: 'START_DOWNLOAD: url is required' } as ExtensionResponse;
       }
       try {
-        const record = await startBrowserToolDownload(downloadTabId, downloadMsg.url);
+        const record = await startBrowserToolDownload(
+          downloadTabId,
+          downloadMsg.url,
+          (message as { siteRules?: { allow: string[]; deny: string[] } }).siteRules,
+        );
         return { success: true, download: record } as ExtensionResponse;
       } catch (error) {
         return { success: false, error: errorText(error) } as ExtensionResponse;
@@ -4947,20 +5021,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
   if (changeInfo.url === undefined && changeInfo.status !== 'loading') return;
   invalidateWebMCPToolsForNavigation(tabId);
-});
-
-chrome.tabs.onActivated.addListener((activeInfo) => {
-  const lease = computerUseRuns.getActive();
-  if (!lease || lease.takeover) return;
-  if (
-    lease.windowId === undefined ||
-    activeInfo.windowId !== lease.windowId ||
-    activeInfo.tabId === lease.tabId
-  ) {
-    return;
-  }
-  computerUseStartGeneration += 1;
-  cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
 });
 
 chrome.commands.onCommand.addListener((command) => {
@@ -5642,6 +5702,10 @@ function mapInPagePromptFailure(
       return inPagePromptFailure('quota_exceeded', result.message);
     case 'account_unavailable':
       return inPagePromptFailure('account_unavailable', result.message, true);
+    case 'account_suspended':
+      return inPagePromptFailure('account_unavailable', result.message);
+    case 'terms_required':
+      return inPagePromptFailure('terms_required', result.message);
     case 'rate_limited':
       return inPagePromptFailure('rate_limited', result.message, true);
     case 'cancelled':

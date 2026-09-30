@@ -5,6 +5,7 @@ import {
   UpdateConnectorPolicyRequestSchema,
   normalizeWebDomain,
   type ConnectorPolicyResponse,
+  type WorkspaceConnectorToolRule,
 } from '@agiworkforce/cloud-contracts';
 
 import { withErrorHandler } from '@/lib/error-handler';
@@ -40,6 +41,16 @@ function webDomains(values: readonly string[]): string[] {
   return [...new Set(values.flatMap((value) => normalizeWebDomain(value) ?? []))];
 }
 
+function toolRules(rules: readonly WorkspaceConnectorToolRule[]): WorkspaceConnectorToolRule[] {
+  const byTool = new Map<string, WorkspaceConnectorToolRule>();
+  for (const rule of rules) {
+    const connectorId = rule.connectorId.trim().toLowerCase();
+    const toolName = rule.toolName.trim();
+    byTool.set(`${connectorId} ${toolName}`, { connectorId, toolName, level: rule.level });
+  }
+  return [...byTool.values()];
+}
+
 function present(
   organizationId: string,
   role: 'owner' | 'admin' | 'member' | 'viewer',
@@ -60,6 +71,7 @@ function present(
       allowedMcpHosts: policy?.allowedMcpHosts ?? [],
       allowedWebDomains: policy?.allowedWebDomains ?? [],
       blockedWebDomains: policy?.blockedWebDomains ?? [],
+      toolRules: policy?.toolRules ?? [],
       updatedAt: policy?.updatedAt ?? null,
     },
     // Derived from the operator connector map rather than a list written here,
@@ -108,6 +120,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     'Invalid connector policy',
   );
 
+  const before = await readConnectorPolicy(db, membership.organizationId);
   const input = {
     allowedConnectors: dedupe(body.allowedConnectors),
     blockedConnectors: dedupe(body.blockedConnectors),
@@ -117,6 +130,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     allowedMcpHosts: dedupe(body.allowedMcpHosts),
     allowedWebDomains: webDomains(body.allowedWebDomains),
     blockedWebDomains: webDomains(body.blockedWebDomains),
+    toolRules: body.toolRules ? toolRules(body.toolRules) : (before?.toolRules ?? []),
   };
 
   const overlap = input.allowedConnectors.filter((id) => input.blockedConnectors.includes(id));
@@ -140,7 +154,6 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     );
   }
 
-  const before = await readConnectorPolicy(db, membership.organizationId);
   const policy = await upsertConnectorPolicy(getNeonDb(), membership.organizationId, input, userId);
 
   await recordAuditEvent({

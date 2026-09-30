@@ -33,6 +33,7 @@ describe('Onboarding, local setup with cloud invite gate', () => {
     await waitFor(element(by.id('hero-start-chatting-btn')))
       .toBeVisible()
       .withTimeout(4000);
+    await device.takeScreenshot('02-onboarding-local');
   });
 
   it('tapping "Start chatting" opens the disclosure modal', async () => {
@@ -104,6 +105,5 @@ describe('Onboarding, local setup with cloud invite gate', () => {
     await waitFor(element(by.id('chat.composer.input')))
       .toBeVisible()
       .withTimeout(5000);
-    await device.takeScreenshot('02-onboarding-local');
   });
 });

@@ -2,13 +2,11 @@ import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getActiveWorkspaceFolderSync } from '../platform/workspaceFolders';
-import { redactSecrets } from '../core/telemetry';
+import { redactTelemetryText } from '../core/telemetry';
 
 const execFileAsync = promisify(execFile);
 
 const MAX_GIT_DIFF_CHARS = 2000;
-const MAX_FILE_TREE_CHARS = 1500;
-const MAX_TREE_ENTRIES = 30;
 const MAX_SELECTION_CHARS = 3000;
 const MAX_DIAGNOSTICS = 20;
 
@@ -21,6 +19,8 @@ export interface ActiveFileContext {
   cursorCharacter: number;
   lineCount: number;
 }
+
+export type EditorContextSource = Pick<vscode.TextEditor, 'document' | 'selection'>;
 
 export interface OpenFileEntry {
   filePath: string;
@@ -37,16 +37,11 @@ export interface DiagnosticEntry {
   source: string;
 }
 
-export interface ContextBuildOptions {
-  includeGit?: boolean;
-  includeDiagnostics?: boolean;
-  includeOpenFiles?: boolean;
-}
-
 export class ContextBuilder {
-  getActiveFileContext(): ActiveFileContext | undefined {
+  getActiveFileContext(
+    editor: EditorContextSource | undefined = vscode.window.activeTextEditor,
+  ): ActiveFileContext | undefined {
     try {
-      const editor = vscode.window.activeTextEditor;
       if (editor === undefined) return undefined;
 
       const { document, selection } = editor;
@@ -168,7 +163,7 @@ export class ContextBuilder {
         if (truncatedDiff.length > MAX_GIT_DIFF_CHARS) {
           truncatedDiff = truncatedDiff.slice(0, MAX_GIT_DIFF_CHARS) + '\n... (truncated)';
         }
-        parts.push(`\nDiff summary:\n${redactSecrets(truncatedDiff)}`);
+        parts.push(`\nDiff summary:\n${redactTelemetryText(truncatedDiff)}`);
       }
 
       return parts.join('\n');
@@ -177,9 +172,10 @@ export class ContextBuilder {
     }
   }
 
-  getDiagnosticsContext(): DiagnosticEntry[] {
+  getDiagnosticsContext(
+    editor: EditorContextSource | undefined = vscode.window.activeTextEditor,
+  ): DiagnosticEntry[] {
     try {
-      const editor = vscode.window.activeTextEditor;
       if (editor === undefined) return [];
 
       const allDiagnostics = vscode.languages.getDiagnostics(editor.document.uri);
@@ -200,123 +196,6 @@ export class ContextBuilder {
     } catch {
       return [];
     }
-  }
-
-  async getWorkspaceStructure(): Promise<string> {
-    try {
-      const workspaceFolder = getActiveWorkspaceFolderSync();
-      if (workspaceFolder === undefined) return '';
-
-      const rootUri = workspaceFolder.uri;
-      const entries = await vscode.workspace.fs.readDirectory(rootUri);
-
-      const sorted = entries.sort((a, b) => {
-        const aIsDir = a[1] === vscode.FileType.Directory ? 0 : 1;
-        const bIsDir = b[1] === vscode.FileType.Directory ? 0 : 1;
-        if (aIsDir !== bIsDir) return aIsDir - bIsDir;
-        return a[0].localeCompare(b[0]);
-      });
-
-      const ignored = new Set([
-        'node_modules',
-        '.git',
-        'dist',
-        'build',
-        '.next',
-        'target',
-        '__pycache__',
-        '.venv',
-        '.vscode',
-        '.idea',
-        'coverage',
-      ]);
-
-      const lines: string[] = [`Workspace: ${workspaceFolder.name}/`];
-      let count = 0;
-
-      for (const [name, type] of sorted) {
-        if (count >= MAX_TREE_ENTRIES) {
-          lines.push(`  ... (${sorted.length - count} more entries)`);
-          break;
-        }
-
-        if (ignored.has(name)) continue;
-
-        const isDir = type === vscode.FileType.Directory;
-        lines.push(`  ${isDir ? name + '/' : name}`);
-        count++;
-      }
-
-      let output = lines.join('\n');
-      if (output.length > MAX_FILE_TREE_CHARS) {
-        output = output.slice(0, MAX_FILE_TREE_CHARS) + '\n... (truncated)';
-      }
-
-      return output;
-    } catch {
-      return '';
-    }
-  }
-
-  async buildFullContext(options?: ContextBuildOptions): Promise<string> {
-    const includeGit = options?.includeGit ?? true;
-    const includeDiagnostics = options?.includeDiagnostics ?? true;
-    const includeOpenFiles = options?.includeOpenFiles ?? true;
-
-    const sections: string[] = [];
-
-    const activeFile = this.getActiveFileContext();
-    if (activeFile !== undefined) {
-      const fileParts: string[] = [
-        `Active file: ${activeFile.relativePath} (${activeFile.languageId})`,
-        `  Cursor: line ${activeFile.cursorLine}, column ${activeFile.cursorCharacter} (${activeFile.lineCount} lines total)`,
-      ];
-
-      if (activeFile.selectedText !== '') {
-        fileParts.push(
-          `  Selection:\n\`\`\`${activeFile.languageId}\n${activeFile.selectedText}\n\`\`\``,
-        );
-      }
-
-      sections.push(fileParts.join('\n'));
-    }
-
-    if (includeOpenFiles) {
-      const openFiles = this.getOpenFilesContext();
-      if (openFiles.length > 0) {
-        const fileList = openFiles
-          .map((f) => `  ${f.isActive ? '* ' : '  '}${f.relativePath} (${f.languageId})`)
-          .join('\n');
-        sections.push(`Open files (${openFiles.length}):\n${fileList}`);
-      }
-    }
-
-    if (includeDiagnostics) {
-      const diagnostics = this.getDiagnosticsContext();
-      if (diagnostics.length > 0) {
-        const diagLines = diagnostics.map(
-          (d) =>
-            `  [${d.severity.toUpperCase()}] Line ${d.line}: ${d.message}${d.source !== '' ? ` (${d.source})` : ''}`,
-        );
-        sections.push(`Diagnostics:\n${diagLines.join('\n')}`);
-      }
-    }
-
-    if (includeGit) {
-      const gitContext = await this.getGitContext();
-      if (gitContext !== '') {
-        sections.push(gitContext);
-      }
-    }
-
-    const structure = await this.getWorkspaceStructure();
-    if (structure !== '') {
-      sections.push(structure);
-    }
-
-    if (sections.length === 0) return '';
-
-    return '--- Workspace Context ---\n' + sections.join('\n\n') + '\n--- End Context ---';
   }
 
   private _inferLanguageFromUri(uri: vscode.Uri): string {

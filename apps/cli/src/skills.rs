@@ -104,6 +104,21 @@ pub fn load_disabled_skills() -> std::collections::HashSet<String> {
         .unwrap_or_default()
 }
 
+pub fn project_disabled_skills(project_root: &Path) -> std::collections::HashSet<String> {
+    if !crate::trust::is_trusted(project_root) {
+        return std::collections::HashSet::new();
+    }
+    std::fs::read_to_string(
+        project_root
+            .join(".agiworkforce")
+            .join("disabled-skills.json"),
+    )
+    .ok()
+    .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+    .map(|v| v.into_iter().collect())
+    .unwrap_or_default()
+}
+
 /// Persist the disabled-skill set (sorted for a stable file).
 pub fn save_disabled_skills(disabled: &std::collections::HashSet<String>) -> std::io::Result<()> {
     let Some(path) = disabled_skills_path() else {
@@ -123,7 +138,15 @@ pub fn save_disabled_skills(disabled: &std::collections::HashSet<String>) -> std
 /// set is empty by default, so this is identical to `discover_skills_all` until a
 /// skill is turned off.
 pub fn discover_skills() -> Vec<Skill> {
-    let disabled = load_disabled_skills();
+    if crate::tier_cache::capability_refusal(crate::tier_cache::SKILLS_CAPABILITY, "Skills")
+        .is_some()
+    {
+        return Vec::new();
+    }
+    let mut disabled = load_disabled_skills();
+    if let Ok(cwd) = std::env::current_dir() {
+        disabled.extend(project_disabled_skills(&cwd));
+    }
     let mut skills = discover_skills_all();
     skills.retain(|s| !disabled.contains(&s.name));
     skills
@@ -282,7 +305,8 @@ pub struct SkillCatalogEntry {
 /// Never prompts, so it is safe to call from a transport whose stdin is a
 /// JSON-RPC pipe or a terminal the user is not looking at.
 pub fn skill_catalog(project_root: &Path) -> Vec<SkillCatalogEntry> {
-    let disabled = load_disabled_skills();
+    let mut disabled = load_disabled_skills();
+    disabled.extend(project_disabled_skills(project_root));
     let mut entries = Vec::new();
 
     let project_dir = project_root.join(".agiworkforce").join("skills");
@@ -622,7 +646,10 @@ fn parse_frontmatter(content: &str) -> Result<Frontmatter> {
                 if !v.is_empty() {
                     category = Some(v);
                 }
-            } else if let Some(val) = line.strip_prefix("env_vars:") {
+            } else if let Some(val) = line
+                .strip_prefix("env_vars:")
+                .or_else(|| line.strip_prefix("env:"))
+            {
                 active_list = Some("env_vars");
                 env_vars.extend(parse_inline_list(val));
             } else if let Some(val) = line
@@ -904,7 +931,7 @@ pub fn format_skill_catalog_for_prompt(skills: &[Skill]) -> String {
     out
 }
 
-fn missing_tool_dependencies(skill: &Skill, available_tools: &[String]) -> Vec<String> {
+pub(crate) fn missing_tool_dependencies(skill: &Skill, available_tools: &[String]) -> Vec<String> {
     skill
         .required_tools
         .iter()
@@ -1199,6 +1226,28 @@ pub fn format_skill_list(skills: &[Skill]) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn manifests_match_the_golden_fixtures_shared_with_the_skills_package() {
+        let fixtures: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+            "../../../packages/tools/skills/src/__fixtures__/skill-manifests.golden.json"
+        ))
+        .expect("fixtures");
+        for fixture in fixtures {
+            let parsed =
+                parse_frontmatter(fixture["source"].as_str().expect("source")).expect("parses");
+            let optional = |value: String, absent: &str| (value != absent).then_some(value);
+            let actual = serde_json::json!({
+                "name": optional(parsed.name, "untitled"),
+                "description": optional(parsed.description, ""),
+                "version": parsed.version,
+                "body": parsed.body.trim(),
+                "tools": parsed.tools,
+                "env": parsed.env_vars,
+            });
+            assert_eq!(actual, fixture["expected"], "{}", fixture["case"]);
+        }
+    }
     use super::*;
 
     // ---- helpers ----------------------------------------------------------

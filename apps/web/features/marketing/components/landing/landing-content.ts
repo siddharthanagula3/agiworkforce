@@ -410,7 +410,7 @@ export const MOBILE_SHOT = {
   height: 2622,
 } as const;
 
-export const CLI_VERSION = '1.7.1';
+export const CLI_VERSION = '0.0.1';
 export const CLI_TRANSCRIPT = [
   { kind: 'cmd', text: 'agi --version' },
   { kind: 'out', text: `agi ${CLI_VERSION}` },

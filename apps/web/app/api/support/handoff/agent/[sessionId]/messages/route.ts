@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { createError } from '@/lib/errors';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
-import { redactSecrets } from '@/lib/support/handoff/transcript';
+import { redactTranscriptText } from '@/lib/support/handoff/transcript';
 import {
   appendHandoffMessage,
   getSessionById,
   listHandoffMessages,
 } from '@/lib/support/handoff/store';
+import { SupportHandoffMessageRequestSchema } from '@agiworkforce/cloud-contracts/support';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
-
-const PostSchema = z.object({ body: z.string().trim().min(1).max(4_000) });
 
 async function handleAgentList(request: NextRequest, context: RouteContext) {
   const limited = await withRateLimit(request, 'support-handoff-agent');
@@ -69,13 +67,15 @@ async function handleAgentPost(request: NextRequest, context: RouteContext) {
     throw createError.conflict(`That request is ${session.status}`);
   }
 
-  const parsed = PostSchema.safeParse(await request.json().catch(() => null));
+  const parsed = SupportHandoffMessageRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) throw createError.badRequest('Invalid message');
 
   const row = await appendHandoffMessage({
     sessionId,
     author: 'agent',
-    body: redactSecrets(parsed.data.body),
+    body: redactTranscriptText(parsed.data.body),
   });
   if (!row) throw createError.internal('Could not send that message');
 

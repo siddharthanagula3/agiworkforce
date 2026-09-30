@@ -50,14 +50,21 @@ export function applyMessageDeltas(
         merged.delete(d.id);
         continue;
       }
-      const existing = merged.get(d.id);
+      const {
+        model: localModel,
+        provider: localProvider,
+        ...existing
+      }: Partial<SyncMessageRecord> = merged.get(d.id) ?? {};
+      const askedWith = d.role === 'user' ? { model: localModel, provider: localProvider } : {};
+      const model = d.model || askedWith.model;
+      const provider = d.provider || askedWith.provider;
       merged.set(d.id, {
-        ...(existing ?? {}),
+        ...existing,
         id: d.id,
         role: d.role,
         content: d.content,
-        ...(d.model ? { model: d.model } : {}),
-        ...(d.provider ? { provider: d.provider } : {}),
+        ...(model ? { model } : {}),
+        ...(provider ? { provider } : {}),
         // Omitted rather than nulled when the delta carries no parent, so an
         // emitter that cannot thread leaves a lineage learned elsewhere intact.
         ...(d.parent_id !== undefined ? { parentId: d.parent_id } : {}),
@@ -81,8 +88,8 @@ export interface MessagePushItem {
   conversationId: string;
   role: SyncMessageRole;
   content: string;
-  model: string | null;
-  provider: string | null;
+  model?: string;
+  provider?: string;
   metadata: Record<string, unknown> | null;
   baseVersion: string;
 }
@@ -96,8 +103,8 @@ export function toMessagePushItem(
     conversationId,
     role: record.role,
     content: record.content,
-    model: record.model ?? null,
-    provider: record.provider ?? null,
+    ...(record.model ? { model: record.model } : {}),
+    ...(record.provider ? { provider: record.provider } : {}),
     metadata: record.metadata ?? null,
     baseVersion: record.serverVersion ?? '0',
   };

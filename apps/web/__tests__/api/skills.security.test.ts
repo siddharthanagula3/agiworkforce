@@ -43,6 +43,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 
 vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+  findInstalledDirectorySkillWithFiles: vi.fn(async () => null),
   listInstalledDirectorySkills: vi.fn(async () => []),
 }));
 vi.mock('@/lib/server/neon-db', () => ({

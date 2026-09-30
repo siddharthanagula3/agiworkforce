@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM,
@@ -10,9 +11,7 @@ import {
   type ConnectorOAuthStartStatus,
 } from '@agiworkforce/cloud-contracts';
 
-import { unauthorizedResponseFor } from '@/lib/api-auth-response';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { logger } from '@/lib/logger';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -54,12 +53,15 @@ import {
 } from '@/lib/custom-connector-crypto';
 import {
   ConnectorOAuthStoreUnavailableError,
+  markAppReturn,
   createPendingAuthorization,
   listConnectorAccounts,
 } from '@/lib/connectors/oauth-store';
 import { scopeEscalation } from '@/lib/connectors/scopes-escalation';
 import { resolveRegistryAuthorization } from '@/lib/connectors/registry-authorization';
 import { McpPkceUnsupportedError } from '@/lib/connectors/mcp-oauth-provider';
+import { CONNECTOR_OAUTH_APP_RETURN_PARAM } from '@agiworkforce/cloud-contracts';
+import { stateOfAuthorizeUrl } from '@/lib/connectors/app-handoff';
 
 export const OAUTH_START_STATUS_NOT_CONFIGURED: ConnectorOAuthStartStatus = 'not_configured';
 export const OAUTH_START_STATUS_REGISTRATION_REJECTED: ConnectorOAuthStartStatus =
@@ -145,6 +147,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const connectorId = url.searchParams.get('connectorId')?.trim() ?? '';
   const returnPath = sanitizeConnectorReturnPath(url.searchParams.get('returnPath'));
   const wantsJson = url.searchParams.get('mode') === 'json';
+  const wantsAppReturn =
+    wantsJson && url.searchParams.get(CONNECTOR_OAUTH_APP_RETURN_PARAM) === '1';
+  const appHandoff = async (authorizeUrl: string): Promise<{ appReturn?: true }> => {
+    if (!wantsAppReturn) return {};
+    const state = stateOfAuthorizeUrl(authorizeUrl);
+    return state && (await markAppReturn(userId, state)) ? { appReturn: true } : {};
+  };
 
   let userId: string;
   let db: DatabaseAdapter;
@@ -152,7 +161,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   try {
     ({ db, userId, organizationId } = await getUserScopedDb(request));
   } catch (authError) {
-    if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
+    if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
     }
     if (wantsJson) {
@@ -252,6 +261,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     connectorId,
     isCustom: Boolean(!provider && discovered),
     request,
+    surface: resolveCloudChatSurface(request),
   });
   if (!policyDecision.allowed) {
     return fail(OAUTH_START_STATUS_POLICY_BLOCKED, 403, policyDecision.reason);
@@ -270,6 +280,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json({
           connectorId,
           authorizeUrl: started.authorizationUrl,
+          ...(await appHandoff(started.authorizationUrl)),
         } satisfies ConnectorOAuthStartResponse);
       }
       return NextResponse.redirect(started.authorizationUrl);
@@ -310,10 +321,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const authorization = await resolveRegistryAuthorization(provider);
-  if (authorization.status === 'authorization-server-changed') {
+  const registryAuth = await resolveRegistryAuthorization(provider);
+  if (registryAuth.status === 'authorization-server-changed') {
     logger.warn(
-      { connectorId, issuer: authorization.issuer },
+      { connectorId, issuer: registryAuth.issuer },
       '[connector-oauth] the server no longer names the issuer its pre-registered app belongs to',
     );
     return fail(
@@ -322,11 +333,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       authorizationServerChangedMessage(connectorDisplayName(connectorId)),
     );
   }
-  if (authorization.status === 'pkce-unsupported') {
+  if (registryAuth.status === 'pkce-unsupported') {
     return fail(
       OAUTH_START_STATUS_ERROR,
       502,
-      new McpPkceUnsupportedError(authorization.issuer).message,
+      new McpPkceUnsupportedError(registryAuth.issuer).message,
     );
   }
 
@@ -344,10 +355,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       requestedScopes,
       returnPath,
       ttlSeconds: sensitiveDataConnector(connectorId)?.authorizationTtlSeconds,
-      issuer: authorization.context.issuer,
-      resourceUrl: authorization.context.resource,
-      ...(authorization.context.discoveryState
-        ? { discoveryState: authorization.context.discoveryState }
+      issuer: registryAuth.context.issuer,
+      resourceUrl: registryAuth.context.resource,
+      ...(registryAuth.context.discoveryState
+        ? { discoveryState: registryAuth.context.discoveryState }
         : {}),
     });
   } catch (error) {
@@ -366,13 +377,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     redirectUri,
     state,
     codeChallenge: pkce.challenge,
-    resource: authorization.context.resource,
+    resource: registryAuth.context.resource,
   });
 
   if (wantsJson) {
     return NextResponse.json({
       connectorId,
       authorizeUrl,
+      ...(await appHandoff(authorizeUrl)),
       ...(needsReconsent
         ? { status: OAUTH_START_STATUS_SCOPE_RECONSENT, addedScopes: escalation.added }
         : {}),

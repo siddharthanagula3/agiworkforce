@@ -1,6 +1,6 @@
 'use client';
 
-import type { SupportCitation } from '../lib/contract';
+import type { SupportCitation } from '@agiworkforce/cloud-contracts/support';
 import { isInternalCitationUrl } from '../lib/normalize-answer';
 import styles from './SupportWidget.module.css';
 

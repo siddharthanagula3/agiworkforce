@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { View, Pressable, Modal, Dimensions } from 'react-native';
+import { View, Modal, Dimensions } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import {
   QrCode,
@@ -12,7 +13,8 @@ import {
   CheckCircle2,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { dialogPadding } from '@/src/ui/theme/tokens';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
@@ -38,7 +40,7 @@ function demoSteps(colors: ReturnType<typeof useThemeColors>): DemoStep[] {
       stepNumber: 1,
       title: 'Pair with Desktop',
       description:
-        'Sign in on Desktop, switch to Managed Cloud, then open Settings > Connections. Generate a short-lived QR or pairing code and scan it from this screen.',
+        'Sign in on Desktop, switch to Managed Cloud, then open Settings > Connections. Generate a short-lived QR or pairing code and scan it from this screen. To send tasks from this phone, also turn on Dispatch in Settings > Cowork.',
       hint: 'The code authorizes this phone. Account identities are not compared, and the devices only need to be online, they do not need the same Wi-Fi.',
     },
     {
@@ -172,8 +174,8 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
       accessibilityViewIsModal
     >
       <Animated.View
-        entering={FadeIn.duration(200)}
-        exiting={FadeOut.duration(150)}
+        entering={FadeIn.duration(motion.quick)}
+        exiting={FadeOut.duration(motion.quick)}
         style={{
           flex: 1,
           backgroundColor: colors.scrim,
@@ -181,7 +183,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
         }}
       >
         {/* Dismiss tap zone (above the card) */}
-        <Pressable
+        <PressableBox
           style={{ flex: 1 }}
           onPress={handleSkip}
           accessibilityLabel="Dismiss walkthrough"
@@ -190,13 +192,13 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
 
         {/* Bottom sheet tooltip card */}
         <Animated.View
-          entering={SlideInDown.duration(350).springify()}
-          exiting={SlideOutDown.duration(250)}
+          entering={SlideInDown.duration(motion.moved).springify()}
+          exiting={SlideOutDown.duration(motion.moved)}
           style={{
             backgroundColor: '#1a1a1a',
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
-            paddingHorizontal: 24,
+            paddingHorizontal: dialogPadding,
             paddingBottom: 40,
             paddingTop: 24,
             borderTopWidth: 1,
@@ -208,14 +210,14 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
           <View className="flex-row items-center justify-between mb-5">
             <View className="w-10 h-1 rounded-full bg-white/20 mx-auto" style={{ flex: 0 }} />
             <View style={{ flex: 1 }} />
-            <Pressable
+            <PressableBox
               onPress={handleSkip}
               className="p-1.5 rounded-full bg-white/5 active:bg-white/10"
               accessibilityLabel="Skip walkthrough"
               accessibilityRole="button"
             >
               <X size={16} color={colors.textMuted} />
-            </Pressable>
+            </PressableBox>
           </View>
 
           {/* Step icon */}
@@ -231,7 +233,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
               style={{ backgroundColor: colors.accentSurface }}
             >
               <Text
-                className="text-[10px] font-semibold uppercase tracking-wider"
+                className="text-xs font-semibold uppercase tracking-wider"
                 style={{ color: colors.teal }}
               >
                 Step {step.stepNumber} of {DEMO_STEPS.length}
@@ -247,24 +249,24 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
 
           {/* Hint pill */}
           <View className="flex-row items-start gap-2 px-4 py-3 rounded-xl bg-white/5 mb-6">
-            <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.teal }}>
+            <Text className="text-xs font-semibold mt-0.5" style={{ color: colors.teal }}>
               TIP
             </Text>
-            <Text className="text-[11px] text-white/50 flex-1 leading-4">{step.hint}</Text>
+            <Text className="text-xs text-white/50 flex-1 leading-4">{step.hint}</Text>
           </View>
 
           {/* Navigation */}
           <View className="flex-row items-center gap-3">
             {/* Prev button, only shown after first step */}
             {currentStep > 0 ? (
-              <Pressable
+              <PressableBox
                 onPress={handlePrev}
                 className="px-4 py-3 rounded-xl bg-white/5 active:bg-white/10"
                 accessibilityLabel="Previous step"
                 accessibilityRole="button"
               >
                 <ChevronLeft size={18} color={colors.textMuted} />
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {/* Step dots */}
@@ -273,7 +275,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             </View>
 
             {/* Next / Finish button */}
-            <Pressable
+            <PressableBox
               onPress={handleNext}
               className="flex-row items-center gap-2 px-5 py-3 rounded-xl active:opacity-80"
               style={{ backgroundColor: colors.teal }}
@@ -295,7 +297,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
                   <ChevronRight size={16} color={colors.accentText} />
                 </>
               )}
-            </Pressable>
+            </PressableBox>
           </View>
         </Animated.View>
       </Animated.View>

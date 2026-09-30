@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "agiworkforce-desktop"
-version = "1.2.0"
+version = "0.0.1"
 edition = "2021"
 authors = ["AGI Automation LLC"]
 description = "AGI Workforce desktop shell"

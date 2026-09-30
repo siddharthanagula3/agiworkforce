@@ -204,7 +204,7 @@ function ChatDetailsSection({ rows }: { rows: readonly ChatDetailRow[] }) {
         <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <span>{CHAT_DETAILS_LABEL}</span>
         <ChevronRight
-          className="ml-auto h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          className="ms-auto h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
           aria-hidden="true"
         />
       </summary>
@@ -238,7 +238,7 @@ function DockSection({
       <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium marker:hidden">
         <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <span>{label}</span>
-        <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-caption text-muted-foreground">
+        <span className="ms-auto rounded-full bg-muted px-1.5 py-0.5 text-caption text-muted-foreground">
           {count}
         </span>
         <ChevronRight
@@ -331,7 +331,7 @@ export function WorkSessionToggleButton({
     >
       <PanelRight className="h-4 w-4" aria-hidden="true" />
       {badgeCount > 0 && !open && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground">
+        <span className="absolute -end-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground">
           {badgeCount > 99 ? '99+' : badgeCount}
         </span>
       )}
@@ -369,14 +369,14 @@ function TaskDockProgressSection({
         <StatusIcon status={summary.status === 'idle' ? 'pending' : summary.status} />
         <span>{TASK_DOCK_PROGRESS_LABEL}</span>
         {summary.steps.length > 0 && (
-          <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-caption text-muted-foreground">
+          <span className="ms-auto rounded-full bg-muted px-1.5 py-0.5 text-caption text-muted-foreground">
             {completed}/{summary.steps.length}
           </span>
         )}
         <ChevronRight
           className={cn(
             'h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none',
-            summary.steps.length === 0 && 'ml-auto',
+            summary.steps.length === 0 && 'ms-auto',
           )}
           aria-hidden="true"
         />
@@ -717,7 +717,7 @@ export function WorkSessionPanel({
             : cn(
                 'fixed inset-x-0 bottom-0 z-[var(--z-panel)] flex max-h-[85vh] w-full flex-col rounded-t-2xl border-t border-border/30 bg-card/95 outline-none backdrop-blur-xl',
                 'animate-in slide-in-from-bottom duration-moved motion-reduce:animate-none',
-                'md:relative md:inset-auto md:z-auto md:max-h-none md:w-[380px] md:min-w-[280px] md:shrink md:rounded-none md:border-l md:border-t-0',
+                'md:relative md:inset-auto md:z-auto md:max-h-none md:w-[380px] md:min-w-[280px] md:shrink md:rounded-none md:border-s md:border-t-0',
                 'md:animate-in md:slide-in-from-right',
               )
         }

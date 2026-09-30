@@ -39,7 +39,7 @@ export const createSortableHeader = (label: string) => {
         className="p-0 font-medium hover:bg-transparent"
       >
         {label}
-        <ArrowUpDown className="ml-2 h-4 w-4" />
+        <ArrowUpDown className="ms-2 h-4 w-4" />
       </Button>
     );
   };
@@ -99,12 +99,12 @@ export function DataTable<TData, TValue>({
           {/* Search */}
           {searchKey && (
             <div className="relative max-w-sm">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute start-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder={searchPlaceholder}
                 value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ''}
                 onChange={(event) => table.getColumn(searchKey)?.setFilterValue(event.target.value)}
-                className="pl-8"
+                className="ps-8"
               />
             </div>
           )}
@@ -119,7 +119,7 @@ export function DataTable<TData, TValue>({
               }
             >
               <SelectTrigger className="w-[150px]">
-                <Filter className="mr-2 h-4 w-4" />
+                <Filter className="me-2 h-4 w-4" />
                 <SelectValue placeholder={filter.label} />
               </SelectTrigger>
               <SelectContent>
@@ -139,8 +139,8 @@ export function DataTable<TData, TValue>({
         {/* Column Visibility */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
-              Columns <ChevronDown className="ml-2 h-4 w-4" />
+            <Button variant="outline" className="ms-auto">
+              Columns <ChevronDown className="ms-2 h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

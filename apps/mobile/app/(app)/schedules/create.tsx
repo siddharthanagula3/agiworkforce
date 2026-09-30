@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Pressable, Alert } from 'react-native';
+import { View, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -16,6 +17,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 
@@ -80,7 +82,8 @@ export default function CreateScheduleScreen() {
         if (isEditing && existingSchedule) {
           await updateSchedule(existingSchedule.id, data);
         } else {
-          await createSchedule(data as Parameters<typeof createSchedule>[0]);
+          const created = await createSchedule(data as Parameters<typeof createSchedule>[0]);
+          if (!created) return;
         }
         router.back();
       } catch {
@@ -97,7 +100,7 @@ export default function CreateScheduleScreen() {
 
   const handleActivateCloud = useCallback(() => {
     if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent('cloud-schedules'));
       return;
     }
     setAppMode('cloud');
@@ -115,8 +118,7 @@ export default function CreateScheduleScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteSchedule(existingSchedule.id);
-            router.back();
+            if (await deleteSchedule(existingSchedule.id)) router.back();
           },
         },
       ],
@@ -144,13 +146,13 @@ export default function CreateScheduleScreen() {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
         <View className="flex-row items-center px-4 h-12">
-          <Pressable
+          <PressableBox
             onPress={handleCancel}
             className="p-2 -ml-2 rounded-lg active:bg-white/5"
             accessibilityLabel="Go back"
           >
             <ArrowLeft size={22} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         </View>
         <View className="flex-1 items-center justify-center px-8">
           <Text variant="heading" className="text-center">
@@ -159,7 +161,7 @@ export default function CreateScheduleScreen() {
           <Text className="mt-2 text-center text-sm leading-5 text-white/50">
             Upgrade to create unattended tasks in the daily AGI Cloud scheduling window.
           </Text>
-          <Pressable
+          <PressableBox
             onPress={() =>
               router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0])
             }
@@ -168,7 +170,7 @@ export default function CreateScheduleScreen() {
             accessibilityLabel="View plans for scheduled tasks"
           >
             <Text className="font-semibold text-black">View Plans</Text>
-          </Pressable>
+          </PressableBox>
         </View>
       </SafeAreaView>
     );
@@ -189,9 +191,9 @@ export default function CreateScheduleScreen() {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
         <View className="flex-row items-center px-4 h-12">
-          <Pressable onPress={handleCancel} className="p-2 -ml-2" accessibilityLabel="Go back">
+          <PressableBox onPress={handleCancel} className="p-2 -ml-2" accessibilityLabel="Go back">
             <ArrowLeft size={22} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         </View>
         <View className="flex-1 items-center justify-center px-8">
           <Text variant="heading" className="text-center">
@@ -203,14 +205,14 @@ export default function CreateScheduleScreen() {
               : 'It may have been deleted, or this account may not have access to it.'}
           </Text>
           {error ? (
-            <Pressable
+            <PressableBox
               onPress={handleRetryLoad}
               className="mt-6 min-h-[48px] min-w-[180px] items-center justify-center rounded-xl bg-white"
               accessibilityRole="button"
               accessibilityLabel="Retry loading schedule"
             >
               <Text className="font-semibold text-black">Try Again</Text>
-            </Pressable>
+            </PressableBox>
           ) : null}
         </View>
       </SafeAreaView>
@@ -221,13 +223,13 @@ export default function CreateScheduleScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <View className="flex-row items-center px-4 h-12">
-        <Pressable
+        <PressableBox
           onPress={handleCancel}
           className="p-2 -ml-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Go back"
         >
           <ArrowLeft size={22} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
         <Text variant="subheading" className="ml-2">
           {isEditing ? 'Edit Schedule' : 'New Schedule'}
         </Text>

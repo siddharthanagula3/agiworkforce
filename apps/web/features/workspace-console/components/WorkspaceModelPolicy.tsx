@@ -226,7 +226,7 @@ export function WorkspaceModelPolicy() {
                       color: allowed ? 'var(--text-1)' : 'var(--text-3)',
                     }}
                   >
-                    <Check aria-hidden className="mr-1 inline h-3 w-3" />
+                    <Check aria-hidden className="me-1 inline h-3 w-3" />
                     Approve
                   </button>
                   <button
@@ -248,7 +248,7 @@ export function WorkspaceModelPolicy() {
                       color: blocked ? 'var(--settings-destructive-text)' : 'var(--text-3)',
                     }}
                   >
-                    <Ban aria-hidden className="mr-1 inline h-3 w-3" />
+                    <Ban aria-hidden className="me-1 inline h-3 w-3" />
                     Block
                   </button>
                 </div>

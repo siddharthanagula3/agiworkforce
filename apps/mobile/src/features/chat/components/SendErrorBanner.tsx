@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { AlertTriangle, RotateCcw, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   freeCapacityCountdownMessage,
   freeCapacityRetrySeconds,
@@ -66,13 +68,18 @@ export function SendErrorBanner({
     >
       <AlertTriangle size={14} color={colors.agentError} strokeWidth={2} />
       <Text
-        style={{ fontSize: 12, color: colors.agentError, fontWeight: '500', flex: 1 }}
+        style={{
+          fontSize: typeScale.caption,
+          color: colors.agentError,
+          fontWeight: '500',
+          flex: 1,
+        }}
         numberOfLines={2}
       >
         {message}
       </Text>
       {action && !waitingForCapacity ? (
-        <Pressable
+        <PressableBox
           testID="send-error-action"
           onPress={action.onPress}
           hitSlop={8}
@@ -80,13 +87,15 @@ export function SendErrorBanner({
           accessibilityLabel={action.label}
           accessibilityRole="button"
         >
-          <Text style={{ fontSize: 12, color: colors.agentError, fontWeight: '700' }}>
+          <Text
+            style={{ fontSize: typeScale.caption, color: colors.agentError, fontWeight: '700' }}
+          >
             {action.label}
           </Text>
-        </Pressable>
+        </PressableBox>
       ) : null}
       {onRetry && (
-        <Pressable
+        <PressableBox
           onPress={onRetry}
           disabled={waitingForCapacity}
           hitSlop={8}
@@ -96,17 +105,19 @@ export function SendErrorBanner({
           accessibilityState={{ disabled: waitingForCapacity }}
         >
           <RotateCcw size={13} color={retryColor} strokeWidth={2} />
-          <Text style={{ fontSize: 12, color: retryColor, fontWeight: '600' }}>Retry</Text>
-        </Pressable>
+          <Text style={{ fontSize: typeScale.caption, color: retryColor, fontWeight: '600' }}>
+            Retry
+          </Text>
+        </PressableBox>
       )}
-      <Pressable
+      <PressableBox
         onPress={onDismiss}
         hitSlop={8}
         accessibilityLabel="Dismiss error"
         accessibilityRole="button"
       >
         <X size={14} color={colors.agentError} />
-      </Pressable>
+      </PressableBox>
     </View>
   );
 }

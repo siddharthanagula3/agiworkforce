@@ -249,7 +249,7 @@ function RoleList({ data }: { data: WorkspaceRolesResult }) {
               <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
                 {role.name}
                 {role.builtIn ? (
-                  <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-3)' }}>
+                  <span className="ms-2 text-xs font-normal" style={{ color: 'var(--text-3)' }}>
                     Built in
                   </span>
                 ) : null}
@@ -583,7 +583,7 @@ function GroupRow({
     >
       <p className="text-sm" style={{ color: 'var(--text-1)' }}>
         {group.displayName}
-        <span className="ml-2 text-xs" style={{ color: 'var(--text-3)' }}>
+        <span className="ms-2 text-xs" style={{ color: 'var(--text-3)' }}>
           {translateUiPlural('settings', 'counts.members', group.memberCount, {
             one: '{{count}} member',
             other: '{{count}} members',

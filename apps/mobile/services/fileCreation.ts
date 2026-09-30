@@ -7,8 +7,13 @@ import {
   makeDirectoryAsync,
   EncodingType,
 } from 'expo-file-system/legacy';
+import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
+import {
+  requestPermissionsAsync as requestPhotoPermissionsAsync,
+  saveToLibraryAsync,
+} from 'expo-media-library/legacy';
 import { localDeviceManagedFile, type FileLineage, type ManagedFile } from '@agiworkforce/types';
 import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
@@ -18,6 +23,7 @@ import {
   EXPORT_MATH_SCRIPT,
   markdownToExportHtml,
 } from '@/services/exportMarkdownHtml';
+import { markdownToDocxBase64 } from './docxExport';
 
 export const EXPORTS_DIR = `${documentDirectory}exports/`;
 
@@ -28,7 +34,7 @@ async function ensureExportsDir(): Promise<void> {
   }
 }
 
-export type ExportFormat = 'pdf' | 'text' | 'markdown';
+export type ExportFormat = 'pdf' | 'text' | 'markdown' | 'docx' | 'source';
 
 export interface ExportResult {
   uri: string;
@@ -64,7 +70,7 @@ function sanitizeFileName(title: string): string {
 function markdownToHtml(content: string, title: string): string {
   const { html, hasMath } = markdownToExportHtml(content);
 
-  const timestamp = new Date().toLocaleDateString('en-US', {
+  const timestamp = new Date().toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -203,6 +209,25 @@ export async function exportToText(
   return { uri: destUri, format: 'text', fileName, file: exportedFile(destUri, fileName, lineage) };
 }
 
+export async function exportSourceFile(
+  content: string,
+  title: string,
+  extension: string,
+  lineage: Partial<FileLineage> = {},
+): Promise<ExportResult> {
+  if (!content.trim()) throw new Error('Cannot export empty content');
+  await ensureExportsDir();
+  const fileName = `${sanitizeFileName(title)}.${extension.replace(/[^a-z0-9]/gi, '') || 'txt'}`;
+  const destUri = `${EXPORTS_DIR}${fileName}`;
+  await writeAsStringAsync(destUri, content, { encoding: EncodingType.UTF8 });
+  return {
+    uri: destUri,
+    format: 'source',
+    fileName,
+    file: exportedFile(destUri, fileName, lineage),
+  };
+}
+
 export async function exportPngImage(base64Png: string, title: string): Promise<string> {
   await ensureExportsDir();
   const destUri = `${EXPORTS_DIR}${sanitizeFileName(title)}.png`;
@@ -233,6 +258,7 @@ export async function shareFile(uri: string): Promise<void> {
     csv: 'public.comma-separated-values-text',
     json: 'public.json',
     html: 'public.html',
+    svg: 'public.svg-image',
     png: 'public.png',
     jpg: 'public.jpeg',
     jpeg: 'public.jpeg',
@@ -247,6 +273,7 @@ export async function shareFile(uri: string): Promise<void> {
     csv: 'text/csv',
     json: 'application/json',
     html: 'text/html',
+    svg: 'image/svg+xml',
     png: 'image/png',
     jpg: 'image/jpeg',
     jpeg: 'image/jpeg',
@@ -354,6 +381,48 @@ export async function downloadGeneratedFile(url: string, fileName: string): Prom
   return (await downloadGeneratedFileAsManagedFile(url, fileName)).uri;
 }
 
+function videoFileKey(url: string): string {
+  const cloudId = CLOUD_FILE_PATH.exec(url)?.[1];
+  if (cloudId && /^[a-zA-Z0-9_-]+$/.test(cloudId)) return cloudId;
+  let hash = 2166136261;
+  for (let index = 0; index < url.length; index += 1) {
+    hash = Math.imul(hash ^ url.charCodeAt(index), 16777619) >>> 0;
+  }
+  return hash.toString(16);
+}
+
+export interface LocalVideoPlayer {
+  videoUri: string;
+  playerUri: string;
+  directoryUri: string;
+}
+
+export async function prepareLocalVideoPlayer(
+  url: string,
+  background: string,
+): Promise<LocalVideoPlayer> {
+  const key = videoFileKey(url);
+  const cachedVideo = `${EXPORTS_DIR}video-${key}.mp4`;
+  const videoUri = (await getInfoAsync(cachedVideo)).exists
+    ? cachedVideo
+    : await downloadGeneratedFile(url, `video-${key}.mp4`);
+  const videoName = videoUri.slice(videoUri.lastIndexOf('/') + 1);
+  const playerUri = `${EXPORTS_DIR}player-${key}.html`;
+  await writeAsStringAsync(
+    playerUri,
+    [
+      '<!DOCTYPE html><html><head><meta charset="utf-8">',
+      '<meta name="viewport" content="width=device-width, initial-scale=1">',
+      `<style>html,body{margin:0;height:100%;background:${background}}`,
+      'video{width:100%;height:100%;object-fit:contain}</style></head><body>',
+      `<video src="${videoName}" controls playsinline autoplay></video>`,
+      '</body></html>',
+    ].join(''),
+    { encoding: EncodingType.UTF8 },
+  );
+  return { videoUri, playerUri, directoryUri: EXPORTS_DIR };
+}
+
 const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeType: string }>> = {
   'image/png': { extension: 'png', mimeType: 'image/png' },
   'image/jpeg': { extension: 'jpg', mimeType: 'image/jpeg' },
@@ -388,6 +457,46 @@ export async function shareGeneratedImage(
   });
 }
 
+export async function saveGeneratedImageToPhotos(
+  imagePath: string,
+  fileName = 'generated-image',
+): Promise<void> {
+  const url = resolveGeneratedImageUri(imagePath);
+  if (!url) throw new Error('Only saved AGI Cloud images can be saved.');
+  const permission = await requestPhotoPermissionsAsync(true);
+  if (!permission.granted) {
+    throw new Error('Allow AGI Workforce to add photos in Settings to save images.');
+  }
+  const downloaded = await fetchGeneratedFileBytes(url);
+  const imageType = downloaded.contentType ? SHAREABLE_IMAGE_TYPES[downloaded.contentType] : null;
+  if (!imageType) throw new Error('The saved image format cannot be added to Photos.');
+  const localUri = await writeGeneratedFileBytes(
+    `${fileName}.${imageType.extension}`,
+    downloaded.base64,
+  );
+  await saveToLibraryAsync(localUri);
+}
+
+export async function readGeneratedImageBase64(
+  imagePath: string,
+): Promise<{ base64: string; contentType: string | null }> {
+  const url = resolveGeneratedImageUri(imagePath);
+  if (!url) throw new Error('Only saved AGI Cloud images can be edited.');
+  return fetchGeneratedFileBytes(url);
+}
+
+export async function copyGeneratedImage(imagePath: string): Promise<void> {
+  const url = resolveGeneratedImageUri(imagePath);
+  if (!url) {
+    throw new Error('Only saved AGI Cloud images can be copied.');
+  }
+  const downloaded = await fetchGeneratedFileBytes(url);
+  if (!downloaded.contentType || !SHAREABLE_IMAGE_TYPES[downloaded.contentType]) {
+    throw new Error('The saved image format cannot be copied.');
+  }
+  await Clipboard.setImageAsync(downloaded.base64);
+}
+
 export async function exportToMarkdown(
   content: string,
   title: string,
@@ -405,6 +514,20 @@ export async function exportToMarkdown(
     fileName,
     file: exportedFile(destUri, fileName, lineage),
   };
+}
+
+export async function exportToDocx(
+  content: string,
+  title: string,
+  lineage: Partial<FileLineage> = {},
+): Promise<ExportResult> {
+  if (!content.trim()) throw new Error('Cannot export empty content');
+  const base64 = await markdownToDocxBase64(content, title);
+  await ensureExportsDir();
+  const fileName = `${sanitizeFileName(title)}.docx`;
+  const destUri = `${EXPORTS_DIR}${fileName}`;
+  await writeAsStringAsync(destUri, base64, { encoding: EncodingType.Base64 });
+  return { uri: destUri, format: 'docx', fileName, file: exportedFile(destUri, fileName, lineage) };
 }
 
 import type { ChatMessage } from '@/types/chat';
@@ -438,6 +561,17 @@ export async function exportConversationToPDF(
 ): Promise<ExportResult> {
   const md = formatConversationAsMarkdown(messages, title);
   return exportToPDF(md, title);
+}
+
+export async function printConversation(messages: ChatMessage[], title: string): Promise<void> {
+  const md = formatConversationAsMarkdown(messages, title);
+  if (!md.trim()) throw new Error('Cannot print empty content');
+  try {
+    await Print.printAsync({ html: markdownToHtml(md, title) });
+  } catch (error) {
+    if (error instanceof Error && /did not complete|cancel/i.test(error.message)) return;
+    throw error;
+  }
 }
 
 export async function exportConversationToText(

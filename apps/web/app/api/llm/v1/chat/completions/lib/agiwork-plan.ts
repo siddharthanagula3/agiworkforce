@@ -1,13 +1,15 @@
+import {
+  AGIWORK_PLAN_MAX_STEPS,
+  MAX_AGIWORK_GOAL_CHARS,
+  MAX_AGIWORK_PLAN_STEP_CHARS,
+} from '@agiworkforce/cloud-contracts';
 import { contextSource, type ContextSource } from '@agiworkforce/context';
 import type { AgentEvent } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { assertNoExternalInstructions } from './context/context-manifest';
 
 export const AGIWORK_PLAN_MIN_STEPS = 3;
-export const AGIWORK_PLAN_MAX_STEPS = 6;
-const MAX_PLAN_STEP_CHARS = 300;
 
-export const MAX_AGIWORK_GOAL_CHARS = 2000;
 export const MAX_AGIWORK_GOAL_FIELD_CHARS = 1000;
 
 export const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';
@@ -128,7 +130,7 @@ export function parseAgiWorkPlanSteps(text: string): string[] {
   const push = (value: string) => {
     const trimmed = value.trim();
     if (!trimmed || steps.length >= AGIWORK_PLAN_MAX_STEPS) return;
-    steps.push(trimmed.slice(0, MAX_PLAN_STEP_CHARS));
+    steps.push(trimmed.slice(0, MAX_AGIWORK_PLAN_STEP_CHARS));
   };
 
   const jsonStart = text.indexOf('[');
@@ -227,7 +229,7 @@ export function agiWorkExecutionDirective(steps: AgiWorkPlanStep[]): string {
 
 export const AgiWorkSuppliedPlanSchema = z.object({
   steps: z
-    .array(z.string().trim().min(1).max(MAX_PLAN_STEP_CHARS))
+    .array(z.string().trim().min(1).max(MAX_AGIWORK_PLAN_STEP_CHARS))
     .min(1)
     .max(AGIWORK_PLAN_MAX_STEPS),
 });

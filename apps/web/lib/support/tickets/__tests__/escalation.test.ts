@@ -38,7 +38,7 @@ import {
   escalateTicket,
   readEscalations,
 } from '../service';
-import { pagesOnCall, severityForPriority } from '../types';
+import { pagesOnCall, severityForPriority } from '@agiworkforce/cloud-contracts/support';
 
 function ticket(overrides: Record<string, unknown> = {}) {
   return {

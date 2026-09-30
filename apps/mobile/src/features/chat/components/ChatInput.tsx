@@ -7,7 +7,8 @@ import {
   useLayoutEffect,
   useMemo,
 } from 'react';
-import { Alert, View, TextInput, Pressable, Keyboard } from 'react-native';
+import { Alert, View, TextInput, Keyboard } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Plus,
@@ -16,6 +17,7 @@ import {
   Maximize2,
   Square,
   X,
+  Pencil,
   Telescope,
   Terminal,
   Paintbrush,
@@ -25,6 +27,7 @@ import {
 import {
   canUseBillingPlanCapability,
   getModelMetadataById,
+  isAutoModeModelId,
   summarizeSendPreview,
   type SendPreviewInput,
 } from '@agiworkforce/types';
@@ -43,6 +46,7 @@ import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecy
 import { useKeyboardVisible } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { exitMediaMode, mediaModelIdForMode } from '@/src/features/chat/actions/mediaMode';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
+import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { Waveform } from '@/src/features/voice/components/Waveform';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import * as Haptics from 'expo-haptics';
@@ -51,8 +55,13 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAuthStore } from '@/src/features/auth/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme, radii } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
@@ -85,6 +94,12 @@ function mergeTranscript(previous: string, transcript: string): string {
   return previous ? `${previous} ${cleanedTranscript}` : cleanedTranscript;
 }
 
+function attachmentIdentity(attachment: Attachment): string {
+  return attachment.pastedText !== undefined
+    ? `text:${attachment.id}`
+    : `${attachment.mimeType}:${attachment.fileName}:${attachment.fileSize ?? attachment.uri}`;
+}
+
 interface QueuedFollowUp {
   id: string;
   text: string;
@@ -94,6 +109,7 @@ interface QueuedFollowUp {
 export interface ChatInputHandle {
   addAttachments: (items: Attachment[]) => void;
   focus?: () => void;
+  prefillText?: (starter: string) => void;
 }
 
 interface ChatInputProps {
@@ -144,11 +160,14 @@ export function ChatInput({
     draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance) || (initialText ?? ''),
   );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const attachmentsRef = useRef<Attachment[]>(attachments);
+  attachmentsRef.current = attachments;
   const keyboardVisible = useKeyboardVisible();
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [voiceResetSignal, setVoiceResetSignal] = useState(0);
+  const [voiceStartSignal, setVoiceStartSignal] = useState(0);
   const [isMultiline, setIsMultiline] = useState(false);
   const [expandedEditorVisible, setExpandedEditorVisible] = useState(false);
   const [queuedFollowUps, setQueuedFollowUps] = useState<QueuedFollowUp[]>([]);
@@ -184,7 +203,12 @@ export function ChatInput({
 
   const modelName = getShortDisplayName(selectedModel, subscriptionTier);
   const selectedModelMetadata = getModelMetadataById(selectedModel);
+  const unreadableImages =
+    !isAutoModeModelId(selectedModel) &&
+    selectedModelMetadata?.capabilities.vision === false &&
+    attachments.some((attachment) => attachment.mimeType.startsWith('image/'));
   const mediaMode = useChatViewStore((s) => s.mediaMode);
+  const workMode = useChatViewStore((s) => s.workMode);
   const mediaModelId = mediaModelIdForMode(mediaMode);
   const mediaModelName = mediaModelId
     ? (getModelMetadataById(mediaModelId)?.name ?? mediaModelId)
@@ -244,9 +268,30 @@ export function ChatInput({
       focus: () => {
         inputRef.current?.focus();
       },
+      prefillText: (starter: string) => {
+        setText((current) => (current.trim() ? current : starter));
+      },
       addAttachments: (items: Attachment[]) => {
         const { accepted, rejected } = validateAttachments(items, appMode);
-        if (accepted.length > 0) setAttachments((prev) => [...prev, ...accepted]);
+        const seen = new Set(attachmentsRef.current.map(attachmentIdentity));
+        const fresh: Attachment[] = [];
+        const duplicates: string[] = [];
+        for (const item of accepted) {
+          const identity = attachmentIdentity(item);
+          if (seen.has(identity)) {
+            duplicates.push(item.fileName);
+            continue;
+          }
+          seen.add(identity);
+          fresh.push(item);
+        }
+        if (fresh.length > 0) setAttachments((prev) => [...prev, ...fresh]);
+        if (duplicates.length > 0) {
+          Alert.alert(
+            duplicates.length === 1 ? 'Already attached' : 'Some files are already attached',
+            `${duplicates.join('\n')}\n\nEach file is attached once.`,
+          );
+        }
         if (rejected.length > 0) {
           Alert.alert(
             rejected.length === 1 ? 'Attachment not added' : 'Some attachments not added',
@@ -411,6 +456,24 @@ export function ChatInput({
     setQueuedFollowUps(queuedFollowUpsRef.current);
   }, []);
 
+  const editQueuedFollowUp = useCallback((item: QueuedFollowUp) => {
+    queuedFollowUpsRef.current = queuedFollowUpsRef.current.filter(
+      (queued) => queued.id !== item.id,
+    );
+    setQueuedFollowUps(queuedFollowUpsRef.current);
+    setText((current) =>
+      current
+        ? `${item.text}
+
+${current}`
+        : item.text,
+    );
+    if (item.attachments.length > 0) {
+      setAttachments((current) => [...item.attachments, ...current]);
+    }
+    inputRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     const streaming = isStreaming === true;
     if (wasStreamingRef.current && !streaming) {
@@ -492,40 +555,60 @@ export function ChatInput({
     (id: string) => {
       const target = attachments.find((a) => a.id === id);
       if (!target) return;
+      const accountEpoch = captureCloudAccountEpoch();
+      if (!isCloudAccountEpochCurrent(accountEpoch)) return;
       void uploadWithRetry(
         { uri: target.uri, name: target.fileName, type: target.mimeType },
         target.fileName,
         target.id,
         { temporary: useSettingsStore.getState().isTemporaryChat },
-      ).then((result) => {
-        if (!result) return;
-        // A resumed upload owns a Cloud asset, so the next send reuses it
-        // instead of uploading the same bytes again.
-        setAttachments((prev) =>
-          prev.map((a) =>
-            a.id === id
-              ? {
-                  ...a,
-                  assetId: result.id,
-                  uri: result.url,
-                  fileSize: result.byteCount,
-                  sendFailed: false,
-                }
-              : a,
-          ),
-        );
-      });
+      )
+        .then((result) => {
+          if (!result || !isCloudAccountEpochCurrent(accountEpoch)) return;
+          // A resumed upload owns a Cloud asset, so the next send reuses it
+          // instead of uploading the same bytes again.
+          setAttachments((prev) =>
+            prev.map((a) =>
+              a.id === id
+                ? {
+                    ...a,
+                    assetId: result.id,
+                    uri: result.url,
+                    fileSize: result.byteCount,
+                    sendFailed: false,
+                  }
+                : a,
+            ),
+          );
+        })
+        .catch(() => {
+          if (!isCloudAccountEpochCurrent(accountEpoch)) return;
+          useUploadLifecycleStore
+            .getState()
+            .settle(id, 'failed', 'Could not upload this file. Check your connection and retry.');
+        });
     },
     [attachments],
   );
+
+  const handleDictationFailure = useCallback(() => {
+    Alert.alert("Didn't catch that", "Audio isn't saved, so say it again.", [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Try again', onPress: () => setVoiceStartSignal((value) => value + 1) },
+    ]);
+  }, []);
 
   const handleTranscription = useCallback(
     (transcribedText: string) => {
       setIsRecording(false);
       setAudioLevel(0);
+      if (!cleanupVoiceDictation(transcribedText)) {
+        handleDictationFailure();
+        return;
+      }
       applyTranscript(transcribedText);
     },
-    [applyTranscript],
+    [applyTranscript, handleDictationFailure],
   );
 
   const resetRecordingUi = useCallback(() => {
@@ -566,31 +649,31 @@ export function ChatInput({
       const run = transcriptionRunRef.current + 1;
       transcriptionRunRef.current = run;
       setIsTranscribing(true);
+      let transcript: string;
       try {
         const uri = await VoiceService.stopRecording();
         if (transcriptionRunRef.current !== run) return;
         const result = await VoiceService.transcribe(uri);
-        if (transcriptionRunRef.current !== run) return;
-        const transcript = result.text.trim();
-        if (transcript) {
-          if (send) {
-            const merged = mergeTranscript(text, transcript);
-            setText(merged);
-            sendComposerMessage(merged);
-          } else {
-            applyTranscript(transcript);
-          }
-        }
+        transcript = result.text.trim();
       } catch {
+        transcript = '';
+      }
+      if (transcriptionRunRef.current !== run) return;
+      setIsTranscribing(false);
+      setVoiceResetSignal((value) => value + 1);
+      if (!cleanupVoiceDictation(transcript)) {
+        handleDictationFailure();
         return;
-      } finally {
-        if (transcriptionRunRef.current === run) {
-          setIsTranscribing(false);
-          setVoiceResetSignal((value) => value + 1);
-        }
+      }
+      if (send) {
+        const merged = mergeTranscript(text, transcript);
+        setText(merged);
+        sendComposerMessage(merged);
+      } else {
+        applyTranscript(transcript);
       }
     },
-    [applyTranscript, resetRecordingUi, sendComposerMessage, text],
+    [applyTranscript, handleDictationFailure, resetRecordingUi, sendComposerMessage, text],
   );
 
   const handleDictationStop = useCallback(() => {
@@ -602,10 +685,11 @@ export function ChatInput({
   }, [finishDictation]);
 
   const handleVoiceError = useCallback(
-    (message: string) => {
+    (message: string, permissionDenied?: boolean) => {
       resetRecordingUi();
       setVoiceResetSignal((value) => value + 1);
-      Alert.alert('Voice input unavailable', message);
+      if (permissionDenied) showVoicePermissionAlert(message);
+      else Alert.alert('Voice input unavailable', message);
     },
     [resetRecordingUi],
   );
@@ -705,7 +789,11 @@ export function ChatInput({
           ? 'Describe the video to create'
           : isThreadActive
             ? 'Reply to AGI'
-            : "What's on your mind?";
+            : appMode === 'cloud' &&
+                workMode === 'agiwork' &&
+                canUseBillingPlanCapability(subscriptionTier, 'agi_work')
+              ? 'Work with AGI'
+              : "What's on your mind?";
 
   return (
     <View
@@ -756,11 +844,11 @@ export function ChatInput({
           <Sparkles size={13} color={themeColors.teal} />
           <Text
             numberOfLines={1}
-            style={{ maxWidth: 220, color: themeColors.textSecondary, fontSize: 12 }}
+            style={{ maxWidth: 220, color: themeColors.textSecondary, fontSize: typeScale.caption }}
           >
             {selectedSkillName}
           </Text>
-          <Pressable
+          <PressableBox
             onPress={onClearSelectedSkill}
             accessibilityRole="button"
             accessibilityLabel="Clear selected Skill"
@@ -768,7 +856,7 @@ export function ChatInput({
             style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
           >
             <X size={14} color={themeColors.textMuted} />
-          </Pressable>
+          </PressableBox>
         </View>
       ) : null}
 
@@ -780,6 +868,20 @@ export function ChatInput({
         onRetryUpload={handleRetryUpload}
         privacyShortLabel={attachmentPrivacyShortLabel}
       />
+
+      {unreadableImages ? (
+        <Text
+          accessibilityRole="alert"
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 6,
+            fontSize: typeScale.caption,
+            color: themeColors.agentWarning,
+          }}
+        >
+          {`${selectedModelMetadata?.name ?? modelName} cannot read images. Choose a model that can, or remove the images before sending.`}
+        </Text>
+      ) : null}
 
       {/* Command palette -- shown when input starts with "/" */}
       <CommandPalette
@@ -824,8 +926,8 @@ export function ChatInput({
               <Text
                 style={{
                   color: themeColors.textSecondary,
-                  fontSize: 11,
-                  lineHeight: 14,
+                  fontSize: typeScale.caption,
+                  lineHeight: 16,
                   fontWeight: '500',
                   includeFontPadding: false,
                 }}
@@ -863,13 +965,30 @@ export function ChatInput({
                 style={{
                   flex: 1,
                   color: themeColors.textSecondary,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   includeFontPadding: false,
                 }}
               >
                 {item.text}
               </Text>
-              <Pressable
+              <PressableBox
+                onPress={() => editQueuedFollowUp(item)}
+                testID={`chat.composer.queued-followup-edit.${item.id}`}
+                accessibilityLabel="Edit queued message"
+                accessibilityHint="Takes this message out of the queue and puts it back in the message box"
+                accessibilityRole="button"
+                hitSlop={8}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: radii.full,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Pencil size={13} color={themeColors.textMuted} />
+              </PressableBox>
+              <PressableBox
                 onPress={() => cancelQueuedFollowUp(item.id)}
                 testID={`chat.composer.queued-followup-cancel.${item.id}`}
                 accessibilityLabel="Cancel queued message"
@@ -885,7 +1004,7 @@ export function ChatInput({
                 }}
               >
                 <X size={14} color={themeColors.textMuted} />
-              </Pressable>
+              </PressableBox>
             </View>
           ))}
         </View>
@@ -910,7 +1029,7 @@ export function ChatInput({
             (IMG_0687): it was previously disabled the moment capture stopped,
             which stranded a mis-heard long dictation with no way out. */}
         {stacked ? null : isRecording || isTranscribing ? (
-          <Pressable
+          <PressableBox
             onPress={handleDictationCancel}
             style={{
               width: 40,
@@ -927,7 +1046,7 @@ export function ChatInput({
             accessibilityRole="button"
           >
             <X size={20} color={themeColors.textPrimary} />
-          </Pressable>
+          </PressableBox>
         ) : null}
 
         {/* Pill -- text input + mic, inside the rounded border. When stacked it
@@ -954,7 +1073,7 @@ export function ChatInput({
               expand. The stacked TextInput reserves room for it on the right so
               the first line never runs underneath the glyph. */}
           {stacked ? (
-            <Pressable
+            <PressableBox
               onPress={handleExpandEditor}
               style={{
                 position: 'absolute',
@@ -973,7 +1092,7 @@ export function ChatInput({
               accessibilityRole="button"
             >
               <Maximize2 size={16} color={themeColors.textMuted} />
-            </Pressable>
+            </PressableBox>
           ) : null}
 
           {/* [+] sits INSIDE the pill on the left, matching ChatGPT
@@ -983,7 +1102,7 @@ export function ChatInput({
               pill is showing recording/transcribing state, and while stacked,
               where the plus moves to the controls row beneath the text. */}
           {onOpenAddToChat && !stacked && !isRecording && !isTranscribing ? (
-            <Pressable
+            <PressableBox
               testID="chat.composer.plus"
               onPress={handlePlusPress}
               style={{
@@ -999,7 +1118,7 @@ export function ChatInput({
               accessibilityRole="button"
             >
               <Plus size={20} color={themeColors.textMuted} />
-            </Pressable>
+            </PressableBox>
           ) : null}
 
           {/* Dictation state, in place of the input: one live waveform that
@@ -1034,7 +1153,10 @@ export function ChatInput({
                 />
               </View>
               {isTranscribing ? (
-                <Text numberOfLines={1} style={{ color: themeColors.textMuted, fontSize: 13 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ color: themeColors.textMuted, fontSize: typeScale.footnote }}
+                >
                   Transcribing
                 </Text>
               ) : null}
@@ -1047,7 +1169,7 @@ export function ChatInput({
             style={{
               ...(stacked ? { alignSelf: 'stretch', paddingRight: 28 } : { flex: 1 }),
               color: themeColors.textPrimary,
-              fontSize: 15,
+              fontSize: typeScale.body,
               paddingVertical: 0,
               minHeight: 24,
               maxHeight: 160,
@@ -1095,7 +1217,7 @@ export function ChatInput({
             {stacked ? (
               <>
                 {onOpenAddToChat ? (
-                  <Pressable
+                  <PressableBox
                     testID="chat.composer.plus.stacked"
                     onPress={handlePlusPress}
                     style={{
@@ -1112,7 +1234,7 @@ export function ChatInput({
                     accessibilityRole="button"
                   >
                     <Plus size={18} color={themeColors.textMuted} />
-                  </Pressable>
+                  </PressableBox>
                 ) : null}
                 {/* The model answering this chat, on the control row beside [+]
                     - Claude's arrangement (IMG_0730); ChatGPT puts the same
@@ -1139,7 +1261,9 @@ export function ChatInput({
                 onMetering={handleMetering}
                 onLongPress={onOpenVoiceMode}
                 onError={handleVoiceError}
+                onFailure={handleDictationFailure}
                 resetSignal={voiceResetSignal}
+                startSignal={voiceStartSignal}
                 disabled={isStreaming}
               />
             ) : null}
@@ -1154,7 +1278,7 @@ export function ChatInput({
             Both dim while the transcript resolves; cancel (left) stays live. */}
         {isRecording || isTranscribing ? (
           <>
-            <Pressable
+            <PressableBox
               onPress={isRecording ? handleDictationStop : undefined}
               disabled={!isRecording}
               style={{
@@ -1178,8 +1302,8 @@ export function ChatInput({
                   like it offered only cancel-or-send and users could not find a
                   way to stop. ChatGPT shows a stop square in the same slot. */}
               <Square size={14} color={themeColors.textPrimary} fill={themeColors.textPrimary} />
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               onPress={isRecording ? handleDictationSend : undefined}
               disabled={!isRecording}
               style={{
@@ -1198,7 +1322,7 @@ export function ChatInput({
               accessibilityRole="button"
             >
               <ArrowUp size={18} color={themeColors.surfaceElevated} />
-            </Pressable>
+            </PressableBox>
           </>
         ) : (
           <>
@@ -1216,7 +1340,7 @@ export function ChatInput({
             ) : null}
             <View testID="chat.composer.send">
               {sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
-                <Pressable
+                <PressableBox
                   onPress={onOpenVoiceMode}
                   style={{
                     width: 40,
@@ -1232,7 +1356,7 @@ export function ChatInput({
                   accessibilityRole="button"
                 >
                   <AudioLines size={18} color={themeColors.surfaceElevated} />
-                </Pressable>
+                </PressableBox>
               ) : (
                 <SendButton
                   state={sendButtonState}

@@ -48,6 +48,12 @@ describe('library client mapping', () => {
     );
   });
 
+  it('passes a selected sort to the hosted Library route', () => {
+    expect(libraryListPath({ sort: 'name' })).toBe('/api/library?limit=24&offset=0&sort=name');
+    expect(libraryListPath({ sort: 'oldest' })).toBe('/api/library?limit=24&offset=0&sort=oldest');
+    expect(libraryListPath({ sort: 'type' })).toBe('/api/library?limit=24&offset=0&sort=type');
+  });
+
   it('keeps every media kind the route returns', () => {
     expect(libraryAssetKind(item({}))).toBe('image');
     expect(libraryAssetKind(item({ kind: 'video', mime_type: 'video/mp4' }))).toBe('video');
@@ -68,6 +74,9 @@ describe('library client mapping', () => {
       prompt: 'a cobalt circle',
       createdAt: '2026-09-01T00:00:00.000Z',
       sourceLabel: 'sol-1',
+      eraseAfter: null,
+      model: 'sol-1',
+      conversationId: null,
     });
   });
 
@@ -95,11 +104,28 @@ describe('library client mapping', () => {
     await expect(fetchLibraryPage({})).rejects.toThrow(/unreadable/i);
   });
 
+  it('refuses a next page that would repeat the current cursor', async () => {
+    mockApi.get.mockResolvedValue({
+      items: [item({})],
+      has_more: true,
+      next_offset: 24,
+    });
+    await expect(fetchLibraryPage({ offset: 24 })).rejects.toThrow(/unreadable/i);
+  });
+
   it('deletes through the hosted media route the web app uses', async () => {
     mockApi.delete.mockResolvedValue({ success: true });
     await deleteLibraryAsset('asset 1');
     expect(mockApi.delete).toHaveBeenCalledWith('/api/media?id=asset%201');
   });
+
+  it.each([{ success: false }, { success: 'true' }, null])(
+    'keeps the file when the hosted delete does not confirm success: %p',
+    async (response) => {
+      mockApi.delete.mockResolvedValue(response);
+      await expect(deleteLibraryAsset('asset-1')).rejects.toThrow(/could not be deleted/i);
+    },
+  );
 });
 
 describe('offline cache boundary', () => {
@@ -114,6 +140,15 @@ describe('offline cache boundary', () => {
     store.rememberLibraryPage('user_1', [mapLibraryItem(item({}))]);
     expect(useLibraryCacheStore.getState().readLibraryPage('user_2')).toBeNull();
     expect(useLibraryCacheStore.getState().readLibraryPage('user_1')).toHaveLength(1);
+  });
+
+  it('removes a deleted asset from only its owner cache', () => {
+    const store = useLibraryCacheStore.getState();
+    store.rememberLibraryPage('user_1', [mapLibraryItem(item({}))]);
+    store.removeLibraryAsset('user_2', 'asset-1');
+    expect(store.readLibraryPage('user_1')).toHaveLength(1);
+    store.removeLibraryAsset('user_1', 'asset-1');
+    expect(store.readLibraryPage('user_1')).toBeNull();
   });
 });
 

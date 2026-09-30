@@ -1,7 +1,12 @@
 import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { getModelReasoning, normalizeModelId } from '@agiworkforce/types';
+import {
+  getModelReasoning,
+  isRoutingProfileChoice,
+  normalizeModelId,
+  type RoutingProfileChoice,
+} from '@agiworkforce/types';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import {
   DEFAULT_LOCAL_MODEL_ID,
@@ -19,6 +24,7 @@ import { useTierStore } from '@/src/features/billing/store';
 
 const MAX_RECENT = 5;
 const CLOUD_PROVIDER_ID = 'cloud_managed';
+const DEFAULT_ROUTING_PROFILE: RoutingProfileChoice = 'auto';
 
 function isCloudUnlocked(): boolean {
   return useWaitlistStore.getState().cloudUnlocked;
@@ -70,6 +76,7 @@ function modelRequiresThinking(modelId: string): boolean {
 interface ModelState {
   selectedModel: string;
   selectedProvider: string;
+  routingProfile: RoutingProfileChoice;
   favorites: string[];
   recentModels: string[];
   thinkingModeEnabled: boolean;
@@ -77,6 +84,7 @@ interface ModelState {
 
   setModel: (modelId: string) => void;
   setProvider: (providerId: string) => void;
+  setRoutingProfile: (profile: RoutingProfileChoice) => void;
   toggleFavorite: (modelId: string) => void;
   setThinkingMode: (enabled: boolean) => void;
   toggleThinkingForModel: (modelId: string) => void;
@@ -88,6 +96,7 @@ export const useModelStore = create<ModelState>()(
     (set, get) => ({
       selectedModel: DEFAULT_LOCAL_MODEL_ID,
       selectedProvider: 'local',
+      routingProfile: DEFAULT_ROUTING_PROFILE,
       favorites: [],
       recentModels: [],
       thinkingModeEnabled: false,
@@ -118,6 +127,10 @@ export const useModelStore = create<ModelState>()(
 
       setProvider: (providerId: string) => {
         set({ selectedProvider: normalizeProvider(providerId) });
+      },
+
+      setRoutingProfile: (profile: RoutingProfileChoice) => {
+        set({ routingProfile: profile });
       },
 
       toggleFavorite: (modelId: string) => {
@@ -215,6 +228,9 @@ export const useModelStore = create<ModelState>()(
           ...persistedState,
           selectedModel,
           selectedProvider,
+          routingProfile: isRoutingProfileChoice(persistedState.routingProfile)
+            ? persistedState.routingProfile
+            : DEFAULT_ROUTING_PROFILE,
           favorites: filterSelectableModelIds(persistedState.favorites ?? []),
           recentModels: filterSelectableModelIds(persistedState.recentModels ?? []).slice(
             0,

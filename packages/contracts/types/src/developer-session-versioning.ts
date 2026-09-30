@@ -4,7 +4,7 @@ export const AGENT_EVENT_SCHEMA_VERSION = 5;
 
 export const PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE = -32005;
 
-export const MINIMUM_SUPPORTED_RUNTIME_VERSION = '1.7.1';
+export const MINIMUM_SUPPORTED_RUNTIME_VERSION = '0.0.1';
 
 const RUNTIME_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u;
 

@@ -57,6 +57,7 @@ const authContext = {
   } as { token: string; owner: { accountId: string; authIncarnation: string } } | null,
 };
 vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+  CODE_EXECUTION_OUTPUT_MAX_CHARS: 16_000,
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.com',
   getManagedCloudAuthContext: vi.fn(async () => authContext.current),
 }));

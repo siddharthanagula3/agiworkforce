@@ -73,6 +73,8 @@ const SAFE_TO_EXPOSE_CODES = new Set<string>([
   'CAPABILITY_UNAVAILABLE',
   'MFA_REQUIRED',
   'IP_NOT_ALLOWED',
+  'PASSKEY_REQUIRED',
+  'ACCOUNT_UNAVAILABLE',
   // A denial names why the answer is no. Collapsing it to 403 or 503 is what
   // leaves a caller unable to tell "upgrade" from "your admin turned it off".
   ...Object.values(DenialErrorCode),

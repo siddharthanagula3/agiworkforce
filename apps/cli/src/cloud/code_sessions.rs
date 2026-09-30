@@ -82,6 +82,108 @@ pub async fn show(client: &CloudClient, id: &str) -> Result<CodeSessionDetail, C
     client.get(&session_path(id), &[]).await
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeApproval {
+    pub turn_id: String,
+    pub step_index: u32,
+    #[serde(default)]
+    pub command: String,
+    #[serde(default)]
+    pub reason: String,
+    #[serde(default)]
+    pub goal: String,
+    #[serde(default)]
+    pub expires_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodeApprovalList {
+    #[serde(default)]
+    approvals: Vec<CodeApproval>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CodeApprovalDecision<'a> {
+    turn_id: &'a str,
+    step_index: u32,
+    decision: &'a str,
+}
+
+const APPROVAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+pub async fn approvals(client: &CloudClient, id: &str) -> Result<Vec<CodeApproval>, CloudError> {
+    let list: CodeApprovalList = client
+        .get(&format!("{}/agent/approvals", session_path(id)), &[])
+        .await?;
+    Ok(list.approvals)
+}
+
+pub async fn decide_approval(
+    client: &CloudClient,
+    id: &str,
+    turn_id: &str,
+    step_index: u32,
+    approve: bool,
+) -> Result<serde_json::Value, CloudError> {
+    let decision = if approve { "approve" } else { "reject" };
+    client
+        .post_idempotent(
+            &format!("{}/agent/approvals", session_path(id)),
+            &format!("code-approval:{id}:{turn_id}:{step_index}:{decision}"),
+            &CodeApprovalDecision {
+                turn_id,
+                step_index,
+                decision,
+            },
+            APPROVAL_TIMEOUT,
+        )
+        .await
+}
+
+pub fn approval_handle(session_id: &str, approval: &CodeApproval) -> String {
+    format!("{session_id}/{}/{}", approval.turn_id, approval.step_index)
+}
+
+pub fn parse_approval_handle(handle: &str) -> Option<(&str, &str, u32)> {
+    let mut parts = handle.trim().splitn(3, '/');
+    let session = parts.next().filter(|part| !part.is_empty())?;
+    let turn = parts.next().filter(|part| !part.is_empty())?;
+    let step = parts.next()?.parse().ok()?;
+    Some((session, turn, step))
+}
+
+pub fn render_approvals(pending: &[(CodeSession, Vec<CodeApproval>)]) -> String {
+    let sanitize = |text: &str| crate::terminal_text::sanitize_terminal_text(text).into_owned();
+    let count: usize = pending.iter().map(|(_, approvals)| approvals.len()).sum();
+    if count == 0 {
+        return "No cloud Code session is waiting for an approval.".to_string();
+    }
+    let mut lines = vec![format!(
+        "{count} approval(s) waiting in cloud Code sessions:"
+    )];
+    for (session, approvals) in pending {
+        for approval in approvals {
+            lines.push(format!(
+                "  {}  {}",
+                approval_handle(&session.id, approval),
+                sanitize(&session.title)
+            ));
+            lines.push(format!("      runs: {}", sanitize(&approval.command)));
+            if !approval.reason.is_empty() {
+                lines.push(format!("      why: {}", sanitize(&approval.reason)));
+            }
+            if !approval.expires_at.is_empty() {
+                lines.push(format!("      expires: {}", sanitize(&approval.expires_at)));
+            }
+        }
+    }
+    lines
+        .push("Answer with `agi code approve <handle>` or `agi code reject <handle>`.".to_string());
+    lines.join("\n")
+}
+
 pub fn session_path(id: &str) -> String {
     format!("{CODE_SESSIONS_PATH}/{}", encode_segment(id))
 }
@@ -146,7 +248,8 @@ pub fn render_list(sessions: &[CodeSession], status: &str) -> String {
     }
     lines.push(String::new());
     lines.push(
-        "Show one with `agi code show <id>`; open it in the browser with `agi code open <id>`."
+        "Show one with `agi code show <id>`, open it in the browser with `agi code open <id>`, \
+         or continue it in this checkout with `agi resume --teleport <id>`."
             .to_string(),
     );
     lines.join("\n")

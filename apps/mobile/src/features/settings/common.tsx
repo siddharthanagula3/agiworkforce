@@ -7,6 +7,7 @@ import { ArrowLeft, ChevronRight, CloudOff, type LucideIcon } from 'lucide-react
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 export function SettingsScreenShell({
@@ -42,7 +43,12 @@ export function SettingsScreenShell({
         >
           <ArrowLeft size={21} color={colors.textPrimary} />
         </Pressable>
-        <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '700' }}>{title}</Text>
+        <Text
+          accessibilityRole="header"
+          style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
+        >
+          {title}
+        </Text>
       </View>
       <ScrollView
         className="flex-1"
@@ -95,9 +101,13 @@ export function SettingsInfo({
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
         {Icon ? <Icon size={18} color={colors.textSecondary} /> : null}
-        <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>{title}</Text>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '700' }}>
+          {title}
+        </Text>
       </View>
-      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{body}</Text>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
+        {body}
+      </Text>
     </View>
   );
 }
@@ -122,7 +132,9 @@ export function CloudAccountRequired({
         }}
       >
         <ActivityIndicator color={colors.teal} />
-        <Text style={{ color: colors.textMuted, fontSize: 13 }}>Checking AGI Cloud account…</Text>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+          Checking AGI Cloud account…
+        </Text>
       </View>
     );
   }
@@ -138,10 +150,10 @@ export function CloudAccountRequired({
         gap: 10,
       }}
     >
-      <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700' }}>
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.callout, fontWeight: '700' }}>
         Sign in to AGI Cloud
       </Text>
-      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
         This page contains account-specific subscription and Cloud data. Local Mode remains
         available without an account.
       </Text>
@@ -159,7 +171,9 @@ export function CloudAccountRequired({
           opacity: pressed ? 0.8 : 1,
         })}
       >
-        <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '700' }}>Sign in</Text>
+        <Text style={{ color: colors.accentText, fontSize: typeScale.subhead, fontWeight: '700' }}>
+          Sign in
+        </Text>
       </Pressable>
     </View>
   );
@@ -188,11 +202,11 @@ export function CloudSyncBlockedBanner({
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <CloudOff size={18} color={colors.agentError} />
-        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '700' }}>
           Chat is set to Local Mode
         </Text>
       </View>
-      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 18 }}>
         {message ??
           "This can't sync with your real plan and usage while chat is in Local Mode. Switch to AGI Cloud to see up-to-date info."}
       </Text>
@@ -209,7 +223,7 @@ export function CloudSyncBlockedBanner({
           opacity: pressed ? 0.8 : 1,
         })}
       >
-        <Text style={{ color: colors.accentText, fontSize: 13, fontWeight: '600' }}>
+        <Text style={{ color: colors.accentText, fontSize: typeScale.footnote, fontWeight: '600' }}>
           Switch to AGI Cloud
         </Text>
       </Pressable>
@@ -251,13 +265,16 @@ export function SettingsRow({
         style={{
           flex: 1,
           color: destructive ? colors.agentError : colors.textPrimary,
-          fontSize: 15,
+          fontSize: typeScale.body,
         }}
       >
         {label}
       </Text>
       {value ? (
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13, maxWidth: 140 }}>
+        <Text
+          numberOfLines={1}
+          style={{ color: colors.textMuted, fontSize: typeScale.footnote, maxWidth: 140 }}
+        >
           {value}
         </Text>
       ) : null}
@@ -331,14 +348,19 @@ export function SettingsSwitchRow({
       <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
         <Text
           numberOfLines={1}
-          style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+          style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
         >
           {label}
         </Text>
         {description ? (
           <Text
             numberOfLines={2}
-            style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18, marginTop: 2 }}
+            style={{
+              color: colors.textMuted,
+              fontSize: typeScale.footnote,
+              lineHeight: 18,
+              marginTop: 2,
+            }}
           >
             {description}
           </Text>

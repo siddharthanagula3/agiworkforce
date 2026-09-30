@@ -1,29 +1,12 @@
 import type { ProviderOfferingCategory } from '@agiworkforce/types';
+import type { FreeQuotaStatus } from '@agiworkforce/cloud-contracts';
 
-export type FreeQuotaStatus = 'ready' | 'exhausted' | 'expired' | 'unavailable';
-
-export interface FreeQuotaModel {
-  key: string;
-  displayName: string;
-  providerModelId: string | null;
-  category: ProviderOfferingCategory;
-  limit: number | null;
-  unit: 'tokens' | 'images' | 'seconds' | 'chars' | 'calls' | null;
-  consumedApproximate: number | null;
-  expiresOn: string | null;
-  status: FreeQuotaStatus;
-  outputSize?: string;
-  durationSeconds?: number;
-}
-
-export interface FreeQuotaCatalogue {
-  issuer: string;
-  observedOn: string;
-  evidenceUrl: string;
-  reportedEligible: number;
-  reportedUnavailable: number;
-  models: FreeQuotaModel[];
-}
+export {
+  FREE_QUOTA_EXHAUSTED_CODE,
+  type FreeQuotaCatalogue,
+  type FreeQuotaModel,
+  type FreeQuotaStatus,
+} from '@agiworkforce/cloud-contracts';
 
 export const FREE_QUOTA_CATEGORIES: Readonly<Record<ProviderOfferingCategory, string>> = {
   chat: 'Text chat',
@@ -39,5 +22,3 @@ export const FREE_QUOTA_STATUS_LABELS: Readonly<Record<FreeQuotaStatus, string>>
   expired: 'Quota expired',
   unavailable: 'Not available right now',
 };
-
-export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';

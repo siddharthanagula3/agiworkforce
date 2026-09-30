@@ -258,7 +258,7 @@ export default function ReleaseDashboardPage() {
                       <p className="text-sm text-foreground">
                         {EVENT_LABELS[event.event]} · {event.surface} · {event.environment}
                         {event.outcome === 'failed' ? (
-                          <span className="ml-2 text-danger-text">failed</span>
+                          <span className="ms-2 text-danger-text">failed</span>
                         ) : null}
                       </p>
                       <p className="text-xs text-muted-foreground">

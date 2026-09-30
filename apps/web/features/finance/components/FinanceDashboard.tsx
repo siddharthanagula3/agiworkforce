@@ -11,6 +11,8 @@ import {
   type FinanceOverviewResponse,
 } from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
+import { toUserMessage } from '@/lib/user-error-message';
+import { LinkedBanks } from './LinkedBanks';
 
 type ReadyOverview = Extract<FinanceOverviewResponse, { status: 'ready' }>;
 
@@ -157,7 +159,7 @@ function Accounts({ accounts }: { accounts: readonly FinanceAccount[] }) {
                 {categoryLabel(account.subtype ?? account.type)}
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-end">
               <p className="text-sm font-medium tabular-nums text-foreground">
                 {money(account.current, account.currency)}
               </p>
@@ -191,7 +193,7 @@ function SpendingByCategory({ overview }: { overview: ReadyOverview }) {
                 <span className="text-foreground">{categoryLabel(entry.category)}</span>
                 <span className="tabular-nums text-foreground">
                   {money(entry.amount, overview.currency)}
-                  <span className="ml-2 text-xs text-muted-foreground">
+                  <span className="ms-2 text-xs text-muted-foreground">
                     {entry.transactions === 1 ? '1 purchase' : `${entry.transactions} purchases`}
                   </span>
                 </span>
@@ -220,14 +222,14 @@ function ByMonth({ overview }: { overview: ReadyOverview }) {
       <div className="overflow-x-auto rounded-lg border border-border/60 bg-card">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-xs text-muted-foreground">
+            <tr className="text-start text-xs text-muted-foreground">
               <th scope="col" className="px-4 py-2 font-medium">
                 Month
               </th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">
+              <th scope="col" className="px-4 py-2 text-end font-medium">
                 Spending
               </th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">
+              <th scope="col" className="px-4 py-2 text-end font-medium">
                 Income
               </th>
             </tr>
@@ -236,10 +238,10 @@ function ByMonth({ overview }: { overview: ReadyOverview }) {
             {overview.spending.byMonth.map((entry) => (
               <tr key={entry.month} className="border-t border-border/60">
                 <td className="px-4 py-2 text-foreground">{monthLabel(entry.month)}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-foreground">
+                <td className="px-4 py-2 text-end tabular-nums text-foreground">
                   {money(entry.spending, overview.currency)}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums text-foreground">
+                <td className="px-4 py-2 text-end tabular-nums text-foreground">
                   {money(entry.income, overview.currency)}
                 </td>
               </tr>
@@ -264,7 +266,7 @@ function RecentTransactions({ overview }: { overview: ReadyOverview }) {
         <div className="overflow-x-auto rounded-lg border border-border/60 bg-card">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-muted-foreground">
+              <tr className="text-start text-xs text-muted-foreground">
                 <th scope="col" className="px-4 py-2 font-medium">
                   Date
                 </th>
@@ -274,7 +276,7 @@ function RecentTransactions({ overview }: { overview: ReadyOverview }) {
                 <th scope="col" className="px-4 py-2 font-medium">
                   Category
                 </th>
-                <th scope="col" className="px-4 py-2 text-right font-medium">
+                <th scope="col" className="px-4 py-2 text-end font-medium">
                   Amount
                 </th>
               </tr>
@@ -301,8 +303,8 @@ function RecentTransactions({ overview }: { overview: ReadyOverview }) {
                   <td
                     className={
                       transaction.amount < 0
-                        ? 'whitespace-nowrap px-4 py-2 text-right tabular-nums text-success-text'
-                        : 'whitespace-nowrap px-4 py-2 text-right tabular-nums text-foreground'
+                        ? 'whitespace-nowrap px-4 py-2 text-end tabular-nums text-success-text'
+                        : 'whitespace-nowrap px-4 py-2 text-end tabular-nums text-foreground'
                     }
                   >
                     {transaction.amount < 0
@@ -328,6 +330,7 @@ function RecentTransactions({ overview }: { overview: ReadyOverview }) {
 export function FinanceDashboard() {
   const [period, setPeriod] = useState<FinanceOverviewPeriod>('30d');
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  const [reloadKey, setReloadKey] = useState(0);
   const periodLabelId = useId();
 
   useEffect(() => {
@@ -344,10 +347,10 @@ export function FinanceDashboard() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setState({ kind: 'error', message: error instanceof Error ? error.message : LOAD_FAILED });
+        setState({ kind: 'error', message: toUserMessage(error, LOAD_FAILED) });
       });
     return () => controller.abort();
-  }, [period]);
+  }, [period, reloadKey]);
 
   const overview = state.kind === 'loaded' ? state.overview : null;
 
@@ -397,6 +400,7 @@ export function FinanceDashboard() {
         <>
           <Summary overview={overview} />
           <Accounts accounts={overview.accounts} />
+          <LinkedBanks onChanged={() => setReloadKey((key) => key + 1)} />
           <SpendingByCategory overview={overview} />
           <ByMonth overview={overview} />
           <RecentTransactions overview={overview} />

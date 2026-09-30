@@ -1,4 +1,12 @@
 import { MAX_CHAT_ATTACHMENT_BYTES, isChatImageMimeType } from '@agiworkforce/cloud-contracts';
+import {
+  getHarnessMediaInput,
+  getModelMetadataById,
+  getRegistryRoute,
+  listManagedRoutesForModel,
+  OFFICE_ATTACHMENT_EXTENSIONS,
+  OFFICE_ATTACHMENT_MIME_TYPES,
+} from '@agiworkforce/types';
 import { isParseableDocument } from '@/services/docParser';
 import { isHeicImage } from '@/src/features/media/image-normalization';
 
@@ -38,6 +46,14 @@ export interface AttachmentValidationResult<T> {
  * has not resolved its destination is never the reason an unsendable file gets
  * staged. The production caller (ChatInput) always passes it.
  */
+function isOfficeDocument(a: ValidatableAttachment): boolean {
+  const extension = a.fileName.split('.').pop()?.toLowerCase() ?? '';
+  return (
+    OFFICE_ATTACHMENT_MIME_TYPES.includes(a.mimeType.toLowerCase()) ||
+    OFFICE_ATTACHMENT_EXTENSIONS.includes(extension)
+  );
+}
+
 export function isAcceptableAttachment(
   a: ValidatableAttachment,
   destination: AttachmentDestination = 'cloud',
@@ -59,7 +75,10 @@ export function isAcceptableAttachment(
     return true;
   }
   if (isParseableDocument(a.uri, a.mimeType)) return true;
-  return `“${a.fileName}” isn’t a supported file type. Try an image, PDF, text, CSV, Markdown, or code file.`;
+  if (destination === 'cloud' && isOfficeDocument(a)) return true;
+  return destination === 'cloud'
+    ? `“${a.fileName}” isn’t a supported file type. Try an image, PDF, Word, Excel, PowerPoint, text, CSV, Markdown, or code file.`
+    : `“${a.fileName}” isn’t a supported file type on this device. Try an image, PDF, text, CSV, Markdown, or code file, or switch to AGI Cloud for Word, Excel and PowerPoint.`;
 }
 
 export function validateAttachments<T extends ValidatableAttachment>(
@@ -74,4 +93,24 @@ export function validateAttachments<T extends ValidatableAttachment>(
     else rejected.push({ fileName: item.fileName, reason: verdict });
   }
   return { accepted, rejected };
+}
+
+export function maxImagesPerMessage(modelId: string): number | null {
+  const override = getModelMetadataById(modelId)?.imageInput?.maxImagesPerRequest;
+  if (override !== undefined) return override;
+  const route = listManagedRoutesForModel(modelId)[0];
+  const harnessId = route ? getRegistryRoute(route.routeId)?.harnessId : undefined;
+  return harnessId ? (getHarnessMediaInput(harnessId).maxImagesPerRequest ?? null) : null;
+}
+
+export function imageLimitRefusal(
+  modelId: string,
+  attachments: ReadonlyArray<Pick<ValidatableAttachment, 'mimeType'>> | undefined,
+): string | null {
+  const limit = maxImagesPerMessage(modelId);
+  const count = attachments?.filter((a) => a.mimeType.startsWith('image/')).length ?? 0;
+  if (limit === null || count <= limit) return null;
+  const excess = count - limit;
+  const modelName = getModelMetadataById(modelId)?.name ?? modelId;
+  return `${modelName} can read up to ${limit} images in one message. Remove ${excess} ${excess === 1 ? 'image' : 'images'} to send it.`;
 }

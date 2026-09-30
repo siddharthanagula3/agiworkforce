@@ -136,8 +136,46 @@ describe('Manual companion pairing', () => {
   });
 
   it('says whose pairing it is when the code belongs to another account', async () => {
-    mockSecureFetch.mockResolvedValueOnce({ ok: false, status: 403, json: jest.fn() });
+    mockSecureFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: jest.fn(async () => ({ error: 'pairing_belongs_to_another_account' })),
+    });
     await expect(claimManualPairingToken('ABCDEFGHIJKL')).rejects.toThrow('different account');
+
+    mockSecureFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: jest.fn(async () => ({
+        error: {
+          code: 'FEATURE_DISABLED',
+          message: 'Your workspace has turned Remote Control off.',
+        },
+      })),
+    });
+    await expect(claimManualPairingToken('ABCDEFGHIJKL')).rejects.toThrow(
+      'Your workspace has turned Remote Control off.',
+    );
+
+    // The Remote Control gate answers in the pairing shape, a bare sentence.
+    mockSecureFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: jest.fn(async () => ({ error: 'Remote Control is turned off for this workspace.' })),
+    });
+    await expect(claimManualPairingToken('ABCDEFGHIJKL')).rejects.toThrow(
+      'Remote Control is turned off for this workspace.',
+    );
+
+    // A bare code is not shown to the user.
+    mockSecureFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: jest.fn(async () => ({ error: 'forbidden' })),
+    });
+    await expect(claimManualPairingToken('ABCDEFGHIJKL')).rejects.toThrow(
+      'workspace administrator',
+    );
 
     mockSecureFetch.mockResolvedValueOnce({ ok: false, status: 401, json: jest.fn() });
     await expect(claimManualPairingToken('ABCDEFGHIJKL')).rejects.toThrow('Sign in on this phone');

@@ -28,6 +28,7 @@ import {
 import {
   PausedRunResumeRequestSchema,
   ToolApprovalResumeRequestSchema,
+  ToolInputResumeRequestSchema,
 } from './tool-approval-resume';
 import { stripTrailingSlashes } from '@agiworkforce/types';
 
@@ -66,6 +67,7 @@ export interface ManagedCloudAgentRunListOptions {
   requestId?: string;
   limit?: number;
   cursor?: string;
+  projectId?: string;
   signal?: AbortSignal;
 }
 
@@ -92,6 +94,11 @@ export interface ManagedCloudAgentRunApproval {
   decision: ManagedCloudAgentRunApprovalDecision;
 }
 
+export interface ManagedCloudAgentRunInputAnswer {
+  toolCallId: string;
+  responses: Record<string, unknown>;
+}
+
 export interface ManagedCloudAgentRunClient {
   listRuns(options?: ManagedCloudAgentRunListOptions): Promise<CloudAgentRunListPage>;
   getRun(
@@ -103,6 +110,11 @@ export interface ManagedCloudAgentRunClient {
     runId: string,
     approvals: ManagedCloudAgentRunApproval[],
     options?: { signal?: AbortSignal; guidance?: string },
+  ): Promise<void>;
+  answerRunInput(
+    runId: string,
+    inputs: ManagedCloudAgentRunInputAnswer[],
+    options?: { signal?: AbortSignal },
   ): Promise<void>;
   pauseRun(runId: string, options?: { signal?: AbortSignal }): Promise<CloudAgentRun>;
   resumePausedRun(
@@ -325,12 +337,14 @@ export function createManagedCloudAgentRunClient(
         .parse(options.states ?? []);
       const requestId = ManagedCloudAgentRunRequestIdSchema.optional().parse(options.requestId);
       const cursor = z.string().min(1).max(512).optional().parse(options.cursor);
+      const projectId = z.string().uuid().optional().parse(options.projectId);
       const limit = Math.min(100, Math.max(1, Math.trunc(options.limit ?? 25)));
       const params = new URLSearchParams();
       for (const state of states) params.append('state', state);
       params.set('limit', String(limit));
       if (requestId) params.set('requestId', requestId);
       if (cursor) params.set('cursor', cursor);
+      if (projectId) params.set('projectId', projectId);
       const response = await request(`${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}?${params.toString()}`, {
         headers: await readHeaders(),
         signal: options.signal,
@@ -375,10 +389,43 @@ export function createManagedCloudAgentRunClient(
           decision: approval.decision,
         })),
         ...(guidance ? { guidance } : {}),
+        detached: true,
       });
       let response: Response;
       try {
         response = await request(TOOL_APPROVAL_RESUME_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
+          body: JSON.stringify(body),
+          signal: options.signal,
+        });
+      } catch (error) {
+        if (error instanceof ManagedCloudAgentRunHttpError) {
+          if (error.status === 409) {
+            throw new ManagedCloudAgentRunAlreadyResumingError(error.message);
+          }
+          if (error.status === 410) {
+            throw new ManagedCloudAgentRunApprovalExpiredError(error.message);
+          }
+        }
+        throw error;
+      }
+
+      await response.body?.cancel().catch(() => undefined);
+    },
+
+    async answerRunInput(runId, inputs, options = {}) {
+      const body = ToolInputResumeRequestSchema.parse({
+        run_id: runId,
+        tool_inputs: inputs.map((input) => ({
+          tool_call_id: input.toolCallId,
+          input_responses: input.responses,
+        })),
+        detached: true,
+      });
+      let response: Response;
+      try {
+        response = await request(TOOL_INPUT_RESUME_PATH, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
           body: JSON.stringify(body),
@@ -498,12 +545,15 @@ export function createManagedCloudAgentRunClient(
         }
         await options.onSnapshot?.(snapshot);
         lastSequence = snapshot.nextAfterSequence;
+        const serverHasMoreEvents = lastSequence < snapshot.run.lastEventSequence;
 
-        if (isCloudAgentRunFollowBoundary(snapshot.run.state)) {
+        if (
+          isCloudAgentRunFollowBoundary(snapshot.run.state) &&
+          (!serverHasMoreEvents || snapshot.events.length === 0)
+        ) {
           return { run: snapshot.run, lastSequence };
         }
 
-        const serverHasMoreEvents = lastSequence < snapshot.run.lastEventSequence;
         const pageMayBeFull = snapshot.events.length >= pageSize;
         if (!serverHasMoreEvents && !pageMayBeFull) {
           await wait(pollIntervalMs, options.signal);

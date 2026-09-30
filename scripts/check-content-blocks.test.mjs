@@ -201,7 +201,7 @@ function eventTree(extra = {}) {
 test('a client that decides blocks from event types without the mapping fails', async () => {
   const { runContentBlocksGuard } = await import('./check-content-blocks.mjs');
   const dir = eventTree({ 'apps/extension/src/features/blocks.ts': PRIVATE_CLASSIFIER });
-  const { findings } = runContentBlocksGuard(dir, { pending: {} });
+  const { findings } = runContentBlocksGuard(dir, { pending: {}, notReaders: {} });
   assert.ok(
     findings.some((finding) => /blocks\.ts: decides blocks from agent event types/.test(finding)),
     findings.join('\n'),
@@ -213,7 +213,7 @@ test('a client that reads the kind through the mapping passes', async () => {
   const dir = eventTree({
     'apps/extension/src/features/blocks.ts': `import { messageKindForAgentEvent } from '@agiworkforce/types';\n${PRIVATE_CLASSIFIER}`,
   });
-  assert.deepEqual(runContentBlocksGuard(dir, { pending: {} }).findings, []);
+  assert.deepEqual(runContentBlocksGuard(dir, { pending: {}, notReaders: {} }).findings, []);
 });
 
 test('a pending client that adopts the mapping fails until its entry goes', async () => {
@@ -221,13 +221,54 @@ test('a pending client that adopts the mapping fails until its entry goes', asyn
   const file = 'apps/mobile/src/features/blocks.ts';
   const pending = { [file]: 'mobile, post-codex patch: read kinds through the mapping' };
   const before = eventTree({ [file]: PRIVATE_CLASSIFIER });
-  assert.deepEqual(runContentBlocksGuard(before, { pending }).findings, []);
+  assert.deepEqual(runContentBlocksGuard(before, { pending, notReaders: {} }).findings, []);
   const after = eventTree({
     [file]: `import { messageKindForAgentEvent } from '@agiworkforce/types';\n${PRIVATE_CLASSIFIER}`,
   });
   assert.ok(
-    runContentBlocksGuard(after, { pending }).findings.some((finding) =>
+    runContentBlocksGuard(after, { pending, notReaders: {} }).findings.some((finding) =>
       /Delete its pending entry/.test(finding),
+    ),
+  );
+});
+
+test('a file recorded as not a block-kind reader passes, and only that exact path', async () => {
+  const { runContentBlocksGuard } = await import('./check-content-blocks.mjs');
+  const listed = 'apps/desktop/electron/runtime/adapterChunks.ts';
+  const notReaders = { [listed]: 'Reads provider-adapter chunks, a separate vocabulary.' };
+  const dir = eventTree({
+    [listed]: PRIVATE_CLASSIFIER,
+    'apps/desktop/electron/runtime/adapterChunksCopy.ts': PRIVATE_CLASSIFIER,
+  });
+  const { findings } = runContentBlocksGuard(dir, { pending: {}, notReaders });
+  assert.ok(
+    findings.some((finding) =>
+      /adapterChunksCopy\.ts: decides blocks from agent event types/.test(finding),
+    ),
+    findings.join('\n'),
+  );
+  assert.ok(!findings.some((finding) => finding.startsWith(`${listed}:`)), findings.join('\n'));
+});
+
+test('a not-a-reader entry that no longer matches the scan fails until it goes', async () => {
+  const { runContentBlocksGuard } = await import('./check-content-blocks.mjs');
+  const listed = 'apps/desktop/electron/runtime/adapterChunks.ts';
+  const notReaders = { [listed]: 'Reads provider-adapter chunks, a separate vocabulary.' };
+  const dir = eventTree({ [listed]: 'export {};\n' });
+  assert.ok(
+    runContentBlocksGuard(dir, { pending: {}, notReaders }).findings.some((finding) =>
+      /Delete its not-a-reader entry/.test(finding),
+    ),
+  );
+});
+
+test('a not-a-reader entry without a reason fails', async () => {
+  const { runContentBlocksGuard } = await import('./check-content-blocks.mjs');
+  const listed = 'apps/desktop/electron/runtime/adapterChunks.ts';
+  const dir = eventTree({ [listed]: PRIVATE_CLASSIFIER });
+  assert.ok(
+    runContentBlocksGuard(dir, { pending: {}, notReaders: { [listed]: 'n/a' } }).findings.some(
+      (finding) => /not a block-kind reader without a reason/.test(finding),
     ),
   );
 });
@@ -241,7 +282,7 @@ test('a mapping that leaves an event type out fails', async () => {
     ),
   });
   assert.ok(
-    runContentBlocksGuard(dir, { pending: {} }).findings.some((finding) =>
+    runContentBlocksGuard(dir, { pending: {}, notReaders: {} }).findings.some((finding) =>
       /maps no block kind for the event type 'source-list'/.test(finding),
     ),
   );

@@ -172,6 +172,9 @@ describe('Mobile cross-device continuity onboarding', () => {
     fireEvent.press(getByLabelText('Start a Managed Cloud task'));
 
     expect(mockSet).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-chat' },
+    });
   });
 });

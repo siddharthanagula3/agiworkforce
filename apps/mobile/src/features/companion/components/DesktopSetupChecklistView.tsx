@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { Alert, Linking, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Linking, ScrollView, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Mail, MonitorDown } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
@@ -9,7 +10,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
 import { PairingChecklist } from './ConnectionStateViews';
 import { PairingRiskDisclosure } from './PairingRiskDisclosure';
 
@@ -48,7 +49,7 @@ export function buildDesktopLinkMailto(accountEmail: string | null): string {
       'Download AGI Workforce for desktop here:',
       DESKTOP_DOWNLOAD_URL,
       '',
-      'Then open it, sign in, and turn on Dispatch under Settings → Connections to generate a pairing code for your phone.',
+      'Then open it, sign in, turn on Dispatch in Settings → Cowork, and generate a pairing code for your phone in Settings → Connections.',
     ].join('\n'),
   );
   return `mailto:${accountEmail ?? ''}?subject=${subject}&body=${body}`;
@@ -88,7 +89,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
   }, [accountEmail]);
 
   return (
-    <Animated.View entering={FadeIn.duration(300)} className="flex-1">
+    <Animated.View entering={FadeIn.duration(motion.moved)} className="flex-1">
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 32, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
@@ -114,10 +115,8 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
           className="mb-8"
           steps={[
             'Install AGI Workforce on your computer, then open it in Managed Cloud',
-            accountEmail
-              ? `Sign in on that computer as ${accountEmail}`
-              : 'Sign in on that computer with the account you use here',
-            'Turn on Dispatch in Settings → Connections, then generate a pairing code',
+            'Sign in on Desktop; the short-lived pairing code authorizes this phone',
+            'Turn on Dispatch in Settings → Cowork, then generate a pairing code in Settings → Connections',
           ]}
         />
 
@@ -132,7 +131,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
         {/* Directly beneath the pair button, before any pairing action. */}
         <PairingRiskDisclosure className="mt-4" />
 
-        <Pressable
+        <PressableBox
           onPress={() => void handleEmailDesktopLink()}
           className="flex-row items-center justify-center gap-2 mt-6 py-3 rounded-xl"
           style={{ backgroundColor: colors.accentSurface }}
@@ -143,7 +142,7 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
           <Text className="text-sm font-medium" style={{ color: colors.teal }}>
             Email me the desktop app link
           </Text>
-        </Pressable>
+        </PressableBox>
       </ScrollView>
     </Animated.View>
   );

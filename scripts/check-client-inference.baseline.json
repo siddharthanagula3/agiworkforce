@@ -319,22 +319,10 @@
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
     },
     {
-      "file": "apps/extension/src/features/background/scheduled-task-cancellation.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
       "file": "apps/extension/src/features/browser-tools/networkCapture.ts",
       "symbol": "TOOL_STATUSES",
       "family": "tool support",
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/extension/src/features/side-panel/schedulesSection.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
       "file": "apps/mobile/app/(app)/companion/agent/[id].tsx",
@@ -347,12 +335,6 @@
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",
       "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/mobile/lib/providerStreamClient.ts",
-      "symbol": "Provider",
-      "family": "provider identity",
-      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
     },
     {
       "file": "apps/mobile/services/cloudSyncEngine.ts",
@@ -433,12 +415,6 @@
       "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
-      "file": "apps/mobile/src/features/image/services/imagegen.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
       "file": "apps/mobile/src/features/schedules/store.ts",
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",
@@ -449,12 +425,6 @@
       "symbol": "TOOL_STATUSES",
       "family": "tool support",
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/mobile/src/features/video/services/videogen.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
       "file": "apps/mobile/stores/agentStore.ts",
@@ -487,82 +457,10 @@
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
     },
     {
-      "file": "apps/web/features/chat/components/ToolCallCard.tsx",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/features/chat/utils/agiwork-plan.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/features/code/hooks/use-local-tests.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
       "file": "apps/web/features/marketing/components/FeatureScenes.tsx",
       "symbol": "ADMIN_PERMISSION_AREAS",
       "family": "policy",
       "why": "restates permission areas in local literals; import them from enterprise/permissions."
-    },
-    {
-      "file": "apps/web/features/marketing/components/LandingSections.tsx",
-      "symbol": "Provider",
-      "family": "provider identity",
-      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
-    },
-    {
-      "file": "apps/web/features/marketing/components/RouteFlow.tsx",
-      "symbol": "Provider",
-      "family": "provider identity",
-      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
-    },
-    {
-      "file": "apps/web/features/media/services/media-api-service.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/features/media/services/media-api-service.ts",
-      "symbol": "Provider",
-      "family": "provider identity",
-      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
-    },
-    {
-      "file": "apps/web/shared/stores/agent-metrics-store.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/shared/stores/company-hub-store.ts",
-      "symbol": "Provider",
-      "family": "provider identity",
-      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
-    },
-    {
-      "file": "apps/web/shared/stores/media-store.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/shared/stores/mission-control-store.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/web/shared/types/multi-agent-chat.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
       "file": "apps/desktop/src/utils/ipc.ts",
@@ -575,12 +473,6 @@
       "symbol": "CONTROL_LAYERS",
       "why": "The unavailable screen restates entitlement, permission and policy to choose its copy, so a fourth control layer added to the registry renders the wrong sentence on mobile.",
       "fix": "Import CONTROL_LAYERS and key the copy off it."
-    },
-    {
-      "file": "apps/web/features/admin/components/RouteEconomicsPanel.tsx",
-      "symbol": "COMPAT_CAPABILITY_SOURCES",
-      "why": "The admin panel restates imageInput, reasoning, imageOutput and videoOutput to label route economics, so a capability added to the catalogue is missing from the panel with no failure.",
-      "fix": "Read the capability names from COMPAT_CAPABILITY_SOURCES."
     }
   ]
 }

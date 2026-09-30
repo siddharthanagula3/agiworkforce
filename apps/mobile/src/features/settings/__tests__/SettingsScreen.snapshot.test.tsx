@@ -6,6 +6,11 @@ import { SYNTHETIC_LOCAL_MODEL_ID } from '@/test-utils/modelFixtures';
 
 const mockSelectedModelId = SYNTHETIC_LOCAL_MODEL_ID;
 
+jest.mock('@/stores/connectionStore', () => ({
+  useConnectionStore: (selector: (state: { status: string }) => unknown) =>
+    selector({ status: 'disconnected' }),
+}));
+
 jest.mock('@/src/ui/theme', () => ({
   colors: {
     textPrimary: '#fff',
@@ -176,14 +181,6 @@ jest.mock('@/src/features/chat/store/appModeStore', () => ({
   useChatAppModeStore: (selector: (s: { appMode: string }) => unknown) =>
     selector({ appMode: 'local' }),
 }));
-
-jest.mock('@/src/features/cloud-bridge', () => {
-  const { View } = require('react-native');
-  return {
-    InviteCodeModal: ({ open }: { open: boolean }) =>
-      open ? <View testID="invite-code-modal" /> : null,
-  };
-});
 
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');

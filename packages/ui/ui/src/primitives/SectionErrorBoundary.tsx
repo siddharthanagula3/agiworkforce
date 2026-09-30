@@ -154,7 +154,7 @@ export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, S
                 Error details (development only)
               </summary>
               <pre className="mt-2 max-h-32 overflow-auto rounded-compact border border-border bg-muted/50 p-2 text-xs">
-                {error.message}
+                Check the console for error details.
                 {errorInfo?.componentStack && (
                   <>
                     {'\n\nComponent Stack:'}
@@ -167,7 +167,7 @@ export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, S
 
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={this.handleReset}>
-              <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+              <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
               Try Again
             </Button>
           </div>

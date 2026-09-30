@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { RESPONSE_LANGUAGE_AUTO } from '@agiworkforce/types';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, storage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import {
+  SPEECH_LANGUAGE_AUTO,
+  speechLanguageFromLegacy,
+} from '@/src/features/voice/speechLanguage';
 import type {
   ThemeMode,
   AccentColor,
@@ -63,9 +67,9 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
       accentColor: 'neutral',
       fontPreference: 'default',
       notificationsEnabled: true,
-      speechLanguage: 'en',
+      speechLanguage: SPEECH_LANGUAGE_AUTO,
       autoListenEnabled: true,
-      memoryEnabled: true,
+      memoryEnabled: false,
       referencePastChats: false,
       generateMemoryFromHistory: true,
       memoryPolicyInitialized: false,
@@ -111,11 +115,17 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
       name: 'settings-store-cloud',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
-      version: 1,
-      migrate: (persisted, version) =>
-        version < 1
-          ? { ...(persisted as Partial<CloudSettingsState>), memoryPolicyInitialized: false }
-          : persisted,
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<CloudSettingsState>;
+        return {
+          ...state,
+          ...(version < 1 ? { memoryPolicyInitialized: false } : {}),
+          ...(version < 2
+            ? { speechLanguage: speechLanguageFromLegacy(state.speechLanguage) }
+            : {}),
+        };
+      },
       merge: (persisted, current) => {
         const persistedState = (persisted ?? {}) as Partial<CloudSettingsState>;
         return {
@@ -143,7 +153,7 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
                 accentColor: s.accentColor ?? 'neutral',
                 fontPreference: s.fontPreference ?? 'default',
                 notificationsEnabled: s.notificationsEnabled ?? true,
-                speechLanguage: s.speechLanguage ?? 'en',
+                speechLanguage: speechLanguageFromLegacy(s.speechLanguage),
                 autoListenEnabled: s.autoListenEnabled ?? true,
                 memoryEnabled: s.memoryEnabled ?? true,
                 referencePastChats: s.referencePastChats ?? false,

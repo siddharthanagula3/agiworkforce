@@ -8,6 +8,12 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn(async () => ({ userId: 'operator_1' })) }));
 vi.mock('@/lib/api-auth', () => ({ assertAccountActive: vi.fn(async () => {}) }));
+vi.mock('@/lib/server/account-security/gate', () => ({
+  assertAccountSecurity: vi.fn(async () => undefined),
+  isPasskeyRequiredError: vi.fn(() => false),
+  PasskeyRequiredError: class PasskeyRequiredError extends Error {},
+  subjectSessionPassesAccountSecurity: vi.fn(async () => true),
+}));
 
 const securityEvents: Array<Record<string, unknown>> = [];
 vi.mock('@/lib/security-audit', () => ({

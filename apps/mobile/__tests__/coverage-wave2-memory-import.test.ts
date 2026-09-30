@@ -63,6 +63,12 @@ describe('parseChatGPTExport', () => {
     expect(result.skipped).toBe(0);
   });
 
+  it('ignores non-conversation values in a valid JSON array', () => {
+    expect(parseChatGPTExport('[null,42,{"memory":["I prefer local notes"]}]').facts).toEqual([
+      { fact: 'I prefer local notes', source: 'chatgpt' },
+    ]);
+  });
+
   it('skips memory entries with fewer than 3 non-whitespace chars', () => {
     const json = JSON.stringify([{ memory: ['ok', 'x', 'This is a real fact'] }]);
     const result = parseChatGPTExport(json);
@@ -131,6 +137,16 @@ describe('parseClaudeExport', () => {
       expect(result.facts).toEqual([]);
       expect(result.source).toBe('claude');
     }).not.toThrow();
+  });
+
+  it('ignores invalid conversation and message shapes', () => {
+    const json = JSON.stringify({
+      conversations: [
+        null,
+        { system_prompt: 42, chat_messages: [null, { starred: true, content: 8 }] },
+      ],
+    });
+    expect(parseClaudeExport(json).facts).toEqual([]);
   });
 
   it('truncates long system_prompt and appends ellipsis', () => {
@@ -217,6 +233,13 @@ describe('parseGeminiExport', () => {
       expect(result.facts).toEqual([]);
       expect(result.source).toBe('gemini');
     }).not.toThrow();
+  });
+
+  it('ignores invalid conversation and message shapes', () => {
+    const json = JSON.stringify({
+      conversations: [null, { messages: [null, { author: 'user', content: 9 }] }],
+    });
+    expect(parseGeminiExport(json).facts).toEqual([]);
   });
 });
 

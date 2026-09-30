@@ -6,39 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S32.28: Design-to-code handoff.
-
-- Done when: A developer can get the code/specs for a design (inspect, copy or export the implementation).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The design is code, so its source can be viewed, copied and downloaded; there is no inspect/spec mode (measurements, tokens, assets) for developers. `agi artifacts show --out` writes the source into the project. | ui |
-
-Code: `apps/cli/src/lib.rs:1034-1043`, `apps/cli/src/lib.rs:1942-1948`
-
-## S32.30: Figma import/export integration.
-
-- Done when: The workspace imports designs from Figma and/or exports designs to Figma.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-## S32.31: Export to HTML.
-
-- Done when: The user can export the design as a standalone HTML file.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/p-slack-s26.29-mobile-artifact-download-formats.patch: an HTML artifact downloads as a standalone .html file with its source unchanged. The export options, the raw source export and the sheet are new free files in the patch; the viewer that opens them, ArtifactFullScreen.tsx, is held by Codex. The viewer hunk passes git apply --check on the Codex working copy, the free files on integration, and it composes in either order with no-yearly-s32-34-mobile-show-changes.patch; the edit was typechecked against this branch. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:236-241`
-
 ## S32.33: Export to image or archive.
 
 - Done when: The user can export the design as an image file or as a downloadable archive.
@@ -48,18 +15,3 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`,
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | SVG artifacts are written as .svg files; there is no raster image of an HTML design and no archive export. | ui |
-
-Code: `apps/cli/src/cloud/artifacts.rs:212-216`, `apps/cli/src/lib.rs:1034-1043`
-
-## S32.34: Version comparison and restoration.
-
-- Done when: The user can compare two versions of a design and restore an earlier one.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | post-codex/no-yearly-s32-34-mobile-show-changes.patch (Show changes and the version diff in the artifact viewer) still applies to the Codex working copy on 2026-09-28; ArtifactFullScreen.tsx is held by Codex. | ui |
-
-Code: `packages/platform/artifacts/src/artifact-changes.ts:166-166`, `apps/mobile/src/ui/theme/tokens.ts:38-38`, `apps/mobile/__tests__/theme-contrast.test.ts:77-77`

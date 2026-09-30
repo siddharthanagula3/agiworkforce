@@ -5,8 +5,24 @@ import {
   type MobileIapCatalogResponse,
   type MobileIapPlatform,
   type MobileIapVerifyResponse,
+  type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 import { api } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
+
+export class BillingUpgradeRequestError extends Error {
+  constructor(readonly userMessage: string) {
+    super(userMessage);
+  }
+}
+
+export function billingRequestMessage(error: unknown, fallback: string): string {
+  if (error instanceof BillingUpgradeRequestError) return error.userMessage;
+  if (error instanceof ApiHttpError && error.status >= 400 && error.status < 500) {
+    return error.message;
+  }
+  return fallback;
+}
 
 function currentStorePlatform(): MobileIapPlatform | null {
   if (Platform.OS === 'ios') return 'ios';
@@ -97,6 +113,38 @@ export async function fetchMobileIapCatalog(): Promise<MobileIapCatalogResponse>
   return parseMobileIapCatalogResponse(
     await api.get<unknown>(`/api/mobile/iap/catalog?platform=${platform}`),
   );
+}
+
+export async function redeemBillingUpgradeCode(code: string): Promise<void> {
+  const normalizedCode = code.trim().toUpperCase();
+  if (!normalizedCode || normalizedCode.length > 50 || !/^[A-Z0-9]+$/.test(normalizedCode)) {
+    throw new BillingUpgradeRequestError('Enter a valid access code.');
+  }
+  const { token } = await api.get<{ token?: string }>('/api/csrf');
+  if (!token)
+    throw new BillingUpgradeRequestError('Could not verify this request. Please try again.');
+  const result = await api.post<{ ok?: boolean; accessGranted?: boolean }>(
+    '/api/waitlist/access',
+    { code: normalizedCode },
+    { headers: { 'x-csrf-token': token } },
+  );
+  if (result.ok !== true || result.accessGranted !== true) {
+    throw new BillingUpgradeRequestError('Upgrade access was not confirmed. Please try again.');
+  }
+}
+
+export async function joinBillingUpgradeWaitlist(plan: SelfServePaidPlanTier): Promise<void> {
+  const { token } = await api.get<{ token?: string }>('/api/csrf');
+  if (!token)
+    throw new BillingUpgradeRequestError('Could not verify this request. Please try again.');
+  const result = await api.post<{ ok?: boolean; joined?: boolean }>(
+    '/api/waitlist',
+    { plan, billingInterval: 'monthly', source: 'mobile-billing' },
+    { headers: { 'x-csrf-token': token } },
+  );
+  if (result.ok !== true || result.joined !== true) {
+    throw new BillingUpgradeRequestError('Waitlist signup was not confirmed. Please try again.');
+  }
 }
 
 export async function verifyMobileIapPurchase(input: {

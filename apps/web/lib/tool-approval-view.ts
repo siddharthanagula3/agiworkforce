@@ -51,6 +51,16 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Runs a search and reads the results. Classified as a read that accepts untrusted content and creates an egress path, because a search query is a place secrets can leak and a result page is attacker-influenced text.',
   },
+  search_places: {
+    label: 'Place search',
+    description:
+      'Looks up businesses and places by name or kind near a location, with ratings and opening hours, and shows them in the conversation.',
+  },
+  ask_clarifying_questions: {
+    label: 'Ask you a question',
+    description:
+      'Asks you to choose between options when a request could mean more than one thing, and continues with the answer you give.',
+  },
   search_maps: {
     label: 'Map search',
     description:
@@ -144,6 +154,11 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       "Searches the files you uploaded and your project's knowledge for passages about a topic and returns the best excerpts. Classified as accepting untrusted content, because a document can carry attacker-written text.",
   },
+  open_file: {
+    label: 'Open one of your files',
+    description:
+      "Reads one of the files you uploaded or your project's knowledge files whole, by the id a file search returned. Classified as accepting untrusted content, because a document can carry attacker-written text.",
+  },
   create_schedule: {
     label: 'Create a scheduled task',
     description:
@@ -153,6 +168,229 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     label: 'Draft a plugin',
     description:
       'Checks a plugin written in the chat the way the create form does and shows it as a draft card. Nothing is saved until you press Save plugin or Save as a skill.',
+  },
+  agi_work: {
+    label: 'Start an AGI Work task',
+    description:
+      'Offered in a voice session: hands the goal you spoke to the chat as an AGI Work task, which runs in the background and is tracked in Tasks, where you can stop it. Reversible, no egress path.',
+  },
+  device_read_file: {
+    label: 'Read a file on your computer',
+    description:
+      'Reads a text file in a folder you granted to the desktop app. The contents come back to the chat.',
+  },
+  device_list_folder: {
+    label: 'List a folder on your computer',
+    description: 'Lists the files and folders inside a folder you granted to the desktop app.',
+  },
+  device_find_files: {
+    label: 'Find files on your computer',
+    description:
+      'Finds files by name inside a folder you granted to the desktop app and returns their paths.',
+  },
+  device_search_text: {
+    label: 'Search files on your computer',
+    description:
+      'Searches the text of files inside a folder you granted to the desktop app and returns matching lines.',
+  },
+  device_write_file: {
+    label: 'Write a file on your computer',
+    description:
+      'Creates or replaces a text file inside a folder you granted to the desktop app. Not reversible from the chat.',
+  },
+  device_edit_file: {
+    label: 'Edit a file on your computer',
+    description:
+      'Replaces one exact passage in a text file inside a folder you granted to the desktop app. Not reversible from the chat.',
+  },
+  device_run_command: {
+    label: 'Run a command on your computer',
+    description:
+      'Runs a terminal command in a folder you granted and returns its output once it exits. The desktop app asks for the exact command first.',
+  },
+  device_start_command: {
+    label: 'Start a command on your computer',
+    description:
+      'Starts a command that keeps running, such as a dev server, in a folder you granted. The desktop app asks for the exact command first.',
+  },
+  device_command_output: {
+    label: 'Read a running command',
+    description:
+      'Reads what a command started on your computer printed since the last read, and can type into it after you approve the input.',
+  },
+  device_command_stop: {
+    label: 'Stop a running command',
+    description:
+      'Stops a command the assistant started on your computer, together with everything it started.',
+  },
+  device_screenshot: {
+    label: 'Take a screenshot',
+    description:
+      'Captures your screen through the desktop app so the assistant can see what is open. The picture comes back to the chat.',
+  },
+  device_zoom: {
+    label: 'Look closely at the screen',
+    description:
+      'Captures one region of your screen at full detail through the desktop app. The picture comes back to the chat.',
+  },
+  device_move: {
+    label: 'Move the pointer',
+    description:
+      'Moves the mouse pointer on your computer without clicking. Used between steps while controlling the screen.',
+  },
+  device_scroll: {
+    label: 'Scroll on your computer',
+    description: 'Scrolls the window or area under a point on your screen through the desktop app.',
+  },
+  device_wait: {
+    label: 'Wait on your computer',
+    description:
+      'Pauses before the next step so a window can open or a page can load. It does nothing on its own.',
+  },
+  device_click: {
+    label: 'Click on your computer',
+    description:
+      'Clicks at a point on your screen through the desktop app. A click can send, buy or delete in whatever app is open.',
+  },
+  device_drag: {
+    label: 'Drag on your computer',
+    description:
+      'Presses, moves and releases the mouse on your screen, to drag a file, a selection or a slider.',
+  },
+  device_type: {
+    label: 'Type on your computer',
+    description:
+      'Types text into whatever has keyboard focus on your computer. Typed text can be sent by the app that receives it.',
+  },
+  device_key: {
+    label: 'Press a key on your computer',
+    description:
+      'Presses a key or shortcut on your computer, such as Enter or a menu shortcut, in whatever app is in front.',
+  },
+  device_browser_read_page: {
+    label: 'Read your Chrome tab',
+    description:
+      'Reads the address, title and visible text of the active tab in your paired Chrome, on sites you approved in the extension.',
+  },
+  device_browser_screenshot: {
+    label: 'Capture your Chrome tab',
+    description:
+      'Captures the visible part of the active tab in your paired Chrome, on sites you approved in the extension.',
+  },
+  device_browser_console: {
+    label: 'Read the Chrome console',
+    description:
+      'Reads the console messages the active tab in your paired Chrome logged. The desktop app always asks first.',
+  },
+  device_browser_network: {
+    label: 'Read Chrome network activity',
+    description:
+      'Reads the requests the active tab in your paired Chrome made, with addresses and status. The desktop app always asks first.',
+  },
+  device_browser_navigate: {
+    label: 'Open a page in Chrome',
+    description:
+      'Opens an address in the active tab of your paired Chrome. Only sites you approved in the extension can be opened.',
+  },
+  device_browser_click: {
+    label: 'Click in Chrome',
+    description:
+      'Clicks an element on the active tab of your paired Chrome, which can submit a form, on sites you approved.',
+  },
+  device_browser_type: {
+    label: 'Type in Chrome',
+    description:
+      'Types into a field on the active tab of your paired Chrome, on sites you approved in the extension.',
+  },
+  device_browser_download: {
+    label: 'Download through Chrome',
+    description:
+      'Downloads a file through your paired Chrome into your downloads folder. The desktop app always asks first.',
+  },
+  agi_reconnect: {
+    label: 'Offer to reconnect an app',
+    description:
+      'Shows you a button to reconnect a connected app whose sign-in expired or was revoked. None of its tools run until you reconnect it.',
+  },
+  browser_list_tabs: {
+    label: 'List your Chrome tabs',
+    description:
+      'Lists the titles and addresses of the tabs open in your paired Chrome, so you can choose which one to read.',
+  },
+  device_calendar_events: {
+    label: 'Read your phone calendar',
+    description:
+      'Reads the events in a date range from the calendars on your phone, after the phone asks for calendar access.',
+  },
+  device_calendar_availability: {
+    label: 'Check your free time',
+    description:
+      'Reads when you are busy or free in a date range from the calendars on your phone, without the event details.',
+  },
+  device_calendar_create_event: {
+    label: 'Add a calendar event',
+    description:
+      'Adds an event to a calendar on your phone. Your phone asks for calendar access, and AGI asks before it adds anything.',
+  },
+  device_reminder_create: {
+    label: 'Add a reminder',
+    description:
+      'Adds a reminder on your phone. Your phone asks for reminders access, and AGI asks before it adds anything.',
+  },
+  browser_read_page: {
+    label: 'Read your Chrome tab',
+    description:
+      'Reads the address, title and visible text of the active tab in your paired Chrome, on sites you approved in the extension.',
+  },
+  browser_screenshot: {
+    label: 'Capture your Chrome tab',
+    description:
+      'Captures the visible part of the active tab in your paired Chrome, on sites you approved in the extension.',
+  },
+  browser_console: {
+    label: 'Read the Chrome console',
+    description:
+      'Reads the console messages the active tab in your paired Chrome logged. AGI always asks first.',
+  },
+  browser_network: {
+    label: 'Read Chrome network activity',
+    description:
+      'Reads the requests the active tab in your paired Chrome made, with addresses and status. AGI always asks first.',
+  },
+  browser_navigate: {
+    label: 'Open a page in Chrome',
+    description:
+      'Opens an address in the active tab of your paired Chrome. Only sites you approved in the extension can be opened.',
+  },
+  browser_click: {
+    label: 'Click in Chrome',
+    description:
+      'Clicks an element on the active tab of your paired Chrome, which can submit a form, on sites you approved.',
+  },
+  browser_type: {
+    label: 'Type in Chrome',
+    description:
+      'Types into a field on the active tab of your paired Chrome, on sites you approved in the extension.',
+  },
+  browser_download: {
+    label: 'Download through Chrome',
+    description:
+      'Downloads a file through your paired Chrome into your downloads folder. AGI always asks first.',
+  },
+  browser_find: {
+    label: 'Find on your Chrome tab',
+    description:
+      'Lists the buttons, links and fields on the active tab of your paired Chrome, optionally matching a search term, on sites you approved in the extension.',
+  },
+  browser_fill_form: {
+    label: 'Fill a form in Chrome',
+    description:
+      'Fills fields of a form on the active tab of your paired Chrome, on sites you approved in the extension. It does not submit the form.',
+  },
+  browser_history: {
+    label: 'Go back or forward in Chrome',
+    description:
+      'Moves the active tab of your paired Chrome back or forward in its history, on sites you approved in the extension.',
   },
 };
 

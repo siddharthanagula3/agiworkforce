@@ -119,6 +119,15 @@ async function handleMakePrimary(request: NextRequest) {
     endpoint: ENDPOINT,
   });
 
+  await announceTwoFactorChange({
+    userId,
+    event: 'email_changed',
+    noticeRef: emailAddressId,
+    request,
+    organizationId,
+    detail: { source: grant.method, status: previousId === null ? 'added' : 'replaced' },
+  });
+
   const identity = getIdentityProvider();
   await identity.setPrimaryEmailAddress(userId, emailAddressId).catch(rejected);
   await db.query('update public.profiles set email = $2, updated_at = now() where id = $1', [
@@ -139,14 +148,6 @@ async function handleMakePrimary(request: NextRequest) {
       );
     }
   }
-
-  await announceTwoFactorChange({
-    userId,
-    event: 'email_changed',
-    request,
-    organizationId,
-    detail: { source: grant.method, status: previousAddressRemoved ? 'replaced' : 'added' },
-  });
 
   return NextResponse.json({ emailAddress: next.emailAddress, previousAddressRemoved });
 }

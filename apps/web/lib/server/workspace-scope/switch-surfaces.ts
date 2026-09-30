@@ -108,6 +108,19 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
     exportable: false,
   },
   {
+    surface: 'workspace_plugins',
+    effect: 'organization-only',
+    tables: [
+      'organization_plugins',
+      'organization_plugin_group_settings',
+      'organization_plugin_members',
+    ],
+    why: 'a workspace marketplace plugin is published by an organization, and a member adding one or turning it off is their state inside that organization; Personal has no marketplace of its own to list',
+    transferable: false,
+    copyable: false,
+    exportable: true,
+  },
+  {
     surface: 'models',
     effect: 'organization-only',
     tables: ['organization_model_policies', 'routing_decision_traces'],
@@ -195,6 +208,14 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
     exportable: true,
   },
   {
+    surface: 'external_references',
+    effect: 'partitioned',
+    tables: ['external_resource_references'],
+    transferable: false,
+    copyable: false,
+    exportable: true,
+  },
+  {
     surface: 'notifications',
     effect: 'account-wide',
     tables: ['notifications'],
@@ -214,7 +235,12 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
   {
     surface: 'admin_capability',
     effect: 'organization-only',
-    tables: ['organization_members', 'organization_member_roles', 'organization_group_managers'],
+    tables: [
+      'organization_members',
+      'organization_member_roles',
+      'organization_group_managers',
+      'organization_group_members',
+    ],
     why: 'administration is over an organization, so Personal offers none of it whoever is signed in',
     transferable: false,
     copyable: false,
@@ -260,7 +286,7 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
   {
     surface: 'devices',
     effect: 'partitioned',
-    tables: ['device_registrations', 'device_refresh_tokens'],
+    tables: ['device_registrations', 'device_refresh_tokens', 'mobile_intent_tokens'],
     transferable: false,
     copyable: false,
     exportable: false,

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   CONNECTOR_REF_PATTERN,
@@ -131,6 +132,7 @@ async function handlePost(
     connectorId: target.serverId,
     isCustom: true,
     request,
+    surface: resolveCloudChatSurface(request),
   });
   if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason);
 

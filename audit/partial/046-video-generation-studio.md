@@ -30,14 +30,11 @@ nothing is left.
 
 - Done when: User chooses the clip duration before generating.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No duration picker and duration_secs is never sent; the quality list only hints "Ns only". | ui, handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`
 
 ## S46.07: Aspect-ratio selector.
 
@@ -73,14 +70,11 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `ap
 
 - Done when: User sees the estimated or actual credit cost of a video before or after generating.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only a per-second list price appears in the model picker; the cost of this clip is never shown. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:889-897`, `apps/web/app/api/media/video/generate/route.ts:1001-1007`
 
 ## S46.28: Cancel request.
 
@@ -96,14 +90,11 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:889-897`, `ap
 
 - Done when: User retries a failed video job with the same settings.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Retry on a failed video calls the generic retryMessage, which resends the prompt as an ordinary text-chat turn (sendMessage), not a new video job. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:911-915`, `apps/mobile/app/(app)/chat/[id].tsx:1090-1102`, `apps/mobile/stores/chat/chatExecutionStore.ts:3028-3030`
 
 ## S46.30: Completed clip gallery.
 
@@ -119,27 +110,21 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:911-915`, `app
 
 - Done when: User plays, pauses and scrubs a finished clip in the product.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | No in-app player: the chat clip opens in the in-app browser, which may lack the app session for the auth-gated /api/files URL, and Library opens the share sheet; add an inline player. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:23-31`
 
 ## S46.32: Download.
 
 - Done when: User downloads a finished clip as a file.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only through the OS share sheet after a download to cache; no direct Save to Photos. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/library/index.tsx:144-148`
 
 ## S46.33: Share.
 

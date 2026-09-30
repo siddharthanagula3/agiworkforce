@@ -1,11 +1,12 @@
 import { whenMmkvReady } from '@/lib/mmkv';
+import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
 
 const DEFAULT_CLOUD_SETTINGS = {
   themeMode: 'system',
   accentColor: 'neutral',
   fontPreference: 'default',
   notificationsEnabled: true,
-  speechLanguage: 'en',
+  speechLanguage: SPEECH_LANGUAGE_AUTO,
   autoListenEnabled: true,
   referencePastChats: false,
   generateMemoryFromHistory: true,
@@ -73,6 +74,11 @@ function clearLocalCloudAccountStateNow(): void {
     useChatMessageStore.getState().clearCloudConversationSelection(cloudConversationIds);
   });
 
+  runTeardownStep('Cloud conversation pagination', () => {
+    const { clearCloudConversationPagination } = require('@/stores/chat/chatMessageStore');
+    clearCloudConversationPagination();
+  });
+
   runTeardownStep('chat cache', () => {
     const { useChatCloudMessageStore } = require('@/stores/chat/chatCloudMessageStore');
     useChatCloudMessageStore.getState().clearCloudData();
@@ -136,6 +142,38 @@ function clearLocalCloudAccountStateNow(): void {
     useTierStore.getState().clearAccountEntitlements();
   });
 
+  runTeardownStep('Cloud usage', () => {
+    const { useCloudUsageStore } = require('@/src/features/settings/cloud-usage/store');
+    useCloudUsageStore.getState().clear();
+  });
+
+  runTeardownStep('Cloud profile name', () => {
+    const {
+      useCloudProfileStore,
+    } = require('@/src/features/settings/cloud-account/cloudProfileStore');
+    useCloudProfileStore.getState().reset();
+  });
+
+  runTeardownStep('capability switches', () => {
+    const { useRemoteCapabilityStore } = require('@/src/lib/capabilities');
+    useRemoteCapabilityStore.getState().clear();
+  });
+
+  runTeardownStep('promotional model catalogue', () => {
+    const {
+      useFreeQuotaCatalogueStore,
+    } = require('@/src/features/model-picker/freeQuotaCatalogue');
+    useFreeQuotaCatalogueStore.getState().clear();
+  });
+
+  runTeardownStep('promotional model selection', () => {
+    const { useModelStore } = require('@/src/features/model-picker/store');
+    const { getProviderOffering } = require('@agiworkforce/types');
+    const { DEFAULT_LOCAL_MODEL_ID } = require('@/src/features/model-picker/service');
+    const selected = useModelStore.getState().selectedModel;
+    if (getProviderOffering(selected)) useModelStore.getState().setModel(DEFAULT_LOCAL_MODEL_ID);
+  });
+
   runTeardownStep('schedule cache', () => {
     const { useScheduleStore } = require('@/src/features/schedules/store');
     useScheduleStore.getState().clearAccountSchedules();
@@ -144,6 +182,11 @@ function clearLocalCloudAccountStateNow(): void {
   runTeardownStep('API authentication work', () => {
     const { resetApiAccountState } = require('@/services/api');
     resetApiAccountState();
+  });
+
+  runTeardownStep('Cloud upload progress', () => {
+    const { useUploadLifecycleStore } = require('@/src/features/chat/upload/uploadLifecycle');
+    useUploadLifecycleStore.getState().reset();
   });
 
   runTeardownStep('notification center', () => {

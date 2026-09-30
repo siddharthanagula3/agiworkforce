@@ -14,6 +14,7 @@ import {
 export async function uploadDesktopCloudAttachments(
   files: File[],
   signal?: AbortSignal,
+  conversationId?: string,
 ): Promise<ManagedCloudChatAttachment[]> {
   const boundary = captureManagedCloudBoundary('Managed Cloud attachments');
   const assertBoundary = () => assertManagedCloudBoundary(boundary);
@@ -45,7 +46,10 @@ export async function uploadDesktopCloudAttachments(
     },
   });
   try {
-    const attachments = await client.upload(files, { signal: boundaryController.signal });
+    const attachments = await client.upload(files, {
+      signal: boundaryController.signal,
+      ...(conversationId ? { conversationId } : {}),
+    });
     assertBoundary();
     return attachments;
   } finally {

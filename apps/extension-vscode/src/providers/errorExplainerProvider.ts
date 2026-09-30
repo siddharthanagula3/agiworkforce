@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { logEvent, TelemetryEvents } from '../core/telemetry';
 import {
   buildAskAboutCodePrompt,
   buildExplainErrorPrompt,
@@ -15,12 +14,6 @@ export function activateErrorExplainer(context: vscode.ExtensionContext): void {
 
 async function explainErrorCommand(): Promise<void> {
   const built = buildExplainErrorPrompt();
-  if (built.ok) {
-    logEvent(TelemetryEvents.INLINE_COMMAND_EXECUTED, {
-      command: 'explainError',
-      language: vscode.window.activeTextEditor?.document.languageId ?? 'none',
-    });
-  }
   await runEditorUtility(built);
 }
 
@@ -35,11 +28,5 @@ async function askAboutCodeCommand(): Promise<void> {
   if (question === undefined || question.trim() === '') return;
 
   const built = buildAskAboutCodePrompt(question);
-  if (built.ok) {
-    logEvent(TelemetryEvents.INLINE_COMMAND_EXECUTED, {
-      command: 'askAboutCode',
-      language: vscode.window.activeTextEditor?.document.languageId ?? 'none',
-    });
-  }
   await runEditorUtility(built);
 }

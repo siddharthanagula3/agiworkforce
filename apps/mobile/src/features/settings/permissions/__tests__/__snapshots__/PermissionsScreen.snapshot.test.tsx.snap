@@ -365,6 +365,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
       />
     </View>
     <Text
+      accessibilityRole="header"
       style={
         {
           "color": "#fff",
@@ -397,6 +398,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
         }
       >
         <Text
+          accessibilityRole="header"
           style={
             {
               "color": "#777",
@@ -1054,7 +1056,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                   }
                 }
               >
-                Optional. Used only after you enable device calendar context.
+                Optional. Used when you ask about your schedule or confirm an event in a chat.
               </Text>
             </View>
             <View
@@ -1189,7 +1191,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                   }
                 }
               >
-                Used only when you explicitly create an Apple Reminder; never read automatically.
+                Used only when you create a reminder or confirm one in a chat; never read.
               </Text>
             </View>
             <View

@@ -46,10 +46,10 @@
       "negotiated": false
     },
     "mcp-integration": {
-      "why": "the protocol revision we speak to an MCP server, owned by the SDK and pinned here",
+      "why": "the protocol revision we speak to an MCP server, negotiated per server by the MCP client SDK in auto mode, so the SDK's supported revisions are the version",
       "kind": "referenced",
       "file": "apps/web/lib/connectors/mcp-credential-spec.ts",
-      "symbol": "LATEST_PROTOCOL_VERSION",
+      "symbol": "PROBE_VERSION_NEGOTIATION",
       "negotiated": true
     },
     "model-registry": {

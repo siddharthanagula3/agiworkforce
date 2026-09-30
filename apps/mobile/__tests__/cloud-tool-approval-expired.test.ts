@@ -74,8 +74,7 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
-import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
-import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { requireFreeMobileCloudModel } from '../test-utils/modelFixtures';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -85,7 +84,7 @@ const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000003';
 const RUN_ID = '0190a000-0000-7000-8000-000000000013';
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const CLOUD_MODEL = requireFreeMobileCloudModel().id;
 
 beforeEach(() => {
   jest.clearAllMocks();

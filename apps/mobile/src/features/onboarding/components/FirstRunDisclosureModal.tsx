@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Modal, View, ScrollView, StyleSheet } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, elevation } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import type { ChineseHqProviderId, DisclosureCopy } from '@agiworkforce/compliance';
 
@@ -54,6 +56,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
       animationType="slide"
       statusBarTranslucent
       accessibilityViewIsModal
+      onRequestClose={onDecline}
     >
       <View style={[styles.scrim, { backgroundColor: colors.scrim }]}>
         <View
@@ -61,11 +64,8 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
             styles.sheet,
             {
               backgroundColor: colors.surfaceBase,
-              shadowColor: colors.black,
-              shadowOffset: { width: 0, height: -8 },
-              shadowOpacity: 0.18,
-              shadowRadius: 24,
-              elevation: 24,
+              ...elevation.e4,
+              shadowOffset: { width: 0, height: -elevation.e4.shadowOffset.height },
             },
           ]}
         >
@@ -98,22 +98,22 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               <Text style={[styles.privacyBody, { color: colors.textSecondary }]}>
                 {PRIVACY_NOTICE_BODY}
               </Text>
-              <Pressable
+              <PressableBox
                 testID="disclosure-privacy-policy-link"
                 onPress={() => void openInAppBrowser(PRIVACY_POLICY_URL)}
                 accessibilityRole="link"
                 accessibilityLabel="Read the AGI privacy policy"
               >
                 <Text style={[styles.privacyLink, { color: colors.teal }]}>Privacy Policy</Text>
-              </Pressable>
-              <Pressable
+              </PressableBox>
+              <PressableBox
                 testID="disclosure-dpdp-notice-link"
                 onPress={() => void openInAppBrowser(INDIA_DPDP_NOTICE_URL)}
                 accessibilityRole="link"
                 accessibilityLabel="Read the India DPDP notice"
               >
                 <Text style={[styles.privacyLink, { color: colors.teal }]}>India DPDP notice</Text>
-              </Pressable>
+              </PressableBox>
             </View>
 
             {copy.chineseHqProviderRows.length > 0 && (
@@ -151,7 +151,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               </View>
             )}
 
-            <Pressable
+            <PressableBox
               onPress={() => setLegalExpanded((v) => !v)}
               accessibilityRole="button"
               accessibilityLabel={legalExpanded ? 'Collapse legal detail' : 'Why we show this'}
@@ -160,7 +160,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               <Text style={[styles.legalToggleText, { color: colors.teal }]}>
                 {legalExpanded ? 'Hide legal detail' : 'Why we show this'}
               </Text>
-            </Pressable>
+            </PressableBox>
 
             {legalExpanded && (
               <View
@@ -178,7 +178,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
           </ScrollView>
 
           <View style={[styles.actions, { borderTopColor: colors.border }]}>
-            <Pressable
+            <PressableBox
               testID="disclosure-accept-btn"
               onPress={handleAccept}
               accessibilityRole="button"
@@ -188,8 +188,8 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               <Text style={[styles.acceptBtnText, { color: colors.accentText }]}>
                 {copy.acceptLabel}
               </Text>
-            </Pressable>
-            <Pressable
+            </PressableBox>
+            <PressableBox
               testID="disclosure-decline-btn"
               onPress={onDecline}
               accessibilityRole="button"
@@ -199,7 +199,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               <Text style={[styles.declineBtnText, { color: colors.textMuted }]}>
                 {copy.declineLabel}
               </Text>
-            </Pressable>
+            </PressableBox>
           </View>
         </View>
       </View>
@@ -229,18 +229,18 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: dialogPadding,
     paddingTop: 16,
     paddingBottom: 8,
   },
   title: {
-    fontSize: 22,
+    fontSize: typeScale.title2,
     fontWeight: '700',
     marginBottom: 16,
     letterSpacing: 0,
   },
   summary: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     lineHeight: 22,
     marginBottom: 16,
   },
@@ -252,15 +252,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   privacyTitle: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
     fontWeight: '600',
   },
   privacyBody: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     lineHeight: 19,
   },
   privacyLink: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     fontWeight: '500',
   },
   providerRow: {
@@ -272,14 +272,14 @@ const styles = StyleSheet.create({
   },
   providerLabel: {
     flex: 1,
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
   legalToggle: {
     paddingVertical: 4,
     marginBottom: 8,
   },
   legalToggleText: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     fontWeight: '500',
   },
   legalBox: {
@@ -290,15 +290,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   legalText: {
-    fontSize: 12,
+    fontSize: typeScale.caption,
     lineHeight: 18,
     fontStyle: 'italic',
   },
   legalSource: {
-    fontSize: 11,
+    fontSize: typeScale.caption,
   },
   actions: {
-    paddingHorizontal: 24,
+    paddingHorizontal: dialogPadding,
     paddingTop: 12,
     paddingBottom: 32,
     borderTopWidth: 1,
@@ -311,13 +311,13 @@ const styles = StyleSheet.create({
   },
   acceptBtnText: {
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: typeScale.callout,
   },
   declineBtn: {
     paddingVertical: 12,
     alignItems: 'center',
   },
   declineBtnText: {
-    fontSize: 14,
+    fontSize: typeScale.subhead,
   },
 });

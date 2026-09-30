@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
-import { describeDiagnostics } from '@/lib/support/diagnostics/types';
 import {
+  describeDiagnostics,
   MAX_TICKET_MESSAGE_CHARS,
   OPEN_TICKET_STATUSES,
   RECOVERY_TICKET_SUBJECT,
@@ -14,10 +14,11 @@ import {
   type StaffSupportTicket,
   type StaffTicketPage,
   type StaffTicketThread,
-} from '@/lib/support/tickets/types';
+  SUPPORT_STAFF_TICKETS_PATH,
+  supportStaffTicketPath,
+  supportStaffTicketRecoveryPath,
+} from '@agiworkforce/cloud-contracts/support';
 import { formatDateTime } from '../lib/operator-format';
-
-const QUEUE_ENDPOINT = '/api/support/staff/tickets';
 
 const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
 const FIELD_CLASS =
@@ -47,7 +48,7 @@ function RecoveryActions({ ticketId }: { ticketId: string }) {
     setDone(null);
     try {
       const result = (await requestJson(
-        `${ticketPath(ticketId)}/recovery`,
+        supportStaffTicketRecoveryPath(ticketId),
         {
           method: 'POST',
           headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
@@ -162,10 +163,6 @@ function asThread(body: unknown, fallback: string): StaffTicketThread {
   return { ticket: thread.ticket, replies: thread.replies };
 }
 
-function ticketPath(ticketId: string): string {
-  return `${QUEUE_ENDPOINT}/${encodeURIComponent(ticketId)}`;
-}
-
 function describePriority(ticket: StaffSupportTicket): string {
   const severity = severityForPriority(ticket.priority).toUpperCase();
   return ticket.supportTier
@@ -200,7 +197,7 @@ function StaffTicketThreadView({
     setSaved(false);
     try {
       const next = await requestJson(
-        ticketPath(ticket.id),
+        supportStaffTicketPath(ticket.id),
         {
           method: 'POST',
           headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
@@ -344,7 +341,7 @@ export default function SupportTicketQueuePanel() {
     setError(null);
     const page = asPage(
       await requestJson(
-        `${QUEUE_ENDPOINT}?offset=${offset}`,
+        `${SUPPORT_STAFF_TICKETS_PATH}?offset=${offset}`,
         { method: 'GET', headers: { Accept: 'application/json' } },
         QUEUE_UNREADABLE,
       ),
@@ -386,7 +383,7 @@ export default function SupportTicketQueuePanel() {
     setError(null);
     try {
       const next = await requestJson(
-        ticketPath(ticketId),
+        supportStaffTicketPath(ticketId),
         { method: 'GET', headers: { Accept: 'application/json' } },
         'That ticket could not be opened.',
       );
@@ -415,8 +412,8 @@ export default function SupportTicketQueuePanel() {
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Tickets customers raised in Settings, Help that are open or in progress, newest first. A
-          reply here appears on the customer&apos;s ticket straight away. It is not emailed to them,
-          so write to the contact address on the ticket when it cannot wait.
+          reply here appears on the customer&apos;s ticket straight away and is emailed to the
+          contact address on the ticket.
         </p>
       </div>
 
@@ -455,7 +452,7 @@ export default function SupportTicketQueuePanel() {
                 <button
                   type="button"
                   onClick={() => void openTicket(ticket.id)}
-                  className={`${CARD_CLASS} w-full text-left transition-colors hover:bg-muted`}
+                  className={`${CARD_CLASS} w-full text-start transition-colors hover:bg-muted`}
                 >
                   <span className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-sm font-medium">{ticket.subject}</span>

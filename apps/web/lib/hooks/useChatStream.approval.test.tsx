@@ -88,6 +88,7 @@ describe('useChatStream, tool approval → resume', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -415,6 +416,184 @@ describe('useChatStream, tool approval → resume', () => {
       expect(assistantMessage()?.content).toContain('Recovered.');
     },
   );
+
+  it('follows the run when another device answers the approval and folds the result in', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockSseStream([approvalEvent]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('summarize PR 7', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    const assistantId = assistantMessage()!.id;
+    expect(isApprovalTurnLive(assistantId)).toBe(true);
+
+    const envelope = (sequence: number, event: Record<string, unknown>) => ({
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: TEMP_CONVERSATION.id,
+      turnId: 'turn-remote',
+      sequence,
+      emittedAtMs: 3_000 + sequence,
+      event,
+    });
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      if (!String(input).startsWith(RUN_PATH))
+        throw new Error(`Unexpected request: ${String(input)}`);
+      return new Response(
+        JSON.stringify({
+          run: {
+            id: RUN_ID,
+            userId: 'user-1',
+            requestId: 'request-1',
+            conversationId: TEMP_CONVERSATION.id,
+            originSurface: 'web',
+            workMode: 'chat',
+            state: 'ready_for_review',
+            provider: 'openai',
+            model: 'model-1',
+            lastEventSequence: 1,
+            cancellationRequestedAt: null,
+            completedAt: '2026-09-28T20:00:00.000Z',
+            createdAt: '2026-09-28T19:00:00.000Z',
+            updatedAt: '2026-09-28T20:00:00.000Z',
+          },
+          events: [
+            envelope(0, { type: 'text-delta', delta: 'Approved on the phone.' }),
+            envelope(1, { type: 'stop', reason: 'end-turn' }),
+          ],
+          nextAfterSequence: 1,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    await vi.waitFor(() => expect(assistantMessage()?.content).toContain('Approved on the phone.'));
+
+    expect(isApprovalTurnLive(assistantId)).toBe(false);
+    expect(assistantMessage()?.metadata?.cloudApproval).toBeFalsy();
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.some((call) =>
+          String(call[0]).includes('/api/llm/v1/chat/completions/approve'),
+        ),
+    ).toBe(false);
+  });
+
+  it('after a reload, follows a run whose approval another device answered', async () => {
+    mockSseStream([approvalEvent]);
+    const first = renderHook(() => useChatStream());
+    await act(async () => {
+      await first.result.current.sendMessage('summarize PR 7', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    const assistantId = assistantMessage()!.id;
+    expect(assistantMessage()?.metadata?.cloudApproval).toBeTruthy();
+    first.unmount();
+    __resetPendingTurnsForTests();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    const envelope = (sequence: number, event: Record<string, unknown>) => ({
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: TEMP_CONVERSATION.id,
+      turnId: 'turn-remote',
+      sequence,
+      emittedAtMs: 3_000 + sequence,
+      event,
+    });
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      if (!String(input).startsWith(RUN_PATH))
+        throw new Error(`Unexpected request: ${String(input)}`);
+      return new Response(
+        JSON.stringify({
+          run: {
+            id: RUN_ID,
+            userId: 'user-1',
+            requestId: 'request-1',
+            conversationId: TEMP_CONVERSATION.id,
+            originSurface: 'web',
+            workMode: 'chat',
+            state: 'ready_for_review',
+            provider: 'openai',
+            model: 'model-1',
+            lastEventSequence: 1,
+            cancellationRequestedAt: null,
+            completedAt: '2026-09-28T20:00:00.000Z',
+            createdAt: '2026-09-28T19:00:00.000Z',
+            updatedAt: '2026-09-28T20:00:00.000Z',
+          },
+          events: [
+            envelope(0, { type: 'text-delta', delta: 'Approved on the phone.' }),
+            envelope(1, { type: 'stop', reason: 'end-turn' }),
+          ],
+          nextAfterSequence: 1,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+
+    renderHook(() => useChatStream());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    await vi.waitFor(() => expect(assistantMessage()?.content).toContain('Approved on the phone.'));
+
+    expect(isApprovalTurnLive(assistantId)).toBe(false);
+    expect(assistantMessage()?.metadata?.cloudApproval).toBeFalsy();
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.some((call) =>
+          String(call[0]).includes('/api/llm/v1/chat/completions/approve'),
+        ),
+    ).toBe(false);
+  });
+
+  it('stops following a waiting run the server no longer knows, and when the conversation changes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockSseStream([approvalEvent]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('summarize PR 7', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    vi.mocked(fetch).mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error: { message: 'Run not found' } }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    const runReads = () =>
+      vi.mocked(fetch).mock.calls.filter((call) => String(call[0]).startsWith(RUN_PATH)).length;
+    expect(runReads()).toBe(1);
+
+    __resetPendingTurnsForTests();
+    mockSseStream([approvalEvent]);
+    await act(async () => {
+      await result.current.sendMessage('summarize PR 8', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    useChatStore.setState({ activeConversationId: 'another-conversation', messages: [] });
+    const before = runReads();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    expect(runReads()).toBe(before);
+  });
 
   it('sends decision "rejected" and marks the card failed without executing', async () => {
     mockSseStream([approvalEvent]);

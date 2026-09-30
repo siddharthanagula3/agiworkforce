@@ -62,13 +62,6 @@ jest.mock('../src/ui/theme', () => ({
   }),
 }));
 
-jest.mock('../src/features/cloud-bridge', () => {
-  const { View } = require('react-native');
-  return {
-    InviteCodeModal: () => <View testID="invite-code-modal" />,
-  };
-});
-
 jest.mock('../src/features/model-picker/components/ModelPickerSheet', () => {
   const { View } = require('react-native');
   return {
@@ -95,12 +88,22 @@ import { getDefaultModel } from '@agiworkforce/local-llm';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
+import { useFreeQuotaCatalogueStore } from '../src/features/model-picker/freeQuotaCatalogue';
 import { LOCAL_MODEL_LIST, getModelListForCloudAccess } from '../src/features/model-picker/service';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+
+const originalRefreshFreeQuotaCatalogue = useFreeQuotaCatalogueStore.getState().refresh;
 
 describe('Models screen', () => {
   beforeEach(() => {
     lastModelPickerProps = null;
+    useFreeQuotaCatalogueStore.setState({
+      account: null,
+      catalogue: null,
+      loading: false,
+      error: null,
+      refresh: originalRefreshFreeQuotaCatalogue,
+    });
     useModelStore.setState({
       selectedModel: getDefaultModel().id,
       selectedProvider: 'local',
@@ -134,6 +137,18 @@ describe('Models screen', () => {
     render(<ModelsScreen />);
 
     expect(lastModelPickerProps?.modelScope).toBe('all');
+  });
+
+  it('refreshes provider-funded Free models on Cloud entry and when reopening the picker', () => {
+    const refresh = jest.fn().mockResolvedValue(undefined);
+    useFreeQuotaCatalogueStore.setState({ refresh });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+
+    const { getByLabelText } = render(<ModelsScreen />);
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    fireEvent.press(getByLabelText('Change model'));
+    expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   it('renders favorite/recent models as tappable rows (regression: MOBILE-MODELS-FAVORITES-INERT)', () => {

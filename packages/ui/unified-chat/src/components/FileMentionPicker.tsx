@@ -185,7 +185,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     <div
       ref={listRef}
       className={cn(
-        'absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-80 max-h-72 overflow-y-auto',
+        'absolute bottom-full start-0 z-[var(--z-dropdown)] mb-2 w-80 max-h-72 overflow-y-auto',
         'rounded-xl border border-border bg-popover shadow-e4 backdrop-blur-xl',
       )}
       role="listbox"
@@ -224,7 +224,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
             role="option"
             aria-selected={i === selectedIndex}
             className={cn(
-              'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
+              'flex w-full items-center gap-2 px-3 py-2 text-start text-sm transition-colors',
               i === selectedIndex
                 ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground'
                 : 'text-foreground hover:bg-accent',

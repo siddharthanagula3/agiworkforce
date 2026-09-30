@@ -441,8 +441,8 @@
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
       "audience": "developer",
-      "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:05b4dd7ea6c0b4341ce0f114c12b2eb99afe81cd55700c2daa558b08dc5705db"
+      "declaredVersion": "2.0.0",
+      "computedHash": "sha256-tree-v1:50f3b46007bbe048abd6b56a31c58e65bd40014792a40824779761667dea5320"
     },
     "ms-frontend-design-review": {
       "path": ".agents/skills/ms-frontend-design-review",

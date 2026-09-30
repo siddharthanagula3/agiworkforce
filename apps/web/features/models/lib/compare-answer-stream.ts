@@ -1,5 +1,6 @@
 'use client';
 
+import { clientHandshakeHeaders } from '@agiworkforce/cloud-contracts';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import { chatCompletionEndpoint } from '@features/chat/lib/free-quota-selection';
 import { getAuthToken } from '@shared/lib/get-auth-token';
@@ -119,7 +120,7 @@ export async function streamCompareAnswer(
   const headers = await addCsrfHeaders({
     'Content-Type': 'application/json',
     Accept: 'text/event-stream',
-    'X-AGI-Surface': host.surface,
+    ...clientHandshakeHeaders({ surface: host.surface, version: undefined }),
     'Idempotency-Key': createManagedChatIdempotencyKey({
       surface: host.surface,
       purpose: 'compare',

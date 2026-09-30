@@ -37,7 +37,7 @@ async function handlePost(
   }
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
-  const permissions = await loadConnectorToolPermissions(db, userId);
+  const permissions = await loadConnectorToolPermissions(db, userId, organizationId ?? null);
   const output = await withUserConnectorMcpHandle(userId, connectorRef, async (connection) => {
     const { handle } = connection;
     switch (body.operation) {

@@ -14,7 +14,7 @@ import { logAuthFailure } from '@/lib/security-audit';
 import { getIdentityProvider } from '@/lib/server/identity';
 import { requireStepUp } from '@/lib/server/step-up-auth';
 import { readSecondFactorStatus } from '@/lib/server/step-up/second-factor';
-import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
+import { finishIntentRevocation, revokeEveryOtherSession } from '@/lib/server/session-revocation';
 import { announceTwoFactorChange } from '@/lib/server/two-factor-security-events';
 import { resolveSessionsPrincipal } from '@/app/api/settings/sessions/session-principal';
 
@@ -90,6 +90,14 @@ async function handleChangePassword(request: NextRequest) {
     organizationId,
     detail: { source, count: signOut.ended.length },
   });
+
+  if (!(await finishIntentRevocation(signOut, userId))) {
+    throw createError
+      .serviceUnavailable(
+        'Your password was changed, but signing out your other devices did not finish. End your other sessions in Settings to finish.',
+      )
+      .asUserSafe();
+  }
 
   return NextResponse.json({
     success: true,

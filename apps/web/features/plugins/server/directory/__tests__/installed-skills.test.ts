@@ -21,6 +21,9 @@ vi.mock('../memory-cache', () => ({
   findPluginDirectoryRecord: (id: string) => mocks.findRecord(id),
 }));
 vi.mock('../snapshot-cache', () => ({
+  readSkillCompanions: vi.fn(async () => null),
+  skillCompanionsCacheParams: vi.fn(() => ''),
+  writeSkillCompanions: vi.fn(async () => undefined),
   installedSkillsCacheParams: (repo: string, key: string, sha: string) =>
     `v1|${repo}|${key}|${sha}`,
   readInstalledSkills: (params: string) => mocks.readInstalledSkills(params),

@@ -155,3 +155,9 @@ nothing is left.
 - Done when: Changes made in code flow back into the design so the two stay in sync.
 - Wave: 4
 - Build on: web, desktop, mobile, chrome
+
+## S32.30: Figma import/export integration.
+
+- Done when: The workspace imports designs from Figma and/or exports designs to Figma.
+- Wave: 4
+- Build on: cli, chrome

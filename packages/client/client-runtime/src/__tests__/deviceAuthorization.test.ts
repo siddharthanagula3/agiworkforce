@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { pollDeviceAuthorization, requestDeviceAuthorization } from '../deviceAuthorization';
+import {
+  pollDeviceAuthorization,
+  requestDeviceAuthorization,
+  slowedDevicePollIntervalMs,
+} from '../deviceAuthorization';
 
 describe('shared device authorization client', () => {
   it('starts authorization against the trusted origin and validates the browser URL', async () => {
@@ -86,6 +90,55 @@ describe('shared device authorization client', () => {
       expect(message).not.toMatch(/rejected the device sign-in request/i);
     },
   );
+
+  it.each([
+    [429, '{"error":"slow_down"}', null],
+    [400, '{"error":"slow_down","interval":9}', 9_000],
+  ] as const)(
+    'reports HTTP %s slow_down as its own result with the server interval',
+    async (status, body, intervalMs) => {
+      const post = vi.fn().mockResolvedValue({ status, body });
+
+      const result = await pollDeviceAuthorization(
+        'https://agiworkforce.com',
+        '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
+        post,
+      );
+
+      expect(result).toEqual({ kind: 'slow_down', intervalMs });
+    },
+  );
+
+  it('adds five seconds per slow_down, or takes a longer server interval', () => {
+    expect(slowedDevicePollIntervalMs(3_000, { kind: 'slow_down', intervalMs: null })).toBe(8_000);
+    expect(slowedDevicePollIntervalMs(3_000, { kind: 'slow_down', intervalMs: 20_000 })).toBe(
+      20_000,
+    );
+    expect(slowedDevicePollIntervalMs(58_000, { kind: 'slow_down', intervalMs: null })).toBe(
+      60_000,
+    );
+  });
+
+  it('names the terms step and its link when the account must accept first', async () => {
+    const post = vi.fn().mockResolvedValue({
+      status: 403,
+      body: JSON.stringify({
+        error: 'terms_acceptance_required',
+        acceptance_url: 'https://agiworkforce.com/login/complete?redirectTo=%2F',
+      }),
+    });
+
+    const result = await pollDeviceAuthorization(
+      'https://agiworkforce.com',
+      '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
+      post,
+    );
+
+    expect(result.kind).toBe('rejected');
+    expect(result.kind === 'rejected' ? result.message : '').toContain(
+      'https://agiworkforce.com/login/complete?redirectTo=%2F',
+    );
+  });
 
   it('names the status for a non-2xx below 500 instead of claiming a rejection', async () => {
     const post = vi.fn().mockResolvedValue({ status: 404, body: '{}' });

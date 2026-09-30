@@ -15,6 +15,7 @@ export interface VerifiedDeveloperToken {
   sessionFamilyId?: string;
   jti: string;
   exp: number;
+  issuedAt?: number;
 }
 
 function getSigningSecret(): string | null {
@@ -83,12 +84,14 @@ export function verifyDeveloperTokenSignature(token: string): VerifiedDeveloperT
     }
 
     const email = typeof payload['email'] === 'string' ? payload['email'] : undefined;
+    const issuedAt = typeof payload.iat === 'number' ? payload.iat : undefined;
     return {
       userId,
       ...(email ? { email } : {}),
       ...(sessionFamilyId ? { sessionFamilyId } : {}),
       jti,
       exp,
+      ...(issuedAt !== undefined ? { issuedAt } : {}),
     };
   } catch {
     return null;

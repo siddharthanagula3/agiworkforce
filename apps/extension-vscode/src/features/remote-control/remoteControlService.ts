@@ -86,6 +86,7 @@ function toSession(rootId: string, thread: ThreadSummary): LocalDeveloperSession
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     origin: thread.createdBy,
+    ...(thread.location === 'cloud' ? { location: 'cloud' as const } : {}),
   };
 }
 
@@ -131,6 +132,7 @@ export class VscodeRemoteControl implements vscode.Disposable {
     private readonly _runtimes: LocalRuntimePool,
   ) {
     this._host = createRemoteControlHost({
+      allowInsecureLoopback: this._context.extensionMode === vscode.ExtensionMode.Development,
       code: this._dependencies(),
       deviceName: () =>
         t('remote.deviceName', { host: os.hostname().replace(/\.local$/iu, '') || 'VS Code' }),
@@ -264,7 +266,10 @@ export class VscodeRemoteControl implements vscode.Disposable {
       sessions: [],
     };
     try {
-      const { threads } = await this._runtime(root).listThreads({ cwd: root.path });
+      const { threads } = await this._runtime(root).listThreads({
+        cwd: root.path,
+        includeCloud: true,
+      });
       group.sessions = threads.map((thread) => toSession(root.id, thread));
     } catch (error) {
       group.unavailable = {

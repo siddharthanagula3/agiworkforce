@@ -14,11 +14,14 @@ use agiworkforce_protocol::developer_session::{
     McpResourceSummary, McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse,
     McpServerParams, McpServerScope, McpServerSummary, McpServerTestResponse,
     McpServerToolsResponse, McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope,
-    PermissionsListResponse, PluginInstallParams, PluginListResponse, PluginRemoveParams,
-    PluginScope, PluginSummary, PluginUpdateResponse, SavedPermission, SavedPermissionDecision,
-    SavedPermissionKind, SettingsReadResponse, SettingsWriteParams, SkillCatalogScope,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
+    PermissionRule, PermissionRuleDecision, PermissionRuleKind, PermissionRulesResponse,
+    PermissionsAddParams, PermissionsListResponse, PluginInstallParams, PluginListResponse,
+    PluginRemoveParams, PluginScope, PluginSummary, PluginUpdateResponse, ProviderKeySummary,
+    ProvidersListResponse, SavedPermission, SavedPermissionDecision, SavedPermissionKind,
+    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
     SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
+    TrustListResponse, TrustedFolder,
 };
 use std::path::{Path, PathBuf};
 
@@ -101,9 +104,17 @@ fn skill_scope(origin: SkillOrigin) -> SkillCatalogScope {
 }
 
 pub fn list_skills(workspace_root: &Path) -> SkillListResponse {
+    let available_tools: Vec<String> = crate::runtime::tool_catalog::all_builtin_tool_definitions()
+        .into_iter()
+        .map(|definition| definition.name)
+        .collect();
     let skills = skills::skill_catalog(workspace_root)
         .into_iter()
         .map(|entry| SkillSummary {
+            missing_tools: skills::missing_tool_dependencies(&entry.skill, &available_tools),
+            missing_env_vars: entry.skill.check_env_deps().err().unwrap_or_default(),
+            required_tools: entry.skill.required_tools.clone(),
+            required_env_vars: entry.skill.required_env_vars.clone(),
             name: entry.skill.name,
             description: entry.skill.description,
             scope: skill_scope(entry.origin),
@@ -238,12 +249,20 @@ fn mcp_status(state: McpCredentialState) -> McpServerConfiguredStatus {
 pub fn list_mcp_servers(workspace_root: &Path) -> McpServerListResponse {
     let servers = crate::mcp::discover_servers(workspace_root)
         .into_iter()
-        .map(|server| McpServerSummary {
-            transport: server.config.transport_kind().to_string(),
-            scope: mcp_scope(server.origin),
-            status: mcp_status(server.credential),
-            url: server.url,
-            name: server.name,
+        .map(|server| {
+            let policy_refusal = crate::mcp::policy_refusal(&server.name, &server.config);
+            McpServerSummary {
+                transport: server.config.transport_kind().to_string(),
+                scope: mcp_scope(server.origin),
+                status: if policy_refusal.is_some() {
+                    McpServerConfiguredStatus::Blocked
+                } else {
+                    mcp_status(server.credential)
+                },
+                policy_refusal,
+                url: server.url,
+                name: server.name,
+            }
         })
         .collect();
     McpServerListResponse { servers }
@@ -575,7 +594,10 @@ pub fn run_command(
             let text = servers
                 .servers
                 .iter()
-                .map(|server| format!("{} ({})", server.name, server.transport))
+                .map(|server| match &server.policy_refusal {
+                    Some(reason) => format!("{} (blocked): {reason}", server.name),
+                    None => format!("{} ({})", server.name, server.transport),
+                })
                 .collect::<Vec<_>>()
                 .join("\n");
             structured(SlashCommandResultKind::Mcp, text, servers)
@@ -599,7 +621,7 @@ pub fn run_command(
     }
 }
 
-fn startable_server(
+async fn startable_server(
     workspace_root: &Path,
     name: &str,
 ) -> Result<crate::mcp::DiscoveredMcpServer, DeveloperSessionHostError> {
@@ -618,10 +640,11 @@ fn startable_server(
             "'{name}' comes from this workspace's .mcp.json, and project servers start only once the workspace is trusted. Run /trust grant in agi, then try again."
         )));
     }
-    if let Some(reason) = crate::mcp::policy_refusal(&server.config) {
-        return Err(DeveloperSessionHostError::conflict(format!(
-            "'{name}' is not started: {reason}."
-        )));
+    if let Some(reason) =
+        crate::cloud::workspace_policy::mcp_server_refusal(&server.name, server.url.as_deref())
+            .await
+    {
+        return Err(DeveloperSessionHostError::conflict(reason));
     }
     Ok(server)
 }
@@ -635,7 +658,7 @@ pub async fn test_mcp_server(
     name: &str,
     limit: std::time::Duration,
 ) -> Result<McpServerTestResponse, DeveloperSessionHostError> {
-    let server = startable_server(workspace_root, name)?;
+    let server = startable_server(workspace_root, name).await?;
     let started = std::time::Instant::now();
     let outcome = tokio::time::timeout(limit, async {
         let mut connection =
@@ -710,7 +733,7 @@ pub async fn inspect_mcp_server(
     name: &str,
     limit: std::time::Duration,
 ) -> Result<McpServerInspectResponse, DeveloperSessionHostError> {
-    let server = startable_server(workspace_root, name)?;
+    let server = startable_server(workspace_root, name).await?;
     let outcome = tokio::time::timeout(limit, async {
         let mut connection =
             crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
@@ -744,7 +767,7 @@ pub async fn mcp_server_tools(
     name: &str,
     limit: std::time::Duration,
 ) -> Result<McpServerToolsResponse, DeveloperSessionHostError> {
-    let server = startable_server(workspace_root, name)?;
+    let server = startable_server(workspace_root, name).await?;
     let listed = tokio::time::timeout(limit, async {
         let mut connection =
             crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
@@ -866,6 +889,7 @@ pub fn install_plugin(
         params.name.as_deref(),
         integrity,
         signature,
+        None,
     )
     .map_err(invalid)?
     {
@@ -1097,6 +1121,13 @@ pub fn remove_saved_permission(
                 .find(|rule| saved_permission_id(scope, rule) == id)
                 .map(|rule| (deny, rule.clone()))
         });
+    let mcp_rule = crate::platform::policy::user_mcp_rules()
+        .into_iter()
+        .find(|(target, _)| saved_permission_id(MCP_RULE_SCOPE, target) == id);
+    if let Some((target, _)) = mcp_rule {
+        crate::platform::policy::remove_user_mcp_rule(&target).map_err(internal)?;
+        return list_saved_permissions();
+    }
     let removed = if let Some((deny, rule)) = stored {
         if deny {
             store.always_deny.remove(&rule);
@@ -1122,6 +1153,202 @@ pub fn remove_saved_permission(
         ));
     }
     list_saved_permissions()
+}
+
+const MCP_RULE_SCOPE: &str = "mcp";
+const MCP_TARGET_SEPARATOR: char = '/';
+
+pub fn list_permission_rules() -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+    let mut rules: Vec<PermissionRule> = list_saved_permissions()?
+        .permissions
+        .into_iter()
+        .map(|saved| {
+            let decision = match saved.decision {
+                SavedPermissionDecision::Allow => PermissionRuleDecision::Allow,
+                SavedPermissionDecision::Deny => PermissionRuleDecision::Deny,
+            };
+            let (kind, target) = match saved.kind {
+                SavedPermissionKind::File => (PermissionRuleKind::File, saved.label.clone()),
+                SavedPermissionKind::ExecPolicy => {
+                    (PermissionRuleKind::ExecPolicy, saved.label.clone())
+                }
+                SavedPermissionKind::Command => {
+                    match saved
+                        .label
+                        .strip_prefix(crate::permissions::DOMAIN_RULE_PREFIX)
+                    {
+                        Some(host) => (PermissionRuleKind::Domain, host.to_string()),
+                        None => (PermissionRuleKind::Command, saved.label.clone()),
+                    }
+                }
+            };
+            PermissionRule {
+                id: saved.id,
+                kind,
+                target,
+                label: saved.label,
+                decision,
+            }
+        })
+        .collect();
+    let server_prefix = crate::platform::policy::mcp_rule_target("", None);
+    for (target, decision) in crate::platform::policy::user_mcp_rules() {
+        let shown = target
+            .strip_prefix(&server_prefix)
+            .unwrap_or(&target)
+            .trim_end_matches("__*");
+        let (server, tool) = match shown.split_once("__") {
+            Some((server, tool)) => (server.to_string(), Some(tool.to_string())),
+            None => (shown.to_string(), None),
+        };
+        rules.push(PermissionRule {
+            id: saved_permission_id(MCP_RULE_SCOPE, &target),
+            kind: PermissionRuleKind::Mcp,
+            target: match &tool {
+                Some(tool) => format!("{server}{MCP_TARGET_SEPARATOR}{tool}"),
+                None => server.clone(),
+            },
+            label: match &tool {
+                Some(tool) => format!("{tool} from {server}"),
+                None => format!("every tool from {server}"),
+            },
+            decision: match decision {
+                crate::platform::policy::PolicyDecision::Allow => PermissionRuleDecision::Allow,
+                crate::platform::policy::PolicyDecision::Ask => PermissionRuleDecision::Ask,
+                crate::platform::policy::PolicyDecision::Deny => PermissionRuleDecision::Deny,
+            },
+        });
+    }
+    Ok(PermissionRulesResponse { rules })
+}
+
+pub fn add_permission(
+    params: PermissionsAddParams,
+) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+    let target = params.target.trim();
+    if target.is_empty() || target.len() > 512 || target.chars().any(char::is_control) {
+        return Err(invalid("Name what the rule applies to"));
+    }
+    match params.kind {
+        PermissionRuleKind::Mcp => {
+            let (server, tool) = match target.split_once(MCP_TARGET_SEPARATOR) {
+                Some((server, tool)) => (server.trim(), Some(tool.trim())),
+                None => (target, None),
+            };
+            let valid = |name: &str| {
+                !name.is_empty()
+                    && !name.contains("__")
+                    && name.chars().all(|character| {
+                        character.is_ascii_alphanumeric() || "-_.".contains(character)
+                    })
+            };
+            if !valid(server) || tool.is_some_and(|tool| !valid(tool)) {
+                return Err(invalid(
+                    "An MCP rule names a server, or server/tool, using letters, digits, dots, dashes and underscores",
+                ));
+            }
+            let decision = match params.decision {
+                PermissionRuleDecision::Allow => crate::platform::policy::PolicyDecision::Allow,
+                PermissionRuleDecision::Ask => crate::platform::policy::PolicyDecision::Ask,
+                PermissionRuleDecision::Deny => crate::platform::policy::PolicyDecision::Deny,
+            };
+            crate::platform::policy::set_user_mcp_rule(server, tool, Some(decision))
+                .map_err(internal)?;
+        }
+        PermissionRuleKind::Command | PermissionRuleKind::Domain => {
+            let rule = if params.kind == PermissionRuleKind::Domain {
+                if target.contains(['/', ':', ' ']) {
+                    return Err(invalid(
+                        "A site rule names a host such as example.com or *.example.com",
+                    ));
+                }
+                if params.decision == PermissionRuleDecision::Allow {
+                    if let Some(message) = crate::permissions::website_allow_error(target) {
+                        return Err(invalid(message));
+                    }
+                }
+                format!(
+                    "{}{}",
+                    crate::permissions::DOMAIN_RULE_PREFIX,
+                    target.to_ascii_lowercase()
+                )
+            } else {
+                if params.decision == PermissionRuleDecision::Allow {
+                    if let Some(message) = crate::permissions::open_ended_allow_error(target) {
+                        return Err(invalid(message));
+                    }
+                }
+                target.to_string()
+            };
+            let mut store = crate::permissions::PermissionStore::load().map_err(internal)?;
+            match params.decision {
+                PermissionRuleDecision::Allow => {
+                    store.remove_always_deny(&rule);
+                    store.allow_always(&rule);
+                }
+                PermissionRuleDecision::Deny => {
+                    store.remove_always_allow(&rule);
+                    store.deny_always(&rule);
+                }
+                PermissionRuleDecision::Ask => {
+                    store.remove_always_allow(&rule);
+                    store.remove_always_deny(&rule);
+                }
+            }
+            store.save().map_err(internal)?;
+        }
+        PermissionRuleKind::File | PermissionRuleKind::ExecPolicy => {
+            return Err(invalid(
+                "File and exec-policy rules are saved from an approval prompt, not added here",
+            ));
+        }
+    }
+    list_permission_rules()
+}
+
+pub fn list_provider_keys() -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+    let providers = crate::auth::api_key_providers()
+        .map_err(internal)?
+        .into_iter()
+        .map(|provider| ProviderKeySummary {
+            provider: provider.id.to_string(),
+            label: provider.label.to_string(),
+            env_var: provider.env_var.to_string(),
+            configured: provider.configured,
+        })
+        .collect();
+    Ok(ProvidersListResponse {
+        providers,
+        storage: crate::auth::credential_storage_label().to_string(),
+    })
+}
+
+pub fn list_trusted_folders() -> Result<TrustListResponse, DeveloperSessionHostError> {
+    let config_dir = CliConfig::config_dir().map_err(internal)?;
+    let registry = crate::project_registry::ProjectRegistry::load(&config_dir).map_err(internal)?;
+    let mut folders: Vec<TrustedFolder> = registry
+        .projects
+        .iter()
+        .filter(|(_, entry)| entry.trust_level == "trusted" && entry.revoked_at.is_none())
+        .map(|(path, entry)| TrustedFolder {
+            path: path.clone(),
+            trusted_at: entry.trusted_at.clone(),
+            trusted_by: entry.trusted_by.clone(),
+        })
+        .collect();
+    folders.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(TrustListResponse { folders })
+}
+
+pub fn revoke_trusted_folder(path: &str) -> Result<TrustListResponse, DeveloperSessionHostError> {
+    let listed = list_trusted_folders()?;
+    if !listed.folders.iter().any(|folder| folder.path == path) {
+        return Err(DeveloperSessionHostError::not_found(
+            "That folder is not trusted; list them again",
+        ));
+    }
+    crate::trust::revoke(std::path::Path::new(path)).map_err(internal)?;
+    list_trusted_folders()
 }
 
 fn saved_permission_id(scope: &str, rule: &str) -> String {
@@ -1177,7 +1404,7 @@ pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSess
     }
 }
 
-const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 7] = [
+const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 9] = [
     ("review", crate::claude_parity::review_prompt),
     (
         "security-review",
@@ -1188,6 +1415,8 @@ const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 7] = [
     ("think-back", crate::claude_parity::think_back_prompt),
     ("recap", crate::claude_parity::recap_prompt),
     ("powerup", crate::claude_parity::powerup_prompt),
+    ("save-skill", crate::claude_parity::save_skill_prompt),
+    ("save-routine", crate::claude_parity::save_routine_prompt),
 ];
 
 fn builtin_prompt_command(command: &str, args: &str) -> Option<String> {
@@ -1282,58 +1511,62 @@ mod tests {
 
     #[test]
     fn instruction_preview_names_exactly_the_files_a_turn_loads() {
-        let root = tempdir().expect("fixture root");
-        let root_path = root.path();
-        std::fs::create_dir_all(root_path.join(".git")).expect("root marker");
-        std::fs::write(root_path.join("AGENTS.md"), "root contract").expect("root AGENTS.md");
+        let home = tempfile::tempdir().expect("config home");
+        crate::compaction::with_config_home(home.path(), || {
+            let root = tempdir().expect("fixture root");
+            let root_path = root.path();
+            std::fs::create_dir_all(root_path.join(".git")).expect("root marker");
+            std::fs::write(root_path.join("AGENTS.md"), "root contract").expect("root AGENTS.md");
 
-        let nested = root_path.join("apps").join("web");
-        std::fs::create_dir_all(nested.join(".agiworkforce")).expect("nested dirs");
-        std::fs::write(nested.join("CLAUDE.md"), "nested adapter").expect("nested CLAUDE.md");
-        std::fs::write(
-            nested.join(".agiworkforce").join("instructions.md"),
-            "nested instructions",
-        )
-        .expect("nested instructions");
+            let nested = root_path.join("apps").join("web");
+            std::fs::create_dir_all(nested.join(".agiworkforce")).expect("nested dirs");
+            std::fs::write(nested.join("CLAUDE.md"), "nested adapter").expect("nested CLAUDE.md");
+            std::fs::write(
+                nested.join(".agiworkforce").join("instructions.md"),
+                "nested instructions",
+            )
+            .expect("nested instructions");
 
-        let preview = context_instructions(&nested);
-        let previewed: Vec<String> = preview.files.iter().map(|file| file.path.clone()).collect();
+            let preview = context_instructions(&nested);
+            let previewed: Vec<String> =
+                preview.files.iter().map(|file| file.path.clone()).collect();
 
-        let loaded =
-            crate::compaction::load_instructions(&nested).expect("turn loads instructions");
-        for path in &previewed {
-            assert!(
-                loaded.contains(path.as_str()),
-                "preview names {path}, which the turn never loaded"
+            let loaded =
+                crate::compaction::load_instructions(&nested).expect("turn loads instructions");
+            for path in &previewed {
+                assert!(
+                    loaded.contains(path.as_str()),
+                    "preview names {path}, which the turn never loaded"
+                );
+            }
+            let loaded_count = loaded.matches("<!-- Instructions from: ").count();
+            assert_eq!(
+                loaded_count,
+                previewed.len(),
+                "the turn loaded {loaded_count} files but the preview named {}",
+                previewed.len()
             );
-        }
-        let loaded_count = loaded.matches("<!-- Instructions from: ").count();
-        assert_eq!(
-            loaded_count,
-            previewed.len(),
-            "the turn loaded {loaded_count} files but the preview named {}",
-            previewed.len()
-        );
 
-        assert!(previewed
-            .iter()
-            .any(|path| path.ends_with("AGENTS.md") && path.starts_with(&display(root_path))));
-        assert!(previewed.iter().any(|path| path.ends_with("CLAUDE.md")));
-        assert!(previewed
-            .iter()
-            .any(|path| path.ends_with("instructions.md")));
-        assert_eq!(
-            preview.project_root.as_deref(),
-            Some(display(root_path).as_str())
-        );
-        assert!(!preview.truncated);
+            assert!(previewed
+                .iter()
+                .any(|path| path.ends_with("AGENTS.md") && path.starts_with(&display(root_path))));
+            assert!(previewed.iter().any(|path| path.ends_with("CLAUDE.md")));
+            assert!(previewed
+                .iter()
+                .any(|path| path.ends_with("instructions.md")));
+            assert_eq!(
+                preview.project_root.as_deref(),
+                Some(display(root_path).as_str())
+            );
+            assert!(!preview.truncated);
 
-        let root_first = preview
-            .files
-            .first()
-            .expect("at least one instruction file");
-        assert_eq!(root_first.kind, InstructionFileKind::Agents);
-        assert_eq!(root_first.root, display(root_path));
+            let root_first = preview
+                .files
+                .first()
+                .expect("at least one instruction file");
+            assert_eq!(root_first.kind, InstructionFileKind::Agents);
+            assert_eq!(root_first.root, display(root_path));
+        })
     }
 
     #[test]
@@ -1365,5 +1598,138 @@ mod tests {
             );
         }
         assert!(crate::cli_options::persisted_permission_mode("bypassPermissions").is_none());
+    }
+
+    #[test]
+    fn an_allow_for_a_bare_interpreter_is_refused_before_anything_is_saved() {
+        for target in ["bash", "python3", "npm exec", "/usr/bin/env"] {
+            let error = add_permission(PermissionsAddParams {
+                kind: PermissionRuleKind::Command,
+                target: target.to_string(),
+                decision: PermissionRuleDecision::Allow,
+            })
+            .expect_err(target);
+            assert!(
+                error.to_string().contains("without asking"),
+                "{target}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_site_allow_for_a_metadata_address_is_refused() {
+        for target in ["169.254.169.254", "localhost", "*"] {
+            let error = add_permission(PermissionsAddParams {
+                kind: PermissionRuleKind::Domain,
+                target: target.to_string(),
+                decision: PermissionRuleDecision::Allow,
+            })
+            .expect_err(target);
+            assert!(
+                error.to_string().contains("cannot be allowed")
+                    || error.to_string().contains("names a host"),
+                "{target}: {error}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod workspace_mcp_refusal_tests {
+    use super::*;
+    use crate::cloud::workspace_policy::with_test_policy;
+    use crate::mcp::{with_test_configs, McpServerConfig};
+    use std::collections::HashMap;
+
+    fn server_configs() -> HashMap<String, McpServerConfig> {
+        HashMap::from([
+            (
+                "blocked-local-fixture".to_string(),
+                McpServerConfig::stdio(
+                    "/nonexistent/agi-mcp-policy-fixture",
+                    Vec::new(),
+                    HashMap::new(),
+                ),
+            ),
+            (
+                "allowed-remote-fixture".to_string(),
+                McpServerConfig::http("https://mcp.example.test/mcp", HashMap::new()),
+            ),
+            (
+                "blocked-apex-fixture".to_string(),
+                McpServerConfig::http("https://example.test/mcp", HashMap::new()),
+            ),
+        ])
+    }
+
+    fn policy() -> serde_json::Value {
+        serde_json::json!({"code": {"allowedMcpServers": ["*.example.test"]}})
+    }
+
+    #[test]
+    fn workspace_mcp_listing_reports_policy_refusal_before_connecting() {
+        with_test_policy(policy(), || {
+            with_test_configs(server_configs(), || {
+                let listed = serde_json::to_value(list_mcp_servers(Path::new("/unused"))).unwrap();
+                for name in ["blocked-local-fixture", "blocked-apex-fixture"] {
+                    let row = listed["servers"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|row| row["name"] == name)
+                        .unwrap();
+                    assert_eq!(row["status"], "blocked");
+                    assert!(row["policyRefusal"].as_str().unwrap().contains(name));
+                    assert!(row["policyRefusal"]
+                        .as_str()
+                        .unwrap()
+                        .contains("not started"));
+                }
+                let allowed = listed["servers"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|row| row["name"] == "allowed-remote-fixture")
+                    .unwrap();
+                assert_eq!(allowed["status"], "needs_auth");
+                assert!(allowed.get("policyRefusal").is_none());
+            })
+        });
+    }
+
+    #[test]
+    fn workspace_mcp_admission_reports_conflict_for_disconnected_probes() {
+        with_test_policy(policy(), || {
+            with_test_configs(server_configs(), || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    let root = Path::new("/unused");
+                    let limit = std::time::Duration::from_secs(1);
+                    let test = test_mcp_server(root, "blocked-local-fixture", limit)
+                        .await
+                        .unwrap_err();
+                    let inspect = inspect_mcp_server(root, "blocked-local-fixture", limit)
+                        .await
+                        .unwrap_err();
+                    let tools = mcp_server_tools(root, "blocked-local-fixture", limit)
+                        .await
+                        .unwrap_err();
+                    for error in [test, inspect, tools] {
+                        assert_eq!(error.code(), -32009);
+                        assert!(error.to_string().contains("allows only listed MCP hosts"));
+                    }
+                    let config = server_configs().remove("blocked-local-fixture").unwrap();
+                    let error =
+                        crate::mcp::McpConnection::connect("blocked-local-fixture", &config)
+                            .await
+                            .err()
+                            .expect("transport must remain blocked");
+                    assert!(error.to_string().contains("allows only listed MCP hosts"));
+                });
+            })
+        });
     }
 }

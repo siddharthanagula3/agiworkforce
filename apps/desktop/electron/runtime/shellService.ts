@@ -65,6 +65,12 @@ export interface RunShellCommandInput {
    */
   approve: (request: ShellApprovalRequest) => Promise<boolean>;
   emit: (chunk: ShellStreamChunk) => void;
+  /**
+   * Set by the server once the turn carries untrusted content. It asks even
+   * for an allow-listed program: the folder grant was given before anything
+   * in this turn could have steered the command.
+   */
+  review?: string;
 }
 
 const KILL_GRACE_MS = 2_000;
@@ -270,7 +276,7 @@ async function prepareShellCommand(
 
   const sandbox = input.sandbox;
   const sandboxed = sandbox.backend !== 'none';
-  if (verdict.decision === 'ask' || !sandboxed) {
+  if (verdict.decision === 'ask' || !sandboxed || input.review !== undefined) {
     const approved = await input.approve({ verdict, command, cwd: cwd.absolute, sandboxed });
     if (!approved) {
       throw sandboxed

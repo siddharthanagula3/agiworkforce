@@ -10,6 +10,7 @@ export interface ConnectorAccessPolicy {
 export type ConnectorAccessCode =
   | 'allowed'
   | 'ungoverned'
+  | 'connectors_unavailable'
   | 'connector_blocked'
   | 'connector_not_allowed'
   | 'custom_connectors_disabled'

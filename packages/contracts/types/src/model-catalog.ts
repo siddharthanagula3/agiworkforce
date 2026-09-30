@@ -94,6 +94,7 @@ export function getRegistryRoute(routeId: string): RegistryRoute | null {
   return routes[routeId] ?? null;
 }
 import { normalizeBillingPlanTier } from './billing-catalog';
+import { CENTS_PER_USD, MICROUSD_PER_USD } from './credits';
 import type { Provider } from './provider';
 import type { ModelInfo } from './provider-adapter';
 import type { SubscriptionTier } from './user';
@@ -682,6 +683,11 @@ export interface ModelMetadata {
   endpoints?: string[];
   knowledgeCutoff?: string;
   inputTokenPricingTiers?: InputTokenPricingTier[];
+  /**
+   * The provider's fast output tier (Anthropic `speed: "fast"`): the same model
+   * served faster, every token priced at this multiple of the standard rate.
+   */
+  fastTier?: { priceMultiplier: number };
   /** @deprecated Read compatibility for catalogs generated before ordered tiers. */
   longContext?: InputTokenPricingTier;
   cachePolicy?: {
@@ -1922,6 +1928,12 @@ export function listChatModels(): ModelMetadata[] {
   return listCanonicalModels().filter((model) => types.has(model.modelType));
 }
 
+export function isCurrentModel(model: ModelMetadata, nowMs: number = Date.now()): boolean {
+  if (model.deprecated === true || model.status === 'deprecated') return false;
+  const retirement = model.deprecation_date ? Date.parse(model.deprecation_date) : NaN;
+  return !Number.isFinite(retirement) || retirement > nowMs;
+}
+
 export const MODEL_PRICE_BAND_SCALE = 4;
 
 export interface ModelPriceBand {
@@ -2464,6 +2476,28 @@ export function calculateCatalogVideoCostCents(input: {
   return Math.ceil(Number((videoTokens * usdPerToken * 100).toFixed(8)));
 }
 
+const MICROUSD_PER_CATALOG_CENT = MICROUSD_PER_USD / CENTS_PER_USD;
+
+export function videoGenerationCostMicrousd(input: {
+  model: ModelMetadata;
+  resolution: string;
+  aspectRatio: string;
+  durationSecs: number;
+  generateAudio: boolean;
+}): number | null {
+  const { model, resolution, durationSecs } = input;
+  if (model.videoGeneration?.pricing) {
+    const cents = calculateCatalogVideoCostCents(input);
+    return cents === null ? null : cents * MICROUSD_PER_CATALOG_CENT;
+  }
+  const byResolution = model.videoPerSecondCostByResolution;
+  const perSecond = byResolution
+    ? byResolution[resolution as keyof typeof byResolution]
+    : model.videoPerSecondCost;
+  if (perSecond === undefined || !Number.isFinite(perSecond)) return null;
+  return Math.ceil(Number((perSecond * durationSecs * 100).toFixed(8))) * MICROUSD_PER_CATALOG_CENT;
+}
+
 export function getModelReasoning(modelId: string | null | undefined): ModelReasoning {
   const meta = getModelMetadataById(modelId);
   return meta?.reasoning ?? { capable: false, control: 'none' };
@@ -2880,10 +2914,7 @@ export function getPickerModels(options: PickerModelOptions = {}): PickerModelVi
   return getExecutableModelIds()
     .map((modelId) => getModelMetadataById(modelId))
     .filter((model): model is ModelMetadata => Boolean(model))
-    .filter(
-      (model) =>
-        includeDeprecated || (model.status !== 'deprecated' && !isPastDeprecationDate(model)),
-    )
+    .filter((model) => includeDeprecated || isCurrentModel(model))
     .filter((model) => allowedTypes.has(model.modelType))
     .filter((model) => (allowedProviderSet ? allowedProviderSet.has(model.provider) : true))
     .sort((left, right) => {

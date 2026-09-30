@@ -17,7 +17,7 @@ import type {
   SupportAccountEmail,
   SupportAccountPlan,
   SupportAccountUsage,
-} from './types';
+} from '@agiworkforce/cloud-contracts/support';
 import { getIdentityUser } from '@/lib/server/identity';
 
 export const SUPPORT_API_KEY_CEILING = 20;

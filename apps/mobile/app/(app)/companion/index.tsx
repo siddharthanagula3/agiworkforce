@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Pressable, Alert } from 'react-native';
+import { View, Alert } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, RefreshCw, HelpCircle } from 'lucide-react-native';
@@ -22,6 +23,7 @@ import {
   SessionExpiredView,
 } from '@/src/features/companion/components/ConnectionStateViews';
 import { DesktopInfoCard } from '@/src/features/companion/components/DesktopInfoCard';
+import { AccountComputersCard } from '@/src/features/companion/components/AccountComputersCard';
 import {
   DesktopSetupChecklistView,
   useDispatchSetupStore,
@@ -47,6 +49,7 @@ export default function CompanionScreen() {
   const router = useRouter();
   const { pairingCode: deepLinkCode } = useLocalSearchParams<{ pairingCode?: string }>();
   const [showScanner, setShowScanner] = useState(false);
+  const [showSetupAgain, setShowSetupAgain] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const hasSeenDemo = useDemoStore((s) => s.hasSeenDemo);
   const hasSeenDispatchSetup = useDispatchSetupStore((s) => s.hasSeenDispatchSetup);
@@ -151,9 +154,13 @@ export default function CompanionScreen() {
   }, [clearError, pairingCode, connect]);
 
   const handleBack = useCallback(() => {
+    if (showSetupAgain) {
+      setShowSetupAgain(false);
+      return;
+    }
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
-  }, [router]);
+  }, [router, showSetupAgain]);
 
   const handleApprove = useCallback(
     async (id: string) => {
@@ -187,33 +194,33 @@ export default function CompanionScreen() {
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       <View className="flex-row items-center px-3 h-12">
-        <Pressable
+        <PressableBox
           onPress={handleBack}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
         <Text variant="subheading" className="ml-2 flex-1">
           Remote
         </Text>
-        <Pressable
+        <PressableBox
           onPress={() => setShowDemo(true)}
           className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Show companion walkthrough"
           accessibilityRole="button"
         >
           <HelpCircle size={18} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
         {status === 'connected' && (
-          <Pressable
+          <PressableBox
             onPress={() => requestAgentRefresh()}
             className="p-2 rounded-lg active:bg-white/5"
             accessibilityLabel="Refresh agents"
           >
             <RefreshCw size={18} color={colors.textSecondary} />
-          </Pressable>
+          </PressableBox>
         )}
       </View>
 
@@ -243,11 +250,16 @@ export default function CompanionScreen() {
         </View>
       )}
 
+      <AccountComputersCard connectedName={isConnectedOrActive ? (desktopName ?? null) : null} />
+
       {status === 'disconnected' &&
-        (hasSeenDispatchSetup ? (
-          <DisconnectedView onScanPress={() => setShowScanner(true)} />
+        (hasSeenDispatchSetup && !showSetupAgain ? (
+          <DisconnectedView
+            onScanPress={() => setShowScanner(true)}
+            onShowSetupSteps={() => setShowSetupAgain(true)}
+          />
         ) : (
-          <DesktopSetupChecklistView />
+          <DesktopSetupChecklistView onContinue={() => setShowSetupAgain(false)} />
         ))}
       {status === 'connecting' && <ConnectingView onCancel={disconnect} />}
       {status === 'error' && <ErrorView error={error} onRetry={handleRetry} />}

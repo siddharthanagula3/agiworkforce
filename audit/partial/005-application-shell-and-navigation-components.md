@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: From the shell, the user can see the active workspace and switch between personal and team workspaces.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Switching workspace exists only inside Settings > Workspace; the drawer/shell has no workspace switcher. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/src/features/settings/index.tsx:451-456`
 
 ## S5.09: Pinned-item section.
 
@@ -37,16 +34,12 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:27-35`, `apps/mobile/src/fea
 
 - Done when: Recent conversations can be shown grouped under their projects in navigation.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The drawer lists projects in their own block and recents separately; chats are not grouped under their projects (only the project screen lists its chats). | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | The projects drawer keeps conversationsByProjectId and, when a project row is open, renders its conversations under it via buildConversationList (projectsDrawer.ts:287, 333-350, 466-481) with a "Conversations" subtitle. That is the same shape the auditor scored partial on mobile ("only the project screen lists its chats"); the recent-chats list itself is not grouped by project, so partial with miss ui. |  |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 
 ## S5.12: Date-grouped recents.
 
@@ -63,83 +56,45 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:439-470`
 
 - Done when: Rows in mixed lists carry an icon (or equivalent marker) that tells the resource type apart (chat, project, task, file) visually and for assistive tech.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mixed search results show the type as a text chip, not an icon; normal lists carry no type marker. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | The auditor searched only icon identifiers. openWorkSurface composes cloud tasks and schedules into one quick pick (surfaces/index.ts:306-318) whose rows carry each item's ThemeIcon as a $(icon) label prefix plus a section separator per type (treeQuickPick.ts:83-108; cloudTasksTree.ts:34, schedulesTree.ts:37). Partial: only that pick mixes types, the row icons encode run state rather than type, the separator is the type marker, and no list mixes chats, projects or files. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:362-378`, `apps/mobile/src/features/chat/ChatsListScreen.tsx:337-337`
 
 ## S5.19: Unread-result indicator.
 
 - Done when: Items with new results the user has not seen are marked unread (visually and for assistive tech) and clear when opened.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Chats screen can filter to Unread, but rows carry no unread marker in the list or drawer. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/ChatsListScreen.tsx:174-178`
 
 ## S5.20: Item overflow menu.
 
 - Done when: Each row has an overflow (⋯) menu with its actions (share, rename, pin, archive, move, delete).
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The cited row has no overflow control: actions open only on long-press (DrawerContent.tsx:496-504, hint "Long press to pin or delete"; ChatsListScreen.tsx:331-333 likewise) and the sheet offers rename, pin, archive (cloud only) and delete (useConversationActions.ts:115-133), with no share or move. partial, miss ui; remaining: add a visible more-options control and share/move actions. |  |
-| cli | partial | The /history picker only resumes; rename, fork and export are separate commands on the current session and deletion is agi history delete. | ui |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:494-504`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`, `apps/cli/src/tui/widgets/session_picker.rs:10-13`, `apps/cli/src/tui/tui_app.rs:3574-3579`
 
 ## S5.21: Inline rename field.
 
 - Done when: A row can be renamed in place (inline field, Enter to save, Escape to cancel) and the new title persists.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The cited lines are RenameConversationModal: a "Rename chat" modal with a TextInput, opened from the long-press action sheet (useConversationActions.ts:117-124). Nothing edits the title in the row, so the criterion's in-place field (Enter to save, Escape to cancel) is not what ships. partial, miss ui; remaining: rename is a modal, not an inline field on the row. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx:170-180`, `apps/mobile/src/features/conversation-actions/useConversationActions.ts:115-125`
-
-## S5.25: Back and forward navigation.
-
-- Done when: Back and forward navigation move through the user's in-app history.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Only drawer sub-pages have a Back button; switching tabs, chats and runs keeps no back/forward history. | ui |
-
-Code: `apps/extension/src/side_panel.ts:6639-6640`, `apps/extension/src/side_panel.ts:6686-6686`
-
-## S5.26: Global command palette.
-
-- Done when: A global command palette (keyboard-invoked) searches and runs app commands and destinations.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only a composer slash palette (/image, /voice, /compare, /export); no global palette for destinations or settings. | ui |
-
-Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`
 
 ## S5.28: Notification center.
 
@@ -153,18 +108,6 @@ Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S5.30: Help menu.
-
-- Done when: A help menu gathers help centre, support contact, feedback and shortcuts in one place.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Help & About (about.tsx) has a Support section with Contact Support (mailto) and Send Feedback only; no help-centre or docs link exists in the file, so two of the criterion's four parts are missing (shortcuts do not apply on a phone). partial, miss ui; remaining: add a help-centre link to Help & About. |  |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:569-569`, `apps/mobile/app/(app)/about.tsx:255-265`
-
 ## S5.31: Upgrade entry.
 
 - Done when: A visible Upgrade entry in the shell takes an eligible user into the plan upgrade flow.
@@ -173,26 +116,13 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:569-569`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Upgrade entry exists, but paid checkout sits behind the beta_redemptions waitlist gate (see S81). | flag-off |
-| desktop | partial | Same flow as web: the upgrade ends at checkout behind the beta_redemptions waitlist gate. | flag-off |
-| mobile | partial | The paywall's Upgrade routes to the subscription screen, where FEATURES.billing=false disables plan changes. | flag-off |
+| web | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
+| desktop | partial | owner-held (lead ruling 2026-09-28): the billing waitlist stays on by owner decision; paid checkout, portal and store purchases need a redeemed access code. aaae88832e added AGI_BILLING_WAITLIST_OPEN, which stays unset at deploy until the owner opens paid upgrades | flag-off |
+| mobile | partial | Owner hold: billing waitlist stays on (rulings, w-auth sweep); Upgrade leads to the subscription screen until FEATURES.billing is on. | flag-off |
 | vscode | partial | Upgrade button opens web pricing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | chrome | partial | Quota upgrade button opens web pricing/billing, where checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 
-Code: `apps/web/shared/components/layout/AccountMenuItems.tsx:104-109`, `apps/web/shared/components/layout/WebAppShell.tsx:489-489`, `apps/web/shared/components/layout/WebAppShell.tsx:510-510`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:113-126`
-
-## S5.32: Connection-status indicator.
-
-- Done when: A status indicator shows whether the app is connected to its backend/runtime and offers reconnect when not.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Only a network-offline banner; no connected/reconnecting status for the cloud session. | ui |
-| cli | partial | The status bar shows the access mode (Local / Your key / Managed) but not whether the backend is reachable. | ui |
-
-Code: `apps/mobile/app/_layout.tsx:724-725`, `apps/cli/src/tui/tui_app.rs:1985-1995`
+Code: `apps/web/lib/server/billing-waitlist-access.ts:22-24`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:113-126`, `apps/mobile/lib/v1FeatureFlags.ts:1-10`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2355-2355`
 
 ## S5.33: Offline indicator.
 

@@ -27,6 +27,10 @@ pub enum ParityCommandResult {
         destination: PrivacyMode,
         provider: String,
     },
+    Feedback {
+        kind: crate::cloud::feedback::FeedbackKind,
+        message: String,
+    },
 }
 
 #[cfg(test)]
@@ -34,6 +38,14 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
     &[
         "review",
         "copy",
+        "links",
+        "table",
+        "background",
+        "bg",
+        "thread",
+        "threads",
+        "gather",
+        "continue-elsewhere",
         "new",
         "mcp",
         "output-style",
@@ -96,8 +108,13 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "stickers",
         "thinkback-play",
         "recap",
+        "save-skill",
+        "save-routine",
+        "schedule",
+        "routines",
         "security-review",
         "pr-comments",
+        "autofix-pr",
         "ultrareview",
         "think-back",
         "debug",
@@ -123,6 +140,44 @@ pub fn handle_shared_command(
     match command.as_str() {
         "/review" => ParityCommandResult::Prompt(review_prompt(arg)),
         "/copy" => ParityCommandResult::SystemMessage(render_copy()),
+        "/continue-elsewhere" => {
+            ParityCommandResult::SystemMessage(crate::cloud::continue_elsewhere(session, arg))
+        }
+        "/thread" => ParityCommandResult::SystemMessage(
+            match crate::background::spawn_thread(session, arg) {
+                Ok(message) | Err(message) => message,
+            },
+        ),
+        "/threads" => {
+            ParityCommandResult::SystemMessage(crate::background::threads_summary(session))
+        }
+        "/gather" => match crate::background::gather_prompt(session) {
+            Ok(prompt) => ParityCommandResult::Prompt(prompt),
+            Err(message) => ParityCommandResult::SystemMessage(message),
+        },
+        "/background" | "/bg" => ParityCommandResult::SystemMessage(
+            match crate::background::hand_off(session, arg) {
+                Ok(message) | Err(message) => message,
+            },
+        ),
+        "/table" => {
+            let reply = session
+                .messages
+                .iter()
+                .rev()
+                .find(|message| message.role == "assistant")
+                .map(|message| message.text_content());
+            ParityCommandResult::SystemMessage(table_command(reply.as_deref(), arg))
+        }
+        "/links" => {
+            let reply = session
+                .messages
+                .iter()
+                .rev()
+                .find(|message| message.role == "assistant")
+                .map(|message| message.text_content());
+            ParityCommandResult::SystemMessage(links_command(reply.as_deref(), arg))
+        }
         "/new" => {
             session.clear();
             ParityCommandResult::SystemMessage("Started new conversation.".to_string())
@@ -140,9 +195,25 @@ pub fn handle_shared_command(
         "/route" => ParityCommandResult::SystemMessage(session.routing_profile(arg)),
         "/replay" => ParityCommandResult::SystemMessage(render_replay()),
         "/insights" => ParityCommandResult::SystemMessage(render_insights(session)),
-        "/feedback" | "/bug" => ParityCommandResult::SystemMessage(
-            "Report issues at: https://github.com/agiworkforce/agiworkforce/issues".to_string(),
-        ),
+        "/feedback" | "/bug" if arg.trim().is_empty() => {
+            ParityCommandResult::SystemMessage(crate::cloud::feedback::USAGE.to_string())
+        }
+        "/feedback" | "/bug" => {
+            let request = arg.trim();
+            let feature = (command == "/feedback")
+                .then(|| request.strip_prefix("feature "))
+                .flatten();
+            ParityCommandResult::Feedback {
+                kind: if command == "/bug" {
+                    crate::cloud::feedback::FeedbackKind::Bug
+                } else if feature.is_some() {
+                    crate::cloud::feedback::FeedbackKind::Feature
+                } else {
+                    crate::cloud::feedback::FeedbackKind::Feedback
+                },
+                message: feature.unwrap_or(request).trim().to_string(),
+            }
+        }
         "/focus" => ParityCommandResult::SystemMessage(
             "Focus mode is not implemented. Use /statusline to choose which status fields render."
                 .to_string(),
@@ -199,7 +270,9 @@ pub fn handle_shared_command(
         }
         "/stats" => ParityCommandResult::SystemMessage(render_stats(session)),
         "/passes" => ParityCommandResult::SystemMessage(render_passes(session)),
-        "/sandbox" => ParityCommandResult::SystemMessage(render_sandbox(session)),
+        "/sandbox" => {
+            ParityCommandResult::SystemMessage(crate::sandbox::handle_sandbox_command(arg))
+        }
         "/agents" => ParityCommandResult::SystemMessage(render_agents(arg)),
         "/chrome" => ParityCommandResult::SystemMessage(render_chrome()),
         "/ide" => ParityCommandResult::SystemMessage(render_ide()),
@@ -218,11 +291,19 @@ pub fn handle_shared_command(
         "/mobile" | "/ios" | "/android" => {
             ParityCommandResult::SystemMessage(render_companion("Mobile"))
         }
-        "/connectors" => ParityCommandResult::SystemMessage(format!(
-            "{}\n\n{}",
-            connectors::availability(session.privacy_mode),
-            connectors::render_policy()
-        )),
+        "/connectors" => ParityCommandResult::SystemMessage(
+            match crate::tier_cache::capability_refusal(
+                crate::tier_cache::CONNECTORS_CAPABILITY,
+                "Connectors",
+            ) {
+                Some(refusal) => refusal,
+                None => format!(
+                    "{}\n\n{}",
+                    connectors::availability(session.privacy_mode),
+                    connectors::render_policy()
+                ),
+            },
+        ),
         "/install-github-app" => {
             ParityCommandResult::SystemMessage(render_install_app("GitHub"))
         }
@@ -244,12 +325,33 @@ pub fn handle_shared_command(
         ),
         "/recap" => ParityCommandResult::Prompt(recap_prompt(arg)),
         "/security-review" => ParityCommandResult::Prompt(security_review_prompt(arg)),
-        "/pr-comments" => ParityCommandResult::Prompt(pr_comments_prompt(arg)),
+        "/pr-comments" | "/autofix-pr" => {
+            let mode = if command == "/autofix-pr" {
+                crate::pr_feedback::FeedbackMode::Fix
+            } else {
+                crate::pr_feedback::FeedbackMode::Inspect
+            };
+            match crate::pr_feedback::feedback_prompt(arg, mode) {
+                Ok(prompt) => ParityCommandResult::Prompt(prompt),
+                Err(message) => ParityCommandResult::SystemMessage(message),
+            }
+        }
         "/ultrareview" => ParityCommandResult::Prompt(ultrareview_prompt(arg)),
         "/think-back" => ParityCommandResult::Prompt(think_back_prompt(arg)),
         "/debug" => ParityCommandResult::SystemMessage(handle_debug(session)),
         "/tui" => ParityCommandResult::SystemMessage(handle_tui(session, arg)),
         "/powerup" => ParityCommandResult::Prompt(powerup_prompt(arg)),
+        "/save-skill" => ParityCommandResult::Prompt(save_skill_prompt(arg)),
+        "/save-routine" => ParityCommandResult::Prompt(save_routine_prompt(arg)),
+        "/schedule" | "/routines" => {
+            if session.privacy_mode == PrivacyMode::Local {
+                ParityCommandResult::SystemMessage(
+                    crate::schedules::ScheduleError::LocalPrivacy.to_string(),
+                )
+            } else {
+                ParityCommandResult::Prompt(schedule_prompt(arg))
+            }
+        }
         _ => ParityCommandResult::NotHandled,
     }
 }
@@ -257,7 +359,7 @@ pub fn handle_shared_command(
 pub fn handle_add_dir(session: &mut AgentSession, arg: &str) -> String {
     let dirs = split_shell_words(arg);
     if dirs.is_empty() {
-        let roots = crate::path_security::registered_additional_workspace_roots();
+        let roots = &session.additional_context_dirs;
         if roots.is_empty() {
             return "Usage: /add-dir <directory> [more directories...]\nNo directories are added yet.".to_string();
         }
@@ -353,7 +455,7 @@ pub fn render_context_files(session: &AgentSession) -> String {
         }
     }
 
-    let roots = crate::path_security::registered_additional_workspace_roots();
+    let roots = &session.additional_context_dirs;
     if roots.is_empty() {
         lines.push("  additional directories: none".to_string());
     } else {
@@ -385,6 +487,9 @@ pub fn render_privacy_settings(session: &AgentSession) -> String {
         "  Attached files: never included in BYOK handoff drafts automatically".to_string(),
         "  Telemetry: CLI-local unless managed cloud features are enabled".to_string(),
         "  Sync: opt-in with agi sync".to_string(),
+        "  History: a Managed Cloud chat stays in your account history until you delete it; Local and BYOK sessions stay on this computer".to_string(),
+        "  Model training: AGI Workforce does not train its own models on your prompts, responses or files, so there is no training opt-in; on the Free plan the providers' free models may train on what you send unless you turn on Only use models that do not train on your chats in Settings > Privacy".to_string(),
+        "  Retention: a deleted chat stays in Recently deleted for 30 days, then is deleted for good; a temporary chat and its attachments are removed after 30 days".to_string(),
     ]
     .join("\n")
 }
@@ -647,22 +752,8 @@ pub fn render_passes(session: &AgentSession) -> String {
         session.plan_approved,
         session.auto_approve_safe,
         session.skip_permissions,
-        crate::path_security::registered_additional_workspace_roots().len(),
+        session.additional_context_dirs.len(),
     )
-}
-
-pub fn render_sandbox(session: &AgentSession) -> String {
-    let roots = crate::path_security::registered_additional_workspace_roots();
-    let mut lines = vec![
-        "Sandbox".to_string(),
-        format!("  permission mode: {:?}", session.permission_mode),
-        format!("  skip permissions: {}", session.skip_permissions),
-        format!("  additional roots: {}", roots.len()),
-    ];
-    for root in roots {
-        lines.push(format!("    {}", root.display()));
-    }
-    lines.join("\n")
 }
 
 pub fn handle_tag(session: &mut AgentSession, arg: &str) -> String {
@@ -757,6 +848,232 @@ pub fn review_prompt(arg: &str) -> String {
     };
     format!(
         "Please review {review_scope}. Inspect the actual source files, manifests, config, routes, prompts, tools, and wiring. Look for LLM-generated failure modes: hallucinated APIs/imports/packages, fake or partial implementations, stubs/TODOs/mock leakage, dead UI handlers, architecture drift, requirement drift, unsafe assumptions, swallowed errors, state races, schema/date/pagination bugs, auth/BOLA/IDOR/tenant isolation issues, prompt injection/tool poisoning/RAG poisoning, excessive agency, secret/PII leakage, dependency confusion, false-green tests, config drift, and platform-specific web/mobile/desktop/CLI/extension risks. Return high-confidence findings with file/line evidence and proposed fixes."
+    )
+}
+
+pub fn save_skill_prompt(arg: &str) -> String {
+    let name = match arg.trim() {
+        "" => "a short name that says what it does".to_string(),
+        name => format!("the name \"{name}\""),
+    };
+    format!(
+        "Turn the task we just finished in this conversation into a reusable skill with {name}. Write it to .agiworkforce/skills/<name>/SKILL.md: YAML frontmatter with name and a one-line description of when to use it, then the steps, commands and checks that worked here, written for the next task like this one rather than for this run. Leave out secrets, tokens and personal data. Show me the file when it is written."
+    )
+}
+
+pub fn save_routine_prompt(arg: &str) -> String {
+    let schedule = match arg.trim() {
+        "" => "Ask me how often it should run before you create it.".to_string(),
+        schedule => format!("Run it on this schedule: {schedule}."),
+    };
+    format!(
+        "Turn the task we just finished in this conversation into a routine that runs on its own. Write a prompt that repeats the task without relying on this conversation, then create the routine with cron_create. {schedule} Tell me the schedule and what each run will do."
+    )
+}
+
+const TABLE_USAGE: &str = "Use /table <column> [desc] to sort, where the column is its name or number. With several tables, put the table number first: /table 2 <column> [desc].";
+
+pub fn table_command(reply: Option<&str>, arg: &str) -> String {
+    let Some(reply) = reply else {
+        return "No assistant response to take a table from.".to_string();
+    };
+    let tables = crate::markdown::tables_in(reply);
+    if tables.is_empty() {
+        return "The last response has no table.".to_string();
+    }
+    let mut words: Vec<&str> = arg.split_whitespace().collect();
+    if words.is_empty() {
+        let mut out = String::from("Tables in the last response:\n");
+        for (index, table) in tables.iter().enumerate() {
+            out.push_str(&format!(
+                "  {}. {} rows: {}\n",
+                index + 1,
+                table.rows.len(),
+                crate::terminal_text::sanitize_terminal_text(&table.header.join(", "))
+            ));
+        }
+        out.push_str(TABLE_USAGE);
+        return out;
+    }
+    let mut table_index = 0;
+    if tables.len() > 1 && words.len() > 1 {
+        if let Ok(number) = words[0].parse::<usize>() {
+            if number == 0 || number > tables.len() {
+                return format!("There are {} tables. {TABLE_USAGE}", tables.len());
+            }
+            table_index = number - 1;
+            words.remove(0);
+        }
+    }
+    let descending = match words.last().map(|word| word.to_ascii_lowercase()) {
+        Some(word) if word == "desc" => {
+            words.pop();
+            true
+        }
+        Some(word) if word == "asc" => {
+            words.pop();
+            false
+        }
+        _ => false,
+    };
+    let table = &tables[table_index];
+    let wanted = words.join(" ");
+    let column = wanted
+        .parse::<usize>()
+        .ok()
+        .and_then(|number| number.checked_sub(1))
+        .filter(|index| *index < table.header.len())
+        .or_else(|| {
+            table
+                .header
+                .iter()
+                .position(|name| name.eq_ignore_ascii_case(&wanted))
+        });
+    let Some(column) = column else {
+        return format!(
+            "No column named {}. The columns are {}. {TABLE_USAGE}",
+            crate::terminal_text::sanitize_terminal_text(&wanted),
+            crate::terminal_text::sanitize_terminal_text(&table.header.join(", "))
+        );
+    };
+    let mut rows = table.rows.clone();
+    rows.sort_by(|a, b| {
+        let ordering = compare_cells(&a[column], &b[column]);
+        if descending {
+            ordering.reverse()
+        } else {
+            ordering
+        }
+    });
+    let mut out = format!(
+        "Sorted by {} ({}):\n",
+        crate::terminal_text::sanitize_terminal_text(&table.header[column]),
+        if descending {
+            "descending"
+        } else {
+            "ascending"
+        }
+    );
+    out.push_str(&aligned_table(&table.header, &rows));
+    out
+}
+
+fn compare_cells(a: &str, b: &str) -> std::cmp::Ordering {
+    match (cell_number(a), cell_number(b)) {
+        (Some(x), Some(y)) => x.total_cmp(&y),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.to_lowercase().cmp(&b.to_lowercase()),
+    }
+}
+
+fn cell_number(cell: &str) -> Option<f64> {
+    let cleaned: String = cell
+        .trim()
+        .chars()
+        .filter(|c| !matches!(c, ',' | '$' | '%' | '*' | '_' | ' '))
+        .collect();
+    cleaned
+        .parse::<f64>()
+        .ok()
+        .filter(|value| value.is_finite())
+}
+
+fn aligned_table(header: &[String], rows: &[Vec<String>]) -> String {
+    let clean = |cell: &str| crate::terminal_text::sanitize_terminal_text(cell).replace('\n', " ");
+    let header: Vec<String> = header.iter().map(|cell| clean(cell)).collect();
+    let rows: Vec<Vec<String>> = rows
+        .iter()
+        .map(|row| row.iter().map(|cell| clean(cell)).collect())
+        .collect();
+    let mut widths: Vec<usize> = header.iter().map(|cell| cell.chars().count()).collect();
+    for row in &rows {
+        for (index, cell) in row.iter().enumerate() {
+            widths[index] = widths[index].max(cell.chars().count());
+        }
+    }
+    let line = |cells: &[String]| {
+        let padded: Vec<String> = cells
+            .iter()
+            .enumerate()
+            .map(|(index, cell)| {
+                let pad = widths[index].saturating_sub(cell.chars().count());
+                format!("{cell}{}", " ".repeat(pad))
+            })
+            .collect();
+        format!("  {}", padded.join(" | ").trim_end())
+    };
+    let mut out = line(&header);
+    out.push('\n');
+    let rule: Vec<String> = widths.iter().map(|width| "-".repeat(*width)).collect();
+    out.push_str(&format!("  {}", rule.join("-+-")));
+    for row in &rows {
+        out.push('\n');
+        out.push_str(&line(row));
+    }
+    out
+}
+
+pub fn links_command(reply: Option<&str>, arg: &str) -> String {
+    let Some(reply) = reply else {
+        return "No assistant response to take links from.".to_string();
+    };
+    let links = crate::markdown::web_links(reply);
+    if links.is_empty() {
+        return "The last response has no web links.".to_string();
+    }
+    let arg = arg.trim();
+    if arg.is_empty() {
+        let mut out = String::from("Links in the last response:\n");
+        for (index, (label, url)) in links.iter().enumerate() {
+            let url = crate::terminal_text::sanitize_terminal_text(url);
+            match label {
+                Some(label) => out.push_str(&format!(
+                    "  {}. {} {url}\n",
+                    index + 1,
+                    crate::terminal_text::sanitize_terminal_text(label)
+                )),
+                None => out.push_str(&format!("  {}. {url}\n", index + 1)),
+            }
+        }
+        out.push_str("Open one in your browser with /links <number>.");
+        return out;
+    }
+    let Some((_, url)) = arg
+        .parse::<usize>()
+        .ok()
+        .and_then(|number| number.checked_sub(1))
+        .and_then(|index| links.get(index))
+    else {
+        return format!(
+            "Use /links to list them, or /links <number> between 1 and {} to open one.",
+            links.len()
+        );
+    };
+    let shown = crate::terminal_text::sanitize_terminal_text(url);
+    if crate::oauth::open_external_url(url, crate::oauth::UserActionContext::user_initiated()) {
+        format!("Opened {shown} in your browser.")
+    } else {
+        format!("Could not open a browser here. The link is {shown}")
+    }
+}
+
+pub fn schedule_prompt(arg: &str) -> String {
+    let request = match arg.trim() {
+        "" => "Ask me what I want to set up or change.".to_string(),
+        request => format!("Here is what I want: {request}"),
+    };
+    format!(
+        "Help me manage my routines: schedules that run an agent task in AGI cloud on a clock, when an event arrives, or both. {request} \
+Create a clock schedule with cron_create and see existing ones with cron_list. For everything else run `agi schedules` in the shell: \
+`agi schedules edit|pause|resume|run|runs|approve|deny <schedule>`, and to start a schedule when an event arrives, \
+`agi schedules triggers add <schedule> --source github|slack|gmail|google_calendar|connector [--event TYPE] [--account ACCOUNT] [--when \"FIELD OPERATOR VALUE\"] [--debounce SECONDS]`, \
+with `agi schedules triggers list|pause|resume|watch` to manage them. \
+Before creating anything, ask for whatever is missing: how often or on which event, which repository, workspace or mailbox, and what each run should do. \
+Write the run's prompt so it works without this conversation. Confirm with me before deleting a schedule. \
+Never remove a trigger yourself: ask me to run `agi schedules triggers remove <trigger>` in my own terminal. \
+If adding a trigger says its signing secret or verification code was withheld, tell me to run the same add command in my own terminal to see them; never ask for them or repeat them. \
+If I ask why a run did something, read `agi schedules runs <schedule>` before answering."
     )
 }
 
@@ -903,8 +1220,7 @@ pub fn render_mcp(session: &AgentSession) -> String {
         .unwrap_or_default()
         .iter()
         .filter_map(|(name, config)| {
-            crate::mcp::policy_refusal(config)
-                .map(|reason| format!("  {name} is not started: {reason}."))
+            crate::mcp::policy_refusal(name, config).map(|reason| format!("  {reason}"))
         })
         .collect();
     blocked.sort();
@@ -1471,7 +1787,7 @@ pub fn render_doctor(session: &AgentSession) -> String {
     ));
     lines.push(format!(
         "  additional roots: {}",
-        crate::path_security::registered_additional_workspace_roots().len()
+        session.additional_context_dirs.len()
     ));
     lines.push(format!(
         "  attached files: {}",
@@ -1738,6 +2054,14 @@ pub mod connectors {
 
     #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
     #[serde(rename_all = "camelCase")]
+    pub struct WorkspaceToolRule {
+        pub connector_id: String,
+        pub tool_name: String,
+        pub level: String,
+    }
+
+    #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+    #[serde(rename_all = "camelCase")]
     pub struct ConnectorAccessPolicy {
         #[serde(default)]
         pub allowed_connectors: Vec<String>,
@@ -1751,6 +2075,12 @@ pub mod connectors {
         pub blocked_plugins: Vec<String>,
         #[serde(default)]
         pub allowed_mcp_hosts: Vec<String>,
+        #[serde(default)]
+        pub allowed_web_domains: Vec<String>,
+        #[serde(default)]
+        pub blocked_web_domains: Vec<String>,
+        #[serde(default)]
+        pub tool_rules: Vec<WorkspaceToolRule>,
     }
 
     fn default_true() -> bool {
@@ -1767,6 +2097,9 @@ pub mod connectors {
                 allowed_plugins: Vec::new(),
                 blocked_plugins: Vec::new(),
                 allowed_mcp_hosts: Vec::new(),
+                allowed_web_domains: Vec::new(),
+                blocked_web_domains: Vec::new(),
+                tool_rules: Vec::new(),
             }
         }
     }
@@ -1983,6 +2316,186 @@ pub mod connectors {
         Ok(policy)
     }
 
+    /// What a tool that runs on this machine in any privacy mode, such as
+    /// web_search and web_fetch, must apply. Their site rules bind Local and
+    /// BYOK turns too.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum LocalToolPolicy {
+        /// Signed out, a personal account, or a workspace that set nothing.
+        Unrestricted,
+        Rules(ConnectorAccessPolicy),
+        /// A workspace member whose rules could not be read. Refused, as the
+        /// web connector gate refuses, rather than read as permission.
+        Unreadable(String),
+    }
+
+    const UNREADABLE_RETRY: std::time::Duration = std::time::Duration::from_secs(60);
+
+    /// One read per signed-in account: the stored sign-in's subject keys it,
+    /// so a /login as someone else or a /logout never reuses another
+    /// account's rules.
+    struct LocalToolRead {
+        owner: Option<String>,
+        policy: LocalToolPolicy,
+        read_at: std::time::Instant,
+    }
+
+    impl LocalToolRead {
+        /// The cached answer, when it was read for this same account and is
+        /// not an unreadable result due for another try.
+        fn reusable_for(&self, owner: &Option<String>) -> Option<LocalToolPolicy> {
+            let fresh = !matches!(self.policy, LocalToolPolicy::Unreadable(_))
+                || self.read_at.elapsed() < UNREADABLE_RETRY;
+            (&self.owner == owner && fresh).then(|| self.policy.clone())
+        }
+    }
+
+    #[cfg(test)]
+    pub fn cached_read_reusable(
+        owner: Option<&str>,
+        policy: LocalToolPolicy,
+        age: std::time::Duration,
+        asking: Option<&str>,
+    ) -> bool {
+        LocalToolRead {
+            owner: owner.map(str::to_string),
+            policy,
+            read_at: std::time::Instant::now() - age,
+        }
+        .reusable_for(&asking.map(str::to_string))
+        .is_some()
+    }
+
+    fn local_tool_cache() -> &'static Mutex<Option<LocalToolRead>> {
+        static CACHE: OnceLock<Mutex<Option<LocalToolRead>>> = OnceLock::new();
+        CACHE.get_or_init(|| Mutex::new(None))
+    }
+
+    fn signed_in_owner() -> Option<String> {
+        crate::tier_cache::load_jwt()
+            .filter(|jwt| !jwt.trim().is_empty())
+            .map(|jwt| crate::auth::jwt_subject(&jwt).unwrap_or_else(|| "unknown".to_string()))
+    }
+
+    /// Called on /login and /logout so the next tool call reads afresh.
+    pub fn forget_local_tool_policy() {
+        if let Ok(mut slot) = local_tool_cache().lock() {
+            *slot = None;
+        }
+    }
+
+    /// Decides the policy from one read. A 403 or 404 means no workspace
+    /// governs this account; any other failure refuses only when this account
+    /// is known to belong to a workspace.
+    pub fn local_tool_policy_from(
+        read: Result<Option<ConnectorAccessPolicy>, CloudError>,
+        workspace_member: bool,
+    ) -> LocalToolPolicy {
+        match read {
+            Ok(Some(policy)) => LocalToolPolicy::Rules(policy),
+            Ok(None) | Err(CloudError::SignedOut) => LocalToolPolicy::Unrestricted,
+            Err(CloudError::Api {
+                status: 403 | 404, ..
+            }) => LocalToolPolicy::Unrestricted,
+            Err(_) if !workspace_member => LocalToolPolicy::Unrestricted,
+            Err(CloudError::SessionExpired) => LocalToolPolicy::Unreadable(
+                "Your AGI Workforce session expired, so your workspace's website rules could \
+                 not be checked and the assistant will not read websites. Sign in again with \
+                 `agi login`."
+                    .to_string(),
+            ),
+            Err(_) => LocalToolPolicy::Unreadable(
+                "Your workspace's website rules could not be read, so the assistant will not \
+                 read websites until they can be. Check your connection and try again."
+                    .to_string(),
+            ),
+        }
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct WorkspaceGovernance {
+        #[serde(default)]
+        governed: bool,
+    }
+
+    /// Whether the server places this account in a workspace, asked when the
+    /// rules themselves could not be read. The cached copy on disk is user
+    /// writable, so it is not trusted for this; when the server cannot answer
+    /// either, a signed-in account is treated as a member and refused.
+    async fn workspace_membership(client: &CloudClient) -> bool {
+        client
+            .get::<WorkspaceGovernance>("/api/settings/organization/policy/effective", &[])
+            .await
+            .map(|governance| governance.governed)
+            .unwrap_or(true)
+    }
+
+    /// Read once per process with the stored sign-in; the read sends nothing
+    /// of the session. An unreadable result is retried after a minute.
+    pub async fn policy_for_local_tools() -> LocalToolPolicy {
+        let owner = signed_in_owner();
+        if let Some(policy) = local_tool_cache()
+            .lock()
+            .ok()
+            .and_then(|slot| slot.as_ref().and_then(|read| read.reusable_for(&owner)))
+        {
+            return policy;
+        }
+        let (read, workspace_member) = match CloudClient::connect_managed() {
+            Ok(client) => {
+                let read = client
+                    .get::<PolicyResponse>(CONNECTOR_POLICY_PATH, &[])
+                    .await
+                    .map(|response| response.configured.then_some(response.policy).flatten());
+                let member = match &read {
+                    Ok(_)
+                    | Err(CloudError::Api {
+                        status: 403 | 404, ..
+                    }) => false,
+                    Err(_) => workspace_membership(&client).await,
+                };
+                (read, member)
+            }
+            Err(error) => (Err(error), false),
+        };
+        let policy = local_tool_policy_from(read, workspace_member);
+        if let Ok(mut slot) = local_tool_cache().lock() {
+            *slot = Some(LocalToolRead {
+                owner,
+                policy: policy.clone(),
+                read_at: std::time::Instant::now(),
+            });
+        }
+        policy
+    }
+
+    pub fn prefetch_workspace_policy(privacy: PrivacyMode) {
+        if privacy != PrivacyMode::Managed {
+            return;
+        }
+        tokio::spawn(async move {
+            let _ = fetch_workspace_policy(privacy).await;
+        });
+    }
+
+    fn describe_tool_rule(rule: &WorkspaceToolRule) -> String {
+        let tools = match rule.tool_name.as_str() {
+            "*read_only" => "read-only tools".to_string(),
+            "*write" => "write tools".to_string(),
+            name => name.to_string(),
+        };
+        let level = match rule.level.as_str() {
+            "allow" => "always allowed",
+            "ask" => "need approval",
+            "deny" => "blocked",
+            other => other,
+        };
+        format!(
+            "{} {tools}: {level}",
+            rule.connector_id.replace(['-', '_'], " ")
+        )
+    }
+
     pub fn availability(privacy: PrivacyMode) -> String {
         match privacy {
             PrivacyMode::Managed => "Your account's connectors\n  Connectors you connected at https://agiworkforce.com/connectors, such as Google Drive, Slack and Notion, are offered to this session's turns. Each call asks first unless you allowed that tool there.".to_string(),
@@ -2019,7 +2532,19 @@ pub mod connectors {
             list(&policy.allowed_mcp_hosts),
             list(&policy.allowed_plugins),
             list(&policy.blocked_plugins),
-        )
+        ) + &if policy.tool_rules.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n  tool rules: {}",
+                policy
+                    .tool_rules
+                    .iter()
+                    .map(describe_tool_rule)
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )
+        }
     }
 }
 
@@ -2048,6 +2573,34 @@ mod tests {
             },
             None,
         )
+    }
+
+    #[test]
+    fn workspace_mcp_slash_lists_refusals_when_no_server_connected() {
+        crate::cloud::workspace_policy::with_test_policy(
+            serde_json::json!({"code": {"allowMcpServers": false}}),
+            || {
+                crate::mcp::with_test_configs(
+                    std::collections::HashMap::from([(
+                        "blocked-parity-fixture".to_string(),
+                        crate::mcp::McpServerConfig::stdio(
+                            "/nonexistent/agi-mcp-policy-fixture",
+                            Vec::new(),
+                            std::collections::HashMap::new(),
+                        ),
+                    )]),
+                    || {
+                        let text = render_mcp(&test_session());
+                        assert!(text.contains("Blocked by your workspace"));
+                        assert!(
+                            text.contains("MCP server 'blocked-parity-fixture' was not started")
+                        );
+                        assert!(text.contains("administrator has turned MCP servers off"));
+                        assert!(!text.contains("needs authentication"));
+                    },
+                )
+            },
+        );
     }
 
     fn prepare_local_handoff_draft(session: &mut AgentSession, destination: PrivacyMode) {
@@ -2631,6 +3184,55 @@ mod tests {
             other => panic!("expected prompt, got {other:?}"),
         }
     }
+
+    #[test]
+    fn schedule_walks_through_routines_and_event_triggers() {
+        for command in ["/schedule", "/routines"] {
+            let mut session = test_session();
+            session.set_privacy_mode(PrivacyMode::Managed);
+            let ParityCommandResult::Prompt(prompt) = handle_shared_command(
+                command,
+                "review new pull requests in acme/webapp",
+                &mut session,
+            ) else {
+                panic!("{command} must hand the model a prompt");
+            };
+            assert!(
+                prompt.contains("review new pull requests in acme/webapp"),
+                "{prompt}"
+            );
+            assert!(prompt.contains("cron_create"), "{prompt}");
+            assert!(prompt.contains("agi schedules triggers add"), "{prompt}");
+            assert!(
+                !prompt.contains("show me the endpoint, signing secret"),
+                "{prompt}"
+            );
+            assert!(
+                prompt.contains("never ask for them or repeat them"),
+                "{prompt}"
+            );
+            assert!(
+                prompt.contains("Never remove a trigger yourself"),
+                "{prompt}"
+            );
+        }
+    }
+
+    #[test]
+    fn schedule_without_a_request_asks_what_to_set_up() {
+        assert!(schedule_prompt("  ").contains("Ask me what I want to set up"));
+    }
+
+    #[test]
+    fn schedule_in_local_mode_explains_the_prompt_would_leave_the_device() {
+        let mut session = test_session();
+        session.set_privacy_mode(PrivacyMode::Local);
+        let result = handle_shared_command("/schedule", "", &mut session);
+        let ParityCommandResult::SystemMessage(message) = result else {
+            panic!("Local mode must not hand a scheduling prompt to the model: {result:?}");
+        };
+        assert!(message.contains("Local privacy mode"), "{message}");
+    }
 }
 
 #[cfg(test)]
@@ -2741,6 +3343,9 @@ mod connector_contract_tests {
                 "mcp.example.com".to_string(),
                 "*.internal.example".to_string(),
             ],
+            allowed_web_domains: vec![],
+            blocked_web_domains: vec![],
+            tool_rules: vec![],
         }
     }
 

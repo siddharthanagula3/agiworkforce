@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { DeviceApproveResponse } from '@agiworkforce/cloud-contracts';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { isDeviceCodeSignInEnabled } from '@/lib/server/device-signin-policy';
@@ -16,7 +17,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
-import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
+import { mustAcceptTerms } from '@/lib/server/terms';
 import { CliUserCodeSchema } from '@/lib/validations/device';
 
 const DeviceCodeApproveSchema = z.object({
@@ -116,7 +117,7 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     });
 
     return NextResponse.json(
-      { success: true, approved: false, status: 'denied' },
+      { success: true, approved: false, status: 'denied' } satisfies DeviceApproveResponse,
       { headers: { 'Cache-Control': 'no-store' } },
     );
   }
@@ -142,7 +143,7 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     );
   }
 
-  if (!(await hasAcceptedCurrentTerms(authUser.userId))) {
+  if (await mustAcceptTerms(authUser.userId, 'device-approve')) {
     const returnParams = new URLSearchParams({ user_code: userCode });
     if (parsed.data.surface === 'desktop') returnParams.set('surface', 'desktop');
     const returnTo = `/auth/device?${returnParams.toString()}`;
@@ -188,7 +189,7 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
   });
 
   return NextResponse.json(
-    { success: true, approved: true, status: 'approved' },
+    { success: true, approved: true, status: 'approved' } satisfies DeviceApproveResponse,
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

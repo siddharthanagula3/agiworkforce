@@ -59,6 +59,7 @@ export interface UseVoiceSessionOptions {
   turnActive: boolean;
   conversationId: string | null;
   onSend: (text: string) => boolean;
+  onStartWorkTask?: (goal: string) => boolean;
   onEnsureConversation: () => Promise<string | null>;
   onTranscript: (conversationId: string, turn: LiveTranscriptTurn) => void;
 }
@@ -94,6 +95,7 @@ export interface VoiceSessionController {
 
 interface TranscriptSink {
   conversationId: string | null;
+  onStartWorkTask?: ((goal: string) => boolean) | undefined;
   onEnsureConversation: () => Promise<string | null>;
   onTranscript: (conversationId: string, turn: LiveTranscriptTurn) => void;
 }
@@ -425,6 +427,12 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           onToolActivity: store.setToolActivity,
           onToolApprovals: store.setToolApprovals,
           onToolResult: store.addToolOutcome,
+          ...(controller.sink?.onStartWorkTask
+            ? {
+                onStartWorkTask: (goal: string) =>
+                  controller.sink?.onStartWorkTask?.(goal) ?? false,
+              }
+            : {}),
           onTranscript: deliverTranscript,
           onUsage: () => undefined,
           onClosed: (closed) => {
@@ -505,6 +513,7 @@ export function useVoiceSession({
   turnActive,
   conversationId,
   onSend,
+  onStartWorkTask,
   onEnsureConversation,
   onTranscript,
 }: UseVoiceSessionOptions): VoiceSessionController {
@@ -530,7 +539,7 @@ export function useVoiceSession({
   const { status, muted } = state;
   const active = isVoiceSessionActive(status);
 
-  controller.sink = { conversationId, onEnsureConversation, onTranscript };
+  controller.sink = { conversationId, onStartWorkTask, onEnsureConversation, onTranscript };
 
   useEffect(() => {
     resumeVoiceSessionAfterNavigation();

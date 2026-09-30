@@ -84,25 +84,11 @@ impl McpOAuthStore {
         serde_json::from_str(&content).context("parse mcp-oauth.json")
     }
 
-    /// Persist the store, creating parent dir as needed and tightening
-    /// permissions to `0o600` on Unix.
+    /// Persist the store owner-only, created with that mode and renamed into place.
     pub fn save(&self) -> Result<()> {
         let path = Self::store_path()?;
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).context("create ~/.agiworkforce dir")?;
-        }
         let json = serde_json::to_string_pretty(self).context("serialize mcp-oauth.json")?;
-        fs::write(&path, json).context("write mcp-oauth.json")?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&path)
-                .context("stat mcp-oauth.json for chmod")?
-                .permissions();
-            perms.set_mode(0o600);
-            fs::set_permissions(&path, perms).context("chmod 0o600 mcp-oauth.json")?;
-        }
-        Ok(())
+        crate::secure_store::write_owner_only(&path, json.as_bytes())
     }
 
     pub fn get(&self, server_url: &str) -> Option<&McpOAuthToken> {
@@ -131,13 +117,10 @@ pub type McpServerToken = agiworkforce_mcp::OAuthToken;
 /// Keyring-backed OAuth token store keyed by a SHA-256 digest of the canonical
 /// server URL, so tenant/path details never appear in credential metadata.
 ///
-/// Strategy:
-/// 1. Primary: OS keyring (`keyring` crate), survives reboots, OS-encrypted.
-/// 2. Explicit headless opt-out: file at
-///    `~/.agiworkforce/secrets/<server-hash>.token` with 0o600 permissions.
-///
-/// On Linux without DBus, callers receive an actionable keyring error unless
-/// `AGIWORKFORCE_NO_KEYRING=1` was explicitly configured.
+/// Strategy, following `crate::secure_store`:
+/// 1. macOS and Windows: the OS keychain (`keyring` crate).
+/// 2. Linux, or anywhere `AGIWORKFORCE_NO_KEYRING` is set: a file at
+///    `~/.agiworkforce/secrets/<server-hash>.token`, created 0o600.
 #[allow(dead_code)]
 pub struct McpServerOAuthStore {
     base_dir: PathBuf,
@@ -145,15 +128,6 @@ pub struct McpServerOAuthStore {
     /// (no OS keychain interaction). Tests + headless environments use this
     /// path to avoid auth prompts.
     use_keyring: bool,
-}
-
-/// Honor `AGIWORKFORCE_NO_KEYRING=1` (or any non-empty value), opt-out for
-/// environments where the OS keyring is unavailable or undesirable (CI,
-/// sandboxes, devs who don't want the Mac to prompt them constantly).
-fn env_disables_keyring() -> bool {
-    std::env::var("AGIWORKFORCE_NO_KEYRING")
-        .map(|v| !v.is_empty() && v != "0")
-        .unwrap_or(false)
 }
 
 #[allow(dead_code)]
@@ -169,7 +143,7 @@ impl McpServerOAuthStore {
         }
         Ok(Self {
             base_dir: base,
-            use_keyring: !env_disables_keyring(),
+            use_keyring: crate::secure_store::uses_keychain(),
         })
     }
 
@@ -267,13 +241,7 @@ impl McpServerOAuthStore {
             }
             return Ok(());
         }
-        fs::write(&path, json).with_context(|| format!("write {}", path.display()))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
-        }
-        Ok(())
+        crate::secure_store::write_owner_only(&path, json.as_bytes())
     }
 
     fn read_entry(&self, credential_id: &str) -> Result<Option<String>> {

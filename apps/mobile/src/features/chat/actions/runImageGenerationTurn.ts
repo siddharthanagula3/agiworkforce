@@ -1,8 +1,15 @@
 import type { ManagedMediaImageOperation } from '@agiworkforce/cloud-contracts';
 import type { MessageAttachment } from '@/types/chat';
 import { ApiPaywallError } from '@/services/api';
+import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
 import { readReferenceImageBase64 } from '@/src/features/image/services/imageReference';
 import type { MobileImageReferenceAttachment } from './resolveMobileImageGenerationRequest';
+import {
+  MediaGenerationAdmissionError,
+  MEDIA_USAGE_LIMIT_MESSAGE,
+  isUsageLimitRefusal,
+  mediaGenerationFailureMessage,
+} from './mediaGenerationError';
 import {
   generateImage,
   getDurableGeneratedImagePath,
@@ -11,10 +18,13 @@ import {
   type ImageGenRequest,
   type ImageGenResponse,
 } from '@/src/features/image/services/imagegen';
+
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
+
+const CLOUD_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface ImageTurnCompletion {
   imageUrl: string;
@@ -22,6 +32,7 @@ interface ImageTurnCompletion {
   persistenceWarning?: string;
   revisedPrompt?: string;
   model?: string;
+  aspectRatio?: string;
 }
 
 export interface RunImageGenerationTurnInput {
@@ -30,9 +41,14 @@ export interface RunImageGenerationTurnInput {
   prompt: string;
   model: string;
   aspectRatio?: ImageGenRequest['aspect_ratio'];
+  transparentBackground?: boolean;
   operation?: ManagedMediaImageOperation;
   sourceImage?: MobileImageReferenceAttachment;
+  sourceImageBase64?: string;
+  maskImageBase64?: string;
+  referenceImages?: MobileImageReferenceAttachment[];
   ownerId: string;
+  onStarted?: () => void;
   begin: (
     conversationId: string,
     displayText: string,
@@ -52,7 +68,10 @@ export interface RunImageGenerationTurnInput {
 }
 
 export interface ImageGenerationTurnDependencies {
-  generate: (request: ImageGenRequest) => Promise<ImageGenResponse>;
+  generate: (
+    request: ImageGenRequest,
+    options?: { operationId?: string },
+  ) => Promise<ImageGenResponse>;
   getUri: (image: GeneratedImage | undefined) => string | null;
   getDurablePath?: (image: GeneratedImage | undefined) => string | null;
   readReferenceImage?: (uri: string) => Promise<string>;
@@ -103,14 +122,14 @@ export async function runImageGenerationTurn(
 ): Promise<ImageGenerationTurnOutcome> {
   const accountEpoch = captureCloudAccountEpoch();
   if (!accountEpoch) {
-    input.onUnexpectedError?.(
-      new Error('Sign in to an active AGI Cloud account before generating an image.'),
-    );
+    input.onUnexpectedError?.(new MediaGenerationAdmissionError(CLOUD_SIGN_IN_MESSAGE));
     return { status: 'failed', assistantMessageId: null };
   }
   if (accountEpoch.ownerId !== input.ownerId) {
     input.onUnexpectedError?.(
-      new Error('The active AGI Cloud account changed before image generation started.'),
+      new MediaGenerationAdmissionError(
+        'The active AGI Cloud account changed before image generation started.',
+      ),
     );
     return { status: 'failed', assistantMessageId: null };
   }
@@ -132,26 +151,58 @@ export async function runImageGenerationTurn(
         referenceAttachment,
       ])
     : input.begin(input.conversationId, input.displayText, input.prompt, input.model);
+  input.onStarted?.();
 
   try {
     const referenceOperation =
-      input.sourceImage && input.operation && input.operation !== 'generate'
+      (input.sourceImage || input.sourceImageBase64) &&
+      input.operation &&
+      input.operation !== 'generate'
         ? input.operation
         : null;
-    const referenceBase64 =
-      referenceOperation && input.sourceImage
-        ? await (dependencies.readReferenceImage ?? readReferenceImageBase64)(input.sourceImage.uri)
-        : null;
+    let referenceBase64: string | null = input.sourceImageBase64 ?? null;
+    let guideImagesBase64: string[] = [];
+    if (referenceOperation && input.sourceImage) {
+      try {
+        const readImage = dependencies.readReferenceImage ?? readReferenceImageBase64;
+        referenceBase64 = await readImage(input.sourceImage.uri);
+        guideImagesBase64 = await Promise.all(
+          (input.referenceImages ?? []).map((image) => readImage(image.uri)),
+        );
+      } catch (error) {
+        if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+        input.onUnexpectedError?.(error);
+        input.fail(
+          input.conversationId,
+          assistantMessageId,
+          'The reference image could not be read from this device.',
+        );
+        return { status: 'failed', assistantMessageId };
+      }
+    }
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
     const result = await withTimeout(
-      dependencies.generate({
-        prompt: input.prompt,
-        model: input.model,
-        ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
-        ...(referenceOperation && referenceBase64
-          ? { operation: referenceOperation, source_image: { b64_json: referenceBase64 } }
-          : {}),
-      }),
+      dependencies.generate(
+        {
+          prompt: input.prompt,
+          model: input.model,
+          ...(CLOUD_CONVERSATION_ID.test(input.conversationId)
+            ? { conversation_id: input.conversationId }
+            : {}),
+          ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
+          ...(input.transparentBackground ? { transparent_background: true } : {}),
+          ...(referenceOperation && referenceBase64
+            ? { operation: referenceOperation, source_image: { b64_json: referenceBase64 } }
+            : {}),
+          ...(referenceOperation && referenceBase64 && input.maskImageBase64
+            ? { mask_image: { b64_json: input.maskImageBase64 } }
+            : {}),
+          ...(referenceOperation && referenceBase64 && guideImagesBase64.length > 0
+            ? { reference_images: guideImagesBase64.map((b64_json) => ({ b64_json })) }
+            : {}),
+        },
+        { operationId: assistantMessageId },
+      ),
       dependencies.timeoutMs ?? IMAGE_GENERATION_TIMEOUT_MS,
     );
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
@@ -161,7 +212,7 @@ export async function runImageGenerationTurn(
       input.fail(
         input.conversationId,
         assistantMessageId,
-        result.error ?? 'AGI Cloud did not return an image.',
+        'AGI Cloud did not return an image. Try again.',
       );
       return { status: 'failed', assistantMessageId };
     }
@@ -179,6 +230,7 @@ export async function runImageGenerationTurn(
         : {}),
       revisedPrompt: image?.revisedPrompt,
       model: result.model,
+      aspectRatio: input.aspectRatio,
     });
     return { status: 'completed', assistantMessageId };
   } catch (error) {
@@ -189,17 +241,18 @@ export async function runImageGenerationTurn(
       return { status: 'paywall', assistantMessageId };
     }
 
+    if (isUsageLimitRefusal(error)) {
+      input.fail(input.conversationId, assistantMessageId, MEDIA_USAGE_LIMIT_MESSAGE);
+      return { status: 'failed', assistantMessageId };
+    }
+
     if (error instanceof ImageGenerationTimeout) {
       input.fail(input.conversationId, assistantMessageId, IMAGE_GENERATION_TIMEOUT_MESSAGE);
       return { status: 'failed', assistantMessageId };
     }
 
     input.onUnexpectedError?.(error);
-    input.fail(
-      input.conversationId,
-      assistantMessageId,
-      error instanceof Error ? error.message : String(error),
-    );
+    input.fail(input.conversationId, assistantMessageId, mediaGenerationFailureMessage('image'));
     return { status: 'failed', assistantMessageId };
   }
 }

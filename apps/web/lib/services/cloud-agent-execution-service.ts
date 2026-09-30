@@ -406,21 +406,24 @@ export async function failCloudAgentExecutionOperation(
     operationId: string;
     leaseToken: string;
     error: Record<string, unknown>;
+    usage?: Record<string, unknown>;
   },
 ): Promise<CloudAgentExecutionOperation> {
   const error = JsonObjectSchema.parse(input.error);
+  const usage = input.usage === undefined ? null : JsonObjectSchema.parse(input.usage);
   return requireOperation(
     await db.query<CloudAgentExecutionOperationRow>(
       `update public.cloud_agent_execution_operations
           set status = 'failed',
               error = $4::jsonb,
+              usage = coalesce($5::jsonb, usage),
               lease_token = null,
               lease_expires_at = null,
               completed_at = now(),
               updated_at = now()
         where id = $1 and user_id = $2 and lease_token = $3 and status = 'running'
         returning *`,
-      [input.operationId, input.userId, input.leaseToken, error],
+      [input.operationId, input.userId, input.leaseToken, error, usage],
     ),
   );
 }
@@ -575,6 +578,7 @@ const ProviderUsageObservationSchema = z
     routeId: z.string().min(1).nullable().optional(),
     upstreamProvider: z.string().min(1).optional(),
     providerReportedCostUsd: z.number().finite().nonnegative().optional(),
+    speed: z.enum(['standard', 'fast']).optional(),
   })
   .strict();
 const providerUsageObservationSchemaCoversObservation: SameKeys<
@@ -640,7 +644,8 @@ async function readCloudAgentUsage(
               as tool_spend_microusd
        from public.cloud_agent_execution_operations
       where run_id = $1 and user_id = $2
-        and operation_kind = 'provider' and status = 'completed'
+        and operation_kind = 'provider'
+        and (status = 'completed' or (status = 'failed' and usage is not null))
         and ($3::text is null or usage->>'billingIdempotencyKey' = $3)`,
     [input.runId, input.userId, input.billingIdempotencyKey],
   );

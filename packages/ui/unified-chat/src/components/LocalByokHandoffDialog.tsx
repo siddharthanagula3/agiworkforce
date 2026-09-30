@@ -120,7 +120,7 @@ export function LocalByokHandoffDialog({
             )}
           >
             {showContextPanel && (
-              <section className="min-h-0 overflow-y-auto border-b border-border/60 p-4 md:border-b-0 md:border-r">
+              <section className="min-h-0 overflow-y-auto border-b border-border/60 p-4 md:border-b-0 md:border-e">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <h3 className="text-h5">Context</h3>
                   <span className="text-xs text-muted-foreground">

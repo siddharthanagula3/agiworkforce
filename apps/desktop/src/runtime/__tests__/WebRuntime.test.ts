@@ -32,6 +32,7 @@ vi.mock('../../api/cloudApi', () => ({
 
 vi.mock('../../services/cloudChat', () => ({
   ensureCloudConversation: vi.fn().mockResolvedValue({ id: 'conv_1' }),
+  readTemporaryChatPreference: vi.fn().mockResolvedValue(false),
 }));
 
 import { WebRuntime, mapGeneratedFilesPayload } from '../WebRuntime';

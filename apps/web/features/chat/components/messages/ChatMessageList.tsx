@@ -45,6 +45,12 @@ import {
 } from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
+import {
+  SAVE_AS_SKILL_PROMPT,
+  SaveAsSkillProvider,
+  useSkillAuthoringCapability,
+  type SaveAsSkill,
+} from '@/features/skills/components/save-as-skill';
 import { useGeneratedFollowUps } from '../../hooks/use-generated-follow-ups';
 import { collectMessageResearchSources } from '../../utils/research-sources';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
@@ -208,6 +214,11 @@ export interface ChatMessageListProps {
   ) => void;
   onPaywallDismiss?: (messageId: string) => void;
   enableFollowUpSuggestions?: boolean;
+  /**
+   * Sends a prompt as the user's next turn. onSendMessage fills the composer for
+   * follow-up suggestions; Save as skill sends at once, as Claude's does.
+   */
+  onSubmitPrompt?: (prompt: string) => void;
   temporaryChat?: boolean;
   onRegenerateWithModel?: (messageId: string, modelId: string) => void;
   regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
@@ -1158,6 +1169,7 @@ const ChatMessageListComponent = ({
   onResumeVideo,
   onRetryVideo,
   onSendMessage,
+  onSubmitPrompt,
   isUserTyping = false,
   className,
   onPaywallUpgrade,
@@ -1370,6 +1382,18 @@ const ChatMessageListComponent = ({
     if (lastMessage.metadata?.['research']) return true;
     return collectMessageResearchSources(lastMessage.metadata).searchSources.length > 0;
   }, [lastMessage]);
+
+  // Any finished answer can become a skill, as Claude offers: the menu item asks
+  // for the draft, whose Save creates it. Only where the account may author
+  // skills, and never in a temporary chat, which keeps nothing.
+  const skillAuthoring = useSkillAuthoringCapability(Boolean(onSubmitPrompt) && !temporaryChat);
+  const saveAsSkill = useMemo<SaveAsSkill | null>(
+    () =>
+      skillAuthoring && onSubmitPrompt && !isLoading
+        ? { save: () => onSubmitPrompt(SAVE_AS_SKILL_PROMPT) }
+        : null,
+    [skillAuthoring, onSubmitPrompt, isLoading],
+  );
 
   const followUpSuggestionsEnabled = useSettingsStore((state) => state.followUpSuggestionsEnabled);
   const showFollowUps = Boolean(
@@ -1980,83 +2004,85 @@ const ChatMessageListComponent = ({
   }
 
   return (
-    <div
-      className={cn('relative flex h-full flex-col', className)}
-      data-testid="chat-message-list"
-      data-soft-keyboard-inset={softKeyboardInset > 0 ? softKeyboardInset : undefined}
-      style={{
-        height: softKeyboardInset > 0 ? `calc(100% - ${softKeyboardInset}px)` : '100%',
-      }}
-    >
-      {/* AUDIT-FIX GOV-29: the ONLY live region on this surface. Off-screen,
+    <SaveAsSkillProvider value={saveAsSkill}>
+      <div
+        className={cn('relative flex h-full flex-col', className)}
+        data-testid="chat-message-list"
+        data-soft-keyboard-inset={softKeyboardInset > 0 ? softKeyboardInset : undefined}
+        style={{
+          height: softKeyboardInset > 0 ? `calc(100% - ${softKeyboardInset}px)` : '100%',
+        }}
+      >
+        {/* AUDIT-FIX GOV-29: the ONLY live region on this surface. Off-screen,
           atomic, and carrying one short phrase per generation state change.
           so a screen reader hears "Generating response" and then "Response
           complete"; the answer itself is read once, by the streaming announcer
           in the bubble, instead of the transcript being re-read. */}
-      <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {streamAnnouncement}
-      </p>
-      {searchOpen && (
-        <MessageSearch
-          query={searchQuery}
-          onQueryChange={setSearchQuery}
-          totalMatches={searchMatches.length}
-          currentMatchIndex={currentMatchIndex}
-          onNext={handleSearchNext}
-          onPrev={handleSearchPrev}
-          onClose={closeSearch}
+        <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {streamAnnouncement}
+        </p>
+        {searchOpen && (
+          <MessageSearch
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            totalMatches={searchMatches.length}
+            currentMatchIndex={currentMatchIndex}
+            onNext={handleSearchNext}
+            onPrev={handleSearchPrev}
+            onClose={closeSearch}
+          />
+        )}
+        <List
+          listRef={listApiRef}
+          rowComponent={VirtualizedTranscriptRow as unknown as TranscriptRowComponent}
+          rowCount={virtualRowCount}
+          rowHeight={dynamicRowHeight}
+          rowProps={rowProps}
+          defaultHeight={DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT}
+          overscanCount={printingTranscript ? virtualRowCount : 6}
+          onResize={({ height }) => setViewportHeight(height)}
+          role="log"
+          aria-live="off"
+          aria-busy={isGenerating}
+          aria-label="Chat messages"
+          onScroll={handleScroll}
+          onWheel={markUserScrollIntent}
+          onTouchMove={markUserScrollIntent}
+          onKeyDown={handleTranscriptKeyDown}
+          className="h-full [scrollbar-width:thin]"
+          // react-window's List bounds only the y axis, unlike its Grid sibling.
+          // Horizontal scroll belongs to the code block or table that needs it.
+          // `contain` keeps a transcript fling from chaining into the shell scroll
+          // container behind it, and kills the rubber band that showed the page
+          // background under the transcript on touch.
+          style={{
+            height: '100%',
+            overflowX: 'hidden',
+            overscrollBehaviorY: 'contain',
+          }}
         />
-      )}
-      <List
-        listRef={listApiRef}
-        rowComponent={VirtualizedTranscriptRow as unknown as TranscriptRowComponent}
-        rowCount={virtualRowCount}
-        rowHeight={dynamicRowHeight}
-        rowProps={rowProps}
-        defaultHeight={DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT}
-        overscanCount={printingTranscript ? virtualRowCount : 6}
-        onResize={({ height }) => setViewportHeight(height)}
-        role="log"
-        aria-live="off"
-        aria-busy={isGenerating}
-        aria-label="Chat messages"
-        onScroll={handleScroll}
-        onWheel={markUserScrollIntent}
-        onTouchMove={markUserScrollIntent}
-        onKeyDown={handleTranscriptKeyDown}
-        className="h-full [scrollbar-width:thin]"
-        // react-window's List bounds only the y axis, unlike its Grid sibling.
-        // Horizontal scroll belongs to the code block or table that needs it.
-        // `contain` keeps a transcript fling from chaining into the shell scroll
-        // container behind it, and kills the rubber band that showed the page
-        // background under the transcript on touch.
-        style={{
-          height: '100%',
-          overflowX: 'hidden',
-          overscrollBehaviorY: 'contain',
-        }}
-      />
 
-      {/* Scroll-to-bottom FAB · shown when user has scrolled up. Its screen
+        {/* Scroll-to-bottom FAB · shown when user has scrolled up. Its screen
           position is fixed regardless of scroll offset, so the fade behind it
           is load-bearing: without it the circle sits directly on top of
           whatever transcript line happens to be there. */}
-      <AnimatePresence>
-        {userScrolledUp && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-24 items-end justify-center">
-            <div
-              className="absolute inset-0 bg-gradient-to-t from-[var(--chat-bg)] via-[var(--chat-bg)]/85 to-transparent"
-              aria-hidden="true"
-            />
-            <div className="pointer-events-auto relative mb-3">
-              <ScrollToBottomButton
-                onClick={() => followBottom(prefersReducedMotion ? 'auto' : 'smooth')}
+        <AnimatePresence>
+          {userScrolledUp && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-24 items-end justify-center">
+              <div
+                className="absolute inset-0 bg-gradient-to-t from-[var(--chat-bg)] via-[var(--chat-bg)]/85 to-transparent"
+                aria-hidden="true"
               />
+              <div className="pointer-events-auto relative mb-3">
+                <ScrollToBottomButton
+                  onClick={() => followBottom(prefersReducedMotion ? 'auto' : 'smooth')}
+                />
+              </div>
             </div>
-          </div>
-        )}
-      </AnimatePresence>
-    </div>
+          )}
+        </AnimatePresence>
+      </div>
+    </SaveAsSkillProvider>
   );
 };
 
@@ -2081,6 +2107,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.onResumeVideo === next.onResumeVideo &&
     prev.onRetryVideo === next.onRetryVideo &&
     prev.onSendMessage === next.onSendMessage &&
+    prev.onSubmitPrompt === next.onSubmitPrompt &&
     prev.className === next.className &&
     prev.onPaywallUpgrade === next.onPaywallUpgrade &&
     prev.onPaywallDismiss === next.onPaywallDismiss &&

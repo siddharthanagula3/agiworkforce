@@ -6,47 +6,21 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S57.01: Search tool.
-
-- Done when: The assistant can call a web-search tool during a turn and the searches and their sources are shown to the user.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Hosted search needs the gateway web_search flag carried on the shared agiworkforce-llm ChatRequest (desktop also constructs it) or a hosted search endpoint; BYOK/Local still need SEARCH_API_KEY. | handler |
-
-Code: `apps/cli/src/features/exec/tools/web/mod.rs:286-286`
-
 ## S57.03: Source-reader tool.
 
 - Done when: The assistant can call a tool that opens a cited source or document (PDF, Office file or page) by reference and reads its text.
 - Wave: 3
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
-| desktop | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
-| mobile | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
-| cli | partial | No PDF/Office text extraction in the CLI; adding a PDF crate changes Cargo.lock (lead-owned). | handler |
-| vscode | partial | Runs the CLI tools: read_file and web_fetch read plain text only; no PDF or Office source reader. | handler |
+| web | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval quality signal (packages/ai/model-registry/catalog/routing-policies.json:161) | handler |
+| desktop | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval quality signal (packages/ai/model-registry/catalog/routing-policies.json:161) | handler |
+| mobile | partial | switch-on (lead): advance tool.url_fetch_description@2 from internal to canary with an eval signal; server-only, the phone uses the same completions path | handler |
 | chrome | partial | Same as web: url_fetch reads PDF and Office files by URL (d67ced36f), but the served tool description is still v1 until tool.url_fetch_description@2 advances to stable; uploaded files and connector sources are still not opened by reference. | handler |
-| api | partial | url_fetch now reads PDFs and Word, Excel and PowerPoint files by URL (d67ced36f), but the served tool description is still v1, which says binary content is unsupported; tool.url_fetch_description@2 is recorded on the internal channel and needs a canary advance to stable. Uploaded files and connector sources are still not opened by reference. | handler |
+| api | partial | release step: tool.url_fetch_description@2 is on internal and needs a canary advance with an eval quality signal (lead). Uploaded files and connector sources are still reached only through search_files excerpts, not opened whole by reference | handler |
 
-Code: `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`, `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `apps/cli/src/features/exec/tools/mod.rs:365-372`, `apps/cli/src/features/exec/tools/mod.rs:568-568`
-
-## S57.04: File-search tool.
-
-- Done when: The assistant can call a tool that searches the user's files (by name or content) and returns matching paths or snippets.
-- Wave: 3
-- Already works on: web, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | search_files also runs in the desktop app over the account's files; searching a granted local folder as a device step (file_glob/file_grep) belongs to p-sessions. | handler |
-| chrome | partial | The server offers search_files, save_memory/search_memory/forget_memory and create_schedule only to MEMORY_COMMAND_CLIENT_SURFACES (web, desktop, mobile), so Chrome chats never get them. p-mcp-web: in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts gate applyMemoryToolCapability, applyFileSearchToolCapability and applyScheduleToolCapability on a set that also holds chrome (memory commands keep their own set). The side panel already renders the tool steps, forget_memory approvals and the account schedules. | handler |
-
-Code: `apps/web/lib/server/tools/file-search-tool.ts:64-64`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`
+Code: `apps/web/lib/prompts/prompt-manifest.ts:97-97`, `packages/ai/model-registry/catalog/routing-policies.json:161-161`, `apps/web/lib/url-fetch/url-fetch-tool.ts:479-479`
 
 ## S57.05: File-read tool.
 
@@ -56,12 +30,12 @@ Code: `apps/web/lib/server/tools/file-search-tool.ts:64-64`, `apps/web/app/api/l
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The chat sandbox read_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
-| mobile | partial | The chat sandbox read_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
+| mobile | partial | switch-on: set AGI_E2B_EXECUTION=1 with E2B_API_KEY and the compute price; the phone reaches the same sandbox tools | flag-off |
 | chrome | partial | The chat sandbox read_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | code_execution and its sandbox file tools are now documented; read_file still runs only when AGI_E2B_EXECUTION=1 (switched on by the lead at run end). | flag-off |
 
-Code: `apps/web/lib/e2b/execution-tools.ts:16-16`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/lib/e2b/gate.ts:16-18`, `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1754`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/gate.ts:20-20`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`
 
 ## S57.06: File-write tool.
 
@@ -71,12 +45,12 @@ Code: `apps/web/lib/e2b/execution-tools.ts:16-16`, `apps/web/app/api/llm/v1/chat
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The chat sandbox write_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
-| mobile | partial | The chat sandbox write_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
+| mobile | partial | switch-on: set AGI_E2B_EXECUTION=1 with E2B_API_KEY and the compute price; the phone reaches the same sandbox tools | flag-off |
 | chrome | partial | The chat sandbox write_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | Documented; write_file still runs only when AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/web/lib/e2b/execution-tools.ts:14-14`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/lib/e2b/gate.ts:16-18`, `apps/mobile/stores/chat/chatExecutionStore.ts:1754-1754`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/gate.ts:20-20`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`
 
 ## S57.07: Spreadsheet tool.
 
@@ -119,11 +93,11 @@ Code: `apps/web/lib/e2b/execution-tools.ts:14-14`, `apps/web/app/api/llm/v1/chat
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud Code sessions run commands in a sandbox only when AGI_E2B_EXECUTION=1 with an E2B key (off by default); the chat itself has no shell tool. | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-87`, `apps/web/lib/e2b/gate.ts:16-18`
+Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 ## S57.12: Patch/edit tool.
 
@@ -133,12 +107,12 @@ Code: `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-87`, `apps/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
-| mobile | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
+| web | partial | switch-on: set AGI_E2B_EXECUTION=1 and E2B_API_KEY in Vercel Production and redeploy (read by e2bProvisioningReady, apps/web/lib/e2b/gate.ts:16-30; the sandbox rate card is already priceable, compute-metering.ts:73; AGI_MANAGED_COMPUTE_PRIVATE_BETA is on when unset, do not set it to 0); then live-check the feature in /code | flag-off |
+| mobile | partial | switch-on: set AGI_E2B_EXECUTION=1 with E2B_API_KEY and the compute price; the phone reaches the same sandbox tools | flag-off |
 | chrome | partial | The chat sandbox edit_file tool runs only when AGI_E2B_EXECUTION=1 (default 0) with an E2B key and compute price set; until then the loop answers "not available". | flag-off |
 | api | partial | Documented; edit_file still runs only when AGI_E2B_EXECUTION=1. | flag-off |
 
-Code: `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`, `apps/web/lib/e2b/gate.ts:16-18`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`
+Code: `apps/web/lib/e2b/gate.ts:16-16`, `apps/web/lib/e2b/gate.ts:20-20`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:588-594`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2009-2015`
 
 ## S57.13: Browser-navigation tool.
 
@@ -178,53 +152,26 @@ Code: `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat
 
 - Done when: The assistant can call an image-generation tool during a turn and the generated image appears in the transcript.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 3261f2780 renders image.v1 cards on mobile (GeneratedImage with full screen and share), so images made in a web turn show on the phone. New mobile turns still need image.v1 declared in chatExecutionStore.ts, held by Codex: post-codex/p-mcp-web-S57.16-mobile-image-v1.patch. It touches the same line as no-yearly-s108-33-mobile-itinerary.patch; combined, the line is supported: ['image.v1', 'itinerary.v1', 'map-search.v1']. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586`
 
 ## S57.17: Image-editing tool.
 
 - Done when: The assistant can call a tool that edits a supplied image (edit, inpaint, variation) and shows the result.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Same as S57.16 mobile: edited images render once image.v1 is declared by the post-codex patch. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 | api | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/InteractiveCardBlock.tsx:586-586`
-
-## S57.18: Video-generation tool.
-
-- Done when: The assistant can call a video-generation tool and the generated video appears in the conversation.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-
-## S57.21: Memory tool.
-
-- Done when: The assistant can call a memory tool to save, recall or delete a remembered fact during a turn.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The CLI runtime injects and saves memory automatically; the agent has no memory tool. | handler |
-| chrome | partial | The server offers search_files, save_memory/search_memory/forget_memory and create_schedule only to MEMORY_COMMAND_CLIENT_SURFACES (web, desktop, mobile), so Chrome chats never get them. p-mcp-web: in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts gate applyMemoryToolCapability, applyFileSearchToolCapability and applyScheduleToolCapability on a set that also holds chrome (memory commands keep their own set). The side panel already renders the tool steps, forget_memory approvals and the account schedules. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-3064`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`
 
 ## S57.22: Calendar tool.
 
@@ -234,57 +181,19 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3056-30
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
-| desktop | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
-| mobile | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
+| web | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json; Outlook calendar needs the Microsoft OAuth app credentials (microsoft-graph.ts:360 is wired) |  |
+| desktop | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry with its client pair to CONNECTOR_OAUTH_PROVIDERS_JSON in Vercel; tools are declared in lib/connectors/directory/sources/first-party.json; Outlook calendar needs the Microsoft OAuth app credentials (microsoft-graph.ts:360 is wired) |  |
+| mobile | partial | owner: create the Google Calendar OAuth client and add the google-calendar entry to CONNECTOR_OAUTH_PROVIDERS_JSON; the phone's own calendar tool already works |  |
 | chrome | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' |  |
 | api | partial | Lane ruling (R-t clarification): an MCP endpoint that exists only through CONNECTOR_OAUTH_PROVIDERS_JSON is a feature gate, so the cell is partial/flag-off, not unverified. google-calendar, outlook and calendly are mcpConnector catalog entries (catalog.ts 154/164/174) with no MCP_ENDPOINTS record (0 hits), so getMcpEndpoint returns null (177-179) until the operator JSON supplies one. miss: flag-off. remaining: 'Calendar connectors ship no MCP endpoint; supply one in CONNECTOR_OAUTH_PROVIDERS_JSON (Codex queue: confirm the production env).' API turns load the same catalog. |  |
 
-## S57.24: Scheduling tool.
-
-- Done when: The assistant can call a tool that creates, lists or deletes a scheduled task for the user.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | The server offers search_files, save_memory/search_memory/forget_memory and create_schedule only to MEMORY_COMMAND_CLIENT_SURFACES (web, desktop, mobile), so Chrome chats never get them. p-mcp-web: in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts gate applyMemoryToolCapability, applyFileSearchToolCapability and applyScheduleToolCapability on a set that also holds chrome (memory commands keep their own set). The side panel already renders the tool steps, forget_memory approvals and the account schedules. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:842-842`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:868-868`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:894-894`, `apps/web/lib/services/memory-commands.ts:32-32`
+Code: `apps/web/lib/connectors/mcp-endpoints.ts:183-183`, `apps/web/lib/connectors/oauth-registry.ts:21-21`
 
 ## S57.26: Clarification/input tool.
 
 - Done when: The assistant can call a tool that asks the user a clarifying question (with choices) and waits for the answer.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The clarify tool is offered only when the client declares clarify.v1 cards; this client sends only map-search.v1, so the model never gets it. | ui |
-| vscode | partial | The runtime's ask_user reads the runtime process's stdin, which VS Code uses for JSON-RPC; the AskUser approval kind the webview labels is never raised outside tests. | handler |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1756-1756`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:713-713`, `apps/cli/src/features/exec/tools/task_registry/mod.rs:489-492`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:15-15`
-
-## S57.30: Tool descriptions and schemas.
-
-- Done when: Each tool carries a readable description and typed parameter schema that the model uses and the user can inspect.
-- Wave: 3
-- Already works on: web, desktop, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Every tool reaches the model with a description and typed input schema, but the user has no view of what each tool does or what parameters it takes; connector settings list tool names only. | ui |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:344-349`
-
-## S57.37: Tool receipt.
-
-- Done when: After tool calls run, the user can later review a record of which tool ran, with what input, and its outcome.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The transcript keeps each tool's input and output, but mobile has no call log or receipt view for connector actions. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:368-386`

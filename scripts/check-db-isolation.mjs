@@ -110,6 +110,28 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
       'request workspace to constrain by',
   },
   {
+    match: /lib\/connectors\/google-user-data\.ts$/,
+    reason:
+      'Google Limited Use routing reads whether Google user data can reach a turn: a connector ' +
+      'grant is account-wide like the connector catalog it gates, and each statement is keyed ' +
+      'by the account plus a conversation, project or connector id and returns only ids or a ' +
+      'flag, so reading across workspaces can only add a restriction, never expose a row',
+  },
+  {
+    match: /lib\/connectors\/google-user-data-runs\.ts$/,
+    reason:
+      'Google Limited Use routing for runs outside a chat and for retrieval embeddings: each ' +
+      'statement is keyed by the account plus a source id and returns only a conversation id ' +
+      'or a flag, so reading across workspaces can only add a restriction, never expose a row',
+  },
+  {
+    match: /lib\/jobs\/google-user-data-jobs\.ts$/,
+    reason:
+      'the operator dead-jobs view already spans every tenant behind the break-glass gate; this ' +
+      'reads only the connector list of the routines those jobs name, by id, to decide what to ' +
+      'withhold, so it can only hide content, never expose a row',
+  },
+  {
     match: /lib\/services\/tier-unit-quota-service\.ts$/,
     reason:
       'a Free daily cap limits the account, not one workspace: it counts the messages and ' +
@@ -269,6 +291,27 @@ const ALLOWLIST = [
       'session to scope by: the email names the account, the caller gets the same answer ' +
       'whether or not a profile matches, and the matched id only files a support ticket and a ' +
       'security event for staff review',
+  },
+  {
+    match: /lib\/server\/account-security\/store\.ts$/,
+    tables: [
+      'account_security_challenges',
+      'account_security_enrollments',
+      'scim_provisioned_users',
+      'sso_connections',
+      'profiles',
+    ],
+    functions: ['readOpenHandoff', 'readEnrollmentUndo', 'readOrganizationControl'],
+    reason:
+      'readOpenHandoff finds a browser verification handoff by the hash of its unguessable ' +
+      'token, because the browser that opens it holds no session: the token is the capability, ' +
+      'and every later write on that row is constrained by the user_id the row names. ' +
+      'readEnrollmentUndo finds the enrollment an emailed turn-off link names the same way, ' +
+      'for an owner who may have no session left, and undoEnrollment then writes only by that ' +
+      'user_id. ' +
+      'readOrganizationControl reads the account by its own id and asks whether an ' +
+      "organization's directory has linked it or has verified its email domain, which the " +
+      'directory and domain tables can answer only across organizations',
   },
   {
     match: /lib\/server\/security-log-retention\.ts$/,

@@ -99,6 +99,7 @@
   "navImages": "이미지",
   "navModels": "모델",
   "navSchedules": "일정",
+  "navHealth": "건강",
   "navAdmin": "관리",
   "navWorkspaceSection": "워크스페이스",
   "navLoadingWorkspaces": "워크스페이스 불러오는 중…",
@@ -169,7 +170,13 @@
     "toolsAwaitingApproval_one": "도구 1개가 승인을 기다리고 있습니다.",
     "toolsAwaitingApproval_other": "도구 {{count}}개가 승인을 기다리고 있습니다.",
     "unsentMessages_one": "보내지 않은 메시지가 1개 있습니다.",
-    "unsentMessages_other": "보내지 않은 메시지가 {{count}}개 있습니다."
+    "unsentMessages_other": "보내지 않은 메시지가 {{count}}개 있습니다.",
+    "packages_other": "패키지 {{count}}개",
+    "unreadNotifications_other": "읽지 않은 알림 {{count}}개",
+    "packages_one": "패키지 {{count}}개",
+    "unreadNotifications_one": "읽지 않은 알림 {{count}}개",
+    "textBlocks_one": "텍스트 블록 {{count}}개",
+    "textBlocks_other": "텍스트 블록 {{count}}개"
   },
   "relative": {
     "minutesAgo_one": "{{count}}분 전",

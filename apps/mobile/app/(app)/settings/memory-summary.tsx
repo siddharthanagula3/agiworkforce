@@ -9,6 +9,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 function formatGeneratedOn(date: Date): string {
   return date.toLocaleDateString(undefined, {
@@ -62,7 +63,9 @@ export default function MemorySummaryScreen() {
             marginBottom: 24,
           }}
         >
-          <Text style={{ color: colors.agentWarning, fontSize: 13, lineHeight: 18 }}>
+          <Text
+            style={{ color: colors.agentWarning, fontSize: typeScale.footnote, lineHeight: 18 }}
+          >
             Memory is off, so none of these are used in new chats. They stay saved until you delete
             them.
           </Text>
@@ -71,13 +74,13 @@ export default function MemorySummaryScreen() {
 
       {summary.sections.length === 0 ? (
         <View style={{ paddingVertical: 32, alignItems: 'center' }}>
-          <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
             {loading ? 'Loading memories…' : 'Nothing learned yet'}
           </Text>
           <Text
             style={{
               color: colors.textMuted,
-              fontSize: 13,
+              fontSize: typeScale.footnote,
               lineHeight: 19,
               marginTop: 6,
               textAlign: 'center',
@@ -92,9 +95,10 @@ export default function MemorySummaryScreen() {
         summary.sections.map((section) => (
           <View key={section.key}>
             <Text
+              accessibilityRole="header"
               style={{
                 color: colors.textMuted,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 fontWeight: '700',
                 paddingHorizontal: 2,
                 textTransform: 'uppercase',
@@ -105,7 +109,7 @@ export default function MemorySummaryScreen() {
             <Text
               style={{
                 color: colors.textMuted,
-                fontSize: 12,
+                fontSize: typeScale.caption,
                 lineHeight: 17,
                 marginBottom: 8,
                 paddingHorizontal: 2,
@@ -124,7 +128,13 @@ export default function MemorySummaryScreen() {
                     borderBottomColor: colors.border,
                   }}
                 >
-                  <Text style={{ color: colors.textPrimary, fontSize: 14, lineHeight: 20 }}>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: typeScale.subhead,
+                      lineHeight: 20,
+                    }}
+                  >
                     {fact}
                   </Text>
                 </View>
@@ -138,7 +148,7 @@ export default function MemorySummaryScreen() {
       <Text
         style={{
           color: colors.textMuted,
-          fontSize: 12,
+          fontSize: typeScale.caption,
           lineHeight: 18,
         }}
       >

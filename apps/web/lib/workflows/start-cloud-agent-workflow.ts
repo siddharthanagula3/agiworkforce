@@ -82,6 +82,7 @@ export interface StartCloudAgentWorkflowExecutionInput {
   connectorPermissions?: ConnectorToolPermissions;
   continuation?: CloudAgentWorkflowInput['continuation'];
   predecessorApproval?: CloudAgentWorkflowInput['predecessorApproval'];
+  research?: CloudAgentWorkflowInput['research'];
 }
 
 /**
@@ -440,6 +441,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
     completionReason: input.completionReason,
     cancellationReason: input.cancellationReason,
     runJournal: { db: input.db, userId: input.userId, runId: input.runId },
+    persistsRunContinuation: Boolean(input.continuation),
     onTerminal: async (outcome) => {
       // The durable transport resolves the predecessor lease inside
       // settleWorkflowInvocation. Inline owes the same write: without it the

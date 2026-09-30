@@ -83,6 +83,10 @@ jest.mock('../src/features/settings/account-security/service', () => ({
   fetchLockdownMode: jest.fn(async () => false),
   saveLockdownMode: jest.fn(async () => undefined),
   revokeAllAccountSessions: jest.fn(async () => undefined),
+  fetchSignInMethods: jest.fn(async () => ({
+    identities: [],
+    keys: [{ id: 'key-1', name: 'Work laptop', kind: 'passkey' }],
+  })),
 }));
 
 jest.mock('../src/features/settings/common', () => {
@@ -188,11 +192,8 @@ describe('Mobile Account Security screen', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Backup codes. Ready')).toBeTruthy());
     expect(screen.getByLabelText('Authenticator app. On')).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Passkeys and SMS MFA are not exposed by the current AGI account contracts, so Mobile does not show editable controls for them.',
-      ),
-    ).toBeTruthy();
+    await waitFor(() => expect(screen.getByLabelText('Work laptop. Passkey')).toBeTruthy());
+    expect(screen.getByLabelText('Add or remove a sign-in method. Web')).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('Open Web security. Web'));
     fireEvent.press(screen.getByLabelText('Open Web account. Web'));
@@ -293,6 +294,28 @@ describe('Mobile Account Security screen', () => {
     alertSpy.mockRestore();
   });
 
+  it('does not show raw account-provider failures when device revocation fails', async () => {
+    mockRevokeAccountSession.mockRejectedValueOnce(
+      new Error('Private session token failed at /internal/revoke'),
+    );
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByText('Macintosh · Chrome 141')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Macintosh · Chrome 141. 3h ago'));
+    const buttons = alertSpy.mock.calls.at(-1)?.[2] as Array<{
+      text?: string;
+      onPress?: () => void;
+    }>;
+    await act(async () => buttons.find((button) => button.text === 'Sign out')?.onPress?.());
+
+    expect(alertSpy).toHaveBeenLastCalledWith(
+      'Could not sign out that device',
+      'Please try again.',
+    );
+    alertSpy.mockRestore();
+  });
+
   it('says the device list is unavailable instead of showing no other devices', async () => {
     mockFetchAccountSessions.mockRejectedValue(new Error('offline'));
     const screen = render(<AccountSecurityScreen />);
@@ -337,7 +360,10 @@ describe('Mobile Account Security screen', () => {
 
     fireEvent.press(screen.getByLabelText('Sign in to AGI Cloud'));
 
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-account-security' },
+    });
     expect(mockFetchStatus).not.toHaveBeenCalled();
     expect(mockFetchAccountSessions).not.toHaveBeenCalled();
   });

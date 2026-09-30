@@ -7,6 +7,7 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { toUserMessage } from '@/lib/user-error-message';
 
 export interface CapabilitiesSettings {
@@ -129,6 +130,7 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
         acknowledged.current = { ...acknowledged.current, ...batch };
         setSettings(acknowledged.current);
         resetMemoryCapabilityCache();
+        if ('cloudCodeExecution' in batch) void useBillingStore.getState().refreshUser();
         setSavedAt(Date.now());
       } catch (error) {
         // The optimistic value has to go back to what the server acknowledged,

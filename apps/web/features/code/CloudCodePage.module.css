@@ -504,6 +504,16 @@ svg + .menuRowLabel {
   line-height: 1.5;
 }
 
+.questionPrompt {
+  flex-direction: column;
+}
+
+.questionOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .noticeError {
   border-color: var(--chat-destructive);
   color: var(--chat-destructive-text);

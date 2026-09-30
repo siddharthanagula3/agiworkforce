@@ -46,30 +46,6 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
-## S58.07: Connection test.
-
-- Done when: The user can test the connection to an MCP server and see whether it succeeded.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The server is probed only when it is added; there is no on-demand test afterwards. | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:908-908`, `apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx:108-108`, `apps/mobile/services/connectors.ts:102-107`
-
-## S58.08: Tool discovery.
-
-- Done when: Connecting an MCP server discovers its tools and the user can see them.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Server tools are discovered and offered in chat, but mobile shows no tool list per server (only tools with a saved permission). | ui |
-
-Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`, `apps/web/lib/user-connector-tools.ts:2218-2228`
-
 ## S58.09: Resource discovery.
 
 - Done when: The product discovers an MCP server's resources and lets the user browse or attach them.
@@ -102,18 +78,6 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:85-85`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-
-## S58.12: Server health and logs.
-
-- Done when: Each server shows its health and the user can read recent logs or call history.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile marks only expired authorization; the server's "not-responding" health is ignored, so a failing connector still shows Connected. | ui |
-
-Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
 
 ## S58.13: Enable/disable server.
 
@@ -239,41 +203,21 @@ Code: `apps/mobile/src/features/settings/cloud-connectors/index.tsx:430-444`
 
 - Done when: Tools a website provides (e.g. WebMCP) appear to the assistant as their own category, distinct from connectors.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | WebMCP tools are discovered and classified per tab, but they are never offered to the assistant: runAgentLoop is called without siteTools. | handler |
-
-Code: `apps/extension/src/webmcp.ts:51-61`, `apps/extension/src/background.ts:3586-3600`, `apps/extension/src/features/computer-use/agentLoop.ts:48-48`, `apps/extension/src/background.ts:4148-4166`
 
 ## S58.25: Tool availability changing with site state.
 
 - Done when: When the page state changes, the set of site-provided tools available to the assistant updates.
 - Wave: 3
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | Discovery refreshes on navigation and on tool changes (WEBMCP_TOOLS_CHANGED), but the refreshed set never reaches the assistant. | handler |
-
-Code: `apps/extension/src/webmcp.ts:51-61`, `apps/extension/src/background.ts:3586-3600`, `apps/extension/src/features/computer-use/agentLoop.ts:48-48`, `apps/extension/src/background.ts:4148-4166`
-
-## S58.26: Extension debugging console.
-
-- Done when: Extension developers get a console to watch MCP traffic and debug their server.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | Only debug log output (--debug=mcp, AGIWORKFORCE_MCP_DEBUG); no console to watch protocol messages or send test calls. | ui |
-| vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:342-344`, `crates/agiworkforce-mcp/src/client.rs:296-296`
 
 ## S58.27: Developer-mode connection flow.
 

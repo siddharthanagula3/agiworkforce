@@ -236,7 +236,7 @@ export function EmailAddressChange({ currentEmail, onChanged, onClose }: EmailAd
                   Cancel
                 </Button>
                 <Button type="button" disabled={busy || !ready} onClick={submit}>
-                  {busy ? <Spinner size="sm" className="mr-2" aria-label="Working" /> : null}
+                  {busy ? <Spinner size="sm" className="me-2" aria-label="Working" /> : null}
                   {stage.name === 'address' ? 'Send code' : 'Change address'}
                 </Button>
               </>

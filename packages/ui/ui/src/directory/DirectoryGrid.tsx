@@ -119,7 +119,7 @@ export function DirectoryCard({
               type="button"
               onClick={() => onOpen(entry.id)}
               className={cn(
-                'line-clamp-2 min-w-0 break-words text-left text-sm font-medium text-foreground after:absolute after:inset-0 after:content-[""]',
+                'line-clamp-2 min-w-0 break-words text-start text-sm font-medium text-foreground after:absolute after:inset-0 after:content-[""]',
                 entry.slashName && 'font-mono',
                 DIRECTORY_FOCUS_RING,
               )}

@@ -220,7 +220,7 @@ describe('SpreadsheetArtifact interactions', () => {
       />,
     );
     const cell = screen.getByText('30');
-    expect(cell.className).toContain('text-right');
+    expect(cell.className).toContain('text-end');
   });
 });
 

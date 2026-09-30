@@ -270,7 +270,7 @@ describe('desktop release routes', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-disposition')).toContain('filename="agiworkforce.dmg"');
+    expect(response.headers.get('content-disposition')).toContain(`filename="${CLOUD_ARM64_DMG}"`);
     expect(await response.text()).toBe('arm64-dmg-bytes');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/releases\?per_page=/),

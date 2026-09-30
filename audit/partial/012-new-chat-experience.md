@@ -10,26 +10,13 @@ nothing is left.
 
 - Done when: The new-chat screen greets the signed-in user by their (preferred) name when one is known.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The missing searches ('Welcome back\|Good (morning...)', 'greeting*Name', 'greet') could never match the mobile implementation, `Hi, ${displayName}` built from nickname/full name/Clerk first name in ChatEmptyState, which MessageList mounts for an empty conversation. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S12.03: Neutral greeting when personalization is disabled.
-
-- Done when: When personalization is off (or no name is known), the new-chat greeting is neutral and shows no personal details.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | The done rests on 'mobile never personalizes' (R-e), which is false: ChatEmptyState greets by name, and no mobile setting turns that off, which is the same gap that makes web partial. |  |
-
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:97-103`, `apps/mobile/app/(app)/(tabs)/chat.tsx:850-861`
 
 ## S12.04: Suggested prompts.
 
@@ -43,32 +30,6 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:97-103`, `apps/mobile/app/(app)/(ta
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-## S12.05: Task-category shortcuts.
-
-- Done when: The new-chat screen offers one-tap task-category shortcuts (e.g. write, research, image) that set up the next message.
-- Wave: 3
-- Already works on: web, desktop, mobile, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Add task commands for research and writing and list them on the welcome screen; today only /image (and /review for code) set up a task type, found by typing "/". | ui, handler |
-| vscode | partial | Inconsistent with CLI S12.05, credited partial for /image and /review behind '/': VS Code's registered @agi participant has the same task commands, each mapped to a task prompt by the handler. |  |
-
-Code: `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiworkforce-command-registry/src/lib.rs:193-199`, `apps/cli/src/tui/tui_app.rs:4676-4690`
-
-## S12.06: Recent Project shortcuts.
-
-- Done when: The new-chat screen offers shortcuts to the user's recent projects that open the project or start a chat in it.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Cloud projects in the drawer are ordered most recently updated first in post-codex/chat-gates-s12.06-mobile-recent-projects.patch (DrawerContent is held), matching the web sidebar's project shortcuts. | ui |
-| cli | partial | Add a way to start a session in a recent project from the terminal; today `agiworkforce projects list` lists account projects and `projects link` binds the current directory, with no recent-project shortcut. | ui |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:334-334`, `apps/cli/src/lib.rs:984-996`, `apps/cli/src/lib.rs:1866-1884`
-
 ## S12.08: Recommended Skills.
 
 - Done when: The new-chat screen recommends Skills relevant to the user, which can be applied to the next message.
@@ -77,36 +38,17 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:334-334`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Recommend a skill for a new session; today /skills only browses the installed list. | handler, ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `crates/agiworkforce-command-registry/src/lib.rs:248-248`
-
-## S12.09: Recommended connected apps.
-
-- Done when: The new-chat screen recommends apps/connectors worth connecting or using for the next message.
-- Wave: 3
-- Already works on: web, desktop, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Recommend connectors on the new-chat screen; the "+" sheet's Connectors row only opens the Connectors screen. | handler, ui |
-| cli | partial | Recommend MCP servers to connect; today /mcp only lists what is configured. | handler, ui |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `crates/agiworkforce-command-registry/src/lib.rs:247-247`
 
 ## S12.10: Search entry.
 
 - Done when: From the new-chat screen the user can explicitly start a web search for the next message.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The Search the web chip now sends search_requested with web_search, the flag the web's /search sends, so the next message requests a search; in post-codex/chat-gates-s12.10-mobile-requested-search.patch (TaskChips and the store are held). | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531`
 
 ## S12.11: Research entry.
 
@@ -146,39 +88,12 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531
 ## S12.14: Voice entry.
 
 - Done when: From the new-chat screen the user can start a spoken (voice-mode) conversation.
-- Wave: 2
-- Already works on: web, desktop, mobile
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Code done; flag-off until the voice cargo feature ships (apps/cli/Cargo.toml:118). | flag-off |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/voice.rs:354-354`
-
-## S12.15: Agentic-work entry.
-
-- Done when: From the new-chat screen the user can start agentic (multi-step, tool-using) work rather than a plain chat.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Codex's held chat.tsx already adds a Chat and Work switch to the new-chat screen (working copy lines 844-876); the cell is done once that file merges. Nothing to add here. | ui |
-
-Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
-
-## S12.16: Coding entry.
-
-- Done when: From the new-chat surface the user can start a coding session (a repository/workspace-aware coding agent).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Add a way to start coding work from the phone; today mobile can only follow a paired desktop's code sessions from "Remote" in the drawer. | ui |
-
-Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:129-136`
 
 ## S12.17: Temporary-chat control.
 
@@ -195,40 +110,12 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:129-136`
 
 - Done when: The new-chat screen shows which workspace (personal or organization) the new chat will belong to.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The new-chat screen shows 'Workspace: <name>' (or Personal) for accounts in an organization, with the web's shared i18n string, in post-codex/chat-gates-s12.19-s12.21-s14.15-mobile-new-chat.patch. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/team/service.ts:62-62`
-
-## S12.20: Default-Project selection.
-
-- Done when: Before sending, the user can pick the project a new chat will be created in.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | The active project is a workspaceState memento turned into a text prelude; nothing passes a project id to the thread or the CLI app server, so the chat is not created in the project (only `agiworkforce projects link` does that, per directory, outside VS Code). |  |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2448-2465`, `apps/extension-vscode/src/core/commandSetup.ts:2265-2268`, `apps/extension-vscode/src/features/sidebar-webview/sidebarProvider.ts:73-73`, `apps/extension-vscode/src/core/chatSetup.ts:60-60`
-
-## S12.21: Mode explanation and examples.
-
-- Done when: The new-chat screen explains the available modes and gives examples of what each is for.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | In AGI Work mode the new-chat screen shows the web's AGI Work intro and four examples (shared i18n) that fill the composer, in post-codex/chat-gates-s12.19-s12.21-s14.15-mobile-new-chat.patch. | ui |
-| cli | partial | Add examples; the welcome names the access modes and the Shift+Tab mode switch only. | ui |
-
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-200`, `apps/cli/src/tui/tui_app.rs:1476-1488`
 
 ## S12.23: Resumption of an unsent draft.
 
@@ -249,7 +136,7 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-200`, `apps/cli/src/tui/tui_app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/contrast 45941613aa and 1edf7c6eba: a visitor without a session reaches exactly /chat (proxy exemption, lead-approved) and gets the text-only guest chat on p-auth's route: the free default model; no files, images, voice, tools, memory or history; Log in and Sign up for free; the daily limit stated and what is left after each reply; the Terms and Privacy line; every refusal code handled. With the switch off the layout sends the same sign-in redirect the proxy did. Left: switching guest.chat on with AGI_BOT_CHALLENGE_ENFORCED at the final pass (supersedes p-contrast-45941613aa.json). | switch |
-| desktop | partial | partials/contrast 45941613aa and 1edf7c6eba: a visitor without a session reaches exactly /chat (proxy exemption, lead-approved) and gets the text-only guest chat on p-auth's route: the free default model; no files, images, voice, tools, memory or history; Log in and Sign up for free; the daily limit stated and what is left after each reply; the Terms and Privacy line; every refusal code handled. With the switch off the layout sends the same sign-in redirect the proxy did. Left: switching guest.chat on with AGI_BOT_CHALLENGE_ENFORCED at the final pass (supersedes p-contrast-45941613aa.json). | switch |
+| web | partial | web: switch-on AGI_BOT_CHALLENGE_ENFORCED=1 and flag guest.chat (surface web), off by owner decision for now. desktop: declined (lead ruling 2026-09-28): guest chat is web-only; the ChatGPT and Claude desktop apps require sign-in | switch |
+| desktop | partial | web: switch-on AGI_BOT_CHALLENGE_ENFORCED=1 and flag guest.chat (surface web), off by owner decision for now. desktop: declined (lead ruling 2026-09-28): guest chat is web-only; the ChatGPT and Claude desktop apps require sign-in | switch |
 
-Code: `apps/web/proxy.ts:283-283`, `apps/web/app/chat/layout.tsx:42-42`, `apps/web/features/chat/guest/guest-chat-stream.ts:86-86`, `apps/web/features/chat/guest/GuestChat.tsx:228-228`
+Code: `apps/web/lib/guest-chat/guest-chat-access.ts:33-33`

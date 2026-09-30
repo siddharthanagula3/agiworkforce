@@ -1,6 +1,7 @@
 import {
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   resolveChatAttachmentMimeType,
 } from '@agiworkforce/cloud-contracts';
 import type { GlobMatch } from '../../api/codeSearch';
@@ -46,7 +47,7 @@ export function selectDefaultCandidates(
       omittedForCap += 1;
       continue;
     }
-    if (totalBytes + candidate.byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
+    if (totalBytes + candidate.byteCount > MAX_CHAT_ATTACHMENT_MESSAGE_BYTES) {
       omittedForCap += 1;
       continue;
     }
@@ -65,6 +66,6 @@ export function isSelectionWithinCaps(candidates: readonly FolderCandidate[]): b
   return (
     candidates.length > 0 &&
     candidates.length <= MAX_CHAT_ATTACHMENT_COUNT &&
-    totalBytes(candidates) <= MAX_CHAT_ATTACHMENT_BYTES
+    totalBytes(candidates) <= MAX_CHAT_ATTACHMENT_MESSAGE_BYTES
   );
 }

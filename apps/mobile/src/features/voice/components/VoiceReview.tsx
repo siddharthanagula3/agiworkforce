@@ -1,12 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, TextInput, Pressable, StyleSheet } from 'react-native';
+import { View, TextInput, StyleSheet } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { X, Check, Mic } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 interface VoiceReviewProps {
   visible: boolean;
@@ -57,8 +59,8 @@ export function VoiceReview({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.quick)}
       style={[styles.container, { backgroundColor: colors.surfaceElevated }]}
       accessible
       accessibilityLabel="Review your transcription before sending"
@@ -98,29 +100,29 @@ export function VoiceReview({
       {/* Action row */}
       <View style={styles.actions}>
         {/* Cancel */}
-        <Pressable
+        <PressableBox
           onPress={handleCancel}
           style={[styles.cancelBtn, { backgroundColor: colors.neutralSurface }]}
           accessibilityLabel="Cancel and discard"
           accessibilityRole="button"
         >
           <X size={20} color={colors.textSecondary} />
-        </Pressable>
+        </PressableBox>
 
         {/* Re-record */}
         {onReRecord && (
-          <Pressable
+          <PressableBox
             onPress={handleReRecord}
             style={[styles.reRecordBtn, { backgroundColor: colors.accentSurface }]}
             accessibilityLabel="Re-record voice"
             accessibilityRole="button"
           >
             <Mic size={20} color={colors.terraCotta} />
-          </Pressable>
+          </PressableBox>
         )}
 
         {/* Confirm */}
-        <Pressable
+        <PressableBox
           onPress={handleConfirm}
           style={[
             styles.confirmBtn,
@@ -132,7 +134,7 @@ export function VoiceReview({
           accessibilityState={{ disabled: !editedText.trim() }}
         >
           <Check size={22} color={colors.accentText} />
-        </Pressable>
+        </PressableBox>
       </View>
     </Animated.View>
   );
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: {
-    fontSize: 13,
+    fontSize: typeScale.footnote,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -165,7 +167,7 @@ const styles = StyleSheet.create({
     minHeight: 80,
   },
   transcriptInput: {
-    fontSize: 15,
+    fontSize: typeScale.body,
     lineHeight: 22,
   },
   actions: {

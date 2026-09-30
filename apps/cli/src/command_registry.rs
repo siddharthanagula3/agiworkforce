@@ -221,7 +221,7 @@ fn append_tui_shortcuts(help: &mut String) {
     help.push_str("\nKeyboard shortcuts:\n");
     let _ = writeln!(
         help,
-        "  {:<14} Cycle mode: Default -> Plan -> AcceptEdits -> Bypass -> FullAuto",
+        "  {:<14} Cycle mode: Default -> Plan -> AcceptEdits, then Bypass -> FullAuto when started with --allow-dangerously-skip-permissions",
         "Shift+Tab"
     );
     let _ = writeln!(help, "  {:<14} Open command palette", "/");
@@ -288,7 +288,7 @@ mod tests {
     fn cli_uses_shared_builtin_registry() {
         let commands = builtin_slash_registry_commands();
 
-        assert_eq!(commands.len(), 96);
+        assert_eq!(commands.len(), 107);
         assert_eq!(commands[0].name, "model");
         assert_eq!(
             commands

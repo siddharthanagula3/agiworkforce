@@ -37,9 +37,13 @@ export class ServerSentEventDecoder {
     return events;
   }
 
-  finish(): { events: ServerSentEvent[]; incomplete: boolean } {
+  finish(options: { acceptUnterminatedFrame?: boolean } = {}): {
+    events: ServerSentEvent[];
+    incomplete: boolean;
+  } {
     const events = this.drain(true);
-    const incomplete = this.dataLines.length > 0;
+    const incomplete = this.dataLines.length > 0 && options.acceptUnterminatedFrame !== true;
+    if (!incomplete) this.dispatch(events);
     this.buffer = '';
     this.resetFrame();
     return { events, incomplete };
@@ -133,6 +137,7 @@ export function splitJoinedServerSentEventData(data: string): string[] {
 
 export interface ReadServerSentEventsOptions {
   maximumFrameCharacters?: number;
+  acceptUnterminatedFinalFrame?: boolean;
   onChunk?: () => void;
 }
 
@@ -151,7 +156,7 @@ export async function* readServerSentEvents(
   if (!stream) {
     if (isByteStream(source)) return;
     yield* decoder.push(await source.text());
-    yield* decoder.finish().events;
+    yield* decoder.finish({ acceptUnterminatedFrame: options.acceptUnterminatedFinalFrame }).events;
     return;
   }
   const reader = stream.getReader();
@@ -164,7 +169,7 @@ export async function* readServerSentEvents(
       yield* decoder.push(text.decode(value, { stream: true }));
     }
     yield* decoder.push(text.decode());
-    yield* decoder.finish().events;
+    yield* decoder.finish({ acceptUnterminatedFrame: options.acceptUnterminatedFinalFrame }).events;
   } finally {
     reader.releaseLock();
   }

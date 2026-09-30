@@ -1029,7 +1029,7 @@ export function ChatInput({
           {visibleSkillSuggestions.map((suggestion) => (
             <span
               key={suggestion.name}
-              className="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] pl-2.5 pr-1 py-0.5 text-xs text-[var(--chat-text-secondary)]"
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] ps-2.5 pe-1 py-0.5 text-xs text-[var(--chat-text-secondary)]"
             >
               <button
                 type="button"
@@ -1117,7 +1117,7 @@ export function ChatInput({
                   <button
                     type="button"
                     onClick={() => setAttachedFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="ml-0.5 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]"
+                    className="ms-0.5 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]"
                     aria-label={`Remove ${file.name}`}
                   >
                     &times;
@@ -1238,7 +1238,7 @@ export function ChatInput({
                   >
                     <Plus size={18} />
                     {attachedFiles.length > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-caption font-bold text-[var(--chat-accent-on-primary)]">
+                      <span className="absolute -top-0.5 -end-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-caption font-bold text-[var(--chat-accent-on-primary)]">
                         {attachedFiles.length}
                       </span>
                     )}
@@ -1325,7 +1325,7 @@ export function ChatInput({
                 shrinkable model area shares the nowrap row. The mic + send below
                 are shrink-0, so under flex-nowrap + the container's overflow-hidden
                 the send button can never be pushed off-edge or clipped. */}
-            <div className="ml-auto flex min-w-0 max-w-full items-center justify-end gap-1.5">
+            <div className="ms-auto flex min-w-0 max-w-full items-center justify-end gap-1.5">
               {/* Inline model selector popover */}
               <ModelSelector
                 onSettingsClick={onModelSelectorClick}
@@ -1417,8 +1417,8 @@ export function ChatInput({
               }}
               disabled={disabled}
               className={cn(
-                'flex h-full min-w-0 items-center gap-1.5 pl-2.5 text-xs font-medium',
-                scopeHasSelection ? 'pr-1' : 'pr-2.5',
+                'flex h-full min-w-0 items-center gap-1.5 ps-2.5 text-xs font-medium',
+                scopeHasSelection ? 'pe-1' : 'pe-2.5',
                 disabled && 'cursor-not-allowed opacity-50',
               )}
               aria-label={
@@ -1442,7 +1442,7 @@ export function ChatInput({
               <button
                 type="button"
                 onClick={handleClearScopeSelection}
-                className="mr-1.5 shrink-0 rounded-full p-1.5 hover:bg-[var(--chat-accent-primary)]/20"
+                className="me-1.5 shrink-0 rounded-full p-1.5 hover:bg-[var(--chat-accent-primary)]/20"
                 aria-label={
                   canUseAgiWork
                     ? t('composer.clearProjectOrFolder', 'Clear project or folder selection')
@@ -1459,7 +1459,7 @@ export function ChatInput({
               ref={scopePanelRef}
               role="listbox"
               aria-label={t('composer.projectOrFolder', 'Project or folder')}
-              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-e4"
+              className="absolute bottom-full start-0 z-[var(--z-dropdown)] mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-e4"
             >
               {!canUseAgiWork && (
                 <p
@@ -1498,7 +1498,7 @@ export function ChatInput({
                     onClick={() => handlePickProject(project.id)}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
                   >
-                    <span className="min-w-0 flex-1 truncate text-left">{project.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-start">{project.name}</span>
                     {activeProjectId === project.id && (
                       <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     )}
@@ -1534,7 +1534,7 @@ export function ChatInput({
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
                   >
                     <FolderOpen className="h-4 w-4 shrink-0 text-[var(--chat-text-secondary)]" />
-                    <span className="flex-1 text-left">
+                    <span className="flex-1 text-start">
                       {entitledFolderLabel
                         ? t('composer.chooseDifferentFolder', 'Choose a different folder')
                         : t('composer.chooseLocalFolder', 'Choose a local folder')}

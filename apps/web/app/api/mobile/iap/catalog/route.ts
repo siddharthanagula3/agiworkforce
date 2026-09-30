@@ -15,6 +15,7 @@ import {
   WAITLIST_ACCESS_REQUIRED_CODE,
   hasBillingWaitlistAccess,
   hasPaidBillingHistory,
+  isBillingUpgradeWaitlistEnabled,
 } from '@/lib/server/billing-waitlist-access';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 
@@ -50,18 +51,27 @@ async function handleCatalog(
       )
     : null;
   const switchedOff = gate !== null && !gate.capabilityAllowed('in_app_purchase');
-  if (!catalog.enabled || switchedOff) {
+  if (switchedOff) {
     return NextResponse.json({
       enabled: false,
       platform: parsed.data.platform,
       appAccountToken: null,
       products: [],
-      unavailableReason: switchedOff ? PURCHASES_SWITCHED_OFF : catalog.unavailableReason,
+      unavailableReason: PURCHASES_SWITCHED_OFF,
       unavailableCode: null,
     });
   }
 
-  const db = getNeonDb();
+  if (!catalog.enabled && !isBillingUpgradeWaitlistEnabled()) {
+    return NextResponse.json({
+      enabled: false,
+      platform: parsed.data.platform,
+      appAccountToken: null,
+      products: [],
+      unavailableReason: catalog.unavailableReason,
+      unavailableCode: null,
+    });
+  }
 
   type SubRow = Pick<
     SubscriptionRow,
@@ -98,11 +108,25 @@ async function handleCatalog(
       platform: parsed.data.platform,
       appAccountToken: null,
       products: [],
-      unavailableReason: UPGRADE_ACCESS_REQUIRED,
+      unavailableReason: catalog.enabled
+        ? UPGRADE_ACCESS_REQUIRED
+        : `${UPGRADE_ACCESS_REQUIRED} Purchases will open after store products are ready.`,
       unavailableCode: WAITLIST_ACCESS_REQUIRED_CODE,
     });
   }
 
+  if (!catalog.enabled) {
+    return NextResponse.json({
+      enabled: false,
+      platform: parsed.data.platform,
+      appAccountToken: null,
+      products: [],
+      unavailableReason: catalog.unavailableReason,
+      unavailableCode: null,
+    });
+  }
+
+  const db = getNeonDb();
   const [readiness] = await db.query<{ ready: boolean }>(
     `select (
        to_regclass('public.mobile_iap_accounts') is not null
@@ -132,7 +156,7 @@ async function handleCatalog(
     enabled: true,
     platform: parsed.data.platform,
     appAccountToken: account.app_account_token,
-    products: catalog.products,
+    products: catalog.products.filter((product) => product.kind === 'subscription'),
     unavailableReason: null,
     unavailableCode: null,
   });

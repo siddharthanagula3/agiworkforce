@@ -113,7 +113,7 @@ export default function RoutingHealthPanel() {
 
           <div className={TABLE_WRAP_CLASS}>
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-card text-left">
+              <thead className="bg-card text-start">
                 <tr>
                   <th className="p-3 font-medium">Provider</th>
                   <th className="p-3 font-medium">Credential class</th>
@@ -206,7 +206,7 @@ export default function RoutingHealthPanel() {
               ) : (
                 <div className={`mt-4 ${TABLE_WRAP_CLASS}`}>
                   <table className="w-full min-w-[720px] text-sm">
-                    <thead className="bg-card text-left">
+                    <thead className="bg-card text-start">
                       <tr>
                         <th className="p-3 font-medium">Route</th>
                         <th className="p-3 font-medium">Lockout</th>

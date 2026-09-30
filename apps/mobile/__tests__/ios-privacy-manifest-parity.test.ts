@@ -19,62 +19,29 @@ const configured = appConfig.expo.ios?.privacyManifests ?? {};
 const manifestBody = readFileSync(
   join(__dirname, '..', 'store-listing', 'ios', 'PrivacyInfo.xcprivacy'),
   'utf8',
-).replace(/<!--[\s\S]*?-->/g, '');
+);
+const plist = require('plist') as typeof import('plist');
 
-const lockedStrings = new Set(
-  [...manifestBody.matchAll(/<string>([^<]+)<\/string>/g)].map((m) => m[1]!.trim()),
-);
-const lockedKeys = new Set(
-  [...manifestBody.matchAll(/<key>([^<]+)<\/key>/g)].map((m) => m[1]!.trim()),
-);
+function canonicalManifestValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value
+      .map(canonicalManifestValue)
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, canonicalManifestValue(entry)]),
+    );
+  }
+  return value;
+}
 
 describe('iOS privacy manifest, generated config matches the reviewed copy', () => {
-  it('declares every top-level key the reviewed manifest declares', () => {
-    for (const topLevel of [
-      'NSPrivacyAccessedAPITypes',
-      'NSPrivacyCollectedDataTypes',
-      'NSPrivacyTracking',
-      'NSPrivacyTrackingDomains',
-    ]) {
-      expect(lockedKeys.has(topLevel)).toBe(true);
-      expect(Object.prototype.hasOwnProperty.call(configured, topLevel)).toBe(true);
-    }
-  });
-
-  it('declares no API type or reason the reviewed manifest does not carry', () => {
-    const apiTypes = (configured['NSPrivacyAccessedAPITypes'] ?? []) as Array<{
-      NSPrivacyAccessedAPIType: string;
-      NSPrivacyAccessedAPITypeReasons: string[];
-    }>;
-
-    expect(apiTypes.length).toBeGreaterThan(0);
-    for (const entry of apiTypes) {
-      expect(lockedStrings.has(entry.NSPrivacyAccessedAPIType)).toBe(true);
-      for (const reason of entry.NSPrivacyAccessedAPITypeReasons) {
-        expect(lockedStrings.has(reason)).toBe(true);
-      }
-    }
-  });
-
-  it('declares no collected data type the reviewed manifest does not carry', () => {
-    const collected = (configured['NSPrivacyCollectedDataTypes'] ?? []) as Array<{
-      NSPrivacyCollectedDataType: string;
-      NSPrivacyCollectedDataTypePurposes: string[];
-    }>;
-
-    expect(collected.length).toBeGreaterThan(0);
-    for (const entry of collected) {
-      expect(lockedStrings.has(entry.NSPrivacyCollectedDataType)).toBe(true);
-      for (const purpose of entry.NSPrivacyCollectedDataTypePurposes) {
-        expect(lockedStrings.has(purpose)).toBe(true);
-      }
-    }
-  });
-
-  it('agrees that the app does not track', () => {
-    expect(configured['NSPrivacyTracking']).toBe(false);
-    expect(manifestBody).toMatch(/<key>NSPrivacyTracking<\/key>\s*<false\/>/);
-    expect(configured['NSPrivacyTrackingDomains']).toEqual([]);
-    expect(manifestBody).toMatch(/<key>NSPrivacyTrackingDomains<\/key>\s*<array\/>/);
+  it('matches every configured declaration, purpose, linked flag and tracking flag in both directions', () => {
+    expect(canonicalManifestValue(plist.parse(manifestBody))).toEqual(
+      canonicalManifestValue(configured),
+    );
   });
 });

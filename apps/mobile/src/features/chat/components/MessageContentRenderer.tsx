@@ -1,4 +1,6 @@
+import { useMemo, useState } from 'react';
 import { View, Linking, ScrollView, Alert, type LayoutChangeEvent } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { MathBlock } from './MathBlock';
@@ -6,6 +8,7 @@ import { ReportChart } from './ReportChart';
 import { MermaidDiagramBlock } from './MermaidDiagramBlock';
 import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   classifyExternalLink,
   getSystemIntentPrompt,
@@ -19,9 +22,25 @@ import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
+import { Download } from 'lucide-react-native';
+import { exportSourceFile, shareFile } from '@/services/fileCreation';
+import { markdownTableToCsv } from '@/src/features/chat/utils/tableCsv';
 
 const MIN_TABLE_COLUMN_WIDTH = 120;
 const MAX_TABLE_COLUMN_WIDTH = 260;
+const WIDE_TABLE_GUTTER = 24;
+
+export function wideTableOverflow(input: {
+  tableWidth: number;
+  containerWidth: number;
+  paneWidth: number;
+}): number {
+  const { tableWidth, containerWidth, paneWidth } = input;
+  if (containerWidth <= 0 || tableWidth <= containerWidth) return 0;
+  const widest = Math.max(containerWidth, paneWidth - WIDE_TABLE_GUTTER * 2);
+  return Math.max(0, Math.min(tableWidth, widest) - containerWidth);
+}
 const TABLE_COLUMN_CHARACTER_WIDTH = 8;
 const TABLE_COLUMN_PADDING = 16;
 const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
@@ -167,7 +186,7 @@ export function renderInlineMarkdown(
           key={`code-${keyBase}-${inlineKey++}`}
           style={{
             fontFamily: 'Menlo',
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             backgroundColor: renderColors.surfaceHover,
             color: renderColors.textPrimary,
           }}
@@ -226,6 +245,175 @@ const listItemPattern = /^(\s*)(?:([-*])|(\d+)\.)\s+(.+)$/;
 const nestedBullets = ['•', '◦', '▪'];
 
 type ParsedListItem = { depth: number; marker: string; ordered: boolean; text: string };
+
+const TABLE_SORT_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+function tableCellNumber(value: string): number {
+  const trimmed = value.trim();
+  if (!/^[-+(]?[$€£₹]?[\d.,]+%?\)?$/.test(trimmed)) return Number.NaN;
+  const negative = trimmed.startsWith('(') && trimmed.endsWith(')');
+  const parsed = Number(trimmed.replace(/[()%$€£₹,\s]/g, ''));
+  return negative ? -parsed : parsed;
+}
+
+function compareTableCells(a: string, b: string): number {
+  const left = tableCellNumber(a);
+  const right = tableCellNumber(b);
+  if (!Number.isNaN(left) && !Number.isNaN(right)) return left - right;
+  return TABLE_SORT_COLLATOR.compare(a, b);
+}
+
+type TableSort = { column: number; direction: 'ascending' | 'descending' } | null;
+
+function MarkdownTable({
+  rows,
+  columnWidths,
+  keyBase,
+  renderColors,
+  citations,
+}: {
+  rows: string[][];
+  columnWidths: number[];
+  keyBase: string;
+  renderColors: ColorScheme;
+  citations: readonly CitationSource[];
+}) {
+  const [sort, setSort] = useState<TableSort>(null);
+  const [header = [], ...body] = rows;
+  const numCols = columnWidths.length;
+  const sortedBody = useMemo(() => {
+    if (!sort) return body;
+    const ordered = [...body].sort((a, b) =>
+      compareTableCells(a[sort.column] ?? '', b[sort.column] ?? ''),
+    );
+    return sort.direction === 'ascending' ? ordered : ordered.reverse();
+  }, [body, sort]);
+  const sortable = body.length > 1;
+  const { contentWidth: paneWidth } = useResponsiveLayout();
+  const [containerWidth, setContainerWidth] = useState(0);
+  const tableWidth = columnWidths.reduce((total, width) => total + width, 0) + 2;
+  const overflow = wideTableOverflow({ tableWidth, containerWidth, paneWidth });
+
+  const cellStyle = (colIdx: number) => ({
+    width: columnWidths[colIdx],
+    borderRightWidth: colIdx < numCols - 1 ? 1 : 0,
+    borderRightColor: renderColors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    justifyContent: 'center' as const,
+  });
+
+  return (
+    <View
+      onLayout={(event: LayoutChangeEvent) => setContainerWidth(event.nativeEvent.layout.width)}
+      testID="markdown-table-frame"
+    >
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator
+        style={{ marginVertical: 8, marginHorizontal: -overflow / 2 }}
+        testID="markdown-table"
+        contentContainerStyle={{
+          borderWidth: 1,
+          borderColor: renderColors.border,
+          borderRadius: 4,
+          overflow: 'hidden',
+          flexDirection: 'column',
+        }}
+      >
+        <View
+          style={{
+            flexDirection: 'row',
+            borderBottomWidth: 1,
+            borderBottomColor: renderColors.border,
+            backgroundColor: renderColors.surfaceHover,
+          }}
+        >
+          {Array.from({ length: numCols }).map((_, colIdx) => {
+            const label = header[colIdx] ?? '';
+            const active = sort?.column === colIdx ? sort.direction : null;
+            const next = active === 'ascending' ? 'descending' : 'ascending';
+            const content = (
+              <Text
+                style={{
+                  fontSize: typeScale.footnote,
+                  color: renderColors.textPrimary,
+                  fontWeight: '500',
+                  lineHeight: 19,
+                }}
+              >
+                {renderInlineMarkdown(label, `${keyBase}-th-${colIdx}`, renderColors, citations)}
+                {active ? (active === 'ascending' ? ' \u2191' : ' \u2193') : ''}
+              </Text>
+            );
+            return sortable ? (
+              <Pressable
+                key={`${keyBase}-th-${colIdx}`}
+                style={cellStyle(colIdx)}
+                onPress={() => setSort({ column: colIdx, direction: next })}
+                accessibilityRole="button"
+                accessibilityLabel={`${label}${active ? `, sorted ${active}` : ''}`}
+                accessibilityHint={`Sorts the table by this column, ${next}`}
+              >
+                {content}
+              </Pressable>
+            ) : (
+              <View key={`${keyBase}-th-${colIdx}`} style={cellStyle(colIdx)}>
+                {content}
+              </View>
+            );
+          })}
+        </View>
+        {sortedBody.map((row, rowIdx) => (
+          <View key={`${keyBase}-tr-${rowIdx}`} style={{ flexDirection: 'row' }}>
+            {Array.from({ length: numCols }).map((_, colIdx) => (
+              <View key={`${keyBase}-td-${rowIdx}-${colIdx}`} style={cellStyle(colIdx)}>
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    color: renderColors.textSecondary,
+                    fontWeight: '400',
+                    lineHeight: 19,
+                  }}
+                  selectable
+                >
+                  {renderInlineMarkdown(
+                    row[colIdx] || '',
+                    `${keyBase}-tdil-${rowIdx}-${colIdx}`,
+                    renderColors,
+                    citations,
+                  )}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+      <Pressable
+        onPress={() => {
+          void exportSourceFile(markdownTableToCsv([header, ...sortedBody]), 'table', 'csv')
+            .then((result) => shareFile(result.uri))
+            .catch(() => {
+              Alert.alert('Download failed', 'Could not save this table as CSV. Try again.');
+            });
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Download table as CSV"
+        style={{
+          alignSelf: 'flex-end',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+          minHeight: 44,
+          paddingHorizontal: 8,
+        }}
+      >
+        <Download size={14} color={renderColors.textSecondary} />
+        <Text style={{ fontSize: typeScale.caption, color: renderColors.textSecondary }}>CSV</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 function collectListItems(
   lines: string[],
@@ -343,7 +531,7 @@ function renderTextSegment(
         >
           <Text
             style={{
-              fontSize: 14,
+              fontSize: typeScale.subhead,
               fontStyle: 'italic',
               color: renderColors.textSecondary,
               lineHeight: 21,
@@ -374,7 +562,7 @@ function renderTextSegment(
             >
               <Text
                 style={{
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   color: renderColors.teal,
                   lineHeight: 22,
                   ...(item.ordered
@@ -386,7 +574,7 @@ function renderTextSegment(
               </Text>
               <Text
                 style={{
-                  fontSize: 15,
+                  fontSize: typeScale.body,
                   color: renderColors.textPrimary,
                   lineHeight: 22,
                   flex: 1,
@@ -460,63 +648,14 @@ function renderTextSegment(
               );
             });
             nodes.push(
-              <ScrollView
+              <MarkdownTable
                 key={`${keyBase}-table-${idx}`}
-                horizontal
-                showsHorizontalScrollIndicator
-                style={{ marginVertical: 8 }}
-                contentContainerStyle={{
-                  borderWidth: 1,
-                  borderColor: renderColors.border,
-                  borderRadius: 4,
-                  overflow: 'hidden',
-                  flexDirection: 'column',
-                }}
-              >
-                {tableRows.map((row, rowIdx) => (
-                  <View
-                    key={`${keyBase}-tr-${idx}-${rowIdx}`}
-                    style={{
-                      flexDirection: 'row',
-                      borderBottomWidth: rowIdx === 0 ? 1 : 0,
-                      borderBottomColor: renderColors.border,
-                      backgroundColor: rowIdx === 0 ? renderColors.surfaceHover : undefined,
-                    }}
-                  >
-                    {Array.from({ length: numCols }).map((_, colIdx) => (
-                      <View
-                        key={`${keyBase}-td-${idx}-${rowIdx}-${colIdx}`}
-                        style={{
-                          width: columnWidths[colIdx],
-                          borderRightWidth: colIdx < numCols - 1 ? 1 : 0,
-                          borderRightColor: renderColors.border,
-                          paddingHorizontal: 8,
-                          paddingVertical: 6,
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color:
-                              rowIdx === 0 ? renderColors.textPrimary : renderColors.textSecondary,
-                            fontWeight: rowIdx === 0 ? '500' : '400',
-                            lineHeight: 19,
-                          }}
-                          selectable
-                        >
-                          {renderInlineMarkdown(
-                            row[colIdx] || '',
-                            `${keyBase}-tdil-${idx}-${rowIdx}-${colIdx}`,
-                            renderColors,
-                            citations,
-                          )}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ))}
-              </ScrollView>,
+                rows={tableRows}
+                columnWidths={columnWidths}
+                keyBase={`${keyBase}-t${idx}`}
+                renderColors={renderColors}
+                citations={citations}
+              />,
             );
           }
           continue;
@@ -543,7 +682,7 @@ function renderTextSegment(
       nodes.push(
         <Text
           key={`${keyBase}-p-${idx}`}
-          style={{ color: renderColors.textPrimary, fontSize: 15, lineHeight: 23 }}
+          style={{ color: renderColors.textPrimary, fontSize: typeScale.body, lineHeight: 23 }}
           selectable
         >
           {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`, renderColors, citations)}
@@ -593,7 +732,7 @@ function renderCodeCard(
       >
         <Text
           style={{
-            fontSize: 11,
+            fontSize: typeScale.caption,
             fontWeight: '500',
             color: renderColors.textMuted,
             flexShrink: 1,
@@ -616,7 +755,7 @@ function renderCodeCard(
       >
         <Text
           style={{
-            fontSize: 13,
+            fontSize: typeScale.footnote,
             lineHeight: 19,
             fontFamily: 'Menlo',
             color: renderColors.textPrimary,

@@ -33,6 +33,7 @@ const MAX_FACTS_PRESETS: &[u32] = &[100, 250, 500, 1000, 2000];
 
 pub struct MemoriesSettingsView {
     pub settings: MemorySettings,
+    stored_facts: Option<usize>,
     state: SelectionState,
     done: bool,
     saved: bool,
@@ -43,9 +44,15 @@ impl MemoriesSettingsView {
         Self {
             state: SelectionState::new(3),
             settings,
+            stored_facts: None,
             done: false,
             saved: false,
         }
+    }
+
+    pub fn with_stored_facts(mut self, stored: usize) -> Self {
+        self.stored_facts = Some(stored);
+        self
     }
 
     pub fn was_saved(&self) -> bool {
@@ -87,10 +94,16 @@ impl MemoriesSettingsView {
                 "Decay threshold                      [{} days]",
                 self.settings.decay_threshold_days
             ),
-            2 => format!(
-                "Max facts                            [{} facts]",
-                self.settings.max_facts
-            ),
+            2 => match self.stored_facts {
+                Some(stored) => format!(
+                    "Max facts              [{stored} of {} stored]",
+                    self.settings.max_facts
+                ),
+                None => format!(
+                    "Max facts                            [{} facts]",
+                    self.settings.max_facts
+                ),
+            },
             _ => String::new(),
         }
     }

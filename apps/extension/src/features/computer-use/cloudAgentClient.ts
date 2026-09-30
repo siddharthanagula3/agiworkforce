@@ -1,6 +1,6 @@
+import { ServerSentEventDecoder } from '@agiworkforce/client-runtime';
 import { validateGatewayUrl } from '../../background/policy';
 import { getAuthToken } from '../cloud-bridge/freeTrialClient';
-import { BoundedSseDecoder } from '../cloud-bridge/boundedSseDecoder';
 import { platformRequestHeaders } from '../../platformHeaders';
 
 export { getAuthToken };
@@ -413,7 +413,7 @@ export async function callCloud(
   signal?.addEventListener('abort', cancelReader, { once: true });
 
   const decoder = new TextDecoder();
-  const sseDecoder = new BoundedSseDecoder(COMPUTER_USE_MAX_SSE_FRAME_CHARS);
+  const sseDecoder = new ServerSentEventDecoder(COMPUTER_USE_MAX_SSE_FRAME_CHARS);
   let textContent = '';
   const toolCallsAcc: ToolCall[] = [];
   let isDone = false;
@@ -489,8 +489,8 @@ export async function callCloud(
       }
       if (done) break;
 
-      for (const data of sseDecoder.push(decoder.decode(value, { stream: true }))) {
-        consumeSseData(data);
+      for (const event of sseDecoder.push(decoder.decode(value, { stream: true }))) {
+        consumeSseData(event.data);
         if (isDone) break;
       }
 
@@ -500,8 +500,8 @@ export async function callCloud(
     if (!isDone) {
       const trailingText = decoder.decode();
       if (trailingText) {
-        for (const data of sseDecoder.push(trailingText)) {
-          consumeSseData(data);
+        for (const event of sseDecoder.push(trailingText)) {
+          consumeSseData(event.data);
           if (isDone) break;
         }
       }
@@ -509,8 +509,8 @@ export async function callCloud(
 
     if (!isDone) {
       const finished = sseDecoder.finish();
-      for (const data of finished.events) {
-        consumeSseData(data);
+      for (const event of finished.events) {
+        consumeSseData(event.data);
         if (isDone) break;
       }
       // An event without its terminating blank line is incomplete by SSE rules

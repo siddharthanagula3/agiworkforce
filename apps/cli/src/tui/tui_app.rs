@@ -33,6 +33,8 @@ use super::{clip_cols, display_width, pad_to_cols, truncate_cols};
 // Constants
 // ---------------------------------------------------------------------------
 
+const APPROVAL_EXPIRY: Duration = Duration::from_secs(600);
+
 /// Duration the mode-cycle banner is shown after Shift+Tab.
 const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 
@@ -51,7 +53,8 @@ const STATUS_NOTICE_TTL: Duration = Duration::from_secs(2);
 
 /// Permission modes available in the TUI, cycling with Shift+Tab.
 ///
-/// Cycle order: Default → Plan → AcceptEdits → BypassPermissions → FullAuto → Default
+/// Cycle order: Default → Plan → AcceptEdits → BypassPermissions → FullAuto → Default,
+/// where the two approval-skipping modes join only a session launched with them available.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum InteractionMode {
     /// Normal conversation mode (maps to `PermissionMode::Default`).
@@ -102,13 +105,21 @@ impl InteractionMode {
         }
     }
 
-    fn allowed_under(self, pinned: Option<crate::cli_options::PermissionMode>) -> bool {
-        self.permission_mode().within(pinned) == self.permission_mode()
+    fn skips_approval(self) -> bool {
+        matches!(self, Self::BypassPermissions | Self::FullAuto)
     }
 
-    fn next_allowed(self, pinned: Option<crate::cli_options::PermissionMode>) -> Self {
+    fn available_in(self, session: &crate::agent::AgentSession) -> bool {
+        (session.bypass_permissions_available || !self.skips_approval())
+            && self
+                .permission_mode()
+                .within(session.pinned_permission_mode)
+                == self.permission_mode()
+    }
+
+    fn next_available(self, session: &crate::agent::AgentSession) -> Self {
         let mut next = self.next();
-        while next != self && !next.allowed_under(pinned) {
+        while next != self && !next.available_in(session) {
             next = next.next();
         }
         next
@@ -156,6 +167,7 @@ enum ChatRole {
     System,
     Tool,
     Error,
+    Detail,
 }
 
 /// A live tool-call row in the transcript. Populated from the agent's tool
@@ -172,6 +184,8 @@ struct ToolCell {
     timing: ToolTiming,
     full_output: Option<String>,
     accent: Option<Color>,
+    exit_code: Option<i32>,
+    stderr: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -282,6 +296,12 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
             Style::default().fg(ui_muted()),
         ));
     }
+    if let Some(code) = cell.exit_code {
+        spans.push(Span::styled(
+            format!("  exit {code}"),
+            Style::default().fg(if code == 0 { ui_success() } else { ui_danger() }),
+        ));
+    }
     let mut lines = vec![Line::from(spans)];
     let expanded = EXPAND_TOOL_OUTPUT.load(std::sync::atomic::Ordering::Relaxed);
     match (&cell.full_output, &cell.output_preview) {
@@ -305,6 +325,35 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
             Span::styled(preview.clone(), Style::default().fg(ui_muted())),
         ])),
         _ => {}
+    }
+    if let Some(stderr) = &cell.stderr {
+        let shown = if expanded {
+            EXPANDED_TOOL_OUTPUT_LINES
+        } else {
+            1
+        };
+        for (index, line) in stderr.lines().take(shown).enumerate() {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    if index == 0 {
+                        "    stderr "
+                    } else {
+                        "           "
+                    },
+                    Style::default()
+                        .fg(ui_danger())
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(line.to_string(), Style::default().fg(ui_danger())),
+            ]));
+        }
+        let total = stderr.lines().count();
+        if total > shown {
+            lines.push(Line::from(Span::styled(
+                format!("           … {} more stderr lines", total - shown),
+                Style::default().fg(ui_muted()),
+            )));
+        }
     }
     lines
 }
@@ -334,8 +383,7 @@ struct TuiApp {
     model_name: String,
     provider_name: String,
     mode: InteractionMode,
-    /// Detected sandbox backend for the footer indicator.
-    /// `None` means sandboxing was explicitly disabled via `--no-sandbox`.
+    /// Detected sandbox backend. `/status` reports it only while the sandbox is on.
     sandbox_type: Option<crate::sandbox::SandboxType>,
     // Agent picker popup
     agent_picker: super::widgets::agent_picker::AgentPickerState,
@@ -365,6 +413,7 @@ struct TuiApp {
     stream_start: Option<Instant>,
     // Git branch
     git_branch: Option<String>,
+    workspace_pane: Option<Vec<String>>,
     command_registry: CommandRegistry,
     // Fallback rotation banner, shared with the agent send loop. The banner
     // self-clears after FALLBACK_BANNER_TTL seconds.
@@ -383,6 +432,7 @@ struct TuiApp {
     /// derived from them because a `ContentBlock::Image` carries base64 bytes
     /// and no provenance, so the composer would have nothing to name in a chip.
     staged_images: Vec<String>,
+    turn_context: Vec<String>,
     /// Images `/image` generated this session, newest last. Held as paths so
     /// the chip can name a real file and `/image open` can hand it to the
     /// user's default viewer.
@@ -400,6 +450,17 @@ struct TuiApp {
         tokio::sync::mpsc::UnboundedSender<String>,
         tokio::sync::mpsc::UnboundedReceiver<String>,
     ),
+    remote: Option<RemoteLink>,
+    remote_prompts: Vec<String>,
+    remote_label: Option<String>,
+}
+
+struct RemoteLink {
+    host: Arc<crate::tui::remote_host::TuiRemoteHost>,
+    inbox: tokio::sync::mpsc::UnboundedReceiver<crate::tui::remote_host::RemoteInput>,
+    stop: tokio::sync::watch::Sender<bool>,
+    status: Arc<std::sync::Mutex<Option<crate::remote_control::RemoteControlStatus>>>,
+    task: tokio::task::JoinHandle<()>,
 }
 
 /// Short-lived banner shown across the top of the chat area when the
@@ -416,7 +477,7 @@ struct FallbackBanner {
 const FALLBACK_BANNER_TTL: Duration = Duration::from_secs(5);
 
 impl TuiApp {
-    fn new(session: AgentSession, config: CliConfig, sandbox_disabled: bool) -> Self {
+    fn new(session: AgentSession, config: CliConfig) -> Self {
         // Restore the persisted theme before the first frame. Without this the
         // picker recoloured the running TUI and the choice died at restart.
         let theme_choice = config
@@ -440,7 +501,12 @@ impl TuiApp {
         // follow-up prompt) had the full prior history. Hydrate the
         // transcript widget state from the same `session.messages` here so
         // the first render already shows the resumed conversation.
-        let chat_messages: Vec<ChatMessage> = session
+        let imported_from = session.managed_session.as_ref().and_then(|managed| {
+            crate::sessions::open_db()
+                .ok()
+                .and_then(|conn| crate::sessions::imported_from(&conn, &managed.session_id))
+        });
+        let mut chat_messages: Vec<ChatMessage> = session
             .messages
             .iter()
             .filter_map(|m| {
@@ -459,6 +525,15 @@ impl TuiApp {
                 Some(ChatMessage { role, text })
             })
             .collect();
+        if let Some(origin) = imported_from.filter(|_| !chat_messages.is_empty()) {
+            chat_messages.insert(
+                0,
+                ChatMessage {
+                    role: ChatRole::System,
+                    text: format!("The messages below came from {origin}."),
+                },
+            );
+        }
         let git_branch = std::process::Command::new("git")
             .args(["rev-parse", "--abbrev-ref", "HEAD"])
             .output()
@@ -473,11 +548,7 @@ impl TuiApp {
                 }
             });
 
-        let sandbox_type = if sandbox_disabled {
-            None
-        } else {
-            Some(crate::sandbox::SandboxType::detect())
-        };
+        let sandbox_type = Some(crate::sandbox::SandboxType::detect());
         let mode = InteractionMode::for_session(&session);
 
         let mut command_registry =
@@ -555,6 +626,7 @@ impl TuiApp {
             stream_buffer: String::new(),
             stream_start: None,
             git_branch,
+            workspace_pane: None,
             command_registry,
             fallback_banner: Arc::new(std::sync::Mutex::new(None)),
             active_overlay: None,
@@ -562,6 +634,7 @@ impl TuiApp {
             tool_cells: Vec::new(),
             mcp_elicitation_handler: Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new()),
             staged_images: Vec::new(),
+            turn_context: Vec::new(),
             generated_images: Vec::new(),
             mention_candidates: None,
             mention_anchor: None,
@@ -570,6 +643,9 @@ impl TuiApp {
             pasted_texts: Default::default(),
             queued_prompts: Vec::new(),
             side_answers: tokio::sync::mpsc::unbounded_channel(),
+            remote: None,
+            remote_prompts: Vec::new(),
+            remote_label: None,
         }
     }
 
@@ -581,13 +657,24 @@ impl TuiApp {
     /// Stage one image file on the next turn, as `--file` does at launch.
     /// Returns the label the composer chip shows.
     fn stage_image_path(&mut self, path: &str) -> Result<String, String> {
+        self.stage_image_path_with(path, agiworkforce_utils_image::PromptImageMode::ResizeToFit)
+    }
+
+    fn stage_image_path_with(
+        &mut self,
+        path: &str,
+        mode: agiworkforce_utils_image::PromptImageMode,
+    ) -> Result<String, String> {
         let root = self.workspace_root();
         let resolved = crate::path_security::validate_workspace_path_with_cwd(path, &root)?;
         if !resolved.is_file() {
             return Err(format!("{path} is not a file"));
         }
+        if crate::documents::DocumentKind::for_path(&resolved).is_some() {
+            return self.stage_document(&resolved, &root);
+        }
         if !crate::is_image_extension(path) {
-            return Err(format!("{path} is not an image"));
+            return Err(format!("{path} is not an image, PDF or Office document"));
         }
         if crate::model_catalog::find(&self.session.model)
             .is_some_and(|model| !model.supports_vision)
@@ -597,7 +684,7 @@ impl TuiApp {
                 crate::model_catalog::display_name(&self.session.model)
             ));
         }
-        let attachment = crate::load_image_attachment(&resolved.to_string_lossy())
+        let attachment = crate::load_image_attachment_with(&resolved.to_string_lossy(), mode)
             .map_err(|error| format!("{error:#}"))?;
         let path_label = resolved
             .strip_prefix(&root)
@@ -607,13 +694,47 @@ impl TuiApp {
         let size = std::fs::metadata(&resolved)
             .map(|meta| meta.len())
             .unwrap_or(0);
-        let label = format!("{path_label} ({})", crate::tools::format_size(size));
+        let label = match mode {
+            agiworkforce_utils_image::PromptImageMode::Original => format!(
+                "{path_label} ({}, full resolution)",
+                crate::tools::format_size(size)
+            ),
+            agiworkforce_utils_image::PromptImageMode::ResizeToFit => {
+                format!("{path_label} ({})", crate::tools::format_size(size))
+            }
+        };
         if self.staged_images.contains(&label) {
             return Err(format!("{path_label} is already attached"));
         }
         self.session
             .pending_image_blocks
             .push(attachment.into_image_block());
+        self.staged_images.push(label.clone());
+        Ok(label)
+    }
+
+    fn stage_document(
+        &mut self,
+        resolved: &std::path::Path,
+        root: &std::path::Path,
+    ) -> Result<String, String> {
+        let block = crate::load_document_attachment(&resolved.to_string_lossy())
+            .map_err(|error| format!("{error:#}"))?;
+        let size = std::fs::metadata(resolved)
+            .map(|meta| meta.len())
+            .unwrap_or(0);
+        let label = format!(
+            "{} ({})",
+            resolved
+                .strip_prefix(root)
+                .unwrap_or(resolved)
+                .to_string_lossy(),
+            crate::tools::format_size(size)
+        );
+        if self.staged_images.contains(&label) {
+            return Err(format!("{label} is already attached"));
+        }
+        self.session.pending_image_blocks.push(block);
         self.staged_images.push(label.clone());
         Ok(label)
     }
@@ -743,6 +864,12 @@ impl TuiApp {
             *slot = None;
         }
         None
+    }
+
+    fn refresh_workspace_pane(&mut self) {
+        if self.workspace_pane.is_some() {
+            self.workspace_pane = Some(workspace_pane_lines());
+        }
     }
 
     fn sync_stats(&mut self) {
@@ -924,6 +1051,85 @@ impl TuiApp {
                     );
                 }
             }
+            OverlayResult::DiffReviewed(outcome) => {
+                let staged_files = outcome
+                    .approved
+                    .iter()
+                    .filter(|path| {
+                        std::process::Command::new("git")
+                            .arg("add")
+                            .arg("--")
+                            .arg(path)
+                            .status()
+                            .map(|s| s.success())
+                            .unwrap_or(false)
+                    })
+                    .count();
+                let apply = |patch: &str, args: &[&str]| -> bool {
+                    use std::io::Write;
+                    let Ok(mut child) = std::process::Command::new("git")
+                        .arg("apply")
+                        .args(args)
+                        .arg("--recount")
+                        .arg("-")
+                        .stdin(std::process::Stdio::piped())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .spawn()
+                    else {
+                        return false;
+                    };
+                    let written = child
+                        .stdin
+                        .take()
+                        .map(|mut stdin| stdin.write_all(patch.as_bytes()).is_ok())
+                        .unwrap_or(false);
+                    child.wait().map(|s| s.success()).unwrap_or(false) && written
+                };
+                let unstaged_files = outcome
+                    .unstage_files
+                    .iter()
+                    .filter(|path| {
+                        std::process::Command::new("git")
+                            .args(["reset", "-q", "--"])
+                            .arg(path)
+                            .status()
+                            .map(|s| s.success())
+                            .unwrap_or(false)
+                    })
+                    .count();
+                let staged_hunks = outcome
+                    .stage_hunks
+                    .iter()
+                    .filter(|patch| apply(patch, &["--cached"]))
+                    .count();
+                let unstaged_hunks = outcome
+                    .unstage_hunks
+                    .iter()
+                    .filter(|patch| apply(patch, &["-R", "--cached"]))
+                    .count();
+                let discarded_hunks = outcome
+                    .discard_hunks
+                    .iter()
+                    .filter(|patch| apply(patch, &["-R"]))
+                    .count();
+                let failed = outcome.stage_hunks.len() - staged_hunks + outcome.unstage_hunks.len()
+                    - unstaged_hunks
+                    + outcome.discard_hunks.len()
+                    - discarded_hunks;
+                let mut text = format!(
+                    "Staged {staged_files} file(s) and {staged_hunks} hunk(s); unstaged {unstaged_files} file(s) and {unstaged_hunks} hunk(s); discarded {discarded_hunks} hunk(s) from the working tree."
+                );
+                if failed > 0 {
+                    text.push_str(&format!(
+                        " {failed} hunk(s) no longer matched the file and were left as they are; run /diff-review again."
+                    ));
+                }
+                self.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text,
+                });
+            }
             OverlayResult::DiffApproved(paths) => {
                 // Stage the approved files (reversible via `git reset`). Rejected /
                 // skipped files are deliberately left untouched, never auto-discard
@@ -1088,16 +1294,26 @@ fn run_tui_approval_modal(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ctx: &FrameCtx,
     request: &crate::tui::approval_broker::ApprovalRequest,
-) -> Result<(
-    crate::tui::widgets::approval_overlay::ApprovalChoice,
-    Option<String>,
-)> {
+    settled_elsewhere: &dyn Fn() -> bool,
+) -> Result<
+    Option<(
+        crate::tui::widgets::approval_overlay::ApprovalChoice,
+        Option<String>,
+    )>,
+> {
     use crate::tui::widgets::approval_overlay::ApprovalChoice;
     use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
 
     let mut overlay = approval_overlay_for(request);
+    let expires_at = Instant::now() + APPROVAL_EXPIRY;
 
     loop {
+        if Instant::now() >= expires_at || settled_elsewhere() {
+            terminal.draw(|frame| {
+                draw_turn_chrome(frame, ctx);
+            })?;
+            return Ok(None);
+        }
         terminal.draw(|frame| {
             let chat_area = draw_turn_chrome(frame, ctx);
             // Drawn last within the same closure so it composites on top of
@@ -1116,7 +1332,7 @@ fn run_tui_approval_modal(
                             draw_turn_chrome(frame, ctx);
                         })?;
                         let note = overlay.note();
-                        return Ok((overlay.result.unwrap_or(ApprovalChoice::No), note));
+                        return Ok(Some((overlay.result.unwrap_or(ApprovalChoice::No), note)));
                     }
                     ViewAction::Continue | ViewAction::SideAction(_) => {}
                 },
@@ -1516,6 +1732,26 @@ fn spinner_frame(tick: u8) -> &'static str {
     FRAMES[(tick as usize) % FRAMES.len()]
 }
 
+fn answer_details(
+    model: &str,
+    turn: &crate::agent::TurnResult,
+    elapsed: std::time::Duration,
+) -> String {
+    let mut parts = vec![
+        crate::model_catalog::display_name(model),
+        format!(
+            "{} in · {} out",
+            crate::output::format_tokens(turn.input_tokens),
+            crate::output::format_tokens(turn.output_tokens)
+        ),
+    ];
+    if turn.cost_usd > 0.0 && !turn.via_subscription {
+        parts.push(crate::output::format_session_credits(turn.cost_usd));
+    }
+    parts.push(crate::output::format_duration_ms(elapsed.as_millis() as u64));
+    parts.join(" · ")
+}
+
 /// AGI loading verb shown beside the spinner: one plain, steady word, the same
 /// register Claude Code and Codex use, not a rotating vocabulary.
 fn loading_verb_for(_turn_count: u32) -> &'static str {
@@ -1566,11 +1802,13 @@ struct FrameCtx<'a> {
     notice: Option<&'a str>,
     /// Which statusline fields the user has enabled (model/tokens/cost/branch/mode).
     statusline: &'a super::widgets::statusline_setup::StatusLineConfig,
+    workspace_pane: Option<&'a [String]>,
 }
 
 impl<'a> FrameCtx<'a> {
     fn from_app(app: &'a TuiApp) -> Self {
         FrameCtx {
+            workspace_pane: app.workspace_pane.as_deref(),
             model_name: &app.model_name,
             statusline: &app.statusline_config,
             provider_name: &app.provider_name,
@@ -1605,6 +1843,7 @@ impl TuiApp {
             .as_ref()
             .filter(|(_, at)| at.elapsed() <= STATUS_NOTICE_TTL)
             .map(|(text, _)| text.as_str())
+            .or(self.remote_label.as_deref())
     }
 }
 
@@ -1676,13 +1915,74 @@ fn render_header_divider(frame: &mut ratatui::Frame, area: Rect) {
     frame.render_widget(Paragraph::new(line), row);
 }
 
+const WORKSPACE_PANE_MIN_WIDTH: u16 = 90;
+const WORKSPACE_PANE_MAX_LINES: usize = 2000;
+
+fn workspace_pane_lines() -> Vec<String> {
+    match crate::runtime::git::diff_for_command("head") {
+        Ok(read) => {
+            let mut lines: Vec<String> = read.summary().lines().map(str::to_string).collect();
+            if !read.diff.is_empty() {
+                lines.push(String::new());
+                lines.extend(read.text.lines().map(str::to_string));
+            }
+            lines.truncate(WORKSPACE_PANE_MAX_LINES);
+            lines
+        }
+        Err(message) => vec![message],
+    }
+}
+
+fn render_workspace_pane(frame: &mut ratatui::Frame, area: Rect, pane: &[String]) {
+    use crate::tui::terminal_palette::{ui_accent, ui_danger, ui_muted, ui_success};
+    let lines: Vec<Line> = pane
+        .iter()
+        .map(|line| {
+            let text = crate::terminal_text::sanitize_terminal_text(line);
+            let style = if line.starts_with("+++") || line.starts_with("---") {
+                Style::default().add_modifier(Modifier::BOLD)
+            } else if line.starts_with('+') {
+                Style::default().fg(ui_success())
+            } else if line.starts_with('-') {
+                Style::default().fg(ui_danger())
+            } else if line.starts_with("@@") {
+                Style::default().fg(ui_accent())
+            } else if line.starts_with("diff --git") || line.starts_with("index ") {
+                Style::default().fg(ui_muted())
+            } else {
+                Style::default()
+            };
+            Line::from(Span::styled(text, style))
+        })
+        .collect();
+    let pane = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(ui_muted()))
+            .title(" Workspace · changes since the last commit "),
+    );
+    frame.render_widget(pane, area);
+}
+
 fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
+    let area = match ctx.workspace_pane {
+        Some(pane) if area.width >= WORKSPACE_PANE_MIN_WIDTH => {
+            let columns = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(58), Constraint::Percentage(42)])
+                .split(area);
+            render_workspace_pane(frame, columns[1], pane);
+            columns[0]
+        }
+        _ => area,
+    };
     use crate::tui::terminal_palette::{
         ui_accent, ui_brand, ui_cloud, ui_danger, ui_muted, ui_success,
     };
     let mut lines: Vec<Line> = Vec::new();
+    let start_view = ctx.chat_messages.is_empty() && !ctx.is_loading;
 
-    if ctx.chat_messages.is_empty() && !ctx.is_loading {
+    if start_view {
         use crate::design_system::AccessMode;
         // Access-mode colors match the status-bar chip so the visual identity is
         // consistent across the app. The word is the same "Local" / "Your key" /
@@ -1716,19 +2016,37 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         )));
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  Type a message and press Enter to send.",
+            "  Type a message and press Enter to send, for example:",
+            Style::default().fg(ui_muted()),
+        )));
+        for example in [
+            "explain how this project is organised",
+            "find the failing test and fix it",
+            "/search what changed in the latest release of a library you use",
+        ] {
+            lines.push(Line::from(Span::styled(
+                format!("    {example}"),
+                Style::default().fg(ui_accent()),
+            )));
+        }
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  Type / for commands. Shift+Tab cycles how much AGI may do on its own: ask before each action, plan only (reads, no edits), or accept edits.",
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(Span::styled(
-            "  Type / for commands · Shift+Tab to switch modes.",
-            Style::default().fg(ui_muted()),
-        )));
-        lines.push(Line::from(Span::styled(
-            "  Esc closes a panel or clears the composer; press it twice on an empty composer to quit.",
+            "  Esc closes a panel or clears the composer; twice on an empty composer, it rewinds. Ctrl+D twice quits.",
             Style::default().fg(ui_muted()),
         )));
     } else {
         for msg in ctx.chat_messages {
+            if msg.role == ChatRole::Detail {
+                lines.push(Line::from(Span::styled(
+                    format!("    ↳ {}", msg.text),
+                    Style::default().fg(ui_muted()),
+                )));
+                continue;
+            }
             if !lines.is_empty() {
                 lines.push(Line::from(""));
             }
@@ -1757,6 +2075,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                         .fg(ui_danger())
                         .add_modifier(Modifier::BOLD),
                 ),
+                ChatRole::Detail => ("  ↳ ", Style::default().fg(ui_muted())),
             };
 
             // Render prefix line
@@ -1773,7 +2092,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                         ChatRole::User => Style::default(),
                         ChatRole::System => Style::default(),
                         ChatRole::Error => Style::default(),
-                        ChatRole::Tool => Style::default().fg(ui_muted()),
+                        ChatRole::Tool | ChatRole::Detail => Style::default().fg(ui_muted()),
                         // Assistant is handled by the outer if-branch; reaching
                         // here would be a logic error but we render it as plain
                         // default foreground rather than panicking so the TUI stays responsive.
@@ -1790,6 +2109,25 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // (running → succeeded/failed), instead of vanishing into swallowed stderr.
     if !ctx.tool_cells.is_empty() {
         lines.push(Line::from(""));
+        let running: Vec<&ToolCell> = ctx
+            .tool_cells
+            .iter()
+            .filter(|cell| cell.state == crate::tui::transcript_cell::TranscriptCellState::Running)
+            .collect();
+        if running.len() > 1 {
+            let what = if running
+                .iter()
+                .all(|cell| matches!(cell.name.as_str(), "task" | "agent"))
+            {
+                "subagents"
+            } else {
+                "tools"
+            };
+            lines.push(Line::from(Span::styled(
+                format!("  ⧉ {} {what} working at once", running.len()),
+                Style::default().fg(ui_accent()),
+            )));
+        }
         for cell in ctx.tool_cells {
             lines.extend(tool_cell_lines(cell, ctx.spinner_char));
         }
@@ -1825,20 +2163,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         // Live streamed output. During a turn this is redrawn each tick, so show
         // a generous tail (not just 5 lines) for a real streaming feel.
         if !ctx.stream_buffer.is_empty() {
-            for line in ctx
-                .stream_buffer
-                .lines()
-                .rev()
-                .take(40)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-            {
-                lines.push(Line::from(Span::styled(
-                    format!("    {line}"),
-                    Style::default(),
-                )));
-            }
+            lines.extend(streaming_markdown_tail(ctx.stream_buffer));
         }
     }
 
@@ -1849,10 +2174,20 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // Wrap here rather than with `Wrap`, which restarts a continuation row at
     // column 0 and puts the text hard against the left border. Wrapping first
     // also makes the scroll maths count rendered rows, not logical lines.
-    let lines = super::wrap_styled_lines(lines, area.width.saturating_sub(2) as usize, 2);
+    let mut lines = super::wrap_styled_lines(lines, area.width.saturating_sub(2) as usize, 2);
 
     // Scroll
     let visible_height = area.height.saturating_sub(1) as usize;
+    if start_view && ctx.tool_cells.is_empty() {
+        let inner_width = area.width.saturating_sub(2) as usize;
+        let block_width = lines.iter().map(Line::width).max().unwrap_or(0);
+        let left = " ".repeat(inner_width.saturating_sub(block_width) / 2);
+        for line in &mut lines {
+            line.spans.insert(0, Span::raw(left.clone()));
+        }
+        let top = visible_height.saturating_sub(lines.len()) / 2;
+        lines.splice(0..0, std::iter::repeat_with(|| Line::from("")).take(top));
+    }
     let total_lines = lines.len();
     let max_scroll = total_lines.saturating_sub(visible_height) as u16;
     let effective_scroll = ctx.scroll_offset.min(max_scroll);
@@ -3135,6 +3470,8 @@ fn rebuild_transcript_from_session(app: &mut TuiApp) {
     app.scroll_offset = 0;
 }
 
+const VOICE_TRANSCRIPT_LABEL: &str = "(spoken)";
+
 fn append_session_messages_since(app: &mut TuiApp, first: usize) {
     if app.session.messages.len() < first {
         rebuild_transcript_from_session(app);
@@ -3179,7 +3516,14 @@ fn open_command_popup(app: &mut TuiApp) {
     // would reject them). They are still dispatched by `handle_slash_command`
     // below, so surface them here so `/` makes them discoverable in the TUI.
     for (name, desc) in [
-        ("attach", "Attach an image to the next message"),
+        (
+            "attach",
+            "Attach an image, PDF or Office file to the next message",
+        ),
+        (
+            "remote-control",
+            "Continue this session from the AGI Workforce phone app",
+        ),
         ("memories", "Configure auto-memory settings"),
         ("skills-toggle", "Enable or disable individual skills"),
         ("title", "Configure the terminal window title"),
@@ -3202,6 +3546,7 @@ fn resolve_composer_mentions(app: &mut TuiApp, text: &str) -> String {
     let root = app.workspace_root();
     let trusted = app.workspace_is_trusted();
     let expansion = crate::mentions::expand_mentions(text, &root, trusted);
+    app.turn_context = expansion.inlined.clone();
     let known_agents: Vec<String> = crate::agents::discover_agents()
         .into_iter()
         .map(|agent| agent.name)
@@ -3347,7 +3692,7 @@ fn find_in_transcript(messages: &[ChatMessage], query: &str) -> String {
         let who = match message.role {
             ChatRole::User => "you",
             ChatRole::Assistant => "assistant",
-            ChatRole::System | ChatRole::Tool | ChatRole::Error => continue,
+            ChatRole::System | ChatRole::Tool | ChatRole::Error | ChatRole::Detail => continue,
         };
         for line in message.text.lines() {
             if line.to_lowercase().contains(&needle) {
@@ -3396,6 +3741,144 @@ fn drain_side_answers(app: &mut TuiApp) {
             role: ChatRole::System,
             text,
         });
+    }
+}
+
+fn remote_status_label(status: &crate::remote_control::RemoteControlStatus) -> Option<String> {
+    use crate::remote_control::RemoteControlStatus;
+    match status {
+        RemoteControlStatus::Waiting { .. } => {
+            Some("Remote Control: waiting for your phone".to_string())
+        }
+        RemoteControlStatus::Connected { phone } => {
+            Some(format!("Remote Control: {}", sanitize_terminal_text(phone)))
+        }
+        RemoteControlStatus::PhoneLeft => Some("Remote Control: phone disconnected".to_string()),
+        RemoteControlStatus::PhoneNeedsUpdate => {
+            Some("Remote Control: update the phone app".to_string())
+        }
+        RemoteControlStatus::Reconnecting => Some("Remote Control: reconnecting".to_string()),
+        RemoteControlStatus::Off => None,
+    }
+}
+
+fn start_remote_control(app: &mut TuiApp) -> String {
+    if app.remote.is_some() {
+        return "Remote Control is already on. /remote-control off stops it.".to_string();
+    }
+    let Some(thread_id) = app.session.managed_session_id().map(str::to_string) else {
+        return "Remote Control needs a saved session, and this one is not being saved."
+            .to_string();
+    };
+    if let Err(error) = app.session.persist_managed_session() {
+        return format!(
+            "Remote Control could not save this session first: {}",
+            sanitize_terminal_text(&format!("{error:#}"))
+        );
+    }
+    let workspace = app.workspace_root();
+    let inner = match crate::runtime::session_control::ManagedSessionStore::user_config()
+        .map_err(|error| error.to_string())
+        .and_then(|store| {
+            crate::app_server::CliDeveloperSessionHost::new_with_store(
+                app.config.clone(),
+                workspace.clone(),
+                store,
+                false,
+            )
+            .map_err(|error| error.to_string())
+        }) {
+        Ok(inner) => inner,
+        Err(error) => {
+            return format!(
+                "Remote Control could not start: {}",
+                sanitize_terminal_text(&error)
+            )
+        }
+    };
+    let (host, inbox) = crate::tui::remote_host::TuiRemoteHost::new(inner, thread_id);
+    let (stop, stopped) = tokio::sync::watch::channel(false);
+    let status = Arc::new(std::sync::Mutex::new(None));
+    let sink = Arc::clone(&status);
+    let relay_host = Arc::clone(&host);
+    let task = tokio::spawn(async move {
+        let result = crate::remote_control::run_with(
+            relay_host,
+            &workspace,
+            stopped,
+            move |update: crate::remote_control::RemoteControlStatus| {
+                use crate::remote_control::RemoteControlStatus;
+                match &update {
+                    RemoteControlStatus::Waiting { folder, pairing_line } => {
+                        crate::tui::push_tui_notice(format!(
+                            "Remote Control is on for {folder}. Open AGI Workforce on your phone to continue this session there.\n{pairing_line}"
+                        ))
+                    }
+                    RemoteControlStatus::Connected { phone } => crate::tui::push_tui_notice(
+                        format!("Remote Control: {} is connected. It sees this session's messages, tool activity and approvals, and can answer them.", sanitize_terminal_text(phone)),
+                    ),
+                    RemoteControlStatus::PhoneLeft => crate::tui::push_tui_notice(
+                        "Remote Control: the phone disconnected. It can reconnect while Remote Control stays on.".to_string(),
+                    ),
+                    RemoteControlStatus::PhoneNeedsUpdate => crate::tui::push_tui_notice(
+                        "Remote Control: the phone app needs an update to connect.".to_string(),
+                    ),
+                    RemoteControlStatus::Reconnecting | RemoteControlStatus::Off => {}
+                }
+                if let Ok(mut current) = sink.lock() {
+                    *current = Some(update);
+                }
+            },
+        )
+        .await;
+        crate::tui::push_tui_notice(match result {
+            Ok(()) => "Remote Control is off.".to_string(),
+            Err(error) => format!("Remote Control stopped: {error:#}"),
+        });
+    });
+    app.remote = Some(RemoteLink {
+        host,
+        inbox,
+        stop,
+        status,
+        task,
+    });
+    app.remote_label = Some("Remote Control: starting".to_string());
+    "Starting Remote Control for this session. /remote-control off stops it.".to_string()
+}
+
+fn stop_remote_control(app: &mut TuiApp) -> String {
+    app.remote_label = None;
+    match app.remote.take() {
+        Some(link) => {
+            let _ = link.stop.send(true);
+            "Stopping Remote Control; the phone can no longer reach this session.".to_string()
+        }
+        None => "Remote Control is not on.".to_string(),
+    }
+}
+
+fn drain_remote_control(app: &mut TuiApp) {
+    let Some(link) = app.remote.as_mut() else {
+        return;
+    };
+    if link.task.is_finished() {
+        app.remote = None;
+        app.remote_label = None;
+        return;
+    }
+    while let Ok(input) = link.inbox.try_recv() {
+        if let crate::tui::remote_host::RemoteInput::Message(text) = input {
+            app.remote_prompts.push(text);
+        }
+    }
+    if let Some(label) = link
+        .status
+        .lock()
+        .ok()
+        .and_then(|status| status.as_ref().map(remote_status_label))
+    {
+        app.remote_label = label;
     }
 }
 
@@ -3579,6 +4062,24 @@ fn handle_effort_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
 }
 
+fn theme_set_message(
+    choice: super::widgets::theme_picker::ThemeChoice,
+    saved: Result<std::path::PathBuf>,
+) -> String {
+    match saved {
+        Ok(path) => format!(
+            "Theme set to {}, saved in {}.",
+            choice.label(),
+            path.display()
+        ),
+        Err(error) => format!(
+            "Theme set to {} for this session; it could not be saved: {}",
+            choice.label(),
+            sanitize_terminal_text(&format!("{error:#}"))
+        ),
+    }
+}
+
 fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     use super::widgets::theme_picker::{handle_key, PickerAction};
 
@@ -3597,12 +4098,12 @@ fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             // TUI recolors on the next frame.
             crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
             // Persist so the choice survives a restart.
-            let _ = app.config.persist_theme_project(choice.slug());
+            let text = theme_set_message(choice, app.config.persist_theme_project(choice.slug()));
             app.input.clear();
             app.cursor = 0;
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
-                text: format!("Theme set to {}", choice.label()),
+                text,
             });
             InputAction::None
         }
@@ -3708,7 +4209,7 @@ fn mode_is_permission_escalating(mode: InteractionMode) -> bool {
 
 /// Apply a mode change to the app and session.
 fn apply_mode(app: &mut TuiApp, mode: InteractionMode) -> bool {
-    if !mode.allowed_under(app.session.pinned_permission_mode) {
+    if !mode.available_in(&app.session) {
         return false;
     }
     app.mode = mode;
@@ -3731,6 +4232,20 @@ fn pinned_mode_notice(app: &TuiApp) -> String {
         "Your organization's policy holds tool approval at {}, so a looser mode is not available.",
         app.session.governed_permission_mode().name()
     )
+}
+
+fn unavailable_mode_notice(app: &TuiApp, mode: InteractionMode) -> String {
+    if mode.skips_approval()
+        && !app.session.bypass_permissions_available
+        && app.session.pinned_permission_mode.is_none()
+    {
+        return format!(
+            "{} is off for this session. Start agi with --allow-dangerously-skip-permissions \
+             to make it available, or --dangerously-skip-permissions to start in it.",
+            mode.label()
+        );
+    }
+    pinned_mode_notice(app)
 }
 
 fn mode_description(mode: InteractionMode) -> &'static str {
@@ -3766,6 +4281,7 @@ enum SlashResult {
     RunCompact(String),
     RunLogin,
     RunLogout,
+    StatusReport(String),
     /// Leave the TUI, run the interactive voice loop, then re-enter.
     RunVoice(String),
     RunDictate(String),
@@ -3780,17 +4296,42 @@ enum SlashResult {
     RunAttachUrl(String),
     RunPersonalize(String),
     RunBtw(String),
+    RunRemoteControl(String),
+    RunFeedback(crate::cloud::feedback::FeedbackKind, String),
 }
 
 const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
   @path            Inline a file, or list a folder with @dir/
   @agent-<name>    Hand the message to one of your agents
-  /attach <image>  Attach an image file (png, jpg, gif, webp)
+  /attach <file>   Attach an image, PDF or Office file
+  /attach --full <image>  Attach it without scaling it down, for fine detail
   /attach <url>    Fetch a web page and add its text to the conversation
   Ctrl+V           Attach the image on the clipboard
   Paste            Long pastes collapse to [Pasted text #N]; the full text is sent
   /mcp             Run a connected server's prompt as /mcp:<server>:<prompt>
   /attach list     Show what is staged · /attach remove [n|all]";
+
+const STREAM_SOURCE_TAIL_LINES: usize = 200;
+const STREAM_RENDERED_TAIL_LINES: usize = 40;
+
+fn streaming_markdown_tail(buffer: &str) -> Vec<Line<'static>> {
+    let source: Vec<&str> = buffer.lines().collect();
+    let start = source.len().saturating_sub(STREAM_SOURCE_TAIL_LINES);
+    let open_fence = source[..start]
+        .iter()
+        .filter(|line| line.trim_start().starts_with("```"))
+        .count()
+        % 2
+        == 1;
+    let mut tail = String::new();
+    if open_fence {
+        tail.push_str("```\n");
+    }
+    tail.push_str(&source[start..].join("\n"));
+    let rendered = super::markdown_renderer::render_markdown(&tail);
+    let skip = rendered.len().saturating_sub(STREAM_RENDERED_TAIL_LINES);
+    rendered.into_iter().skip(skip).collect()
+}
 
 fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) -> String {
     let normalized = input_command.to_lowercase();
@@ -3894,24 +4435,19 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 crate::cli_options::PermissionMode::Plan
             ) {
                 "/plan accept: not in plan mode. Use /plan to enter it first.".to_string()
-            } else if app.session.current_plan.is_none() {
+            } else if app.session.approve_plan().is_err() {
                 "/plan accept: no plan to approve yet. Ask the model to call update_plan first."
                     .to_string()
             } else {
-                app.session.plan_approved = true;
                 "Plan approved. Mutating tools enabled for this session.".to_string()
             },
         ),
 
         "/plan" if arg.starts_with("reject") => {
             let feedback = arg.strip_prefix("reject").unwrap_or("").trim().to_string();
-            SlashResult::SystemMessage(if feedback.is_empty() {
+            SlashResult::SystemMessage(if app.session.reject_plan(&feedback).is_err() {
                 "/plan reject: needs a reason. Usage: /plan reject <feedback>".to_string()
             } else {
-                app.session.plan_rejection_feedback = Some(feedback);
-                app.session.current_plan = None;
-                app.session.current_plan_path = None;
-                app.session.plan_approved = false;
                 "Plan rejected. Feedback queued for the model on the next turn.".to_string()
             })
         }
@@ -4046,13 +4582,16 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 crate::model_catalog::display_name(&app.session.model),
                 app.provider_name,
                 app.mode.label(),
-                crate::sandbox::status_word(app.sandbox_type),
+                crate::sandbox::status_word(
+                    app.sandbox_type
+                        .filter(|_| !crate::sandbox::sandbox_disabled())
+                ),
                 app.session.turn_count,
                 app.session.total_input_tokens,
                 app.session.total_output_tokens,
                 app.context_percent(),
             );
-            SlashResult::SystemMessage(format!(
+            SlashResult::StatusReport(format!(
                 "{msg}\n{}",
                 app.session.session_status_lines().join("\n")
             ))
@@ -4086,16 +4625,24 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage("Started new conversation.".to_string())
         }
 
+        "/models" if !arg.is_empty() => SlashResult::SystemMessage(
+            crate::provider::find_model(arg)
+                .map(|model| crate::provider::format_model_detail(&model))
+                .unwrap_or_else(|| format!("No model named {arg} in the catalog.")),
+        ),
+
         "/models" | "/providers" => {
             let models_output = crate::model_catalog::catalog()
                 .all()
                 .iter()
                 .map(|m| {
                     let flags = format!(
-                        "{}{}{}",
+                        "{}{}{}{}{}",
                         if m.supports_tools { "T" } else { " " },
                         if m.supports_vision { "V" } else { " " },
                         if m.supports_reasoning { "R" } else { " " },
+                        if m.supports_pdf { "P" } else { " " },
+                        if m.supports_audio_input { "A" } else { " " },
                     );
                     format!(
                         "  {} [{}] {:>6}K ctx  {} {}",
@@ -4116,7 +4663,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .collect::<Vec<_>>()
                 .join("\n");
             SlashResult::SystemMessage(format!(
-                "Available models:\n{models_output}\n\nPrices are per 1M input/output tokens; `base+tiered` has request-input bands shown by `agi --cost MODEL`.\nLive local discovery: run `agi models scan` or `agi models status`."
+                "Available models:\n{models_output}\n\nFlags: T=tools, V=vision, R=reasoning, P=reads PDFs, A=audio input. /models <id> shows one model.\nPrices are per 1M input/output tokens; `base+tiered` has request-input bands shown by `agi --cost MODEL`.\nLive local discovery: run `agi models scan` or `agi models status`."
             ))
         }
 
@@ -4134,6 +4681,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         ),
 
         "/worktree" | "/wt" => SlashResult::RunWorktree(arg.to_string()),
+
+        "/diff" if arg.trim() == "panel" => {
+            if app.workspace_pane.take().is_some() {
+                SlashResult::SystemMessage("Closed the workspace pane.".to_string())
+            } else {
+                app.workspace_pane = Some(workspace_pane_lines());
+                SlashResult::SystemMessage(format!(
+                    "The workspace pane now shows the changes since the last commit beside the chat, refreshed after each turn. It needs a window at least {WORKSPACE_PANE_MIN_WIDTH} columns wide. /diff panel again closes it."
+                ))
+            }
+        }
 
         "/diff" => SlashResult::SystemMessage(crate::runtime::git::diff_summary_for_command(arg)),
 
@@ -4172,13 +4730,39 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage("Clipboard not available on this platform.".to_string())
         }
 
+        "/table" => {
+            let reply = app
+                .chat_messages
+                .iter()
+                .rev()
+                .find(|m| m.role == ChatRole::Assistant)
+                .map(|m| m.text.as_str());
+            SlashResult::SystemMessage(crate::claude_parity::table_command(reply, arg))
+        }
+
+        "/background" | "/bg" => match crate::background::hand_off(&mut app.session, arg) {
+            Ok(message) => {
+                app.chat_messages.clear();
+                app.scroll_offset = 0;
+                app.sync_stats();
+                SlashResult::SystemMessage(message)
+            }
+            Err(message) => SlashResult::SystemMessage(message),
+        },
+
+        "/links" => {
+            let reply = app
+                .chat_messages
+                .iter()
+                .rev()
+                .find(|m| m.role == ChatRole::Assistant)
+                .map(|m| m.text.as_str());
+            SlashResult::SystemMessage(crate::claude_parity::links_command(reply, arg))
+        }
+
         "/login" => SlashResult::RunLogin,
 
         "/logout" => SlashResult::RunLogout,
-
-        "/feedback" | "/bug" => {
-            SlashResult::SystemMessage("Report issues at: https://github.com/agiworkforce/agiworkforce/issues".to_string())
-        }
 
         "/help" | "/h" | "/?" => {
             SlashResult::SystemMessage(crate::command_registry::format_command_help(
@@ -4287,7 +4871,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         McpStatus::Disabled
                     } else if configured
                         .get(name)
-                        .and_then(crate::mcp::policy_refusal)
+                        .and_then(|config| crate::mcp::policy_refusal(name, config))
                         .is_some()
                     {
                         McpStatus::Blocked
@@ -4310,8 +4894,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 servers,
             }]);
             for name in &names {
-                if let Some(reason) = configured.get(name).and_then(crate::mcp::policy_refusal) {
-                    text.push_str(&format!("\n{name} is not started: {reason}."));
+                if let Some(reason) = configured.get(name).filter(|_| !registry.iter().any(|row| &row.name == name && !row.enabled)).and_then(|config| crate::mcp::policy_refusal(name, config)) {
+                    text.push_str(&format!("\n{reason}"));
                 }
             }
             text.push_str(
@@ -4321,7 +4905,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/permissions" | "/perms" | "/approvals" => SlashResult::SystemMessage(
-            crate::repl::permissions_for_display(arg).plain_message(),
+            crate::repl::permissions_for_display(arg, &app.session).plain_message(),
         ),
 
         "/agents" => {
@@ -4419,7 +5003,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     SlashResult::RunAttachUrl(url.to_string())
                 }
                 "list" => SlashResult::SystemMessage(if app.staged_images.is_empty() {
-                    "No images staged for the next turn.".to_string()
+                    "Nothing staged for the next turn.".to_string()
                 } else {
                     let rows: Vec<String> = app
                         .staged_images
@@ -4447,6 +5031,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         Err(reason) => SlashResult::SystemMessage(reason),
                     }
                 }
+                "--full" => match app.stage_image_path_with(
+                    rest.trim(),
+                    agiworkforce_utils_image::PromptImageMode::Original,
+                ) {
+                    Ok(label) => SlashResult::SystemMessage(format!(
+                        "Attached {label}. It is sent without being scaled down, so it costs more input; /attach remove drops it."
+                    )),
+                    Err(reason) => SlashResult::SystemMessage(format!(
+                        "Could not attach {}: {reason}",
+                        rest.trim()
+                    )),
+                },
                 "clipboard" => match app.stage_clipboard_image() {
                     Ok(label) => SlashResult::SystemMessage(format!("Attached {label}.")),
                     Err(reason) => SlashResult::SystemMessage(format!("Could not attach: {reason}")),
@@ -4478,7 +5074,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/plugin" | "/plugins" | "/marketplace" | "/market" => {
             use crate::tui::widgets::screen_renderers::{
-                PluginGroup, PluginSummary, PluginTab, render_plugin,
+                PluginGroup, PluginSummary, PluginTab, PluginTabsView,
             };
             // Discover installed plugins from global and project plugin directories.
             let mut manager = crate::features::plugins::plugins::PluginsManager::new();
@@ -4502,7 +5098,15 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .iter()
                 .filter_map(|p| p.error.clone())
                 .collect();
-            SlashResult::SystemMessage(render_plugin(PluginTab::Installed, &installed, &errors))
+            let tab = PluginTab::parse(arg).unwrap_or(if cmd.starts_with("/market") {
+                PluginTab::Marketplaces
+            } else {
+                PluginTab::Installed
+            });
+            app.open_overlay(Box::new(PluginTabsView::new(tab, installed, errors)));
+            SlashResult::SystemMessage(
+                "Plugins (\u{2190}\u{2192} switch tabs \u{00b7} Esc close)".to_string(),
+            )
         }
 
         // ── Memory ──
@@ -4546,8 +5150,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     Some(choice) => {
                         app.theme_choice = choice;
                         crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
-                        let _ = app.config.persist_theme_project(choice.slug());
-                        SlashResult::SystemMessage(format!("Theme set to {}", choice.label()))
+                        SlashResult::SystemMessage(theme_set_message(
+                            choice,
+                            app.config.persist_theme_project(choice.slug()),
+                        ))
                     }
                     None => SlashResult::SystemMessage(format!(
                         "Unknown theme: '{arg}'. Available: {}",
@@ -4558,6 +5164,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         // ── Side query ──
+        "/remote-control" | "/rc" => SlashResult::RunRemoteControl(arg.to_string()),
+
         "/btw" => {
             if arg.is_empty() {
                 SlashResult::SystemMessage("Usage: /btw <question>, ask a side question".to_string())
@@ -4651,15 +5259,19 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/memories" => {
             use crate::tui::widgets::memories_settings::{MemoriesSettingsView, MemorySettings};
             // Seed from the persisted settings; save commits back via take_result.
-            let (auto_memory, decay_threshold_days, max_facts) =
-                crate::config::CliConfig::config_dir()
-                    .map(|home| crate::memory_pipeline::load_memory_settings(&home))
-                    .unwrap_or((true, 30, 500));
-            let view = MemoriesSettingsView::new(MemorySettings {
+            let home = crate::config::CliConfig::config_dir().ok();
+            let (auto_memory, decay_threshold_days, max_facts) = home
+                .as_deref()
+                .map(crate::memory_pipeline::load_memory_settings)
+                .unwrap_or((true, 30, 500));
+            let mut view = MemoriesSettingsView::new(MemorySettings {
                 auto_memory,
                 decay_threshold_days,
                 max_facts,
             });
+            if let Some(home) = home.as_deref() {
+                view = view.with_stored_facts(crate::memory_pipeline::stored_fact_count(home));
+            }
             app.open_overlay(Box::new(view));
             SlashResult::SystemMessage(
                 "Memory settings (\u{2191}\u{2193} navigate \u{00b7} Enter toggle \u{00b7} Esc close)".into(),
@@ -4746,8 +5358,43 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
                 .unwrap_or_default();
             let parsed = crate::diff_model::Diff::parse(&tracked_diff);
-            let mut files: Vec<FileDiff> =
-                parsed.files.iter().map(FileDiff::from_model).collect();
+            let read_diff = |args: &[&str]| {
+                std::process::Command::new("git")
+                    .args(args)
+                    .output()
+                    .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+                    .unwrap_or_default()
+            };
+            let mut hunks_by_path: std::collections::HashMap<
+                std::path::PathBuf,
+                Vec<(Vec<String>, String, bool)>,
+            > = std::collections::HashMap::new();
+            for (text, staged) in [(read_diff(&["diff", "--cached"]), true), (read_diff(&["diff"]), false)] {
+                let model = crate::diff_model::Diff::parse(&text);
+                let patches = crate::diff_model::file_hunk_patches(&text);
+                if patches.len() != model.files.len() {
+                    continue;
+                }
+                for (file, patches) in model.files.iter().zip(patches) {
+                    if patches.len() != file.hunks.len() {
+                        continue;
+                    }
+                    let entry = hunks_by_path.entry(file.path().to_path_buf()).or_default();
+                    for (hunk, patch) in file.hunks.iter().zip(patches) {
+                        let mut preview = vec![hunk.header()];
+                        preview.extend(hunk.lines.iter().map(crate::diff_model::DiffLine::render));
+                        entry.push((preview, patch, staged));
+                    }
+                }
+            }
+            let mut files: Vec<FileDiff> = parsed
+                .files
+                .iter()
+                .map(|file| {
+                    let hunks = hunks_by_path.remove(file.path()).unwrap_or_default();
+                    FileDiff::from_model(file).with_hunks(hunks)
+                })
+                .collect();
             files.extend(untracked.iter().map(|path| {
                 let mut file = FileDiff::new(path.as_str(), Vec::new(), 0, 0);
                 file.kind = crate::diff_model::FileChangeKind::Added;
@@ -4759,7 +5406,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 let view = DiffReviewView::new(files);
                 app.open_overlay(Box::new(view));
                 SlashResult::SystemMessage(
-                    "Diff review (\u{2191}\u{2193} navigate \u{00b7} y approve \u{00b7} n reject \u{00b7} s skip \u{00b7} Enter done \u{00b7} Esc close)".into(),
+                    "Diff review (\u{2191}\u{2193} file \u{00b7} \u{2190}\u{2192} hunk \u{00b7} y approve \u{00b7} n reject \u{00b7} s skip \u{00b7} Enter done \u{00b7} Esc close). An approved file or hunk is staged, a rejected one is left unstaged (unstaged if it was staged), and d pressed twice on an unstaged hunk discards it from the working tree.".into(),
                 )
             }
         }
@@ -4859,6 +5506,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         }
                     ))
                 }
+                crate::claude_parity::ParityCommandResult::Feedback { kind, message } => {
+                    SlashResult::RunFeedback(kind, message)
+                }
                 crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
             }
         }
@@ -4911,6 +5561,7 @@ pub async fn run(
     resume_managed_session: Option<(crate::runtime::session::ManagedSession, std::path::PathBuf)>,
     max_turns: Option<usize>,
     skip_permissions: bool,
+    allow_bypass_permissions: bool,
     fallback_chain: crate::routing::fallback::FallbackChain,
     _session_name: Option<String>,
     team_mode: bool,
@@ -4919,7 +5570,6 @@ pub async fn run(
     provider_override: Option<String>,
     permission_mode: crate::cli_options::PermissionMode,
     auto_approve_plan: bool,
-    sandbox_disabled: bool,
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: crate::mcp::McpConfigLoadOptions,
@@ -4961,9 +5611,12 @@ pub async fn run(
         custom_system_prompt,
         effective_provider_override,
     )?;
+    session.additional_context_dirs = crate::path_security::registered_additional_workspace_roots();
     session.apply_ui_config(config);
+    crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
+    session.bypass_permissions_available = skip_permissions || allow_bypass_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
     if fallback_chain.primaries.len() > 1 {
@@ -5134,7 +5787,7 @@ pub async fn run(
     )
     .await;
 
-    let mut app = TuiApp::new(session, config.clone(), sandbox_disabled);
+    let mut app = TuiApp::new(session, config.clone());
     if let Some(temperature) = config.default.temperature {
         if crate::model_catalog::model_rejects_sampling_parameters(&app.session.model) {
             app.chat_messages.push(ChatMessage {
@@ -5178,6 +5831,10 @@ pub async fn run(
     // pending) so it can't keep a browser-wait or connection alive after exit.
     if let Some(handle) = mcp_attach_join.take() {
         handle.abort();
+    }
+    if let Some(link) = app.remote.take() {
+        let _ = link.stop.send(true);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(3), link.task).await;
     }
 
     // A turn cancelled with Esc/Ctrl-C reconciles history in memory but never
@@ -5287,6 +5944,23 @@ async fn run_event_loop(
         }
 
         drain_side_answers(app);
+        drain_remote_control(app);
+        if !app.is_loading && !app.remote_prompts.is_empty() {
+            let text = std::mem::take(&mut app.remote_prompts).join("\n\n");
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: "From your phone:".to_string(),
+            });
+            let staged = std::mem::take(&mut app.session.pending_image_blocks);
+            let labels = std::mem::take(&mut app.staged_images);
+            let context = std::mem::take(&mut app.turn_context);
+            let sent = send_message(terminal, app, &text).await;
+            app.session.pending_image_blocks = staged;
+            app.staged_images = labels;
+            app.turn_context = context;
+            sent?;
+            continue;
+        }
         let queued = (!app.is_loading && !app.queued_prompts.is_empty())
             .then(|| std::mem::take(&mut app.queued_prompts).join("\n\n"));
         if queued.is_some() || event::poll(super::motion::FRAME_INTERVAL)? {
@@ -5344,7 +6018,7 @@ async fn run_event_loop(
                 }
 
                 InputAction::CycleMode => {
-                    let new_mode = app.mode.next_allowed(app.session.pinned_permission_mode);
+                    let new_mode = app.mode.next_available(&app.session);
                     if new_mode == app.mode {
                         app.chat_messages.push(ChatMessage {
                             role: ChatRole::System,
@@ -5453,7 +6127,7 @@ async fn run_event_loop(
                         } else {
                             app.chat_messages.push(ChatMessage {
                                 role: ChatRole::System,
-                                text: pinned_mode_notice(app),
+                                text: unavailable_mode_notice(app, new_mode),
                             });
                         }
                         // A pure utterance that escalates into a permission-weakening
@@ -5489,6 +6163,7 @@ async fn run_event_loop(
                                 let result =
                                     crate::auth::interactive_login_for_provider(None).await;
                                 *terminal = setup_terminal()?;
+                                crate::claude_parity::connectors::forget_local_tool_policy();
                                 match result {
                                     Ok(()) => {
                                         app.chat_messages.push(ChatMessage {
@@ -5550,7 +6225,14 @@ async fn run_event_loop(
                                 .await;
                                 *terminal = setup_terminal()?;
                                 app.sync_stats();
+                                let first_voice_row = app.chat_messages.len();
                                 append_session_messages_since(app, first_voice_message);
+                                for message in app.chat_messages.iter_mut().skip(first_voice_row) {
+                                    if message.role == ChatRole::User {
+                                        message.text =
+                                            format!("{VOICE_TRANSCRIPT_LABEL} {}", message.text);
+                                    }
+                                }
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text: match result {
@@ -5588,6 +6270,19 @@ async fn run_event_loop(
                                     &argument,
                                 )
                                 .await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
+                            SlashResult::RunRemoteControl(action) => {
+                                let text = match action.trim() {
+                                    "off" | "stop" => stop_remote_control(app),
+                                    "" | "on" | "start" => start_remote_control(app),
+                                    other => {
+                                        format!("Usage: /remote-control [on|off], not {other}")
+                                    }
+                                };
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
@@ -5689,17 +6384,49 @@ async fn run_event_loop(
                                     ),
                                 });
                             }
+                            SlashResult::StatusReport(report) => {
+                                let connectivity = crate::cloud::client::connectivity_line(
+                                    app.session.privacy_mode,
+                                )
+                                .await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: format!("{report}\n{connectivity}"),
+                                });
+                            }
+                            SlashResult::RunFeedback(kind, message) => {
+                                let text = crate::cloud::send_feedback(kind, &message).await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
                             SlashResult::RunLogout => {
+                                let revoked =
+                                    crate::app_server::account::revoke_managed_sessions().await;
                                 let mut store = crate::auth::load_auth().unwrap_or_default();
                                 store.entries.clear();
                                 let _ = crate::auth::save_auth(&store);
+                                crate::claude_parity::connectors::forget_local_tool_policy();
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
-                                    text: "Logged out from all providers.".to_string(),
+                                    text: if revoked {
+                                        "Logged out from all providers.".to_string()
+                                    } else {
+                                        "Logged out from all providers. AGI Cloud did not confirm the sign-out; the device session ends when it expires, or unlink it in Settings, Account, Linked devices.".to_string()
+                                    },
                                 });
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {
                                 let prompt = resolve_composer_mentions(app, &text);
+                                let (prompt, notices) =
+                                    app.session.expand_mcp_resource_mentions(&prompt).await;
+                                for notice in notices {
+                                    app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: notice,
+                                    });
+                                }
                                 send_message_with_prompt(terminal, app, &text, &prompt).await?;
                             }
                             SlashResult::SendPrompt(prompt) => {
@@ -5729,6 +6456,7 @@ async fn run_event_loop(
                                     )]),
                                 };
                                 let opts = crate::tools::ToolExecOptions {
+                                    additional_workspace_roots: Vec::new(),
                                     mcp_tool_definitions: None,
                                     require_confirmation: false,
                                     auto_approve_safe: true,
@@ -5848,6 +6576,8 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                 timing: ToolTiming::Running(Instant::now()),
                 full_output: None,
                 accent,
+                exit_code: None,
+                stderr: None,
             });
         }
         TuiAppEvent::ToolCompleted {
@@ -5863,13 +6593,42 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                     ToolStatus::Cancelled => TranscriptCellState::Cancelled,
                     _ => TranscriptCellState::Complete,
                 };
-                cell.output_preview = compact_tool_output_preview(&output);
+                let (exit_code, output, stderr) = if tool_type_icon(&cell.name) == "$" {
+                    split_command_output(&output)
+                } else {
+                    (None, output.as_str(), None)
+                };
+                cell.exit_code = exit_code;
+                cell.stderr = stderr
+                    .map(|stderr| sanitize_terminal_text(stderr.trim_end()).into_owned())
+                    .filter(|stderr| !stderr.is_empty());
+                cell.output_preview = compact_tool_output_preview(output);
                 cell.timing = ToolTiming::Finished(duration_ms);
                 cell.full_output = Some(sanitize_terminal_text(output.trim_end()).into_owned())
                     .filter(|output| !output.is_empty());
             }
         }
         _ => {}
+    }
+}
+
+fn split_command_output(output: &str) -> (Option<i32>, &str, Option<&str>) {
+    let (exit_code, rest) = match output.split_once('\n') {
+        Some((first, rest)) => match first
+            .strip_prefix("Exit code: ")
+            .and_then(|code| code.trim().parse().ok())
+        {
+            Some(code) => (Some(code), rest),
+            None => (None, output),
+        },
+        None => (None, output),
+    };
+    if let Some(stderr) = rest.strip_prefix("[stderr]\n") {
+        return (exit_code, "", Some(stderr));
+    }
+    match rest.split_once("\n[stderr]\n") {
+        Some((stdout, stderr)) => (exit_code, stdout, Some(stderr)),
+        None => (exit_code, rest, None),
     }
 }
 
@@ -5941,15 +6700,20 @@ async fn send_message_with_prompt(
             ),
         }),
     }
-    let attachments = if app.staged_images.is_empty() {
-        String::new()
-    } else {
-        format!("\n[attached: {}]", app.staged_images.join(", "))
-    };
+    let context: Vec<String> = std::mem::take(&mut app.turn_context)
+        .into_iter()
+        .chain(app.staged_images.iter().cloned())
+        .collect();
     app.chat_messages.push(ChatMessage {
         role: ChatRole::User,
-        text: format!("{transcript_text}{attachments}"),
+        text: transcript_text.to_string(),
     });
+    if !context.is_empty() {
+        app.chat_messages.push(ChatMessage {
+            role: ChatRole::Detail,
+            text: format!("with {}", context.join(" · ")),
+        });
+    }
 
     // The session drains `pending_image_blocks` into this turn, so the chips
     // that named them go with it.
@@ -5997,6 +6761,10 @@ async fn send_message_with_prompt(
         });
         app.session.on_tool_approval = Some(crate::agent::ToolApprovalSink(callback));
     }
+    let remote_host = app.remote.as_ref().map(|link| Arc::clone(&link.host));
+    if let Some(host) = &remote_host {
+        host.begin_turn(broker.clone());
+    }
 
     // Stream tool lifecycle events into a local cell list during the turn, then
     // surface them in the transcript after it ends. Drained in the select! loop
@@ -6015,6 +6783,7 @@ async fn send_message_with_prompt(
         app.session.on_tool_event = Some(crate::agent::ToolEventSink(sink));
     }
     let mut tool_cells: Vec<ToolCell> = Vec::new();
+    let mut preparing = true;
 
     // Drive the agent turn while staying responsive to approval requests. The
     // event loop is otherwise parked inside this `.await`, so without the
@@ -6071,6 +6840,7 @@ async fn send_message_with_prompt(
                         // mutably borrowed by `send_fut`, so this must stay
                         // field-by-field rather than `FrameCtx::from_app(app)`.
                         let approval_ctx = FrameCtx {
+                            workspace_pane: app.workspace_pane.as_deref(),
                             model_name: &app.model_name,
                             statusline: &app.statusline_config,
                             provider_name: &app.provider_name,
@@ -6111,7 +6881,51 @@ async fn send_message_with_prompt(
                             broker.complete_with_note(req.id, decision, answer).await;
                             continue;
                         }
-                        let (choice, note) = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
+                        if let Some(host) = &remote_host {
+                            host.approval_requested(&req);
+                        }
+                        let answered_remotely = || {
+                            remote_host
+                                .as_ref()
+                                .and_then(|host| host.answered_remotely(req.id))
+                        };
+                        let modal = run_tui_approval_modal(
+                            terminal,
+                            &approval_ctx,
+                            &req,
+                            &|| answered_remotely().is_some(),
+                        )?;
+                        if let Some(host) = &remote_host {
+                            host.approval_settled(req.id);
+                        }
+                        if let Some(allowed) = answered_remotely() {
+                            terminal.clear()?;
+                            app.chat_messages.push(ChatMessage {
+                                role: ChatRole::System,
+                                text: format!(
+                                    "{} on your phone: {}",
+                                    if allowed { "Allowed" } else { "Denied" },
+                                    sanitize_terminal_text(&req.summary)
+                                ),
+                            });
+                            continue;
+                        }
+                        let Some((choice, note)) = modal
+                        else {
+                            terminal.clear()?;
+                            broker
+                                .complete(req.id, crate::tui::approval_broker::ApprovalDecision::Timeout)
+                                .await;
+                            app.chat_messages.push(ChatMessage {
+                                role: ChatRole::System,
+                                text: format!(
+                                    "The approval for {} expired after {} minutes without an answer, so it did not run.",
+                                    sanitize_terminal_text(&req.summary),
+                                    APPROVAL_EXPIRY.as_secs() / 60
+                                ),
+                            });
+                            continue;
+                        };
                         // The modal ran its own key loop over frames ratatui
                         // drew; force the next frame to repaint every cell so
                         // nothing the prompt covered survives it.
@@ -6131,6 +6945,12 @@ async fn send_message_with_prompt(
                     }
                 }
                 Some(ev) = tool_rx.recv() => {
+                    if ev == crate::tui::app_event::TuiAppEvent::ModelRequested {
+                        preparing = false;
+                    }
+                    if let Some(host) = &remote_host {
+                        host.tool_event(&ev);
+                    }
                     apply_tool_event(&mut tool_cells, ev);
                 }
                 _ = tokio::time::sleep(std::time::Duration::from_millis(80)) => {
@@ -6187,9 +7007,19 @@ async fn send_message_with_prompt(
                             _ => {}
                         }
                     }
+                    if let Some(link) = app.remote.as_mut() {
+                        while let Ok(input) = link.inbox.try_recv() {
+                            match input {
+                                crate::tui::remote_host::RemoteInput::Interrupt => cancelled = true,
+                                crate::tui::remote_host::RemoteInput::Message(text) => {
+                                    app.remote_prompts.push(text)
+                                }
+                            }
+                        }
+                    }
                     if cancelled {
                         app.status_notice =
-                            Some(("interrupted the turn".to_string(), Instant::now()));
+                            Some(("stopping the turn…".to_string(), Instant::now()));
                         break None;
                     }
                     while let Ok(text) = app.side_answers.1.try_recv() {
@@ -6206,8 +7036,12 @@ async fn send_message_with_prompt(
                     if let Ok(b) = buf_for_display.lock() {
                         app.stream_buffer = b.clone();
                     }
+                    if let Some(host) = &remote_host {
+                        host.output(&app.stream_buffer);
+                    }
                     app.spinner_tick = app.spinner_tick.wrapping_add(1);
                     let ctx = FrameCtx {
+                        workspace_pane: app.workspace_pane.as_deref(),
                         model_name: &app.model_name,
                         statusline: &app.statusline_config,
                         provider_name: &app.provider_name,
@@ -6222,7 +7056,11 @@ async fn send_message_with_prompt(
                         stream_start: app.stream_start,
                         stream_buffer: &app.stream_buffer,
                         spinner_char: spinner_frame(app.spinner_tick),
-                        loading_verb: loading_verb_for(turn_count),
+                        loading_verb: if preparing {
+                            "Preparing context"
+                        } else {
+                            loading_verb_for(turn_count)
+                        },
                         awaiting_approval: false,
                         scroll_offset: app.scroll_offset,
                         access_mode: turn_access_mode,
@@ -6287,6 +7125,28 @@ async fn send_message_with_prompt(
     app.is_loading = false;
     app.stream_start = None;
 
+    if let Some(host) = &remote_host {
+        host.output(&app.stream_buffer);
+        match &result {
+            Some(Ok(turn)) => host.end_turn(
+                agiworkforce_protocol::developer_session::TurnStatus::Completed,
+                if app.stream_buffer.is_empty() {
+                    &turn.response
+                } else {
+                    &app.stream_buffer
+                },
+            ),
+            Some(Err(error)) => host.end_turn(
+                agiworkforce_protocol::developer_session::TurnStatus::Failed,
+                &format!("{error:#}"),
+            ),
+            None => host.end_turn(
+                agiworkforce_protocol::developer_session::TurnStatus::Interrupted,
+                &app.stream_buffer,
+            ),
+        }
+    }
+
     match result {
         Some(Ok(turn)) => {
             let response_text = if app.stream_buffer.is_empty() {
@@ -6298,6 +7158,10 @@ async fn send_message_with_prompt(
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::Assistant,
                 text: response_text,
+            });
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::Detail,
+                text: answer_details(&app.session.model, &turn, turn_started.elapsed()),
             });
 
             app.sync_stats();
@@ -6363,7 +7227,14 @@ async fn send_message_with_prompt(
             // and reconcile session history so the next turn stays a valid
             // user→assistant sequence.
             let partial = app.stream_buffer.clone();
+            render(terminal, app)?;
             app.session.cancel_turn(&partial).await;
+            crate::cloud::product_analytics::record(
+                &app.config,
+                app.session.privacy_mode,
+                "generation_stopped",
+            );
+            app.status_notice = Some(("stopped the turn".to_string(), Instant::now()));
             if !partial.is_empty() {
                 app.chat_messages.push(ChatMessage {
                     role: ChatRole::Assistant,
@@ -6378,6 +7249,7 @@ async fn send_message_with_prompt(
         }
     }
 
+    app.refresh_workspace_pane();
     app.scroll_offset = 0;
     render(terminal, app)?;
 
@@ -6497,6 +7369,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         };
         let t = line0(&edit);
         assert!(
@@ -6514,6 +7388,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         };
         assert!(
             line0(&cmd).contains("$ ls -la"),
@@ -6531,6 +7407,8 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         };
         let f = line0(&fail);
         assert!(f.contains('✗') && f.contains('▤'), "got: {f}");
@@ -6865,6 +7743,7 @@ mod tests {
                 ]),
             };
             let opts = crate::tools::ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
@@ -6925,6 +7804,7 @@ mod tests {
                 ]),
             };
             let opts = crate::tools::ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
@@ -7024,6 +7904,7 @@ mod tests {
                 ]),
             };
             let opts = crate::tools::ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
@@ -7097,7 +7978,113 @@ mod tests {
         let model = crate::model_catalog::fast_completion_model("anthropic");
         let session = crate::agent::AgentSession::new(&model, &sys_ctx, None);
         let config = crate::config::CliConfig::default();
-        TuiApp::new(session, config, true /* sandbox_disabled */)
+        TuiApp::new(session, config)
+    }
+
+    #[test]
+    fn workspace_mcp_tui_lists_blocked_status_and_reason() {
+        crate::cloud::workspace_policy::with_test_policy(
+            serde_json::json!({"code": {"allowMcpServers": false}}),
+            || {
+                crate::mcp::with_test_configs(
+                    std::collections::HashMap::from([(
+                        "blocked-tui-fixture".to_string(),
+                        crate::mcp::McpServerConfig::http(
+                            "https://mcp.example.test/mcp",
+                            std::collections::HashMap::new(),
+                        ),
+                    )]),
+                    || {
+                        let mut app = minimal_app();
+                        let SlashResult::SystemMessage(text) = handle_slash("/mcp", &mut app)
+                        else {
+                            panic!("MCP list must render a system message");
+                        };
+                        assert!(text.contains("blocked-tui-fixture · ⊘ blocked by your workspace"));
+                        assert!(text.contains("MCP server 'blocked-tui-fixture' was not started"));
+                        assert!(text.contains("administrator has turned MCP servers off"));
+                        assert!(!text.contains("blocked-tui-fixture · △ needs authentication"));
+                    },
+                )
+            },
+        );
+    }
+
+    fn modes_reached_by_shift_tab(app: &TuiApp) -> Vec<InteractionMode> {
+        let mut reached = vec![app.mode];
+        let mut mode = app.mode;
+        for _ in 0..10 {
+            mode = mode.next_available(&app.session);
+            reached.push(mode);
+        }
+        reached
+    }
+
+    #[test]
+    fn shift_tab_never_reaches_an_approval_skipping_mode_without_the_launch_opt_in() {
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = None;
+
+        let reached = modes_reached_by_shift_tab(&app);
+
+        assert!(
+            reached.contains(&InteractionMode::AcceptEdits),
+            "{reached:?}"
+        );
+        assert!(
+            !reached.contains(&InteractionMode::BypassPermissions),
+            "{reached:?}"
+        );
+        assert!(!reached.contains(&InteractionMode::FullAuto), "{reached:?}");
+    }
+
+    #[test]
+    fn a_typed_bypass_command_is_refused_without_the_launch_opt_in() {
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = None;
+
+        assert!(!apply_mode(&mut app, InteractionMode::BypassPermissions));
+        assert!(!apply_mode(&mut app, InteractionMode::FullAuto));
+        assert!(!app.session.skip_permissions);
+        assert_eq!(app.mode, InteractionMode::Chat);
+        assert!(
+            unavailable_mode_notice(&app, InteractionMode::BypassPermissions)
+                .contains("--allow-dangerously-skip-permissions"),
+            "the refusal names the opt-in"
+        );
+    }
+
+    #[test]
+    fn the_launch_opt_in_puts_bypass_and_full_auto_back_in_the_cycle() {
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = None;
+        app.session.bypass_permissions_available = true;
+
+        assert_eq!(
+            InteractionMode::AcceptEdits.next_available(&app.session),
+            InteractionMode::BypassPermissions
+        );
+        assert_eq!(
+            InteractionMode::BypassPermissions.next_available(&app.session),
+            InteractionMode::FullAuto
+        );
+        assert!(apply_mode(&mut app, InteractionMode::BypassPermissions));
+        assert!(app.session.skip_permissions);
+    }
+
+    #[test]
+    fn an_organization_pin_still_outranks_the_launch_opt_in() {
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = Some(crate::cli_options::PermissionMode::AcceptEdits);
+        app.session.bypass_permissions_available = true;
+
+        let reached = modes_reached_by_shift_tab(&app);
+
+        assert!(
+            !reached.contains(&InteractionMode::BypassPermissions),
+            "{reached:?}"
+        );
+        assert!(!reached.contains(&InteractionMode::FullAuto), "{reached:?}");
     }
 
     /// Regression: `/voice` in the TUI printed "Voice mode requires the REPL
@@ -7960,6 +8947,8 @@ mod tests {
             "extra-usage",
             "pricing",
             "remote-env",
+            "remote-control",
+            "rc",
         ]);
         names
     }
@@ -8157,7 +9146,7 @@ mod tests {
         }
 
         match handle_slash("/status", &mut app) {
-            SlashResult::SystemMessage(message) => {
+            SlashResult::StatusReport(message) => {
                 assert!(message.contains("Provider: DeepSeek"), "{message}");
                 assert!(!message.contains("api_key_env"), "{message}");
             }
@@ -8174,7 +9163,7 @@ mod tests {
 
         app.sandbox_type = Some(crate::sandbox::SandboxType::MacosSeatbelt);
         match handle_slash("/status", &mut app) {
-            SlashResult::SystemMessage(message) => {
+            SlashResult::StatusReport(message) => {
                 assert!(message.contains("Sandbox: seatbelt"), "{message}");
             }
             _ => panic!("/status must report in place"),
@@ -8182,7 +9171,7 @@ mod tests {
 
         app.sandbox_type = None;
         match handle_slash("/status", &mut app) {
-            SlashResult::SystemMessage(message) => {
+            SlashResult::StatusReport(message) => {
                 assert!(message.contains("Sandbox: no sandbox"), "{message}");
             }
             _ => panic!("/status must report in place"),
@@ -8201,6 +9190,7 @@ mod tests {
         let tool_cells: Vec<ToolCell> = Vec::new();
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-local-model:latest",
             statusline: &statusline_cfg,
             provider_name: "ollama",
@@ -8280,6 +9270,7 @@ mod tests {
         notice: Option<&'a str>,
     ) -> FrameCtx<'a> {
         FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-flagship",
             statusline,
             provider_name: "anthropic",
@@ -8612,10 +9603,13 @@ mod tests {
             timing: ToolTiming::default(),
             full_output: None,
             accent: None,
+            exit_code: None,
+            stderr: None,
         }];
         let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-local-model:latest",
             statusline: &statusline_cfg,
             provider_name: "ollama",
@@ -8668,6 +9662,7 @@ mod tests {
         let tool_cells: Vec<ToolCell> = Vec::new();
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: "fixture-local-model:latest",
             statusline: &statusline_cfg,
             provider_name: "ollama",
@@ -8785,6 +9780,7 @@ mod tests {
             show_mode: true,
         };
         let ctx = FrameCtx {
+            workspace_pane: None,
             model_name: &model_name,
             statusline: &statusline_cfg,
             provider_name: "ollama",

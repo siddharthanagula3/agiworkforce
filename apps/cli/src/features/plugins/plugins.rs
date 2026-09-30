@@ -331,6 +331,123 @@ impl PluginSignatureState {
     }
 }
 
+fn manifest_person(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(text) => Some(text.trim().to_string()),
+        serde_json::Value::Object(person) => {
+            let field = |key: &str| {
+                person
+                    .get(key)
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::trim)
+                    .filter(|text| !text.is_empty())
+            };
+            let name = field("name")?;
+            let contact = field("email").or_else(|| field("url"));
+            Some(match contact {
+                Some(contact) => format!("{name} <{contact}>"),
+                None => name.to_string(),
+            })
+        }
+        _ => None,
+    }
+    .filter(|text| !text.is_empty())
+}
+
+fn manifest_link(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(text) => Some(text.trim().to_string()),
+        serde_json::Value::Object(link) => link
+            .get("url")
+            .and_then(serde_json::Value::as_str)
+            .map(|url| url.trim().to_string()),
+        _ => None,
+    }
+    .filter(|text| !text.is_empty())
+}
+
+pub fn describe_plugin(plugin: &LoadedPlugin, policy: &PluginSignaturePolicy) -> String {
+    let manifest = load_manifest_for(&plugin.root).map(|(manifest, _)| manifest);
+    let extra = |key: &str| {
+        manifest
+            .as_ref()
+            .and_then(|manifest| manifest.extra.get(key))
+    };
+    let signature = match describe_plugin_signature(&plugin.root, policy) {
+        Ok(state) => state.label(),
+        Err(error) => format!("signature invalid: {error}"),
+    };
+    let mut rows = vec![
+        (
+            "Name",
+            plugin
+                .manifest_name
+                .clone()
+                .unwrap_or_else(|| plugin.config_name.clone()),
+        ),
+        (
+            "Version",
+            manifest
+                .as_ref()
+                .and_then(|manifest| manifest.version.clone())
+                .unwrap_or_else(|| "not stated".to_string()),
+        ),
+        (
+            "Publisher",
+            manifest
+                .as_ref()
+                .and_then(|manifest| manifest.publisher.clone())
+                .or_else(|| extra("author").and_then(manifest_person))
+                .unwrap_or_else(|| "not stated".to_string()),
+        ),
+        ("Signature", signature),
+    ];
+    if let Some(description) = manifest
+        .as_ref()
+        .and_then(|manifest| manifest.description.clone())
+    {
+        rows.push(("About", description));
+    }
+    for (label, key) in [("Homepage", "homepage"), ("Source", "repository")] {
+        if let Some(link) = extra(key).and_then(manifest_link) {
+            rows.push((label, link));
+        }
+    }
+    if let Some(license) = extra("license").and_then(serde_json::Value::as_str) {
+        rows.push(("License", license.to_string()));
+    }
+    rows.push((
+        "Installed",
+        format!(
+            "{} ({})",
+            plugin.root.display(),
+            if plugin.from_project_dir {
+                "this project"
+            } else {
+                "your account on this computer"
+            }
+        ),
+    ));
+    rows.push((
+        "State",
+        if plugin.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+        .to_string(),
+    ));
+    rows.into_iter()
+        .map(|(label, value)| {
+            format!(
+                "  {label:<10} {}",
+                crate::terminal_text::sanitize_terminal_text(&value)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub fn evaluate_plugin_signature(
     target: &Path,
     policy: &PluginSignaturePolicy,
@@ -660,6 +777,10 @@ impl PluginsManager {
         let mut out = HashMap::new();
         for p in self.enabled_plugins() {
             for (name, cfg) in &p.mcp_servers {
+                if let Err(error) = crate::mcp::registry::ensure_no_rule_separator(name) {
+                    eprintln!("[plugins] {error}, skipping");
+                    continue;
+                }
                 let transport_kind = cfg
                     .extra
                     .get("transport")

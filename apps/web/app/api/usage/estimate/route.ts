@@ -9,13 +9,12 @@ import {
 } from '@agiworkforce/types';
 import { estimateTokens } from '@agiworkforce/routing';
 import { withErrorHandler } from '@/lib/error-handler';
+import { isAuthGateRefusal } from '@/lib/api-auth-response';
 import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { creditsPerMillionTokens } from '@/lib/billing/credit-estimates';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -62,7 +61,7 @@ async function handler(request: NextRequest) {
   try {
     await getUserScopedDb(request, { apiKeyScope: 'usage:read' });
   } catch (error) {
-    if (isApiKeyScopeError(error) || isMfaRequiredError(error) || isIpNotAllowedError(error)) {
+    if (isApiKeyScopeError(error) || isAuthGateRefusal(error)) {
       throw error;
     }
     throw createError.unauthorized('Authentication required');

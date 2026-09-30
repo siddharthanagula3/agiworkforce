@@ -1,4 +1,11 @@
 import { ApiPaywallError } from '@/services/api';
+import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
+import {
+  MediaGenerationAdmissionError,
+  MEDIA_USAGE_LIMIT_MESSAGE,
+  isUsageLimitRefusal,
+  mediaGenerationFailureMessage,
+} from './mediaGenerationError';
 import {
   generateVideo,
   type GeneratedVideo,
@@ -9,6 +16,8 @@ import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
+
+const CLOUD_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface VideoTurnCompletion {
   videoUrl: string;
@@ -23,7 +32,9 @@ export interface RunVideoGenerationTurnInput {
   model: string;
   aspectRatio?: VideoGenRequest['aspect_ratio'];
   resolution?: VideoGenRequest['resolution'];
+  durationSecs?: number;
   ownerId: string;
+  onStarted?: () => void;
   begin: (conversationId: string, displayText: string, prompt: string, model: string) => string;
   taskCreated?: (conversationId: string, assistantMessageId: string, taskId: string) => void;
   isCancelRequested?: (conversationId: string, assistantMessageId: string) => boolean;
@@ -76,14 +87,14 @@ export async function runVideoGenerationTurn(
 ): Promise<VideoGenerationTurnOutcome> {
   const accountEpoch = captureCloudAccountEpoch();
   if (!accountEpoch) {
-    input.onUnexpectedError?.(
-      new Error('Sign in to an active AGI Cloud account before generating video.'),
-    );
+    input.onUnexpectedError?.(new MediaGenerationAdmissionError(CLOUD_SIGN_IN_MESSAGE));
     return { status: 'failed', assistantMessageId: null };
   }
   if (accountEpoch.ownerId !== input.ownerId) {
     input.onUnexpectedError?.(
-      new Error('The active AGI Cloud account changed before video generation started.'),
+      new MediaGenerationAdmissionError(
+        'The active AGI Cloud account changed before video generation started.',
+      ),
     );
     return { status: 'failed', assistantMessageId: null };
   }
@@ -96,6 +107,7 @@ export async function runVideoGenerationTurn(
     input.prompt,
     input.model,
   );
+  input.onStarted?.();
 
   const isStopRequested = () =>
     input.isCancelRequested?.(input.conversationId, assistantMessageId) === true;
@@ -105,8 +117,12 @@ export async function runVideoGenerationTurn(
       {
         prompt: input.prompt,
         model: input.model,
+        ...(CLOUD_CONVERSATION_ID.test(input.conversationId)
+          ? { conversation_id: input.conversationId }
+          : {}),
         ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
         ...(input.resolution ? { resolution: input.resolution } : {}),
+        ...(input.durationSecs ? { duration_secs: input.durationSecs } : {}),
       },
       {
         onTaskCreated: (taskId) => {
@@ -137,12 +153,13 @@ export async function runVideoGenerationTurn(
       return { status: 'paywall', assistantMessageId };
     }
 
+    if (isUsageLimitRefusal(error)) {
+      input.fail(input.conversationId, assistantMessageId, MEDIA_USAGE_LIMIT_MESSAGE);
+      return { status: 'failed', assistantMessageId };
+    }
+
     input.onUnexpectedError?.(error);
-    input.fail(
-      input.conversationId,
-      assistantMessageId,
-      error instanceof Error ? error.message : String(error),
-    );
+    input.fail(input.conversationId, assistantMessageId, mediaGenerationFailureMessage('video'));
     return { status: 'failed', assistantMessageId };
   }
 }

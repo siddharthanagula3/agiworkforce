@@ -4,7 +4,8 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Image, Mic, GitCompare, Download } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export type ChatCommand = '/image' | '/voice' | '/compare' | '/export';
 
@@ -90,7 +91,7 @@ export function CommandPalette({
             <Text className="text-[13px] font-semibold" style={{ color: colors.textPrimary }}>
               {item.command}
             </Text>
-            <Text className="text-[11px]" style={{ color: colors.textMuted }}>
+            <Text className="text-xs" style={{ color: colors.textMuted }}>
               {item.description}
             </Text>
           </View>
@@ -108,7 +109,7 @@ export function CommandPalette({
             >
               <Text
                 style={{
-                  fontSize: 11,
+                  fontSize: typeScale.caption,
                   fontWeight: '700',
                   color: colors.teal,
                   textTransform: 'uppercase',
@@ -131,8 +132,8 @@ export function CommandPalette({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(150)}
-      exiting={FadeOut.duration(100)}
+      entering={FadeIn.duration(motion.quick)}
+      exiting={FadeOut.duration(motion.instant)}
       className="mb-1 rounded-xl border overflow-hidden"
       style={{ backgroundColor: colors.surfaceOverlay, borderColor: colors.border }}
       accessibilityLabel="Command suggestions"

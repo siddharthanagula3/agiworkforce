@@ -55,7 +55,11 @@ function refusal(content: string): ToolLoopToolResult {
  */
 export function createCloudAgentToolPermissionGate(
   db: DatabaseAdapter,
-  params: { userId: string; connectorToolNames: ReadonlySet<string> },
+  params: {
+    userId: string;
+    organizationId: string | null;
+    connectorToolNames: ReadonlySet<string>;
+  },
 ): CloudAgentToolPermissionGate {
   const offered = [...params.connectorToolNames];
 
@@ -90,7 +94,7 @@ export function createCloudAgentToolPermissionGate(
 
       let permissions: Awaited<ReturnType<typeof loadConnectorToolPermissions>>;
       try {
-        permissions = await loadConnectorToolPermissions(db, params.userId);
+        permissions = await loadConnectorToolPermissions(db, params.userId, params.organizationId);
       } catch (error) {
         logger.warn(
           { error, userId: params.userId, tool: qualifiedName },

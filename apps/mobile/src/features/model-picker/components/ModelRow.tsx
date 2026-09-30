@@ -1,4 +1,5 @@
-import { ActivityIndicator, View, Pressable, Switch } from 'react-native';
+import { ActivityIndicator, View, Switch } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { Brain, Check, Cloud, Cpu, Download, Lock, Star } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
@@ -17,7 +18,8 @@ import {
   useModelInstallStore,
   type ModelInstallJob,
 } from '@/src/features/model-picker/installStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
 import { useProviderOutage } from '@/src/features/model-picker/providerAvailabilityStore';
 
@@ -125,7 +127,7 @@ export function ModelRow({
 
   return (
     <View>
-      <Pressable
+      <PressableBox
         testID={`model-row-${model.id}`}
         onPress={handlePress}
         onLongPress={handleLongPress}
@@ -185,22 +187,31 @@ export function ModelRow({
             numberOfLines={1}
             style={{
               color: visiblySelected ? colors.teal : colors.textPrimary,
-              fontSize: 15,
+              fontSize: typeScale.body,
               fontWeight: '600',
             }}
           >
             {model.name}
           </Text>
           {model.description ? (
-            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+            <Text
+              numberOfLines={1}
+              style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+            >
               {model.description}
             </Text>
           ) : null}
-          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
+          <Text
+            numberOfLines={1}
+            style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+          >
             {model.detailLabel}
           </Text>
           {!isLocal && (speedLabel || model.contextWindow > 0) ? (
-            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
+            <Text
+              numberOfLines={1}
+              style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
+            >
               {[
                 speedLabel,
                 model.contextWindow > 0
@@ -235,7 +246,9 @@ export function ModelRow({
           ) : null}
           {isLocal && isDownloading ? (
             <>
-              <Text style={{ color: colors.teal, fontSize: 11 }}>{progressPercent}%</Text>
+              <Text style={{ color: colors.teal, fontSize: typeScale.caption }}>
+                {progressPercent}%
+              </Text>
               <ActivityIndicator size="small" color={colors.teal} />
             </>
           ) : null}
@@ -253,7 +266,7 @@ export function ModelRow({
             <Star size={14} color={colors.agentWarning} fill={colors.agentWarning} />
           ) : null}
         </View>
-      </Pressable>
+      </PressableBox>
 
       {isLocked ? (
         <View
@@ -267,7 +280,7 @@ export function ModelRow({
           }}
         >
           <Cloud size={13} color={colors.agentWarning} />
-          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
+          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
             {model.lockReason ?? 'Sign in to use AGI Cloud chat.'}
           </Text>
         </View>
@@ -275,7 +288,10 @@ export function ModelRow({
 
       {outage ? (
         <View style={{ paddingLeft: 58, paddingRight: 16, paddingBottom: 10 }}>
-          <Text numberOfLines={2} style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+          <Text
+            numberOfLines={2}
+            style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}
+          >
             {outage.reason
               ? `Unavailable right now: ${outage.reason}`
               : 'Unavailable right now. Try again soon or pick another model.'}
@@ -285,7 +301,7 @@ export function ModelRow({
 
       {isDownloading ? (
         <View style={{ paddingLeft: 58, paddingRight: 16, paddingBottom: 10 }}>
-          <Pressable
+          <PressableBox
             testID={`model-cancel-${model.id}`}
             onPress={handleCancelDownload}
             accessibilityRole="button"
@@ -293,16 +309,21 @@ export function ModelRow({
             hitSlop={8}
             style={{ minHeight: 28, justifyContent: 'center' }}
           >
-            <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
+            <Text
+              style={{ color: colors.agentError, fontSize: typeScale.footnote, fontWeight: '600' }}
+            >
               Cancel download
             </Text>
-          </Pressable>
+          </PressableBox>
         </View>
       ) : null}
 
       {(isFailed || isUnavailable) && installStatus.error ? (
         <View style={{ paddingLeft: 58, paddingRight: 16, paddingBottom: 10 }}>
-          <Text numberOfLines={3} style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+          <Text
+            numberOfLines={3}
+            style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}
+          >
             {installStatus.error}
           </Text>
         </View>
@@ -310,8 +331,8 @@ export function ModelRow({
 
       {isExpanded && (canToggleThinking || requiresThinking) ? (
         <Animated.View
-          entering={reducedMotion ? undefined : FadeIn.duration(150)}
-          exiting={reducedMotion ? undefined : FadeOut.duration(100)}
+          entering={reducedMotion ? undefined : FadeIn.duration(motion.quick)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(motion.instant)}
           style={{
             paddingLeft: 58,
             paddingRight: 16,
@@ -329,7 +350,7 @@ export function ModelRow({
             <Text
               style={{
                 color: effectiveThinkingEnabled ? colors.agentThinking : colors.textSecondary,
-                fontSize: 13,
+                fontSize: typeScale.footnote,
                 fontWeight: '600',
               }}
             >

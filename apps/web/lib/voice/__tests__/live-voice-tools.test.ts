@@ -74,10 +74,7 @@ describe('live voice delegation tools', () => {
    * as an oversight rather than a boundary.
    */
   it('names every tool it cannot run and why', () => {
-    expect(Object.keys(LIVE_VOICE_EXCLUDED_TOOLS).sort()).toEqual([
-      'agi_work',
-      'web_search_fallback',
-    ]);
+    expect(Object.keys(LIVE_VOICE_EXCLUDED_TOOLS).sort()).toEqual(['web_search_fallback']);
     for (const reason of Object.values(LIVE_VOICE_EXCLUDED_TOOLS)) {
       expect(reason.length).toBeGreaterThan(20);
     }

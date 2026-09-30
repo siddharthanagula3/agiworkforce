@@ -45,7 +45,7 @@ async function handleGetFileText(
   if (!object) throw createError.notFound('File bytes are not available');
 
   return NextResponse.json<FileTextPreview>(
-    await renderFileTextPreview(kind, fileName, asset.mimeType, object.data),
+    { ...(await renderFileTextPreview(kind, fileName, asset.mimeType, object.data)), fileName },
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }

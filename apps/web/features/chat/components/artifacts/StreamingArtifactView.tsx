@@ -62,7 +62,7 @@ export function StreamingArtifactView({
             {artifact.content}
             {/* Blinking caret at the write head */}
             <span
-              className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-gray-100/70 align-text-bottom"
+              className="ms-0.5 inline-block h-4 w-2 animate-pulse bg-gray-100/70 align-text-bottom"
               aria-hidden="true"
             />
           </code>

@@ -16,6 +16,7 @@ vi.mock('@/features/directory', () => ({
   },
 }));
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn().mockResolvedValue('csrf-1') }));
 
 vi.mock('@/features/connectors/components/ConnectorApiKeyForm', () => ({

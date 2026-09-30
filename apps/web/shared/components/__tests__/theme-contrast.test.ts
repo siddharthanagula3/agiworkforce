@@ -10,6 +10,9 @@ import {
   agiChatCssVars,
   agiElevation,
   agiExtensionCssVars,
+  agiMobileAccentSwatches,
+  agiMobileColors,
+  agiMobileHighContrastColors,
   agiRadii,
   agiRadiiVar,
   agiShadows,
@@ -1200,6 +1203,33 @@ describe('chat status text roles clear AA on every chat surface and on their own
   }
 });
 
+describe('code syntax colours clear AA on every code ground', () => {
+  const coolLight = braceBody(chatCss, "html:not(.dark)[data-chat-theme='cool'] {");
+  const grounds = {
+    light: [
+      colorToken(chat.light, '--chat-code-bg'),
+      colorToken(coolLight, '--chat-code-bg'),
+      colorToken(webBase.light, '--chat-code-bg'),
+    ],
+    dark: [colorToken(chat.dark, '--chat-code-bg'), colorToken(webBase.dark, '--chat-code-bg')],
+  };
+  const SYNTAX = ['keyword', 'string', 'comment', 'number', 'function', 'type'];
+
+  for (const [theme, block] of [
+    ['light', chat.light],
+    ['dark', chat.dark],
+  ] as const) {
+    for (const role of SYNTAX) {
+      it(`${theme}: --chat-code-syntax-${role} >= 4.5:1 on the code background`, () => {
+        const colour = colorToken(block, `--chat-code-syntax-${role}`);
+        for (const ground of grounds[theme]) {
+          expect(contrastRatio(colour, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        }
+      });
+    }
+  }
+});
+
 describe('the Chrome extension map separates fill, text and on-fill roles', () => {
   const STATES = ['danger', 'success', 'warning', 'info'] as const;
 
@@ -1293,38 +1323,19 @@ describe('the Chrome extension map separates fill, text and on-fill roles', () =
 });
 
 describe('the mobile palette clears AA in every theme', () => {
-  // Mobile keeps its own palette in its own app, so this reads the source
-  // rather than importing across the app boundary check:boundaries enforces.
+  // The palettes live in @agiworkforce/design-tokens (508372fdd2); only the
+  // AccentToken union the settings screen offers stays in the mobile theme.
   const tokensTs = readFileSync(resolve(repoRoot, 'apps/mobile/src/ui/theme/tokens.ts'), 'utf8');
-  const entries = (body: string): Record<string, string> =>
-    Object.fromEntries(
-      [...body.matchAll(/^\s*([A-Za-z0-9]+): '([^']+)',$/gm)].map((m) => [m[1]!, m[2]!]),
-    );
-  const native = braceBody(tokensTs, 'const mobileNativeColors = {');
-  const light = entries(braceBody(native, 'light: {'));
-  const dark = entries(braceBody(native, 'dark: {'));
   const palettes: Record<string, Record<string, string>> = {
-    light,
-    dark,
-    'high-contrast light': {
-      ...light,
-      ...entries(braceBody(tokensTs, 'export const highContrastLightColors: ColorScheme = {')),
-    },
-    'high-contrast dark': {
-      ...dark,
-      ...entries(braceBody(tokensTs, 'export const highContrastColors: ColorScheme = {')),
-    },
+    light: agiMobileColors.light,
+    dark: agiMobileColors.dark,
+    'high-contrast light': agiMobileHighContrastColors.light,
+    'high-contrast dark': agiMobileHighContrastColors.dark,
   };
   const accentNames = [
     ...(tokensTs.match(/export type AccentToken = ([^;]+);/)?.[1] ?? '').matchAll(/'([a-z]+)'/g),
   ].map((m) => m[1]!);
-  const swatches: Record<string, { light: string; dark: string }> = Object.fromEntries(
-    [
-      ...tokensTs.matchAll(
-        /^\s*([a-z]+): \{ light: '(#[0-9a-f]{6})', dark: '(#[0-9a-f]{6})' \},$/gm,
-      ),
-    ].map((m) => [m[1]!, { light: m[2]!, dark: m[3]! }]),
-  );
+  const swatches: Record<string, { light: string; dark: string }> = agiMobileAccentSwatches;
 
   const SURFACES = [
     'background',

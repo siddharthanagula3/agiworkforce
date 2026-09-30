@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { normalizeDiagnostics } from '../schema';
-import { MAX_DIAGNOSTIC_EVENTS, MAX_DIAGNOSTIC_MESSAGE_CHARS, describeDiagnostics } from '../types';
+import {
+  MAX_DIAGNOSTIC_EVENTS,
+  MAX_DIAGNOSTIC_MESSAGE_CHARS,
+  describeDiagnostics,
+} from '@agiworkforce/cloud-contracts/support';
 
 function bundle(overrides: Record<string, unknown> = {}) {
   return {

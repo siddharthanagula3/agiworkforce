@@ -102,10 +102,7 @@ test('fails when the loop persists a status the contract does not declare', () =
 test('fails when a network tool loses the run cancellation signal', () => {
   withRepo(
     (loop, contract) => [
-      loop.replace(
-        /\n\s*\.\.\.\(options\.signal \? \{ signal: options\.signal \} : \{\}\),(?=\n\s*\}\);)/,
-        '',
-      ),
+      loop.replace(/\n\s*\.\.\.toolCallSignalOption\(\),(?=\n\s*\}\);)/, ''),
       contract,
     ],
     (root) => {
@@ -114,6 +111,40 @@ test('fails when a network tool loses the run cancellation signal', () => {
       assert.ok(NETWORK_TOOL_CALLS.includes(missing[0].call));
       assert.ok(missing[0].line > 0);
       assert.ok(findings(root).some((problem) => /cancellation signal/.test(problem)));
+    },
+  );
+});
+
+test('fails when the tool-call signal stops following the run signal', () => {
+  withRepo(
+    (loop, contract) => [
+      loop
+        .replace(
+          'return options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;',
+          'return deadline;',
+        )
+        .replace('if (!invocation) return options.signal;', 'if (!invocation) return undefined;'),
+      contract,
+    ],
+    (root) => {
+      assert.equal(unsignalledNetworkCalls(root).length, NETWORK_TOOL_CALLS.length);
+    },
+  );
+});
+
+test('fails when the signal helper is renamed out from under the tool calls', () => {
+  withRepo(
+    (loop, contract) => [
+      loop
+        .replace(
+          'function toolCallSignal(): AbortSignal | undefined {',
+          'function callSignal(): AbortSignal | undefined {',
+        )
+        .replaceAll('const signal = toolCallSignal();', 'const signal = callSignal();'),
+      contract,
+    ],
+    (root) => {
+      assert.equal(unsignalledNetworkCalls(root).length, NETWORK_TOOL_CALLS.length);
     },
   );
 });

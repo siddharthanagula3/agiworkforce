@@ -38,7 +38,7 @@ import type {
 } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
-import type { CloudWorkMode, ManagedMemoryCitations } from '@agiworkforce/types';
+import type { AgentEventSource, CloudWorkMode, ManagedMemoryCitations } from '@agiworkforce/types';
 import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 import type {
   PaywallSlot,
@@ -238,6 +238,7 @@ export interface MessageMetadata {
   privacyMode?: 'local' | 'byok' | 'managed';
   providerMode?: 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';
   localPersonalContextMissing?: boolean;
+  sharedAttachments?: Array<{ name: string; type?: string; mimeType?: string }>;
   /** Provider model label when persisted with metadata rather than the top-level message. */
   model?: string;
   /** Provider that served the turn, written into metadata by turn persistence. */
@@ -868,7 +869,7 @@ interface ChatState {
   ) => void;
   setSearchResults: (
     id: string,
-    results: Array<{ url: string; title: string; snippet: string }>,
+    results: Array<AgentEventSource & { snippet: string }>,
     conversationId?: string,
   ) => void;
   setExecutingCode: (id: string, isExecuting: boolean, conversationId?: string) => void;
@@ -961,7 +962,7 @@ interface ChatState {
    * parking the same fingerprint is a no-op, so a repeated block never
    * multiplies the slot.
    */
-  parkBlockedSend: (fingerprint: string, content: string) => void;
+  parkBlockedSend: (fingerprint: string, content: string, temporary?: boolean) => void;
   /**
    * Drop one parked send. Matching on the fingerprint is what makes this
    * exactly-once: a composer clearing the message it restored can never
@@ -1909,21 +1910,22 @@ export const useChatStore = create<ChatState>()(
           ),
 
         // Blocked sends
-        parkBlockedSend: (fingerprint, content) =>
+        parkBlockedSend: (fingerprint, content, temporary = false) =>
           set(
-            (state) =>
-              state.parkedSendsByFingerprint[fingerprint] === content
-                ? state
-                : {
-                    parkedSendsByFingerprint: {
-                      ...state.parkedSendsByFingerprint,
-                      [fingerprint]: content,
-                    },
-                    parkedSendCreatedAtByFingerprint: {
-                      ...state.parkedSendCreatedAtByFingerprint,
-                      [fingerprint]: Date.now(),
-                    },
-                  },
+            (state) => {
+              if (state.parkedSendsByFingerprint[fingerprint] === content) return state;
+              const { [fingerprint]: _replacedCreatedAt, ...parkedSendCreatedAtByFingerprint } =
+                state.parkedSendCreatedAtByFingerprint;
+              return {
+                parkedSendsByFingerprint: {
+                  ...state.parkedSendsByFingerprint,
+                  [fingerprint]: content,
+                },
+                parkedSendCreatedAtByFingerprint: temporary
+                  ? parkedSendCreatedAtByFingerprint
+                  : { ...parkedSendCreatedAtByFingerprint, [fingerprint]: Date.now() },
+              };
+            },
             undefined,
             'chat/parkBlockedSend',
           ),

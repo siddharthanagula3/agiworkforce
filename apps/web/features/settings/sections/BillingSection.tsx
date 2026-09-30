@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Switch, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useBillingStore } from '@shared/stores/web-auth-store';
+import { toast } from 'sonner';
 import { openBillingPortal } from '@/features/billing/services/stripe-payments';
 import {
   fetchPlanChangeState,
@@ -290,7 +291,13 @@ export function BillingSection() {
     setPortalPending(true);
     setPortalError(null);
     try {
-      await openBillingPortal(undefined, flow);
+      const opened = await openBillingPortal(undefined, flow, () => void refreshUser());
+      if (opened === 'browser') {
+        setPortalPending(false);
+        toast.info(
+          'The billing portal opened in your browser. Your plan updates here when you come back.',
+        );
+      }
     } catch (error) {
       setPortalError(toUserMessage(error, 'Could not open billing portal.'));
       setPortalPending(false);

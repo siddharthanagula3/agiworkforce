@@ -41,6 +41,8 @@ export const NOT_A_SECRET = {
     'the JSON-RPC method name clients call to read a token, not a token',
   'apps/cli/src/auth.rs:CREDENTIAL_USE_LOG':
     'the file name the credential-use trail is written to, not a credential',
+  'apps/cli/src/cloud/api_keys.rs:API_KEYS_PATH':
+    'the account route that lists and revokes API keys, not a key',
 };
 
 /**

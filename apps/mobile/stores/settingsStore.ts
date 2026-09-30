@@ -42,6 +42,7 @@ export interface Personalization {
   preferredLength?: PreferredLength;
   technicalLevel?: TechnicalLevel;
   responseLanguage?: string;
+  nameOptedOut?: boolean;
 }
 
 interface Capabilities {
@@ -65,11 +66,14 @@ export interface SettingsState {
   speechRate: number;
   speechPitch: number;
   selectedPresetId: string | null;
+  liveVoice: string | null;
   ttsProvider: TTSProvider;
   voicePushToTalk: boolean;
   voiceOnboardingSeen: boolean;
+  dictationOnboardingSeen: boolean;
   audioRoute: AudioRoute;
   isTemporaryChat: boolean;
+  temporaryChatPersonalized: boolean;
   capabilities: Capabilities;
 
   setToolApprovalPolicy: (policy: ToolApprovalPolicy) => void;
@@ -81,11 +85,14 @@ export interface SettingsState {
   setSpeechRate: (rate: number) => void;
   setSpeechPitch: (pitch: number) => void;
   setSelectedPresetId: (id: string | null) => void;
+  setLiveVoice: (voice: string | null) => void;
   setTtsProvider: (provider: TTSProvider) => void;
   setVoicePushToTalk: (enabled: boolean) => void;
   setVoiceOnboardingSeen: (seen: boolean) => void;
+  setDictationOnboardingSeen: (seen: boolean) => void;
   setAudioRoute: (route: AudioRoute) => void;
   setTemporaryChat: (enabled: boolean) => void;
+  setTemporaryChatPersonalized: (personalized: boolean) => void;
   setCapability: (key: keyof Capabilities, value: boolean) => void;
 }
 
@@ -134,11 +141,14 @@ export const useSettingsStore = create<SettingsState>()(
       speechRate: 1.0,
       speechPitch: 1.0,
       selectedPresetId: null,
+      liveVoice: null,
       ttsProvider: 'system',
       voicePushToTalk: false,
       voiceOnboardingSeen: false,
+      dictationOnboardingSeen: false,
       audioRoute: 'auto',
       isTemporaryChat: false,
+      temporaryChatPersonalized: true,
       capabilities: {
         webSearch: true,
         imageGen: true,
@@ -159,11 +169,15 @@ export const useSettingsStore = create<SettingsState>()(
       setSpeechRate: (rate) => set({ speechRate: Math.min(Math.max(rate, 0.5), 2.0) }),
       setSpeechPitch: (pitch) => set({ speechPitch: Math.min(Math.max(pitch, 0.5), 2.0) }),
       setSelectedPresetId: (id) => set({ selectedPresetId: id }),
+      setLiveVoice: (voice) => set({ liveVoice: voice }),
       setTtsProvider: (provider) => set({ ttsProvider: provider }),
       setVoicePushToTalk: (enabled) => set({ voicePushToTalk: enabled }),
       setVoiceOnboardingSeen: (seen) => set({ voiceOnboardingSeen: seen }),
+      setDictationOnboardingSeen: (seen) => set({ dictationOnboardingSeen: seen }),
       setAudioRoute: (route) => set({ audioRoute: route }),
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
+      setTemporaryChatPersonalized: (personalized) =>
+        set({ temporaryChatPersonalized: personalized }),
       setCapability: (key, value) => set({ capabilities: { ...get().capabilities, [key]: value } }),
     }),
     {

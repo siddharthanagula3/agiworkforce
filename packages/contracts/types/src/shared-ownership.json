@@ -66,6 +66,12 @@
       "kind": "shape",
       "why": "One tool shape reaches every surface from the protocol crate, so a member added on one side cannot go missing on the other."
     },
+    "source records": {
+      "module": "packages/contracts/types/src/generated/protocol/AgentEventSource.ts",
+      "symbol": "AgentEventSource",
+      "kind": "shape",
+      "why": "A source a turn drew on reaches every surface as the protocol's AgentEventSource, so a client that declares its own url, title and snippet record drifts from what the server sends."
+    },
     "event schemas": {
       "module": "packages/contracts/cloud-contracts/src/domain-events.ts",
       "symbol": "DOMAIN_EVENT_VERBS",

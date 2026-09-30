@@ -31,6 +31,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 const mockGetClerkAuthUser = vi.fn();
 
 vi.mock('@/lib/api-auth', () => ({
+  isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -38,6 +39,7 @@ const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
+  getStripeWebhookDb: vi.fn(),
   getNeonDb: vi.fn(() => ({
     query: mockQuery,
     execute: mockExecute,
@@ -55,6 +57,7 @@ vi.mock('@/lib/server/device-signin-policy', () => ({
 
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (userId: string) => mockHasAcceptedCurrentTerms(userId),
+  mustAcceptTerms: async (userId: string) => !(await mockHasAcceptedCurrentTerms(userId)),
 }));
 
 const mockRecordAuditEvent = vi.fn();

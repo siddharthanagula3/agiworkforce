@@ -1,5 +1,6 @@
 import { useRef, useState, type RefObject } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import Svg, { Circle, G, Line, Path, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import type { ColorScheme } from '@/src/ui/theme';
@@ -11,6 +12,7 @@ import {
   type PieChart,
   type XyChart,
 } from '@/src/features/chat/utils/mermaidChart';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 const XY_WIDTH = 320;
 const XY_HEIGHT = 200;
@@ -103,7 +105,7 @@ function ChartDataTable({ chart, colors }: { chart: MermaidChart; colors: ColorS
                   width: 110,
                   paddingHorizontal: 8,
                   paddingVertical: 5,
-                  fontSize: 12,
+                  fontSize: typeScale.caption,
                   fontWeight: rowIndex === 0 ? '600' : '400',
                   color: rowIndex === 0 ? colors.textPrimary : colors.textSecondary,
                   textAlign: cellIndex === 0 ? 'left' : 'right',
@@ -134,7 +136,9 @@ function Legend({
           style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
         >
           <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: entry.color }} />
-          <Text style={{ fontSize: 11, color: colors.textSecondary }}>{entry.label}</Text>
+          <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
+            {entry.label}
+          </Text>
         </View>
       ))}
     </View>
@@ -292,7 +296,7 @@ function XyChartView({
         </Svg>
       </View>
       {chart.yLabel ? (
-        <Text style={{ fontSize: 11, color: colors.textMuted }}>{chart.yLabel}</Text>
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>{chart.yLabel}</Text>
       ) : null}
       {legend.length > 1 || chart.series.some((series) => series.name) ? (
         <Legend entries={legend} colors={colors} />
@@ -420,7 +424,12 @@ export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: Co
       <View accessible accessibilityRole="image" accessibilityLabel={describeChart(chart)}>
         {chart.title ? (
           <Text
-            style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginBottom: 6 }}
+            style={{
+              fontSize: typeScale.footnote,
+              fontWeight: '600',
+              color: colors.textPrimary,
+              marginBottom: 6,
+            }}
           >
             {chart.title}
           </Text>
@@ -445,24 +454,26 @@ export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: Co
       </View>
       {readout ? (
         <Text
-          style={{ fontSize: 12, color: colors.textPrimary, marginTop: 6 }}
+          style={{ fontSize: typeScale.caption, color: colors.textPrimary, marginTop: 6 }}
           accessibilityLiveRegion="polite"
         >
           {readout}
         </Text>
       ) : null}
       <View style={{ flexDirection: 'row', gap: 16 }}>
-        <Pressable
+        <PressableBox
           onPress={() => setShowData((shown) => !shown)}
           accessibilityRole="button"
           accessibilityState={{ expanded: showData }}
           style={{ minHeight: 44, justifyContent: 'center' }}
         >
-          <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textSecondary }}>
+          <Text
+            style={{ fontSize: typeScale.footnote, fontWeight: '500', color: colors.textSecondary }}
+          >
             {showData ? 'Hide data' : 'Show data'}
           </Text>
-        </Pressable>
-        <Pressable
+        </PressableBox>
+        <PressableBox
           onPress={saveImage}
           disabled={saving}
           accessibilityRole="button"
@@ -470,10 +481,12 @@ export function ReportChart({ chart, colors }: { chart: MermaidChart; colors: Co
           accessibilityState={{ disabled: saving, busy: saving }}
           style={{ minHeight: 44, justifyContent: 'center', opacity: saving ? 0.55 : 1 }}
         >
-          <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textSecondary }}>
+          <Text
+            style={{ fontSize: typeScale.footnote, fontWeight: '500', color: colors.textSecondary }}
+          >
             {saving ? 'Saving…' : 'Save image'}
           </Text>
-        </Pressable>
+        </PressableBox>
       </View>
       {showData ? <ChartDataTable chart={chart} colors={colors} /> : null}
     </View>

@@ -126,7 +126,7 @@ export function ProjectCard({
   const conversationCount = project.conversationCount ?? project.conversationIds?.length ?? 0;
 
   const menuItemCls =
-    'flex w-full items-center gap-2 px-3 py-1.5 text-sm text-left text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] transition-colors';
+    'flex w-full items-center gap-2 px-3 py-1.5 text-sm text-start text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] transition-colors';
 
   const archiveAction = project.isArchived ? onUnarchive : onArchive;
   const hasMenu = !!(onShare || onEdit || archiveAction || onDelete);
@@ -142,7 +142,7 @@ export function ProjectCard({
       <div
         aria-current={active ? 'true' : undefined}
         className={cn(
-          'group relative flex w-full flex-col gap-2 rounded-xl border bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors',
+          'group relative flex w-full flex-col gap-2 rounded-xl border bg-[var(--chat-surface-elevated)] p-4 text-start transition-colors',
           'hover:bg-[var(--chat-surface-hover)] focus-within:ring-2 focus-within:ring-[var(--chat-focus-ring)]',
           active
             ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--chat-accent-primary)_18%,transparent)]'
@@ -227,7 +227,7 @@ export function ProjectCard({
                     ref={menuPanelRef}
                     role="menu"
                     aria-label={`Options for ${project.name}`}
-                    className="absolute right-0 top-full z-[var(--z-content-sticky)] mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-e3"
+                    className="absolute end-0 top-full z-[var(--z-content-sticky)] mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-e3"
                   >
                     {/* Order matches the leaders' project row menu: share,
                         edit (rename + settings), archive, delete. Star lives
@@ -318,7 +318,10 @@ export function ProjectCard({
                           setMenuOpen(false);
                           confirm({
                             title: `Delete "${project.name}"?`,
-                            description: 'This cannot be undone.',
+                            description:
+                              project.space === 'health'
+                                ? 'Its chats, files and memories are deleted with it. This cannot be undone.'
+                                : 'This cannot be undone.',
                             confirmLabel: 'Delete',
                             destructive: true,
                             onConfirm: () => onDelete(project),

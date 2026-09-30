@@ -1,7 +1,14 @@
-import type { QueryResult } from '@neondatabase/serverless';
 import { Pool } from '@neondatabase/serverless';
+import {
+  DB_CONNECTION_TIMEOUT_MS,
+  DB_PROBE_TIMEOUT_MS,
+  DB_QUERY_TIMEOUT_MS,
+  DB_STATEMENT_TIMEOUT_MS,
+} from './constants.js';
+import { queryWithStatementTimeout } from './db-query.js';
+import { withinDeadline } from './deadline.js';
 import { logger } from './logger.js';
-import type { PairTokenRole } from './pair-token.js';
+import { pairCredentialKey, type PairCredential, type PairTokenRole } from './pair-token.js';
 import { pairingDeviceKey } from './pairing-device.js';
 
 interface DbError {
@@ -49,7 +56,12 @@ function guardTransportErrors(candidate: Pool): Pool {
 }
 
 const pool = guardTransportErrors(
-  new Pool({ connectionString: databaseUrl, idleTimeoutMillis: IDLE_TIMEOUT_MS }),
+  new Pool({
+    connectionString: databaseUrl,
+    idleTimeoutMillis: IDLE_TIMEOUT_MS,
+    connectionTimeoutMillis: DB_CONNECTION_TIMEOUT_MS,
+    query_timeout: DB_QUERY_TIMEOUT_MS,
+  }),
 );
 
 function normalizeTimestamp(value: string | number | null): number {
@@ -82,7 +94,13 @@ function toDbError(error: unknown): DbError {
 
 async function queryOne<T>(sql: string, params: unknown[] = []): Promise<QueryResultWrapper<T>> {
   try {
-    const result = (await pool.query(sql, params)) as QueryResult;
+    const result = await queryWithStatementTimeout(
+      pool,
+      sql,
+      params,
+      DB_STATEMENT_TIMEOUT_MS,
+      reportTransportError,
+    );
     const row = result.rows?.[0] as T | undefined;
     return { data: (row as T) ?? null, error: null };
   } catch (error) {
@@ -92,7 +110,13 @@ async function queryOne<T>(sql: string, params: unknown[] = []): Promise<QueryRe
 
 async function queryRows<T>(sql: string, params: unknown[] = []): Promise<QueryResultWrapper<T[]>> {
   try {
-    const result = (await pool.query(sql, params)) as QueryResult;
+    const result = await queryWithStatementTimeout(
+      pool,
+      sql,
+      params,
+      DB_STATEMENT_TIMEOUT_MS,
+      reportTransportError,
+    );
     return { data: (result.rows ?? []) as T[], error: null };
   } catch (error) {
     return { data: null, error: toDbError(error) };
@@ -104,7 +128,13 @@ async function queryNoReturn(
   params: unknown[] = [],
 ): Promise<{ error: DbError | null }> {
   try {
-    await pool.query(sql, params);
+    await queryWithStatementTimeout(
+      pool,
+      sql,
+      params,
+      DB_STATEMENT_TIMEOUT_MS,
+      reportTransportError,
+    );
     return { error: null };
   } catch (error) {
     return { error: toDbError(error) };
@@ -123,33 +153,31 @@ export async function getSessionByCode(
   return { data: toRow(data), error: null };
 }
 
-export async function getSessionExpiresAtByCode(
-  code: string,
-): Promise<QueryResultWrapper<{ expires_at: number }>> {
-  const sql = 'SELECT expires_at FROM signaling_sessions WHERE code = $1 LIMIT 1';
-  const { data, error } = await queryOne<{ expires_at: number | string }>(sql, [code]);
-  if (error || !data) {
-    return { data: null, error };
-  }
-  return {
-    data: { expires_at: normalizeTimestamp(data.expires_at) },
-    error: null,
-  };
-}
-
 export async function deleteSessionByCode(code: string): Promise<{ error: DbError | null }> {
   return queryNoReturn('DELETE FROM signaling_sessions WHERE code = $1', [code]);
 }
 
-export async function bindSessionDevice(
-  code: string,
+export async function rotatePairCredential(
+  session: Pick<SignalingSession, 'code' | 'created_at'>,
   role: PairTokenRole,
-  deviceId: string,
-  metadata: Record<string, unknown>,
-): Promise<QueryResultWrapper<{ code: string }>> {
+  accountId: string,
+  previous: PairCredential | null,
+  replacement: PairCredential,
+  registeredDeviceId: string | null,
+): Promise<QueryResultWrapper<{ metadata: Record<string, unknown> }>> {
   const sql =
-    'UPDATE signaling_sessions SET metadata = $2 WHERE code = $1 AND coalesce(metadata ->> $3::text, $4::text) = $4::text RETURNING code';
-  return queryOne<{ code: string }>(sql, [code, metadata, pairingDeviceKey(role), deviceId]);
+    "UPDATE signaling_sessions SET metadata = jsonb_set(CASE WHEN $8::text IS NULL THEN coalesce(metadata, '{}'::jsonb) ELSE jsonb_set(coalesce(metadata, '{}'::jsonb), ARRAY[$7::text], to_jsonb($8::text), true) END, ARRAY[$4::text], $6::jsonb, true) WHERE code = $1 AND created_at = $2 AND expires_at > $9 AND metadata ->> 'userId' = $3 AND metadata -> $4::text IS NOT DISTINCT FROM $5::jsonb AND (metadata ->> $7::text IS NULL OR metadata ->> $7::text = $8::text) RETURNING metadata";
+  return queryOne(sql, [
+    session.code,
+    session.created_at,
+    accountId,
+    pairCredentialKey(role),
+    previous === null ? null : JSON.stringify(previous),
+    JSON.stringify(replacement),
+    pairingDeviceKey(role),
+    registeredDeviceId,
+    Date.now(),
+  ]);
 }
 
 export async function deleteSessionsForDevice(
@@ -194,4 +222,28 @@ export async function insertSession(
   const insertSql =
     'INSERT INTO signaling_sessions (code, created_at, expires_at, metadata) VALUES ($1, $2, $3, $4)';
   return queryNoReturn(insertSql, [code, createdAt, expiresAt, metadata]);
+}
+
+export type DatabaseProbe = { ok: true; latencyMs: number } | { ok: false; reason: string };
+
+const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
+
+export async function probeDatabase(
+  timeoutMs: number = DB_PROBE_TIMEOUT_MS,
+): Promise<DatabaseProbe> {
+  const startedAt = Date.now();
+  const outcome = await withinDeadline(
+    queryNoReturn('SELECT 1 FROM signaling_sessions LIMIT 1'),
+    timeoutMs,
+  );
+  if (outcome.kind === 'timeout') return { ok: false, reason: 'timeout' };
+  if (outcome.kind === 'failed') return { ok: false, reason: 'unreachable' };
+  const { error } = outcome.value;
+  if (error) {
+    return {
+      ok: false,
+      reason: error.code && SQLSTATE_PATTERN.test(error.code) ? error.code : 'unreachable',
+    };
+  }
+  return { ok: true, latencyMs: Date.now() - startedAt };
 }

@@ -99,6 +99,7 @@
   "navImages": "Bilder",
   "navModels": "Modelle",
   "navSchedules": "Zeitpläne",
+  "navHealth": "Gesundheit",
   "navAdmin": "Verwaltung",
   "navWorkspaceSection": "Arbeitsbereich",
   "navLoadingWorkspaces": "Arbeitsbereiche werden geladen…",
@@ -169,7 +170,13 @@
     "toolsAwaitingApproval_one": "Ein Tool wartet auf Ihre Freigabe.",
     "toolsAwaitingApproval_other": "{{count}} Tools warten auf Ihre Freigabe.",
     "unsentMessages_one": "Sie haben eine ungesendete Nachricht.",
-    "unsentMessages_other": "Sie haben {{count}} ungesendete Nachrichten."
+    "unsentMessages_other": "Sie haben {{count}} ungesendete Nachrichten.",
+    "packages_one": "{{count}} Paket",
+    "packages_other": "{{count}} Pakete",
+    "unreadNotifications_one": "{{count}} ungelesene Benachrichtigung",
+    "unreadNotifications_other": "{{count}} ungelesene Benachrichtigungen",
+    "textBlocks_one": "{{count}} Textblock",
+    "textBlocks_other": "{{count}} Textblöcke"
   },
   "relative": {
     "minutesAgo_one": "vor {{count}} Minute",

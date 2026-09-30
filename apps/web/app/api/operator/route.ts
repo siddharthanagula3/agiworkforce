@@ -26,6 +26,10 @@ import {
 import { readOperatorCosts } from '@/features/admin/services/operator-cost-metrics';
 import { getRequestIdentity } from '@/lib/server/identity';
 import {
+  PasskeyRequiredError,
+  subjectSessionPassesAccountSecurity,
+} from '@/lib/server/account-security/gate';
+import {
   ingestBudgetForMaxDuration,
   ingestConnectorDirectory,
 } from '@/lib/connectors/directory/ingest';
@@ -59,7 +63,7 @@ function errorResponse(err: AppError): NextResponse {
 const FEEDBACK_SCREENSHOT_PREFIX = 'feedback';
 
 async function requirePlatformAdmin(): Promise<string> {
-  const { subject: userId } = await getRequestIdentity();
+  const { subject: userId, sessionId } = await getRequestIdentity();
   if (!userId) throw createError.unauthorized('Sign in required.');
 
   if (!isPlatformAdmin(userId, process.env[PLATFORM_ADMIN_ENV_VAR])) {
@@ -70,6 +74,9 @@ async function requirePlatformAdmin(): Promise<string> {
   }
 
   await assertAccountActive(userId);
+  if (!(await subjectSessionPassesAccountSecurity(userId, sessionId))) {
+    throw new PasskeyRequiredError();
+  }
   return userId;
 }
 

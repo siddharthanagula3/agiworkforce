@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type {
   CreateCustomConnectorRequest,
   CreateCustomConnectorResponse,
@@ -96,6 +97,7 @@ async function handlePost(request: NextRequest) {
     connectorId: null,
     isCustom: true,
     request,
+    surface: resolveCloudChatSurface(request),
   });
   if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason);
 

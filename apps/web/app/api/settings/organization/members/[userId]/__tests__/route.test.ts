@@ -156,7 +156,7 @@ describe('GET /api/settings/organization/members/[userId]', () => {
   });
 
   it('rejects a blank member id', async () => {
-    const response = await GET(request('GET', ' '), context('%20'));
+    const response = await GET(request('GET', ' '), context(' '));
 
     expect(response.status).toBe(400);
   });

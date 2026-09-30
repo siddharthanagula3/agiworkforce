@@ -76,6 +76,68 @@ fn code_theme(palette: SyntaxPalette) -> Theme {
     }
 }
 
+fn ansi_color(color: ratatui::style::Color, foreground: bool) -> Option<String> {
+    use ratatui::style::Color;
+    let base = if foreground { 30 } else { 40 };
+    let named =
+        |offset: u8, bright: bool| Some(format!("{}", base + offset + if bright { 60 } else { 0 }));
+    match color {
+        Color::Reset => None,
+        Color::Black => named(0, false),
+        Color::Red => named(1, false),
+        Color::Green => named(2, false),
+        Color::Yellow => named(3, false),
+        Color::Blue => named(4, false),
+        Color::Magenta => named(5, false),
+        Color::Cyan => named(6, false),
+        Color::Gray => named(7, false),
+        Color::DarkGray => named(0, true),
+        Color::LightRed => named(1, true),
+        Color::LightGreen => named(2, true),
+        Color::LightYellow => named(3, true),
+        Color::LightBlue => named(4, true),
+        Color::LightMagenta => named(5, true),
+        Color::LightCyan => named(6, true),
+        Color::White => named(7, true),
+        Color::Rgb(red, green, blue) => Some(format!("{};2;{red};{green};{blue}", base + 8)),
+        Color::Indexed(index) => Some(format!("{};5;{index}", base + 8)),
+    }
+}
+
+pub fn render_markdown_ansi(text: &str) -> String {
+    let mut output = String::new();
+    for line in render_markdown(text) {
+        for span in line.spans {
+            let mut codes = Vec::new();
+            if let Some(code) = span.style.fg.and_then(|color| ansi_color(color, true)) {
+                codes.push(code);
+            }
+            if let Some(code) = span.style.bg.and_then(|color| ansi_color(color, false)) {
+                codes.push(code);
+            }
+            let modifiers = span.style.add_modifier;
+            for (modifier, code) in [
+                (Modifier::BOLD, "1"),
+                (Modifier::DIM, "2"),
+                (Modifier::ITALIC, "3"),
+                (Modifier::UNDERLINED, "4"),
+                (Modifier::CROSSED_OUT, "9"),
+            ] {
+                if modifiers.contains(modifier) {
+                    codes.push(code.to_string());
+                }
+            }
+            if codes.is_empty() {
+                output.push_str(&span.content);
+            } else {
+                output.push_str(&format!("\x1b[{}m{}\x1b[0m", codes.join(";"), span.content));
+            }
+        }
+        output.push('\n');
+    }
+    output
+}
+
 /// Render markdown text into styled ratatui Lines with syntax highlighting.
 pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();

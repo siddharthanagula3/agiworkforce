@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, StyleSheet, TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useSession } from '@clerk/expo';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { useAuthStore } from '@/src/features/auth/store';
 import { requestStepUpGrant, type StepUpChallenge, type StepUpLevel } from '../services/stepUp';
@@ -275,7 +277,7 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
             ) : null}
 
             {prompt.kind === 'second_factor' && prompt.strategies.length > 1 ? (
-              <Pressable
+              <PressableBox
                 accessibilityRole="button"
                 disabled={busy}
                 onPress={() =>
@@ -290,10 +292,10 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
                     ? 'Use a backup code instead'
                     : 'Use your authenticator app instead'}
                 </Text>
-              </Pressable>
+              </PressableBox>
             ) : null}
             {prompt.kind === 'password' && prompt.emailAddressId ? (
-              <Pressable
+              <PressableBox
                 accessibilityRole="button"
                 disabled={busy}
                 onPress={() => void sendEmailCode(prompt.emailAddressId!, null)}
@@ -301,7 +303,7 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
                 <Text style={[styles.link, { color: colors.textPrimary }]}>
                   Email me a code instead
                 </Text>
-              </Pressable>
+              </PressableBox>
             ) : null}
 
             {error ? (
@@ -336,12 +338,25 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  dialog: { width: '100%', maxWidth: 420, borderRadius: 14, padding: 20, borderWidth: 1, gap: 12 },
-  title: { fontSize: 17, fontWeight: '600' },
-  body: { fontSize: 14, lineHeight: 20 },
+  dialog: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 14,
+    padding: dialogPadding,
+    borderWidth: 1,
+    gap: 12,
+  },
+  title: { fontSize: typeScale.headline, fontWeight: '600' },
+  body: { fontSize: typeScale.subhead, lineHeight: 20 },
   field: { gap: 6 },
-  label: { fontSize: 13 },
-  input: { height: 44, borderRadius: 8, paddingHorizontal: 12, borderWidth: 1, fontSize: 15 },
-  link: { fontSize: 14, textDecorationLine: 'underline' },
+  label: { fontSize: typeScale.footnote },
+  input: {
+    height: 44,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    fontSize: typeScale.body,
+  },
+  link: { fontSize: typeScale.subhead, textDecorationLine: 'underline' },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
 });

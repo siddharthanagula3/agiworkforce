@@ -35,6 +35,35 @@ vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
   resolveEntitledPlanTier: mocks.plan,
 }));
+vi.mock('@/lib/server/free-pools', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/free-pools')>();
+  return {
+    ...actual,
+    loadFreePools: () => {
+      const document = actual.loadFreePools();
+      const inventory = document.inventory!;
+      return {
+        ...document,
+        inventory: {
+          ...inventory,
+          termsReview: {
+            terms: {
+              commercialUseAllowed: true,
+              thirdPartyServingAllowed: true,
+              proxyingAllowed: true,
+              promptsExcludedFromTraining: true,
+            },
+            evidenceUrl: 'https://provider.example/terms',
+            reviewedBy: 'fixture-reviewer',
+            verifiedAtMs: Date.now() - 60_000,
+            expiresAtMs: Date.now() + 86_400_000,
+            approvedOfferingKeys: inventory.entries.map((entry) => entry.offeringKey),
+          },
+        },
+      };
+    },
+  };
+});
 
 const { GET } = await import('./route');
 

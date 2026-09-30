@@ -15,26 +15,30 @@ use agiworkforce_protocol::developer_session::{
     DeveloperReasoningEffort, DeveloperRoutingProfile, DeveloperRoutingTaskType,
     DeveloperSessionApproval, DeveloperSessionHandoff, DeveloperSessionSource,
     DeveloperSessionTrustMode, DeveloperSessionWriter, DeveloperSessionWriterChange,
-    HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn,
-    HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse,
-    HookRemoveParams, HostModelSummary, LocalModelListResponse, LocalModelProvider,
-    LocalModelSummary, McpAddParams, McpAuthRequiredNotification, McpLoginParams, McpLoginResponse,
-    McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse, McpServerParams,
-    McpServerTestResponse, McpServerToolsResponse, MemoryAddParams, MemoryAddResponse,
-    ModelListParams, PendingApprovalSnapshot, PermissionsListResponse, PermissionsRemoveParams,
-    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginSetEnabledParams,
-    PluginUpdateResponse, RewindSkippedFile, SettingsReadResponse, SettingsWriteParams,
-    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
-    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
-    ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
-    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
-    TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams,
-    WorktreeSummary,
+    GitPullRequestParams, GitPullRequestPlanParams, GitPullRequestPlanResponse,
+    GitPullRequestResponse, HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment,
+    HandoffLastTurn, HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams,
+    HookListResponse, HookRemoveParams, HostModelSummary, LocalModelListResponse,
+    LocalModelProvider, LocalModelSummary, McpAddParams, McpAuthRequiredNotification,
+    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerInspectResponse,
+    McpServerListResponse, McpServerParams, McpServerTestResponse, McpServerToolsResponse,
+    MemoryAddParams, MemoryAddResponse, ModelListParams, PendingApprovalSnapshot,
+    PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
+    PermissionsRemoveParams, PlanDecideParams, PlanDecision, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
+    ProviderParams, ProviderSetKeyParams, ProvidersListResponse, RewindSkippedFile,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
+    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
+    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
+    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
+    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnEndedNotification,
+    TurnFailure, TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams,
+    TurnStatus, TurnSteerParams, TurnSummary, WorktreeCreateParams, WorktreeListResponse,
+    WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -71,7 +75,7 @@ use crate::runtime::session_handoff::{
     developer_session_handoff, file_change_record, HandoffContext,
 };
 use crate::runtime::writer_lease::{self, LeaseClaim, WriterIdentity, WriterLease};
-use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
+use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 const DEFAULT_THREAD_LIMIT: usize = 50;
 const MAX_THREAD_LIMIT: usize = 100;
@@ -89,6 +93,7 @@ const MAX_IMAGE_INPUT_BYTES: usize = 10_000_000;
 const MAX_TOTAL_IMAGE_INPUT_BYTES: usize = 20_000_000;
 const MAX_IMAGE_DATA_URL_HEADER_BYTES: usize = 256;
 const MAX_IMAGE_MIME_BYTES: usize = 127;
+const MAX_PLAN_FEEDBACK_CHARS: usize = 4_000;
 const MAX_IMAGE_INPUT_ENCODED_BYTES: usize = MAX_IMAGE_INPUT_BYTES.div_ceil(3) * 4;
 const MAX_STEER_QUEUE_DEPTH: usize = 20;
 // The VS Code JSONL client rejects any single line above 4 MiB. Reserve ample
@@ -108,6 +113,16 @@ const MAX_SEARCH_HITS: usize = 50;
 const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
 const MAX_CLIENT_TURN_ID_CHARS: usize = 128;
 const WRITER_LABEL: &str = "AGI app-server";
+
+/// Read the account's memory setting and memories before a session starts, so
+/// a user who turned memory off on the web is not remembered or read here.
+/// Only the terminal CLI refreshed this before, so a desktop session kept the
+/// last cached answer. Signed out or offline, the cached answer stands.
+async fn refresh_account_memory_setting() {
+    if let Err(error) = crate::cloud::refresh_memory(crate::agent::PrivacyMode::Managed).await {
+        tracing::debug!(%error, "account memory setting not refreshed");
+    }
+}
 
 fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse {
     AccountStatusResponse {
@@ -331,6 +346,7 @@ pub struct CliDeveloperSessionHost {
     workspace_root: PathBuf,
     store: ManagedSessionStore,
     load_integrations: bool,
+    bypass_permissions_available: bool,
     sessions: Arc<Mutex<HashMap<String, Arc<Mutex<AgentSession>>>>>,
     running_turns: Arc<Mutex<HashMap<String, RunningTurn>>>,
     steering: Arc<Mutex<HashMap<String, Vec<PreparedInput>>>>,
@@ -359,6 +375,7 @@ impl CliDeveloperSessionHost {
         workspace_root: PathBuf,
     ) -> Result<Self, DeveloperSessionHostError> {
         let store = ManagedSessionStore::user_config().map_err(internal_error)?;
+        crate::tools::enable_interactive_questions();
         Self::new_with_store(config, workspace_root, store, true)
     }
 
@@ -369,16 +386,13 @@ impl CliDeveloperSessionHost {
         load_integrations: bool,
     ) -> Result<Self, DeveloperSessionHostError> {
         let workspace_root = canonical_directory(&workspace_root)?;
-        // AgentSession's existing context loader validates against the process
-        // cwd plus registered roots. App-server processes normally launch in.
-        crate::path_security::register_additional_workspace_root_path(&workspace_root)
-            .map_err(DeveloperSessionHostError::invalid_request)?;
         let (notifications, _) = broadcast::channel(1024);
         Ok(Self {
             config: Arc::new(config),
             workspace_root,
             store,
             load_integrations,
+            bypass_permissions_available: false,
             sessions: Arc::new(Mutex::new(HashMap::new())),
             running_turns: Arc::new(Mutex::new(HashMap::new())),
             steering: Arc::new(Mutex::new(HashMap::new())),
@@ -392,6 +406,11 @@ impl CliDeveloperSessionHost {
             client_turns: Arc::new(StdMutex::new(HashMap::new())),
             taken_handoffs: Arc::new(Mutex::new(Vec::new())),
         })
+    }
+
+    pub fn with_bypass_permissions_available(mut self, available: bool) -> Self {
+        self.bypass_permissions_available = available;
+        self
     }
 
     async fn admit_request(&self) -> Result<RwLockReadGuard<'_, ()>, DeveloperSessionHostError> {
@@ -439,6 +458,13 @@ impl CliDeveloperSessionHost {
             saved_permissions: true,
             mcp_inspect: self.load_integrations,
             plugin_updates: true,
+            permission_rules: true,
+            trust: true,
+            turn_tool_filters: true,
+            provider_keys: true,
+            questions: true,
+            plan_decisions: true,
+            pull_requests: true,
         }
     }
 
@@ -563,6 +589,7 @@ impl CliDeveloperSessionHost {
             .require_routing_authority()
             .map_err(invalid_request)?;
         let system_context = context::gather_system_context();
+        refresh_account_memory_setting().await;
         let mut agent = AgentSession::new_checked(
             model,
             &system_context,
@@ -571,6 +598,7 @@ impl CliDeveloperSessionHost {
         )
         .map_err(invalid_request)?;
         agent.apply_ui_config(&self.config);
+        agent.bypass_permissions_available = self.bypass_permissions_available;
         agent
             .load_managed_conversation(managed_session, path)
             .map_err(invalid_request)?;
@@ -867,6 +895,7 @@ impl CliDeveloperSessionHost {
             repository: summary.repository.clone(),
             writer: writer_lease::read(&summary.path)
                 .map(|lease| writer_summary(self.writer, lease)),
+            location: None,
         }
     }
 
@@ -1241,6 +1270,7 @@ impl CliDeveloperSessionHost {
                 task_type,
                 trust_mode,
                 speed_first,
+                policy_version: crate::runtime::session::current_routing_policy_version(),
             }),
             fallback_model_ids,
         })
@@ -1497,9 +1527,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 requested_provider,
             ),
         };
+        refresh_account_memory_setting().await;
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
         agent.apply_ui_config(&self.config);
+        agent.bypass_permissions_available = self.bypass_permissions_available;
         agent.quiet = true;
 
         let id = Uuid::new_v4().to_string();
@@ -1599,6 +1631,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         for summary in selected {
             threads.push(self.thread_summary(summary).await);
         }
+        if params.include_cloud && params.cursor.is_none() {
+            threads.extend(super::cloud_threads::list(&self.workspace_root).await);
+        }
         Ok(ThreadListResponse {
             threads,
             next_cursor,
@@ -1610,6 +1645,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadIdParams,
     ) -> Result<ThreadSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        if super::cloud_threads::cloud_session_id(&params.thread_id).is_some() {
+            return Err(super::cloud_threads::turn_refusal());
+        }
         self.load_agent(&params.thread_id).await?;
         let store = self.store.clone();
         let thread_id = params.thread_id;
@@ -1627,6 +1665,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadIdParams,
     ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        if let Some(session_id) = super::cloud_threads::cloud_session_id(&params.thread_id) {
+            return super::cloud_threads::read(session_id).await;
+        }
         let store = self.store.clone();
         let thread_id = params.thread_id;
         let (resolved, session) = tokio::task::spawn_blocking(move || {
@@ -2266,6 +2307,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: TurnStartParams,
     ) -> Result<TurnSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        if super::cloud_threads::cloud_session_id(&params.thread_id).is_some() {
+            return Err(super::cloud_threads::turn_refusal());
+        }
         self.validate_requested_cwd(params.cwd.as_deref())?;
         let context_files =
             self.validate_context_files(params.context_files.as_deref().unwrap_or_default())?;
@@ -2388,7 +2432,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     agent.fallback_chain = None;
                     agent.set_managed_auto_routing(None);
                 }
-                apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort);
+                apply_agent_controls(&mut agent, params.agent_mode, params.reasoning_effort)?;
+                if params.allowed_tools.is_some() || params.disallowed_tools.is_some() {
+                    let allowed = validated_tool_filter(params.allowed_tools.as_deref())?
+                        .or_else(|| agent.allowed_tools.clone())
+                        .unwrap_or_default();
+                    let disallowed = validated_tool_filter(params.disallowed_tools.as_deref())?
+                        .unwrap_or_else(|| agent.disallowed_tools.clone());
+                    agent.apply_tool_filters(&allowed, &disallowed);
+                    self.apply_subagent_boundary_policy(&mut agent);
+                }
                 agent.max_turns = max_turns;
                 agent.cloud_project = params
                     .cloud_project_id
@@ -2686,6 +2739,38 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             }
             drop(pending);
 
+            // The account refused this machine's session mid-life (a passkey
+            // enrolled, the device unlinked). Renew once, or forget it so the
+            // account reads signed out and the desktop signs this machine in again.
+            if let Some(failure) = final_failure.as_mut() {
+                let managed = failure.provider.as_deref() == Some("managed_cloud");
+                let refused = matches!(
+                    failure.code,
+                    TurnFailureCode::ProviderAuthInvalid | TurnFailureCode::AccountSignedOut
+                );
+                if managed && refused {
+                    if let Some(jwt) = crate::tier_cache::load_jwt() {
+                        use account::RejectedSessionRecovery as Recovery;
+                        match account::recover_rejected_session(&jwt).await {
+                            Recovery::Renewed => {
+                                failure.message =
+                                    "Your AGI Workforce session was renewed. Send it again."
+                                        .to_string();
+                                failure.retryable = true;
+                                failure.action =
+                                    agiworkforce_protocol::developer_session::TurnFailureAction::Retry;
+                            }
+                            Recovery::Ended(message) | Recovery::Refused(message) => {
+                                failure.code = TurnFailureCode::AccountSignedOut;
+                                failure.message = message;
+                                failure.action = agiworkforce_protocol::developer_session::TurnFailureAction::SignInAccount;
+                            }
+                            Recovery::Unavailable => {}
+                        }
+                    }
+                }
+            }
+
             let method = if final_status == TurnStatus::Completed {
                 "turn/completed"
             } else {
@@ -2860,6 +2945,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: TurnSteerParams,
     ) -> Result<TurnSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        if super::cloud_threads::cloud_session_id(&params.thread_id).is_some() {
+            return Err(super::cloud_threads::turn_refusal());
+        }
         let prepared = self.prepare_input(params.input)?;
         let running = self.running_turns.lock().await;
         let Some(turn) = running.get(&params.thread_id) else {
@@ -3090,7 +3178,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: AccountLoginWaitParams,
     ) -> Result<AccountLoginWaitResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
-        let pending = self
+        let mut pending = self
             .pending_logins
             .lock()
             .await
@@ -3115,6 +3203,28 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .map_err(|error| DeveloperSessionHostError::unavailable(error.to_string()))?;
             match poll {
                 crate::oauth::DeviceCodePoll::Pending => continue,
+                // Waiting out the code's lifetime would only end in "expired";
+                // the account has to accept the terms on the web first.
+                crate::oauth::DeviceCodePoll::TermsRequired(url) => {
+                    return Ok(AccountLoginWaitResponse {
+                        outcome: AccountLoginOutcome::Failed,
+                        message: Some(format!(
+                            "Accept the updated Terms of Service at {url}, then sign in again."
+                        )),
+                        account: account_response(account::account_status(false).await),
+                    });
+                }
+                crate::oauth::DeviceCodePoll::SlowDown => {
+                    pending.interval += std::time::Duration::from_secs(5);
+                    continue;
+                }
+                crate::oauth::DeviceCodePoll::Denied => {
+                    return Ok(AccountLoginWaitResponse {
+                        outcome: AccountLoginOutcome::Failed,
+                        message: Some("The sign-in was denied in the browser".to_string()),
+                        account: account_response(account::account_status(false).await),
+                    });
+                }
                 crate::oauth::DeviceCodePoll::Expired => {
                     return Ok(AccountLoginWaitResponse {
                         outcome: AccountLoginOutcome::Expired,
@@ -3140,11 +3250,17 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let _guard = self.admit_request().await?;
         self.pending_logins.lock().await.clear();
         *self.host_models.write().await = None;
-        account::logout().map_err(|error| DeveloperSessionHostError::internal(error.to_string()))
+        account::sign_out()
+            .await
+            .map(|_| ())
+            .map_err(|error| DeveloperSessionHostError::internal(error.to_string()))
     }
 
     async fn account_token(&self) -> Result<AccountTokenResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
+        if let Some(reason) = account::renew_managed_session_if_expiring().await {
+            return Err(DeveloperSessionHostError::unavailable(reason));
+        }
         let (token, expires_ms) = account::managed_credential().ok_or_else(|| {
             DeveloperSessionHostError::not_found(
                 "This machine holds no AGI Workforce credential; call account/login first",
@@ -3522,6 +3638,170 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .map_err(internal_error)?
     }
 
+    async fn plan_pull_request(
+        &self,
+        params: GitPullRequestPlanParams,
+    ) -> Result<GitPullRequestPlanResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_requested_cwd(params.cwd.as_deref())?;
+        super::pull_request::plan(&self.workspace_root).await
+    }
+
+    async fn create_pull_request(
+        &self,
+        params: GitPullRequestParams,
+    ) -> Result<GitPullRequestResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_requested_cwd(params.cwd.as_deref())?;
+        super::pull_request::create(&self.workspace_root, params).await
+    }
+
+    async fn decide_plan(&self, params: PlanDecideParams) -> Result<(), DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        if self
+            .running_turns
+            .lock()
+            .await
+            .contains_key(&params.thread_id)
+        {
+            return Err(DeveloperSessionHostError::conflict(
+                "Wait for the running turn to finish before deciding on its plan",
+            ));
+        }
+        let feedback = match params.decision {
+            PlanDecision::Approve => None,
+            PlanDecision::Reject => {
+                let feedback = params
+                    .feedback
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|feedback| !feedback.is_empty())
+                    .ok_or_else(|| {
+                        DeveloperSessionHostError::invalid_request(
+                            "Rejecting a plan needs feedback for the next attempt",
+                        )
+                    })?;
+                if feedback.chars().count() > MAX_PLAN_FEEDBACK_CHARS {
+                    return Err(DeveloperSessionHostError::invalid_request(format!(
+                        "Plan feedback is limited to {MAX_PLAN_FEEDBACK_CHARS} characters"
+                    )));
+                }
+                Some(feedback.to_string())
+            }
+        };
+        let session = self.load_agent(&params.thread_id).await?;
+        {
+            let mut agent = session.lock().await;
+            if !matches!(
+                agent.permission_mode,
+                crate::cli_options::PermissionMode::Plan
+            ) {
+                return Err(DeveloperSessionHostError::conflict(
+                    "This thread is not in plan mode",
+                ));
+            }
+            if agent.current_plan.is_none() {
+                return Err(DeveloperSessionHostError::conflict(
+                    "This thread has no plan to decide on yet",
+                ));
+            }
+            match feedback {
+                None => {
+                    agent.plan_approved = true;
+                }
+                Some(feedback) => {
+                    agent.plan_rejection_feedback = Some(feedback);
+                    agent.current_plan = None;
+                    agent.current_plan_path = None;
+                    agent.plan_approved = false;
+                }
+            }
+        }
+        if params.decision == PlanDecision::Reject {
+            self.emit(
+                agiworkforce_protocol::developer_session::method::THREAD_PLAN,
+                serde_json::to_value(ThreadPlanNotification {
+                    thread_id: params.thread_id,
+                    plan: Some(Vec::new()),
+                    todos: None,
+                })
+                .map_err(internal_error)?,
+            );
+        }
+        Ok(())
+    }
+
+    async fn list_provider_keys(&self) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_provider_keys)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn set_provider_key(
+        &self,
+        params: ProviderSetKeyParams,
+    ) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || {
+            crate::auth::save_api_key(&params.provider, &params.api_key)
+                .map_err(|error| DeveloperSessionHostError::invalid_request(error.to_string()))?;
+            surfaces::list_provider_keys()
+        })
+        .await
+        .map_err(internal_error)?
+    }
+
+    async fn remove_provider_key(
+        &self,
+        params: ProviderParams,
+    ) -> Result<ProvidersListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || {
+            crate::auth::remove_api_key(&params.provider)
+                .map_err(|error| DeveloperSessionHostError::invalid_request(error.to_string()))?;
+            surfaces::list_provider_keys()
+        })
+        .await
+        .map_err(internal_error)?
+    }
+
+    async fn list_permission_rules(
+        &self,
+    ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_permission_rules)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn add_permission(
+        &self,
+        params: PermissionsAddParams,
+    ) -> Result<PermissionRulesResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || surfaces::add_permission(params))
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn list_trusted_folders(&self) -> Result<TrustListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(surfaces::list_trusted_folders)
+            .await
+            .map_err(internal_error)?
+    }
+
+    async fn revoke_trusted_folder(
+        &self,
+        params: TrustRevokeParams,
+    ) -> Result<TrustListResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        tokio::task::spawn_blocking(move || surfaces::revoke_trusted_folder(&params.path))
+            .await
+            .map_err(internal_error)?
+    }
+
     async fn list_worktrees(&self) -> Result<WorktreeListResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         let mut worktrees = Vec::new();
@@ -3888,6 +4168,13 @@ fn approval_callback(
         Box::pin(async move {
             let request_id = request.id.to_string();
             let risk = request.kind.risk();
+            let question = match &request.kind {
+                ApprovalRequestKind::Question { question, options } => Some(serde_json::json!({
+                    "question": question,
+                    "options": options,
+                })),
+                _ => None,
+            };
             let snapshot = PendingApprovalSnapshot {
                 request_id: request_id.clone(),
                 kind: format!("{:?}", request.kind),
@@ -3933,6 +4220,7 @@ fn approval_callback(
                     "proposedContent": snapshot.proposed_content,
                     "editable": snapshot.proposed_content.is_some(),
                     "alwaysAllowSaved": snapshot.always_allow_saved,
+                    "question": question,
                 }),
             ) {
                 let _ = notifications.send(notification);
@@ -4251,6 +4539,7 @@ fn changed_files(activity: &SharedSessionActivity, call_id: &str) -> Vec<AgentEv
             change: match change.kind {
                 ManagedSessionFileChangeKind::Created => AgentEventFileChangeKind::Created,
                 ManagedSessionFileChangeKind::Modified => AgentEventFileChangeKind::Modified,
+                ManagedSessionFileChangeKind::Deleted => AgentEventFileChangeKind::Deleted,
             },
             reason: change.reason.as_ref().map(ChangeReason::describe),
             notices: change
@@ -4476,14 +4765,48 @@ fn content_block_from_data_url(
     ))
 }
 
+const MAX_TURN_TOOL_FILTERS: usize = 200;
+const MAX_TOOL_FILTER_LENGTH: usize = 200;
+
+fn validated_tool_filter(
+    filter: Option<&[String]>,
+) -> Result<Option<Vec<String>>, DeveloperSessionHostError> {
+    let Some(filter) = filter else {
+        return Ok(None);
+    };
+    if filter.len() > MAX_TURN_TOOL_FILTERS
+        || filter.iter().any(|tool| {
+            let tool = tool.trim();
+            tool.is_empty()
+                || tool.len() > MAX_TOOL_FILTER_LENGTH
+                || tool.chars().any(char::is_control)
+        })
+    {
+        return Err(DeveloperSessionHostError::invalid_request(
+            "Tool filters name up to 200 tools, each a non-empty name or pattern",
+        ));
+    }
+    Ok(Some(
+        filter.iter().map(|tool| tool.trim().to_string()).collect(),
+    ))
+}
+
 fn apply_agent_controls(
     agent: &mut AgentSession,
     mode: Option<DeveloperAgentMode>,
     effort: Option<DeveloperReasoningEffort>,
-) {
+) -> Result<(), DeveloperSessionHostError> {
+    if matches!(mode, Some(DeveloperAgentMode::Bypass)) && !agent.bypass_permissions_available {
+        return Err(DeveloperSessionHostError::invalid_request(
+            "Bypass requires the host to be launched with --allow-dangerously-skip-permissions before app-server or remote-control",
+        ));
+    }
     if let Some(mode) = mode {
+        let stays_in_plan = agent.plan_mode && matches!(mode, DeveloperAgentMode::Plan);
         agent.plan_mode = matches!(mode, DeveloperAgentMode::Plan);
-        agent.plan_approved = false;
+        if !stays_in_plan {
+            agent.plan_approved = false;
+        }
         agent.permission_mode = match mode {
             DeveloperAgentMode::Ask => crate::cli_options::PermissionMode::Default,
             DeveloperAgentMode::Auto => crate::cli_options::PermissionMode::AcceptEdits,
@@ -4505,6 +4828,7 @@ fn apply_agent_controls(
         agent.thinking_budget_tokens = effort.thinking_budget_for_anthropic();
         agent.effort = Some(effort);
     }
+    Ok(())
 }
 
 /// Classify the error that ended a turn into the protocol's closed set.
@@ -4754,10 +5078,31 @@ mod tests {
     }
 
     #[test]
+    fn a_remote_bypass_request_cannot_grant_launch_authority() {
+        let mut agent = test_agent();
+        agent.plan_mode = true;
+        agent.plan_approved = true;
+        let previous_mode = agent.permission_mode;
+        let previous_effort = agent.effort;
+        let result = apply_agent_controls(
+            &mut agent,
+            Some(DeveloperAgentMode::Bypass),
+            Some(DeveloperReasoningEffort::Max),
+        );
+        assert!(result.is_err());
+        assert!(!agent.skip_permissions);
+        assert_eq!(agent.permission_mode, previous_mode);
+        assert!(agent.plan_mode);
+        assert!(agent.plan_approved);
+        assert_eq!(agent.effort, previous_effort);
+    }
+
+    #[test]
     fn developer_modes_map_to_existing_cli_permission_controls() {
         let mut agent = test_agent();
 
-        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Plan), None);
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Plan), None)
+            .expect("authorized controls");
         assert_eq!(
             agent.permission_mode,
             crate::cli_options::PermissionMode::Plan
@@ -4765,7 +5110,8 @@ mod tests {
         assert!(agent.plan_mode);
         assert!(!agent.skip_permissions);
 
-        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Auto), None);
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Auto), None)
+            .expect("authorized controls");
         assert_eq!(
             agent.permission_mode,
             crate::cli_options::PermissionMode::AcceptEdits
@@ -4774,7 +5120,9 @@ mod tests {
         assert!(agent.auto_approve_safe);
         assert!(!agent.skip_permissions);
 
-        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None);
+        agent.bypass_permissions_available = true;
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
+            .expect("authorized controls");
         assert_eq!(
             agent.permission_mode,
             crate::cli_options::PermissionMode::BypassPermissions
@@ -5219,6 +5567,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect_err("unknown authority must not start a turn");
@@ -5696,10 +6046,12 @@ mod tests {
     fn developer_effort_uses_the_existing_session_thinking_budget() {
         let mut agent = test_agent();
 
-        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::High));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::High))
+            .expect("authorized controls");
         assert_eq!(agent.thinking_budget_tokens, Some(32_768));
 
-        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium))
+            .expect("authorized controls");
         assert_eq!(agent.thinking_budget_tokens, None);
     }
 
@@ -5710,11 +6062,13 @@ mod tests {
         let mut agent = test_agent();
 
         // Low and Medium are indistinguishable in the Anthropic projection...
-        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Low));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Low))
+            .expect("authorized controls");
         assert_eq!(agent.thinking_budget_tokens, None);
         let low = agent.effort.expect("effort retained");
 
-        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium))
+            .expect("authorized controls");
         assert_eq!(agent.thinking_budget_tokens, None);
         let medium = agent.effort.expect("effort retained");
 
@@ -5726,7 +6080,8 @@ mod tests {
             medium.gemini_thinking_budget()
         );
 
-        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Max));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Max))
+            .expect("authorized controls");
         let max = agent.effort.expect("effort retained");
         assert_eq!(max.openai_effort_str(), "high");
     }
@@ -6156,6 +6511,7 @@ mod tests {
             task_type: DeveloperRoutingTaskType::SimpleChat,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
             speed_first: false,
+            policy_version: crate::runtime::session::current_routing_policy_version(),
         };
 
         let resolved = host
@@ -6272,6 +6628,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect("next Auto turn");
@@ -6440,6 +6798,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await;
         if result.is_ok() {
@@ -7162,6 +7522,7 @@ mod tests {
                 args: std::collections::HashMap::new(),
             },
             &crate::tools::ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: false,
                 auto_approve_safe: false,
@@ -7209,6 +7570,7 @@ mod tests {
                 )]),
             },
             &crate::tools::ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: false,
                 auto_approve_safe: false,
@@ -7264,7 +7626,7 @@ mod tests {
             DeveloperAgentMode::Auto,
             DeveloperAgentMode::Plan,
         ] {
-            apply_agent_controls(&mut agent, Some(mode), None);
+            apply_agent_controls(&mut agent, Some(mode), None).expect("authorized controls");
             host.apply_subagent_boundary_policy(&mut agent);
             let names = tool_names(&agent);
             for tool in SUBAGENT_SPAWN_TOOLS {
@@ -7277,7 +7639,9 @@ mod tests {
 
         // Bypass answers its own approvals, so the child never needs the sink
         // the crossing cannot carry, and `task` comes back. (`agent` stays out.
-        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None);
+        agent.bypass_permissions_available = true;
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
+            .expect("authorized controls");
         host.apply_subagent_boundary_policy(&mut agent);
         let names = tool_names(&agent);
         assert!(
@@ -7303,7 +7667,9 @@ mod tests {
         let host = boundary_host(workspace.path(), store.path());
         let mut agent = test_agent();
 
-        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None);
+        agent.bypass_permissions_available = true;
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
+            .expect("authorized controls");
         host.apply_subagent_boundary_policy(&mut agent);
         let names = tool_names(&agent);
 
@@ -7428,6 +7794,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect_err("a saturated host must refuse another turn");
@@ -7660,6 +8028,8 @@ mod tests {
                 max_turns: None,
                 routing_profile: None,
                 cloud_project_id: None,
+                allowed_tools: None,
+                disallowed_tools: None,
             })
             .await
             .expect_err("a live writer elsewhere must refuse the turn");
@@ -7777,6 +8147,8 @@ mod tests {
             max_turns: None,
             routing_profile: None,
             cloud_project_id: None,
+            allowed_tools: None,
+            disallowed_tools: None,
         };
 
         let replayed = host

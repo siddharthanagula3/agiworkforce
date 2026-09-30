@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { hasPrivateContext } from './tool-loop';
+import { hasPrivateContext, hasUntrustedContext } from './tool-loop';
+import { resolveToolCallGate, sensitiveSourceReachable } from './tool-call-gate';
 
 /**
  * `WEB-SEC-SCAN-2026-09-09-F39`.
@@ -44,6 +45,17 @@ describe('the sensitive-source leg of the trifecta gate', () => {
 
   it('ignores an empty memory list', () => {
     expect(hasPrivateContext({ autoMemoryFacts: [] }, [USER])).toBe(false);
+  });
+
+  it('sees a file the turn already read on the user device, with no device host left', () => {
+    const readCall = (name: string) =>
+      ({
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ id: 'call_1', type: 'function', function: { name, arguments: '{}' } }],
+      }) as Message;
+    expect(hasPrivateContext({}, [SYSTEM, USER, readCall('device_read_file')])).toBe(true);
+    expect(hasPrivateContext({}, [SYSTEM, USER, readCall('device_wait')])).toBe(false);
   });
 
   it('sees an earlier user turn', () => {
@@ -92,4 +104,44 @@ describe('the sensitive-source leg of the trifecta gate', () => {
   it('only ever adds: the explicit flag never suppresses another signal', () => {
     expect(hasPrivateContext({ sensitiveContextPresent: false }, [USER, USER])).toBe(true);
   });
+
+  it.each(['open_file', 'search_files'])(
+    'escalates a fetch in the first turn after %s read a private file',
+    (reader) => {
+      const readCall = {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          { id: 'call_1', type: 'function', function: { name: reader, arguments: '{}' } },
+        ],
+      } as Message;
+      const readResult = { role: 'tool', tool_call_id: 'call_1', content: 'Q3 plan' } as Message;
+      const messages = [SYSTEM, USER, readCall, readResult];
+
+      const gate = (sensitive: boolean) =>
+        resolveToolCallGate(
+          {
+            qualifiedName: 'url_fetch',
+            savedLevel: 'allow',
+            batchIntroducesUntrustedContent: false,
+          },
+          {
+            approvalMode: 'auto',
+            toolApprovalPolicy: 'autonomous',
+            unattended: false,
+            deviceHostPresent: false,
+            untrustedContentInContext: hasUntrustedContext({}, messages),
+            sensitiveSourceAvailable: sensitiveSourceReachable({
+              privateContextPresent: sensitive && hasPrivateContext({}, messages),
+              offeredTools: [],
+              availableToolNames: [],
+            }),
+          },
+        );
+
+      expect(hasPrivateContext({}, messages)).toBe(true);
+      expect(gate(true).verdict).toBe('ask');
+      expect(gate(false).verdict).not.toBe('ask');
+    },
+  );
 });

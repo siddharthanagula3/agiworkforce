@@ -196,6 +196,10 @@
     "windowMinutes_one": "分钟",
     "windowMinutes_other": "{{count}} 分钟",
     "windowSeconds_one": "秒",
-    "windowSeconds_other": "{{count}} 秒"
+    "windowSeconds_other": "{{count}} 秒",
+    "memoriesAdded_one": "已添加 {{count}} 条记忆",
+    "memoriesAdded_other": "已添加 {{count}} 条记忆",
+    "factsFound_one": "从 {{source}} 找到 {{count}} 条事实。",
+    "factsFound_other": "从 {{source}} 找到 {{count}} 条事实。"
   }
 }

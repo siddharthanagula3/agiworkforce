@@ -446,7 +446,7 @@ export function Sidebar(props: SidebarProps) {
         )}
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="flex-1 text-left">{item.label}</span>
+        <span className="flex-1 text-start">{item.label}</span>
         {item.badge != null && <span className="text-xs text-muted-foreground">{item.badge}</span>}
       </button>
     );
@@ -460,7 +460,7 @@ export function Sidebar(props: SidebarProps) {
       <TooltipProvider delayDuration={SIDEBAR_TOOLTIP_DELAY_MS}>
         <nav
           aria-label={t('sidebar.navLabel', 'Chat history')}
-          className="flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-[width] duration-moved ease-standard"
+          className="flex flex-col border-e border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-[width] duration-moved ease-standard"
           style={{ width: COLLAPSED_RAIL_WIDTH }}
         >
           <div data-sidebar-region="rail" className="flex flex-col items-center gap-0 py-2">
@@ -504,7 +504,7 @@ export function Sidebar(props: SidebarProps) {
           // saying so, a narrow container resolved its inline end to 100% and
           // pushed the whole sidebar exactly one container-width off-canvas,
           // which is what left the mobile drawer rendering as an empty panel.
-          'relative inset-auto flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-[width] duration-moved ease-standard',
+          'relative inset-auto flex flex-col border-e border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-[width] duration-moved ease-standard',
           className,
         )}
         style={{ width }}
@@ -582,7 +582,7 @@ export function Sidebar(props: SidebarProps) {
           >
             <Search className="h-4 w-4" />
             <span>{tCommon('search', 'Search')}</span>
-            <kbd className="ml-auto rounded-compact border border-border px-1.5 py-0.5 font-sans text-xs leading-none text-muted-foreground">
+            <kbd className="ms-auto rounded-compact border border-border px-1.5 py-0.5 font-sans text-xs leading-none text-muted-foreground">
               {openSearchShortcutLabel()}
             </kbd>
           </button>
@@ -816,7 +816,7 @@ export function Sidebar(props: SidebarProps) {
                           type="button"
                           onClick={() => setShowAllProjects(true)}
                           className={cn(
-                            'mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground',
+                            'mt-0.5 w-full rounded-md px-3 py-1.5 text-start text-xs text-muted-foreground transition-colors hover:text-foreground',
                             FOCUS_RING,
                           )}
                         >
@@ -828,7 +828,7 @@ export function Sidebar(props: SidebarProps) {
                           type="button"
                           onClick={() => setShowAllProjects(false)}
                           className={cn(
-                            'mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground',
+                            'mt-0.5 w-full rounded-md px-3 py-1.5 text-start text-xs text-muted-foreground transition-colors hover:text-foreground',
                             FOCUS_RING,
                           )}
                         >
@@ -1190,7 +1190,7 @@ function ProjectRow({
         {/* Folder icon + project name, clicking toggles expand */}
         <button
           type="button"
-          className={cn('flex min-h-6 min-w-0 flex-1 items-center gap-2 text-left', FOCUS_RING)}
+          className={cn('flex min-h-6 min-w-0 flex-1 items-center gap-2 text-start', FOCUS_RING)}
           onClick={toggleExpand}
           aria-label={
             isExpanded
@@ -1344,7 +1344,7 @@ function ProjectRow({
 
       {/* Expanded: indented conversation list */}
       {isExpanded && (
-        <div className="mt-0.5 pl-4">
+        <div className="mt-0.5 ps-4">
           {projectSessions.length === 0 ? (
             <p className="px-3 py-1.5 text-xs text-muted-foreground italic">
               {t('noChats', 'No chats yet')}
@@ -1355,7 +1355,7 @@ function ProjectRow({
                 const isActive = session.id === activeSessionId;
                 const href = getSessionHref?.(session);
                 const rowClassName = cn(
-                  'group/projchat flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors',
+                  'group/projchat flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-start transition-colors',
                   FOCUS_RING,
                   isActive
                     ? 'bg-accent text-foreground'
@@ -1422,7 +1422,7 @@ function ProjectRow({
                     })
                   }
                   className={cn(
-                    'w-full rounded-md px-3 py-1 text-left text-xs text-muted-foreground transition-colors hover:text-muted-foreground',
+                    'w-full rounded-md px-3 py-1 text-start text-xs text-muted-foreground transition-colors hover:text-muted-foreground',
                     FOCUS_RING,
                   )}
                 >
@@ -1440,7 +1440,7 @@ function ProjectRow({
                     })
                   }
                   className={cn(
-                    'w-full rounded-md px-3 py-1 text-left text-xs text-muted-foreground transition-colors hover:text-muted-foreground',
+                    'w-full rounded-md px-3 py-1 text-start text-xs text-muted-foreground transition-colors hover:text-muted-foreground',
                     FOCUS_RING,
                   )}
                 >

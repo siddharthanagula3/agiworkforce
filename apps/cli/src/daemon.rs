@@ -43,6 +43,49 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     result == 0
 }
 
+fn webhook_request_authenticated(
+    headers: &axum::http::HeaderMap,
+    body: &str,
+    expected_token: &str,
+) -> bool {
+    let header = |name: &str| headers.get(name).and_then(|value| value.to_str().ok());
+    if let Some(bearer) = header("authorization").and_then(|v| v.strip_prefix("Bearer ")) {
+        return constant_time_eq(bearer.as_bytes(), expected_token.as_bytes());
+    }
+    if let Some(signature) = header("x-hub-signature-256").and_then(|v| v.strip_prefix("sha256=")) {
+        let expected = crate::hex::encode(&hmac_sha256(expected_token.as_bytes(), body.as_bytes()));
+        return constant_time_eq(
+            signature.to_ascii_lowercase().as_bytes(),
+            expected.as_bytes(),
+        );
+    }
+    if let Some(token) = header("x-gitlab-token") {
+        return constant_time_eq(token.as_bytes(), expected_token.as_bytes());
+    }
+    false
+}
+
+pub(crate) fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    const BLOCK: usize = 64;
+    let mut block = [0u8; BLOCK];
+    if key.len() > BLOCK {
+        block[..32].copy_from_slice(&Sha256::digest(key));
+    } else {
+        block[..key.len()].copy_from_slice(key);
+    }
+    let mut inner = Sha256::new();
+    inner.update(block.map(|byte| byte ^ 0x36));
+    inner.update(message);
+    let inner = inner.finalize();
+    let mut outer = Sha256::new();
+    outer.update(block.map(|byte| byte ^ 0x5c));
+    outer.update(inner);
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&outer.finalize());
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Internal types
 // ---------------------------------------------------------------------------
@@ -684,20 +727,12 @@ async fn webhook_handler(
 
     // Authenticate if token is configured
     if let Some(ref expected_token) = state.token {
-        let provided = headers
-            .get("authorization")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("Bearer "));
-
-        match provided {
-            Some(t) if constant_time_eq(t.as_bytes(), expected_token.as_bytes()) => {} // authenticated
-            _ => {
-                return (
-                    axum::http::StatusCode::UNAUTHORIZED,
-                    "Unauthorized: invalid or missing Bearer token".to_string(),
-                )
-                    .into_response();
-            }
+        if !webhook_request_authenticated(&headers, &body, expected_token) {
+            return (
+                axum::http::StatusCode::UNAUTHORIZED,
+                "Unauthorized: invalid or missing Bearer token or signature".to_string(),
+            )
+                .into_response();
         }
     }
 
@@ -927,7 +962,7 @@ async fn run_file_watcher(
 pub fn list_triggers() -> Result<String> {
     let Some(config) = hooks::load_triggers()? else {
         return Ok(format!(
-            "No triggers yet. Define them in {}.",
+            "No triggers yet. Add one with `agi triggers add`, or define them in {}.",
             hooks::triggers_path()?.display()
         ));
     };
@@ -956,6 +991,150 @@ pub fn list_triggers() -> Result<String> {
         }
     }
     Ok(lines.join("\n"))
+}
+
+pub struct NewTrigger {
+    pub id: String,
+    pub prompt: String,
+    pub model: Option<String>,
+    pub cron: Option<String>,
+    pub webhook: Option<String>,
+    pub watch: Option<String>,
+    pub glob: Option<String>,
+}
+
+pub fn add_trigger(new: NewTrigger) -> Result<String> {
+    let id = new.id.trim().to_string();
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        bail!("A trigger id uses letters, digits, '-' and '_' only.");
+    }
+    if new.prompt.trim().is_empty() {
+        bail!("A trigger needs --prompt, the instruction to run when it fires.");
+    }
+    let kinds = [&new.cron, &new.webhook, &new.watch]
+        .iter()
+        .filter(|kind| kind.is_some())
+        .count();
+    if kinds != 1 {
+        bail!("Give exactly one of --cron, --webhook or --watch.");
+    }
+    let mut config = hooks::load_triggers()?.unwrap_or_default();
+    if config.webhook_port == 0 {
+        config.webhook_port = 7891;
+    }
+    if config.max_parallel == 0 {
+        config.max_parallel = 4;
+    }
+    if config.triggers.iter().any(|t| t.id == id) {
+        bail!(
+            "A trigger named {id} already exists. `agi triggers remove {id}` first to replace it."
+        );
+    }
+    let (trigger_type, webhook_path, watch_path) = if new.cron.is_some() {
+        (TriggerType::Cron, None, None)
+    } else if let Some(path) = new.webhook.as_deref() {
+        let path = format!("/{}", path.trim().trim_start_matches('/'));
+        if config
+            .triggers
+            .iter()
+            .any(|t| t.webhook_path.as_deref() == Some(path.as_str()))
+        {
+            bail!("Another trigger already listens on {path}.");
+        }
+        (TriggerType::Webhook, Some(path), None)
+    } else {
+        let dir = PathBuf::from(new.watch.as_deref().unwrap_or_default());
+        let dir = std::fs::canonicalize(&dir)
+            .with_context(|| format!("--watch {} does not exist", dir.display()))?;
+        (
+            TriggerType::FileWatcher,
+            None,
+            Some(dir.display().to_string()),
+        )
+    };
+    let trigger = TriggerConfig {
+        id: id.clone(),
+        trigger_type,
+        prompt: Some(new.prompt.trim().to_string()),
+        model: new.model,
+        enabled: true,
+        cron: new.cron.map(|expr| expr.trim().to_string()),
+        webhook_path: webhook_path.clone(),
+        watch_path,
+        watch_glob: new.glob,
+        filter: hooks::TriggerFilter::default(),
+    };
+    validate_triggers(&[&trigger])?;
+    let mut created_token = false;
+    if webhook_path.is_some() && config.webhook_token.is_none() {
+        config.webhook_token = Some(format!(
+            "{}{}",
+            uuid::Uuid::new_v4().simple(),
+            uuid::Uuid::new_v4().simple()
+        ));
+        created_token = true;
+    }
+    config.triggers.push(trigger);
+    let path = hooks::save_triggers(&config)?;
+    let mut lines = vec![format!("Added trigger {id} to {}.", path.display())];
+    if let Some(webhook_path) = webhook_path {
+        lines.push(format!(
+            "It runs when a request reaches http://127.0.0.1:{}{webhook_path} on this machine.",
+            config.webhook_port
+        ));
+        lines.push(
+            "For a GitHub webhook, point the Payload URL at a public address that forwards to that port, set Content type to application/json, and use the webhook secret as the Secret; GitLab takes it as the Secret token. Other senders pass it as a Bearer token.".to_string(),
+        );
+        if created_token {
+            lines.push(format!(
+                "Webhook secret (shown once, stored in triggers.json): {}",
+                config.webhook_token.as_deref().unwrap_or_default()
+            ));
+        } else {
+            lines.push("It uses the webhook secret already in triggers.json.".to_string());
+        }
+        lines.push(format!(
+            "Narrow it to certain events with `agi triggers filter {id} --event pull_request`."
+        ));
+    }
+    lines.push("Start or restart `agi --daemon` to run it.".to_string());
+    Ok(lines.join("\n"))
+}
+
+pub fn remove_trigger(id: &str) -> Result<String> {
+    let mut config =
+        hooks::load_triggers()?.ok_or_else(|| anyhow::anyhow!("No triggers.json to update."))?;
+    let before = config.triggers.len();
+    config.triggers.retain(|t| t.id != id);
+    if config.triggers.len() == before {
+        bail!("No trigger named {id}. `agi triggers list` shows them.");
+    }
+    let path = hooks::save_triggers(&config)?;
+    Ok(format!(
+        "Removed trigger {id} from {}. Restart `agi --daemon` to apply it.",
+        path.display()
+    ))
+}
+
+pub fn set_trigger_enabled(id: &str, enabled: bool) -> Result<String> {
+    let mut config =
+        hooks::load_triggers()?.ok_or_else(|| anyhow::anyhow!("No triggers.json to update."))?;
+    let trigger = config
+        .triggers
+        .iter_mut()
+        .find(|t| t.id == id)
+        .ok_or_else(|| anyhow::anyhow!("No trigger named {id}. `agi triggers list` shows them."))?;
+    trigger.enabled = enabled;
+    let path = hooks::save_triggers(&config)?;
+    Ok(format!(
+        "Turned trigger {id} {} in {}. Restart `agi --daemon` to apply it.",
+        if enabled { "on" } else { "off" },
+        path.display()
+    ))
 }
 
 pub fn set_trigger_filter(

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerNotificationWorker } from '@/features/notifications/lib/web-push-client';
+import { useMemoryStore } from '@agiworkforce/unified-chat';
 import { cleanupAllStores, useAuthStore } from '@shared/stores/authentication-store';
 
 const WEB_ROOT = path.join(__dirname, '..', '..');
@@ -160,6 +161,29 @@ describe('signing out', () => {
     expect(browser.unsubscribe).toHaveBeenCalledTimes(1);
     expect(browser.signOut).toHaveBeenCalledTimes(1);
     expect(browser.events).toEqual(['revoke', 'unsubscribe', 'sign-out']);
+  });
+
+  it('forgets the account memories held in this browser without erasing them on the server', async () => {
+    const browser = installBrowser();
+    useMemoryStore.setState({
+      facts: [
+        {
+          id: 'mem_local',
+          serverId: 'server-memory-1',
+          text: 'Prefers metric units',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+        },
+      ],
+    });
+
+    await useAuthStore.getState().logout();
+
+    const memoryCalls = browser.fetch.mock.calls.filter(([url]) =>
+      String(url).startsWith('/api/memory'),
+    );
+    expect(memoryCalls).toEqual([]);
+    expect(useMemoryStore.getState().facts).toEqual([]);
   });
 
   it('removes the app-owned tokens this browser kept for the account', async () => {

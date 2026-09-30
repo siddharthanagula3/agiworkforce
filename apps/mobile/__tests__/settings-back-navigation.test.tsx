@@ -15,6 +15,11 @@ const mockNavigate = jest.fn();
 const mockBack = jest.fn();
 const mockCanGoBack = jest.fn<boolean, []>();
 
+jest.mock('@/stores/connectionStore', () => ({
+  useConnectionStore: (selector: (state: { status: string }) => unknown) =>
+    selector({ status: 'disconnected' }),
+}));
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
@@ -98,12 +103,7 @@ jest.mock('expo-notifications', () => ({
   requestPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
-jest.mock('expo-contacts', () => ({
-  getPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
-  requestPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
-}));
-
-jest.mock('expo-calendar', () => ({
+jest.mock('expo-calendar/legacy', () => ({
   getCalendarPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
   requestCalendarPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
   getRemindersPermissionsAsync: jest.fn().mockResolvedValue(undetermined),

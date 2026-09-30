@@ -12,6 +12,12 @@ import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from './agiWorkGoal';
 export const START_WORK_ERROR = 'This task could not be started';
 export const START_WORK_EMPTY_GOAL_ERROR = 'Describe what this task should accomplish';
 
+export function startWorkFailureMessage(error: unknown): string {
+  return error instanceof Error && error.message === START_WORK_EMPTY_GOAL_ERROR
+    ? START_WORK_EMPTY_GOAL_ERROR
+    : START_WORK_ERROR;
+}
+
 export interface StartCloudWorkRunInput {
   goal: string;
   constraints?: string;

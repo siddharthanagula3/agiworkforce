@@ -6,6 +6,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { isMemoryExtractionWorthwhile } from '@agiworkforce/agent-core';
 
+import { turnHoldsGoogleUserData } from '@/lib/connectors/google-user-data';
 import { logger } from '@/lib/logger';
 import { runWorthExtractingShadow } from '@/lib/services/semantic-decisions/consumers/memory-worth-extracting';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -100,6 +101,19 @@ async function persistTurnCandidates(
     // the leak project memory exists to prevent, so the project is resolved
     // here rather than defaulting to global at four separate call sites.
     const conversationId = params.processed.conversationId;
+    if (
+      await turnHoldsGoogleUserData(db, params.userId, {
+        conversationId,
+        messages: params.processed.chatRequest.messages,
+        googleToolRan: !conversationId && params.processed.googleUserData === true,
+      })
+    ) {
+      logger.info(
+        { userId: params.userId, requestId: params.processed.requestId },
+        'Managed auto-memory skipped: the turn carried Google user data',
+      );
+      return;
+    }
     const [conversationRow] = conversationId
       ? await db.query<{ project_id: string | null }>(
           `select project_id from web_conversations where id = $1::uuid and user_id = $2 limit 1`,
@@ -162,6 +176,9 @@ export async function recordManagedAutoMemoryTurn(
           userId: params.userId,
           organizationId: params.processed.organizationId ?? null,
           planTier: params.processed.subscriptionTier ?? 'free',
+          forceNoTraining:
+            Boolean(params.processed.healthSpaceProjectId) ||
+            params.processed.googleUserData === true,
           requestId: params.processed.requestId,
         });
       } catch (error) {

@@ -4,7 +4,10 @@ import { SupportAbstentionCard } from '../components/SupportAbstentionCard';
 import { SupportAnswerCard } from '../components/SupportAnswerCard';
 import { normalizeAnswer } from '../lib/normalize-answer';
 import { renderSupportText } from '../lib/render-text';
-import type { SupportAbstentionView, SupportAnswerView } from '../lib/contract';
+import type {
+  SupportAbstentionView,
+  SupportAnswerView,
+} from '@agiworkforce/cloud-contracts/support';
 
 const RAW_ANSWER = {
   kind: 'answer',

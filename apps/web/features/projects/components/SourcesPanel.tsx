@@ -169,7 +169,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
         },
       );
       const body = (await response.json().catch(() => ({}))) as {
-        results?: { status: 'added' | 'failed'; message?: string }[];
+        results?: { status: 'added' | 'failed'; message?: string; notice?: string }[];
         error?: { message?: string };
       };
       if (response.status === 409) {
@@ -191,6 +191,8 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             : `${results.length - failed.length} of ${results.length} files were added. ${failed[0]?.message ?? ''}`.trim(),
         );
       }
+      const notice = results.find((result) => result.status === 'added' && result.notice)?.notice;
+      if (notice) toast.info(notice);
       return 'added';
     } catch (err) {
       setUploadState({

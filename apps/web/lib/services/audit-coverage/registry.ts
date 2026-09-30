@@ -57,6 +57,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'files/uploads/[uploadId]/route.ts', reason: 'own_content' },
   { route: 'files/uploads/route.ts', reason: 'own_content' },
   { route: 'github/issues/route.ts', reason: 'own_content' },
+  { route: 'health-space/route.ts', reason: 'own_content' },
   { route: 'interactive-cards/respond/route.ts', reason: 'own_content' },
   { route: 'library/route.ts', reason: 'own_content' },
   {
@@ -80,6 +81,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'mobile/feedback/route.ts', reason: 'own_content' },
   { route: 'mobile/iap/apple-notifications/route.ts', reason: 'inbound_callback' },
   { route: 'mobile/iap/google-notifications/route.ts', reason: 'inbound_callback' },
+  { route: 'mobile/intent/ask/route.ts', reason: 'own_content' },
   { route: 'mobile/push-token/route.ts', reason: 'no_governed_state' },
   { route: 'notifications/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/duplicate/route.ts', reason: 'own_content' },
@@ -138,6 +140,17 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
     route: 'llm/v1/chat/completions/runs/[runId]/steer/[steerId]/route.ts',
     reason: 'own_content',
   },
+  { route: 'agents/collaboration/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/communication/[id]/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/communication/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/log-message/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/session/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/tool-executions/route.ts', reason: 'no_governed_state' },
+  { route: 'agents/tools/route.ts', reason: 'no_governed_state' },
+  { route: 'artifacts/runtime/[token]/connectors/route.ts', reason: 'no_governed_state' },
+  { route: 'github/install/pending/route.ts', reason: 'no_governed_state' },
+  { route: 'usage/deduct/route.ts', reason: 'no_governed_state' },
+  { route: 'usage/estimate/route.ts', reason: 'no_governed_state' },
 ] as const;
 
 export interface RequiredRouteAuditEvents {
@@ -147,6 +160,24 @@ export interface RequiredRouteAuditEvents {
 
 export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = [
   { route: 'billing/refund-requests/route.ts', eventTypes: ['refund_requested'] },
+  {
+    route: 'chat/conversations/[id]/code-runs/route.ts',
+    eventTypes: ['tool_executed'],
+  },
+  {
+    route: 'code/sessions/route.ts',
+    eventTypes: ['code_session_lifecycle_changed'],
+  },
+  {
+    route: 'code/sessions/handoff/route.ts',
+    eventTypes: ['code_session_lifecycle_changed'],
+  },
+  { route: 'github/install/complete/route.ts', eventTypes: ['connector_added'] },
+  { route: 'share/route.ts', eventTypes: ['share_link_created'] },
+  {
+    route: 'share/[token]/route.ts',
+    eventTypes: ['organization_share_granted', 'organization_share_revoked', 'share_link_revoked'],
+  },
   {
     route: 'code/sessions/[sessionId]/agent/cancel/route.ts',
     eventTypes: ['code_session_lifecycle_changed'],

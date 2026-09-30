@@ -1,4 +1,3 @@
-
 const { withEntitlementsPlist, createRunOncePlugin } = require('@expo/config-plugins');
 
 const PLUGIN_NAME = 'agi-dev-entitlements-ios-plugin';
@@ -27,7 +26,6 @@ function withAGIDevEntitlements(config) {
     delete c.modResults['com.apple.developer.applesignin'];
     delete c.modResults['com.apple.developer.associated-domains'];
     delete c.modResults['com.apple.developer.siri'];
-    delete c.modResults['com.apple.developer.natural-language.translation'];
     return c;
   });
 }

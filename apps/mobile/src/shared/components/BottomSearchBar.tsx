@@ -1,9 +1,11 @@
 import type { Ref } from 'react';
 import { useEffect, useState } from 'react';
-import { Keyboard, Platform, Pressable, TextInput, View } from 'react-native';
+import { Keyboard, Platform, TextInput, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, X } from 'lucide-react-native';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 
 export const BOTTOM_SEARCH_BAR_HEIGHT = 44;
 
@@ -86,17 +88,22 @@ export function BottomSearchBar({
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"
-        style={{ flex: 1, color: colors.textPrimary, fontSize: 14, paddingVertical: 0 }}
+        style={{
+          flex: 1,
+          color: colors.textPrimary,
+          fontSize: typeScale.subhead,
+          paddingVertical: 0,
+        }}
       />
       {hasQuery ? (
-        <Pressable
+        <PressableBox
           onPress={() => onChangeText('')}
           accessibilityRole="button"
           accessibilityLabel={clearAccessibilityLabel}
           hitSlop={8}
         >
           <X size={17} color={colors.textMuted} />
-        </Pressable>
+        </PressableBox>
       ) : null}
     </View>
   );
