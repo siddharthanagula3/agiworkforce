@@ -88,6 +88,7 @@ function refundEvent(charge: Partial<Stripe.Charge>): Stripe.Event {
       object: {
         id: 'ch_123',
         customer: 'cus_123',
+        payment_intent: 'pi_123',
         amount: 2000,
         amount_refunded: 2000,
         refunded: true,
@@ -130,6 +131,43 @@ function planRefundDb(alreadyRevokedMicrousd = 0) {
   });
 }
 
+function stripeForPlanRefund(amount = 2000): Stripe {
+  return {
+    invoicePayments: {
+      list: vi.fn(async () => ({
+        has_more: false,
+        data: [
+          {
+            id: 'inpay_primary',
+            amount_paid: amount,
+            status: 'paid',
+            payment: { type: 'payment_intent', payment_intent: 'pi_123' },
+            invoice: {
+              id: 'in_primary',
+              customer: 'cus_123',
+              status: 'paid',
+              amount_paid: amount,
+              amount_remaining: 0,
+              parent: { subscription_details: { subscription: 'sub_primary' } },
+              lines: {
+                has_more: false,
+                data: [
+                  {
+                    period: {
+                      start: Date.parse(PERIOD_START) / 1000,
+                      end: Date.parse(PERIOD_END) / 1000,
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      })),
+    },
+  } as unknown as Stripe;
+}
+
 function planRevocations(calls: Call[]): unknown[] {
   return calls
     .filter((call) => call.sql.includes('revoke_plan_allowance_microusd'))
@@ -142,7 +180,7 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
   it('downgrades the plan when the whole charge is refunded', async () => {
     const { db, calls } = planRefundDb();
 
-    await dispatchStripeEvent(db, {} as Stripe, refundEvent({}));
+    await dispatchStripeEvent(db, stripeForPlanRefund(), refundEvent({}));
 
     const [update] = planUpdates(calls);
     expect(update).toBeDefined();
@@ -160,7 +198,7 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
   it('never writes the terminal canceled status, which would block later renewals', async () => {
     const { db, calls } = planRefundDb();
 
-    await dispatchStripeEvent(db, {} as Stripe, refundEvent({}));
+    await dispatchStripeEvent(db, stripeForPlanRefund(), refundEvent({}));
 
     expect(planUpdates(calls)[0]!.sql).not.toContain("status = 'canceled'");
   });
@@ -170,7 +208,7 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
 
     await dispatchStripeEvent(
       db,
-      {} as Stripe,
+      stripeForPlanRefund(),
       refundEvent({ amount_refunded: 500, refunded: false }),
     );
 
@@ -183,7 +221,7 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
 
     await dispatchStripeEvent(
       db,
-      {} as Stripe,
+      stripeForPlanRefund(1200),
       refundEvent({ amount: 1200, amount_refunded: 600, refunded: false }),
     );
 
@@ -195,7 +233,7 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
 
     await dispatchStripeEvent(
       db,
-      {} as Stripe,
+      stripeForPlanRefund(1200),
       refundEvent({ amount: 1200, amount_refunded: 300, refunded: false }),
     );
 
@@ -207,7 +245,7 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
 
     await dispatchStripeEvent(
       db,
-      {} as Stripe,
+      stripeForPlanRefund(1200),
       refundEvent({ amount: 1200, amount_refunded: 500, refunded: false }),
     );
 
@@ -217,7 +255,7 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
   it('scopes the already-revoked lookup to this user and this charge', async () => {
     const { db, calls } = planRefundDb(0);
 
-    await dispatchStripeEvent(db, {} as Stripe, refundEvent({}));
+    await dispatchStripeEvent(db, stripeForPlanRefund(), refundEvent({}));
 
     const lookup = calls.find((call) => call.sql.includes('from credit_transactions'));
     expect(lookup).toBeDefined();
