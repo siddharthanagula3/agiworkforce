@@ -3209,7 +3209,7 @@ timer is scheduled. A real-hook/store reproduction advanced 5,001 ms and
 observed one GET rather than two. This leaves recovery busy after completion
 or a later stall. Keep this identity for the remaining recovery defect.
 The source snapshot, mocks, command and captured failing assertion are in
-`audit/live-check/2026-09-29-ecosystem-review/web-cloud-review.json` and
+`audit/prior-audits/evidence/2026-09-29-ecosystem-review/web-cloud-review.json` and
 `web-repro-output.txt`. The durable run and mounted browser were not executed
 in this reproduction. Separate owned-stream busy state from a restored-run
 follower and require terminal and stalled follow-up tests before closure.
@@ -3862,7 +3862,7 @@ Stop on a recovered cloud turn never requests server cancellation. activeRunsRef
 
 Impact/trigger: Stop clears the local busy state but sends no run cancellation. The detached workflow may continue provider/tool execution and associated usage until its normal stop condition or another cancellation path.
 
-Start at `apps/web/lib/hooks/useChatStream.ts:4597` in `.worktrees/billing-e2e`. Evidence and full anchors: [`web-cloud-review.json`](../live-check/2026-09-29-ecosystem-review/web-cloud-review.json).
+Start at `apps/web/lib/hooks/useChatStream.ts:4597` in `.worktrees/billing-e2e`. Evidence and full anchors: [`web-cloud-review.json`](evidence/2026-09-29-ecosystem-review/web-cloud-review.json).
 
 Verification: Real-hook/store assertion failed as expected; captured in web-repro-output.txt. Limit: The absence of the client cancellation call is reproduced. Continued live billing/tool execution was not observed; it follows from the source-owned durable lifecycle and is a conditional impact.
 
@@ -3876,7 +3876,7 @@ Reopening a cached chat discards newer persisted messages. loadConversation fetc
 
 Impact/trigger: The fresh transcript is parsed but discarded whenever any local cached message exists. Reopening still displays the stale transcript, and the next user turn can operate with missing remote context.
 
-Start at `apps/web/lib/hooks/useConversations.ts:590` in `.worktrees/billing-e2e`. Evidence and full anchors: [`web-cloud-review.json`](../live-check/2026-09-29-ecosystem-review/web-cloud-review.json).
+Start at `apps/web/lib/hooks/useConversations.ts:590` in `.worktrees/billing-e2e`. Evidence and full anchors: [`web-cloud-review.json`](evidence/2026-09-29-ecosystem-review/web-cloud-review.json).
 
 Verification: Real-hook/store assertion failed as expected; captured in web-repro-output.txt. Limit: Reopen freshness failure is reproduced. Live cross-device sync, message conflict policy and every possible compensating handler were not exhaustively tested.
 
@@ -3890,7 +3890,7 @@ Managed-compute enforcement test accepts denials from different gates. The accep
 
 Impact/trigger: The test can pass without proving the specific managed-compute policy is enforced, despite claiming to rule out earlier gates. This weakens enterprise admission evidence.
 
-Start at `apps/web/e2e/enterprise-enforcement.spec.ts:90` in `.worktrees/billing-e2e`. Evidence and full anchors: [`web-cloud-review.json`](../live-check/2026-09-29-ecosystem-review/web-cloud-review.json).
+Start at `apps/web/e2e/enterprise-enforcement.spec.ts:90` in `.worktrees/billing-e2e`. Evidence and full anchors: [`web-cloud-review.json`](evidence/2026-09-29-ecosystem-review/web-cloud-review.json).
 
 Verification: Three real-hook/store assertions fail as expected; this particular enterprise-test finding is source-only. Limit: The e2e suite was not run and no runtime enforcement bypass is claimed.
 
@@ -3904,7 +3904,7 @@ Checkpoint rewind follows swapped parent symlinks outside the approved workspace
 
 Impact/trigger: Capture workspace/sub/file during an approved edit, then replace sub with a symlink to a directory outside the workspace before choosing code rewind. An outside regular file of the same name is overwritten; a file captured as Absent is deleted through the symlink.
 
-Start at `apps/cli/src/agent/checkpoints.rs:322` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json).
+Start at `apps/cli/src/agent/checkpoints.rs:322` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
 
 Verification: Exact unsafe_to_overwrite function extracted from current source into a standalone Rust probe; same restore filesystem operations performed in temporary directories. Limit: Primitive reproduction, not full CLI build, mounted app-server or rendered UI. No user files touched.
 
@@ -3918,7 +3918,7 @@ Continue CLI Session accepts the chosen thread but never opens it in VS Code. co
 
 Impact/trigger: With a different sidebar thread active, invoke Continue CLI Session or a developer-session deep link for a specific CLI thread and confirm Continue here.
 
-Start at `apps/extension-vscode/src/core/commandSetup.ts:498` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json).
+Start at `apps/extension-vscode/src/core/commandSetup.ts:498` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
 
 Verification: Read complete command consumer and target command. Limit: No mounted VS Code invocation; existing admission helper tests do not exercise this command-to-sidebar activation.
 
@@ -3932,7 +3932,7 @@ Interrupt releases turn ownership before cleanup finishes. interrupt_turn remove
 
 Impact/trigger: Two authenticated WebSocket connections to the same app-server host: interrupt an active turn on one connection while starting a new turn on the same thread on the other. The old process tree shutdown yields long enough for the new start to proceed.
 
-Start at `apps/cli/src/app_server/developer_host.rs:2991` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json).
+Start at `apps/cli/src/app_server/developer_host.rs:2991` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
 
 Verification: Read locks, release points, awaits, writer-lease behavior, shared WebSocket host and existing tests. Limit: Single stdio connection serializes requests and mitigates this particular trigger. No direct race harness executed. Existing interrupt test awaits complete cleanup before reload (developer_host.rs6897-6921); simultaneous-start test covers start/start, not interrupt/start.
 
@@ -3946,7 +3946,7 @@ Modern MCP read cache retains unlimited responses and expired distinct keys. Eve
 
 Impact/trigger: A configured modern MCP server returns ttlMs on resources/read; a long-lived client reads many distinct resource URIs without list-change notifications, including expired keys it never requests again.
 
-Start at `crates/agiworkforce-mcp/src/cache.rs:10` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json).
+Start at `crates/agiworkforce-mcp/src/cache.rs:10` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
 
 Verification: Read entire cache module and dispatch call site. Limit: No OOM/load run or live server request; prerequisite is modern protocol and server-provided TTL. TTL overflow hypothesis was separately rejected on host.
 
@@ -3960,7 +3960,7 @@ Background command pool caps finished history but leaves running commands unboun
 
 Impact/trigger: An agent repeatedly launches background servers/watchers or long-lived shell commands across turns without command_stop.
 
-Start at `apps/cli/src/terminals.rs:14` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](../live-check/2026-09-29-ecosystem-review/rust-developer-review.json).
+Start at `apps/cli/src/terminals.rs:14` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
 
 Verification: Read start path, retention policy, background tool caller and searched all CLI call sites for active-command caps. Limit: No stress run or resource exhaustion reproduced; local process resource risk, not demonstrated remote tenant interference.
 
@@ -3974,7 +3974,7 @@ Capability worklist can be green with missing or impossible completion evidence.
 
 Impact/trigger: Current --check exits 0, but 20 done cells have no evidence, 36 done evidence references name absent files, and 165 done evidence references point past EOF. Replacing a done cell evidence with a nonexistent source file at line 999999 in an isolated copy still exits 0.
 
-Start at `scripts/audit-worklist.mjs:317` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json).
+Start at `scripts/audit-worklist.mjs:317` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](evidence/2026-09-29-ecosystem-review/inventory-instrument-review.json).
 
 Verification: Current guard outputs and isolated fixtures captured in instrument-reproductions.json; no product modification. Limit: This proves the guard cannot establish completion and current evidence is not reviewable in those cases. A moved path alone does not prove its underlying capability is broken.
 
@@ -3988,7 +3988,7 @@ Older reachability inventory accepts fabricated implementation evidence. A built
 
 Impact/trigger: A built row with evidence saying apps/web/nonexistent-handler.ts:999999 exists passes with exit 0 in an isolated fixture. The current guard validates 654 rows, independently from the 3439-item capability ledger.
 
-Start at `scripts/check-audit-inventory.mjs:148` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json).
+Start at `scripts/check-audit-inventory.mjs:148` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](evidence/2026-09-29-ecosystem-review/inventory-instrument-review.json).
 
 Verification: Current guard outputs and isolated fixtures captured in instrument-reproductions.json; no product modification. Limit: The script provides identity/status/schema validation. Its green result is not execution or source-reachability evidence.
 
@@ -4002,7 +4002,7 @@ Declined connector capability is counted as implemented. S9.04 and S10.20 requir
 
 Impact/trigger: S9.04 and S10.20 require choosing among several linked accounts, but both roll up done with four done cells each. Their resolvedBy states the capability was declined, one account is supported, and reconnection replaces the existing account. S55.12 correctly records the same underlying multi-account capability as declined. The cited ConnectorAccountSelector component no longer exists.
 
-Start at `audit/ledger/ecosystem-capability-ledger.jsonl:1` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json).
+Start at `audit/ledger/ecosystem-capability-ledger.jsonl:1` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](evidence/2026-09-29-ecosystem-review/inventory-instrument-review.json).
 
 Verification: Current guard outputs and isolated fixtures captured in instrument-reproductions.json; no product modification. Limit: This is a proven ledger classification defect, not a demand to implement a capability the founder declined.
 
@@ -4016,7 +4016,7 @@ Per-file ledger regeneration loses review evidence and does not bind dirty sourc
 
 Impact/trigger: A fixture containing one tracked source and one untracked source produces one row and a -dirty source_commit. Setting its audit_status=reviewed and read_full_file=true then regenerating resets both. Changing tracked source content while preserving line count produces byte-identical ledger output despite different source SHA256 hashes.
 
-Start at `scripts/generate-surface-file-ledger.mjs:33` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json).
+Start at `scripts/generate-surface-file-ledger.mjs:33` in `.worktrees/billing-e2e`. Evidence and full anchors: [`inventory-instrument-review.json`](evidence/2026-09-29-ecosystem-review/inventory-instrument-review.json).
 
 Verification: Current guard outputs and isolated fixtures captured in instrument-reproductions.json; no product modification. Limit: The generator explicitly scopes itself to focused CLI/shared paths, so omission of Web/Mobile/Electron roots is a stated scope limitation, not itself a bug. It is an inventory rather than semantic audit proof.
 
@@ -4042,8 +4042,8 @@ files / 96 tests passed in 9.46 seconds with mocked infrastructure; some
 entitlement fixtures use caught fallback paths. No production DB, scheduler,
 provider or push delivery was used.
 
-Evidence: [continuous assistant review](../live-check/2026-09-29-ecosystem-review/continuous-assistant-review.json)
-and [reproduction result](../live-check/2026-09-29-ecosystem-review/scheduled-refusal-reproduction.json).
+Evidence: [continuous assistant review](evidence/2026-09-29-ecosystem-review/continuous-assistant-review.json)
+and [reproduction result](evidence/2026-09-29-ecosystem-review/scheduled-refusal-reproduction.json).
 Return an explicit execution outcome and propagate policy refusal through
 finalization, notifications and event delivery. Add a composed test in which
 managed-compute refusal cannot become success or a completed announcement.
@@ -4056,7 +4056,7 @@ The CLI is spawned with piped stdio. handshake throws after initialize; its catc
 
 Trigger/impact: Configure an installed CLI that answers initialize with an unsupported protocol, runtime version or missing thread/turn capability. Open an approved coding folder, then retry the unavailable folder. Malformed output and oversized incomplete frames use the same disposal path. An ordinary compatibility mismatch can leave an idle app-server alive on every retry. If disposal follows a protocol failure during a running turn, the unregistered runtime can also continue work. No resource-exhaustion magnitude or live leakage was measured.
 
-Source: `apps/desktop/electron/runtime/developerSessionService.ts:678` in `49d0c30f`. [Full evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No mounted Electron run, process listing after a rejected handshake, or new regression test executed.
+Source: `apps/desktop/electron/runtime/developerSessionService.ts:678` in `49d0c30f`. [Full evidence](evidence/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No mounted Electron run, process listing after a rejected handshake, or new regression test executed.
 
 Resolution/acceptance: Dispose failed handshakes and framing failures through the same owned shutdown path as explicit stop; retain child ownership until exit. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
 
@@ -4068,7 +4068,7 @@ The stdout listener captures the old server. acceptChunk/acceptLine/handleNotifi
 
 Trigger/impact: Stop a runtime or discard it after a protocol failure while stdout has a buffered notification or emits another data chunk. Start or reopen the same root/session during the cleanup interval. A late old-turn delta can append to a replacement turn, a stale approval can reappear after runtime-stopped cleared it, or a late finished event can settle the newer turn in the same thread. This concerns ordinary buffered callbacks; no forged protocol input or exploit was constructed.
 
-Source: `apps/desktop/electron/runtime/developerSessionService.ts:295` in `49d0c30f`. [Full evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No asynchronous child/React regression test executed. Cross-account or permission impact remains unclassified.
+Source: `apps/desktop/electron/runtime/developerSessionService.ts:295` in `49d0c30f`. [Full evidence](evidence/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No asynchronous child/React regression test executed. Cross-account or permission impact remains unclassified.
 
 Resolution/acceptance: Fence old-child callbacks by current runtime identity and closed state; consumers should match the current turn before applying turn-specific events. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
 
@@ -4080,7 +4080,7 @@ terminate ends stdin and schedules SIGKILL after 1,500 ms, then synchronously ca
 
 Trigger/impact: Use Stop background coding runtime, then immediately open/resume/start work in that folder while the prior CLI is still shutting down. Old and new runtimes may overlap for the same approved folder. A fast restart can encounter the old writer lease instead of resuming immediately, and old work can finish during the newly available runtime interval. No overlap duration or visible conflict was measured.
 
-Source: `apps/desktop/electron/runtime/developerSessionService.ts:1195` in `49d0c30f`. [Full evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No real subprocess timing, writer-conflict reproduction or shutdown/restart integration test executed.
+Source: `apps/desktop/electron/runtime/developerSessionService.ts:1195` in `49d0c30f`. [Full evidence](evidence/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No real subprocess timing, writer-conflict reproduction or shutdown/restart integration test executed.
 
 Resolution/acceptance: Keep a stopping registry entry with an exit/shutdown promise and sequence replacement admission after it, while retaining a bounded kill fallback. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
 
@@ -4092,7 +4092,7 @@ The panel marks the answer no longer streaming and can send the next queued foll
 
 Real registered CANCEL_STREAM handler invoked the cancellation seam once, received {status:error,code:server_error,message:Cancellation service unavailable}, logged that failure, but returned response.success=true. The expectation success=false failed. The worker broadcasts a done:true/error:Cancelled chunk before requesting server cancellation, logs failure without returning it, and always returns success. The mounted requestStreamCancellation discards the worker response and swallows rejection. cancelCurrentManagedStream clears streaming/current stream immediately and invokes sendNextFollowUp in finally. The server cancellation owner updates cloud_agent_runs.cancellation_requested_at. Its workflow is started independently of the browser request and its invocation owns the AbortController, checking the persisted flag; aborting a follower cannot substitute for this write.
 
-Source: `apps/extension/src/background.ts:3566`. [Exact harness, source hashes and output](../live-check/2026-09-29-ecosystem-review/chrome-review.json). Limits: The real worker return value and cancellation invocation are reproduced; provider/API transport is mocked. Continued live tool execution or billing is not observed and is a conditional impact supported by the independently traced server-owned lifecycle.
+Source: `apps/extension/src/background.ts:3566`. [Exact harness, source hashes and output](evidence/2026-09-29-ecosystem-review/chrome-review.json). Limits: The real worker return value and cancellation invocation are reproduced; provider/API transport is mocked. Continued live tool execution or billing is not observed and is a conditional impact supported by the independently traced server-owned lifecycle.
 
 Resolution/acceptance: Mount the panel with a recovered owned durable run, click Stop, inject cancellation rejection, and require a visible unconfirmed/failure state with no falsely cancelled chunk or automatic next dependent turn. A successful cancellation should poll a confirmed terminal state. Include a server workflow fixture that remains running until the cancellation flag changes.
 
@@ -4104,6 +4104,6 @@ The history drawer and active conversation lookup cannot find the retained recor
 
 The real upsertConversation/listConversations/getConversation functions ran against callback-correct mocked chrome.storage.local. Old-session owner could list/read the chat, another account saw none, and the persisted conversations array retained one record. The same account/new-session list returned [] instead of one chat. Clerk resolveSessionOwner sets authIncarnation to session.id. Persistent conversation owner is that complete ManagedCloudOwner, and sameManagedCloudOwner compares both accountId and authIncarnation. The mounted owner-transition resets visible messages/conversation id and drawer calls listConversations for the current owner. Cloud delta pull filters the same owner and its insert port is a no-op, so it cannot recover earlier-session history.
 
-Source: `apps/extension/src/features/background/conversation-history.ts:1392`. [Exact harness, source hashes and output](../live-check/2026-09-29-ecosystem-review/chrome-review.json). Limits: Real persistence normalization/filtering is tested with callback Chrome storage mocks. Real Clerk login and whole panel rendering are not mounted. Changing session authority comparison globally would weaken the correctly strict in-flight ownership boundary and is not the proposed fix.
+Source: `apps/extension/src/features/background/conversation-history.ts:1392`. [Exact harness, source hashes and output](evidence/2026-09-29-ecosystem-review/chrome-review.json). Limits: Real persistence normalization/filtering is tested with callback Chrome storage mocks. Real Clerk login and whole panel rendering are not mounted. Changing session authority comparison globally would weaken the correctly strict in-flight ownership boundary and is not the proposed fix.
 
 Resolution/acceptance: Save account A history under session A1, revoke/sign out, sign in as A2 and require retained history plus safe pending mirror recovery; account B remains isolated. Model persistent data ownership separately from auth-incarnation operation leases, retaining strict stale-stream/approval/cancellation fencing.
