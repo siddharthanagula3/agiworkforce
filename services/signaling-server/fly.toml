@@ -5,19 +5,30 @@
 
 app = 'agiworkforce-signaling'
 primary_region = 'sjc'
+kill_signal = 'SIGTERM'
+kill_timeout = 35
+
+[deploy]
+  strategy = 'rolling'
 
 [build]
 
 [http_service]
   internal_port = 4000
   force_https = true
-  auto_stop_machines = 'stop'
+  auto_stop_machines = 'off'
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
   processes = ['app']
 
+[[http_service.checks]]
+  grace_period = '10s'
+  interval = '15s'
+  timeout = '5s'
+  method = 'GET'
+  path = '/ready'
+
 [[vm]]
-  memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 1024

@@ -34,7 +34,7 @@ on:
 
 concurrency:
   group: signaling-${{ github.event.workflow_run.head_sha || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -220,6 +220,9 @@ jobs:
   # Deploy to Railway (only when RAILWAY_TOKEN is configured)
   # ===========================================================================
   deploy-railway:
+    concurrency:
+      group: signaling-production
+      cancel-in-progress: false
     name: Deploy to Railway
     runs-on: ubuntu-24.04
     needs: [gate, build]
@@ -272,6 +275,9 @@ jobs:
   # Deploy to Fly.io
   # ===========================================================================
   deploy-fly:
+    concurrency:
+      group: signaling-production
+      cancel-in-progress: false
     name: Deploy to Fly.io
     runs-on: ubuntu-24.04
     needs: [gate, build]
@@ -297,7 +303,12 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl deploy . --config services/signaling-server/fly.toml --dockerfile services/signaling-server/Dockerfile --remote-only --wait-timeout 300
+          set -euo pipefail
+          flyctl machine list --config services/signaling-server/fly.toml --json \
+            | node services/signaling-server/scripts/check-fly-machines.mjs --before
+          flyctl deploy . --config services/signaling-server/fly.toml --dockerfile services/signaling-server/Dockerfile --remote-only --wait-timeout 5m --ha=false
+          flyctl machine list --config services/signaling-server/fly.toml --json \
+            | node services/signaling-server/scripts/check-fly-machines.mjs
 
       - name: Verify deployment health
         env:
