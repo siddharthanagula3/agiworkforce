@@ -18,6 +18,13 @@ export interface FileTextContent {
   sizeBytes: number;
   modifiedAtMs: number;
   truncated: boolean;
+  readOnly?: boolean;
+  lineEnding?: 'lf' | 'crlf';
+  sha256?: string;
+}
+
+export interface FileTextWrite extends FileStat {
+  sha256?: string;
 }
 
 export interface FileBinaryContent {

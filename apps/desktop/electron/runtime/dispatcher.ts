@@ -136,6 +136,7 @@ import { detectShellSandbox, type ShellSandbox } from './shellSandbox';
 import { readShellPolicy, writeShellPolicy } from './shellPolicyStore';
 import {
   TextEditRefused,
+  WriteConflict,
   createDirectory,
   editTextFile,
   globFiles,
@@ -234,6 +235,17 @@ function optionalString(args: Args, key: string, fallback: string): string {
   if (value === undefined || value === null) return fallback;
   if (typeof value !== 'string') {
     throw new InvalidArguments(`"${key}" must be a string.`);
+  }
+  return value;
+}
+
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+function optionalSha256(args: Args, key: string): string | undefined {
+  const value = args[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string' || !SHA256_HEX.test(value)) {
+    throw new InvalidArguments(`"${key}" must be a lowercase hex SHA-256 digest.`);
   }
   return value;
 }
@@ -949,6 +961,7 @@ async function execute(
         resolveRoot(args),
         requireString(args, 'path'),
         optionalString(args, 'text', ''),
+        optionalSha256(args, 'expectedSha256'),
       );
     case 'file_edit_text': {
       const oldText = args['oldText'];
@@ -1309,6 +1322,7 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
   }
   if (error instanceof InvalidArguments) return runtimeFailure('invalid-arguments', error.message);
   if (error instanceof TextEditRefused) return runtimeFailure('invalid-arguments', error.message);
+  if (error instanceof WriteConflict) return runtimeFailure('conflict', error.message);
   if (error instanceof InvalidBrowserArguments) {
     return runtimeFailure('invalid-arguments', error.message);
   }

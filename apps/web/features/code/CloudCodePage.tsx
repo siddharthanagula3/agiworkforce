@@ -68,6 +68,7 @@ import {
   localFolderChoices,
   localModelChoices,
   localModelSetup,
+  LOCAL_CODE_COPY,
   localProviderSetups,
   preferredLocalRootId,
   startingModelId,
@@ -169,6 +170,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const [railDrawerOpen, setRailDrawerOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  const [localEditorDirty, setLocalEditorDirty] = useState(false);
   const [localSession, setLocalSession] = useState<LocalDeveloperSession | null>(null);
   const [localPrompt, setLocalPrompt] = useState('');
   const local = useLocalSessions();
@@ -189,6 +191,26 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     [selectedModelId, planTier],
   );
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+
+  const leaveLocalEdits = useCallback(
+    (proceed: () => void) => {
+      const leave = () => {
+        setLocalEditorDirty(false);
+        proceed();
+      };
+      if (!localEditorDirty) {
+        leave();
+        return;
+      }
+      confirm({
+        title: LOCAL_CODE_COPY.discardEditsTitle,
+        description: LOCAL_CODE_COPY.discardLocalEditsDescription,
+        confirmLabel: LOCAL_CODE_COPY.discardFileEdits,
+        onConfirm: leave,
+      });
+    },
+    [confirm, localEditorDirty],
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -753,21 +775,26 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     [api, committing, loadChanges, replaceSession, selectedSession],
   );
 
-  const openHome = useCallback(() => {
-    if (paneRef.current) {
-      paneRef.current.onClose();
-      return;
-    }
-    setSelectedId(null);
-    setTurns([]);
-    setEntries([]);
-    setChangesOpen(false);
-    setChanges(null);
-    setError(null);
-    setCommitNotice(null);
-    setRailDrawerOpen(false);
-    router.push(CODE_ROUTES.root);
-  }, [router]);
+  const openHome = useCallback(
+    () =>
+      leaveLocalEdits(() => {
+        if (paneRef.current) {
+          paneRef.current.onClose();
+          return;
+        }
+        setLocalSession(null);
+        setSelectedId(null);
+        setTurns([]);
+        setEntries([]);
+        setChangesOpen(false);
+        setChanges(null);
+        setError(null);
+        setCommitNotice(null);
+        setRailDrawerOpen(false);
+        router.push(CODE_ROUTES.root);
+      }),
+    [router, leaveLocalEdits],
+  );
 
   const handleRename = useCallback(async () => {
     const session = selectedSession;
@@ -885,11 +912,12 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     onFiltersChange: (patch: Partial<CodeSessionFilters>) =>
       setFilters((current) => ({ ...current, ...patch })),
     onNewSession: openHome,
-    onSelectSession: (id: string, options?: { split: boolean }) => {
-      setLocalSession(null);
-      if (panes.select(id, options?.split === true)) return;
-      openSession(id);
-    },
+    onSelectSession: (id: string, options?: { split: boolean }) =>
+      leaveLocalEdits(() => {
+        setLocalSession(null);
+        if (panes.select(id, options?.split === true)) return;
+        openSession(id);
+      }),
     localSection: local.supported ? (
       <LocalSessionsSection
         groups={local.groups}
@@ -899,19 +927,24 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         unavailable={local.unavailable}
         selectedId={localSession?.id ?? null}
         onSelect={(session) => {
-          setRailDrawerOpen(false);
-          setLocalPrompt('');
-          setLocalSession(session);
-        }}
-        onNewSession={(rootId) => {
-          void local.startSession(rootId).then((session) => {
-            if (session) {
-              setRailDrawerOpen(false);
-              setLocalPrompt('');
-              setLocalSession(session);
-            }
+          if (session.id === localSession?.id) return;
+          leaveLocalEdits(() => {
+            setRailDrawerOpen(false);
+            setLocalPrompt('');
+            setLocalSession(session);
           });
         }}
+        onNewSession={(rootId) =>
+          leaveLocalEdits(() => {
+            void local.startSession(rootId).then((session) => {
+              if (session) {
+                setRailDrawerOpen(false);
+                setLocalPrompt('');
+                setLocalSession(session);
+              }
+            });
+          })
+        }
         onAddFolder={() => void local.addFolder('folder')}
         onAddRepository={() => void local.addFolder('repository')}
       />
@@ -1082,13 +1115,15 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         >
           {localSession && localGroup ? (
             <LocalSessionPanel
+              key={localSession.id}
               session={localSession}
               group={localGroup}
               runtimeModels={local.modelsFor(localGroup.rootId)}
               verbose={verbose}
               initialPrompt={localPrompt}
               onPromptSent={() => setLocalPrompt('')}
-              onClose={() => setLocalSession(null)}
+              onClose={() => leaveLocalEdits(() => setLocalSession(null))}
+              onEditorDirtyChange={setLocalEditorDirty}
             />
           ) : (
             <>
