@@ -929,7 +929,8 @@ impl Transport {
     ) -> McpResult<Self> {
         match &config.transport {
             Some(TransportConfig::Http(http_config)) => Ok(Transport::HttpSse(
-                HttpSseTransport::new(server_name, http_config.clone(), interactive).await?,
+                HttpSseTransport::new(server_name, http_config.as_ref().clone(), interactive)
+                    .await?,
             )),
             Some(TransportConfig::Stdio) | None => Ok(Transport::Stdio(
                 StdioTransport::new(server_name, &config.command, &config.args, &config.env)
@@ -990,7 +991,7 @@ pub enum TransportConfig {
     Stdio,
 
     /// HTTP/SSE transport (remote server)
-    Http(HttpSseConfig),
+    Http(Box<HttpSseConfig>),
 }
 
 // Implement Serialize/Deserialize for HttpSseConfig
@@ -1183,10 +1184,10 @@ mod tests {
         assert!(json.contains("stdio"));
 
         // Test Http
-        let http_config = TransportConfig::Http(HttpSseConfig {
+        let http_config = TransportConfig::Http(Box::new(HttpSseConfig {
             url: "http://localhost:8080".to_string(),
             ..Default::default()
-        });
+        }));
         let json = serde_json::to_string(&http_config).unwrap();
         assert!(json.contains("http"));
         assert!(json.contains("localhost:8080"));
