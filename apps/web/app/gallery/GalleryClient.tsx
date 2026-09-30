@@ -4,9 +4,12 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
-import { X, Code, Layers, Plus } from 'lucide-react';
 import {
   CircleHelp,
+  X,
+  Code,
+  LibraryBig,
+  Plus,
   FileText,
   Globe,
   ListChecks,
@@ -176,7 +179,7 @@ function NoMatchesState({ onClear }: { onClear: () => void }) {
         textAlign: 'center',
       }}
     >
-      <Layers size={32} color="var(--agi-ink-faint)" />
+      <LibraryBig size={32} color="var(--agi-ink-faint)" />
       <p
         style={{
           fontSize: 'var(--agi-text-md)',
@@ -1301,7 +1304,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                     textAlign: 'center',
                   }}
                 >
-                  <Layers size={32} color="var(--agi-ink-faint)" />
+                  <LibraryBig size={32} color="var(--agi-ink-faint)" />
                   <p
                     style={{
                       fontSize: 'var(--agi-text-md)',

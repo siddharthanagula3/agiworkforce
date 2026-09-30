@@ -37,7 +37,7 @@ function borderAccent(status: TaskPhase['status']): string {
 function statusIconColor(status: TaskPhase['status']): string {
   switch (status) {
     case 'running':
-      return 'text-teal-700 dark:text-teal-400';
+      return 'text-info-text';
     case 'completed':
       return 'text-success-text';
     case 'failed':

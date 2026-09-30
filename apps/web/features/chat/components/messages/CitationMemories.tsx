@@ -63,7 +63,7 @@ export function CitationMemories({ citations }: { citations: ManagedMemoryCitati
           <button
             type="button"
             onClick={() => openSettings(MEMORY_SETTINGS_SECTION)}
-            className="mt-2 rounded text-xs font-medium text-[var(--chat-text-primary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
+            className="mt-2 rounded-control text-xs font-medium text-[var(--chat-text-primary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
           >
             Manage memory
           </button>

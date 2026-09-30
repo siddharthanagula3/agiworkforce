@@ -682,7 +682,13 @@ export function BillingSection() {
                   : (usageComparison ?? humanizeStatus(subscription.status ?? 'none'))}
               </div>
               {creditWindows ? (
-                <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--text-3)',
+                    marginTop: 'calc(var(--space-1) / 2)',
+                  }}
+                >
                   {creditWindows}
                 </div>
               ) : null}

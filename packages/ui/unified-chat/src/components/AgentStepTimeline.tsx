@@ -24,9 +24,9 @@ export interface AgentStepTimelineProps {
 function agentTypeBadgeClasses(agentType: AgentType): string {
   switch (agentType) {
     case 'planner':
-      return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/25';
+      return 'bg-muted text-info-text border border-border';
     case 'executor':
-      return 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/25';
+      return 'bg-muted text-info-text border border-border';
     case 'reviewer':
       return 'bg-success-fill/10 text-success-text border border-success-fill/25';
     case 'coordinator':

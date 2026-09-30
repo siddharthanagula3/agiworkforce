@@ -21,8 +21,7 @@ export interface FileMentionPickerProps {
 const MAX_RESULTS = 12;
 
 function getFileIcon(entry: MentionFile) {
-  if (entry.isDir)
-    return <Folder size={14} className="shrink-0 text-blue-700 dark:text-blue-400" />;
+  if (entry.isDir) return <Folder size={14} className="shrink-0 text-muted-foreground" />;
   const ext = entry.name.split('.').pop()?.toLowerCase() ?? '';
   const codeExts = [
     'ts',
@@ -45,7 +44,7 @@ function getFileIcon(entry: MentionFile) {
   ];
   const textExts = ['md', 'txt', 'json', 'yaml', 'yml', 'toml', 'css', 'html', 'xml', 'sh'];
   if (codeExts.includes(ext))
-    return <FileText size={14} className="shrink-0 text-emerald-700 dark:text-emerald-400" />;
+    return <FileText size={14} className="shrink-0 text-muted-foreground" />;
   if (textExts.includes(ext))
     return <FileText size={14} className="shrink-0 text-muted-foreground" />;
   return <File size={14} className="shrink-0 text-muted-foreground" />;

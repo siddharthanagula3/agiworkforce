@@ -140,9 +140,7 @@ function SessionItemBase({
 
   const rowContent = (
     <div className="flex min-w-0 items-center gap-1.5">
-      {session.starred && (
-        <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-700 dark:text-amber-400" />
-      )}
+      {session.starred && <Star className="h-3 w-3 shrink-0 fill-warning-fill text-warning-text" />}
       {session.runState === 'running' && (
         <span
           data-testid={`session-running-${session.id}`}

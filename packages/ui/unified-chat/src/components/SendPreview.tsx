@@ -19,14 +19,12 @@ function DestinationIcon({
 }) {
   const sizeClass = compact ? 'h-3 w-3' : 'h-4 w-4';
   if (presentation.staysLocal) {
-    return (
-      <HardDrive className={cn(sizeClass, 'text-emerald-700 dark:text-emerald-300')} aria-hidden />
-    );
+    return <HardDrive className={cn(sizeClass, 'text-success-text')} aria-hidden />;
   }
   if (presentation.providerMode === 'DirectByok') {
-    return <KeyRound className={cn(sizeClass, 'text-amber-700 dark:text-amber-300')} aria-hidden />;
+    return <KeyRound className={cn(sizeClass, 'text-warning-text')} aria-hidden />;
   }
-  return <Cloud className={cn(sizeClass, 'text-sky-700 dark:text-sky-300')} aria-hidden />;
+  return <Cloud className={cn(sizeClass, 'text-info-text')} aria-hidden />;
 }
 
 function compactDestinationLabel(presentation: SendPreviewPresentation): string {

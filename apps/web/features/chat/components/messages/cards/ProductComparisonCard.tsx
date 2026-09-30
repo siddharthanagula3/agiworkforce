@@ -38,7 +38,7 @@ function SourceLinks({ sources }: { sources: InteractiveCardSource[] }) {
             href={source.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex max-w-full items-center gap-1 rounded underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
+            className="inline-flex max-w-full items-center gap-1 rounded-control underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
           >
             <span className="tabular-nums">{index + 1}</span>
             <span className="truncate">{hostnameOf(source.url)}</span>

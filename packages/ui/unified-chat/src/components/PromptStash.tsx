@@ -167,7 +167,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
           isOpen
-            ? 'text-blue-700 dark:text-blue-400 bg-blue-500/10'
+            ? 'text-accent-text bg-muted'
             : 'text-muted-foreground hover:text-foreground hover:bg-accent',
           disabled && 'pointer-events-none opacity-40',
         )}

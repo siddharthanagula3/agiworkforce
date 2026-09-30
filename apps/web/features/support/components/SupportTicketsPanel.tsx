@@ -199,7 +199,7 @@ function NewTicketForm({
         {diagnostics ? (
           <pre
             aria-label="Diagnostics that would be attached"
-            className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 text-[11px] text-foreground"
+            className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 text-caption text-foreground"
           >
             {diagnostics.summary}
           </pre>

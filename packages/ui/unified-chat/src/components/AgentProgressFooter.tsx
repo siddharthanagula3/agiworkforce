@@ -76,10 +76,7 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
       aria-label={`Agent executing: ${description}`}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <Loader2
-          className="h-3.5 w-3.5 shrink-0 animate-spin text-teal-700 dark:text-teal-400"
-          aria-hidden="true"
-        />
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-info-text" aria-hidden="true" />
         <span className="truncate text-xs font-medium text-foreground" title={description}>
           {description}
         </span>

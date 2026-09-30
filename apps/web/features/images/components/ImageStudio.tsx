@@ -296,7 +296,7 @@ export function ImageStudio() {
             }}
             rows={3}
             placeholder={files.length > 0 ? 'Describe the change' : 'Describe an image'}
-            className="w-full resize-none bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground"
+            className="w-full resize-none bg-transparent text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground"
           />
 
           {files.length > 0 ? (
@@ -497,7 +497,7 @@ export function ImageStudio() {
               <div
                 className={cn(
                   'absolute inset-x-0 bottom-0 flex items-center gap-1 bg-background/90 p-1.5',
-                  'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100',
+                  'opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100',
                 )}
               >
                 <button

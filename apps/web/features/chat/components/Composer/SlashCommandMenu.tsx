@@ -175,7 +175,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
           description: note
             ? [skill.description, note].filter(Boolean).join(REQUIREMENT_SEPARATOR)
             : skill.description,
-          icon: <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400" />,
+          icon: <Sparkles className="h-4 w-4 text-accent-text" />,
           isSkill: true,
         };
       };

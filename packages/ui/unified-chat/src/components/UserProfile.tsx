@@ -128,7 +128,7 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
           <button
             type="button"
             onClick={onUpgradeClick}
-            className="flex items-center gap-0.5 text-caption font-medium text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+            className="flex items-center gap-0.5 text-caption font-medium text-accent-text hover:text-accent-text transition-colors"
           >
             Upgrade
             <ArrowUpRight size={10} />
@@ -266,8 +266,8 @@ export function UserProfile({ collapsed }: UserProfileProps) {
                   tier === 'local' || tier === 'byok'
                     ? 'bg-[var(--chat-border)] text-[var(--chat-text-muted)]'
                     : tier === 'basic'
-                      ? 'bg-blue-500/15 text-blue-700 dark:text-blue-400'
-                      : 'bg-purple-500/15 text-purple-700 dark:text-purple-400',
+                      ? 'bg-muted text-accent-text'
+                      : 'bg-muted text-accent-text',
                 )}
               >
                 {planLabel}

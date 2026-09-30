@@ -192,7 +192,7 @@ export function GuestChat({ dailyLimit, signInHref, signUpHref }: GuestChatProps
             ? t('placeholderEmpty', 'How can I help you today?')
             : t('placeholder', 'Message AGI...')
         }
-        className="block max-h-[240px] min-h-[36px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground"
+        className="block max-h-[240px] min-h-[36px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 py-1.5 text-base leading-6 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground"
       />
       <SendButton
         mode={streaming ? 'stop' : 'send'}
