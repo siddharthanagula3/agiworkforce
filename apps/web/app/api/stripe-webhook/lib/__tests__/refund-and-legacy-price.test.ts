@@ -91,6 +91,7 @@ function refundEvent(charge: Partial<Stripe.Charge>): Stripe.Event {
         amount: 2000,
         amount_refunded: 2000,
         refunded: true,
+        refunds: { object: 'list', data: [], has_more: false, url: '/v1/refunds' },
         created: NOW,
         metadata: {},
         ...charge,
@@ -106,6 +107,7 @@ function planRefundDb(alreadyRevokedMicrousd = 0) {
       return [
         {
           subscription_id: 'sub_row',
+          stripe_subscription_id: 'sub_primary',
           plan_tier: 'pro',
           current_period_start: PERIOD_START,
           current_period_end: PERIOD_END,

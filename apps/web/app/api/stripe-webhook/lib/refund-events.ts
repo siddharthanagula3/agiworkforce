@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import type { Stripe } from '@/lib/stripe-types';
+import { duplicateRefundAmount } from './duplicate-subscription-settlement';
 
 interface PlanPeriod {
   subscription_id: string;
@@ -251,12 +252,25 @@ export async function handleChargeRefunded(
     return;
   }
 
-  const revokedMicrousd = await revokePlanRefund(db, profile.id, period, charge, description);
+  const duplicateRefunded = await duplicateRefundAmount(
+    stripe,
+    charge,
+    period.stripe_subscription_id,
+  );
+  const planCharge = {
+    ...charge,
+    amount: charge.amount - duplicateRefunded,
+    amount_refunded: Math.max(0, charge.amount_refunded - duplicateRefunded),
+    refunded: duplicateRefunded === 0 && charge.refunded,
+  };
+  if (planCharge.amount_refunded === 0) return;
+
+  const revokedMicrousd = await revokePlanRefund(db, profile.id, period, planCharge, description);
   logger.info(
     { userId: profile.id, chargeId: charge.id, revokedMicrousd },
     'Plan credits revoked in proportion to the refunded share of the current period',
   );
-  if (isFullyRefunded(charge)) {
-    await endRefundedPlan(db, profile.id, stripeCustomerId, period, charge);
+  if (isFullyRefunded(planCharge)) {
+    await endRefundedPlan(db, profile.id, stripeCustomerId, period, planCharge);
   }
 }
