@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { parse as parseToml } from 'smol-toml';
 
 /**
  * The webview inspector must not reach a shipped binary. Tauri turns it on for
@@ -25,52 +26,90 @@ const RELEASE_CONFIG_FILES = [
   'tauri.macos.conf.json',
   'tauri.windows.conf.json',
 ];
-const TABLE_PREFIX = String.raw`(?:workspace\.|target\.(?:'[^']*'|"[^"]*"|[^.'"]+)\.)?`;
-const DEPENDENCY_TABLE = new RegExp(`^${TABLE_PREFIX}dependencies$`, 'u');
-const TAURI_DEPENDENCY_TABLE = new RegExp(`^${TABLE_PREFIX}dependencies\\."?tauri"?$`, 'u');
 const DEBUG_ASSERTIONS_FLAG = /debug[-_]assertions(?!\s*=\s*(?:off|no|n|false)\b)/iu;
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../..');
 
-function count(text, pattern) {
-  return (text.replace(/"[^"]*"/gu, '""').match(pattern) ?? []).length;
-}
-
-function unclosed(body) {
-  return count(body, /\[/gu) > count(body, /\]/gu) || count(body, /\{/gu) > count(body, /\}/gu);
-}
-
-function manifestEntries(manifestText) {
-  const entries = [];
-  let section = '';
-  let pending = null;
-
-  for (const rawLine of manifestText.split(/\r?\n/u)) {
-    const line = rawLine.replace(/^((?:[^"'#]|"[^"]*"|'[^']*')*)#.*$/u, '$1').trim();
-    if (line.length === 0) continue;
-
-    if (pending === null) {
-      const header = /^\[\[?\s*([^\]]+?)\s*\]\]?$/u.exec(line);
-      if (header) {
-        section = header[1];
-        continue;
-      }
-      const assignment = /^"?([A-Za-z0-9_.-]+?)"?\s*=\s*(.*)$/u.exec(line);
-      if (!assignment) continue;
-      pending = { section, key: assignment[1], body: assignment[2] };
-    } else {
-      pending.body += ` ${line}`;
-    }
-
-    if (unclosed(pending.body)) continue;
-    entries.push(pending);
-    pending = null;
+function tomlTable(value, name) {
+  if (value === undefined) return {};
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    value instanceof Date
+  ) {
+    throw new Error(`${name} must be a TOML table`);
   }
-  return entries;
+  return value;
 }
 
-function quoted(text) {
-  return [...text.matchAll(/"([^"]*)"/gu)].map((match) => match[1]);
+function stringArray(value, name) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new Error(`${name} must be a TOML string array`);
+  }
+  return value;
+}
+
+function tauriDependencies(manifestText, workspaceManifestText = '') {
+  const manifest = parseToml(manifestText);
+  const workspace = tomlTable(manifest.workspace, 'workspace');
+  const inheritedWorkspace = tomlTable(parseToml(workspaceManifestText).workspace, 'workspace');
+  const workspaceDependencies = {
+    ...tomlTable(inheritedWorkspace.dependencies, 'workspace.dependencies'),
+    ...tomlTable(workspace.dependencies, 'workspace.dependencies'),
+  };
+  const targets = tomlTable(manifest.target, 'target');
+  const tables = [
+    manifest.dependencies,
+    workspace.dependencies,
+    ...Object.entries(targets).map(
+      ([name, target]) => tomlTable(target, `target.${name}`).dependencies,
+    ),
+  ];
+  return tables.flatMap((value) =>
+    Object.entries(tomlTable(value, 'dependencies')).flatMap(([name, dependency]) => {
+      const entry =
+        typeof dependency === 'string' ? {} : tomlTable(dependency, `dependencies.${name}`);
+      const inherited =
+        entry.workspace === true
+          ? tomlTable(workspaceDependencies[name], `workspace.dependencies.${name}`)
+          : {};
+      const packageName = entry.package ?? inherited.package ?? name;
+      if (typeof packageName !== 'string')
+        throw new Error('Dependency package names must be strings');
+      if (packageName !== 'tauri') return [];
+      return [
+        {
+          name,
+          features: [
+            ...stringArray(inherited.features ?? [], `workspace.dependencies.${name}.features`),
+            ...stringArray(entry.features ?? [], `dependencies.${name}.features`),
+          ],
+        },
+      ];
+    }),
+  );
+}
+
+function tomlEntries(table, prefix = []) {
+  return Object.entries(table).flatMap(([key, value]) => {
+    const parts = [...prefix, key];
+    if (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      !(value instanceof Date)
+    ) {
+      return tomlEntries(value, parts);
+    }
+    return [{ parts, value }];
+  });
+}
+
+function tomlPath(parts) {
+  return parts
+    .map((part) => (/^[A-Za-z0-9_-]+$/u.test(part) ? part : JSON.stringify(part)))
+    .join('.');
 }
 
 function normalizeFeature(feature) {
@@ -86,11 +125,13 @@ function splitFeatureList(value) {
 }
 
 export function parseFeatureTable(manifestText) {
-  const table = new Map();
-  for (const { section, key, body } of manifestEntries(manifestText)) {
-    if (section === 'features') table.set(key, quoted(body).map(normalizeFeature));
-  }
-  return table;
+  const features = tomlTable(parseToml(manifestText).features, 'features');
+  return new Map(
+    Object.entries(features).map(([name, members]) => [
+      name,
+      stringArray(members, `features.${name}`).map(normalizeFeature),
+    ]),
+  );
 }
 
 export function resolveFeatureClosure(table, requested) {
@@ -110,7 +151,7 @@ export function resolveFeatureClosure(table, requested) {
 export function findDevtoolsActivation(
   manifestText,
   requestedFeatures,
-  { noDefaultFeatures, allFeatures = false },
+  { noDefaultFeatures, allFeatures = false, tauriAliases = [] },
 ) {
   const table = parseFeatureTable(manifestText);
   const roots = [...requestedFeatures];
@@ -118,25 +159,21 @@ export function findDevtoolsActivation(
   if (allFeatures) roots.push(...table.keys());
 
   const closure = resolveFeatureClosure(table, roots);
-  return [FORBIDDEN_FEATURE, FORBIDDEN_DEPENDENCY_FEATURE].filter((feature) =>
-    closure.has(feature),
-  );
+  const dependencies = [
+    ...tauriDependencies(manifestText).map(({ name }) => name),
+    ...tauriAliases,
+  ];
+  return [
+    ...(closure.has(FORBIDDEN_FEATURE) ? [FORBIDDEN_FEATURE] : []),
+    ...(closure.has(FORBIDDEN_DEPENDENCY_FEATURE) ||
+    dependencies.some((name) => closure.has(`${name}/${FORBIDDEN_FEATURE}`))
+      ? [FORBIDDEN_DEPENDENCY_FEATURE]
+      : []),
+  ];
 }
 
-export function tauriDependencyFeatures(manifestText) {
-  const features = [];
-  for (const { section, key, body } of manifestEntries(manifestText)) {
-    if (TAURI_DEPENDENCY_TABLE.test(section)) {
-      if (key === 'features') features.push(...quoted(body));
-      continue;
-    }
-    if (!DEPENDENCY_TABLE.test(section)) continue;
-    if (key === 'tauri.features') features.push(...quoted(body));
-    if (key !== 'tauri') continue;
-    const list = /(?:^|[\s{,])features\s*=\s*\[([^\]]*)\]/u.exec(body);
-    if (list) features.push(...quoted(list[1]));
-  }
-  return features;
+export function tauriDependencyFeatures(manifestText, workspaceManifestText = '') {
+  return tauriDependencies(manifestText, workspaceManifestText).flatMap(({ features }) => features);
 }
 
 export function tauriConfigFeatures(configText) {
@@ -147,13 +184,15 @@ export function tauriConfigFeatures(configText) {
 }
 
 export function debugAssertionRoutes(tomlText) {
-  return manifestEntries(tomlText).flatMap(({ section, key, body }) => {
-    const name = section ? `${section}.${key}` : key;
-    if (/^profile\.release(?:\..+)?\.debug-assertions$/u.test(name) && body.trim() === 'true') {
-      return [`${name} = true`];
+  return tomlEntries(parseToml(tomlText)).flatMap(({ parts, value }) => {
+    const name = tomlPath(parts);
+    if (parts[0] === 'profile' && parts[1] === 'release' && parts.at(-1) === 'debug-assertions') {
+      if (typeof value !== 'boolean') throw new Error(`${name} must be a TOML boolean`);
+      if (value) return [`${name} = true`];
     }
-    if (/(?:^|\.)rustflags$/u.test(name) && DEBUG_ASSERTIONS_FLAG.test(body)) {
-      return [`debug assertions in ${name}`];
+    if (parts.at(-1) === 'rustflags') {
+      const flags = typeof value === 'string' ? value : stringArray(value, name).join(' ');
+      if (DEBUG_ASSERTIONS_FLAG.test(flags)) return [`debug assertions in ${name}`];
     }
     return [];
   });
@@ -259,7 +298,6 @@ export function readReleaseSources(repoRoot = REPO_ROOT) {
 }
 
 function overlayFeatures(value, repoRoot) {
-  if (value.includes('${{')) return { features: [] };
   const file = path.resolve(repoRoot, PROJECT_DIR, value);
   const text = value.trimStart().startsWith('{')
     ? value
@@ -292,9 +330,13 @@ export function findInspectorRoutes({
   const routes = findDevtoolsActivation(manifestText, [...requested, ...configured], {
     noDefaultFeatures,
     allFeatures,
+    tauriAliases: tauriDependencies(workspaceManifestText).map(({ name }) => name),
   }).map((feature) => `the ${feature} feature`);
-  for (const text of [manifestText, workspaceManifestText]) {
-    if (tauriDependencyFeatures(text).includes(FORBIDDEN_FEATURE)) {
+  for (const features of [
+    tauriDependencyFeatures(manifestText, workspaceManifestText),
+    tauriDependencyFeatures(workspaceManifestText),
+  ]) {
+    if (features.includes(FORBIDDEN_FEATURE)) {
       routes.push('the tauri dependency features list devtools');
     }
   }
@@ -307,7 +349,11 @@ export function findInspectorRoutes({
   if (debug) routes.push('a --debug build, which always carries the inspector');
   if (profile !== RELEASE_PROFILE) routes.push(`the ${profile || '(empty)'} cargo profile`);
   routes.push(
-    ...[workspaceManifestText, ...cargoConfigTexts, ...cargoConfigs].flatMap(debugAssertionRoutes),
+    ...[
+      workspaceManifestText,
+      ...cargoConfigTexts,
+      ...cargoConfigs.filter((value) => value.includes('=')),
+    ].flatMap(debugAssertionRoutes),
     ...environmentRoutes(env),
   );
   return routes;

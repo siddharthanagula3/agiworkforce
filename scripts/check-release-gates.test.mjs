@@ -9,6 +9,7 @@ import { readReleaseSources } from '../apps/desktop/scripts/check-no-devtools.mj
 import {
   checkDesktopReleaseGates,
   checkMobileReleaseGates,
+  checkRustLockfileGate,
   checkTauriInspectorGate,
   checkWindowsReleaseGates,
 } from './check-release-gates.mjs';
@@ -167,6 +168,135 @@ test('a devtools check that reads a different feature set than the bundler is ca
     failures[0],
     /but its devtools check reads no default features, features \[shell\]/u,
   );
+});
+
+test('the Windows devtools check must read the generated overlay passed to the bundler', () => {
+  const failures = windowsWith(({ check }) => {
+    check.run = 'node apps/desktop/scripts/check-no-devtools.mjs $TAURI_CARGO_FEATURE_ARGS';
+  });
+  assert.equal(failures.length, 1);
+  assert.match(
+    failures[0],
+    /builds .*Tauri config \[\$\{\{ steps\.windows-signing\.outputs\.tauri_config \}\}\]/u,
+  );
+  assert.match(failures[0], /but its devtools check reads/u);
+});
+
+test('different overlay identities cannot pass as the same feature set', () => {
+  const failures = windowsWith(({ check, bundler }) => {
+    bundler.with.args = '--config \'{"bundle":{"active":true}}\' --bundles nsis';
+    check.run =
+      'node apps/desktop/scripts/check-no-devtools.mjs --config \'{"bundle":{"active":false}}\'';
+  });
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /Tauri config \[\{"bundle":\{"active":true\}\}\]/u);
+  assert.match(failures[0], /Tauri config \[\{"bundle":\{"active":false\}\}\]/u);
+});
+
+test('runtime overlays must come from a preceding step and the same checked output', () => {
+  const failures = windowsWith(({ check, bundler }) => {
+    bundler.with.args = '--config "${{ inputs.config }}" --bundles nsis';
+    check.run = 'node apps/desktop/scripts/check-no-devtools.mjs --config "${{ inputs.config }}"';
+  });
+  assert.ok(failures.some((message) => message.includes('no gate can read the build it makes')));
+  assert.ok(failures.some((message) => message.includes('does not resolve from the workflow env')));
+});
+
+test('every committed workflow keeps Cargo and cross workspace resolution locked', () => {
+  const directory = path.join(repositoryRoot, '.github/workflows');
+  let commands = 0;
+  for (const name of fs.readdirSync(directory).filter((file) => /\.ya?ml$/u.test(file))) {
+    const workflow = loadWorkflow(name);
+    const run = Object.values(workflow.jobs ?? {})
+      .flatMap((job) => (job.steps ?? []).map((step) => String(step.run ?? '')))
+      .join('\n');
+    commands += [...run.matchAll(/\b(?:cargo|cross)\s+(?:build|test|check|clippy|bench|rustc)\b/gu)]
+      .length;
+    assert.deepEqual(checkRustLockfileGate(workflow), [], name);
+  }
+  assert.ok(commands > 0);
+});
+
+test('unlocked commands cannot borrow a flag from another command, comment or test tail', () => {
+  for (const run of [
+    'cargo test -p agiworkforce-cli && cargo clippy --locked --lib',
+    'xvfb-run --auto-servernum cargo test --lib # --locked',
+    'matched=$(cargo test --lib -- --list --locked)',
+    'cross build --release',
+    'cargo check --workspace',
+    'cargo clippy --workspace --lib -- -D warnings',
+  ]) {
+    const workflow = { jobs: { rust: { steps: [{ run }] } } };
+    assert.equal(checkRustLockfileGate(workflow).length, 1, run);
+  }
+  for (const run of [
+    'cargo test --locked --lib && cargo clippy --locked --lib -- -D warnings',
+    'matched=$(cargo test --locked --lib -- --list)',
+    'cross build --locked --release',
+    'cargo check --locked --workspace',
+    'cargo clippy --locked --workspace --lib -- -D warnings',
+    '# cargo test --lib\ncargo fmt --all -- --check',
+  ]) {
+    const workflow = { jobs: { rust: { steps: [{ run }] } } };
+    assert.deepEqual(checkRustLockfileGate(workflow), [], run);
+  }
+});
+
+test('Tauri bundlers cannot borrow the lockfile flag from a neighboring Rust step', () => {
+  for (const args of [
+    '--bundles nsis',
+    '--locked --bundles nsis',
+    '--bundles nsis -- -- --locked',
+  ]) {
+    const workflow = {
+      jobs: {
+        release: {
+          steps: [
+            { run: 'cargo build --locked --release' },
+            { uses: windows.jobs['build-windows'].steps.find(isBundler).uses, with: { args } },
+          ],
+        },
+      },
+    };
+    const failures = checkRustLockfileGate(workflow);
+    assert.equal(failures.length, 1, args);
+    assert.ok(failures[0].includes('Tauri Cargo tail'));
+  }
+});
+
+test('Tauri bundlers pass the lockfile flag through the actual Cargo tail', () => {
+  for (const args of ['--bundles nsis -- --locked', '--bundles nsis -- ${{ env.CARGO_ARGS }}']) {
+    const workflow = {
+      env: { CARGO_ARGS: '--locked --no-default-features --features shell' },
+      jobs: {
+        release: {
+          steps: [
+            { uses: windows.jobs['build-windows'].steps.find(isBundler).uses, with: { args } },
+          ],
+        },
+      },
+    };
+    assert.deepEqual(checkRustLockfileGate(workflow), [], args);
+  }
+});
+
+test('removing the Cargo tail lockfile flag from a real Tauri bundler fails the gate', () => {
+  const workflow = structuredClone(desktop);
+  const bundler = workflow.jobs['build-linux'].steps.find(isBundler);
+  bundler.with.args = bundler.with.args.replace('--locked', '');
+  assert.equal(checkRustLockfileGate(workflow).length, 1);
+});
+
+test('removing the lockfile flag from a real Rust CI step fails the gate', () => {
+  const workflow = loadWorkflow('ci.yml');
+  const step = Object.values(workflow.jobs)
+    .flatMap((job) => job.steps ?? [])
+    .find((step) =>
+      String(step.run ?? '').includes('cargo test --locked -p agiworkforce-model-registry'),
+    );
+  assert.ok(step);
+  step.run = step.run.replace('cargo test --locked', 'cargo test');
+  assert.equal(checkRustLockfileGate(workflow).length, 1);
 });
 
 test('a check under a shell that does not expand the variable cannot vouch for the build', () => {

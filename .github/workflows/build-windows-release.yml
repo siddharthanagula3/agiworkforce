@@ -33,7 +33,7 @@ jobs:
       # OCR stays off on Windows (it needs the Tesseract native library).
       # `remote-databases` is a Windows-only divergence from `default` that neither
       # macOS nor Linux gets, which is a product decision rather than a build fix.
-      TAURI_CARGO_FEATURE_ARGS: --no-default-features --features shell,updater,billing,vad,remote-databases
+      TAURI_CARGO_FEATURE_ARGS: --locked --no-default-features --features shell,updater,billing,vad,remote-databases
     steps:
       - name: Resolve release tag
         id: resolve-tag
@@ -265,7 +265,7 @@ jobs:
 
       - name: Refuse a feature set that bundles the webview inspector
         shell: bash
-        run: node apps/desktop/scripts/check-no-devtools.mjs $TAURI_CARGO_FEATURE_ARGS
+        run: node apps/desktop/scripts/check-no-devtools.mjs --config "${{ steps.windows-signing.outputs.tauri_config }}" -- $TAURI_CARGO_FEATURE_ARGS
 
       - name: Build Tauri Windows app
         # Build locally first. Uploading before Authenticode verification would
