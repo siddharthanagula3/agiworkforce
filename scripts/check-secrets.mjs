@@ -270,7 +270,7 @@ function workingTreeFiles() {
   return [...new Set([...tracked, ...untracked])];
 }
 
-function historyBlobs() {
+function historyObjects() {
   const entries = git(['rev-list', '--objects', '--all'])
     .split('\n')
     .filter(Boolean)
@@ -278,17 +278,17 @@ function historyBlobs() {
       if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?(?: .*)?$/.test(line))
         throw new Error('Git history inventory is malformed');
       const sp = line.indexOf(' ');
-      return sp === -1 ? null : { sha: line.slice(0, sp), path: line.slice(sp + 1) };
-    })
-    .filter((e) => e && e.path && !SKIP_FILE.test(e.path))
-    .filter((e) => !e.path.split('/').some((segment) => SKIP_DIRS.has(segment)));
+      return sp === -1
+        ? { sha: line, path: `git commit ${line}` }
+        : { sha: line.slice(0, sp), path: line.slice(sp + 1) };
+    });
 
   const byId = new Map();
   for (const e of entries) if (!byId.has(e.sha)) byId.set(e.sha, e.path);
   return byId;
 }
 
-function readBlobs(shas) {
+function readObjects(shas, objects) {
   if (shas.length === 0) return new Map();
   let raw;
   try {
@@ -307,7 +307,9 @@ function readBlobs(shas) {
     const nl = raw.indexOf(0x0a, i);
     if (nl === -1) throw new Error('Git history content is incomplete');
     const header = raw.subarray(i, nl).toString('utf8');
-    const fields = /^([a-f0-9]{40}(?:[a-f0-9]{24})?) (blob|tree) (0|[1-9][0-9]*)$/.exec(header);
+    const fields = /^([a-f0-9]{40}(?:[a-f0-9]{24})?) (blob|tree|commit|tag) (0|[1-9][0-9]*)$/.exec(
+      header,
+    );
     if (!fields || fields[1] !== requested)
       throw new Error('Git history content header is invalid');
     const [, sha, type, sizeText] = fields;
@@ -320,9 +322,19 @@ function readBlobs(shas) {
     ) {
       throw new Error('Git history content is truncated');
     }
-    if (type === 'blob') {
-      if (size <= 2 * 1024 * 1024) out.set(sha, raw.subarray(start, start + size).toString('utf8'));
-      else excludedHistoryOversize += 1;
+    if (type !== 'tree') {
+      const rel = objects.get(sha) ?? sha;
+      if (type !== 'blob') objects.set(sha, `git ${type} ${sha}`);
+      const excludedBlob =
+        type === 'blob' &&
+        (SELF.has(rel) ||
+          SKIP_FILE.test(rel) ||
+          rel.split('/').some((segment) => SKIP_DIRS.has(segment)));
+      if (!excludedBlob) {
+        if (size <= 2 * 1024 * 1024)
+          out.set(sha, raw.subarray(start, start + size).toString('utf8'));
+        else excludedHistoryOversize += 1;
+      }
     }
     i = start + size + 1;
   }
@@ -386,7 +398,7 @@ function scanSource(rel, src, { useAllowlist }) {
 }
 
 const scanHistory = process.argv.includes('--history');
-let historyBlobCount = 0;
+let historyObjectCount = 0;
 
 try {
   for (const rel of workingTreeFiles()) {
@@ -412,17 +424,16 @@ try {
   }
 
   if (scanHistory) {
-    const blobs = historyBlobs();
-    const shas = [...blobs.keys()];
-    const CHUNK = 512;
+    const objects = historyObjects();
+    const shas = [...objects.keys()];
+    const CHUNK = 64;
     for (let i = 0; i < shas.length; i += CHUNK) {
       const chunk = shas.slice(i, i + CHUNK);
-      const contents = readBlobs(chunk);
+      const contents = readObjects(chunk, objects);
       for (const [sha, src] of contents) {
-        const rel = blobs.get(sha) ?? sha;
-        if (SELF.has(rel)) continue;
-        historyBlobCount += 1;
-        scanSource(`${rel} (history blob ${sha.slice(0, 9)})`, src, { useAllowlist: false });
+        const rel = objects.get(sha) ?? sha;
+        historyObjectCount += 1;
+        scanSource(`${rel} (history object ${sha.slice(0, 9)})`, src, { useAllowlist: false });
       }
     }
   }
@@ -466,10 +477,10 @@ if (stale.length > 0) {
 
 console.log(
   `Secret scan passed (${scanned} working-tree files` +
-    (scanHistory ? ` + ${historyBlobCount} history blobs` : '') +
+    (scanHistory ? ` + ${historyObjectCount} history objects` : '') +
     `, ${PATTERNS.length} credential formats, ` +
     `${exempted} reviewed exemption(s) across ${allowed.size} allowlist entries; ` +
     `${excludedWorkingTreeOversize} oversized working-tree files excluded` +
-    (scanHistory ? `, ${excludedHistoryOversize} oversized history blobs excluded` : '') +
+    (scanHistory ? `, ${excludedHistoryOversize} oversized history objects excluded` : '') +
     ').',
 );
