@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { initSandboxRepository, sandboxGit } from './lib/sandbox-git.mjs';
+import { initSandboxRepository, sandboxGit, sandboxGitEnv } from './lib/sandbox-git.mjs';
 
 const SCANNER = path.join(path.dirname(fileURLToPath(import.meta.url)), 'check-secrets.mjs');
 
@@ -46,7 +47,7 @@ const ANTHROPIC_SEPARATED = shape(
 const GITHUB_SPLIT = shape('gh', 'p_', 'QzLmNpTzWkYbHgJdF6', 'EXAMPLE', 'sCa9eXuP3vRtBnMkLq');
 const url = (password, host) => shape('postgres', '://', 'admin', ':', password, '@', host);
 
-function scan(files, allowlist) {
+function scan(files, allowlist, { history = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'secret-scan-'));
   try {
     initSandboxRepository(dir, { stdio: 'ignore' });
@@ -56,7 +57,28 @@ function scan(files, allowlist) {
       fs.mkdirSync(path.join(dir, path.dirname(rel)), { recursive: true });
       fs.writeFileSync(path.join(dir, rel), body);
     }
-    const run = spawnSync(process.execPath, [SCANNER], { cwd: dir, encoding: 'utf8' });
+    if (history) {
+      sandboxGit(dir, ['add', '.'], { stdio: 'ignore' });
+      sandboxGit(
+        dir,
+        [
+          '-c',
+          'user.name=Secret scanner fixture',
+          '-c',
+          'user.email=secret-scanner@example.invalid',
+          'commit',
+          '--quiet',
+          '-m',
+          'test: secret scanner fixture',
+        ],
+        { stdio: 'ignore' },
+      );
+    }
+    const run = spawnSync(process.execPath, [SCANNER, ...(history ? ['--history'] : [])], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: sandboxGitEnv(),
+    });
     return { status: run.status, output: `${run.stdout}${run.stderr}` };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -265,6 +287,121 @@ test('an allowlist entry without a real reason fails the scan', () => {
   );
   assert.equal(result.status, 1);
   assert.match(result.output, /has no real reason/);
+});
+
+const wholeFileHash = (body) => createHash('sha256').update(body).digest('hex');
+const hashBoundEntry = (body) => ({
+  path: 'src/config.ts',
+  format: 'Stripe live key',
+  reason: 'Reviewed synthetic fixture whose complete file bytes are bound to this entry.',
+  sha256: wholeFileHash(body),
+});
+
+test('a matching sha256 allowlist binding exempts the exact full file bytes', () => {
+  const body = Buffer.concat([
+    Buffer.from(`const key = '${STRIPE}';\r\n`),
+    Buffer.from([0xff, 0x0a]),
+  ]);
+  const result = scan({ 'src/config.ts': body }, { entries: [hashBoundEntry(body)] });
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /2 working-tree files/);
+  assert.match(result.output, /1 reviewed exemption\(s\) across 1 allowlist entries/);
+  assert.ok(!result.output.includes(STRIPE.slice(0, 12)));
+});
+
+test('whole-file sha256 mutation cannot exempt an additional synthetic key of the same format', () => {
+  const body = `const reviewed = '${STRIPE}';\n`;
+  const added = shape('sk', '_live_', '7Qn4Wp8Lm2Zv6Rt9Bk3Hs5Dc1Fy');
+  const mutated = `${body}const added = '${added}';\n`;
+  const result = scan({ 'src/config.ts': mutated }, { entries: [hashBoundEntry(body)] });
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /2 finding\(s\)/);
+  assert.match(result.output, /src\/config\.ts:1  Stripe live key/);
+  assert.match(result.output, /src\/config\.ts:2  Stripe live key/);
+  assert.ok(!result.output.includes(STRIPE.slice(0, 12)));
+  assert.ok(!result.output.includes(added.slice(0, 12)));
+});
+
+test('malformed sha256 allowlist bindings fail closed without printing the supplied value', async (t) => {
+  const body = `const key = '${STRIPE}';\n`;
+  for (const [name, sha256] of [
+    ['short', 'a'.repeat(63)],
+    ['long', 'a'.repeat(65)],
+    ['uppercase', 'A'.repeat(64)],
+    ['nonhex', 'g'.repeat(64)],
+    ['newline', `${'a'.repeat(64)}\n`],
+    ['empty', ''],
+    ['number', 123],
+    ['null', null],
+  ]) {
+    await t.test(name, () => {
+      const result = scan(
+        { 'src/config.ts': body },
+        { entries: [{ ...hashBoundEntry(body), sha256 }] },
+      );
+      assert.equal(result.status, 1, result.output);
+      assert.match(result.output, /invalid SHA256 whole-file binding/);
+      assert.doesNotMatch(result.output, /Secret scan passed/);
+      if (typeof sha256 === 'string' && sha256.length > 0)
+        assert.ok(!result.output.includes(sha256));
+    });
+  }
+});
+
+test('a stale sha256 binding fails even when mutation leaves only an unmistakable fake key', () => {
+  const fake = shape('rk', '_live_', '000000000000000000000000');
+  const body = `const key = '${fake}';\n`;
+  const entry = hashBoundEntry(body);
+  const matched = scan({ 'src/config.ts': body }, { entries: [entry] });
+  assert.equal(matched.status, 0, matched.output);
+  assert.match(matched.output, /1 reviewed exemption\(s\)/);
+  const result = scan({ 'src/config.ts': `${body}const revision = 2;\n` }, { entries: [entry] });
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /stale allowlist entry/);
+  assert.doesNotMatch(result.output, /finding\(s\)|Secret scan passed/);
+});
+
+test('a sha256 entry still fails as stale when its credential format no longer matches', () => {
+  const body = 'const revision = 1;\n';
+  const result = scan({ 'src/config.ts': body }, { entries: [hashBoundEntry(body)] });
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /stale allowlist entry/);
+});
+
+test('an unbound duplicate cannot discard a stale sha256 entry', () => {
+  const body = `const key = '${STRIPE}';\n`;
+  const bound = hashBoundEntry(body);
+  const unbound = { path: bound.path, format: bound.format, reason: bound.reason };
+  for (const entries of [
+    [bound, unbound],
+    [unbound, bound],
+  ]) {
+    const result = scan({ 'src/config.ts': `${body}const revision = 2;\n` }, { entries });
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /stale allowlist entry/);
+  }
+});
+
+test('a matching sha256 binding does not exempt a different credential format', () => {
+  const body = `const key = '${STRIPE}';\n${PEM}\n`;
+  const result = scan({ 'src/config.ts': body }, { entries: [hashBoundEntry(body)] });
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /1 finding\(s\)/);
+  assert.match(result.output, /src\/config\.ts:2  PEM private key/);
+  assert.doesNotMatch(result.output, /src\/config\.ts:1  Stripe live key/);
+});
+
+test('history inspection bypasses even an exact whole-file sha256 exemption', () => {
+  const body = `const key = '${STRIPE}';\n`;
+  const result = scan(
+    { 'src/config.ts': body },
+    { entries: [hashBoundEntry(body)] },
+    { history: true },
+  );
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /src\/config\.ts \(history object [a-f0-9]{9}\):1  Stripe live key/);
+  assert.doesNotMatch(result.output, /src\/config\.ts:1  Stripe live key/);
+  assert.ok(!result.output.includes(STRIPE.slice(0, 12)));
 });
 
 test('the CI gate runs this suite before it can report a pass', () => {

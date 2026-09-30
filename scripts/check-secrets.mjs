@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -352,7 +353,17 @@ try {
 const allowKey = (filePath, format) => `${filePath}::${format}`;
 
 const allowed = new Map();
+const hashBoundPaths = new Set();
 for (const entry of allowlist.entries ?? []) {
+  if (
+    Object.hasOwn(entry ?? {}, 'sha256') &&
+    (typeof entry.sha256 !== 'string' ||
+      entry.sha256.length !== 64 ||
+      !/^[a-f0-9]{64}$/.test(entry.sha256))
+  ) {
+    console.error('Allowlist entry has an invalid SHA256 whole-file binding.');
+    process.exit(1);
+  }
   if (!entry?.path || !entry?.format) continue;
   if (!entry.reason || entry.reason.length < 25) {
     console.error(
@@ -361,7 +372,11 @@ for (const entry of allowlist.entries ?? []) {
     );
     process.exit(1);
   }
-  allowed.set(allowKey(entry.path, entry.format), false);
+  const key = allowKey(entry.path, entry.format);
+  const entries = allowed.get(key) ?? [];
+  entries.push({ sha256: entry.sha256, matched: false });
+  allowed.set(key, entries);
+  if (entry.sha256 !== undefined) hashBoundPaths.add(entry.path);
 }
 
 const findings = [];
@@ -370,7 +385,7 @@ let exempted = 0;
 let excludedWorkingTreeOversize = 0;
 let excludedHistoryOversize = 0;
 
-function scanSource(rel, src, { useAllowlist }) {
+function scanSource(rel, src, { useAllowlist, sha256 }) {
   const starts = lineStarts(src);
   for (const pattern of PATTERNS) {
     const { name, re } = pattern;
@@ -378,8 +393,13 @@ function scanSource(rel, src, { useAllowlist }) {
     let match;
     while ((match = re.exec(src)) !== null) {
       const key = allowKey(rel, name);
-      if (useAllowlist && allowed.has(key)) {
-        allowed.set(key, true);
+      const exemptions = useAllowlist
+        ? (allowed.get(key) ?? []).filter(
+            (entry) => entry.sha256 === undefined || entry.sha256 === sha256,
+          )
+        : [];
+      if (exemptions.length > 0) {
+        for (const entry of exemptions) entry.matched = true;
         exempted += 1;
         continue;
       }
@@ -407,7 +427,7 @@ try {
     if (rel.split('/').some((segment) => SKIP_DIRS.has(segment))) continue;
 
     const full = path.join(root, rel);
-    let src;
+    let bytes;
     try {
       const stat = fs.statSync(full);
       if (!stat.isFile()) continue;
@@ -415,12 +435,17 @@ try {
         excludedWorkingTreeOversize += 1;
         continue;
       }
-      src = fs.readFileSync(full, 'utf8');
+      bytes = fs.readFileSync(full);
     } catch {
       continue;
     }
     scanned += 1;
-    scanSource(rel, src, { useAllowlist: true });
+    scanSource(rel, bytes.toString('utf8'), {
+      useAllowlist: true,
+      sha256: hashBoundPaths.has(rel)
+        ? createHash('sha256').update(bytes).digest('hex')
+        : undefined,
+    });
   }
 
   if (scanHistory) {
@@ -465,7 +490,9 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-const stale = [...allowed.entries()].filter(([, matched]) => !matched).map(([key]) => key);
+const stale = [...allowed.entries()]
+  .filter(([, entries]) => entries.some((entry) => !entry.matched))
+  .map(([key]) => key);
 if (stale.length > 0) {
   console.error(
     `Secret scan FAILED, ${stale.length} stale allowlist entry(ies) matched nothing:\n\n` +
