@@ -37,6 +37,8 @@ COPY --from=builder --chown=signaling:nodejs /workspace/services/signaling-serve
 COPY --chown=signaling:nodejs services/signaling-server/package.json ./
 
 USER signaling
+ARG AGI_RELEASE_SHA
+ENV AGI_RELEASE_SHA=$AGI_RELEASE_SHA
 ENV NODE_ENV=production \
     PORT=4000 \
     SIGNALING_HOST=0.0.0.0 \

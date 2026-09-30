@@ -40,18 +40,6 @@
       "reason": "it uploads SARIF to code scanning"
     },
     {
-      "id": "deploy-signaling-server.yml:gate:attestations",
-      "reason": "the workflow attests the image it builds; the scope is declared once for all its jobs"
-    },
-    {
-      "id": "deploy-signaling-server.yml:gate:id-token",
-      "reason": "OIDC is how the deploy authenticates without a long-lived token"
-    },
-    {
-      "id": "deploy-signaling-server.yml:gate:packages",
-      "reason": "the image is pushed to the repository container registry"
-    },
-    {
       "id": "deploy-signaling-server.yml:test:attestations",
       "reason": "same workflow-level grant; this job builds nothing and writes nothing"
     },
@@ -74,30 +62,6 @@
     {
       "id": "deploy-signaling-server.yml:build:packages",
       "reason": "it pushes the image to the registry"
-    },
-    {
-      "id": "deploy-signaling-server.yml:deploy-railway:attestations",
-      "reason": "same workflow-level grant; the deploy reads the image it was handed"
-    },
-    {
-      "id": "deploy-signaling-server.yml:deploy-railway:id-token",
-      "reason": "OIDC authenticates the deploy"
-    },
-    {
-      "id": "deploy-signaling-server.yml:deploy-railway:packages",
-      "reason": "it pulls the image it deploys from the registry"
-    },
-    {
-      "id": "deploy-signaling-server.yml:deploy-fly:attestations",
-      "reason": "same workflow-level grant; the deploy reads the image it was handed"
-    },
-    {
-      "id": "deploy-signaling-server.yml:deploy-fly:id-token",
-      "reason": "OIDC authenticates the deploy"
-    },
-    {
-      "id": "deploy-signaling-server.yml:deploy-fly:packages",
-      "reason": "it pulls the image it deploys from the registry"
     },
     {
       "id": "deploy-signaling-server.yml:cleanup:packages",
@@ -182,6 +146,10 @@
     {
       "id": "test-l1.yml:upload-coverage:id-token",
       "reason": "OIDC authenticates the coverage upload"
+    },
+    {
+      "id": "deploy-signaling-server.yml:relay-verdict:statuses",
+      "reason": "It records the relay health verdict on the resolved candidate commit."
     }
   ],
   "knownGaps": {

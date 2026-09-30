@@ -58,6 +58,7 @@ else process.exit(3);
         env: {
           ...process.env,
           PATH: `${bin}:${process.env['PATH']}`,
+          CANDIDATE_SHA: 'a'.repeat(40),
           LIST_FAILURE: listFailure === 'after' ? 'after' : listFailure ? 'yes' : 'no',
           LIST_DELAY: listDelay ? 'yes' : 'no',
         },
