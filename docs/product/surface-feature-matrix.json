@@ -12,7 +12,7 @@
   "featureRegistry": "packages/contracts/types/src/feature-registry.json",
   "surfaceNotes": {
     "web": "The Next.js application. Its API routes are a separate surface below.",
-    "desktop": "The public Electron product plus retained internal Tauri code. A present cell may describe internal Tauri reachability and is not by itself a public Desktop claim.",
+    "desktop": "The public Electron product plus retained internal Tauri code. A present cell may describe internal Tauri reachability and is not by itself a public Desktop claim. For Fast mode, the Desktop cell locates the web composer loaded by the default hosted Managed Cloud renderer in apps/desktop/electron/main.ts under apps/desktop/electron/config.ts.",
     "mobile": "The React Native application under apps/mobile.",
     "cli": "The Rust binary under apps/cli.",
     "vscode": "The editor extension under apps/extension-vscode.",
@@ -566,6 +566,48 @@
           "via": "route",
           "entry": "apps/web/app/api/support/ask/route.ts",
           "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "fast-mode",
+      "label": "Fast mode",
+      "group": "advanced-ai",
+      "featureId": "fast_mode",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+          "mount": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+          "mount": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "The mobile composer has no Fast mode control, and InitialStreamRequest in apps/mobile/services/streaming.ts carries thinking and effort but no provider speed field."
+        },
+        "cli": {
+          "state": "absent",
+          "why": "The CLI /fast command in apps/cli/src/repl/slash_commands.rs reaches AgentSession::toggle_fast_mode in apps/cli/src/agent/mod.rs and switches to a faster model within the current session authority. That is a different control from the registered same-model provider tier: managed_cloud_spec_for_base in apps/cli/src/models/streaming.rs sends no provider speed field."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "The VS Code extension has no provider Fast mode control. buildCloudUtilityChatCompletionRequest in apps/extension-vscode/src/utils/api.ts sends thinking and effort but no provider speed field; the auto-speed model picker selects a routing profile instead."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "The Chrome composer has no provider Fast mode control. The managed request body in apps/extension/src/features/cloud-bridge/freeTrialClient.ts sends thinking and effort but no provider speed field; model speed labels describe catalog metadata."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+          "mount": "apps/web/app/api/llm/v1/chat/completions/route.ts"
         }
       }
     },
