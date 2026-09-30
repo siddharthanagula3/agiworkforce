@@ -1050,6 +1050,35 @@ Related: `apps/desktop/docs/macos-release-runbook.md` for the release-time trust
 checks, and section 3 for the application encryption keys, which are a
 separate key domain.
 
+### CLI release signing key custody
+
+The EC P-256 key pair behind `RELEASE_SIGNING_KEY` in
+`apps/web/public/install.sh` signs the `SHA256SUMS` manifest of each CLI
+release. The installer verifies that manifest against the public keys pinned
+there, and `agi update --install` verifies it against the same pins, which
+`agi` compiles in from the same file.
+
+A `v-cli-*` tag stops in `validate-version`, before the build matrix runs,
+unless every key pinned there is a readable P-256 public key.
+
+| Location                                            | Role               | Holder     |
+| --------------------------------------------------- | ------------------ | ---------- |
+| GitHub Actions secret `AGI_CLI_RELEASE_SIGNING_KEY` | deployment copy    | CI         |
+| _unfilled_, offline escrow                          | recovery authority | _unfilled_ |
+
+`BLOCKED_BY_HUMAN`: the key pair does not exist yet, so every install and every
+`agi update --install` refuses until the owner generates it offline, stores the
+private half as the secret, and pins the public half.
+
+Rotation pins the new public key beside the old one and ships an `agi` build
+carrying both before any release is signed with the new key. An `agi` older
+than that build must reinstall with the installer, which the website serves
+with the current pins.
+
+A leaked private half lets anyone sign a manifest that every pinned install
+accepts, so a compromise unpins the key, deploys the website and replaces the
+secret before anything else.
+
 ---
 
 ## 5. Data retention, erasure and legal hold

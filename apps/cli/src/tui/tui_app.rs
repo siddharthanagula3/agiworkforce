@@ -5567,25 +5567,6 @@ pub async fn run(
 ) -> Result<()> {
     crate::tier_cache::ensure_plan_models_cached().await;
     crate::tools::enable_interactive_questions();
-    tokio::spawn(async {
-        let Ok(release) = crate::update_check::fetch_latest_release().await else {
-            return;
-        };
-        crate::update_check::remember_latest_release(&release);
-        if crate::update_check::compare_versions(
-            crate::update_check::running_version(),
-            &release.version,
-        ) == crate::update_check::UpdateVerdict::Available
-        {
-            crate::tui::push_tui_notice(format!(
-                "agi {} is available (you have {}). Install it with: agi update --install",
-                release.version,
-                crate::update_check::running_version()
-            ));
-        } else if let Some(lines) = crate::update_check::unseen_release_notes(&release) {
-            crate::tui::push_tui_notice(lines.join("\n"));
-        }
-    });
     let effective_provider_override = crate::models::plan_first_provider_override(
         &crate::models::AccountRoute::load(),
         model,
@@ -5602,6 +5583,7 @@ pub async fn run(
     )?;
     session.additional_context_dirs = crate::path_security::registered_additional_workspace_roots();
     session.apply_ui_config(config);
+    crate::update_check::spawn_startup_check(config, session.privacy_mode);
     crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
@@ -6391,19 +6373,16 @@ async fn run_event_loop(
                                 });
                             }
                             SlashResult::RunLogout => {
-                                let revoked =
-                                    crate::app_server::account::revoke_managed_sessions().await;
-                                let mut store = crate::auth::load_auth().unwrap_or_default();
-                                store.entries.clear();
-                                let _ = crate::auth::save_auth(&store);
-                                crate::claude_parity::connectors::forget_local_tool_policy();
+                                let text =
+                                    match crate::app_server::account::sign_out_of_every_provider()
+                                        .await
+                                    {
+                                        Ok(signed_out) => signed_out.message(),
+                                        Err(error) => format!("Could not log out: {error:#}"),
+                                    };
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
-                                    text: if revoked {
-                                        "Logged out from all providers.".to_string()
-                                    } else {
-                                        "Logged out from all providers. AGI Cloud did not confirm the sign-out; the device session ends when it expires, or unlink it in Settings, Account, Linked devices.".to_string()
-                                    },
+                                    text,
                                 });
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {

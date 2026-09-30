@@ -68,6 +68,28 @@ fn create_private_dir(dir: &Path) -> Result<()> {
         .with_context(|| format!("create {}", dir.display()))
 }
 
+/// The default config root keeps the bare service name every earlier release
+/// wrote. Any other root gets a service of its own, so two roots never read or
+/// overwrite each other's credentials.
+pub fn keychain_service(service: &str) -> Result<String> {
+    let root = crate::config::CliConfig::config_dir()?;
+    let default_root = crate::config::CliConfig::default_config_dir().ok();
+    Ok(match root_scope(&root, default_root.as_deref()) {
+        Some(scope) => format!("{service}.{scope}"),
+        None => service.to_string(),
+    })
+}
+
+fn root_scope(root: &Path, default_root: Option<&Path>) -> Option<String> {
+    let resolved = |path: &Path| fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let root = resolved(root);
+    if default_root.map(resolved).as_ref() == Some(&root) {
+        return None;
+    }
+    let digest = Sha256::digest(root.to_string_lossy().as_bytes());
+    Some(crate::hex::encode(&digest[..8]))
+}
+
 fn secret_path(service: &str, account: &str) -> Result<PathBuf> {
     let digest = Sha256::digest(format!("{service}\n{account}").as_bytes());
     Ok(crate::config::CliConfig::config_dir()?
@@ -77,7 +99,7 @@ fn secret_path(service: &str, account: &str) -> Result<PathBuf> {
 
 pub fn get(service: &str, account: &str) -> Result<Option<String>> {
     if uses_keychain() {
-        return match keyring::Entry::new(service, account)?.get_password() {
+        return match keyring::Entry::new(&keychain_service(service)?, account)?.get_password() {
             Ok(secret) => Ok(Some(secret)),
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(error) => Err(error).context("read from the OS credential store"),
@@ -93,7 +115,7 @@ pub fn get(service: &str, account: &str) -> Result<Option<String>> {
 
 pub fn set(service: &str, account: &str, secret: &str) -> Result<()> {
     if uses_keychain() {
-        return keyring::Entry::new(service, account)?
+        return keyring::Entry::new(&keychain_service(service)?, account)?
             .set_password(secret)
             .context("save to the OS credential store");
     }
@@ -120,5 +142,28 @@ mod tests {
             );
         }
         assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn each_config_root_but_the_default_owns_its_keychain_service() {
+        let home = tempfile::tempdir().unwrap();
+        let default_root = home.path().join(".agiworkforce");
+        let work = home.path().join("work");
+        let personal = home.path().join("personal");
+        for dir in [&default_root, &work, &personal] {
+            fs::create_dir_all(dir).unwrap();
+        }
+
+        assert_eq!(root_scope(&default_root, Some(&default_root)), None);
+        let work_scope = root_scope(&work, Some(&default_root)).expect("work is scoped");
+        let personal_scope =
+            root_scope(&personal, Some(&default_root)).expect("personal is scoped");
+        assert_ne!(work_scope, personal_scope);
+        assert_eq!(root_scope(&work, Some(&default_root)), Some(work_scope.clone()));
+        assert_eq!(
+            root_scope(&work.join("."), Some(&default_root)),
+            Some(work_scope),
+            "one directory spelled two ways is one root"
+        );
     }
 }

@@ -1066,6 +1066,28 @@
       ]
     },
     {
+      "id": "cli-tag-needs-a-pinned-p256-key",
+      "section": "CLI release signing key custody",
+      "kind": "prose",
+      "sentence": "A `v-cli-*` tag stops in `validate-version`, before the build matrix runs, unless every key pinned there is a readable P-256 public key.",
+      "implementation": [
+        "scripts/release/check-pinned-release-key.mjs",
+        ".github/workflows/release-cli.yml#check-pinned-release-key.mjs"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/lib/rollout/release-guards.test.mjs",
+          "name": "an installer with no pinned release key fails the key guard"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/lib/rollout/release-guards.test.mjs",
+          "name": "a pinned key the release job cannot sign for fails the key guard"
+        }
+      ]
+    },
+    {
       "id": "retention-graph-closes-over-the-schema",
       "section": "5.1 The deletion graph is closed over the schema, not over a list",
       "kind": "prose",
@@ -1975,6 +1997,41 @@
       "rows": 3,
       "implementation": ["apps/desktop/scripts/verify-updater-key.mjs"],
       "why": "blocked-by-human"
+    },
+    {
+      "id": "cli-release-key-custody-table",
+      "section": "CLI release signing key custody",
+      "kind": "rows",
+      "rows": 2,
+      "implementation": [".github/workflows/release-cli.yml#AGI_CLI_RELEASE_SIGNING_KEY"],
+      "why": "blocked-by-human"
+    },
+    {
+      "id": "cli-release-key-does-not-exist-yet",
+      "section": "CLI release signing key custody",
+      "kind": "prose",
+      "sentence": "`BLOCKED_BY_HUMAN`: the key pair does not exist yet, so every install and every `agi update --install` refuses until the owner generates it offline, stores the private half as the secret, and pins the public half.",
+      "implementation": [
+        "apps/web/public/install.sh#RELEASE_SIGNING_KEY",
+        "apps/cli/src/update_check.rs#verify_manifest"
+      ],
+      "why": "blocked-by-human"
+    },
+    {
+      "id": "cli-release-key-rotation-strands-old-agi",
+      "section": "CLI release signing key custody",
+      "kind": "prose",
+      "sentence": "An `agi` older than that build must reinstall with the installer, which the website serves with the current pins.",
+      "implementation": ["apps/cli/src/update_check.rs#INSTALL_SCRIPT"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "leaked-cli-release-key-is-total",
+      "section": "CLI release signing key custody",
+      "kind": "prose",
+      "sentence": "A leaked private half lets anyone sign a manifest that every pinned install accepts, so a compromise unpins the key, deploys the website and replaces the secret before anything else.",
+      "implementation": ["apps/web/public/install.sh#verify_manifest"],
+      "why": "accepted-risk"
     }
   ]
 }

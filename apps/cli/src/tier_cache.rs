@@ -208,11 +208,10 @@ impl CapabilityDocumentWire {
     }
 }
 
-fn tier_cache_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".agiworkforce")
-        .join(TIER_CACHE_FILE)
+fn tier_cache_path() -> Option<PathBuf> {
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|dir| dir.join(TIER_CACHE_FILE))
 }
 
 fn now_secs() -> u64 {
@@ -227,7 +226,7 @@ fn cache_is_fresh(cached_at: u64, now: u64) -> bool {
 }
 
 fn read_fresh_envelope() -> Option<TierCacheEnvelope> {
-    let content = std::fs::read_to_string(tier_cache_path()).ok()?;
+    let content = std::fs::read_to_string(tier_cache_path()?).ok()?;
     let envelope: TierCacheEnvelope = toml::from_str(&content).ok()?;
     cache_is_fresh(envelope.cached_at, now_secs()).then_some(envelope)
 }
@@ -267,7 +266,9 @@ pub fn capability_allowed(capability: &str) -> Option<bool> {
 /// Write a fresh tier to the disk cache.  Errors are silently swallowed, a
 /// failed cache write is never fatal.
 pub fn write_tier_cache(tier: &UserTier, capabilities: Option<&CapabilityDocumentWire>) {
-    let path = tier_cache_path();
+    let Some(path) = tier_cache_path() else {
+        return;
+    };
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -287,12 +288,16 @@ pub fn write_tier_cache(tier: &UserTier, capabilities: Option<&CapabilityDocumen
 
 /// Drop the cached tier so the next resolve re-reads it from the server.
 pub fn invalidate_tier_cache() {
-    let _ = std::fs::remove_file(tier_cache_path());
-    let _ = std::fs::remove_file(plan_models_cache_path());
+    if let Some(path) = tier_cache_path() {
+        let _ = std::fs::remove_file(path);
+    }
+    if let Some(path) = plan_models_cache_path() {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
-fn plan_models_cache_path() -> PathBuf {
-    tier_cache_path().with_file_name("plan-models.toml")
+fn plan_models_cache_path() -> Option<PathBuf> {
+    Some(tier_cache_path()?.with_file_name("plan-models.toml"))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -306,7 +311,7 @@ struct PlanModelsEnvelope {
 /// the models a plan lists by hand, while the list also admits every model the
 /// plan reaches through its price floor.
 pub fn read_plan_models_cache() -> Option<Vec<String>> {
-    let content = std::fs::read_to_string(plan_models_cache_path()).ok()?;
+    let content = std::fs::read_to_string(plan_models_cache_path()?).ok()?;
     let envelope: PlanModelsEnvelope = toml::from_str(&content).ok()?;
     Some(envelope.models)
 }
@@ -327,7 +332,9 @@ pub fn plan_lists(models: &[String], model: &str) -> bool {
 }
 
 pub fn write_plan_models_cache(models: &[String]) {
-    let path = plan_models_cache_path();
+    let Some(path) = plan_models_cache_path() else {
+        return;
+    };
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }

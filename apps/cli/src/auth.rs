@@ -179,7 +179,7 @@ fn auth_path() -> Result<PathBuf> {
 }
 
 const AUTH_KEYRING_SERVICE: &str = "com.agiworkforce.cli.auth";
-const AUTH_INDEX_VERSION: u8 = 1;
+const AUTH_INDEX_VERSION: u8 = 2;
 const AUTH_INDEX_STORAGE: &str = "os-keyring";
 
 /// Non-secret discovery metadata. Keyring APIs do not provide a portable way
@@ -190,6 +190,8 @@ struct AuthKeyringIndex {
     version: u8,
     storage: String,
     providers: Vec<String>,
+    #[serde(default)]
+    scope: Option<String>,
 }
 
 pub fn credential_storage_label() -> &'static str {
@@ -215,21 +217,43 @@ fn auth_keyring_account(provider: &str) -> String {
 /// the caller reports; degrading to a plaintext file would quietly undo the
 /// reason these credentials moved off disk in the first place.
 trait CredentialStore {
+    fn scope(&self) -> &str {
+        AUTH_KEYRING_SERVICE
+    }
+
     fn get(&self, account: &str) -> Result<Option<String>>;
     fn set(&self, account: &str, secret: &str) -> Result<()>;
     fn delete(&self, account: &str) -> Result<()>;
 }
 
-struct OsKeyring;
+struct OsKeyring {
+    service: String,
+}
 
 impl OsKeyring {
+    fn for_config_root() -> Result<Self> {
+        Ok(Self {
+            service: crate::secure_store::keychain_service(AUTH_KEYRING_SERVICE)?,
+        })
+    }
+
+    fn unscoped() -> Self {
+        Self {
+            service: AUTH_KEYRING_SERVICE.to_string(),
+        }
+    }
+
     fn entry(&self, account: &str) -> Result<keyring::Entry> {
-        keyring::Entry::new(AUTH_KEYRING_SERVICE, account)
+        keyring::Entry::new(&self.service, account)
             .context("Could not open the OS credential store")
     }
 }
 
 impl CredentialStore for OsKeyring {
+    fn scope(&self) -> &str {
+        &self.service
+    }
+
     fn get(&self, account: &str) -> Result<Option<String>> {
         match self.entry(account)?.get_password() {
             Ok(secret) => Ok(Some(secret)),
@@ -258,7 +282,15 @@ impl CredentialStore for OsKeyring {
 
 fn parse_auth_keyring_index(data: &str) -> Option<AuthKeyringIndex> {
     let index = serde_json::from_str::<AuthKeyringIndex>(data).ok()?;
-    (index.version == AUTH_INDEX_VERSION && index.storage == AUTH_INDEX_STORAGE).then_some(index)
+    let valid_version = match index.version {
+        1 => index.scope.is_none(),
+        AUTH_INDEX_VERSION => index
+            .scope
+            .as_deref()
+            .is_some_and(|scope| !scope.is_empty()),
+        _ => false,
+    };
+    (valid_version && index.storage == AUTH_INDEX_STORAGE).then_some(index)
 }
 
 fn write_owner_only_file(path: &Path, data: &str) -> Result<()> {
@@ -278,6 +310,35 @@ fn read_file_store(path: &Path, data: &str) -> Result<AuthStore> {
         );
     }
     serde_json::from_str(data).context("Failed to parse auth.json")
+}
+
+/// Credentials saved before config roots had keychain services of their own sit
+/// under the shared service. A root adopts the ones its own index names, once,
+/// and never removes them there, where the default root may still read them.
+fn adopt_unscoped_credentials(
+    scoped: &dyn CredentialStore,
+    unscoped: &dyn CredentialStore,
+    index: &AuthKeyringIndex,
+) -> Result<()> {
+    for provider in &index.providers {
+        let account = auth_keyring_account(provider);
+        if scoped
+            .get(&account)
+            .with_context(|| format!("Could not read the saved {provider} credential"))?
+            .is_some()
+        {
+            continue;
+        }
+        if let Some(secret) = unscoped
+            .get(&account)
+            .with_context(|| format!("Could not read the saved {provider} credential"))?
+        {
+            scoped.set(&account, &secret).with_context(|| {
+                format!("Could not move the saved {provider} credential to this config root")
+            })?;
+        }
+    }
+    Ok(())
 }
 
 /// A credential the store no longer holds is an error, unless `missing_signs_out`
@@ -308,6 +369,42 @@ fn load_keyring_auth(
         entries,
         copilot_cache: None,
     })
+}
+
+fn load_keyring_auth_for_root(
+    credentials: &dyn CredentialStore,
+    unscoped: &dyn CredentialStore,
+    path: &Path,
+    mut index: AuthKeyringIndex,
+    missing_signs_out: bool,
+) -> Result<AuthStore> {
+    let legacy = index.version == 1 && index.scope.is_none();
+    if !legacy && index.scope.as_deref() != Some(credentials.scope()) {
+        bail!(
+            "The credential index belongs to another config root; sign in again with `agi login`"
+        );
+    }
+    if legacy {
+        adopt_unscoped_credentials(credentials, unscoped, &index)?;
+    }
+    let store = load_keyring_auth(
+        credentials,
+        AuthKeyringIndex {
+            version: index.version,
+            storage: index.storage.clone(),
+            providers: index.providers.clone(),
+            scope: index.scope.clone(),
+        },
+        missing_signs_out,
+    )?;
+    if legacy {
+        index.version = AUTH_INDEX_VERSION;
+        index.scope = Some(credentials.scope().to_string());
+        let data =
+            serde_json::to_string_pretty(&index).context("Failed to serialize auth index")?;
+        write_owner_only_file(path, &data)?;
+    }
+    Ok(store)
 }
 
 fn save_keyring_auth(
@@ -348,6 +445,7 @@ fn save_keyring_auth(
         version: AUTH_INDEX_VERSION,
         storage: AUTH_INDEX_STORAGE.to_string(),
         providers: current_providers.into_iter().collect(),
+        scope: Some(credentials.scope().to_string()),
     };
     let data = serde_json::to_string_pretty(&index).context("Failed to serialize auth index")?;
     write_owner_only_file(path, &data)
@@ -361,13 +459,21 @@ impl AuthStore {
         }
         let data = std::fs::read_to_string(&path).context("Failed to read auth.json")?;
         if let Some(index) = parse_auth_keyring_index(&data) {
+            let keyring = OsKeyring::for_config_root()?;
             if crate::secure_store::uses_keychain() {
-                return load_keyring_auth(&OsKeyring, index, false);
+                return load_keyring_auth_for_root(
+                    &keyring,
+                    &OsKeyring::unscoped(),
+                    &path,
+                    index,
+                    false,
+                );
             }
             // A Linux install upgraded from the kernel keyring may find it
             // emptied by a reboot; a credential it no longer holds is signed
             // out, not a failure that blocks signing in again.
-            let store = load_keyring_auth(&OsKeyring, index, true)?;
+            let store =
+                load_keyring_auth_for_root(&keyring, &OsKeyring::unscoped(), &path, index, true)?;
             store.save()?;
             return Ok(store);
         }
@@ -377,7 +483,7 @@ impl AuthStore {
         // explicit headless opt-out is required for that compatibility mode.
         let store = read_file_store(&path, &data)?;
         if crate::secure_store::uses_keychain() {
-            save_keyring_auth(&OsKeyring, &path, &store).context(
+            save_keyring_auth(&OsKeyring::for_config_root()?, &path, &store).context(
                 "Could not migrate auth.json into the OS keyring; set AGIWORKFORCE_NO_KEYRING=1 only in a trusted headless environment to retain the owner-only file store",
             )?;
         }
@@ -406,7 +512,7 @@ impl AuthStore {
                 serde_json::to_string_pretty(self).context("Failed to serialize auth store")?;
             return write_owner_only_file(&path, &data);
         }
-        save_keyring_auth(&OsKeyring, &path, self).context(
+        save_keyring_auth(&OsKeyring::for_config_root()?, &path, self).context(
             "Could not persist credentials in the OS keyring; set AGIWORKFORCE_NO_KEYRING=1 only in a trusted headless environment to use an owner-only file",
         )
     }
@@ -1564,6 +1670,7 @@ mod tests {
             version: AUTH_INDEX_VERSION,
             storage: AUTH_INDEX_STORAGE.to_string(),
             providers: vec!["openai".to_string(), "agiworkforce".to_string()],
+            scope: Some(AUTH_KEYRING_SERVICE.to_string()),
         };
         let serialized = serde_json::to_string(&index).unwrap();
 
@@ -1768,6 +1875,7 @@ mod tests {
             version: AUTH_INDEX_VERSION,
             storage: AUTH_INDEX_STORAGE.to_string(),
             providers: vec!["openai".to_string()],
+            scope: Some(AUTH_KEYRING_SERVICE.to_string()),
         };
         let error = load_keyring_auth(&DenyingStore, index, true)
             .expect_err("a denied read must not become an empty store");
@@ -1790,6 +1898,93 @@ mod tests {
             .get(&auth_keyring_account("openai"))
             .expect("get")
             .is_none());
+    }
+
+    #[test]
+    fn two_config_roots_keep_their_own_credentials() {
+        let dir = tempfile::tempdir().unwrap();
+        let work_index = dir.path().join("work-auth.json");
+        let personal_index = dir.path().join("personal-auth.json");
+        let work_keyring = MemoryStore::default();
+        let personal_keyring = MemoryStore::default();
+        let work = make_store(vec![(
+            "openai",
+            AuthEntry::ApiKey {
+                key: "sk-work".into(),
+            },
+        )]);
+        let personal = make_store(vec![(
+            "openai",
+            AuthEntry::ApiKey {
+                key: "sk-personal".into(),
+            },
+        )]);
+
+        save_keyring_auth(&work_keyring, &work_index, &work).expect("save work");
+        save_keyring_auth(&personal_keyring, &personal_index, &personal).expect("save personal");
+
+        let index = parse_auth_keyring_index(&std::fs::read_to_string(&work_index).unwrap())
+            .expect("parse");
+        let reloaded = load_keyring_auth(&work_keyring, index, false).expect("load");
+        assert_eq!(every_secret(&reloaded), vec!["sk-work".to_string()]);
+    }
+
+    #[test]
+    fn a_migrated_root_does_not_readopt_a_changed_shared_credential() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        let shared = MemoryStore::default();
+        let scoped = MemoryStore::default();
+        let original = make_store(vec![(
+            "openai",
+            AuthEntry::ApiKey {
+                key: "original-test-account".to_string(),
+            },
+        )]);
+        save_keyring_auth(&shared, &dir.path().join("shared.json"), &original).unwrap();
+        write_owner_only_file(
+            &path,
+            r#"{"version":1,"storage":"os-keyring","providers":["openai"]}"#,
+        )
+        .unwrap();
+        let index = || parse_auth_keyring_index(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let adopted = load_keyring_auth_for_root(&scoped, &shared, &path, index(), false).unwrap();
+        assert_eq!(
+            every_secret(&adopted),
+            vec!["original-test-account".to_string()]
+        );
+        assert_eq!(shared.secrets().len(), 1);
+        scoped.delete(&auth_keyring_account("openai")).unwrap();
+        let replacement = make_store(vec![(
+            "openai",
+            AuthEntry::ApiKey {
+                key: "replacement-test-account".to_string(),
+            },
+        )]);
+        save_keyring_auth(&shared, &dir.path().join("shared.json"), &replacement).unwrap();
+        let result = load_keyring_auth_for_root(&scoped, &shared, &path, index(), false);
+        assert!(
+            result.is_err(),
+            "a missing scoped credential requires sign-in"
+        );
+        assert!(scoped
+            .get(&auth_keyring_account("openai"))
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn a_scoped_index_cannot_be_loaded_by_another_config_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        let shared = MemoryStore::default();
+        let scoped = MemoryStore::default();
+        save_keyring_auth(&shared, &path, &store_with_secrets()).unwrap();
+        let mut index = parse_auth_keyring_index(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        index.scope = Some("another-config-root".to_string());
+        let result = load_keyring_auth_for_root(&scoped, &shared, &path, index, false);
+        assert!(result.is_err());
+        assert!(scoped.secrets().is_empty());
     }
 
     #[test]

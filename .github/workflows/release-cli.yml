@@ -5,8 +5,8 @@ name: Release CLI
 # GitHub release that https://agiworkforce.com/install.sh installs from.
 #
 # Required GitHub Secrets:
-#   AGI_CLI_RELEASE_SIGNING_KEY, the PEM private key whose public half is
-#   RELEASE_SIGNING_KEY in apps/web/public/install.sh
+#   AGI_CLI_RELEASE_SIGNING_KEY, the PEM EC P-256 private key whose public half
+#   is pinned in RELEASE_SIGNING_KEY in apps/web/public/install.sh
 #
 # Existing secrets reused:
 #   GITHUB_TOKEN, auto-provided by GitHub Actions
@@ -46,6 +46,9 @@ jobs:
         run: |
           node --test scripts/lib/rollout/release-guards.test.mjs
           node --test scripts/lib/rollout/channels.test.mjs
+
+      - name: Require a pinned release signing key
+        run: node scripts/release/check-pinned-release-key.mjs
 
       # A migration that cannot be reversed, or destroys rows without saying
       # so, must not reach a released version number.
@@ -332,7 +335,11 @@ jobs:
             | awk -v dir="$pinned" '/-----BEGIN PUBLIC KEY-----/ { n++ } n { print > (dir "/" n ".pem") }'
 
           ( umask 077 && printf '%s\n' "$AGI_CLI_RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release-signing.key" )
-          openssl ec -in "$RUNNER_TEMP/release-signing.key" -pubout -outform DER -out "$RUNNER_TEMP/signing.der" 2>/dev/null
+          if ! openssl ec -in "$RUNNER_TEMP/release-signing.key" -pubout -outform DER -out "$RUNNER_TEMP/signing.der" 2>/dev/null; then
+            rm -f "$RUNNER_TEMP/release-signing.key"
+            echo "ERROR: the AGI_CLI_RELEASE_SIGNING_KEY secret is not a PEM EC private key; the release key is an unencrypted P-256 (prime256v1) key" >&2
+            exit 1
+          fi
           signing_key_is_pinned=false
           for key in "$pinned"/*.pem; do
             [ -e "$key" ] || continue

@@ -134,12 +134,34 @@ async function isPubliclyRetrievable(url: string): Promise<boolean> {
   return publiclyRetrievable;
 }
 
+export const CLI_SIGNED_MANIFEST_ASSETS = [
+  'SHA256SUMS',
+  'SHA256SUMS.sig',
+  'SHA256SUMS.sigstore.json',
+] as const;
+
+function signedManifestUrls(release: StableDesktopRelease): string[] | null {
+  const urls: string[] = [];
+  for (const name of CLI_SIGNED_MANIFEST_ASSETS) {
+    const asset = release.assets.find((candidate) => candidate.name === name);
+    if (!asset || !isTrustedGitHubReleaseAssetUrl(asset.browserDownloadUrl)) return null;
+    urls.push(asset.browserDownloadUrl);
+  }
+  return urls;
+}
+
 export async function fetchCliReleaseAvailability(): Promise<CliReleaseAvailability | null> {
   const release = await fetchLatestDesktopRelease('stable', { tagPrefix: CLI_RELEASE_TAG_PREFIX });
   if (!release) return null;
 
+  const manifestUrls = signedManifestUrls(release);
+  if (!manifestUrls) return null;
+
   const candidates = selectCliReleaseDownloads(release);
   if (candidates.length === 0) return null;
+
+  const manifestReachable = await Promise.all(manifestUrls.map(isPubliclyRetrievable));
+  if (!manifestReachable.every(Boolean)) return null;
 
   const reachable = await Promise.all(
     candidates.map(async (download) =>
