@@ -697,6 +697,7 @@ fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Res
             ));
             for root in writable_roots(manager)? {
                 let root = validate_and_escape_seatbelt_path(&root)?;
+                scratch_read_rules.push_str(&format!("(allow file-read* (subpath \"{root}\"))\n"));
                 write_rules.push_str(&format!("(allow file-write* (subpath \"{root}\"))\n"));
             }
         }
@@ -718,7 +719,7 @@ fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Res
                    ;; macOS resolves `sh` through this symlink directory
                    ;; (/private/var/select/sh -> /bin/bash).
                    (subpath "/private/var/select")
-                   (subpath "/etc") (subpath "/tmp") (subpath "/private/tmp")
+                   (subpath "/etc")
                    (literal "/") (subpath "/opt"))
 (allow file-read* (subpath "{ws}"))
 {scratch_read_rules}
@@ -1627,6 +1628,56 @@ mod tests {
             "read-only write unexpectedly succeeded"
         );
         assert!(!marker.exists(), "read-only sandbox created the file");
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[tokio::test]
+    async fn sandbox_refuses_private_sibling_reads() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let sibling = tempfile::Builder::new()
+            .prefix("agi-private-sibling-")
+            .tempdir_in("/tmp")
+            .expect("private sibling");
+        let private = sibling.path().join("private.txt");
+        std::fs::write(&private, "CONTROLLED_PRIVATE_SIBLING").expect("private fixture");
+        for policy in [SandboxPolicy::ReadOnly, SandboxPolicy::default()] {
+            let manager = SandboxManager::new(policy, workspace.path().to_path_buf());
+            assert_ne!(manager.sandbox_type, SandboxType::None);
+            let command = format!("cat {}", shell_quote(&private.to_string_lossy()));
+            let output = execute_sandboxed(&manager, &command, Some(workspace.path()))
+                .await
+                .expect("sandbox launch");
+            assert!(!output.status.success(), "private sibling read succeeded");
+            assert!(!String::from_utf8_lossy(&output.stdout).contains("CONTROLLED_PRIVATE_SIBLING"));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn explicit_writable_root_remains_readable() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let extra = tempfile::Builder::new()
+            .prefix("agi-explicit-root-")
+            .tempdir_in("/tmp")
+            .expect("extra root");
+        let file = extra
+            .path()
+            .canonicalize()
+            .expect("canonical extra")
+            .join("roundtrip.txt");
+        let manager = SandboxManager::new(
+            SandboxPolicy::WorkspaceWrite {
+                writable_roots: vec![extra.path().canonicalize().expect("extra root")],
+            },
+            workspace.path().to_path_buf(),
+        );
+        let quoted = shell_quote(&file.to_string_lossy());
+        let command = format!("printf controlled > {quoted} && cat {quoted}");
+        let output = execute_sandboxed(&manager, &command, Some(workspace.path()))
+            .await
+            .expect("sandbox launch");
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"controlled");
     }
 
     #[cfg(target_os = "macos")]
