@@ -406,9 +406,12 @@ jobs:
 
       # C1: Mask signing secrets in logs before they reach the build step
       - name: Mask Tauri signing secrets
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
-          echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
+          printf '::add-mask::%s\n' "$TAURI_SIGNING_PRIVATE_KEY"
+          printf '::add-mask::%s\n' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
 
       - name: Build web frontend
         # H27: --max-old-space-size=8192 is intentional; ubuntu-22.04 runners have 7 GB RAM
@@ -952,6 +955,8 @@ jobs:
       - name: Seed user data with the previous release
         if: steps.previous.outputs.have_previous == 'true'
         shell: bash
+        env:
+          PREVIOUS_DEB: ${{ steps.previous.outputs.previous_deb }}
         run: |
           set -euo pipefail
           identifier=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').identifier")
@@ -963,7 +968,7 @@ jobs:
           echo "XDG_DATA_HOME=${data_root}" >> "$GITHUB_ENV"
           echo "AGI_DATA_DIR=${data_dir}" >> "$GITHUB_ENV"
 
-          package_name=$(dpkg-deb -f "${{ steps.previous.outputs.previous_deb }}" Package)
+          package_name=$(dpkg-deb -f "${PREVIOUS_DEB}" Package)
           binary=$(dpkg -L "$package_name" | grep '^/usr/bin/' | head -1)
           echo "AGI_BINARY=${binary}" >> "$GITHUB_ENV"
           xvfb-run -a timeout 120 "$binary" || true
@@ -992,9 +997,11 @@ jobs:
       - name: Roll back to the previous release and prove it still opens the data
         if: steps.previous.outputs.have_previous == 'true'
         shell: bash
+        env:
+          PREVIOUS_DEB: ${{ steps.previous.outputs.previous_deb }}
         run: |
           set -euo pipefail
-          sudo apt-get install -y --allow-downgrades "./${{ steps.previous.outputs.previous_deb }}"
+          sudo apt-get install -y --allow-downgrades "./${PREVIOUS_DEB}"
           xvfb-run -a timeout 120 "$AGI_BINARY" || true
           node scripts/verify-desktop-upgrade.mjs snapshot \
             --data-dir "$AGI_DATA_DIR" \
@@ -1030,8 +1037,10 @@ jobs:
           path: artifacts
 
       - name: Mask sensitive secrets
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
         run: |
-          echo "::add-mask::${{ secrets.NEON_DATABASE_URL }}"
+          printf '::add-mask::%s\n' "$NEON_DATABASE_URL"
 
       - name: Install Neon database driver
         run: npm install --no-save @neondatabase/serverless@1.1.0
@@ -1178,10 +1187,14 @@ jobs:
 
       - name: Notify on success
         if: success()
+        env:
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+          RELEASE_CHANNEL: ${{ needs.prepare-release.outputs.channel }}
+          RELEASE_PRERELEASE: ${{ needs.prepare-release.outputs.prerelease }}
         run: |
-          echo "Release v${{ needs.prepare-release.outputs.version }} published successfully!"
-          echo "Channel: ${{ needs.prepare-release.outputs.channel }}"
-          echo "Pre-release: ${{ needs.prepare-release.outputs.prerelease }}"
+          echo "Release v${RELEASE_VERSION} published successfully!"
+          echo "Channel: ${RELEASE_CHANNEL}"
+          echo "Pre-release: ${RELEASE_PRERELEASE}"
 
   # ==========================================================================
   # Cleanup on Failure
@@ -1221,6 +1234,8 @@ jobs:
             }
 
       - name: Notify on failure
+        env:
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
         run: |
-          echo "Release build failed for v${{ needs.prepare-release.outputs.version }}"
+          echo "Release build failed for v${RELEASE_VERSION}"
           echo "Draft release has been cleaned up"
