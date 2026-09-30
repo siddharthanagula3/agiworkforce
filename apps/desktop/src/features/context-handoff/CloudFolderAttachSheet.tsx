@@ -3,8 +3,8 @@ import { LocalByokHandoffDialog } from '@agiworkforce/unified-chat';
 import { buildLocalToByokHandoffDraft, type LocalToByokHandoffPreview } from '@agiworkforce/utils';
 import type { HandoffContextItem } from '@agiworkforce/types';
 import {
-  MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
 } from '@agiworkforce/cloud-contracts';
 import {
   isSelectionWithinCaps,
@@ -67,7 +67,7 @@ function folderReadNotice(result: CloudFolderReadResult): string | null {
   }
   if (result.omittedForCap > 0) {
     notices.push(
-      `${result.omittedForCap} eligible ${plural(result.omittedForCap, 'file')} ${result.omittedForCap === 1 ? 'was' : 'were'} left unselected because Managed Cloud accepts at most ${MAX_CHAT_ATTACHMENT_COUNT} files and ${Math.floor(MAX_CHAT_ATTACHMENT_BYTES / (1024 * 1024))} MB per message.`,
+      `${result.omittedForCap} eligible ${plural(result.omittedForCap, 'file')} ${result.omittedForCap === 1 ? 'was' : 'were'} left unselected because Managed Cloud accepts at most ${MAX_CHAT_ATTACHMENT_COUNT} files and ${Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES / (1024 * 1024))} MB per message.`,
     );
   }
   if (result.omittedDuringRead > 0) {
@@ -249,7 +249,7 @@ export function CloudFolderAttachSheet({
   const selectionCapError =
     selectedFiles.length > 0 &&
     !isSelectionWithinCaps(selectedFiles.map((file) => file.candidate) as FolderCandidate[])
-      ? `Select at most ${MAX_CHAT_ATTACHMENT_COUNT} files totaling no more than ${Math.floor(MAX_CHAT_ATTACHMENT_BYTES / (1024 * 1024))} MB.`
+      ? `Select at most ${MAX_CHAT_ATTACHMENT_COUNT} files totaling no more than ${Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES / (1024 * 1024))} MB.`
       : null;
 
   if (!folderPath || !folderGrantId || !managedBoundaryActive) return null;
