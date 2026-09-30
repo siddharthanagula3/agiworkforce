@@ -86,34 +86,33 @@ pub(super) async fn execute_run_command(
         .await;
     }
 
-    let result: std::io::Result<std::process::Output> = if crate::sandbox::sandbox_disabled() {
-        let command_process = match &structured {
-            Some((program, args)) => {
-                let mut process = tokio::process::Command::new(program);
-                process.args(args);
-                process
+    let cwd = crate::path_security::validation_workspace();
+    let unrestricted = crate::sandbox::sandbox_disabled_for_workspace(&cwd);
+    let result: std::io::Result<std::process::Output> = {
+        if !unrestricted {
+            if let Some(refusal) = internal_destination_refusal(command) {
+                return Ok(refusal);
             }
-            None => crate::process_tree::shell_command(command),
+        }
+        let network = if unrestricted {
+            crate::sandbox::NetworkPolicy::Allow
+        } else {
+            sandbox_network_policy(command, require_confirmation, approval_callback).await
         };
-        let mut command_process = command_process;
-        crate::interactive::mark_agent_spawned(&mut command_process);
-        if let Some(dir) = &working_dir {
-            command_process.current_dir(dir);
-        }
-        crate::process_tree::output(command_process, None, Some(COMMAND_TIMEOUT)).await
-    } else {
-        if let Some(refusal) = internal_destination_refusal(command) {
-            return Ok(refusal);
-        }
-        let network =
-            sandbox_network_policy(command, require_confirmation, approval_callback).await;
-        let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let run_in = working_dir.clone().unwrap_or_else(|| cwd.clone());
         let cmd = command.to_string();
         let structured = structured.clone();
         let sandbox_result = async move {
-            let mgr = crate::sandbox::SandboxManager::for_agent_command(cwd.clone(), network)
-                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            let mgr = if unrestricted {
+                crate::sandbox::SandboxManager::new(
+                    crate::sandbox::SandboxPolicy::DangerFullAccess,
+                    cwd.clone(),
+                )
+                .with_network(network)
+            } else {
+                crate::sandbox::SandboxManager::for_agent_command(cwd.clone(), network)
+                    .map_err(|e| std::io::Error::other(e.to_string()))?
+            };
             let executed = match &structured {
                 Some((program, args)) => {
                     crate::sandbox::execute_sandboxed_program_with_timeout(
@@ -238,10 +237,16 @@ async fn start_in_background(
         success: false,
         output,
     };
-    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let cwd = crate::path_security::validation_workspace();
     let run_in = working_dir.unwrap_or_else(|| cwd.clone());
-    let manager = if crate::sandbox::sandbox_disabled() {
-        None
+    let manager = if crate::sandbox::sandbox_disabled_for_workspace(&cwd) {
+        Some(
+            crate::sandbox::SandboxManager::new(
+                crate::sandbox::SandboxPolicy::DangerFullAccess,
+                cwd.clone(),
+            )
+            .with_network(crate::sandbox::NetworkPolicy::Allow),
+        )
     } else {
         if let Some(refusal) = internal_destination_refusal(command) {
             return Ok(refusal);
@@ -625,6 +630,12 @@ pub(super) fn command_working_dir(
         return Ok(None);
     };
     let dir = crate::path_security::validate_workspace_path(requested)?;
+    let workspace = crate::path_security::validation_workspace()
+        .canonicalize()
+        .map_err(|error| format!("Cannot resolve command workspace: {error}"))?;
+    if !dir.starts_with(&workspace) {
+        return Err("Working directory is outside the command workspace".to_string());
+    }
     if !dir.is_dir() {
         return Err(format!("{requested} is not a directory"));
     }
@@ -717,6 +728,70 @@ pub(super) fn saved_command_decision(
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn working_directory_cannot_use_an_additional_root() {
+        let workspace = tempfile::tempdir().unwrap();
+        let extra = tempfile::tempdir().unwrap();
+        let args = HashMap::from([(
+            "working_dir".to_string(),
+            extra.path().display().to_string(),
+        )]);
+        let result = crate::path_security::scope_workspace_paths_sync(
+            workspace.path().canonicalize().unwrap(),
+            vec![extra.path().canonicalize().unwrap()],
+            || command_working_dir(&args),
+        );
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn foreground_command_uses_scoped_workspace_by_default() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let args = HashMap::from([("command".to_string(), "pwd".to_string())]);
+        let result = crate::path_security::scope_workspace_paths(
+            Some(root.clone()),
+            Vec::new(),
+            execute_run_command(&args, false, None),
+        )
+        .await
+        .unwrap();
+        assert!(result.success, "{}", result.output);
+        assert!(result
+            .output
+            .lines()
+            .any(|line| line == root.to_string_lossy()));
+    }
+
+    #[tokio::test]
+    async fn background_command_uses_scoped_workspace_by_default() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let args = HashMap::from([
+            ("command".to_string(), "pwd > command-cwd.txt".to_string()),
+            ("run_in_background".to_string(), "true".to_string()),
+        ]);
+        let result = crate::path_security::scope_workspace_paths(
+            Some(root.clone()),
+            Vec::new(),
+            execute_run_command(&args, false, None),
+        )
+        .await
+        .unwrap();
+        assert!(result.success, "{}", result.output);
+        let marker = root.join("command-cwd.txt");
+        for _ in 0..100 {
+            if marker.exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            std::fs::read_to_string(marker).unwrap().trim(),
+            root.to_string_lossy()
+        );
+    }
 
     #[test]
     fn network_needing_commands_are_recognised_through_chains() {

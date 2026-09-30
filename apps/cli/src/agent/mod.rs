@@ -208,6 +208,7 @@ pub struct AgentSession {
     /// The source durable session remains authoritative until the reviewed
     /// draft is sent and a new persisted fork has been adopted.
     pending_privacy_handoff: Option<PendingPrivacyHandoff>,
+    initial_workspace_root: Option<PathBuf>,
     pub additional_context_dirs: Vec<PathBuf>,
     pub attached_context_files: Vec<PathBuf>,
     /// Rules discovered for this workspace. Unconditional rules are included
@@ -721,6 +722,7 @@ impl AgentSession {
             disallowed_tools: Vec::new(),
             privacy_mode,
             pending_privacy_handoff: None,
+            initial_workspace_root: std::env::current_dir().ok(),
             additional_context_dirs: Vec::new(),
             attached_context_files: Vec::new(),
             workspace_rules: rules,
@@ -1089,10 +1091,17 @@ impl AgentSession {
     /// Add an additional directory root at runtime, mirroring Claude Code's
     /// `/add-dir` semantics for tool access and directory-scoped instructions.
     pub fn add_context_dir(&mut self, raw_path: &str) -> Result<AddContextDirReport> {
-        let canonical = crate::path_security::register_additional_workspace_root(raw_path)
-            .map_err(|e| {
-                anyhow::anyhow!("failed to register additional directory `{raw_path}`: {e}")
-            })?;
+        let path = PathBuf::from(crate::path_security::expand_home(raw_path));
+        let root = self
+            .workspace_root()
+            .ok_or_else(|| anyhow::anyhow!("Session workspace is unavailable"))?;
+        let absolute = if path.is_absolute() {
+            path
+        } else {
+            root.join(path)
+        };
+        let canonical = crate::path_security::validate_additional_workspace_root_path(&absolute)
+            .map_err(|e| anyhow::anyhow!("failed to add additional directory `{raw_path}`: {e}"))?;
         let already_present = self
             .additional_context_dirs
             .iter()
@@ -1130,13 +1139,14 @@ impl AgentSession {
         let absolute = if path.is_absolute() {
             path
         } else {
-            std::env::current_dir()?.join(path)
+            self.workspace_root()
+                .ok_or_else(|| anyhow::anyhow!("Session workspace is unavailable"))?
+                .join(path)
         };
         let resolved = absolute.canonicalize().unwrap_or(absolute);
-        let registered = crate::path_security::registered_additional_workspace_roots();
-        let Some(root) = registered
+        let Some(root) = self
+            .additional_context_dirs
             .iter()
-            .chain(self.additional_context_dirs.iter())
             .find(|root| **root == resolved)
             .cloned()
         else {
@@ -1145,7 +1155,6 @@ impl AgentSession {
                 resolved.display()
             );
         };
-        crate::path_security::unregister_additional_workspace_roots(std::slice::from_ref(&root));
         self.additional_context_dirs.retain(|path| path != &root);
         let opening = format!(
             "<additional_directory_context path=\"{}\">",
@@ -1193,7 +1202,7 @@ impl AgentSession {
         self.managed_session
             .as_ref()
             .and_then(|session| session.workspace_root.clone())
-            .or_else(|| std::env::current_dir().ok())
+            .or_else(|| self.initial_workspace_root.clone())
     }
 
     /// Give the model the instruction files `workspace_root` holds now when
@@ -1233,7 +1242,12 @@ impl AgentSession {
             if raw.is_empty() {
                 continue;
             }
-            let resolved = match resolve_context_file(raw) {
+            let root = self.workspace_root().unwrap_or_else(|| PathBuf::from("."));
+            let resolved = match crate::path_security::scope_workspace_paths_sync(
+                root,
+                self.additional_context_dirs.clone(),
+                || resolve_context_file(raw),
+            ) {
                 Ok(path) => path,
                 Err(e) => {
                     report.failed.push((raw.to_string(), e.to_string()));
@@ -1548,7 +1562,6 @@ impl AgentSession {
     }
 
     fn reset_source_context_after_privacy_handoff(&mut self) {
-        crate::path_security::unregister_additional_workspace_roots(&self.additional_context_dirs);
         self.additional_context_dirs.clear();
         self.attached_context_files.clear();
         self.pending_image_blocks.clear();
@@ -1679,7 +1692,7 @@ impl AgentSession {
         );
         managed_session.model = Some(self.model.clone());
         managed_session.routing_authority = Some(self.current_routing_authority());
-        managed_session.workspace_root = std::env::current_dir().ok();
+        managed_session.workspace_root = self.workspace_root();
         managed_session.created_by = Some("cli".to_string());
         let path = store.save(&managed_session)?;
         let carried = std::mem::take(&mut self.checkpoint_log);
@@ -2092,6 +2105,7 @@ impl AgentSession {
         if !self.session_persistence {
             return Ok(());
         }
+        let workspace_root = self.workspace_root();
         let (Some(managed_session), Some(path)) = (
             self.managed_session.as_mut(),
             self.managed_session_path.as_deref(),
@@ -2104,10 +2118,7 @@ impl AgentSession {
             privacy_mode: self.privacy_mode,
             provider: models::provider_persistence_name(&self.provider),
         });
-        managed_session.workspace_root = managed_session
-            .workspace_root
-            .clone()
-            .or_else(|| std::env::current_dir().ok());
+        managed_session.workspace_root = managed_session.workspace_root.clone().or(workspace_root);
         if managed_session.created_by.is_none() {
             managed_session.created_by = Some("cli".to_string());
         }
@@ -2240,7 +2251,8 @@ impl AgentSession {
             return Ok(());
         };
         let conn = crate::sessions::open_db()?;
-        let cwd = std::env::current_dir()
+        let cwd = self
+            .workspace_root()
             .map(|path| path.display().to_string())
             .unwrap_or_default();
         crate::sessions::sync_session_metadata(
@@ -2876,6 +2888,53 @@ mod tests {
         assert_eq!(session.checkpoint_count(), 0);
 
         assert!(!session.restore_checkpoint());
+    }
+
+    #[test]
+    fn directory_grants_and_removals_are_private_to_each_session() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("ordinary.txt");
+        std::fs::write(&file, "controlled session fixture").unwrap();
+        let ctx = test_context();
+        let mut first = AgentSession::new("test-model", &ctx, None);
+        let mut second = AgentSession::new("test-model", &ctx, None);
+        first
+            .add_context_dir(&root.path().to_string_lossy())
+            .unwrap();
+        assert_eq!(
+            first
+                .attach_context_files([file.to_string_lossy()])
+                .added
+                .len(),
+            1
+        );
+        assert_eq!(
+            second
+                .attach_context_files([file.to_string_lossy()])
+                .failed
+                .len(),
+            1
+        );
+        second
+            .add_context_dir(&root.path().to_string_lossy())
+            .unwrap();
+        first
+            .remove_context_dir(&root.path().to_string_lossy())
+            .unwrap();
+        assert_eq!(
+            second
+                .attach_context_files([file.to_string_lossy()])
+                .added
+                .len(),
+            1
+        );
+        assert_eq!(
+            first
+                .attach_context_files([file.to_string_lossy()])
+                .failed
+                .len(),
+            1
+        );
     }
 
     #[test]

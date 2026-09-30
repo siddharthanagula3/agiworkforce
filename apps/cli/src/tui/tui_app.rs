@@ -4894,7 +4894,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/permissions" | "/perms" | "/approvals" => SlashResult::SystemMessage(
-            crate::repl::permissions_for_display(arg).plain_message(),
+            crate::repl::permissions_for_display(arg, &app.session).plain_message(),
         ),
 
         "/agents" => {
@@ -5600,6 +5600,7 @@ pub async fn run(
         custom_system_prompt,
         effective_provider_override,
     )?;
+    session.additional_context_dirs = crate::path_security::registered_additional_workspace_roots();
     session.apply_ui_config(config);
     crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
@@ -6444,6 +6445,7 @@ async fn run_event_loop(
                                     )]),
                                 };
                                 let opts = crate::tools::ToolExecOptions {
+                                    additional_workspace_roots: Vec::new(),
                                     mcp_tool_definitions: None,
                                     require_confirmation: false,
                                     auto_approve_safe: true,
@@ -7730,6 +7732,7 @@ mod tests {
                 ]),
             };
             let opts = crate::tools::ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
@@ -7790,6 +7793,7 @@ mod tests {
                 ]),
             };
             let opts = crate::tools::ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
@@ -7889,6 +7893,7 @@ mod tests {
                 ]),
             };
             let opts = crate::tools::ToolExecOptions {
+                additional_workspace_roots: Vec::new(),
                 mcp_tool_definitions: None,
                 require_confirmation: true,
                 auto_approve_safe: false,

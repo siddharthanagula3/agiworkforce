@@ -5691,6 +5691,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     None,
                     exec_provider_override.as_deref(),
                 )?;
+                session.additional_context_dirs =
+                    crate::path_security::registered_additional_workspace_roots();
                 session.apply_ui_config(&app_config);
                 session.apply_tool_filters(
                     &normalized_cli_options.allowed_tools,
@@ -8261,6 +8263,7 @@ pub async fn run_oneshot(
         custom_system_prompt,
         resolved_provider_override,
     )?;
+    session.additional_context_dirs = crate::path_security::registered_additional_workspace_roots();
     session.apply_ui_config(config);
     session.max_turns = max_turns;
     session.max_budget_usd = max_budget_usd;

@@ -147,9 +147,23 @@ impl LspClient {
         server_args: &[&str],
         workspace_root: &Path,
     ) -> Result<Self> {
-        let mut cmd = Command::new(server_cmd);
-        cmd.args(server_args)
-            .stdin(std::process::Stdio::piped())
+        let workspace = workspace_root.canonicalize()?;
+        let manager = crate::sandbox::SandboxManager::for_agent_command(
+            workspace.clone(),
+            crate::sandbox::NetworkPolicy::Deny,
+        )?;
+        let server_args: Vec<String> = server_args.iter().map(|arg| (*arg).to_string()).collect();
+        let command = crate::sandbox::background_command(
+            Some(&manager),
+            crate::sandbox::Invocation::Program {
+                program: server_cmd,
+                args: &server_args,
+            },
+            &workspace,
+            None,
+        )?;
+        let mut cmd = Command::from(command);
+        cmd.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             // This client never reads stderr. Inheriting a pipe lets a noisy
             // server fill it and deadlock the turn.
@@ -442,6 +456,29 @@ while True:
             .status()
             .map(|status| status.success())
             .unwrap_or(false)
+    }
+
+    #[tokio::test]
+    async fn language_server_cannot_write_outside_its_workspace() {
+        assert!(
+            python3_available(),
+            "python3 is required for this isolation regression"
+        );
+        let workspace = tempfile::tempdir().unwrap();
+        let private = tempfile::tempdir().unwrap();
+        let marker = private.path().join("server-wrote-outside");
+        let marker_literal = serde_json::to_string(&marker.to_string_lossy()).unwrap();
+        let script = format!(
+            "from pathlib import Path\ntry:\n Path({marker_literal}).write_text('controlled fixture')\nexcept OSError:\n pass\n{FAKE_SERVER}"
+        );
+        let client = LspClient::spawn("python3", &["-u", "-c", &script, "ok"], workspace.path())
+            .await
+            .unwrap();
+        client.shutdown().await.unwrap();
+        assert!(
+            !marker.exists(),
+            "language server wrote outside its workspace"
+        );
     }
 
     #[tokio::test]
