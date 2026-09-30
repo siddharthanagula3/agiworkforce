@@ -6157,10 +6157,23 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
             Command::RemoteControl => {
                 let workspace_root = std::env::current_dir()?;
-                let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
-                    app_config.clone(),
-                    workspace_root.clone(),
-                )?);
+                let host = std::sync::Arc::new(
+                    app_server::CliDeveloperSessionHost::new(
+                        app_config.clone(),
+                        workspace_root.clone(),
+                    )?
+                    .with_bypass_permissions_available(
+                        cli.allow_dangerously_skip_permissions
+                            || normalized_cli_options
+                                .effective_permissions(
+                                    cli.mode,
+                                    cli.dangerously_skip_permissions,
+                                    cli.yes,
+                                    None,
+                                )
+                                .skip_permissions,
+                    ),
+                );
                 remote_control::run(host, &workspace_root).await
             }
             Command::AppServer {
@@ -6173,10 +6186,20 @@ async fn run_cli(cli: Cli) -> Result<()> {
             } => {
                 cli_options::set_memory_enabled(!no_memory);
                 let workspace_root = std::env::current_dir()?;
-                let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
-                    app_config.clone(),
-                    workspace_root,
-                )?);
+                let host = std::sync::Arc::new(
+                    app_server::CliDeveloperSessionHost::new(app_config.clone(), workspace_root)?
+                        .with_bypass_permissions_available(
+                            cli.allow_dangerously_skip_permissions
+                                || normalized_cli_options
+                                    .effective_permissions(
+                                        cli.mode,
+                                        cli.dangerously_skip_permissions,
+                                        cli.yes,
+                                        None,
+                                    )
+                                    .skip_permissions,
+                        ),
+                );
                 let capabilities = host.capabilities();
                 let _heartbeat = device_registry::spawn_heartbeat_loop();
                 if listen == "stdio" {
