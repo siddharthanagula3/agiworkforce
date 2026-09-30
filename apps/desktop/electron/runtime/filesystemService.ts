@@ -121,6 +121,58 @@ export async function statPath(root: WorkspaceRoot, relativePath: string): Promi
   };
 }
 
+function validUtf8(bytes: Buffer): boolean {
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function assertWritableUtf8(absolute: string, relative: string): Promise<void> {
+  let handle: Awaited<ReturnType<typeof fs.open>>;
+  try {
+    handle = await fs.open(absolute, 'r');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
+  try {
+    const decoder = new TextDecoder('utf-8', { fatal: true });
+    const bytes = Buffer.alloc(MAX_TEXT_READ_BYTES);
+    for (;;) {
+      const { bytesRead } = await handle.read(bytes, 0, bytes.length, null);
+      try {
+        decoder.decode(bytes.subarray(0, bytesRead), { stream: bytesRead !== 0 });
+      } catch {
+        throw new TextEditRefused(`${relative} is not UTF-8 and cannot be edited here.`);
+      }
+      if (bytesRead === 0) return;
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
+const fileMutations = new Map<string, Promise<void>>();
+
+async function serializeFileMutation<T>(absolute: string, work: () => Promise<T>): Promise<T> {
+  const previous = fileMutations.get(absolute) ?? Promise.resolve();
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  fileMutations.set(absolute, pending);
+  await previous;
+  try {
+    return await work();
+  } finally {
+    release();
+    if (fileMutations.get(absolute) === pending) fileMutations.delete(absolute);
+  }
+}
+
 export async function readTextFile(
   root: WorkspaceRoot,
   relativePath: string,
@@ -145,6 +197,8 @@ export async function readTextFile(
     return {
       path: toPosix(resolved.relative),
       text: bytes.toString('utf8'),
+      readOnly: !validUtf8(bytes),
+      lineEnding: bytes.includes(Buffer.from('\r\n')) ? 'crlf' : 'lf',
       sizeBytes: stat.size,
       modifiedAtMs: stat.mtimeMs,
       truncated,
@@ -213,13 +267,34 @@ export async function writeTextFile(
 ): Promise<FileTextWrite> {
   const resolved = await resolveWithinRoot(root, relativePath);
   assertNotDeniedFile(resolved.absolute);
+  return serializeFileMutation(resolved.absolute, () =>
+    writeResolvedTextFile(
+      root,
+      relativePath,
+      resolved.absolute,
+      resolved.relative,
+      text,
+      expectedSha256,
+    ),
+  );
+}
+
+async function writeResolvedTextFile(
+  root: WorkspaceRoot,
+  relativePath: string,
+  absolute: string,
+  relative: string,
+  text: string,
+  expectedSha256?: string,
+): Promise<FileTextWrite> {
   if (expectedSha256 === undefined) {
-    await fs.mkdir(path.dirname(resolved.absolute), { recursive: true });
+    await fs.mkdir(path.dirname(absolute), { recursive: true });
   } else {
-    await assertUnchangedSinceRead(resolved.absolute, resolved.relative, expectedSha256);
+    await assertUnchangedSinceRead(absolute, relative, expectedSha256);
   }
+  await assertWritableUtf8(absolute, relative);
   const bytes = Buffer.from(text, 'utf8');
-  await fs.writeFile(resolved.absolute, bytes);
+  await fs.writeFile(absolute, bytes);
   const stat = await statPath(root, relativePath);
   return bytes.length > MAX_TEXT_READ_BYTES ? stat : { ...stat, sha256: sha256Of(bytes) };
 }
@@ -243,28 +318,41 @@ export async function editTextFile(
   newText: string,
   replaceAll: boolean,
 ): Promise<FileTextEdit> {
-  const current = await readTextFile(root, relativePath);
-  if (current.truncated) {
-    throw new TextEditRefused(
-      `${current.path} is too large to edit in place. Replace it whole instead.`,
+  const resolved = await resolveWithinRoot(root, relativePath);
+  assertNotDeniedFile(resolved.absolute);
+  return serializeFileMutation(resolved.absolute, async () => {
+    const current = await readTextFile(root, relativePath);
+    if (current.readOnly)
+      throw new TextEditRefused(`${current.path} is not UTF-8 and cannot be edited here.`);
+    if (current.truncated) {
+      throw new TextEditRefused(
+        `${current.path} is too large to edit in place. Replace it whole instead.`,
+      );
+    }
+    const occurrences = countOccurrences(current.text, oldText);
+    if (occurrences === 0) {
+      throw new TextEditRefused(
+        `The passage to replace is not in ${current.path}. Read the file again and copy the passage exactly.`,
+      );
+    }
+    if (occurrences > 1 && !replaceAll) {
+      throw new TextEditRefused(
+        `The passage appears ${occurrences} times in ${current.path}. Include more of the surrounding text so it appears once, or set replaceAll.`,
+      );
+    }
+    const next = replaceAll
+      ? current.text.split(oldText).join(newText)
+      : current.text.replace(oldText, () => newText);
+    const stat = await writeResolvedTextFile(
+      root,
+      relativePath,
+      resolved.absolute,
+      resolved.relative,
+      next,
+      current.sha256,
     );
-  }
-  const occurrences = countOccurrences(current.text, oldText);
-  if (occurrences === 0) {
-    throw new TextEditRefused(
-      `The passage to replace is not in ${current.path}. Read the file again and copy the passage exactly.`,
-    );
-  }
-  if (occurrences > 1 && !replaceAll) {
-    throw new TextEditRefused(
-      `The passage appears ${occurrences} times in ${current.path}. Include more of the surrounding text so it appears once, or set replaceAll.`,
-    );
-  }
-  const next = replaceAll
-    ? current.text.split(oldText).join(newText)
-    : current.text.replace(oldText, () => newText);
-  const stat = await writeTextFile(root, relativePath, next, current.sha256);
-  return { path: current.path, replacements: occurrences, sizeBytes: stat.sizeBytes };
+    return { path: current.path, replacements: occurrences, sizeBytes: stat.sizeBytes };
+  });
 }
 
 export async function createDirectory(

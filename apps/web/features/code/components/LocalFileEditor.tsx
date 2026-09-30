@@ -23,6 +23,8 @@ interface DiskVersion {
   text: string;
   sha256: string | undefined;
   truncated: boolean;
+  readOnly: boolean;
+  lineEnding: 'lf' | 'crlf';
 }
 
 interface EditorState {
@@ -42,13 +44,19 @@ type EditorEvent =
 const UNOPENED: EditorState = { disk: null, text: null, conflict: null };
 
 function diskVersion(file: FileTextContent): DiskVersion {
-  return { text: file.text, sha256: file.sha256, truncated: file.truncated };
+  return {
+    text: file.text.replace(/\r\n/g, '\n'),
+    sha256: file.sha256,
+    truncated: file.truncated,
+    readOnly: file.readOnly === true,
+    lineEnding: file.lineEnding ?? (file.text.includes('\r\n') ? 'crlf' : 'lf'),
+  };
 }
 
 function sameContent(disk: DiskVersion, file: FileTextContent): boolean {
   return disk.sha256 !== undefined && file.sha256 !== undefined
     ? disk.sha256 === file.sha256
-    : disk.text === file.text;
+    : disk.text === diskVersion(file).text;
 }
 
 function editorReducer(state: EditorState, event: EditorEvent): EditorState {
@@ -56,12 +64,18 @@ function editorReducer(state: EditorState, event: EditorEvent): EditorState {
     case 'reset':
       return UNOPENED;
     case 'opened':
-      return { disk: diskVersion(event.file), text: event.file.text, conflict: null };
+      return { disk: diskVersion(event.file), text: diskVersion(event.file).text, conflict: null };
     case 'edited':
       return { ...state, text: event.text };
     case 'saved':
       return {
-        disk: { text: event.text, sha256: event.written.sha256, truncated: false },
+        disk: {
+          text: event.text,
+          sha256: event.written.sha256,
+          truncated: false,
+          readOnly: false,
+          lineEnding: state.disk?.lineEnding ?? 'lf',
+        },
         text: state.text,
         conflict: null,
       };
@@ -75,7 +89,11 @@ function editorReducer(state: EditorState, event: EditorEvent): EditorState {
         return state.conflict === null ? state : { ...state, conflict: null };
       }
       if (text === disk.text) {
-        return { disk: diskVersion(event.current), text: event.current.text, conflict: null };
+        return {
+          disk: diskVersion(event.current),
+          text: diskVersion(event.current).text,
+          conflict: null,
+        };
       }
       return { ...state, conflict: 'changed' };
     }
@@ -167,11 +185,22 @@ export function LocalFileEditor({
   }, [rootId, path, refreshKey]);
 
   const truncated = disk?.truncated === true;
+  const readOnly = truncated || disk?.readOnly === true;
   const dirty = disk !== null && text !== null && text !== disk.text;
 
   useEffect(() => {
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const preventLoss = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', preventLoss);
+    return () => window.removeEventListener('beforeunload', preventLoss);
+  }, [dirty]);
 
   const perform = async (action: EditorAction, work: () => Promise<void>, fallback: string) => {
     epoch.current += 1;
@@ -192,9 +221,10 @@ export function LocalFileEditor({
   };
 
   const write = async (expectedSha256: string | undefined) => {
-    if (text === null) return;
+    if (text === null || readOnly) return;
     if (exceedsEditableSize(text)) throw new Error(LOCAL_CODE_COPY.fileTooLarge);
-    const written = await writeWorkspaceText(rootId, path, text, expectedSha256);
+    const savedText = disk?.lineEnding === 'crlf' ? text.replace(/\r?\n/g, '\r\n') : text;
+    const written = await writeWorkspaceText(rootId, path, savedText, expectedSha256);
     dispatch({ type: 'saved', text, written });
     onSaved();
   };
@@ -293,7 +323,7 @@ export function LocalFileEditor({
             <button
               type="button"
               className={styles['secondaryButton']}
-              disabled={pending !== null}
+              disabled={pending !== null || readOnly}
               onClick={confirmOverwrite}
             >
               {LOCAL_CODE_COPY.overwriteFile}
@@ -309,9 +339,14 @@ export function LocalFileEditor({
             className={styles['fileEditorInput']}
             value={text}
             spellCheck={false}
-            readOnly={truncated}
-            onChange={(event) => dispatch({ type: 'edited', text: event.target.value })}
+            readOnly={readOnly}
+            onChange={(event) => {
+              if (!readOnly) dispatch({ type: 'edited', text: event.target.value });
+            }}
           />
+          {disk?.readOnly && (
+            <span className={styles['formHelp']}>{LOCAL_CODE_COPY.fileUnsupportedEncoding}</span>
+          )}
           {truncated && <span className={styles['formHelp']}>{LOCAL_CODE_COPY.fileTooLarge}</span>}
           {conflict === null && (
             <div className={styles['popoverActions']}>
@@ -326,7 +361,7 @@ export function LocalFileEditor({
               <button
                 type="button"
                 className={styles['primaryButton']}
-                disabled={pending !== null || truncated || !dirty}
+                disabled={pending !== null || readOnly || !dirty}
                 onClick={() => void save()}
               >
                 {pending === 'save' && <Spinner size="sm" aria-hidden="true" />}

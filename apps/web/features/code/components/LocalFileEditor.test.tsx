@@ -293,3 +293,43 @@ describe('a session step that touches the open file', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 });
+
+describe('preserving local file bytes', () => {
+  it('restores CRLF after the textarea normalizes edited lines', async () => {
+    readWorkspaceText.mockResolvedValueOnce({
+      ...onDisk('one\r\ntwo\r\n', OPENED),
+      lineEnding: 'crlf',
+    });
+    writeWorkspaceText.mockResolvedValue(written(WRITTEN));
+    renderEditor();
+    const field = await screen.findByLabelText(PATH);
+    fireEvent.change(field, { target: { value: 'one\nchanged\n' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(writeWorkspaceText).toHaveBeenCalledWith('root-1', PATH, 'one\r\nchanged\r\n', OPENED);
+  });
+
+  it('keeps unsupported encodings read-only and refuses saving', async () => {
+    readWorkspaceText.mockResolvedValueOnce({ ...onDisk('preview', OPENED), readOnly: true });
+    renderEditor();
+    const field = await screen.findByLabelText(PATH);
+    expect(field).toHaveAttribute('readonly');
+    fireEvent.change(field, { target: { value: 'replacement' } });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(writeWorkspaceText).not.toHaveBeenCalled();
+  });
+
+  it('blocks unloading while dirty and releases the guard after saving', async () => {
+    readWorkspaceText.mockResolvedValueOnce(onDisk('one', OPENED));
+    writeWorkspaceText.mockResolvedValue(written(WRITTEN));
+    renderEditor();
+    await replaceText('changed');
+    const dirtyUnload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(dirtyUnload);
+    expect(dirtyUnload.defaultPrevented).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled());
+    const cleanUnload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(cleanUnload);
+    expect(cleanUnload.defaultPrevented).toBe(false);
+  });
+});

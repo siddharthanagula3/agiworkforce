@@ -79,6 +79,9 @@ export const LOCAL_CODE_COPY = {
   saveFile: 'Save',
   fileReadFailed: 'That file could not be opened.',
   fileSaveFailed: 'That file could not be saved.',
+  fileUnsupportedEncoding: 'This file is not UTF-8. Open it in your editor to change it.',
+  discardLocalEditsDescription:
+    'Your unsaved file edits will be discarded. You cannot recover them after leaving.',
   fileTooLarge: 'This file is too large to edit here. Open it in your editor instead.',
   discardFileEdits: 'Discard',
   reloadFile: 'Reload',
