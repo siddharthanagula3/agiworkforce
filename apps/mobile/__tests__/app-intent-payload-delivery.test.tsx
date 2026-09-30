@@ -28,6 +28,10 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('expo-image', () => ({ Image: () => null }));
 
+jest.mock('../services/api', () => ({
+  api: { get: jest.fn(), post: jest.fn(), delete: jest.fn() },
+}));
+
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
   return new Proxy({}, { get: () => icon });

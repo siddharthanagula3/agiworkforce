@@ -26,7 +26,8 @@ vi.mock('sonner', () => ({
 const { createClientMock } = vi.hoisted(() => ({
   createClientMock: vi.fn((_config?: unknown) => ({})),
 }));
-vi.mock('@agiworkforce/cloud-contracts', () => ({
+vi.mock('@agiworkforce/cloud-contracts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/cloud-contracts')>()),
   createManagedCloudChatClient: createClientMock,
 }));
 
