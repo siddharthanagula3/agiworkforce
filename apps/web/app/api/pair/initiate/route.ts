@@ -3,6 +3,7 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { isSecureRelayUrl, isSecureRelayHttpUrl } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -30,8 +31,12 @@ const signalingResponseSchema = z.object({
   code: z.string(),
   expiresAt: z.number(),
   expiresIn: z.number(),
-  httpUrl: z.string(),
-  wsUrl: z.string(),
+  httpUrl: z
+    .string()
+    .refine((url) => isSecureRelayHttpUrl(url, process.env['NODE_ENV'] === 'development')),
+  wsUrl: z
+    .string()
+    .refine((url) => isSecureRelayUrl(url, process.env['NODE_ENV'] === 'development')),
   qrData: z.string(),
   pairTokens: z.object({
     desktop: z.string().min(1).optional(),
@@ -70,7 +75,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const signalingUrl = process.env['SIGNALING_HTTP_URL'];
   const signalingSecret = process.env['SIGNALING_INTERNAL_SECRET'];
-  if (!signalingUrl || !signalingSecret) {
+  if (
+    !isSecureRelayHttpUrl(signalingUrl, process.env['NODE_ENV'] === 'development') ||
+    !signalingSecret
+  ) {
     logger.error(
       { hasUrl: Boolean(signalingUrl), hasSecret: Boolean(signalingSecret) },
       'Pairing is unconfigured: SIGNALING_HTTP_URL and SIGNALING_INTERNAL_SECRET are both required',
@@ -96,6 +104,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     signalingResponse = await fetch(`${signalingUrl.replace(/\/+$/, '')}/pairings`, {
       method: 'POST',
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${signalingSecret}`,

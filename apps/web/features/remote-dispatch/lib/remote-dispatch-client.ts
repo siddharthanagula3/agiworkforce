@@ -177,6 +177,7 @@ export async function connectRemoteDispatch(
   };
 
   const client = new SignalingClient({
+    allowInsecureLoopback: process.env['NODE_ENV'] === 'development',
     wsUrl: claimed.wsUrl,
     code: pairing.code,
     role: 'mobile',

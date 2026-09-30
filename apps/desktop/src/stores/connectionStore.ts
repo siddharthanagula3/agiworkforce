@@ -1,3 +1,4 @@
+import { isSecureRelayUrl, isSecureRelayHttpUrl } from '@agiworkforce/types';
 import {
   SignalingClient,
   type SignalingClientOptions,
@@ -135,15 +136,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function hasAllowedUrlProtocol(value: unknown, protocols: readonly string[]): value is string {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 2_048) return false;
-  try {
-    return protocols.includes(new URL(value).protocol);
-  } catch {
-    return false;
-  }
-}
-
 function parsePairingResponse(value: unknown): PairingResponse | null {
   if (!isRecord(value) || !isRecord(value['signaling']) || !isRecord(value['pairTokens'])) {
     return null;
@@ -163,8 +155,8 @@ function parsePairingResponse(value: unknown): PairingResponse | null {
     !Number.isFinite(expiresAt) ||
     typeof expiresIn !== 'number' ||
     !Number.isFinite(expiresIn) ||
-    !hasAllowedUrlProtocol(httpUrl, ['http:', 'https:']) ||
-    !hasAllowedUrlProtocol(wsUrl, ['ws:', 'wss:']) ||
+    !isSecureRelayHttpUrl(httpUrl, import.meta.env.DEV) ||
+    !isSecureRelayUrl(wsUrl, import.meta.env.DEV) ||
     typeof desktopToken !== 'string' ||
     desktopToken.length === 0 ||
     desktopToken.length > 16_384
@@ -720,6 +712,7 @@ export const useConnectionStore = create<MobileCompanionState>()(
           const pairingSecret = generatePairingSecret();
 
           const nextSignalingClient = new SignalingClient({
+            allowInsecureLoopback: import.meta.env.DEV,
             wsUrl: payload.signaling.wsUrl,
             code: payload.code,
             role: 'desktop',
