@@ -56,6 +56,7 @@ interface MemoryState {
   setPinned: (id: string, pinned: boolean) => Promise<void>;
   remove: (id: string) => Promise<void>;
   clear: () => Promise<void>;
+  resetOnLogout: () => void;
   hydrateFromServer: () => Promise<void>;
 }
 
@@ -350,6 +351,10 @@ export const useMemoryStore = create<MemoryState>()(
       clear: async () => {
         if (canSyncToServer()) await deleteAllServerMemories();
         set({ facts: [] });
+      },
+
+      resetOnLogout: () => {
+        set({ facts: [], syncStatus: canSyncToServer() ? 'idle' : 'unavailable' });
       },
 
       hydrateFromServer: async () => {

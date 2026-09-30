@@ -73,12 +73,12 @@ const SECRET = 'JBSWY3DPEHPK3PXP';
 const OTPAUTH = `otpauth://totp/AGI%20Workforce:user@example.com?secret=${SECRET}&issuer=AGI%20Workforce&algorithm=SHA1&digits=6&period=30`;
 const BACKUP_CODES = ['aaaa2345', 'bbbb6789', 'cccc2345'];
 
-function disabledStatus() {
-  return { data: { enabled: false, backupCodesReady: false } };
+function disabledStatus(enrollmentAvailable = true) {
+  return { data: { enabled: false, backupCodesReady: false, enrollmentAvailable } };
 }
 
-function enabledStatus(backupCodesReady = true) {
-  return { data: { enabled: true, backupCodesReady } };
+function enabledStatus(backupCodesReady = true, enrollmentAvailable = true) {
+  return { data: { enabled: true, backupCodesReady, enrollmentAvailable } };
 }
 
 beforeEach(() => {
@@ -457,6 +457,38 @@ describe('TwoFactorEnrollmentPanel · disable', () => {
       'Too many attempts. Try again in a few minutes.',
     );
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('TwoFactorEnrollmentPanel · enrollment unavailable', () => {
+  it('keeps setup visible but disabled, says why, and calls no setup route', async () => {
+    const user = userEvent.setup();
+    service.get2FAStatus.mockResolvedValue(disabledStatus(false));
+
+    render(<TwoFactorEnrollmentPanel />);
+
+    const setupButton = await screen.findByRole('button', { name: /set up authenticator app/i });
+    expect(setupButton).toBeDisabled();
+    expect(screen.getByText('Temporarily unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Authenticator apps and backup codes are temporarily unavailable/i),
+    ).toBeInTheDocument();
+
+    await user.click(setupButton);
+
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/settings/2fa/setup', expect.anything());
+  });
+
+  it('disables new backup codes but still lets an enrolled account turn two-factor off', async () => {
+    service.get2FAStatus.mockResolvedValue(enabledStatus(true, false));
+
+    render(<TwoFactorEnrollmentPanel />);
+
+    expect(
+      await screen.findByRole('button', { name: /generate new backup codes/i }),
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: /turn off two-factor/i })).toBeEnabled();
+    expect(screen.getByText('Temporarily unavailable')).toBeInTheDocument();
   });
 });
 

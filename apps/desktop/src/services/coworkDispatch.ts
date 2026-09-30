@@ -646,7 +646,7 @@ async function handleCompanionControl(
   const request = parseDispatchTaskControl(detail.action, detail.payload);
   if (!request) return;
   if (request.action === 'dispatch.task.create') await createTask(request, isCurrentSession);
-  else await cancelTask(request, isCurrentSession);
+  else if (request.action === 'dispatch.task.cancel') await cancelTask(request, isCurrentSession);
 }
 
 function resetCoworkDispatchSession(): void {
