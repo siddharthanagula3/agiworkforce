@@ -102,6 +102,7 @@ export interface LocalChangesPanelProps {
   sessionBusy: boolean;
   onReview: () => void;
   onClose: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export function LocalChangesPanel({
@@ -111,6 +112,7 @@ export function LocalChangesPanel({
   sessionBusy,
   onReview,
   onClose,
+  onDirtyChange,
 }: LocalChangesPanelProps) {
   const [changes, setChanges] = useState<WorkingTreeChanges | null>(null);
   const [repository, setRepository] = useState(true);
@@ -121,6 +123,10 @@ export function LocalChangesPanel({
   const [editorDirty, setEditorDirty] = useState(false);
   const [revision, setRevision] = useState(0);
   const { confirm, dialog } = useConfirmAction();
+
+  useEffect(() => {
+    onDirtyChange?.(editorDirty);
+  }, [editorDirty, onDirtyChange]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -175,7 +181,11 @@ export function LocalChangesPanel({
   };
 
   const openEditor = (path: string) => {
-    if (path !== editing) leaveEditor(() => setEditing(path));
+    if (path !== editing)
+      leaveEditor(() => {
+        setEditorDirty(false);
+        setEditing(path);
+      });
   };
 
   const diffs = diffByPath(changes?.diff ?? '');
@@ -267,7 +277,10 @@ export function LocalChangesPanel({
             refreshKey={revision}
             onDirtyChange={setEditorDirty}
             onSaved={() => void load()}
-            onClose={() => setEditing(null)}
+            onClose={() => {
+              setEditorDirty(false);
+              setEditing(null);
+            }}
           />
         )}
 

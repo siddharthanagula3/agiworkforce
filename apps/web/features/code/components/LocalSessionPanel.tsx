@@ -21,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Spinner,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import {
   CLOUD_CODE_DEFAULT_TURN_STEPS,
@@ -88,6 +89,7 @@ export interface LocalSessionPanelProps {
   initialPrompt?: string;
   onPromptSent?: () => void;
   onClose: () => void;
+  onEditorDirtyChange?: (dirty: boolean) => void;
 }
 
 function LocalModeControl({
@@ -260,12 +262,34 @@ export function LocalSessionPanel({
   initialPrompt,
   onPromptSent,
   onClose,
+  onEditorDirtyChange,
 }: LocalSessionPanelProps) {
   const state = useLocalSession(session);
   const tests = useLocalTests(session.rootId);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const { confirm, dialog } = useConfirmAction();
+  useEffect(() => {
+    onEditorDirtyChange?.(editorDirty);
+  }, [editorDirty, onEditorDirtyChange]);
+  const closeChanges = () => {
+    const close = () => {
+      setEditorDirty(false);
+      setChangesOpen(false);
+    };
+    if (!editorDirty) {
+      close();
+      return;
+    }
+    confirm({
+      title: LOCAL_CODE_COPY.discardEditsTitle,
+      description: LOCAL_CODE_COPY.discardLocalEditsDescription,
+      confirmLabel: LOCAL_CODE_COPY.discardFileEdits,
+      onConfirm: close,
+    });
+  };
   const vsCodeHref = continueLocalSessionInVsCodeHref(session);
   const resumeCommand = localSessionResumeCommand(session.id);
   const testsRunning = tests.status === 'running';
@@ -356,7 +380,7 @@ export function LocalSessionPanel({
             aria-label={CODE_COPY.changes}
             aria-pressed={changesOpen}
             title={CODE_COPY.changes}
-            onClick={() => setChangesOpen((open) => !open)}
+            onClick={() => (changesOpen ? closeChanges() : setChangesOpen(true))}
           >
             <PanelsTopLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
           </button>
@@ -617,10 +641,15 @@ export function LocalSessionPanel({
             refreshKey={state.messages.length}
             sessionBusy={busy}
             onReview={review}
-            onClose={() => setChangesOpen(false)}
+            onClose={() => {
+              setEditorDirty(false);
+              setChangesOpen(false);
+            }}
+            onDirtyChange={setEditorDirty}
           />
         )}
       </div>
+      {dialog}
     </>
   );
 }

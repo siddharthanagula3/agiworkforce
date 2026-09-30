@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MAX_TEXT_READ_BYTES, type WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
 import {
   WriteConflict,
+  editTextFile,
   createDirectory,
   globFiles,
   grepFiles,
@@ -213,5 +214,67 @@ describe('grepFiles', () => {
 
   it('returns nothing for an empty query rather than every line', async () => {
     expect(await grepFiles(root, '')).toEqual([]);
+  });
+});
+
+describe('serialized local file editing', () => {
+  it('serializes optimistic writes through realpath aliases', async () => {
+    const target = path.join(sandbox, 'race.txt');
+    const alias = path.join(sandbox, 'race-alias.txt');
+    await fs.writeFile(target, 'original');
+    await fs.symlink(target, alias);
+    const originalWrite = fs.writeFile.bind(fs);
+    let release!: () => void;
+    let entered!: () => void;
+    const firstEntered = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const paused = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let writes = 0;
+    const spy = vi.spyOn(fs, 'writeFile').mockImplementation(async (...args) => {
+      if (args[0] === target && ++writes === 1) {
+        entered();
+        await paused;
+      }
+      return originalWrite(...args);
+    });
+    try {
+      const first = writeTextFile(root, 'race.txt', 'first', sha256('original'));
+      await firstEntered;
+      const second = writeTextFile(root, 'race-alias.txt', 'second', sha256('original'));
+      const secondSettled = second.then(
+        () => 'written',
+        () => 'refused',
+      );
+      await Promise.race([secondSettled, new Promise((resolve) => setTimeout(resolve, 50))]);
+      release();
+      await first;
+      expect(await secondSettled).toBe('refused');
+      expect(await fs.readFile(target, 'utf8')).toBe('first');
+    } finally {
+      release();
+      spy.mockRestore();
+    }
+  });
+
+  it('reports invalid UTF-8 as read-only and refuses passage edits', async () => {
+    const bytes = Buffer.from([0x61, 0xe9, 0x62]);
+    await fs.writeFile(path.join(sandbox, 'legacy.txt'), bytes);
+    expect(await readTextFile(root, 'legacy.txt')).toMatchObject({ readOnly: true });
+    await expect(editTextFile(root, 'legacy.txt', 'a', 'changed', false)).rejects.toThrow(
+      'not UTF-8',
+    );
+    expect(await fs.readFile(path.join(sandbox, 'legacy.txt'))).toEqual(bytes);
+  });
+
+  it('serializes edits without reacquiring their own file lock', async () => {
+    await fs.writeFile(path.join(sandbox, 'edit-race.txt'), 'left right');
+    await Promise.all([
+      editTextFile(root, 'edit-race.txt', 'left', 'LEFT', false),
+      editTextFile(root, 'edit-race.txt', 'right', 'RIGHT', false),
+    ]);
+    expect(await fs.readFile(path.join(sandbox, 'edit-race.txt'), 'utf8')).toBe('LEFT RIGHT');
   });
 });
