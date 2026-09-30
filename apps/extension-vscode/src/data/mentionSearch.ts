@@ -10,7 +10,7 @@
 
 import * as vscode from 'vscode';
 import { type WorkspaceFileReference } from '../features/chat-participant/promptReferences';
-import { gitIgnoredPaths } from './contextExclusion';
+import { resolveContextFile } from './contextExclusion';
 
 export interface MentionTarget extends WorkspaceFileReference {
   label: string;
@@ -112,10 +112,15 @@ export async function searchMentionTargets(query: string): Promise<MentionTarget
     symbolMatches(query).catch(() => [] as MentionCandidate[]),
     fileMatches(query).catch(() => [] as MentionCandidate[]),
   ]);
-  const ignored = await gitIgnoredPaths([...symbols, ...files].map((candidate) => candidate.uri));
+  const checked = new Map<string, boolean>();
+  for (const candidate of [...symbols, ...files]) {
+    if (!checked.has(candidate.uri.fsPath)) {
+      checked.set(candidate.uri.fsPath, (await resolveContextFile(candidate.uri.fsPath)).ok);
+    }
+  }
   const offered = (candidates: MentionCandidate[], limit: number): MentionTarget[] =>
     candidates
-      .filter((candidate) => !ignored.has(candidate.uri.fsPath))
+      .filter((candidate) => checked.get(candidate.uri.fsPath) === true)
       .slice(0, limit)
       .map((candidate) => candidate.target);
   const seen = new Set<string>();

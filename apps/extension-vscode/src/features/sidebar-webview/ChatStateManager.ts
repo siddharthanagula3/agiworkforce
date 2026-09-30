@@ -1,4 +1,7 @@
+import { settingsWithholdReason } from '../../data/contextExclusion';
 import * as path from 'node:path';
+import { realpath } from 'node:fs/promises';
+import { resolveContained } from '@agiworkforce/utils/path-containment';
 import {
   applyAgentActivityEvent,
   createMessageQueue,
@@ -86,7 +89,10 @@ import {
 import { RETRY_LAST_MESSAGE_COMMAND, type ChatTurn } from '../chat/retry';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { EXTENSION_ID } from '../../platform/version';
-import { getContextPanelProvider } from '../trees/contextPanelProvider';
+import {
+  getContextPanelProvider,
+  validateWorkspaceContextFile,
+} from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import {
   accountIdentityForDisplay,
@@ -128,13 +134,12 @@ import { ONBOARDING_SEEN_KEY } from '../onboarding/onboardingState';
 import {
   buildContextAttachment,
   resolveContextMenuState,
-  resolveEditorContext,
+  captureEditorContext,
   withholdGitIgnoredContext,
   type ContextMenuItemState,
   type EditorContextChip,
   type EditorContextSnapshot,
 } from '../../data/composerContext';
-import { isGitIgnoredCached } from '../../data/contextExclusion';
 import { searchMentionTargets } from '../../data/mentionSearch';
 import type { ApprovalDecision, ContextAttachmentKind } from '../../protocol/webviewMessages';
 import {
@@ -665,6 +670,7 @@ export interface UsageMeterWebviewPayload {
 interface PendingAttachment {
   id: string;
   input: UserInput;
+  source?: { filePath: string; untitled?: boolean };
 }
 
 interface PendingChatSend {
@@ -676,7 +682,7 @@ interface PendingChatSend {
   browseWeb: boolean;
   references: WorkspaceFileReference[];
   attachments: PendingAttachment[];
-  editorContext: EditorContextSnapshot;
+  editorContext: Promise<EditorContextSnapshot>;
 }
 
 const USAGE_METER_UPGRADE_THRESHOLD = 0.2;
@@ -1414,7 +1420,7 @@ export class ChatStateManager {
           });
           break;
         }
-        const id = this._pushTextAttachment(attachment.name, attachment.text);
+        const id = this._pushTextAttachment(attachment.name, attachment.text, attachment.source);
         this._post({ type: 'contextAttached', payload: { id, name: attachment.name } });
         break;
       }
@@ -2656,10 +2662,7 @@ export class ChatStateManager {
 
   async pushEditorContext(): Promise<void> {
     const sequence = ++this._editorContextSequence;
-    const snapshot = await withholdGitIgnoredContext(
-      resolveEditorContext(this._dismissedEditorContext),
-      isGitIgnoredCached,
-    );
+    const snapshot = await captureEditorContext(new Set(this._dismissedEditorContext));
     if (sequence !== this._editorContextSequence) return;
     this._post({ type: 'editorContext', payload: { chips: snapshot.chips } });
   }
@@ -2876,7 +2879,11 @@ export class ChatStateManager {
    * wrapper, one truncation rule and one escape of the wrapper tag itself,
    * whether the text came from a dropped file or the composer context menu.
    */
-  private _pushTextAttachment(name: string, raw: string): string {
+  private _pushTextAttachment(
+    name: string,
+    raw: string,
+    source?: PendingAttachment['source'],
+  ): string {
     const selected = raw.slice(0, TEXT_ATTACHMENT_CHAR_LIMIT);
     const escaped = selected.replace(/<\/?untrusted_attachment[^>]*>/gi, (value) =>
       value.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
@@ -2885,6 +2892,7 @@ export class ChatStateManager {
     const id = `att-${++this._attachmentSeq}`;
     this._pendingAttachments.push({
       id,
+      ...(source === undefined ? {} : { source }),
       input: {
         type: 'text',
         text:
@@ -3115,7 +3123,7 @@ export class ChatStateManager {
       browseWeb,
       references: Array.isArray(references) ? references.filter(isWorkspaceFileReference) : [],
       attachments: this._pendingAttachments.splice(0),
-      editorContext: resolveEditorContext(this._dismissedEditorContext),
+      editorContext: captureEditorContext(new Set(this._dismissedEditorContext)),
     };
     this._dismissedEditorContext.clear();
     this._lastUserTurn = { role: 'user', text, references: request.references };
@@ -3352,6 +3360,24 @@ export class ChatStateManager {
     ];
   }
 
+  private async _attachmentInputs(entries: readonly PendingAttachment[]): Promise<UserInput[]> {
+    const inputs: UserInput[] = [];
+    for (const entry of entries) {
+      if (entry.source !== undefined) {
+        if (entry.source.untitled === true) {
+          if (settingsWithholdReason(entry.source.filePath) !== undefined) continue;
+        } else {
+          const resolved = await validateWorkspaceContextFile(
+            vscode.Uri.file(entry.source.filePath),
+          );
+          if (!resolved.ok || resolved.uri.fsPath !== entry.source.filePath) continue;
+        }
+      }
+      inputs.push(entry.input);
+    }
+    return inputs;
+  }
+
   private async _buildFollowUpInputs(
     request: PendingChatSend,
     workspaceUri: vscode.Uri,
@@ -3363,7 +3389,7 @@ export class ChatStateManager {
     return [
       ...this._typedTextInputs(request.text, request.browseWeb),
       ...mentionInputs,
-      ...request.attachments.map((entry) => entry.input),
+      ...(await this._attachmentInputs(request.attachments)),
     ];
   }
 
@@ -3606,14 +3632,14 @@ export class ChatStateManager {
 
       try {
         const attachmentEntries = [...request.attachments];
-        const attachmentInputs = attachmentEntries.map((entry) => entry.input);
+        const attachmentInputs = await this._attachmentInputs(attachmentEntries);
         const activeProject = getActiveCloudProject(this._context.workspaceState);
         const customInstructionInput = buildCustomInstructionInput(this._context, {
           projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
         });
         const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
-        const editorContext = await withholdGitIgnoredContext(request.editorContext);
-        const contextFiles = contextFilesForWorkspace(cwd, editorContext.contextFiles);
+        const editorContext = await withholdGitIgnoredContext(await request.editorContext);
+        const contextFiles = await contextFilesForWorkspace(cwd, editorContext.contextFiles);
         const editorContextInputs: UserInput[] = editorContext.texts.map((text) => ({
           type: 'text',
           text,
@@ -4421,14 +4447,31 @@ function sameTranscript(
   );
 }
 
-function contextFilesForWorkspace(cwd: string, editorFiles: readonly string[]): string[] {
-  const prefix =
-    cwd.endsWith('/') || cwd.endsWith('\\')
-      ? cwd
-      : `${cwd}${process.platform === 'win32' ? '\\' : '/'}`;
+async function contextFilesForWorkspace(
+  cwd: string,
+  editorFiles: readonly string[],
+): Promise<string[]> {
+  let root: string;
+  try {
+    root = await realpath(cwd);
+  } catch {
+    return [];
+  }
   const selected = new Set([
     ...(getContextPanelProvider()?.getContextFiles() ?? []),
     ...editorFiles,
   ]);
-  return [...selected].filter((filePath) => filePath === cwd || filePath.startsWith(prefix));
+  const allowed = new Set<string>();
+  for (const filePath of selected) {
+    if (
+      !resolveContained(cwd, filePath, { allowAbsolute: true }).ok &&
+      !resolveContained(root, filePath, { allowAbsolute: true }).ok
+    )
+      continue;
+    const resolved = await validateWorkspaceContextFile(vscode.Uri.file(filePath));
+    if (resolved.ok && resolveContained(root, resolved.uri.fsPath, { allowAbsolute: true }).ok) {
+      allowed.add(resolved.uri.fsPath);
+    }
+  }
+  return [...allowed];
 }

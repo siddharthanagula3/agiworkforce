@@ -31,7 +31,6 @@ import {
 import { resolveCloudCodeAgentModel } from '@agiworkforce/types';
 import { resolveTierSync } from './integrations/tierResolver';
 import { Config } from './platform/config';
-import { clearGitIgnoreCache } from './data/contextExclusion';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
 import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
@@ -427,7 +426,6 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('search.exclude') ||
         e.affectsConfiguration('files.exclude')
       ) {
-        clearGitIgnoreCache();
         sidebarProvider?.pushEditorContext();
       }
 

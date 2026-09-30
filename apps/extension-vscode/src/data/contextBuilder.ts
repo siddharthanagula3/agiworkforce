@@ -20,6 +20,8 @@ export interface ActiveFileContext {
   lineCount: number;
 }
 
+export type EditorContextSource = Pick<vscode.TextEditor, 'document' | 'selection'>;
+
 export interface OpenFileEntry {
   filePath: string;
   relativePath: string;
@@ -36,9 +38,10 @@ export interface DiagnosticEntry {
 }
 
 export class ContextBuilder {
-  getActiveFileContext(): ActiveFileContext | undefined {
+  getActiveFileContext(
+    editor: EditorContextSource | undefined = vscode.window.activeTextEditor,
+  ): ActiveFileContext | undefined {
     try {
-      const editor = vscode.window.activeTextEditor;
       if (editor === undefined) return undefined;
 
       const { document, selection } = editor;
@@ -169,9 +172,10 @@ export class ContextBuilder {
     }
   }
 
-  getDiagnosticsContext(): DiagnosticEntry[] {
+  getDiagnosticsContext(
+    editor: EditorContextSource | undefined = vscode.window.activeTextEditor,
+  ): DiagnosticEntry[] {
     try {
-      const editor = vscode.window.activeTextEditor;
       if (editor === undefined) return [];
 
       const allDiagnostics = vscode.languages.getDiagnostics(editor.document.uri);
