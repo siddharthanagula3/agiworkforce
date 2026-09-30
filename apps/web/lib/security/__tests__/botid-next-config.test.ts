@@ -1,11 +1,13 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { statSync } from 'node:fs';
+import path from 'node:path';
 import type { NextConfig } from 'next';
+import { PHASE_PRODUCTION_BUILD, PHASE_PRODUCTION_SERVER } from 'next/constants';
 
 import { BOT_PROTECTION_ENV_VAR, BOT_PROTECTION_MODES } from '../bot-protection';
 
-const PHASE_PRODUCTION_BUILD = 'phase-production-build';
 const BOTID_CHALLENGE_SOURCE =
   '/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/a-4-a/c.js';
 const BOTID_PROXY_SOURCE =
@@ -21,14 +23,14 @@ type NextConfigFn = (
 type ResolvedRewrites = Awaited<ReturnType<NonNullable<NextConfig['rewrites']>>>;
 type RewriteRule = Extract<ResolvedRewrites, unknown[]>[number];
 
-async function loadNextConfig(): Promise<NextConfig> {
+async function loadNextConfig(phase: string = PHASE_PRODUCTION_BUILD): Promise<NextConfig> {
   vi.resetModules();
   const imported = (await import('../../../next.config')) as {
     default: NextConfig | NextConfigFn;
   };
   const exported = imported.default;
   if (typeof exported === 'function') {
-    return await exported(PHASE_PRODUCTION_BUILD, { defaultConfig: {} });
+    return await exported(phase, { defaultConfig: {} });
   }
   return exported;
 }
@@ -105,6 +107,15 @@ describe('botid rewrites in next.config', () => {
 });
 
 describe('standalone output in next.config', () => {
+  it('does not regenerate the frozen legal artifact when starting production', async () => {
+    const artifact = path.resolve(__dirname, '../../legal/route-isolation.generated.json');
+    const before = statSync(artifact, { bigint: true }).mtimeNs;
+    const config = await loadNextConfig(PHASE_PRODUCTION_SERVER);
+
+    expect(config.outputFileTracingRoot).toBeTruthy();
+    expect(statSync(artifact, { bigint: true }).mtimeNs).toBe(before);
+  }, 60_000);
+
   it('leaves the hosted build untouched unless the drill asks for it', async () => {
     vi.stubEnv(STANDALONE_ENV_VAR, '');
     const config = await loadNextConfig();
