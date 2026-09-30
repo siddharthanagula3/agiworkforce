@@ -6,6 +6,7 @@ import { classifyTaskLocally, estimateTokens } from '@agiworkforce/routing';
 import { getSlotForModel, isFlagshipRoutingSlot } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { accountAccessDecision } from '@/lib/auth/account-status';
+import { orderInstructionBlocks } from '@/lib/prompts/instruction-precedence';
 import { readAccountStatus } from '@/lib/auth/account-lifecycle';
 import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
@@ -145,13 +146,16 @@ export async function answerMobileIntentAsk(input: {
     throw error;
   }
   const messages = [
-    { role: 'system' as const, content: ASK_DIRECTIVE },
+    ...orderInstructionBlocks([{ layer: 'system', text: ASK_DIRECTIVE }]).map(({ text }) => ({
+      role: 'system' as const,
+      content: text,
+    })),
     { role: 'user' as const, content: prompt },
   ];
   const estimatedCostMicrousd = LLMCostCalculator.estimateCostMicrousd(
     route.provider,
     route.modelKey,
-    estimateTokens(`${ASK_DIRECTIVE}\n${prompt}`, route.modelKey) + 32,
+    estimateTokens(messages.map(({ content }) => content).join('\n'), route.modelKey) + 32,
     MAX_OUTPUT_TOKENS,
   );
   const requestId = randomBytes(16).toString('hex');
