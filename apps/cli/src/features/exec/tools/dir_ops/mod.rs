@@ -464,7 +464,7 @@ mod tests {
              apps/web/.env.production:1:DATABASE_URL=postgres://user:pw@host/db\n\
              deploy/id_rsa:1:OPENSSH_KEY_BODY_PLACEHOLDER\n\
              certs/server.pem:1:PEM_KEY_BODY_PLACEHOLDER\n\
-             docs/setup.md:9:copy .env.example to .env\n"
+             docs/development/README.md:9:copy .env.example to .env\n"
         );
 
         let answer = searched("search_files", raw).output;
@@ -477,7 +477,7 @@ mod tests {
         assert!(!answer.contains("OPENSSH_KEY_BODY_PLACEHOLDER"), "{answer}");
         assert!(!answer.contains("PEM_KEY_BODY_PLACEHOLDER"), "{answer}");
         assert!(answer.contains("src/billing.rs:12:"), "{answer}");
-        assert!(answer.contains("docs/setup.md:9:"), "{answer}");
+        assert!(answer.contains("docs/development/README.md:9:"), "{answer}");
         assert!(
             answer.contains("4 match(es) withheld"),
             "the answer does not say what it held back: {answer}"
@@ -518,7 +518,7 @@ mod tests {
             "src/main.rs",
             "README.md",
             "environment.ts",
-            "docs/credentials-guide.md",
+            "docs/security/security.md",
             "package.json",
         ] {
             let line = format!("{path}:7:value");
