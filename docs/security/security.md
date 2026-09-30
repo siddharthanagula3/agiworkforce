@@ -92,6 +92,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `compare_products`             | asks                   | runs                           | read, reversible                                                                 |
 | `url_fetch`                    | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
 | `execute_code`                 | asks                   | runs                           | execute, not reversible, createsEgressPath, autoInReadOnlyMode                   |
+| `run_command`                  | asks                   | asks                           | execute, not reversible, acceptsUntrustedContent, createsEgressPath              |
 | `write_file`                   | asks                   | asks                           | write, not reversible                                                            |
 | `create_folder`                | asks                   | asks                           | write, reversible                                                                |
 | `list_files`                   | asks                   | runs                           | read, reversible                                                                 |
