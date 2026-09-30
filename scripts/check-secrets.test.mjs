@@ -461,7 +461,7 @@ test(
       batch: historyRecord(HISTORY_A, 'blob', 'clean'),
     });
     assert.equal(result.status, 0);
-    assert.match(result.output, /1 history blobs/);
+    assert.match(result.output, /1 history objects/);
   },
 );
 
@@ -474,7 +474,7 @@ test(
     const input = { inventory: `${HISTORY_A} src/large.ts\n`, batch: complete };
     const result = scanWithGitOutput(input);
     assert.equal(result.status, 0);
-    assert.match(result.output, /1 oversized history blobs excluded/);
+    assert.match(result.output, /1 oversized history objects excluded/);
     const truncated = scanWithGitOutput({
       ...input,
       batch: complete.subarray(0, complete.length - 1),
@@ -512,3 +512,54 @@ test(
     assert.ok(result.calls.includes(JSON.stringify({ input: `${HISTORY_A}\n${HISTORY_B}\n` })));
   },
 );
+
+for (const [type, inventory] of [
+  ['tag', `${HISTORY_A} v-cli-1.0.0\n`],
+  ['commit', `${HISTORY_A}\n`],
+]) {
+  test(
+    `clean ${type} history is inspected without rejecting valid Git objects`,
+    fakeGitOptions,
+    () => {
+      const result = scanWithGitOutput({
+        inventory,
+        batch: historyRecord(HISTORY_A, type, 'clean'),
+      });
+      assert.equal(result.status, 0);
+      assert.match(result.output, /1 history objects/);
+      assert.ok(result.calls.includes(JSON.stringify({ input: `${HISTORY_A}\n` })));
+    },
+  );
+
+  test(`a ${type} message cannot hide credentials from history inspection`, fakeGitOptions, () => {
+    const result = scanWithGitOutput({
+      inventory,
+      batch: historyRecord(HISTORY_A, type, VENDOR_SK),
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.output, /Vendor API key/);
+    assert.ok(!result.output.includes(VENDOR_SK.slice(0, 12)));
+  });
+}
+
+for (const label of ['release.lock', 'build/release', 'scripts/check-secrets.mjs']) {
+  test(`a tag named ${label} is not a file exclusion`, fakeGitOptions, () => {
+    const result = scanWithGitOutput({
+      inventory: `${HISTORY_A} ${label}\n`,
+      batch: historyRecord(HISTORY_A, 'tag', VENDOR_SK),
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.output, /Vendor API key/);
+    assert.ok(result.calls.includes(JSON.stringify({ input: `${HISTORY_A}\n` })));
+  });
+}
+
+test('a credential-bearing tag name is never used as a diagnostic label', fakeGitOptions, () => {
+  const result = scanWithGitOutput({
+    inventory: `${HISTORY_A} ${VENDOR_SK}\n`,
+    batch: historyRecord(HISTORY_A, 'tag', `tag ${VENDOR_SK}\n\nrelease`),
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.output, /git tag [a-f0-9]+.*Vendor API key/);
+  assert.ok(!result.output.includes(VENDOR_SK.slice(0, 12)));
+});
