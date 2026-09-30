@@ -94,11 +94,13 @@ describe('a Recents row says which conversation it is', () => {
 describe('a Recents row says what has been done to the conversation', () => {
   it('draws a starred conversation with its mark and an unstarred one without', () => {
     const { container, unmount } = renderRow({ starred: true });
-    expect(container.querySelector('.fill-amber-400')).toBeTruthy();
+    const star = container.querySelector('svg.fill-warning-fill');
+    expect(star).toBeTruthy();
+    expect(star?.getAttribute('class')).toContain('text-warning-text');
     unmount();
 
     const plain = renderRow();
-    expect(plain.container.querySelector('.fill-amber-400')).toBeNull();
+    expect(plain.container.querySelector('svg.fill-warning-fill')).toBeNull();
   });
 
   it('offers Unpin on a pinned conversation and Pin on one that is not', () => {
