@@ -79,28 +79,31 @@ there is no data subject to protect and the gate would only be a wall. That
 boundary is pinned by a test that fails if anyone reintroduces it:
 `__tests__/age-gate-guards-cloud-not-local.test.ts`.
 
-**Region-aware thresholds.** The threshold is chosen from the device's IANA time
-zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`), no location
-permission, no IP geolocation, no network call:
+**Threshold: 18 everywhere.** `getAgeThreshold` takes the larger of the device
+time zone's regional age and `ACCOUNT_HOLDER_MINIMUM_AGE` (18, in
+`packages/contracts/types/src/account-eligibility.ts`), so every region asks for
+18 before Cloud sign-in. The region comes from the device's IANA time zone
+(`Intl.DateTimeFormat().resolvedOptions().timeZone`), no location permission, no
+IP geolocation, no network call, and no regional age is above 18:
 
-| Threshold | Regions (by time-zone prefix)                                                                                                                                                  |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 18        | India (`Asia/Kolkata`, `Asia/Calcutta`), Brazil (all `America/*` BR zones)                                                                                                     |
-| 16        | EU member-state zones (AT, BE, BG, CY, CZ, DE, DK, EE, ES, FI, FR, GR, HR, HU, IE, IT, LT, LU, LV, MT, NL, PL, PT, RO, SE, SI, SK), plus North Macedonia (`Europe/Skopje`, MK) |
-| 13        | United Kingdom (`Europe/London`, Belfast, Jersey, Guernsey)                                                                                                                    |
-| 13        | Everywhere else (`DEFAULT_RULE`), including when the time zone cannot be read                                                                                                  |
+| Regional age | Regions (by time-zone prefix)                                                                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 18           | India (`Asia/Kolkata`, `Asia/Calcutta`), Brazil (all `America/*` BR zones)                                                                                                     |
+| 16           | EU member-state zones (AT, BE, BG, CY, CZ, DE, DK, EE, ES, FI, FR, GR, HR, HU, IE, IT, LT, LU, LV, MT, NL, PL, PT, RO, SE, SI, SK), plus North Macedonia (`Europe/Skopje`, MK) |
+| 13           | United Kingdom (`Europe/London`, Belfast, Jersey, Guernsey)                                                                                                                    |
+| 13           | Everywhere else (`DEFAULT_RULE`), including when the time zone cannot be read                                                                                                  |
 
 **What it stores.** One MMKV record under `age-gate:v1`: confirmed flag, minor
 flag, timestamp, region code, threshold. It is on-device only and is never sent
 anywhere. The screen says so verbatim: "Your age is stored only on this device
 and never shared."
 
-**Minor-safe mode is one-way.** If the entered age is below the region threshold,
-`confirmAgeGate` records `isMinor: true` and thereafter refuses to accept a higher
-age, nothing in the app verifies a typed age, so accepting one would let the
-protected user switch the protection off. Only `clearAgeGate` lifts it, and the
-locked screen tells the user the honest way to do that: reinstall the app. The
-screen is `age-gate-minor-locked` in `app/(public)/age-gate.tsx`.
+**Minor-safe mode is one-way.** If the entered age is under 18, `confirmAgeGate`
+records `isMinor: true` and thereafter refuses to accept a higher age, nothing in
+the app verifies a typed age, so accepting one would let the protected user
+switch the protection off. Only `clearAgeGate` lifts it, and the refusal screen
+tells the user the honest way to do that: reinstall the app. The screen is
+`age-gate-refused` in `app/(public)/age-gate.tsx`.
 
 **What minor mode does.** `lib/contentFilter.ts` checks every outgoing prompt
 against a shared blocklist before it reaches any model, local or cloud. The check
@@ -109,8 +112,9 @@ is synchronous and purely client-side. A blocked prompt gets the fixed
 (`src/features/settings/parental-controls/index.tsx`) shows the state and can
 review, but explicitly cannot turn it off.
 
-**To exercise it:** tap Cloud sign-in, enter an age below the threshold for your
-device's time zone, and the "Minor-safe mode enabled" screen appears.
+**To exercise it:** tap Cloud sign-in, enter an age under 18, and the "Age
+requirement" screen appears; Settings → Parental Controls then reads "Minor-safe
+mode is active". Only a reinstall lets that device sign in to Cloud again.
 
 ## Reporting AI-generated content
 

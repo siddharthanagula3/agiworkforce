@@ -183,7 +183,7 @@ describe('GET /api/library', () => {
     mockQuery.mockClear();
     await GET(makeRequest('?sort=type'));
     expect((mockQuery.mock.calls[0] as [string])[0]).toContain(
-      'order by kind asc, mime_type asc, created_at desc',
+      "order by mime_type asc, coalesce(metadata->>'filename', kind) asc",
     );
 
     mockQuery.mockClear();

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
@@ -188,10 +188,15 @@ describe('GET /api/settings/organization/policy', () => {
 describe('PATCH /api/settings/organization/policy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
     mockGetUserScopedDb.mockResolvedValue({
       db: { query: (...args: unknown[]) => mockQuery(...args) },
       userId: 'user-1',
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('refuses a member', async () => {
@@ -429,6 +434,20 @@ describe('PATCH /api/settings/organization/policy', () => {
     const response = await PATCH(request({ requireMfa: true }) as never);
 
     expect(response.status).toBe(400);
+    expect(upsertParams()).toEqual([]);
+  });
+
+  it('refuses to start requiring mfa while members cannot enrol an authenticator', async () => {
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '');
+    bindCaller({ policyRow: SAVED_POLICY });
+    mockResolveMfaEnrolled.mockResolvedValueOnce(true);
+
+    const response = await PATCH(request({ requireMfa: true }) as never);
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toMatch(
+      /requiring multi-factor authentication is temporarily unavailable/i,
+    );
     expect(upsertParams()).toEqual([]);
   });
 
