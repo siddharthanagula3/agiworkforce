@@ -230,6 +230,95 @@ fn is_agent_instruction_path(path: &Path) -> bool {
     })
 }
 
+const PROTECTED_DIRECTORIES: &[&str] = &[
+    ".git",
+    ".vscode",
+    ".idea",
+    ".husky",
+    ".cargo",
+    ".devcontainer",
+    ".yarn",
+    ".mvn",
+];
+
+const PROTECTED_FILES: &[&str] = &[
+    ".gitconfig",
+    ".gitmodules",
+    ".bashrc",
+    ".bash_profile",
+    ".bash_login",
+    ".bash_aliases",
+    ".bash_logout",
+    ".zshrc",
+    ".zprofile",
+    ".zshenv",
+    ".zlogin",
+    ".zlogout",
+    ".profile",
+    ".envrc",
+    ".npmrc",
+    ".yarnrc",
+    ".yarnrc.yml",
+    ".pnp.cjs",
+    ".pnp.loader.mjs",
+    ".pnpmfile.cjs",
+    "bunfig.toml",
+    ".bunfig.toml",
+    ".bazelrc",
+    ".bazelversion",
+    ".bazeliskrc",
+    ".pre-commit-config.yaml",
+    "lefthook.yml",
+    "lefthook.yaml",
+    ".lefthook.yml",
+    ".lefthook.yaml",
+    "gradle-wrapper.properties",
+    "maven-wrapper.properties",
+    ".devcontainer.json",
+    ".ripgreprc",
+    "pyrightconfig.json",
+    ".mcp.json",
+    ".claude.json",
+];
+
+pub fn is_protected_path(path: &Path) -> bool {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let roots = allowed_workspace_roots(&cwd);
+    [path.to_path_buf(), resolve_for_denylist(path)]
+        .iter()
+        .any(|candidate| {
+            let relative = roots
+                .iter()
+                .find_map(|root| candidate.strip_prefix(root).ok())
+                .unwrap_or(candidate);
+            names_protected_location(relative)
+        })
+}
+
+fn names_protected_location(path: &Path) -> bool {
+    let names: Vec<String> = path
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(name) => Some(name.to_string_lossy().to_lowercase()),
+            _ => None,
+        })
+        .collect();
+    if names
+        .last()
+        .is_some_and(|name| PROTECTED_FILES.contains(&name.as_str()))
+    {
+        return true;
+    }
+    names.iter().enumerate().any(|(index, name)| {
+        let next = names.get(index + 1).map(String::as_str);
+        match name.as_str() {
+            ".claude" | ".agiworkforce" => next != Some("worktrees"),
+            ".config" => next == Some("git"),
+            other => PROTECTED_DIRECTORIES.contains(&other),
+        }
+    })
+}
+
 /// Canonicalize the deepest existing ancestor of `path` and re-attach the
 /// components below it.
 ///
