@@ -207,6 +207,7 @@ export * from './resource-lifecycle';
 export * from './client-capability-manifest';
 export * from './experiment-registry';
 export * from './feature-release';
+export { featureDefinition, featureMaturityLabel } from './feature-registry';
 export * from './request-identity';
 
 export * from './file-reference';

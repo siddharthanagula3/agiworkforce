@@ -20,6 +20,7 @@ export const EXTRA_KILL_SWITCH_CAPABILITIES = [
   'screen_share',
   'in_app_purchase',
   'desktop_update',
+  'fast_mode',
 ] as const;
 
 export type ExtraKillSwitchCapability = (typeof EXTRA_KILL_SWITCH_CAPABILITIES)[number];
@@ -28,6 +29,7 @@ export type KillSwitchCapability = PlatformCapability | ExtraKillSwitchCapabilit
 export const COMPUTER_USE_CAPABILITY: KillSwitchCapability = 'canUseDesktopAutomation';
 export const BROWSER_CAPABILITY: KillSwitchCapability = 'canUseBrowserAutomation';
 export const WORK_CAPABILITY: KillSwitchCapability = 'canUseAgiWork';
+export const FAST_MODE_CAPABILITY: KillSwitchCapability = 'fast_mode';
 export const DICTATION_CAPABILITY: KillSwitchCapability = 'dictation';
 export const SCREEN_SHARE_CAPABILITY: KillSwitchCapability = 'screen_share';
 export const DESKTOP_UPDATE_CAPABILITY: KillSwitchCapability = 'desktop_update';

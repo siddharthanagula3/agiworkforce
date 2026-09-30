@@ -9,7 +9,11 @@ import {
 import { managedCloudDataRegion } from '@/lib/server/data-region';
 
 import { evaluateFlags, type FlagEvaluation, type FlagSubject } from './evaluate-flags';
-import { getActiveFlagDefinitions, getSubjectOverrides } from './flag-store';
+import {
+  getActiveFlagDefinitions,
+  getSubjectOverrides,
+  type FlagStoreReadOptions,
+} from './flag-store';
 
 const COUNTRY_HEADER = 'x-vercel-ip-country';
 const COUNTRY_PATTERN = /^[A-Z]{2}$/;
@@ -52,14 +56,14 @@ export function buildFlagSubject(request: Request, facts: FlagSubjectFacts): Fla
 
 export async function evaluateFlagsForSubject(
   subject: FlagSubject,
-  options: { keyPrefix?: string; keyPrefixes?: readonly string[] } = {},
+  options: { keyPrefix?: string; keyPrefixes?: readonly string[] } & FlagStoreReadOptions = {},
   nowMs: number = Date.now(),
 ): Promise<Record<string, FlagEvaluation>> {
   const prefixes = [
     ...(options.keyPrefix === undefined ? [] : [options.keyPrefix]),
     ...(options.keyPrefixes ?? []),
   ];
-  const definitions = (await getActiveFlagDefinitions(nowMs)).filter(
+  const definitions = (await getActiveFlagDefinitions(nowMs, options)).filter(
     (definition) =>
       prefixes.length === 0 ||
       prefixes.some((prefix) => definition.key === prefix || definition.key.startsWith(prefix)),
@@ -69,6 +73,18 @@ export async function evaluateFlagsForSubject(
     subject.userId,
     subject.workspaceId,
     definitions.map((definition) => definition.key),
+    options,
   );
+  if (
+    options.failClosed &&
+    overrides.some(
+      (override) =>
+        !definitions
+          .find((definition) => definition.key === override.flagKey)
+          ?.variants.includes(override.variant),
+    )
+  ) {
+    throw new Error('Stored flag override does not name a declared variant');
+  }
   return evaluateFlags(definitions, subject, overrides, nowMs);
 }
