@@ -42,7 +42,7 @@
     "test:node": "node --test scripts/ios-device-dev.test.mjs scripts/release/*.test.mjs && python3 -m unittest discover -s scripts/release -p 'test_verify_ios_ipa.py'",
     "test:local": "jest --runInBand --forceExit",
     "test:handles": "jest --runInBand --detectOpenHandles --openHandlesTimeout=5000",
-    "test:e2e:ios:ci": "detox test --configuration ios.sim.release --artifacts-location artifacts/mobile-e2e scripts/screenshots/specs/ci-smoke.spec.ts",
+    "test:e2e:ios:ci": "detox test --configuration ios.sim.release --artifacts-location artifacts/mobile-e2e --record-logs failing --take-screenshots failing --record-videos failing --capture-view-hierarchy enabled scripts/screenshots/specs/ci-smoke.spec.ts",
     "screenshots": "tsx scripts/screenshots/pipeline.ts all",
     "screenshots:ios": "tsx scripts/screenshots/pipeline.ts ios",
     "screenshots:android": "tsx scripts/screenshots/pipeline.ts android",
