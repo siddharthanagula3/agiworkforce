@@ -530,7 +530,7 @@ async function connectDirectoryTarget(
 }
 
 async function handleCreateConnector(request: NextRequest) {
-  const { db, userId, organizationId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -562,7 +562,6 @@ async function handleCreateConnector(request: NextRequest) {
   const policyDecision = await evaluateConnectorPolicyForUser({
     db,
     userId,
-    organizationId,
     connectorId: body.connectorId,
     ...(directoryTarget ? { isCustom: true, url: directoryTarget.mcpUrl } : {}),
     request,

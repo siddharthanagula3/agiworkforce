@@ -305,6 +305,50 @@ describe('syncNow, pull', () => {
     expect(cloud.messages.c1?.[0]?.parentId).toBe('m0');
   });
 
+  it('drops an answer label the server row no longer carries', async () => {
+    seedConversation('c1');
+    seedMessage('c1', {
+      id: 'm1',
+      role: 'assistant',
+      model: 'fixture-model',
+      provider: 'openai',
+    });
+    mockGet.mockResolvedValueOnce({
+      conversations: [convDelta('c1', '5')],
+      messages: [msgDelta('m1', 'c1', '6', { role: 'assistant' })],
+      artifacts: [],
+      cursor: '6',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    const message = useChatCloudMessageStore.getState().messages.c1?.[0];
+    expect(message).toMatchObject({ id: 'm1', serverVersion: '6' });
+    expect(message).not.toHaveProperty('model');
+    expect(message).not.toHaveProperty('provider');
+  });
+
+  it('keeps the model a question was asked with when the server row has none', async () => {
+    seedConversation('c1');
+    seedMessage('c1', { id: 'm1', role: 'user', model: 'fixture-model', provider: 'openai' });
+    mockGet.mockResolvedValueOnce({
+      conversations: [convDelta('c1', '5')],
+      messages: [msgDelta('m1', 'c1', '6')],
+      artifacts: [],
+      cursor: '6',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    expect(useChatCloudMessageStore.getState().messages.c1?.[0]).toMatchObject({
+      serverVersion: '6',
+      model: 'fixture-model',
+      provider: 'openai',
+    });
+  });
+
   it('hydrates a pending approval projection from synced metadata after a cold device pull', async () => {
     const runId = '018f6f2a-0000-7000-8000-000000000099';
     mockGet.mockResolvedValueOnce({
@@ -511,6 +555,8 @@ describe('syncNow, push', () => {
       content: 'hi there',
       baseVersion: '0',
     });
+    expect(body.messages[0]).not.toHaveProperty('model');
+    expect(body.messages[0]).not.toHaveProperty('provider');
 
     const sync = useCloudSyncStateStore.getState();
     expect(sync.dirtyConversationIds).toEqual([]);

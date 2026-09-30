@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 const authState = { isSignedIn: false, isLoaded: true };
@@ -17,7 +17,28 @@ vi.mock('@/features/settings/components/SettingsModalRedirect', () => ({
   ),
 }));
 
+const { mockGetManagedSkillCatalog } = vi.hoisted(() => ({
+  mockGetManagedSkillCatalog: vi.fn(),
+}));
+
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/skill-catalog-service')>()),
+  getManagedSkillCatalog: mockGetManagedSkillCatalog,
+}));
+
 import SkillsPage from '../page';
+
+async function renderPage() {
+  render(await SkillsPage());
+}
+
+beforeEach(() => {
+  mockGetManagedSkillCatalog.mockReset();
+  mockGetManagedSkillCatalog.mockResolvedValue([
+    { name: 'review-checklist', description: 'Walks a change through a review checklist.' },
+  ]);
+});
 
 /**
  * /skills is sitemap-indexed at 0.8 and is the CTA target of two marketing
@@ -30,7 +51,7 @@ describe('/skills for a signed-out visitor', () => {
     authState.isSignedIn = false;
     authState.isLoaded = true;
 
-    render(<SkillsPage />);
+    await renderPage();
 
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(/skills/i);
     expect(screen.getByText(/reusable instruction set/i)).toBeTruthy();
@@ -39,16 +60,34 @@ describe('/skills for a signed-out visitor', () => {
   it('offers the sign-in rather than performing it', async () => {
     authState.isSignedIn = false;
 
-    render(<SkillsPage />);
+    await renderPage();
 
-    const signIn = await screen.findByRole('link', { name: /sign in to browse skills/i });
+    const signIn = await screen.findByRole('link', { name: /sign in to use skills/i });
     expect(signIn.getAttribute('href')).toBe('/login?redirectTo=%2Fskills');
+  });
+
+  it('lists the built-in skills a visitor can expect before signing in', async () => {
+    authState.isSignedIn = false;
+
+    await renderPage();
+
+    expect(await screen.findByText('review-checklist')).toBeInTheDocument();
+    expect(screen.getByText('Walks a change through a review checklist.')).toBeInTheDocument();
+  });
+
+  it('says so when the skill catalogue cannot be read', async () => {
+    authState.isSignedIn = false;
+    mockGetManagedSkillCatalog.mockRejectedValue(new Error('catalogue offline'));
+
+    await renderPage();
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/temporarily unreachable/i);
   });
 
   it('still opens the settings surface once signed in', async () => {
     authState.isSignedIn = true;
 
-    render(<SkillsPage />);
+    await renderPage();
 
     expect(await screen.findByTestId('settings-redirect')).toHaveTextContent('skills');
   });

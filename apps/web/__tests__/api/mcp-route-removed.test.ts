@@ -19,9 +19,9 @@ function sourceFiles(dir: string): string[] {
 /**
  * `POST /api/mcp` connected to an arbitrary user-supplied MCP server and
  * returned its tool catalog, with no plan gate. Its sibling
- * `POST /api/connectors/custom` does the same discovery behind
- * `assertCustomConnectorCapacity` and `assertConnectorToolCapacity`, persists
- * the result and writes an audit row. Nothing in the product ever called
+ * `POST /api/connectors/custom` does the same discovery through
+ * `createCustomConnector`, behind `assertCustomConnectorCapacity` and
+ * `assertConnectorToolCapacity`, persists the result and writes an audit row. Nothing in the product ever called
  * `/api/mcp`, so the weaker of the two paths was reachable only by hand.
  *
  * It was removed rather than gated, because a second route for one capability
@@ -46,8 +46,12 @@ describe('the ungated /api/mcp connect-and-discover route stays removed', () => 
   it('leaves the gated sibling as the single owner of custom MCP discovery', () => {
     const sibling = join(WEB_ROOT, 'app', 'api', 'connectors', 'custom', 'route.ts');
     expect(statSync(sibling).isFile()).toBe(true);
-    const source = readFileSync(sibling, 'utf8');
-    expect(source).toContain('assertCustomConnectorCapacity');
-    expect(source).toContain('assertConnectorToolCapacity');
+    expect(readFileSync(sibling, 'utf8')).toContain('createCustomConnector(');
+    const service = readFileSync(
+      join(WEB_ROOT, 'lib', 'connectors', 'custom-connector-creation.ts'),
+      'utf8',
+    );
+    expect(service).toContain('assertCustomConnectorCapacity');
+    expect(service).toContain('assertConnectorToolCapacity');
   });
 });

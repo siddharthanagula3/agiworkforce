@@ -10,6 +10,7 @@ import type { CopyrightNoticeRecord, CopyrightNoticeStatus } from '@/lib/server/
 import { formatDateTime } from '../lib/operator-format';
 
 const NOTICES_ENDPOINT = '/api/admin/copyright-notices';
+const NOTICES_UNREADABLE = 'Notices could not be loaded.';
 const TAKEDOWN_ENDPOINT = '/api/admin/takedown';
 
 const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
@@ -72,16 +73,16 @@ export default function CopyrightNoticeQueuePanel() {
     setLoadError(null);
     try {
       const query = view === 'received' ? '?status=received' : '';
-      const body = await readJson<{ notices: CopyrightNoticeRecord[] }>(
+      const body = await readJson<{ notices?: CopyrightNoticeRecord[] } | null>(
         `${NOTICES_ENDPOINT}${query}`,
       );
+      const listed = body?.notices;
+      if (!Array.isArray(listed)) throw new Error(NOTICES_UNREADABLE);
       setNotices(
-        view === 'received'
-          ? body.notices
-          : body.notices.filter((notice) => notice.status !== 'received'),
+        view === 'received' ? listed : listed.filter((notice) => notice.status !== 'received'),
       );
     } catch (error) {
-      setLoadError(toUserMessage(error, 'Notices could not be loaded.'));
+      setLoadError(toUserMessage(error, NOTICES_UNREADABLE));
     } finally {
       setLoading(false);
     }

@@ -12,6 +12,14 @@ const MIGRATIONS_DIR = join(process.cwd(), 'db/neon');
  */
 const SEPARATELY_IDENTIFIED = /(?:session|device|identit|connector|api_key)/;
 
+/**
+ * Rows that record a fact about one identity-provider session are keyed by that
+ * session's own id, which is already an object of its own and never the account.
+ */
+const KEYED_BY_ITS_SESSION: Readonly<Record<string, string>> = {
+  account_security_sessions: 'session_id',
+};
+
 function migrationSql(): { file: string; sql: string }[] {
   return readdirSync(MIGRATIONS_DIR)
     .filter((name) => /^\d{4}_.*\.sql$/.test(name))
@@ -136,15 +144,21 @@ describe('authentication identity object', () => {
       if (!SEPARATELY_IDENTIFIED.test(name)) continue;
       if (!shape.columns.has('user_id')) continue;
       checked.push(name);
+      const rowId = KEYED_BY_ITS_SESSION[name] ?? 'id';
       expect(shape.body, `${name} has no row id of its own`).toMatch(
-        /\bid\s+\w+[^,]*\bprimary\s+key\b/i,
+        new RegExp(`\\b${rowId}\\s+\\w+[^,]*\\bprimary\\s+key\\b`, 'i'),
       );
       expect(shape.body, `${name} keys its rows by the account that owns them`).not.toMatch(
         /\buser_id\s+\w+[^,]*\bprimary\s+key\b/i,
       );
     }
 
-    for (const required of ['account_sessions', 'device_registrations', 'user_connectors']) {
+    for (const required of [
+      'account_sessions',
+      'device_registrations',
+      'user_connectors',
+      ...Object.keys(KEYED_BY_ITS_SESSION),
+    ]) {
       expect(checked).toContain(required);
     }
     expect(checked.length).toBeGreaterThan(5);

@@ -6,6 +6,7 @@ import { ChatCodeRunRequestSchema, type ChatCodeRunResponse } from '@agiworkforc
 import { requireCsrfToken } from '@/lib/csrf';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
+import { EXECUTE_CODE_TOOL } from '@/lib/e2b/execution-tools';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import {
@@ -19,6 +20,7 @@ import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveCloudCodeExecutionPolicy } from '@/lib/server/code-execution-policy';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
@@ -109,8 +111,25 @@ async function handleCodeRun(request: NextRequest, context: RouteContext) {
     throw createError.serviceUnavailable(codeExecutionUnavailableMessage(cause)).asUserSafe();
   }
 
+  const startedAt = Date.now();
   try {
     const result = await executor.runCode({ ...parsed.data, signal: request.signal });
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      request,
+      surface,
+      eventType: 'tool_executed',
+      outcome: result.ok ? 'success' : 'failure',
+      detail: {
+        resourceType: 'tool',
+        resourceId: EXECUTE_CODE_TOOL,
+        source: 'code-execution',
+        status: result.ok ? 'completed' : 'failed',
+        conversationId: id,
+        durationMs: Date.now() - startedAt,
+      },
+    });
     const body: ChatCodeRunResponse = {
       ok: result.ok,
       output: result.output,
