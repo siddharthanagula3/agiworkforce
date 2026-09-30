@@ -69,6 +69,28 @@ beforeEach(() => {
 });
 
 describe('remote control host in the desktop main process', () => {
+  it('reconnects with the rotated credential instead of the consumed one', () => {
+    vi.useFakeTimers();
+    const host = makeHost();
+    try {
+      host.start(startRequest());
+      const first = clientOptions!;
+      first.onEvent({
+        type: 'registered',
+        pairToken: 'b'.repeat(64),
+        expiresAt: 1234,
+        peerConnected: false,
+      });
+      first.onEvent({ type: 'close' });
+      vi.advanceTimersByTime(1000);
+      expect(clientOptions).not.toBe(first);
+      expect(clientOptions?.pairToken).toBe('b'.repeat(64));
+    } finally {
+      host.stop();
+      vi.useRealTimers();
+    }
+  });
+
   it('registers as the desktop and publishes a QR payload carrying the out-of-band secret', () => {
     const host = makeHost();
     const state = host.start(startRequest());

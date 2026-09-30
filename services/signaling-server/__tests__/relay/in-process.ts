@@ -3,7 +3,13 @@ import WebSocket from 'ws';
 
 import * as db from '../../src/db.js';
 import type { SignalingSession } from '../../src/db.js';
-import { pairingDeviceId, pairingDeviceIds } from '../../src/pairing-device.js';
+import {
+  pairingDeviceId,
+  pairingDeviceIds,
+  pairingDeviceKey,
+  withPairingDevice,
+} from '../../src/pairing-device.js';
+import { pairCredentialKey, withPairCredential } from '../../src/pair-token.js';
 import { freePort } from '../websocket/harness.js';
 
 export const INTERNAL_SECRET = 'in-process-internal-secret';
@@ -45,15 +51,32 @@ export class FakeStore {
       this.rows.delete(code);
       return this.answer({ error: null });
     });
-    vi.mocked(db.bindSessionDevice).mockImplementation((code, role, deviceId, metadata) => {
-      const row = this.rows.get(code);
-      const heldBy = pairingDeviceId(row?.metadata, role);
-      if (!row || (heldBy !== null && heldBy !== deviceId)) {
-        return this.answer({ data: null, error: null });
-      }
-      row.metadata = clone(metadata);
-      return this.answer({ data: { code }, error: null });
-    });
+    vi.mocked(db.rotatePairCredential).mockImplementation(
+      (session, role, accountId, previous, replacement, deviceId) => {
+        if (this.failing) return this.answer({ data: null, error: down });
+        const row = this.rows.get(session.code);
+        const rawBound = row?.metadata?.[pairingDeviceKey(role)];
+        const bound = rawBound === null || rawBound === undefined ? null : String(rawBound);
+        const key = pairCredentialKey(role);
+        const credentialMatches =
+          previous === null
+            ? !Object.prototype.hasOwnProperty.call(row?.metadata ?? {}, key)
+            : JSON.stringify(row?.metadata?.[key]) === JSON.stringify(previous);
+        if (
+          !row ||
+          row.created_at !== session.created_at ||
+          row.expires_at <= Date.now() ||
+          row.metadata?.['userId'] !== accountId ||
+          !credentialMatches ||
+          (bound !== null && bound !== deviceId)
+        ) {
+          return this.answer({ data: null, error: null });
+        }
+        row.metadata = withPairCredential(row.metadata, role, replacement);
+        if (deviceId !== null) row.metadata = withPairingDevice(row.metadata, role, deviceId);
+        return this.answer({ data: { metadata: clone(row.metadata) }, error: null });
+      },
+    );
     vi.mocked(db.deleteSessionsForDevice).mockImplementation((deviceId) => {
       const removed: string[] = [];
       for (const [code, row] of this.rows) {

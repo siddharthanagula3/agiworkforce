@@ -188,8 +188,16 @@ export class SignalingClient {
     const type = message['type'];
     switch (type) {
       case 'registered': {
+        const pairToken = message['pairToken'];
+        if (typeof pairToken !== 'string' || !/^[a-f0-9]{64}$/.test(pairToken)) {
+          this.options.onEvent({ type: 'error', error: 'invalid_pair_credential' });
+          this.close();
+          return;
+        }
+        this.options.pairToken = pairToken;
         this.options.onEvent({
           type: 'registered',
+          pairToken,
           expiresAt: safeToNumber(message['expiresAt'], 0),
           peerConnected: Boolean(message['peerConnected']),
         });

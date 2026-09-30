@@ -146,6 +146,118 @@ try {
   ]);
   assert.equal(impatient.totalCount, 0, 'Client timeout left an active transaction in the pool');
   assert.equal((await query('SELECT 42 AS answer')).rows[0].answer, 42);
+  await pool.query(
+    'CREATE TABLE signaling_sessions (code text PRIMARY KEY, created_at bigint, expires_at bigint, metadata jsonb)',
+  );
+  process.env['NEON_DATABASE_URL'] = 'postgresql://postgres@127.0.0.1/fixture';
+  const { rotatePairCredential } = await import('../../src/db.js');
+  const { freshPairCredential } = await import('../../src/pair-token.js');
+  const desktopId = randomUUID();
+  const mobileId = randomUUID();
+  const desktop = freshPairCredential(desktopId);
+  const mobile = freshPairCredential(mobileId);
+  const session = { code: 'sql-rotation', created_at: Date.now() };
+  const reset = async (metadata: Record<string, unknown>, expires = Date.now() + 60_000) => {
+    await pool.query('DELETE FROM signaling_sessions');
+    await pool.query('INSERT INTO signaling_sessions VALUES ($1, $2, $3, $4)', [
+      session.code,
+      session.created_at,
+      expires,
+      metadata,
+    ]);
+  };
+  await reset({
+    userId: 'fixture-account',
+    desktopPairCredential: desktop,
+    desktopDeviceId: desktopId,
+  });
+  const replacement = freshPairCredential(desktopId);
+  const [rotatedDesktop, claimedMobile] = await Promise.all([
+    rotatePairCredential(session, 'desktop', 'fixture-account', desktop, replacement, desktopId),
+    rotatePairCredential(session, 'mobile', 'fixture-account', null, mobile, mobileId),
+  ]);
+  assert.equal(rotatedDesktop.error, null);
+  assert(rotatedDesktop.data);
+  assert.equal(claimedMobile.error, null);
+  assert(claimedMobile.data);
+  const stored = (await pool.query('SELECT metadata FROM signaling_sessions')).rows[0].metadata;
+  assert.deepEqual(stored.desktopPairCredential, replacement);
+  assert.deepEqual(stored.mobilePairCredential, mobile);
+  assert.equal(stored.mobileDeviceId, mobileId);
+  assert.equal(
+    (
+      await rotatePairCredential(
+        session,
+        'desktop',
+        'fixture-account',
+        desktop,
+        freshPairCredential(desktopId),
+        desktopId,
+      )
+    ).data,
+    null,
+  );
+  assert.equal(
+    (
+      await rotatePairCredential(
+        session,
+        'desktop',
+        'other-account',
+        replacement,
+        freshPairCredential(desktopId),
+        desktopId,
+      )
+    ).data,
+    null,
+  );
+  assert.equal(
+    (
+      await rotatePairCredential(
+        { ...session, created_at: session.created_at - 1 },
+        'desktop',
+        'fixture-account',
+        replacement,
+        freshPairCredential(desktopId),
+        desktopId,
+      )
+    ).data,
+    null,
+  );
+  assert.equal(
+    (
+      await rotatePairCredential(
+        session,
+        'desktop',
+        'fixture-account',
+        replacement,
+        freshPairCredential(mobileId),
+        mobileId,
+      )
+    ).data,
+    null,
+  );
+  for (const invalid of [null, {}, { deviceId: mobileId }]) {
+    await reset({ userId: 'fixture-account', mobilePairCredential: invalid });
+    const result = await rotatePairCredential(
+      session,
+      'mobile',
+      'fixture-account',
+      null,
+      mobile,
+      mobileId,
+    );
+    assert.equal(result.error, null);
+    assert.equal(result.data, null);
+  }
+  await reset({ userId: 'fixture-account' }, Date.now() - 1);
+  assert.equal(
+    (await rotatePairCredential(session, 'mobile', 'fixture-account', null, mobile, mobileId)).data,
+    null,
+  );
+  await delay(5500);
+  process.stdout.write(
+    'PASS: actual PostgreSQL credential CAS preserves concurrent roles and rejects stale, foreign, malformed, mismatched-device and expired claims\n',
+  );
   process.stdout.write(
     'PASS: actual Neon driver through transaction-pooled PgBouncer cancels statements, resets settings, rolls back failed writes, destroys timed-out clients and recovers\n',
   );

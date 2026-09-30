@@ -25,6 +25,8 @@ function claims(overrides: Partial<PairTokenClaims> = {}): PairTokenClaims {
     role: 'mobile',
     createdAt: CREATED_AT,
     accountId: ACCOUNT_A,
+    deviceId: 'cfd6bd53-95b6-488f-aa0c-7f0786360259',
+    generation: 'a'.repeat(64),
     ...overrides,
   };
 }

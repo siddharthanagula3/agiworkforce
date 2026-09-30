@@ -114,6 +114,7 @@ describe('Connection store connect watchdog', () => {
     await connectAndAwaitSignaling();
     capturedOnEvent?.({
       type: 'registered',
+      pairToken: 'b'.repeat(64),
       expiresAt: Date.now() + 300_000,
       peerConnected: false,
     } as SignalingEvent);
@@ -135,6 +136,22 @@ describe('Connection store connect watchdog', () => {
     jest.advanceTimersByTime(PAST_WATCHDOG_MS);
 
     expect(useConnectionStore.getState().status).toBe('connected');
+  });
+
+  it('reconnects with the replacement role credential without claiming the consumed token again', async () => {
+    await connectAndAwaitSignaling();
+    capturedOnEvent?.({
+      type: 'registered',
+      pairToken: 'b'.repeat(64),
+      expiresAt: Date.now() + 300_000,
+      peerConnected: false,
+    });
+    expect(useConnectionStore.getState().pairToken).toBe('b'.repeat(64));
+    capturedOnEvent?.({ type: 'close' });
+    useConnectionStore.getState().connect(`agiw3:ABCDEFGHIJKL:${PAIRING_SECRET}`);
+    await waitFor(() => expect(mockSignalingClient).toHaveBeenCalledTimes(2));
+    expect(mockSignalingClient.mock.calls[1][0].pairToken).toBe('b'.repeat(64));
+    expect(mockClaimManualPairingToken).toHaveBeenCalledTimes(1);
   });
 
   it('clears the watchdog when the user cancels a pending connect', async () => {

@@ -56,6 +56,47 @@ afterEach(() => {
 });
 
 describe('SignalingClient, server-sent reconnect messages', () => {
+  it('retains the replacement credential before notifying the registration owner', () => {
+    const options = {
+      wsUrl: 'ws://localhost:4000',
+      code: 'ABCD1234WXYZ',
+      role: 'desktop' as const,
+      pairToken: 'a'.repeat(64),
+      onEvent: vi.fn(),
+    };
+    options.onEvent.mockImplementation((event: SignalingEvent) => {
+      if (event.type === 'registered') expect(options.pairToken).toBe('b'.repeat(64));
+    });
+    const client = new SignalingClient(options);
+    const socket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1]!;
+    socket.receive({
+      type: 'registered',
+      pairToken: 'b'.repeat(64),
+      expiresAt: 1234,
+      peerConnected: false,
+    });
+    expect(options.pairToken).toBe('b'.repeat(64));
+    expect(options.onEvent).toHaveBeenCalledWith({
+      type: 'registered',
+      pairToken: 'b'.repeat(64),
+      expiresAt: 1234,
+      peerConnected: false,
+    });
+    client.close();
+  });
+
+  it.each([undefined, '', 'not-a-token', 'a'.repeat(65)])(
+    'refuses registration without a valid replacement: %s',
+    (pairToken) => {
+      const { socket, events, client } = connect();
+      socket.receive({ type: 'registered', pairToken, expiresAt: 1234, peerConnected: false });
+      expect(events).toContainEqual({ type: 'error', error: 'invalid_pair_credential' });
+      expect(events.some((event) => event.type === 'registered')).toBe(false);
+      expect(socket.readyState).toBe(3);
+      client.close();
+    },
+  );
+
   it('reports whether the local websocket accepted an outbound signal', () => {
     const { socket, client } = connect();
 

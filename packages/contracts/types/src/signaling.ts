@@ -69,6 +69,7 @@ export type SignalingEvent =
   /** Client successfully registered with the signaling server */
   | {
       type: 'registered';
+      pairToken: string;
       expiresAt: number;
       peerConnected: boolean;
     }
