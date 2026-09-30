@@ -50,8 +50,6 @@ works, nor that an observed source defect is deployed.
 | Medium | Older reachability inventory accepts fabricated implementation evidence | [evidence](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
 | Medium | Declined connector capability is counted as implemented | [evidence](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
 | Medium | Per-file ledger regeneration loses review evidence and does not bind dirty source | [evidence](../live-check/2026-09-29-ecosystem-review/inventory-instrument-review.json) |
-| Medium | Concurrent copies of one signed companion frame both pass nonce replay checks | [evidence](../live-check/2026-09-29-ecosystem-review/mobile-control-review.json) |
-| Medium | A previously received companion frame mutates state after disconnect | [evidence](../live-check/2026-09-29-ecosystem-review/mobile-control-review.json) |
 | Medium | Policy-refused schedules reported as completed | [evidence](../live-check/2026-09-29-ecosystem-review/continuous-assistant-review.json) |
 | Medium | Handshake/protocol rejection discards the registry handle without stopping the subprocess | [evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json) |
 | Medium | Notifications from a closed runtime remain eligible to mutate the current session | [evidence](../live-check/2026-09-29-ecosystem-review/electron-protocol-review.json) |
