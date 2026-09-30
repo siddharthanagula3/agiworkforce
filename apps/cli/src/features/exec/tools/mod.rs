@@ -726,7 +726,8 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
                 ApprovalRequestKind::Patch { files: paths },
                 summary.clone(),
                 details,
-            );
+            )
+            .with_tool_subject(canonical_name, serde_json::to_value(&call.args)?);
             let allowed = match request_approval(opts.approval_callback.as_ref(), request).await {
                 Some(decision) => approval_allows(decision),
                 None if !std::io::stdin().is_terminal() => false,
@@ -1511,7 +1512,7 @@ pub(crate) async fn request_approval(
             crate::terminal_style::warning("Denied by PermissionRequest hook:"),
             crate::terminal_text::sanitize_terminal_text(&reason)
         );
-        let (tool_name, arguments) = approval_subject(&request);
+        let (tool_name, arguments) = approval_audit_subject(&request);
         crate::approval_audit::record_approval(
             tool_name,
             arguments.to_string(),
@@ -1522,7 +1523,7 @@ pub(crate) async fn request_approval(
         return Some(ApprovalDecision::Deny);
     }
     let callback = approval_callback?;
-    let (tool_name, arguments) = approval_subject(&request);
+    let (tool_name, arguments) = approval_audit_subject(&request);
     let decision = callback(request).await;
     let (recorded, reason) = match decision {
         ApprovalDecision::AllowOnce => (crate::approval_audit::ApprovalDecision::Approved, None),
@@ -1627,7 +1628,27 @@ fn approval_request_tool(kind: &ApprovalRequestKind) -> (&'static str, serde_jso
     }
 }
 
+fn approval_audit_subject(request: &ApprovalRequest) -> (String, serde_json::Value) {
+    let (fallback_name, targets) = approval_request_tool(&request.kind);
+    let name = request
+        .tool_subject
+        .as_ref()
+        .map(|(name, _)| name.clone())
+        .unwrap_or_else(|| approval_subject(request).0);
+    (
+        if name.is_empty() {
+            fallback_name.into()
+        } else {
+            name
+        },
+        targets,
+    )
+}
+
 fn approval_subject(request: &ApprovalRequest) -> (String, serde_json::Value) {
+    if let Some(subject) = &request.tool_subject {
+        return subject.clone();
+    }
     let (fallback_name, tool_args) = approval_request_tool(&request.kind);
     let tool_name = match &request.kind {
         ApprovalRequestKind::WorkspacePolicy { tool_name, .. } => tool_name.clone(),
@@ -2931,6 +2952,119 @@ decision = "ask"
                     matches!(&requests[0], ApprovalRequestKind::Patch { files } if files.contains(&path))
                 );
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_write_approval_preserves_the_permission_hook_subject() {
+        let workspace = tempfile::Builder::new()
+            .prefix("protected-hook")
+            .tempdir_in(std::env::current_dir().unwrap())
+            .unwrap();
+        let seen = Arc::new(tokio::sync::Mutex::new(None));
+        let recorded = seen.clone();
+        let callback: ApprovalCallback = Arc::new(move |request| {
+            let recorded = recorded.clone();
+            Box::pin(async move {
+                *recorded.lock().await = Some(request);
+                ApprovalDecision::Deny
+            })
+        });
+        let opts = ToolExecOptions {
+            require_confirmation: true,
+            auto_approve_safe: false,
+            auto_approve_edits: false,
+            quiet: true,
+            approval_callback: Some(callback),
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            workspace_root: Some(workspace.path().to_path_buf()),
+            mcp_tool_definitions: None,
+        };
+        execute_tool_with_opts(
+            &ToolCall {
+                name: "write_file".into(),
+                args: HashMap::from([
+                    ("path".into(), ".vscode/tasks.json".into()),
+                    ("content".into(), "{}\n".into()),
+                ]),
+            },
+            &opts,
+        )
+        .await
+        .unwrap();
+        let request = seen.lock().await.clone().expect("approval");
+        let config = crate::hooks::HooksConfig {
+            hooks: HashMap::from([(
+                "PermissionRequest".into(),
+                vec![crate::hooks::Hook {
+                    command: "printf '%s' '{\"decision\":\"block\",\"reason\":\"protected write blocked\"}'".into(),
+                    args: Vec::new(),
+                    timeout: 5,
+                    blocking: true,
+                    matcher: Some("^write_file$".into()),
+                    if_condition: None,
+                    source: crate::hooks::HookSource::User,
+                }],
+            )]),
+        };
+        assert_eq!(
+            permission_request_hook_denial(&config, &request).await,
+            Some(vec!["protected write blocked".into()])
+        );
+        let (name, args) = approval_subject(&request);
+        assert_eq!(name, "write_file");
+        assert_eq!(
+            args["path"],
+            workspace
+                .path()
+                .join(".vscode/tasks.json")
+                .display()
+                .to_string()
+        );
+        assert_eq!(args["content"], "{}\n");
+    }
+
+    #[test]
+    fn protected_approval_audits_exclude_change_bodies_for_each_outcome() {
+        let workspace = tempfile::tempdir().unwrap();
+        let path = workspace.path().join(".vscode/tasks.json");
+        let sentinel = "private-file-content-must-not-be-logged";
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::Patch {
+                files: vec![path.clone()],
+            },
+            "Protected write",
+            vec![sentinel.into()],
+        )
+        .with_tool_subject(
+            "write_file",
+            serde_json::json!({"path": path, "content": sentinel}),
+        );
+        let log = workspace.path().join("approvals.jsonl");
+        for decision in [
+            crate::approval_audit::ApprovalDecision::Approved,
+            crate::approval_audit::ApprovalDecision::BlockedByRule,
+        ] {
+            let (name, targets) = approval_audit_subject(&request);
+            let entry = crate::approval_audit::ApprovalAuditEntry::new(
+                name,
+                targets.to_string(),
+                decision,
+                None,
+                None,
+            );
+            crate::approval_audit::append_entry_at(&log, &entry).unwrap();
+        }
+        let contents = std::fs::read_to_string(log).unwrap();
+        assert!(!contents.contains(sentinel));
+        let entries: Vec<crate::approval_audit::ApprovalAuditEntry> = contents
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(entries.len(), 2);
+        for entry in entries {
+            assert_eq!(entry.tool_name, "write_file");
+            assert!(entry.target.contains("tasks.json"));
         }
     }
 
