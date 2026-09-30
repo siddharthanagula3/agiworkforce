@@ -109,6 +109,7 @@ import {
   DISPATCH_HMAC_REQUIRED_AFTER,
   type HmacSessionState,
 } from '../lib/dispatchHmac';
+import { DISPATCH_MAX_MESSAGE_AGE_MS } from '@agiworkforce/types';
 
 const PAIRING_SECRET = '9f'.repeat(32);
 
@@ -123,6 +124,28 @@ async function makeState(
 
 function cloneState(state: HmacSessionState): HmacSessionState {
   return { secret: state.secret, nonceCache: new Map(state.nonceCache) };
+}
+
+function holdNextDigest() {
+  const { digest } = jest.requireMock('expo-crypto') as {
+    digest: jest.Mock<Promise<ArrayBuffer>, [string, ArrayBuffer]>;
+  };
+  const hash = digest.getMockImplementation();
+  if (!hash) throw new Error('Digest mock is missing its real hash implementation');
+  let entered!: () => void;
+  let release!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const resume = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  digest.mockImplementationOnce(async (...args) => {
+    entered();
+    await resume;
+    return hash(...args);
+  });
+  return { started, release };
 }
 
 describe('Key derivation, deriveDispatchSecret', () => {
@@ -383,6 +406,40 @@ describe('Replay rejection, timestamp window', () => {
     expect(result.ok).toBe(true);
   });
 
+  it.each([1, -1])(
+    'rejects a timestamp leaving its window during hashing with clock direction %s',
+    async (direction) => {
+      const senderState = await makeState();
+      const receiverState = await makeState();
+      const envelope = await signMessage(senderState, 'ping', {});
+      const now = jest.spyOn(Date, 'now').mockReturnValue(envelope.ts);
+      const barrier = holdNextDigest();
+      const verifying = verifyMessage(receiverState, envelope);
+      await barrier.started;
+      now.mockReturnValue(envelope.ts + direction * (DISPATCH_MAX_MESSAGE_AGE_MS + 1));
+      barrier.release();
+
+      expect(await verifying).toEqual({ ok: false, reason: 'timestamp_expired' });
+      expect(receiverState.nonceCache.size).toBe(0);
+    },
+  );
+
+  it('records the current nonce claim time after delayed authentic hashing', async () => {
+    const senderState = await makeState();
+    const receiverState = await makeState();
+    const envelope = await signMessage(senderState, 'ping', {});
+    const now = jest.spyOn(Date, 'now').mockReturnValue(envelope.ts);
+    const barrier = holdNextDigest();
+    const verifying = verifyMessage(receiverState, envelope);
+    await barrier.started;
+    const claimedAt = envelope.ts + DISPATCH_MAX_MESSAGE_AGE_MS - 1;
+    now.mockReturnValue(claimedAt);
+    barrier.release();
+
+    expect(await verifying).toEqual({ ok: true });
+    expect(receiverState.nonceCache.get(envelope.nonce)).toBe(claimedAt);
+  });
+
   void RealDateNow;
 });
 
@@ -402,6 +459,39 @@ describe('Replay rejection, nonce sliding-window cache', () => {
     const r2 = await verifyMessage(receiverState, env);
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.reason).toBe('nonce_replay');
+  });
+
+  it('accepts a concurrently delivered authentic nonce only once', async () => {
+    const senderState = await makeState();
+    const receiverState = await makeState();
+    const envelope = await signMessage(senderState, 'ping', {});
+
+    const results = await Promise.all([
+      verifyMessage(receiverState, envelope),
+      verifyMessage(receiverState, envelope),
+    ]);
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => !result.ok)).toEqual([{ ok: false, reason: 'nonce_replay' }]);
+    expect(receiverState.nonceCache.size).toBe(1);
+  });
+
+  it('does not let an invalid concurrent signature reserve an authentic nonce', async () => {
+    const senderState = await makeState();
+    const receiverState = await makeState();
+    const envelope = await signMessage(senderState, 'ping', {});
+
+    const results = await Promise.all([
+      verifyMessage(receiverState, { ...envelope, hmac: '00'.repeat(32) }),
+      verifyMessage(receiverState, envelope),
+    ]);
+
+    expect(results).toEqual([{ ok: false, reason: 'hmac_mismatch' }, { ok: true }]);
+    expect(receiverState.nonceCache.size).toBe(1);
+    expect(await verifyMessage(receiverState, envelope)).toEqual({
+      ok: false,
+      reason: 'nonce_replay',
+    });
   });
 
   it('accepts different nonces for the same payload and ts', async () => {
