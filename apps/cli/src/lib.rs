@@ -50,6 +50,8 @@ pub mod merge_conflicts;
 // FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
 pub mod message_queue;
 pub mod models;
+#[cfg(test)]
+pub(crate) mod native_process_test_fixture;
 pub mod output;
 pub mod output_styles;
 pub mod path_security;

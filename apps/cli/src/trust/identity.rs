@@ -125,16 +125,41 @@ pub fn current_actor() -> String {
 /// The machine a grant is bound to. The device id file is read, never created:
 /// a trust check must not mint identity as a side effect.
 pub fn current_machine() -> String {
-    if let Some(id) = device_id_file().and_then(|path| std::fs::read_to_string(path).ok()) {
-        let id = id.trim().to_string();
-        if crate::device_registry::is_valid_install_id(&id) {
-            return id;
+    if let Some(path) = device_id_file() {
+        #[cfg(test)]
+        crate::native_process_test_fixture::check_read(
+            crate::native_process_test_fixture::Input::DeviceIdentity,
+            &path,
+        );
+        let id = std::fs::read_to_string(&path);
+        #[cfg(test)]
+        crate::native_process_test_fixture::record_read(
+            crate::native_process_test_fixture::Input::DeviceIdentity,
+            &path,
+            id.is_ok(),
+        );
+        if let Ok(id) = id {
+            let id = id.trim().to_string();
+            let valid = crate::device_registry::is_valid_install_id(&id);
+            #[cfg(test)]
+            crate::native_process_test_fixture::record_validation(
+                crate::native_process_test_fixture::Input::DeviceIdentity,
+                &path,
+                valid,
+            );
+            if valid {
+                return id;
+            }
         }
     }
     hostname().unwrap_or_else(|| "unknown-host".to_string())
 }
 
 fn device_id_file() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(path) = crate::native_process_test_fixture::device_id_file() {
+        return Some(path);
+    }
     dirs::home_dir().map(|home| home.join(".agiworkforce").join("device-id"))
 }
 

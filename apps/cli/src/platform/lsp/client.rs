@@ -398,6 +398,7 @@ mod tests {
         assert!(response_for(&json!({"id": 1, "result": {}}), 2).is_none());
     }
 
+    #[cfg(not(windows))]
     const FAKE_SERVER: &str = r#"
 import json
 import sys
@@ -448,8 +449,11 @@ while True:
         write_frame({"jsonrpc": "2.0", "id": frame["id"], "result": None})
 "#;
 
+    #[cfg(not(windows))]
     fn python3_available() -> bool {
         std::process::Command::new("python3")
+            .arg("-I")
+            .arg("-S")
             .arg("--version")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -458,80 +462,169 @@ while True:
             .unwrap_or(false)
     }
 
+    #[cfg(windows)]
+    async fn assert_windows_lsp_refusal() {
+        use crate::native_process_test_fixture::{
+            assert_windows_backend_refusal, windows_refusal_probe, Input, NativeProcessFixture,
+        };
+
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let fixture = NativeProcessFixture::new();
+        fixture
+            .scope(async {
+                let workspace = tempfile::tempdir().expect("Windows LSP refusal workspace");
+                let root = workspace.path().canonicalize().unwrap();
+                let probe = windows_refusal_probe(&root, LSP_REQUEST_TIMEOUT).await;
+                let args: Vec<&str> = probe.args.iter().map(String::as_str).collect();
+                let error = LspClient::spawn("cmd.exe", &args, &root)
+                    .await
+                    .err()
+                    .expect("Windows unavailable backend must refuse server startup");
+                assert_windows_backend_refusal(&error.to_string());
+                probe.assert_marker_absent();
+            })
+            .await;
+        fixture.assert_inputs(&[Input::DeviceIdentity]);
+    }
+
     #[tokio::test]
     async fn language_server_cannot_write_outside_its_workspace() {
-        assert!(
-            python3_available(),
-            "python3 is required for this isolation regression"
-        );
-        let workspace = tempfile::tempdir().unwrap();
-        let private = tempfile::tempdir().unwrap();
-        let marker = private.path().join("server-wrote-outside");
-        let marker_literal = serde_json::to_string(&marker.to_string_lossy()).unwrap();
-        let script = format!(
-            "from pathlib import Path\ntry:\n Path({marker_literal}).write_text('controlled fixture')\nexcept OSError:\n pass\n{FAKE_SERVER}"
-        );
-        let client = LspClient::spawn("python3", &["-u", "-c", &script, "ok"], workspace.path())
-            .await
-            .unwrap();
-        client.shutdown().await.unwrap();
-        assert!(
-            !marker.exists(),
-            "language server wrote outside its workspace"
-        );
+        #[cfg(windows)]
+        {
+            assert_windows_lsp_refusal().await;
+        }
+        #[cfg(not(windows))]
+        {
+            use crate::native_process_test_fixture::{Input, NativeProcessFixture};
+
+            let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+            NativeProcessFixture::require_backend();
+            assert!(
+                python3_available(),
+                "python3 required for this native regression"
+            );
+            let fixture = NativeProcessFixture::new();
+            fixture
+            .scope(async {
+                assert!(
+                    python3_available(),
+                    "python3 is required for this isolation regression"
+                );
+                let workspace = tempfile::tempdir().unwrap();
+                let private = tempfile::tempdir().unwrap();
+                let marker = private.path().join("server-wrote-outside");
+                let marker_literal = serde_json::to_string(&marker.to_string_lossy()).unwrap();
+                let script = format!(
+                    "from pathlib import Path\ntry:\n Path({marker_literal}).write_text('controlled fixture')\nexcept OSError:\n pass\n{FAKE_SERVER}"
+                );
+                let client = LspClient::spawn("python3", &["-I", "-S", "-u", "-c", &script, "ok"], workspace.path())
+                    .await
+                    .unwrap();
+                client.shutdown().await.unwrap();
+                assert!(
+                    !marker.exists(),
+                    "language server wrote outside its workspace"
+                );
+            })
+            .await;
+            fixture.assert_inputs(&[Input::DeviceIdentity, Input::ManagedSettings]);
+        }
     }
 
     #[tokio::test]
     async fn a_request_follows_the_handshake_and_the_opened_document() {
-        if !python3_available() {
-            return;
+        #[cfg(windows)]
+        {
+            assert_windows_lsp_refusal().await;
         }
-        let root = tempfile::tempdir().expect("workspace");
-        let mut client = LspClient::spawn("python3", &["-u", "-c", FAKE_SERVER, "ok"], root.path())
-            .await
-            .expect("initialize handshake");
+        #[cfg(not(windows))]
+        {
+            use crate::native_process_test_fixture::{Input, NativeProcessFixture};
 
-        client
-            .open_document("file:///workspace/main.rs", "rust", "fn main() {}\n")
-            .await
-            .expect("didOpen");
-        let answer = client
-            .request("textDocument/hover", json!({}))
-            .await
-            .expect("hover");
+            let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+            NativeProcessFixture::require_backend();
+            assert!(
+                python3_available(),
+                "python3 required for this native regression"
+            );
+            let fixture = NativeProcessFixture::new();
+            fixture
+                .scope(async {
+                    let root = tempfile::tempdir().expect("workspace");
+                    let mut client = LspClient::spawn(
+                        "python3",
+                        &["-I", "-S", "-u", "-c", FAKE_SERVER, "ok"],
+                        root.path(),
+                    )
+                    .await
+                    .expect("initialize handshake");
 
-        assert_eq!(
-            answer["seen"],
-            json!([
-                "initialize",
-                "initialized",
-                "textDocument/didOpen",
-                "textDocument/hover"
-            ])
-        );
-        assert_eq!(answer["opened"], json!("file:///workspace/main.rs"));
-        assert_eq!(answer["declined"], json!(-32601));
-        client.shutdown().await.expect("shutdown");
+                    client
+                        .open_document("file:///workspace/main.rs", "rust", "fn main() {}\n")
+                        .await
+                        .expect("didOpen");
+                    let answer = client
+                        .request("textDocument/hover", json!({}))
+                        .await
+                        .expect("hover");
+
+                    assert_eq!(
+                        answer["seen"],
+                        json!([
+                            "initialize",
+                            "initialized",
+                            "textDocument/didOpen",
+                            "textDocument/hover"
+                        ])
+                    );
+                    assert_eq!(answer["opened"], json!("file:///workspace/main.rs"));
+                    assert_eq!(answer["declined"], json!(-32601));
+                    client.shutdown().await.expect("shutdown");
+                })
+                .await;
+            fixture.assert_inputs(&[Input::DeviceIdentity, Input::ManagedSettings]);
+        }
     }
 
     #[tokio::test]
     async fn a_language_server_error_reaches_the_caller() {
-        if !python3_available() {
-            return;
+        #[cfg(windows)]
+        {
+            assert_windows_lsp_refusal().await;
         }
-        let root = tempfile::tempdir().expect("workspace");
-        let mut client =
-            LspClient::spawn("python3", &["-u", "-c", FAKE_SERVER, "error"], root.path())
-                .await
-                .expect("initialize handshake");
+        #[cfg(not(windows))]
+        {
+            use crate::native_process_test_fixture::{Input, NativeProcessFixture};
 
-        let error = client
-            .request("textDocument/formatting", json!({}))
-            .await
-            .expect_err("an error response must not read as an empty answer");
+            let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+            NativeProcessFixture::require_backend();
+            assert!(
+                python3_available(),
+                "python3 required for this native regression"
+            );
+            let fixture = NativeProcessFixture::new();
+            fixture
+                .scope(async {
+                    let root = tempfile::tempdir().expect("workspace");
+                    let mut client = LspClient::spawn(
+                        "python3",
+                        &["-I", "-S", "-u", "-c", FAKE_SERVER, "error"],
+                        root.path(),
+                    )
+                    .await
+                    .expect("initialize handshake");
 
-        assert!(error.to_string().contains("-32601"), "{error}");
-        client.shutdown().await.expect("shutdown");
+                    let error = client
+                        .request("textDocument/formatting", json!({}))
+                        .await
+                        .expect_err("an error response must not read as an empty answer");
+
+                    assert!(error.to_string().contains("-32601"), "{error}");
+                    client.shutdown().await.expect("shutdown");
+                })
+                .await;
+            fixture.assert_inputs(&[Input::DeviceIdentity, Input::ManagedSettings]);
+        }
     }
 
     #[test]
