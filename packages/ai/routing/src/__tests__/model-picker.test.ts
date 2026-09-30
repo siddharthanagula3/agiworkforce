@@ -18,11 +18,35 @@ import {
   buildModelPickerShortList,
   getModelPriceBand,
   resolvePlanLockLabel,
+  resolveModelLineLabel,
   type ModelPickerShortListInput,
   type ModelPickerSourceModel,
 } from '../model-picker';
 
 const AUTO_GUIDANCE = 'auto guidance fixture';
+
+describe('resolveModelLineLabel', () => {
+  it.each([
+    ['Provider: Family (preview) v2', 'Family'],
+    ['Family (outer(inner) remaining)', 'Family remaining)'],
+    ['Family () next', 'Family next'],
+    ['Family (open', 'Family (open'],
+    ['Family closed)', 'Family closed)'],
+    ['Family (one) (two) latest', 'Family'],
+    ['Family (first\nsecond) next', 'Family next'],
+  ])('preserves label grouping for %j', (raw, expected) => {
+    expect(resolveModelLineLabel(raw)).toBe(expected);
+  });
+
+  it('bounds formatting of a label containing many unmatched opening parentheses', () => {
+    const raw = `${'('.repeat(60_000)}unclosed`;
+    const started = performance.now();
+    const label = resolveModelLineLabel(raw);
+    const elapsed = performance.now() - started;
+    expect(label).toBe(raw);
+    expect(elapsed).toBeLessThan(500);
+  });
+});
 const autoContinuityGuidance = (displayName: string) => `stays on ${displayName}`;
 
 function toSource(modelId: string): ModelPickerSourceModel {
