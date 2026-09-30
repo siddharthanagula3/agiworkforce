@@ -7,7 +7,7 @@ import { recordCapabilityDenial } from '@/lib/observability/denials';
 
 import type { FlagEvaluation, FlagSubject } from './evaluate-flags';
 import { evaluateFlagsForSubject } from './flag-evaluation-service';
-import { getActiveFlagDefinitions } from './flag-store';
+import { getActiveFlagDefinitions, type FlagStoreReadOptions } from './flag-store';
 import { versionDisableReason } from './version-disable';
 import {
   ALL_KILL_SWITCH_CAPABILITIES,
@@ -49,9 +49,14 @@ function killSwitchGate(evaluations: Readonly<Record<string, FlagEvaluation>>): 
 export async function readKillSwitchGate(
   subject: FlagSubject,
   nowMs: number = Date.now(),
+  options: FlagStoreReadOptions = {},
 ): Promise<KillSwitchGate> {
   return killSwitchGate(
-    await evaluateFlagsForSubject(subject, { keyPrefixes: KILL_SWITCH_PREFIXES }, nowMs),
+    await evaluateFlagsForSubject(
+      subject,
+      { ...options, keyPrefixes: KILL_SWITCH_PREFIXES },
+      nowMs,
+    ),
   );
 }
 
@@ -60,8 +65,23 @@ export async function assertCapabilityAvailable(
   capability: KillSwitchCapability,
   label: string,
   nowMs: number = Date.now(),
+  options: FlagStoreReadOptions = {},
 ): Promise<void> {
-  const gate = await readKillSwitchGate(subject, nowMs);
+  let gate: KillSwitchGate;
+  try {
+    gate = await readKillSwitchGate(subject, nowMs, options);
+  } catch (error) {
+    if (!options.failClosed) throw error;
+    recordCapabilityDenial({
+      layer: 'capability',
+      reason: 'temporarily_unavailable',
+      surface: subject.surface,
+      organizationId: subject.workspaceId,
+    });
+    throw createError
+      .serviceUnavailable(`${label} availability could not be verified. Please try again.`)
+      .asUserSafe();
+  }
   const denied = (reason: CapabilityDenialReason): void => {
     recordCapabilityDenial({
       layer: 'capability',
@@ -73,12 +93,16 @@ export async function assertCapabilityAvailable(
   if (gate.tenantLockedDown) {
     denied('disabled_by_organization');
     throw createError
-      .forbidden('This workspace is locked down while an incident is investigated. Contact support.')
+      .forbidden(
+        'This workspace is locked down while an incident is investigated. Contact support.',
+      )
       .asUserSafe();
   }
   if (!gate.capabilityAllowed(capability)) {
     denied('temporarily_unavailable');
-    throw createError.serviceUnavailable(await closedMessage(capability, label, nowMs)).asUserSafe();
+    throw createError
+      .serviceUnavailable(await closedMessage(capability, label, nowMs))
+      .asUserSafe();
   }
 }
 

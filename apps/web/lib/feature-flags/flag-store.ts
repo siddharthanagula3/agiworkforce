@@ -9,6 +9,8 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { readFeatureFlagConfig } from './flag-config';
 import {
   FlagRuleSchema,
+  FlagDefinitionInputSchema,
+  FlagOverrideInputSchema,
   type FlagDefinition,
   type FlagDefinitionInput,
   type FlagOverride,
@@ -102,17 +104,23 @@ const DEFINITION_COLUMNS = `key, description, kill_switch, variants, default_var
   expires_at, maturity, release_channel, availability, owner_name, archived_at, version,
   created_at, updated_at`;
 
-let cachedDefinitions: { definitions: readonly FlagDefinition[]; expiresAtMs: number } | null =
-  null;
-let inFlightDefinitions: Promise<readonly FlagDefinition[]> | null = null;
+export interface FlagStoreReadOptions {
+  failClosed?: boolean;
+}
+
+const cachedDefinitions = new Map<
+  boolean,
+  { definitions: readonly FlagDefinition[]; expiresAtMs: number }
+>();
+const inFlightDefinitions = new Map<boolean, Promise<readonly FlagDefinition[]>>();
 
 export function resetFlagDefinitionCache(): void {
-  cachedDefinitions = null;
-  inFlightDefinitions = null;
+  cachedDefinitions.clear();
+  inFlightDefinitions.clear();
 }
 
 export async function listFlagDefinitions(
-  options: { includeArchived?: boolean } = {},
+  options: { includeArchived?: boolean } & FlagStoreReadOptions = {},
   db: DatabaseAdapter = getNeonDb(),
 ): Promise<FlagDefinition[]> {
   const rows = await db.query<DefinitionRow>(
@@ -122,36 +130,58 @@ export async function listFlagDefinitions(
       order by key asc`,
     [options.includeArchived === true],
   );
-  return rows.map(toDefinition).filter((definition): definition is FlagDefinition => !!definition);
+  const definitions = rows.map(toDefinition);
+  if (options.failClosed) {
+    for (const definition of definitions) {
+      if (!definition) throw new Error('Stored flag definition is unreadable');
+      const {
+        version: _version,
+        archivedAt: _archivedAt,
+        createdAt: _createdAt,
+        updatedAt: _updatedAt,
+        ...input
+      } = definition;
+      if (!FlagDefinitionInputSchema.safeParse(input).success) {
+        throw new Error('Stored flag definition is invalid');
+      }
+    }
+  }
+  return definitions.filter((definition): definition is FlagDefinition => !!definition);
 }
 
-/**
- * Active definitions for the request path. Cached briefly per process, and an
- * unreadable table yields no flags rather than an error: every consumer treats
- * an absent flag as its safe default, so a store outage degrades to the
- * behaviour that shipped before the flag existed.
- */
 export async function getActiveFlagDefinitions(
   nowMs: number = Date.now(),
+  options: FlagStoreReadOptions = {},
 ): Promise<readonly FlagDefinition[]> {
-  if (cachedDefinitions && cachedDefinitions.expiresAtMs > nowMs) {
-    return cachedDefinitions.definitions;
+  const failClosed = options.failClosed === true;
+  const cached = cachedDefinitions.get(failClosed);
+  if (cached && cached.expiresAtMs > nowMs) {
+    return cached.definitions;
   }
-  // One read per expiry, taken with no await before it: concurrent requests
-  // share it instead of each querying the table at once.
-  inFlightDefinitions ??= readActiveFlagDefinitions(nowMs).finally(() => {
-    inFlightDefinitions = null;
-  });
-  return inFlightDefinitions;
+  let inFlight = inFlightDefinitions.get(failClosed);
+  if (!inFlight) {
+    inFlight = readActiveFlagDefinitions(nowMs, failClosed).finally(() => {
+      inFlightDefinitions.delete(failClosed);
+    });
+    inFlightDefinitions.set(failClosed, inFlight);
+  }
+  return inFlight;
 }
 
-async function readActiveFlagDefinitions(nowMs: number): Promise<readonly FlagDefinition[]> {
+async function readActiveFlagDefinitions(
+  nowMs: number,
+  failClosed: boolean,
+): Promise<readonly FlagDefinition[]> {
   try {
-    const definitions = await listFlagDefinitions();
-    cachedDefinitions = { definitions, expiresAtMs: nowMs + DEFINITION_CACHE_TTL_MS };
+    const definitions = await listFlagDefinitions({ failClosed });
+    cachedDefinitions.set(failClosed, {
+      definitions,
+      expiresAtMs: nowMs + DEFINITION_CACHE_TTL_MS,
+    });
     return definitions;
   } catch (error) {
-    logger.error({ error }, '[feature-flags] definitions unreadable; evaluating no flags');
+    logger.error({ error }, '[feature-flags] definitions unreadable');
+    if (failClosed) throw error;
     return [];
   }
 }
@@ -160,6 +190,7 @@ export async function getSubjectOverrides(
   userId: string,
   workspaceId: string | null,
   flagKeys: readonly string[],
+  options: FlagStoreReadOptions = {},
 ): Promise<FlagOverride[]> {
   if (flagKeys.length === 0) return [];
   try {
@@ -171,9 +202,19 @@ export async function getSubjectOverrides(
           and (expires_at is null or expires_at > now())`,
       [userId, workspaceId, flagKeys],
     );
-    return rows.map(toOverride);
+    const overrides = rows.map(toOverride);
+    if (options.failClosed) {
+      for (const override of overrides) {
+        const { flagKey: _flagKey, ...input } = override;
+        if (!FlagOverrideInputSchema.safeParse(input).success) {
+          throw new Error('Stored flag override is invalid');
+        }
+      }
+    }
+    return overrides;
   } catch (error) {
-    logger.error({ error }, '[feature-flags] overrides unreadable; evaluating rules only');
+    logger.error({ error }, '[feature-flags] overrides unreadable');
+    if (options.failClosed) throw error;
     return [];
   }
 }
