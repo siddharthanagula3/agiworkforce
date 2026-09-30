@@ -6,6 +6,7 @@ vi.mock('server-only', () => ({}));
 const mocks = vi.hoisted(() => ({
   effective: vi.fn(),
   permissions: new Set<string>(['content.read']),
+  role: 'member',
   subjectExists: vi.fn(async () => true),
   upsert: vi.fn(),
   audit: vi.fn(),
@@ -32,7 +33,7 @@ vi.mock('@/lib/services/organization-permission-service', async () => {
   return {
     resolveOrganizationAccess: vi.fn(async (organizationId: string) => ({
       organizationId,
-      role: 'member',
+      role: mocks.role,
       permissions: mocks.permissions,
     })),
     requirePermission: (
@@ -73,6 +74,7 @@ function overrideRequest(body: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.permissions = new Set(['content.read']);
+  mocks.role = 'member';
   mocks.subjectExists.mockResolvedValue(true);
   mocks.effective.mockResolvedValue({
     organizationId: ORG,
@@ -146,6 +148,54 @@ describe('GET /api/settings/organization/policy/effective', () => {
 });
 
 describe('PUT /api/settings/organization/policy/overrides', () => {
+  it.each(['admin', 'member', 'viewer'])(
+    'refuses a %s with policy.manage turning on fast mode through an override',
+    async (role) => {
+      mocks.role = role;
+      mocks.permissions = new Set(['content.read', 'policy.manage']);
+      const response = await putOverride(
+        overrideRequest({
+          subjectType: 'user',
+          subjectId: 'user-2',
+          layer: { featureAccess: { fast_mode: true } },
+        }),
+      );
+      expect(response.status).toBe(403);
+      expect(mocks.upsert).not.toHaveBeenCalled();
+    },
+  );
+
+  it('allows the Owner with policy.manage turning on fast mode through an override', async () => {
+    mocks.role = 'owner';
+    mocks.permissions = new Set(['content.read', 'policy.manage']);
+    mocks.upsert.mockResolvedValueOnce({ id: 'fast-override' });
+    const response = await putOverride(
+      overrideRequest({
+        subjectType: 'user',
+        subjectId: 'user-2',
+        layer: { featureAccess: { fast_mode: true } },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.upsert).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ layer: { featureAccess: { fast_mode: true } } }),
+    );
+  });
+
+  it('still refuses the Owner without policy.manage', async () => {
+    mocks.role = 'owner';
+    const response = await putOverride(
+      overrideRequest({
+        subjectType: 'user',
+        subjectId: 'user-2',
+        layer: { featureAccess: { fast_mode: true } },
+      }),
+    );
+    expect(response.status).toBe(403);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
   it('refuses a member without policy.manage', async () => {
     const response = await putOverride(
       overrideRequest({

@@ -26,6 +26,7 @@ const CONVERSATION_SERVER_COLUMNS = [
   'created_by text',
   'updated_by text',
   'origin_surface text',
+  'google_user_data_at timestamptz',
 ];
 
 const MESSAGE_SERVER_COLUMNS = [
@@ -170,4 +171,29 @@ test('a stale server-side entry for a column that has gone fails', () => {
   const result = runOn(files);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /folder_id is recorded as server side but no longer exists/);
+});
+
+test('the Google provenance marker cannot become a client-controlled wire field', () => {
+  const files = baseTree();
+  files['packages/contracts/cloud-contracts/src/conversations.ts'] = CONTRACT.replace(
+    '  title: z.string().nullable(),',
+    '  title: z.string().nullable(),\n  google_user_data_at: z.string().nullable(),',
+  );
+  const result = runOn(files);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /google_user_data_at is recorded as server side yet/);
+});
+
+test('the Google provenance declaration cannot outlive its migration column', () => {
+  const files = baseTree();
+  files['apps/web/db/neon/0001_chat.sql'] = BASE_SQL.replace(
+    '  google_user_data_at timestamptz,\n',
+    '',
+  );
+  const result = runOn(files);
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /google_user_data_at is recorded as server side but no longer exists/,
+  );
 });

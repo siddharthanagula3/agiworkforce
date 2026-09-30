@@ -82,6 +82,51 @@ describe('connector reach', () => {
 });
 
 describe('retrievalDocumentHoldsGoogleUserData', () => {
+  it.each(['artifact', 'library_file'])(
+    'retains provenance when a %s origin is withdrawn',
+    async (sourceKind) => {
+      const { db, query } = fakeDb((sql) => {
+        if (/deleted_at\s+is\s+null|archived(?:_at)?\s*(?:=\s*false|is\s+null)/i.test(sql)) {
+          return [];
+        }
+        return conversationRow(true)(sql, []);
+      });
+      await expect(
+        retrievalDocumentHoldsGoogleUserData(db, {
+          source_kind: sourceKind,
+          source_id: 'withdrawn-source',
+          user_id: 'user-1',
+        }),
+      ).resolves.toBe(true);
+      expect(query.mock.calls[0]![1]).toEqual(['withdrawn-source', 'user-1']);
+    },
+  );
+
+  it.each([true, false])(
+    'keeps the Google provenance decision for a withdrawn project knowledge source (%s)',
+    async (google) => {
+      const { db, query } = fakeDb((sql) => [
+        {
+          google:
+            google &&
+            !/deleted_at\s+is\s+null|archived(?:_at)?\s*(?:=\s*false|is\s+null)/i.test(sql),
+        },
+      ]);
+      await expect(
+        retrievalDocumentHoldsGoogleUserData(db, {
+          source_kind: 'project_knowledge',
+          source_id: 'withdrawn-file',
+          user_id: 'user-1',
+        }),
+      ).resolves.toBe(google);
+      expect(query.mock.calls[0]![1]).toEqual([
+        'withdrawn-file',
+        expect.arrayContaining([GOOGLE_DRIVE_CONNECTOR_ID]),
+        'user-1',
+      ]);
+    },
+  );
+
   it('follows the marker of a conversation document', async () => {
     const { db } = fakeDb(conversationRow(true));
     await expect(
@@ -315,6 +360,20 @@ describe('externalOriginHoldsGoogleUserData', () => {
 });
 
 describe('publishedArtifactSourceHoldsGoogleUserData', () => {
+  it.each([true, false])(
+    'keeps the source provenance decision after its chat is withdrawn (%s)',
+    async (marked) => {
+      const { db } = fakeDb((sql) => [
+        {
+          marked:
+            marked &&
+            !/deleted_at\s+is\s+null|archived(?:_at)?\s*(?:=\s*false|is\s+null)/i.test(sql),
+        },
+      ]);
+      await expect(publishedArtifactSourceHoldsGoogleUserData(db, 'pub-1')).resolves.toBe(marked);
+    },
+  );
+
   it.each([
     ['a marked source chat', [{ marked: true }], true],
     ['an unmarked or absent source chat', [{ marked: false }], false],

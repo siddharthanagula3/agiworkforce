@@ -232,6 +232,21 @@ describe('entitlement resolution characterization', () => {
     await expect(
       resolveEntitlementBundle(scopedDb, 'member-1', { throwOnSeatLookupError: true }),
     ).rejects.toThrow('rls');
+    expect(scopedDb.query).toHaveBeenCalledWith(
+      'select 1 as member from public.organization_members where user_id = $1 limit 1',
+      ['member-1'],
+    );
+  });
+
+  it('fails closed when both the seat lookup and self-membership probe fail', async () => {
+    mocks.getSubscription.mockResolvedValue(null);
+    mocks.privilegedQuery.mockRejectedValue(new Error('seat unavailable'));
+    vi.mocked(scopedDb.query).mockRejectedValueOnce(new Error('membership unavailable'));
+
+    await expect(
+      resolveEntitlementBundle(scopedDb, 'member-1', { throwOnSeatLookupError: true }),
+    ).rejects.toThrow('membership unavailable');
+    expect(mocks.getOrCreateAccount).not.toHaveBeenCalled();
   });
 
   it('keeps a personal account on its own plan when the seat lookup fails', async () => {

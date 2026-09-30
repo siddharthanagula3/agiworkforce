@@ -19,6 +19,16 @@ export interface LeaveOrganizationInput {
   successorUserId?: string;
 }
 
+export function assertOwnerTurnsOnFastMode(
+  role: string,
+  wasOn: boolean,
+  turnsOn: boolean | undefined,
+): void {
+  if (turnsOn === true && !wasOn && role !== 'owner') {
+    throw createError.forbidden('Only the workspace Owner can turn on fast mode.').asUserSafe();
+  }
+}
+
 export async function requireOrganizationOwner(
   db: DatabaseAdapter,
   userId: string,

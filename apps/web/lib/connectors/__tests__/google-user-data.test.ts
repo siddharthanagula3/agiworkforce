@@ -9,6 +9,7 @@ import { CONNECTOR_OAUTH_SCOPE_CEILINGS } from '@/lib/connectors/oauth-scope-all
 import { MANAGED_CLOUD_TRIGGER_SOURCES } from '@agiworkforce/cloud-contracts';
 import {
   conversationHoldsGoogleUserData,
+  projectHoldsGoogleUserData,
   GOOGLE_USER_DATA_CONNECTOR_IDS,
   GOOGLE_USER_DATA_TRIGGER_SOURCES,
   isGoogleApiUrl,
@@ -62,6 +63,21 @@ describe('Google user data tool names', () => {
 });
 
 describe('conversationHoldsGoogleUserData', () => {
+  it.each([true, false])(
+    'keeps the provenance decision of a withdrawn conversation (%s)',
+    async (marked) => {
+      const { db, query } = database((sql) =>
+        /deleted_at\s+is\s+null|archived(?:_at)?\s*(?:=\s*false|is\s+null)/i.test(sql)
+          ? []
+          : [{ marked, project_id: null }],
+      );
+      await expect(conversationHoldsGoogleUserData(db, 'user-1', CONVERSATION_ID)).resolves.toBe(
+        marked,
+      );
+      expect(query.mock.calls[0]![1]).toEqual([CONVERSATION_ID, 'user-1']);
+    },
+  );
+
   it('is sticky once the conversation is marked', async () => {
     const { db } = database(() => [{ marked: true, project_id: null }]);
     await expect(conversationHoldsGoogleUserData(db, 'user-1', CONVERSATION_ID)).resolves.toBe(
@@ -90,6 +106,19 @@ describe('conversationHoldsGoogleUserData', () => {
     await expect(conversationHoldsGoogleUserData(db, 'user-1', CONVERSATION_ID)).resolves.toBe(
       true,
     );
+  });
+});
+
+describe('projectHoldsGoogleUserData', () => {
+  it.each([true, false])('keeps provenance from a withdrawn project source (%s)', async (holds) => {
+    const { db, query } = database((sql) => [
+      {
+        holds:
+          holds && !/deleted_at\s+is\s+null|archived(?:_at)?\s*(?:=\s*false|is\s+null)/i.test(sql),
+      },
+    ]);
+    await expect(projectHoldsGoogleUserData(db, 'project-1')).resolves.toBe(holds);
+    expect(query.mock.calls[0]![1]).toEqual(['project-1', GOOGLE_USER_DATA_CONNECTOR_IDS]);
   });
 });
 
