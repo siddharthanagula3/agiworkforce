@@ -136,6 +136,36 @@ async function settleTheme(page: Page): Promise<void> {
 }
 
 test.describe('enterprise buyer surface', () => {
+  test('/trust renders fresh request-bound script nonces', async ({ page }) => {
+    const failures = watch(page);
+    const nonces: string[] = [];
+    for (let request = 0; request < 2; request += 1) {
+      const response = await page.goto(`${BASE}/trust`, { waitUntil: 'load' });
+      expect(response).not.toBeNull();
+      expect(response!.status()).toBe(200);
+      await settleTheme(page);
+      await expect(page.locator('main')).toBeVisible();
+      const nonce = /'nonce-([^']+)'/.exec(
+        response!.headers()['content-security-policy'] ?? '',
+      )?.[1];
+      expect(nonce).toBeTruthy();
+      const inlineScripts = await page.evaluate(() =>
+        Array.from(document.scripts)
+          .filter(
+            (script) => !script.src && script.type !== 'application/ld+json' && script.text.trim(),
+          )
+          .map((script) => script.nonce),
+      );
+      expect(inlineScripts.length).toBeGreaterThan(0);
+      expect(inlineScripts.every((scriptNonce) => scriptNonce === nonce)).toBe(true);
+      nonces.push(nonce!);
+    }
+    expect(nonces[0]).not.toBe(nonces[1]);
+    expect(failures.pageErrors).toEqual([]);
+    expect(failures.failedRequests).toEqual([]);
+    expect(failures.consoleErrors).toEqual([]);
+  });
+
   for (const route of ENTERPRISE_ROUTES) {
     test(`${route} renders clean`, async ({ page }) => {
       const failures = watch(page);

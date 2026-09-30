@@ -16,11 +16,10 @@ import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
-import { ERASED_TABLE_COUNT, measureRouteIsolation } from '@/lib/legal/published-counts';
-
-export const dynamic = 'force-static';
-
-const ROUTE_ISOLATION = measureRouteIsolation();
+import {
+  ERASED_TABLE_COUNT,
+  ROUTE_ISOLATION_COUNTS as ROUTE_ISOLATION,
+} from '@/lib/legal/published-counts';
 
 export const metadata = buildMetadata({
   title: 'Trust: a dated posture ledger',

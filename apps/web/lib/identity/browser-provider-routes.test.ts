@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { needsBrowserIdentityProvider } from './browser-provider-routes';
+import { needsBrowserIdentityProvider, routeNeedsBrowserIdentity } from './browser-provider-routes';
 
 describe('browser identity provider routes', () => {
   it.each([
@@ -17,6 +17,8 @@ describe('browser identity provider routes', () => {
     '/invite',
     '/plugins/example',
     '/skills',
+    '/slack/link',
+    '/slack/link?token=link-code',
   ])('mounts identity for %s', (pathname) => {
     expect(needsBrowserIdentityProvider(pathname)).toBe(true);
   });
@@ -31,5 +33,11 @@ describe('browser identity provider routes', () => {
   it('matches whole route segments rather than lookalike prefixes', () => {
     expect(needsBrowserIdentityProvider('/chatty')).toBe(false);
     expect(needsBrowserIdentityProvider('/pluginshop')).toBe(false);
+    expect(needsBrowserIdentityProvider('/slack/linkage')).toBe(false);
+    expect(needsBrowserIdentityProvider('/slack')).toBe(false);
+  });
+
+  it('mounts identity for the rendered Slack account-link route behind a rewrite', () => {
+    expect(routeNeedsBrowserIdentity('/', ['(public)', 'slack', 'link'])).toBe(true);
   });
 });
