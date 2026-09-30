@@ -272,9 +272,9 @@ describe('background conversation identity', () => {
   });
 
   it('refuses an id the conversation store would reject instead of writing a bad record', () => {
-    expect(backgroundConversationId('task', 'bad id ')).toBeUndefined();
+    expect(backgroundConversationId('task', 'bad id\u0000')).toBeUndefined();
     expect(backgroundConversationId('task', '')).toBeUndefined();
-    expect(createBackgroundChatDelivery('task', 'bad id ', 'name', 'prompt')).toBeUndefined();
+    expect(createBackgroundChatDelivery('task', 'bad id\u0000', 'name', 'prompt')).toBeUndefined();
   });
 
   it('rejects an id the store would throw on', async () => {

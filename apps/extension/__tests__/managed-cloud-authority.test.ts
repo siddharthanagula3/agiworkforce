@@ -359,7 +359,7 @@ describe('managedCloudOwnerFromSessionToken', () => {
 
   it('rejects claims carrying control characters', () => {
     expect(
-      managedCloudOwnerFromSessionToken(makeSessionToken({ sub: 'user abc', sid: 'sess_1' })),
+      managedCloudOwnerFromSessionToken(makeSessionToken({ sub: 'user\u0000abc', sid: 'sess_1' })),
     ).toBeNull();
   });
 });

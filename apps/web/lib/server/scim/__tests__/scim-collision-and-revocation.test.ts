@@ -359,7 +359,7 @@ describe('malicious display names', () => {
     ['right-to-left override', 'Ada‮eciffO'],
     ['newline', 'Ada\nAdmin'],
     ['zero width space', 'Ad​a'],
-    ['null byte', 'Ada '],
+    ['null byte', 'Ada\u0000'],
   ])('refuses a %s in a user display name', async (_label, displayName) => {
     expect(() => parseScimUserResource(body({ displayName }))).toThrow(ScimError);
   });
