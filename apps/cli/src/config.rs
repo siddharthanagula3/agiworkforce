@@ -135,7 +135,9 @@ pub struct DefaultConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permission_mode: Option<String>,
 
-    /// Sandbox mode: off, read-only, workspace, full-auto.
+    /// Sandbox for the commands the agent runs: `read-only`, `contained` (the
+    /// default) or `unrestricted`. A repository's config can tighten it, never
+    /// loosen it, and `/sandbox` changes it for the running session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sandbox_mode: Option<String>,
 

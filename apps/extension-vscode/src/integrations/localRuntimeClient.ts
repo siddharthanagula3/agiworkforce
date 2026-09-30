@@ -1320,6 +1320,7 @@ export type TerminateLocalRuntimeTree = (child: ChildProcessWithoutNullStreams) 
 export interface LocalRuntimeClientOptions {
   cliPath: string | (() => string);
   memoryEnabled?: () => boolean;
+  bypassPermissionsAvailable?: () => boolean;
   cwd: string;
   clientVersion: string;
   environmentLabel?: string;
@@ -1338,6 +1339,7 @@ export class LocalRuntimeClient {
   private readonly eventListeners = new Set<(value: LocalRuntimeEvent) => void>();
   private stderrTail = '';
   private disposed = false;
+  private launchedBypassPermissionsAvailable = false;
 
   constructor(private readonly options: LocalRuntimeClientOptions) {}
 
@@ -1605,6 +1607,7 @@ export class LocalRuntimeClient {
 
   async startTurn(params: TurnStartParams): Promise<TurnSummary> {
     const connection = await this.readyConnection();
+    this.assertPermissionAuthority();
     const result = await connection.request('turn/start', params);
     return turnStartResponseSchema.parse(result).turn as TurnSummary;
   }
@@ -1616,6 +1619,7 @@ export class LocalRuntimeClient {
 
   async steerTurn(params: TurnSteerParams): Promise<TurnSummary> {
     const connection = await this.readyConnection();
+    this.assertPermissionAuthority();
     const result = await connection.request('turn/steer', params);
     return turnStartResponseSchema.parse(result).turn as TurnSummary;
   }
@@ -1865,6 +1869,22 @@ export class LocalRuntimeClient {
     return { dispose: () => this.eventListeners.delete(listener) };
   }
 
+  requiresPermissionRestart(): boolean {
+    return (
+      this.child !== undefined &&
+      this.launchedBypassPermissionsAvailable !==
+        (this.options.bypassPermissionsAvailable?.() === true)
+    );
+  }
+
+  private assertPermissionAuthority(): void {
+    if (this.requiresPermissionRestart()) {
+      throw new Error(
+        'Agent permissions changed. Run AGI Workforce: Restart Local Runtime to apply them before starting or steering a turn. Restarting stops running local turns.',
+      );
+    }
+  }
+
   restart(): Promise<void> {
     if (this.restartPromise !== undefined) return this.restartPromise;
     const restart = (async () => {
@@ -2025,9 +2045,13 @@ export class LocalRuntimeClient {
       );
     }
     let child: ChildProcessWithoutNullStreams;
+    const bypassPermissionsAvailable = this.options.bypassPermissionsAvailable?.() === true;
     try {
       const memoryArgs = this.options.memoryEnabled?.() === false ? ['--no-memory'] : [];
-      child = spawnRuntime(cliPath, ['app-server', ...memoryArgs], {
+      const permissionArgs = bypassPermissionsAvailable
+        ? ['--allow-dangerously-skip-permissions']
+        : [];
+      child = spawnRuntime(cliPath, [...permissionArgs, 'app-server', ...memoryArgs], {
         cwd: this.options.cwd,
         env: process.env,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -2043,6 +2067,7 @@ export class LocalRuntimeClient {
     }
     this.stderrTail = '';
     this.child = child;
+    this.launchedBypassPermissionsAvailable = bypassPermissionsAvailable;
     const releaseTracking = trackRuntimeChild(child);
     let resolveChildExit!: () => void;
     const childExitPromise = new Promise<void>((resolve) => {

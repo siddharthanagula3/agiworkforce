@@ -278,11 +278,6 @@ pub struct PermissionStore {
     #[serde(default)]
     pub workspace_rules: Vec<PermissionRule>,
 
-    /// Ring buffer of the last 50 tool invocations that were denied during the
-    /// current or past sessions. Not persisted, session-only.
-    #[serde(skip)]
-    pub recently_denied: Vec<String>,
-
     /// The permission mode this session is running under, which names the
     /// profile the stored rules sit inside. Session-only: the mode belongs to
     /// the invocation, not to the machine.
@@ -436,6 +431,9 @@ impl PermissionStore {
     }
 
     pub fn check_command(&self, command: &str) -> Option<bool> {
+        if self.denies_command(command) {
+            return Some(false);
+        }
         let command_program = command.split_whitespace().next().unwrap_or(command);
         let base_cmd = std::path::Path::new(command_program)
             .file_name()
@@ -490,13 +488,10 @@ impl PermissionStore {
 
     fn stored_decision(&self, command: &str) -> Option<PermissionDecision> {
         match self.check_command(command) {
-            Some(true) => Some(PermissionDecision::Allow),
             Some(false) => Some(PermissionDecision::Deny),
-            None => self
-                .ask_list
-                .iter()
-                .any(|rule| rule.pattern == command)
-                .then_some(PermissionDecision::Ask),
+            _ if self.asks_before(command) => Some(PermissionDecision::Ask),
+            Some(true) => Some(PermissionDecision::Allow),
+            None => None,
         }
     }
 
@@ -509,6 +504,9 @@ impl PermissionStore {
     ) -> CodePermissionProfile {
         let mut profile = permission_profile_for(self.active_mode);
         for (capability, command) in CAPABILITY_COMMANDS {
+            if profile.decision(*capability) == PermissionDecision::Deny {
+                continue;
+            }
             if let Some(decision) = self.stored_decision(command) {
                 profile.capabilities.set(*capability, decision);
             }
@@ -563,14 +561,15 @@ impl PermissionStore {
             return None;
         }
 
+        let mut all_allowed = true;
         for path in paths {
             match self.check_file(operation, path) {
                 Some(false) => return Some(false),
                 Some(true) => {}
-                None => return None,
+                None => all_allowed = false,
             }
         }
-        Some(true)
+        all_allowed.then_some(true)
     }
 
     /// Add a command prefix to the "always allow" persistent list.
@@ -652,22 +651,97 @@ impl PermissionStore {
         removed_local || removed_process
     }
 
-    /// Record a denied tool invocation in the session ring buffer (max 50 entries).
-    pub fn record_denied(&mut self, command: &str) {
-        const MAX_RECENT: usize = 50;
-        if self.recently_denied.len() >= MAX_RECENT {
-            self.recently_denied.remove(0);
-        }
-        self.recently_denied.push(command.to_string());
-    }
-
-    /// Add a rule to the ask list (per-invocation approval).
-    #[allow(dead_code)]
-    pub fn ask_always(&mut self, pattern: &str) {
-        let rule = PermissionRule::new(pattern);
+    pub fn ask_always(&mut self, prefix: &str) {
+        let Some(rule) = normalize_rule(prefix).map(PermissionRule::new) else {
+            return;
+        };
         if !self.ask_list.contains(&rule) {
             self.ask_list.push(rule);
         }
+    }
+
+    pub fn remove_ask(&mut self, prefix: &str) -> bool {
+        let Some(rule) = normalize_rule(prefix) else {
+            return false;
+        };
+        let before = self.ask_list.len();
+        self.ask_list.retain(|existing| existing.pattern != rule);
+        self.ask_list.len() != before
+    }
+
+    pub fn denies_command(&self, command: &str) -> bool {
+        self.command_matches_rules(command, self.always_deny.iter().map(String::as_str), false)
+    }
+
+    pub fn asks_before(&self, command: &str) -> bool {
+        self.command_matches_rules(
+            command,
+            self.ask_list.iter().map(|rule| rule.pattern.as_str()),
+            false,
+        )
+    }
+
+    pub fn denies_powershell_command(&self, command: &str) -> bool {
+        self.command_matches_rules(command, self.always_deny.iter().map(String::as_str), true)
+    }
+
+    pub fn asks_before_powershell(&self, command: &str) -> bool {
+        self.command_matches_rules(
+            command,
+            self.ask_list.iter().map(|rule| rule.pattern.as_str()),
+            true,
+        )
+    }
+
+    fn command_matches_rules<'a>(
+        &self,
+        command: &str,
+        rules: impl Iterator<Item = &'a str>,
+        case_insensitive_program: bool,
+    ) -> bool {
+        let mut parsed_rules = Vec::new();
+        for rule in rules {
+            if rule.starts_with("file:") || rule.starts_with(DOMAIN_RULE_PREFIX) {
+                continue;
+            }
+            let Some(tokens) = shlex::split(rule) else {
+                return true;
+            };
+            if tokens.is_empty() {
+                return true;
+            }
+            parsed_rules.push(tokens);
+        }
+        let mut rules = parsed_rules;
+        if case_insensitive_program {
+            for rule in &mut rules {
+                rule[0].make_ascii_lowercase();
+            }
+        }
+        if rules.is_empty() {
+            return false;
+        }
+        let Some(commands) = crate::features::exec::exec_policy::command_argvs(command) else {
+            return true;
+        };
+        commands.into_iter().any(|mut tokens| {
+            if case_insensitive_program {
+                if let Some(program) = tokens.first_mut() {
+                    program.make_ascii_lowercase();
+                }
+            }
+            if rules.iter().any(|rule| tokens.starts_with(rule)) {
+                return true;
+            }
+            if let Some(program) = tokens.first_mut() {
+                *program = Path::new(program)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or(program)
+                    .to_string();
+            }
+            rules.iter().any(|rule| tokens.starts_with(rule))
+        })
     }
 
     /// Add a rule scoped to the current workspace.
@@ -686,120 +760,103 @@ impl PermissionStore {
         self.session_allow.clear();
         self.ask_list.clear();
         self.workspace_rules.clear();
-        self.recently_denied.clear();
         PROCESS_SESSION_ALLOW
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clear();
     }
 
-    /// Tabbed display matching Claude Code /permissions UX.
-    ///
-    /// `tab` is one of: "allow" | "deny" | "session" | "workspace" | "recently-denied".
-    /// Unknown values fall back to "allow".
-    ///
-    /// Output format:
-    ///   Permissions:  Recently denied  Allow  Ask  Deny  Workspace
-    ///
-    ///   AGI won't ask before using allowed tools.
-    ///
-    ///   Search…
-    ///
-    ///    1.  Add a new rule…
-    ///    2.  Bash(cargo *)
-    ///    3.  …
-    ///
-    ///   /  tab switch · return · Esc cancel
-    pub fn display_tab(&self, tab: &str) -> String {
-        // Five tabs matching the /permissions UX spec:
-        // Recently denied | Allow | Ask | Deny | Workspace
-        let tabs = ["recently-denied", "allow", "ask", "deny", "workspace"];
+    pub fn display_tab(
+        &self,
+        tab: &str,
+        recent_denials: &[String],
+        directories: &[PathBuf],
+    ) -> String {
+        let tabs = [
+            ("recently-denied", "Recently denied"),
+            ("allow", "Allow"),
+            ("ask", "Ask"),
+            ("deny", "Deny"),
+            ("session", "Session"),
+            ("workspace", "Workspace"),
+        ];
         let active = match tab.to_lowercase().as_str() {
-            "allow" | "always-allow" => "allow",
             "deny" | "always-deny" => "deny",
-            "ask" | "session" => "ask",
-            "workspace" => "workspace",
+            "ask" => "ask",
+            "session" => "session",
+            "workspace" | "directories" => "workspace",
             "recently-denied" | "recent" => "recently-denied",
             _ => "allow",
         };
-
-        // Build tab header line, marking the active tab with [brackets].
-        let tab_header: Vec<String> = tabs
+        let header = tabs
             .iter()
-            .map(|&t| {
-                let label = match t {
-                    "recently-denied" => "Recently denied",
-                    "allow" => "Allow",
-                    "ask" => "Ask",
-                    "deny" => "Deny",
-                    "workspace" => "Workspace",
-                    _ => t,
-                };
-                if t == active {
-                    format!("[{}]", label)
+            .map(|(id, label)| {
+                if *id == active {
+                    format!("[{label}]")
                 } else {
                     label.to_string()
                 }
             })
-            .collect();
-
-        let hint = match active {
-            "allow" => "AGI won't ask before using allowed tools.",
-            "deny" => "AGI will never use denied tools.",
-            "ask" => "AGI will ask before using these tools each time.",
-            "workspace" => "Workspace rules apply only in this directory.",
-            "recently-denied" => "Tools denied during this session.",
-            _ => "",
+            .collect::<Vec<_>>()
+            .join("  ");
+        let sorted = |rules: Vec<String>| {
+            let mut rules = rules;
+            rules.sort();
+            rules
         };
-
-        let rules: Vec<String> = match active {
-            "allow" => {
-                let mut v: Vec<String> = self.always_allow.iter().cloned().collect();
-                v.sort();
-                v
-            }
-            "deny" => {
-                let mut v: Vec<String> = self.always_deny.iter().cloned().collect();
-                v.sort();
-                v
-            }
-            "ask" => {
-                let mut v: Vec<String> = self.ask_list.iter().map(|r| r.pattern.clone()).collect();
-                v.sort();
-                v
-            }
-            "workspace" => {
-                let mut v: Vec<String> = self
-                    .workspace_rules
+        let (hint, entries) = match active {
+            "deny" => (
+                "AGI will never use denied tools.",
+                sorted(self.always_deny.iter().cloned().collect()),
+            ),
+            "ask" => (
+                "AGI asks before every command that starts with one of these, even when an \
+                 allow rule covers it.",
+                sorted(
+                    self.ask_list
+                        .iter()
+                        .map(|rule| rule.pattern.clone())
+                        .collect(),
+                ),
+            ),
+            "session" => (
+                "Allowed until AGI exits. Nothing here is saved.",
+                sorted(self.session_allow.iter().cloned().collect()),
+            ),
+            "workspace" => (
+                "Directories the agent may read and change. Add one with /add-dir, remove one \
+                 with /remove-dir.",
+                directories
                     .iter()
-                    .map(|r| r.pattern.clone())
-                    .collect();
-                v.sort();
-                v
-            }
-            "recently-denied" => self.recently_denied.iter().rev().cloned().collect(),
-            _ => vec![],
+                    .map(|directory| directory.display().to_string())
+                    .collect(),
+            ),
+            "recently-denied" => (
+                "Tool calls that were denied, newest first.",
+                recent_denials.to_vec(),
+            ),
+            _ => (
+                "AGI won't ask before using allowed tools.",
+                sorted(self.always_allow.iter().cloned().collect()),
+            ),
         };
 
-        let mut out = String::new();
-        out.push_str(&format!("Permissions:  {}\n\n", tab_header.join("  ")));
+        let mut out = format!("Permissions:  {header}\n\n");
         out.push_str(&format!(
             "  Active profile: {}\n",
             self.code_permission_profile(None).display_label()
         ));
-        out.push_str(&format!("  {}\n\n", hint));
-        out.push_str("  Search…\n\n");
-
-        out.push_str(&format!("   {:>2}.  Add a new rule…\n", 1));
-        for (i, rule) in rules.iter().enumerate() {
-            out.push_str(&format!("   {:>2}.  {}\n", i + 2, rule));
+        out.push_str(&format!("  {hint}\n\n"));
+        for (index, entry) in entries.iter().enumerate() {
+            out.push_str(&format!("   {:>2}.  {entry}\n", index + 1));
         }
-        if rules.is_empty() {
-            out.push_str("        (no rules)\n");
+        if entries.is_empty() {
+            out.push_str("        (none)\n");
         }
-
-        out.push('\n');
-        out.push_str("  /  tab switch · return · Esc cancel\n");
+        out.push_str(
+            "\n  /permissions <tab> shows a tab. /permissions allow|ask|deny|session <rule> adds a \
+             rule, and /permissions remove <scope> <rule> removes one.\n",
+        );
         out
     }
 }
@@ -851,6 +908,60 @@ mod tests {
     }
 
     #[test]
+    fn malformed_command_rules_fail_closed_without_interpreting_file_or_domain_rules() {
+        let mut store = PermissionStore::default();
+        store.deny_always("git 'push");
+        assert!(store.denies_command("git status"));
+        store.always_deny.clear();
+        store.deny_always("file:write:/workspace/it's-private");
+        store.deny_always("domain:it's-private.example");
+        assert!(!store.denies_command("git status"));
+    }
+
+    #[test]
+    fn nested_wrappers_preserve_saved_denials_and_asks() {
+        let mut denied = PermissionStore::default();
+        denied.deny_always("git push");
+        let mut asked = PermissionStore::default();
+        asked.ask_always("git push");
+        let mut missed = Vec::new();
+        for command in [
+            "FOO=1 sh -c 'git push'",
+            "env sh -c 'git push'",
+            "env -S 'git push'",
+            "env --split-string='git push'",
+        ] {
+            if !denied.denies_command(command) {
+                missed.push(format!("deny: {command}"));
+            }
+            if !asked.asks_before(command) {
+                missed.push(format!("ask: {command}"));
+            }
+        }
+        assert!(missed.is_empty(), "{}", missed.join("; "));
+    }
+
+    #[test]
+    fn command_denials_cover_compound_quoted_and_wrapped_executables() {
+        let mut store = PermissionStore::default();
+        store.deny_always("git push");
+        for command in [
+            "FOO=1 git push",
+            "git status && git push",
+            "git status\ngit push",
+            "/usr/bin/git push",
+            "'/usr/bin/git' push",
+            "env FOO=1 /usr/bin/git push",
+            "sh -c 'git status; git push'",
+            "FOO=1 sh -c 'git push'",
+            "env sh -c 'git push'",
+        ] {
+            assert_eq!(store.check_command(command), Some(false), "{command}");
+        }
+        assert_ne!(store.check_command("git status"), Some(false));
+    }
+
+    #[test]
     fn test_deny_takes_precedence() {
         let mut store = PermissionStore::default();
         store.allow_always("npm");
@@ -889,6 +1000,20 @@ mod tests {
     }
 
     #[test]
+    fn a_later_file_denial_wins_over_an_earlier_unmatched_target() {
+        let mut store = PermissionStore::default();
+        let first = PathBuf::from("/workspace/new.rs");
+        let denied = PathBuf::from("/workspace/.vscode/tasks.json");
+        store
+            .always_deny
+            .insert(file_permission_key(FilePermissionOperation::Patch, &denied).unwrap());
+        assert_eq!(
+            store.check_files(FilePermissionOperation::Patch, &[first, denied]),
+            Some(false)
+        );
+    }
+
+    #[test]
     fn test_file_permission_paths_with_spaces_are_exact() {
         let mut store = PermissionStore::default();
         let path = PathBuf::from("/workspace/path with spaces/file.rs");
@@ -923,29 +1048,30 @@ mod tests {
     #[test]
     fn test_display_empty() {
         let store = PermissionStore::default();
-        let display = store.display_tab("allow");
+        let display = store.display_tab("allow", &[], &[]);
         // Tabbed header is always present
         assert!(display.contains("Permissions:"));
         assert!(display.contains("[Allow]"));
         // No rules means the empty-state marker
-        assert!(display.contains("(no rules)"));
+        assert!(display.contains("(none)"));
     }
 
     #[test]
     fn test_display_with_entries() {
         let mut store = PermissionStore::default();
         store.allow_always("npm test");
-        let display = store.display_tab("allow");
+        let display = store.display_tab("allow", &[], &[]);
         assert!(display.contains("Permissions:"));
-        assert!(display.contains("npm test"));
-        assert!(display.contains("Add a new rule"));
+        assert!(display.contains("  1.  npm test"), "{display}");
+        assert!(!display.contains("Add a new rule"), "{display}");
+        assert!(!display.contains("Search"), "{display}");
     }
 
     #[test]
     fn test_display_tab_deny() {
         let mut store = PermissionStore::default();
         store.deny_always("rm -rf");
-        let display = store.display_tab("deny");
+        let display = store.display_tab("deny", &[], &[]);
         assert!(display.contains("[Deny]"));
         assert!(display.contains("rm -rf"));
         assert!(display.contains("AGI will never use denied tools."));
@@ -955,16 +1081,50 @@ mod tests {
     fn test_display_tab_ask() {
         let mut store = PermissionStore::default();
         store.ask_always("cargo test");
-        // "session" is a legacy alias that maps to the Ask tab.
-        let display = store.display_tab("ask");
+        let display = store.display_tab("ask", &[], &[]);
         assert!(display.contains("[Ask]"));
         assert!(display.contains("cargo test"));
     }
 
     #[test]
+    fn the_session_tab_lists_session_allows_and_not_ask_rules() {
+        let mut store = PermissionStore::default();
+        store.allow_session("npm test");
+        store.ask_always("git push");
+
+        let display = store.display_tab("session", &[], &[]);
+
+        assert!(display.contains("[Session]"), "{display}");
+        assert!(display.contains("npm test"), "{display}");
+        assert!(!display.contains("git push"), "{display}");
+    }
+
+    #[test]
+    fn an_ask_rule_covers_every_segment_and_path_spelling_of_its_command() {
+        let mut store = PermissionStore::default();
+        store.ask_always("git   push");
+
+        for command in [
+            "git push origin main",
+            "cd app && git push",
+            "cargo test; git push --force",
+            "echo $(git push)",
+            "/usr/bin/git push",
+        ] {
+            assert!(store.asks_before(command), "{command}");
+        }
+        for command in ["git status", "git pushx", "echo git push"] {
+            assert!(!store.asks_before(command), "{command}");
+        }
+        assert!(store.remove_ask("git push"));
+        assert!(!store.asks_before("git push"));
+        assert!(!store.remove_ask("git push"));
+    }
+
+    #[test]
     fn test_display_tab_unknown_falls_back_to_allow() {
         let store = PermissionStore::default();
-        let display = store.display_tab("bogus");
+        let display = store.display_tab("bogus", &[], &[]);
         assert!(display.contains("[Allow]"));
     }
 
@@ -974,7 +1134,7 @@ mod tests {
         store.allow_always("zzz");
         store.allow_always("aaa");
         store.allow_always("mmm");
-        let display = store.display_tab("allow");
+        let display = store.display_tab("allow", &[], &[]);
         let aaa_pos = display.find("aaa").unwrap();
         let mmm_pos = display.find("mmm").unwrap();
         let zzz_pos = display.find("zzz").unwrap();
@@ -987,9 +1147,13 @@ mod tests {
     #[test]
     fn test_display_tab_footer() {
         let store = PermissionStore::default();
-        let display = store.display_tab("allow");
-        assert!(display.contains("tab switch"));
-        assert!(display.contains("Esc cancel"));
+        let display = store.display_tab("allow", &[], &[]);
+        assert!(
+            display.contains("/permissions remove <scope> <rule>"),
+            "{display}"
+        );
+        assert!(!display.contains("tab switch"), "{display}");
+        assert!(!display.contains("Esc cancel"), "{display}");
     }
 
     #[test]
@@ -1083,35 +1247,29 @@ mod tests {
     }
 
     #[test]
-    fn test_record_denied_ring_buffer() {
-        let mut store = PermissionStore::default();
-        for i in 0..55 {
-            store.record_denied(&format!("cmd-{}", i));
-        }
-        // Ring buffer is capped at 50.
-        assert_eq!(store.recently_denied.len(), 50);
-        // Most recent entries are present; oldest are evicted.
-        assert!(store.recently_denied.iter().any(|s| s == "cmd-54"));
-        assert!(!store.recently_denied.iter().any(|s| s == "cmd-0"));
-    }
-
-    #[test]
     fn test_display_tab_recently_denied() {
-        let mut store = PermissionStore::default();
-        store.record_denied("curl evil.test");
-        let display = store.display_tab("recently-denied");
+        let store = PermissionStore::default();
+        let display = store.display_tab(
+            "recently-denied",
+            &["run_command: curl evil.test".to_string()],
+            &[],
+        );
         assert!(display.contains("[Recently denied]"));
-        assert!(display.contains("curl evil.test"));
+        assert!(display.contains("run_command: curl evil.test"));
     }
 
     #[test]
     fn test_display_tab_workspace() {
-        let mut store = PermissionStore::default();
-        store.allow_workspace("cargo build");
-        let display = store.display_tab("workspace");
+        let store = PermissionStore::default();
+        let display = store.display_tab(
+            "workspace",
+            &[],
+            &[PathBuf::from("/work/app"), PathBuf::from("/work/shared")],
+        );
         assert!(display.contains("[Workspace]"));
-        assert!(display.contains("cargo build"));
-        assert!(display.contains("Workspace rules apply only in this directory."));
+        assert!(display.contains("  1.  /work/app"), "{display}");
+        assert!(display.contains("  2.  /work/shared"), "{display}");
+        assert!(display.contains("/add-dir"));
     }
 
     #[test]
@@ -1150,6 +1308,65 @@ mod tests {
         assert_eq!(
             accept_edits.decision(CodeCapability::GitPush),
             PermissionDecision::Ask
+        );
+    }
+
+    #[test]
+    fn permission_profiles_preserve_hard_mode_denials_over_stored_rules() {
+        for mode in [PermissionMode::Plan, PermissionMode::DontAsk] {
+            for ask in [false, true] {
+                let mut store = PermissionStore {
+                    active_mode: Some(mode),
+                    ..PermissionStore::default()
+                };
+                for command in ["git commit", "git push", "git rebase"] {
+                    if ask {
+                        store.ask_always(command);
+                    } else {
+                        store.allow_always(command);
+                    }
+                }
+                let profile = store.code_permission_profile(None);
+                for capability in [
+                    CodeCapability::GitCommit,
+                    CodeCapability::GitPush,
+                    CodeCapability::GitHistoryRewrite,
+                ] {
+                    assert_eq!(
+                        profile.decision(capability),
+                        PermissionDecision::Deny,
+                        "{mode:?}, {capability:?}, ask={ask}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn permission_profiles_follow_deny_then_ask_then_allow_precedence() {
+        let mut store = PermissionStore::default();
+        store.allow_always("git push");
+        store.ask_always("git push");
+        assert_eq!(
+            store
+                .code_permission_profile(None)
+                .decision(CodeCapability::GitPush),
+            PermissionDecision::Ask
+        );
+        store.deny_always("git push");
+        assert_eq!(
+            store
+                .code_permission_profile(None)
+                .decision(CodeCapability::GitPush),
+            PermissionDecision::Deny
+        );
+        store.remove_always_deny("git push");
+        store.remove_ask("git push");
+        assert_eq!(
+            store
+                .code_permission_profile(None)
+                .decision(CodeCapability::GitPush),
+            PermissionDecision::Allow
         );
     }
 
@@ -1240,7 +1457,7 @@ mod tests {
             ..PermissionStore::default()
         };
 
-        let display = store.display_tab("allow");
+        let display = store.display_tab("allow", &[], &[]);
 
         assert!(display.contains("Active profile: Plan"));
     }
@@ -1252,13 +1469,11 @@ mod tests {
         store.deny_always("rm");
         store.ask_always("curl");
         store.allow_workspace("cargo");
-        store.record_denied("evil");
         store.reset();
         assert!(store.always_allow.is_empty());
         assert!(store.always_deny.is_empty());
         assert!(store.ask_list.is_empty());
         assert!(store.workspace_rules.is_empty());
-        assert!(store.recently_denied.is_empty());
     }
 
     #[test]
