@@ -21,7 +21,7 @@ Seven technical surfaces implement one product across two continuity domains: Ac
 ## Surfaces
 
 - **web**: The Next.js application. Its API routes are a separate surface below. Release: a release workflow for this surface exists at `.github/workflows/deploy-production.yml`. Whether it has ever run is not in this tree.
-- **desktop**: The public Electron product plus retained internal Tauri code. A present cell may describe internal Tauri reachability and is not by itself a public Desktop claim. Release: a release workflow for this surface exists at `.github/workflows/release-desktop-cloud.yml`. Whether it has ever run is not in this tree.
+- **desktop**: The public Electron product plus retained internal Tauri code. A present cell may describe internal Tauri reachability and is not by itself a public Desktop claim. For Fast mode, the Desktop cell locates the web composer loaded by the default hosted Managed Cloud renderer in apps/desktop/electron/main.ts under apps/desktop/electron/config.ts. Release: a release workflow for this surface exists at `.github/workflows/release-desktop-cloud.yml`. Whether it has ever run is not in this tree.
 - **mobile**: The React Native application under apps/mobile. Release: a release workflow for this surface exists at `.github/workflows/release-mobile.yml`. Whether it has ever run is not in this tree.
 - **cli**: The Rust binary under apps/cli. Release: a release workflow for this surface exists at `.github/workflows/release-cli.yml`. Whether it has ever run is not in this tree.
 - **vscode**: The editor extension under apps/extension-vscode. Release: a release workflow for this surface exists at `.github/workflows/release-vscode-extension.yml`. Whether it has ever run is not in this tree.
@@ -36,7 +36,7 @@ Seven technical surfaces implement one product across two continuity domains: Ac
 `Unverified` means the tree does not settle it, and says what would.
 
 `Declared maturity` is the feature registry's answer for the whole feature, not for one surface.
-Most rows read "not in the feature registry": the registry holds 31 features
+Most rows read "not in the feature registry": the registry holds 32 features
 and this matrix holds more, so there is no declared maturity to show for the rest.
 
 ## Core consumer
@@ -59,6 +59,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 
 | Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Fast mode | beta | Present | Present | Absent | Absent | Absent | Absent | Present |
 | Deep Research | general_availability | Present | Present | Present | Absent | Absent | Absent | Present |
 | Study | general_availability | Present | Absent | Absent | Absent | Absent | Absent | Present |
 | Analyze | not in the feature registry | Unverified | Unverified | Unverified | Unverified | Unverified | Unverified | Unverified |
@@ -121,7 +122,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 
 ## Features with no declared maturity
 
-19 of 50 rows name no feature in
+19 of 51 rows name no feature in
 `packages/contracts/types/src/feature-registry.json`, so nothing in the tree declares how finished they are, who owns
 them, or what would take them out of an unfinished state. That is a gap in the registry, not in
 this document.
@@ -257,6 +258,16 @@ this document.
 - **vscode**: unverified. Settled by: apps/extension-vscode/src/features/onboarding is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both.
 - **chrome**: absent. Nothing under apps/extension/src opens help; the side panel links out to the web application for it.
 - **api**: present. `apps/web/app/api/support/ask/route.ts`, reached by `apps/web/app/layout.tsx` (route).
+
+### Fast mode
+
+- **web**: present. `apps/web/features/chat/components/Composer/ComposerFooter.tsx`, reached by `apps/web/features/chat/components/Composer/ChatComposerNew.tsx` (import).
+- **desktop**: present. `apps/web/features/chat/components/Composer/ComposerFooter.tsx`, reached by `apps/web/features/chat/components/Composer/ChatComposerNew.tsx` (import).
+- **mobile**: absent. The mobile composer has no Fast mode control, and InitialStreamRequest in apps/mobile/services/streaming.ts carries thinking and effort but no provider speed field.
+- **cli**: absent. The CLI /fast command in apps/cli/src/repl/slash_commands.rs reaches AgentSession::toggle_fast_mode in apps/cli/src/agent/mod.rs and switches to a faster model within the current session authority. That is a different control from the registered same-model provider tier: managed_cloud_spec_for_base in apps/cli/src/models/streaming.rs sends no provider speed field.
+- **vscode**: absent. The VS Code extension has no provider Fast mode control. buildCloudUtilityChatCompletionRequest in apps/extension-vscode/src/utils/api.ts sends thinking and effort but no provider speed field; the auto-speed model picker selects a routing profile instead.
+- **chrome**: absent. The Chrome composer has no provider Fast mode control. The managed request body in apps/extension/src/features/cloud-bridge/freeTrialClient.ts sends thinking and effort but no provider speed field; model speed labels describe catalog metadata.
+- **api**: present. `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`, reached by `apps/web/app/api/llm/v1/chat/completions/route.ts` (import).
 
 ### Deep Research
 
