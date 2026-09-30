@@ -1,17 +1,25 @@
 import 'server-only';
 
+import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
 import { z } from 'zod';
 
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 
-const STRIPE_PAGE_SIZE = 100;
+export const STRIPE_PAGE_SIZE = 100;
 const STRIPE_METADATA_VALUE_LIMIT = 500;
+const STRIPE_METADATA_KEY_LIMIT = 50;
 const COLLECTION_SNAPSHOT_KEY = 'agi_duplicate_collection';
 const REFUND_PAYMENT_KEY = 'duplicate_invoice_payment_id';
 const CollectionSnapshotSchema = z.object({
   kept: z.string().refine(isStripeSubscriptionId),
-  invoices: z.array(z.string().min(1)),
+  customer: z.string().min(1),
+  invoices: z.array(
+    z.object({
+      id: z.string().min(1),
+      subscription: z.string().refine(isStripeSubscriptionId).nullable(),
+    }),
+  ),
   refunds: z.number().int().nonnegative(),
   complete: z.boolean(),
 });
@@ -36,33 +44,62 @@ function refundTargetOf(payment: Stripe.InvoicePayment.Payment): StripeRefundTar
   return null;
 }
 
-export async function duplicateRefundAmount(
-  stripe: Stripe,
+export function duplicateRefundAmount(
   charge: Stripe.Charge,
   keptSubscriptionId: string | null,
-): Promise<number> {
-  const refunds =
-    charge.refunds && !charge.refunds.has_more
-      ? charge.refunds
-      : await stripe.refunds.list({ charge: charge.id, limit: STRIPE_PAGE_SIZE });
-  if (refunds.has_more) throw new Error('Charge refunds exceed the settlement limit');
-  const amount = refunds.data
-    .filter(
-      (refund) =>
-        (refund.status === 'succeeded' ||
-          refund.status === 'pending' ||
-          refund.status === 'requires_action') &&
-        isStripeSubscriptionId(refund.metadata?.['duplicate_subscription_id']) &&
-        refund.metadata?.['duplicate_subscription_id'] !== keptSubscriptionId &&
-        !!refund.metadata?.[REFUND_PAYMENT_KEY],
-    )
-    .reduce((sum, refund) => sum + refund.amount, 0);
+  otherAllocations: readonly { id: string; amount: number; subscription: string | null }[],
+): number {
+  const refunds = (charge as Stripe.Charge & { refunds?: Stripe.ApiList<Stripe.Refund> | null })
+    .refunds;
+  if (!refunds || refunds.has_more)
+    throw new Error('Shared payment refunds need a complete signed charge snapshot');
+  const active = refunds.data.filter(
+    (refund) =>
+      refund.status === 'succeeded' ||
+      refund.status === 'pending' ||
+      refund.status === 'requires_action',
+  );
+  const seen = new Set<string>();
   if (
-    !Number.isSafeInteger(amount) ||
-    amount < 0 ||
-    amount > charge.amount ||
-    amount > charge.amount_refunded
+    active.some((refund) => {
+      if (!refund.id || seen.has(refund.id)) return true;
+      seen.add(refund.id);
+      return (
+        !Number.isSafeInteger(refund.amount) ||
+        refund.amount <= 0 ||
+        stripeReference(refund.charge) !== charge.id
+      );
+    })
   ) {
+    throw new Error('Signed refund receipts have invalid charge allocations');
+  }
+  const total = active.reduce((sum, refund) => sum + refund.amount, 0);
+  if (!Number.isSafeInteger(total) || total !== charge.amount_refunded) {
+    throw new Error('Signed refund receipts do not match the charge refund snapshot');
+  }
+  const duplicates = active.filter((refund) => !!refund.metadata?.['duplicate_subscription_id']);
+  for (const refund of duplicates) {
+    const allocation = otherAllocations.find(
+      (payment) => payment.id === refund.metadata?.[REFUND_PAYMENT_KEY],
+    );
+    if (
+      !allocation ||
+      !isStripeSubscriptionId(allocation.subscription) ||
+      allocation.subscription === keptSubscriptionId ||
+      allocation.subscription !== refund.metadata?.['duplicate_subscription_id']
+    ) {
+      throw new Error('Duplicate refund does not belong to a proven other invoice allocation');
+    }
+  }
+  const amount = duplicates.reduce((sum, refund) => sum + refund.amount, 0);
+  for (const allocation of otherAllocations) {
+    const settled = duplicates
+      .filter((refund) => refund.metadata?.[REFUND_PAYMENT_KEY] === allocation.id)
+      .reduce((sum, refund) => sum + refund.amount, 0);
+    if (settled !== allocation.amount)
+      throw new Error('Shared payment refund attribution is ambiguous');
+  }
+  if (!Number.isSafeInteger(amount) || amount > charge.amount_refunded) {
     throw new Error('Duplicate refund receipts exceed the charge refund snapshot');
   }
   return amount;
@@ -147,13 +184,52 @@ async function storeCollectionSnapshot(
   });
 }
 
+function collectionRestoreReceipt(
+  incomingSubscriptionId: string,
+  snapshot: CollectionSnapshot,
+  invoice: CollectionSnapshot['invoices'][number],
+): { key: string; value: string } {
+  const key = `agi_restore_${createHash('sha256').update(incomingSubscriptionId).digest('hex').slice(0, 28)}`;
+  const value = JSON.stringify({
+    operation: incomingSubscriptionId,
+    kept: snapshot.kept,
+    customer: snapshot.customer,
+    invoice: invoice.id,
+    subscription: invoice.subscription,
+  });
+  if (value.length > STRIPE_METADATA_VALUE_LIMIT) {
+    throw new Error('Invoice collection receipt exceeds the settlement limit');
+  }
+  return { key, value };
+}
+
+function hasCollectionRestoreReceipt(
+  invoice: Stripe.Invoice,
+  receipt: { key: string; value: string },
+): boolean {
+  const stored = invoice.metadata?.[receipt.key];
+  if (stored !== undefined) {
+    if (stored !== receipt.value) {
+      throw new Error('Invoice collection receipt does not match its settlement');
+    }
+    return true;
+  }
+  if (Object.keys(invoice.metadata ?? {}).length >= STRIPE_METADATA_KEY_LIMIT) {
+    throw new Error('Invoice collection receipt has no metadata capacity');
+  }
+  return false;
+}
+
 async function captureCollectionSnapshot(
   stripe: Stripe,
   incoming: Stripe.Subscription,
   kept: Stripe.Subscription,
 ): Promise<CollectionSnapshot> {
+  const customer = stripeReference(incoming.customer);
+  if (!customer || customer !== stripeReference(kept.customer))
+    throw new Error('Duplicate and kept subscriptions have different customers');
   const invoices = await stripe.invoices.list({
-    subscription: kept.id,
+    customer,
     status: 'open',
     limit: STRIPE_PAGE_SIZE,
   });
@@ -161,26 +237,39 @@ async function captureCollectionSnapshot(
   if (
     invoices.data.some(
       (invoice) =>
-        stripeReference(invoice.parent?.subscription_details?.subscription) !== kept.id ||
-        stripeReference(invoice.customer) !== stripeReference(kept.customer),
+        stripeReference(invoice.customer) !== customer ||
+        (stripeReference(invoice.parent?.subscription_details?.subscription) !== null &&
+          !isStripeSubscriptionId(
+            stripeReference(invoice.parent?.subscription_details?.subscription),
+          )),
     )
   ) {
     throw new Error('Kept invoice does not belong to the tracked subscription and customer');
   }
   const snapshot: CollectionSnapshot = {
     kept: kept.id,
+    customer,
     invoices: invoices.data
       .filter(
         (invoice) =>
           invoice.auto_advance === true &&
-          stripeReference(invoice.customer) === stripeReference(incoming.customer),
+          stripeReference(invoice.parent?.subscription_details?.subscription) !== incoming.id &&
+          invoice.id !== stripeReference(incoming.latest_invoice),
       )
-      .map((invoice) => invoice.id),
+      .map((invoice) => ({
+        id: invoice.id,
+        subscription: stripeReference(invoice.parent?.subscription_details?.subscription),
+      })),
     refunds: 0,
     complete: false,
   };
   if (JSON.stringify(snapshot).length > STRIPE_METADATA_VALUE_LIMIT) {
     throw new Error('Kept invoice collection state exceeds the settlement limit');
+  }
+  for (const recorded of snapshot.invoices) {
+    const invoice = invoices.data.find((candidate) => candidate.id === recorded.id);
+    if (!invoice) throw new Error('Collection snapshot invoice is missing');
+    hasCollectionRestoreReceipt(invoice, collectionRestoreReceipt(incoming.id, snapshot, recorded));
   }
   snapshot.refunds = await refundDuplicateSubscriptionInvoice(stripe, incoming);
   await storeCollectionSnapshot(stripe, incoming.id, snapshot);
@@ -192,23 +281,39 @@ async function restoreCollectionSnapshot(
   incoming: Stripe.Subscription,
   snapshot: CollectionSnapshot,
 ): Promise<void> {
-  const kept = await stripe.subscriptions.retrieve(snapshot.kept);
-  if (kept.status === 'active' || kept.status === 'trialing' || kept.status === 'past_due') {
-    for (const invoiceId of snapshot.invoices) {
-      const invoice = await stripe.invoices.retrieve(invoiceId);
-      if (
-        stripeReference(invoice.customer) !== stripeReference(incoming.customer) ||
-        stripeReference(invoice.parent?.subscription_details?.subscription) !== kept.id
-      ) {
-        throw new Error('Kept invoice does not belong to the recorded subscription and customer');
-      }
-      if (invoice.status === 'open' && invoice.auto_advance !== true) {
-        await stripe.invoices.update(
-          invoice.id,
-          { auto_advance: true },
-          { idempotencyKey: `duplicate-subscription-collection:${incoming.id}:${invoice.id}` },
-        );
-      }
+  if (snapshot.customer !== stripeReference(incoming.customer))
+    throw new Error('Collection snapshot belongs to a different customer');
+  const live = new Map<string, boolean>();
+  for (const recorded of snapshot.invoices) {
+    if (recorded.subscription === incoming.id)
+      throw new Error('Collection snapshot includes the duplicate subscription');
+    const invoice = await stripe.invoices.retrieve(recorded.id);
+    if (
+      stripeReference(invoice.customer) !== snapshot.customer ||
+      stripeReference(invoice.parent?.subscription_details?.subscription) !== recorded.subscription
+    ) {
+      throw new Error('Invoice does not belong to its recorded customer and subscription');
+    }
+    const receipt = collectionRestoreReceipt(incoming.id, snapshot, recorded);
+    if (hasCollectionRestoreReceipt(invoice, receipt)) continue;
+    if (recorded.subscription !== null && !live.has(recorded.subscription)) {
+      const subscription = await stripe.subscriptions.retrieve(recorded.subscription);
+      if (stripeReference(subscription.customer) !== snapshot.customer)
+        throw new Error('Invoice subscription belongs to a different customer');
+      live.set(
+        recorded.subscription,
+        subscription.status === 'active' ||
+          subscription.status === 'trialing' ||
+          subscription.status === 'past_due',
+      );
+    }
+    if (recorded.subscription !== null && live.get(recorded.subscription) !== true) continue;
+    if (invoice.status === 'open') {
+      await stripe.invoices.update(
+        invoice.id,
+        { auto_advance: true, metadata: { [receipt.key]: receipt.value } },
+        { idempotencyKey: `duplicate-subscription-collection:${incoming.id}:${invoice.id}` },
+      );
     }
   }
   await storeCollectionSnapshot(stripe, incoming.id, { ...snapshot, complete: true });

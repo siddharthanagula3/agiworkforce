@@ -367,6 +367,28 @@ function makeLedgerDb(seed: StoredSubscription | null) {
 }
 
 const stripeStub = {
+  invoicePayments: {
+    list: async () => ({
+      has_more: false,
+      data: [
+        {
+          id: 'inpay_1',
+          amount_paid: 2000,
+          status: 'paid',
+          payment: { type: 'payment_intent', payment_intent: 'pi_1' },
+          invoice: {
+            id: 'in_1',
+            customer: 'cus_1',
+            status: 'paid',
+            amount_paid: 2000,
+            amount_remaining: 0,
+            parent: { subscription_details: { subscription: 'sub_1' } },
+            lines: { has_more: false, data: [{ period: { start: NOW, end: PERIOD_END } }] },
+          },
+        },
+      ],
+    }),
+  },
   refunds: { list: async () => ({ data: [], has_more: false }) },
   subscriptions: {
     retrieve: async () => ({
@@ -460,6 +482,7 @@ const OBJECT_BY_FAMILY: Readonly<Record<string, unknown>> = {
     customer: 'cus_1',
     amount: 2000,
     amount_refunded: 2000,
+    payment_intent: 'pi_1',
     refunded: true,
     created: NOW + 60,
     metadata: {},
