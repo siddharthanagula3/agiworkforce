@@ -46,6 +46,21 @@ store is broken fails its gate instead of passing it. The store probe reads
 probes cannot fan out into database load; failures are reported by SQLSTATE or
 as `timeout` or `unreachable`, never by the driver's message.
 
+Each store statement runs on one checked-out connection inside a transaction
+with a 4-second server statement timeout. The setting resets when the
+transaction ends, including through Neon's transaction pooler. Checkout and
+each driver query have separate 5-second bounds; these are not a total
+operation deadline. Any transaction failure destroys its connection instead
+of returning unfinished work to the pool. Writes are not retried after an
+unknown commit outcome.
+
+The isolated timeout check uses disposable PostgreSQL and PgBouncer on
+loopback and the installed Neon driver. It requires Docker:
+
+```
+pnpm --filter @agiworkforce/signaling-server exec tsx __tests__/fixtures/db-timeout-check.ts
+```
+
 ## Readiness check
 
 ```
