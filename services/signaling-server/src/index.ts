@@ -38,7 +38,7 @@ import {
   withPairingDevice,
 } from './pairing-device.js';
 import { isProxyTrusted, resolveClientIp, resolveTrustedProxyHops } from './client-ip.js';
-import { logger, generateCorrelationId } from './logger.js';
+import { logger, generateCorrelationId, logUnhandledRejection } from './logger.js';
 import { DEVICE_REVOKED_REASON, connectionManager } from './connection-manager.js';
 import { metrics } from './metrics.js';
 import { buildInfoMetric, canonicalEndpoint, releaseIdentity } from './release.js';
@@ -878,6 +878,16 @@ app.use((_req: Request, res: Response) => {
 });
 
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const parserType = 'type' in err ? err.type : null;
+  if (parserType === 'entity.parse.failed' || parserType === 'entity.too.large') {
+    logger.warn({ path: req.path, method: req.method, parserType }, 'Request body rejected');
+    res.status(parserType === 'entity.too.large' ? 413 : 400).json({
+      error: parserType === 'entity.too.large' ? 'PAYLOAD_TOO_LARGE' : 'INVALID_JSON',
+      message: parserType === 'entity.too.large' ? 'Request body too large' : 'Invalid JSON body',
+    });
+    return;
+  }
+
   if (err instanceof z.ZodError) {
     logger.warn({ path: req.path, method: req.method }, 'Request validation failed');
     res.status(400).json({
@@ -1231,8 +1241,8 @@ process.on('uncaughtException', (error) => {
   void gracefulShutdown('uncaughtException');
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  logger.fatal({ reason, promise }, 'Unhandled promise rejection');
+process.on('unhandledRejection', (reason) => {
+  logUnhandledRejection(reason);
   void gracefulShutdown('unhandledRejection');
 });
 

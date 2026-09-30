@@ -62,22 +62,23 @@ export function registerProbeRoutes(app: Application, deps: ProbeRouteDeps): voi
   });
 
   app.get('/ready', async (_req, res) => {
-    const lifecycle = deps.lifecycle();
-    if (lifecycle === 'shutting_down') {
+    if (deps.lifecycle() === 'shutting_down') {
       res.status(503).json({ status: 'shutting_down', timestamp: Date.now() });
       return;
     }
     const database = await deps.database.current();
-    res.status(lifecycle === 'ready' ? 200 : 503).json({
-      status: lifecycle === 'ready' ? 'ready' : 'not_ready',
+    const lifecycle = deps.lifecycle();
+    const ready = lifecycle === 'ready' && database.status === 'ok';
+    res.status(ready ? 200 : 503).json({
+      status: lifecycle === 'shutting_down' ? 'shutting_down' : ready ? 'ready' : 'not_ready',
       timestamp: Date.now(),
       checks: { database },
     });
   });
 
   app.get('/health', deps.healthLimiter, async (_req, res) => {
+    const database = deps.lifecycle() === 'shutting_down' ? null : await deps.database.current();
     const lifecycle = deps.lifecycle();
-    const database = lifecycle === 'shutting_down' ? null : await deps.database.current();
     const status =
       lifecycle === 'shutting_down'
         ? 'shutting_down'

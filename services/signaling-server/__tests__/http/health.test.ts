@@ -86,13 +86,45 @@ describe('Health Endpoints', () => {
       expect(response.body.checks.database).toMatchObject({ status: 'down', reason: '28P01' });
     });
 
-    it('keeps serving live relays through a later store outage and says so in the body', async () => {
+    it('refuses new readiness while the pairing store is down', async () => {
       probe.setDatabase({ ok: false, reason: 'timeout' });
       const response = await request(probe.app).get('/ready');
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(503);
+      expect(response.body.status).toBe('not_ready');
       expect(response.body.checks.database).toMatchObject({ status: 'down', reason: 'timeout' });
     });
+
+    it.each(['/ready', '/health'])(
+      'rechecks shutdown after an in-flight %s probe answers',
+      async (path) => {
+        let lifecycle: RelayLifecycle = 'ready';
+        let answer: ((result: DatabaseProbe) => void) | undefined;
+        const app = express();
+        registerProbeRoutes(app, {
+          lifecycle: () => lifecycle,
+          database: createDatabaseCheck({
+            probe: () =>
+              new Promise<DatabaseProbe>((resolve) => {
+                answer = resolve;
+              }),
+            ttlMs: 0,
+          }),
+          healthLimiter: (_req, _res, next) => next(),
+          healthDetail: () => ({}),
+        });
+        const response = request(app)
+          .get(path)
+          .then((result) => result);
+        for (let attempt = 0; attempt < 100 && !answer; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        expect(answer).toBeTypeOf('function');
+        lifecycle = 'shutting_down';
+        answer?.({ ok: true, latencyMs: 1 });
+        expect((await response).status).toBe(503);
+      },
+    );
 
     it('returns 503 while shutting down', async () => {
       probe.setLifecycle('shutting_down');

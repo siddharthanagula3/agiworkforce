@@ -17,6 +17,7 @@ vi.mock('../src/logger.js', () => ({
     fatal: vi.fn(),
   },
   generateCorrelationId: vi.fn(() => 'test-correlation-id'),
+  logUnhandledRejection: vi.fn(),
 }));
 
 vi.mock('../src/db.js', () => ({
