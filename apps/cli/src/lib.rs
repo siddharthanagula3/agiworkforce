@@ -8253,7 +8253,7 @@ pub async fn run_oneshot(
     // Wire --session-id: override the auto-generated session UUID with the
     // caller-supplied one.  Must be called after enable_managed_session so
     // the managed session object exists.
-    if let Some(ref sid) = session_id_override.as_ref().filter(|_| !resuming) {
+    if let Some(sid) = session_id_override.as_ref().filter(|_| !resuming) {
         session.override_session_id(sid)?;
     }
     if let Some(seed) = auto_route_seed {

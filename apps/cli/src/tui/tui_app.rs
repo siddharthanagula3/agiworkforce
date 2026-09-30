@@ -2159,7 +2159,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         // Live streamed output. During a turn this is redrawn each tick, so show
         // a generous tail (not just 5 lines) for a real streaming feel.
         if !ctx.stream_buffer.is_empty() {
-            lines.extend(streaming_markdown_tail(&ctx.stream_buffer));
+            lines.extend(streaming_markdown_tail(ctx.stream_buffer));
         }
     }
 
