@@ -474,7 +474,7 @@ jobs:
           # This monorepo publishes CLI and desktop releases. The action's
           # releaseId-only latest.json would point at cross-product
           # /releases/latest; AGI's target-scoped updater API is canonical.
-          includeUpdaterJson: false
+          uploadUpdaterJson: false
           args: --bundles appimage,deb
 
       - name: Verify Linux release artifacts
@@ -661,7 +661,7 @@ jobs:
         with:
           projectPath: apps/desktop
           releaseId: ${{ needs.prepare-release.outputs.release_id }}
-          includeUpdaterJson: false
+          uploadUpdaterJson: false
           args: --target universal-apple-darwin --bundles app,dmg
 
       - name: Verify notarized universal app, DMG, and updater archive
