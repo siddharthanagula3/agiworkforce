@@ -44,7 +44,11 @@ const IGNORED_DIRS = new Set([
 ]);
 
 function findWireShapingMarkers(source: string): string[] {
-  return WIRE_SHAPING_MARKERS.filter((marker) => source.includes(marker));
+  return WIRE_SHAPING_MARKERS.filter((marker) =>
+    new RegExp('(?<![A-Za-z0-9_$])' + marker.replaceAll('.', '\\.') + '(?![A-Za-z0-9_$])').test(
+      source,
+    ),
+  );
 }
 
 function isScannableSource(name: string): boolean {
@@ -87,6 +91,22 @@ describe('provider wire-shaping marker detector', () => {
       const payload = { model, messages, stream: true, effort, thinking_mode: true };
     `;
     expect(findWireShapingMarkers(canonical)).toEqual([]);
+  });
+
+  it('accepts persisted preference names without treating their substrings as wire fields', () => {
+    expect(findWireShapingMarkers("const preference = 'agi_reasoning_effort';")).toEqual([]);
+    expect(findWireShapingMarkers("const hint = 'max_completion_tokens_hint';")).toEqual([]);
+  });
+
+  it('still rejects every exact quoted or bare provider field beside a preference name', () => {
+    for (const marker of WIRE_SHAPING_MARKERS) {
+      expect(
+        findWireShapingMarkers(
+          `const preference = 'agi_reasoning_effort'; const body = { '${marker}': value };`,
+        ),
+      ).toEqual([marker]);
+      expect(findWireShapingMarkers(`const body = { ${marker}: value };`)).toEqual([marker]);
+    }
   });
 });
 
