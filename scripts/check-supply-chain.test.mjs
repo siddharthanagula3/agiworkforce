@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { stringify } from 'yaml';
 
 import {
   BASELINE_PATH,
@@ -23,6 +24,31 @@ const CLEAN_WORKFLOW = `jobs:
       - run: pnpm install --frozen-lockfile
 `;
 
+function dependabot(updates) {
+  return stringify({ version: 2, updates });
+}
+
+function updater(ecosystem, overrides = {}) {
+  return {
+    'package-ecosystem': ecosystem,
+    directory: '/',
+    schedule: { interval: 'weekly', day: 'monday' },
+    ...overrides,
+  };
+}
+
+const WORKSPACES = {
+  'pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n",
+  'Cargo.toml':
+    '[workspace]\nmembers = ["apps/desktop", "crates/*"]\n[workspace.lints.clippy]\nunsafe_code = "deny"\n',
+  'Cargo.lock': 'version = 4\n',
+  'apps/desktop/Cargo.toml':
+    '[package]\nname = "fixture-desktop"\nversion = "0.0.1"\n[dependencies]\nfixture-core = { path = "../../crates/core" }\n',
+  'apps/desktop/package.json': '{"name":"fixture-desktop"}',
+  'crates/core/Cargo.toml':
+    '[package]\nname = "fixture-core"\nversion = "0.0.1"\n[lints]\nworkspace = true\n',
+};
+
 function fixture({ files = {}, workflow = CLEAN_WORKFLOW, baseline, manifest }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'supply-chain-'));
   roots.push(root);
@@ -34,6 +60,7 @@ function fixture({ files = {}, workflow = CLEAN_WORKFLOW, baseline, manifest }) 
   );
   fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
   fs.writeFileSync(path.join(root, '.github/workflows/ci.yml'), workflow);
+  fs.writeFileSync(path.join(root, '.github/dependabot.yml'), dependabot([updater('npm')]));
   for (const [relative, body] of Object.entries(files)) {
     fs.mkdirSync(path.join(root, path.dirname(relative)), { recursive: true });
     fs.writeFileSync(path.join(root, relative), body);
@@ -263,3 +290,187 @@ test('the repository itself passes and the walk finds its containers', () => {
   assert.ok(installs > 0, 'CI installs the workspace');
   assert.ok(containerFiles(REPO_ROOT).includes('apps/web/Dockerfile'));
 });
+
+test('a pnpm member updater cannot resolve the shared workspace from its leaf', () => {
+  const root = fixture({
+    files: {
+      'pnpm-workspace.yaml': WORKSPACES['pnpm-workspace.yaml'],
+      'apps/mobile/package.json': '{"name":"fixture-mobile"}',
+      '.github/dependabot.yml': dependabot([
+        updater('npm'),
+        updater('npm', { directory: '/apps/mobile' }),
+      ]),
+    },
+  });
+  assert.match(checkSupplyChain(root).failures.join('\n'), /pnpm workspace.*root/);
+});
+
+test('a Cargo member updater must retain its shared root and inherited path crate lints', () => {
+  const root = fixture({
+    files: {
+      ...WORKSPACES,
+      '.github/dependabot.yml': dependabot([
+        updater('npm'),
+        updater('cargo'),
+        updater('cargo', { directory: '/apps/desktop' }),
+      ]),
+    },
+  });
+  assert.match(checkSupplyChain(root).failures.join('\n'), /Cargo workspace.*root/);
+});
+
+test('root updaters cover shared workspaces while Actions and Docker retain their directories', () => {
+  const root = fixture({
+    files: {
+      ...WORKSPACES,
+      '.github/dependabot.yml': dependabot([
+        updater('npm'),
+        updater('cargo'),
+        updater('github-actions'),
+        updater('docker', { directory: '/services/scanner' }),
+      ]),
+    },
+  });
+  assert.deepEqual(checkSupplyChain(root).failures, []);
+});
+
+test('a standalone npm or Cargo project is not mistaken for a shared workspace', () => {
+  const root = fixture({
+    files: {
+      '.github/dependabot.yml': dependabot([
+        updater('npm', { directory: '/apps/standalone' }),
+        updater('cargo', { directory: '/rust-standalone' }),
+      ]),
+    },
+  });
+  assert.deepEqual(checkSupplyChain(root).failures, []);
+});
+
+for (const ecosystem of ['npm', 'cargo']) {
+  test(`${ecosystem} workspace member directories cannot bypass root validation`, () => {
+    const root = fixture({
+      files: {
+        ...WORKSPACES,
+        '.github/dependabot.yml': dependabot([
+          updater(ecosystem, { directory: undefined, directories: ['/', '/apps/desktop'] }),
+          updater(ecosystem === 'npm' ? 'cargo' : 'npm'),
+        ]),
+      },
+    });
+    assert.match(checkSupplyChain(root).failures.join('\n'), /workspace.*root/);
+  });
+
+  test(`an omitted ${ecosystem} workspace updater cannot look like maintained dependencies`, () => {
+    const root = fixture({
+      files: {
+        ...WORKSPACES,
+        '.github/dependabot.yml': dependabot([updater(ecosystem === 'npm' ? 'cargo' : 'npm')]),
+      },
+    });
+    assert.match(checkSupplyChain(root).failures.join('\n'), /workspace.*root updater/);
+  });
+}
+
+test('the directories form can select each workspace root without selecting members', () => {
+  const root = fixture({
+    files: {
+      ...WORKSPACES,
+      '.github/dependabot.yml': dependabot([
+        updater('npm', { directory: undefined, directories: ['/'] }),
+        updater('cargo', { directory: undefined, directories: ['/'] }),
+      ]),
+    },
+  });
+  assert.deepEqual(checkSupplyChain(root).failures, []);
+});
+
+for (const [name, document] of [
+  ['invalid YAML', 'updates: [unterminated'],
+  ['null configuration', 'null'],
+  ['missing updates', 'version: 2'],
+  ['empty updates', 'version: 2\nupdates: []'],
+  ['nonarray updates', 'version: 2\nupdates: {}'],
+  ['invalid updater', dependabot([null])],
+  ['missing ecosystem', dependabot([{ directory: '/' }])],
+  ['missing directories', dependabot([updater('npm', { directory: undefined })])],
+  ['empty directories', dependabot([updater('npm', { directory: undefined, directories: [] })])],
+  ['invalid directory', dependabot([updater('npm', { directory: 1 })])],
+  ['both directory forms', dependabot([updater('npm', { directories: ['/'] })])],
+]) {
+  test(`${name} produces a controlled updater configuration failure`, () => {
+    const root = fixture({ files: { '.github/dependabot.yml': document } });
+    assert.match(checkSupplyChain(root).failures.join('\n'), /dependabot\.yml/);
+  });
+}
+
+test('a missing updater configuration cannot pass silently', () => {
+  const root = fixture({});
+  fs.rmSync(path.join(root, '.github/dependabot.yml'));
+  assert.match(checkSupplyChain(root).failures.join('\n'), /dependabot\.yml.*missing/);
+});
+
+test('independent projects outside shared workspace membership keep their own updater roots', () => {
+  const root = fixture({
+    files: {
+      ...WORKSPACES,
+      'independent/js/package.json': '{"name":"fixture-independent"}',
+      'independent/js/pnpm-lock.yaml': 'lockfileVersion: 9\n',
+      'independent/rust/Cargo.toml': '[package]\nname = "fixture-independent"\nversion = "0.0.1"\n',
+      'independent/rust/Cargo.lock': 'version = 4\n',
+      '.github/dependabot.yml': dependabot([
+        updater('npm'),
+        updater('cargo'),
+        updater('npm', { directory: '/independent/js' }),
+        updater('cargo', { directory: '/independent/rust' }),
+      ]),
+    },
+  });
+  assert.deepEqual(checkSupplyChain(root).failures, []);
+});
+
+test('explicitly excluded standalone projects are not shared workspace members', () => {
+  const root = fixture({
+    files: {
+      ...WORKSPACES,
+      'pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n  - '!apps/standalone'\n",
+      'Cargo.toml':
+        '[workspace]\nmembers = ["apps/desktop", "crates/*"]\nexclude = ["crates/standalone"]\n',
+      'apps/standalone/package.json': '{"name":"fixture-standalone"}',
+      'apps/standalone/pnpm-lock.yaml': 'lockfileVersion: 9\n',
+      'crates/standalone/Cargo.toml': '[package]\nname = "fixture-standalone"\nversion = "0.0.1"\n',
+      'crates/standalone/Cargo.lock': 'version = 4\n',
+      '.github/dependabot.yml': dependabot([
+        updater('npm'),
+        updater('cargo'),
+        updater('npm', { directory: '/apps/standalone' }),
+        updater('cargo', { directory: '/crates/standalone' }),
+      ]),
+    },
+  });
+  assert.deepEqual(checkSupplyChain(root).failures, []);
+});
+
+test('alternate valid TOML tables cannot hide a shared Cargo workspace', () => {
+  const root = fixture({
+    files: {
+      ...WORKSPACES,
+      'Cargo.toml': 'workspace = { members = ["apps/desktop", "crates/*"] }\n',
+      '.github/dependabot.yml': dependabot([
+        updater('npm'),
+        updater('cargo'),
+        updater('cargo', { directory: '/apps/desktop' }),
+      ]),
+    },
+  });
+  assert.match(checkSupplyChain(root).failures.join('\n'), /Cargo workspace.*root/);
+});
+
+for (const [name, owner, document] of [
+  ['invalid pnpm workspace YAML', 'pnpm-workspace.yaml', 'packages: [unterminated'],
+  ['invalid Cargo TOML', 'Cargo.toml', 'workspace = [unterminated'],
+]) {
+  test(`${name} cannot silently remove updater ownership`, () => {
+    const root = fixture({ files: { ...WORKSPACES, [owner]: document } });
+    assert.match(checkSupplyChain(root).failures.join('\n'), /workspace ownership/);
+  });
+}

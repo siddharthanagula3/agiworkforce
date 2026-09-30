@@ -10,6 +10,8 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { parseDocument } from 'yaml';
+import { parse as parseToml } from 'smol-toml';
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const BASELINE_PATH = 'scripts/config/supply-chain.json';
@@ -370,8 +372,165 @@ function applyBaseline({ declared, found, failures, key }) {
   return remaining;
 }
 
-export function checkSupplyChain(root = REPO_ROOT) {
+function parseYaml(source) {
+  const document = parseDocument(source);
+  if (document.errors.length > 0) throw new Error('invalid YAML');
+  return document.toJS();
+}
+
+function workspaceMembers(root, patterns, exclusions, manifestName) {
+  if (
+    !Array.isArray(patterns) ||
+    !Array.isArray(exclusions) ||
+    [...patterns, ...exclusions].some(
+      (value) =>
+        typeof value !== 'string' ||
+        value.trim() === '' ||
+        path.posix.isAbsolute(value) ||
+        path.win32.isAbsolute(value) ||
+        value.split('/').includes('..'),
+    )
+  ) {
+    throw new Error('invalid workspace members');
+  }
+  return new Set(
+    fs
+      .globSync(patterns, { cwd: root })
+      .map((member) => member.split(path.sep).join('/'))
+      .filter(
+        (member) =>
+          !exclusions.some((pattern) => path.matchesGlob(member, pattern)) &&
+          fs.existsSync(path.join(root, member, manifestName)),
+      ),
+  );
+}
+
+function updaterWorkspaceFailures(root) {
+  const relative = '.github/dependabot.yml';
+  const absolute = path.join(root, relative);
+  if (!fs.existsSync(absolute))
+    return [`${relative} is missing; dependency updates are not configured`];
+  let configuration;
+  try {
+    configuration = parseYaml(fs.readFileSync(absolute, 'utf8'));
+  } catch {
+    return [`${relative} must contain valid YAML`];
+  }
+  if (
+    !configuration ||
+    configuration.version !== 2 ||
+    !Array.isArray(configuration.updates) ||
+    configuration.updates.length === 0
+  ) {
+    return [`${relative} must define version 2 and a nonempty updates array`];
+  }
+
+  const workspaces = new Map();
+  try {
+    const pnpmWorkspace = path.join(root, 'pnpm-workspace.yaml');
+    if (fs.existsSync(pnpmWorkspace)) {
+      const definition = parseYaml(fs.readFileSync(pnpmWorkspace, 'utf8'));
+      if (!Array.isArray(definition?.packages)) throw new Error('invalid pnpm workspace');
+      const exclusions = definition.packages
+        .filter((pattern) => typeof pattern === 'string' && pattern.startsWith('!'))
+        .map((pattern) => pattern.slice(1));
+      const patterns = definition.packages.filter(
+        (pattern) => typeof pattern !== 'string' || !pattern.startsWith('!'),
+      );
+      workspaces.set('npm', {
+        name: 'pnpm workspace',
+        members: workspaceMembers(root, patterns, exclusions, 'package.json'),
+      });
+    }
+    const cargoManifest = path.join(root, 'Cargo.toml');
+    if (fs.existsSync(cargoManifest)) {
+      const definition = parseToml(fs.readFileSync(cargoManifest, 'utf8'));
+      if (definition.workspace !== undefined) {
+        if (
+          !definition.workspace ||
+          typeof definition.workspace !== 'object' ||
+          Array.isArray(definition.workspace)
+        ) {
+          throw new Error('invalid Cargo workspace');
+        }
+        workspaces.set('cargo', {
+          name: 'Cargo workspace',
+          members: workspaceMembers(
+            root,
+            definition.workspace.members ?? [],
+            definition.workspace.exclude ?? [],
+            'Cargo.toml',
+          ),
+        });
+      }
+    }
+  } catch {
+    return [`${relative} cannot validate workspace ownership from the current manifests`];
+  }
+  const roots = new Set();
   const failures = [];
+  configuration.updates.forEach((update, index) => {
+    const label = `${relative} updates[${index}]`;
+    if (
+      !update ||
+      Array.isArray(update) ||
+      typeof update['package-ecosystem'] !== 'string' ||
+      update['package-ecosystem'].trim() === ''
+    ) {
+      failures.push(`${label} must define a package ecosystem`);
+      return;
+    }
+    if ((update.directory !== undefined) === (update.directories !== undefined)) {
+      failures.push(`${label} must define exactly one of directory or directories`);
+      return;
+    }
+    const directories = update.directory !== undefined ? [update.directory] : update.directories;
+    if (
+      !Array.isArray(directories) ||
+      directories.length === 0 ||
+      directories.some(
+        (directory) =>
+          typeof directory !== 'string' ||
+          !directory.startsWith('/') ||
+          directory.includes('\\') ||
+          path.posix.normalize(directory) !== directory,
+      )
+    ) {
+      failures.push(`${label} must define nonempty repository-relative directory values`);
+      return;
+    }
+    const workspace = workspaces.get(update['package-ecosystem']);
+    if (workspace === undefined) return;
+    if (
+      directories.some((directory) => {
+        const target = directory.slice(1).replace(/\/$/, '');
+        return (
+          target !== '' &&
+          [...workspace.members].some(
+            (member) =>
+              member === target ||
+              member.startsWith(`${target}/`) ||
+              path.matchesGlob(member, target),
+          )
+        );
+      })
+    ) {
+      failures.push(
+        `${label} updates a ${workspace.name} member without its shared root; use only /`,
+      );
+      return;
+    }
+    if (directories.includes('/')) roots.add(update['package-ecosystem']);
+  });
+  for (const [ecosystem, workspace] of workspaces) {
+    if (!roots.has(ecosystem))
+      failures.push(`${relative} must configure the ${workspace.name} root updater`);
+  }
+  return failures;
+}
+
+export function checkSupplyChain(root = REPO_ROOT) {
+  const failures = updaterWorkspaceFailures(root);
   const baseline = loadBaseline(root);
   let images = 0;
 
