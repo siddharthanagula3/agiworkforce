@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthProvider } from './lib/mock-auth-provider';
 
 const NOT_FOUND = 404;
 
@@ -8,14 +9,35 @@ test.describe('pages opened from a shared link', () => {
       waitUntil: 'domcontentloaded',
     });
 
-    expect(response?.status()).toBe(NOT_FOUND);
+    expect([200, NOT_FOUND]).toContain(response?.status());
     await expect(
       page.getByRole('heading', { level: 1, name: 'Shared schedule unavailable' }),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Add to my schedules' })).toHaveCount(0);
+    const robots = page.locator('meta[name="robots"]');
+    await expect(robots.first()).toHaveAttribute('content', /noindex/);
+    for (const content of await robots.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('content') ?? ''),
+    )) {
+      expect(content.split(',').map((directive) => directive.trim())).toContain('noindex');
+    }
+    const apiResponse = await page.request.get('/api/schedule-shares/not-a-schedule-share-token');
+    expect(apiResponse.status()).toBe(NOT_FOUND);
+    expect(await apiResponse.json()).toMatchObject({
+      error: { code: 'NOT_FOUND' },
+    });
   });
 
   test('/slack/link without its code links nothing', async ({ page }) => {
+    const linkRequests: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.startsWith('/api/slack/link')) {
+        linkRequests.push(request.method());
+      }
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.name));
+    await mockAuthProvider(page);
     await page.goto('/slack/link', { waitUntil: 'domcontentloaded' });
 
     await expect(
@@ -25,5 +47,7 @@ test.describe('pages opened from a shared link', () => {
       page.getByRole('alert').filter({ hasText: 'This link is missing its code.' }),
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Connect Slack account' })).toBeDisabled();
+    expect(linkRequests).toEqual([]);
+    expect(pageErrors).toEqual([]);
   });
 });

@@ -7,6 +7,7 @@ const IDENTITY_AWARE_PUBLIC_PREFIXES = [
   '/invite',
   '/plugins',
   '/skills',
+  '/slack/link',
 ] as const;
 
 function pathOnly(pathname: string): string {

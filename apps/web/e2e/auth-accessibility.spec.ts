@@ -11,7 +11,13 @@ async function openAuth(page: Page, route: string): Promise<void> {
   await mockAuthProvider(page);
   await page.goto(route, { waitUntil: 'load' });
   await expect(page.getByTestId('auth-layout')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+  const submit = page.getByRole('button', { name: 'Continue', exact: true });
+  if (route === '/signup') {
+    await expect(page.getByTestId('auth-age-confirmation').getByRole('checkbox')).not.toBeChecked();
+    await expect(submit).toBeDisabled();
+  } else {
+    await expect(submit).toBeEnabled();
+  }
 }
 
 test.describe('auth accessibility', () => {
@@ -37,6 +43,10 @@ test.describe('auth accessibility', () => {
     test(`${route} ties every field error to the field it is about`, async ({ page }) => {
       await openAuth(page, route);
 
+      if (route === '/signup') {
+        await page.getByTestId('auth-age-confirmation').getByRole('checkbox').check();
+        await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+      }
       await page.getByLabel('Email address').fill(`unknown-${Date.now()}@example.invalid`);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       await expect(page.getByTestId('auth-layout').getByRole('alert')).toBeVisible();
