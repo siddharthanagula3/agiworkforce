@@ -174,6 +174,7 @@ function fakeRuntime(
     exitOnShutdown?: boolean;
     shutdownResult?: unknown;
     malformedV8?: boolean;
+    mcpServers?: unknown;
     initializeExtra?: Record<string, unknown>;
     initializeError?: { code: number; message: string; data?: unknown };
     trustMode?: string;
@@ -297,7 +298,9 @@ function fakeRuntime(
                       : typeof method === 'string' && method in V8_RESULTS
                         ? options.malformedV8 === true
                           ? MALFORMED_V8_RESULT
-                          : V8_RESULTS[method as keyof typeof V8_RESULTS]
+                          : method === 'mcp/list' && options.mcpServers !== undefined
+                            ? options.mcpServers
+                            : V8_RESULTS[method as keyof typeof V8_RESULTS]
                         : { acknowledged: true };
       const reply =
         method === 'initialize' && options.initializeError !== undefined
@@ -1605,6 +1608,59 @@ describe('LocalRuntimeClient', () => {
     await expect(client.initialize()).rejects.toThrow(/AGI_CLI_NOT_EXECUTABLE/u);
     await expect(client.initialize()).rejects.toThrow(/execute permission/u);
   });
+  it('retains the workspace refusal in blocked MCP list responses', async () => {
+    const policyRefusal =
+      "MCP server 'blocked' was not started: your workspace administrator has turned MCP servers off";
+    const runtime = fakeRuntime(8, {
+      mcpServers: {
+        servers: [
+          {
+            name: 'blocked',
+            transport: 'http',
+            scope: 'user',
+            status: 'blocked',
+            policyRefusal,
+            url: 'https://mcp.example.test/mcp',
+          },
+        ],
+      },
+    });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    expect((await client.listMcpServers()).servers[0]).toMatchObject({
+      status: 'blocked',
+      policyRefusal,
+    });
+    await client.dispose();
+  });
+
+  it('refuses blocked MCP list responses without an explanation', async () => {
+    const runtime = fakeRuntime(8, {
+      mcpServers: {
+        servers: [
+          {
+            name: 'blocked',
+            transport: 'http',
+            scope: 'user',
+            status: 'blocked',
+          },
+        ],
+      },
+    });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    await expect(client.listMcpServers()).rejects.toThrow();
+    await client.dispose();
+  });
+
   it('validates every protocol 8 response against its schema before returning it', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({

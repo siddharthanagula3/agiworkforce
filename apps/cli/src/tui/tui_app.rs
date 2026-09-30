@@ -4869,6 +4869,12 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     });
                     let status = if disabled {
                         McpStatus::Disabled
+                    } else if configured
+                        .get(name)
+                        .and_then(|config| crate::mcp::policy_refusal(name, config))
+                        .is_some()
+                    {
+                        McpStatus::Blocked
                     } else if tool_count > 0 {
                         McpStatus::Connected
                     } else if signed_out_remote {
@@ -4887,6 +4893,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 label: "Configured servers".to_string(),
                 servers,
             }]);
+            for name in &names {
+                if let Some(reason) = configured.get(name).filter(|_| !registry.iter().any(|row| &row.name == name && !row.enabled)).and_then(|config| crate::mcp::policy_refusal(name, config)) {
+                    text.push_str(&format!("\n{reason}"));
+                }
+            }
             text.push_str(
                 "\n/mcp tools [server] lists tools · /mcp restart reconnects · agi mcp login <name> signs in to a remote server · /mcp enable|disable <name>",
             );
@@ -7947,6 +7958,35 @@ mod tests {
         let session = crate::agent::AgentSession::new(&model, &sys_ctx, None);
         let config = crate::config::CliConfig::default();
         TuiApp::new(session, config)
+    }
+
+    #[test]
+    fn workspace_mcp_tui_lists_blocked_status_and_reason() {
+        crate::cloud::workspace_policy::with_test_policy(
+            serde_json::json!({"code": {"allowMcpServers": false}}),
+            || {
+                crate::mcp::with_test_configs(
+                    std::collections::HashMap::from([(
+                        "blocked-tui-fixture".to_string(),
+                        crate::mcp::McpServerConfig::http(
+                            "https://mcp.example.test/mcp",
+                            std::collections::HashMap::new(),
+                        ),
+                    )]),
+                    || {
+                        let mut app = minimal_app();
+                        let SlashResult::SystemMessage(text) = handle_slash("/mcp", &mut app)
+                        else {
+                            panic!("MCP list must render a system message");
+                        };
+                        assert!(text.contains("blocked-tui-fixture · ⊘ blocked by your workspace"));
+                        assert!(text.contains("MCP server 'blocked-tui-fixture' was not started"));
+                        assert!(text.contains("administrator has turned MCP servers off"));
+                        assert!(!text.contains("blocked-tui-fixture · △ needs authentication"));
+                    },
+                )
+            },
+        );
     }
 
     fn modes_reached_by_shift_tab(app: &TuiApp) -> Vec<InteractionMode> {

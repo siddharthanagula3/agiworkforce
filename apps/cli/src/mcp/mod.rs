@@ -195,6 +195,13 @@ impl McpServerConfig {
     }
 }
 
+pub fn policy_refusal(name: &str, config: &McpServerConfig) -> Option<String> {
+    crate::cloud::workspace_policy::cached_mcp_server_refusal(
+        name,
+        remote_config_url(config).as_deref(),
+    )
+}
+
 /// Whether a configured MCP transport may be opened inside the active trust
 /// boundary. Stdio is the only Local transport: SSE and Streamable HTTP are
 /// network egress even when their tool schemas look read-only.
@@ -526,6 +533,21 @@ fn remote_credential_state(url: &str, headers: &HashMap<String, String>) -> McpC
 /// project scope; passing it explicitly keeps this usable from a host that
 /// must not depend on the process working directory.
 pub fn discover_servers(project_dir: &std::path::Path) -> Vec<DiscoveredMcpServer> {
+    #[cfg(test)]
+    if let Some(configs) = TEST_CONFIGS.with(|cell| cell.borrow().clone()) {
+        let mut entries: Vec<_> = configs.into_iter().collect();
+        entries.sort_by(|left, right| left.0.cmp(&right.0));
+        return entries
+            .into_iter()
+            .map(|(name, config)| DiscoveredMcpServer {
+                url: mcp_server_url(&config),
+                credential: credential_state(&config),
+                name,
+                config,
+                origin: McpServerOrigin::User,
+            })
+            .collect();
+    }
     let mut servers: Vec<DiscoveredMcpServer> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
 
@@ -1378,6 +1400,10 @@ impl McpManager {
 
     /// Load MCP server configurations from project/global MCP JSON files.
     pub fn load_configs() -> Result<HashMap<String, McpServerConfig>> {
+        #[cfg(test)]
+        if let Some(configs) = TEST_CONFIGS.with(|cell| cell.borrow().clone()) {
+            return Ok(configs);
+        }
         Self::load_configs_with_options(&McpConfigLoadOptions::default())
     }
 
@@ -2646,4 +2672,26 @@ while True:
         assert_eq!(server_name, "files");
         assert_eq!(tool_name, "tool_16");
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_CONFIGS: std::cell::RefCell<Option<HashMap<String, McpServerConfig>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) fn with_test_configs<T>(
+    configs: HashMap<String, McpServerConfig>,
+    run: impl FnOnce() -> T,
+) -> T {
+    struct Restore(Option<HashMap<String, McpServerConfig>>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            TEST_CONFIGS.with(|cell| cell.replace(self.0.take()));
+        }
+    }
+    let previous = TEST_CONFIGS.with(|cell| cell.replace(Some(configs)));
+    let _restore = Restore(previous);
+    run()
 }

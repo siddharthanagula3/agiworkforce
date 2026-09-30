@@ -2055,6 +2055,7 @@ pub enum McpServerConfiguredStatus {
     Authorized,
     /// A remote server with neither a stored token nor a credential header.
     NeedsAuth,
+    Blocked,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2066,6 +2067,9 @@ pub struct McpServerSummary {
     pub transport: String,
     pub scope: McpServerScope,
     pub status: McpServerConfiguredStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub policy_refusal: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub url: Option<String>,

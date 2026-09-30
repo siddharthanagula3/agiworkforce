@@ -232,6 +232,10 @@ fn load_cached() -> Option<EffectiveWorkspacePolicy> {
 }
 
 fn with_current<R>(read: impl FnOnce(&EffectiveWorkspacePolicy) -> R) -> R {
+    #[cfg(test)]
+    if let Some(policy) = TEST_POLICY.with(|cell| cell.borrow().clone()) {
+        return read(&policy);
+    }
     if let Ok(current) = CURRENT.read() {
         if let Some(policy) = current.as_ref() {
             return read(policy);
@@ -250,6 +254,10 @@ fn with_current<R>(read: impl FnOnce(&EffectiveWorkspacePolicy) -> R) -> R {
 }
 
 fn policy_known() -> bool {
+    #[cfg(test)]
+    if TEST_POLICY.with(|cell| cell.borrow().is_some()) {
+        return true;
+    }
     CURRENT
         .read()
         .map(|current| current.is_some())
@@ -280,21 +288,36 @@ pub fn governed() -> bool {
 }
 
 pub async fn mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String> {
-    if signed_in_owner().is_some() && !policy_known() {
+    if !policy_known() && signed_in_owner().is_some() {
         let fetched = tokio::time::timeout(FIRST_FETCH_WAIT, fetch(PrivacyMode::Managed)).await;
         let signed_in = !matches!(fetched, Ok(Err(CloudError::SignedOut)));
         if !matches!(fetched, Ok(Ok(()))) && closes_on_failed_read(signed_in, policy_known()) {
-            return Some(format!(
-                "MCP server '{name}' was not started: your workspace policy could not be read, so MCP servers stay off until it can be. Check your connection and try again"
-            ));
+            return Some(unread_mcp_policy_refusal(name));
         }
     }
+    current_mcp_server_refusal(name, url)
+}
+
+pub fn cached_mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String> {
+    if !policy_known() && signed_in_owner().is_some() {
+        return Some(unread_mcp_policy_refusal(name));
+    }
+    current_mcp_server_refusal(name, url)
+}
+
+fn current_mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String> {
     with_current(|policy| {
         policy
             .code
             .as_ref()
             .and_then(|code| code_controls_refusal(code, name, url))
     })
+}
+
+fn unread_mcp_policy_refusal(name: &str) -> String {
+    format!(
+        "MCP server '{name}' was not started: your workspace policy could not be read, so MCP servers stay off until it can be. Check your connection and try again"
+    )
 }
 
 fn host_allowed(allowed: &[String], host: &str) -> bool {
@@ -620,6 +643,77 @@ mod credential_store_tests {
                 Some("probe")
             ),
             _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_POLICY: std::cell::RefCell<Option<EffectiveWorkspacePolicy>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) fn with_test_policy<T>(policy: serde_json::Value, run: impl FnOnce() -> T) -> T {
+    struct Restore(Option<EffectiveWorkspacePolicy>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            TEST_POLICY.with(|cell| cell.replace(self.0.take()));
+        }
+    }
+    let policy = serde_json::from_value(policy).expect("workspace policy fixture");
+    let previous = TEST_POLICY.with(|cell| cell.replace(Some(policy)));
+    let _restore = Restore(previous);
+    run()
+}
+
+#[cfg(test)]
+mod scoped_mcp_policy_tests {
+    use super::*;
+
+    #[test]
+    fn workspace_mcp_test_policy_is_scoped_and_restored_after_panics() {
+        with_test_policy(
+            serde_json::json!({"code": {"allowMcpServers": true}}),
+            || {
+                let result = std::panic::catch_unwind(|| {
+                    with_test_policy(
+                        serde_json::json!({"code": {"allowMcpServers": false}}),
+                        || {
+                            assert!(cached_mcp_server_refusal("fixture", None).is_some());
+                            panic!("fixture unwind");
+                        },
+                    );
+                });
+                assert!(result.is_err());
+                assert!(cached_mcp_server_refusal("fixture", None).is_none());
+            },
+        );
+    }
+
+    #[test]
+    fn workspace_mcp_parallel_fixtures_do_not_share_policy_state() {
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let jobs: Vec<_> = [true, false]
+            .into_iter()
+            .map(|allowed| {
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    with_test_policy(
+                        serde_json::json!({"code": {"allowMcpServers": allowed}}),
+                        || {
+                            barrier.wait();
+                            assert_eq!(
+                                cached_mcp_server_refusal("fixture", None).is_none(),
+                                allowed
+                            );
+                        },
+                    );
+                })
+            })
+            .collect();
+        for job in jobs {
+            job.join().unwrap();
         }
     }
 }

@@ -127,6 +127,7 @@ pub enum McpStatus {
     Disabled,
     NeedsAuth,
     Failed,
+    Blocked,
 }
 
 impl McpStatus {
@@ -136,6 +137,7 @@ impl McpStatus {
             McpStatus::Disabled => "◯ disabled",
             McpStatus::NeedsAuth => "△ needs authentication",
             McpStatus::Failed => "✘ failed",
+            McpStatus::Blocked => "⊘ blocked by your workspace",
         }
     }
 }
@@ -195,7 +197,7 @@ pub fn render_mcp_detail(
     args: &[String],
     config_location: &str,
 ) -> String {
-    let body = vec![
+    let mut body = vec![
         format!("  {} MCP Server", capitalize_first(server_name)),
         String::new(),
         format!("    Status:          {}", status.glyph()),
@@ -217,16 +219,19 @@ pub fn render_mcp_detail(
         ),
         format!("    Config location: {}", config_location),
         String::new(),
-        format!(
-            "  ❯ 1. {}",
-            match status {
-                McpStatus::Disabled => "Enable",
-                McpStatus::Connected => "Disable",
-                McpStatus::NeedsAuth => "Authenticate",
-                McpStatus::Failed => "Retry connection",
-            }
-        ),
     ];
+    if status == McpStatus::Blocked {
+        body.push("  Your workspace policy prevents starting this server.".to_string());
+    } else {
+        let action = match status {
+            McpStatus::Disabled => "Enable",
+            McpStatus::Connected => "Disable",
+            McpStatus::NeedsAuth => "Authenticate",
+            McpStatus::Failed => "Retry connection",
+            McpStatus::Blocked => unreachable!(),
+        };
+        body.push(format!("  ❯ 1. {action}"));
+    }
     frame(
         "MCP server".to_string(),
         &body,
@@ -1063,6 +1068,14 @@ mod tests {
 
         let s = render_mcp_detail("baz", McpStatus::Failed, "", &[], "/p");
         assert!(s.contains("❯ 1. Retry connection"));
+    }
+
+    #[test]
+    fn workspace_mcp_blocked_detail_has_no_start_action() {
+        let text = render_mcp_detail("fixture", McpStatus::Blocked, "", &[], "/fixture");
+        assert!(text.contains("blocked by your workspace"));
+        assert!(text.contains("workspace policy prevents starting"));
+        assert!(!text.contains("❯ 1."));
     }
 
     #[test]
