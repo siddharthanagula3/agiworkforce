@@ -180,6 +180,14 @@ class Hover {
 }
 
 class Selection extends Range {
+  get active(): Position {
+    return this.end as Position;
+  }
+
+  get anchor(): Position {
+    return this.start as Position;
+  }
+
   get isEmpty(): boolean {
     const s = this.start as Position;
     const e = this.end as Position;

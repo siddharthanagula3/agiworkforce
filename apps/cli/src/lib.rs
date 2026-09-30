@@ -335,6 +335,10 @@ pub struct Cli {
     #[arg(long)]
     dangerously_skip_permissions: bool,
 
+    /// Add Bypass and FullAuto to the Shift+Tab mode cycle without starting in them (DANGEROUS)
+    #[arg(long)]
+    allow_dangerously_skip_permissions: bool,
+
     /// Auto-approve safe tool calls (reads, searches, listings).
     /// Unknown tools still prompt; dangerous tools always prompt.
     #[arg(short = 'y', long)]
@@ -1819,11 +1823,13 @@ enum ApprovalsSubcommand {
     Allow { rule: String },
     /// Always deny a command prefix, or domain:<host> (*.host for subdomains) to block a site for web_fetch and the browser.
     Deny { rule: String },
+    /// Always ask before a command prefix, even when an allow rule covers it.
+    Ask { rule: String },
     /// Allow a command prefix for this process.
     Session { rule: String },
     /// Remove a saved or session rule.
     Remove {
-        /// allow, deny, or session.
+        /// allow, ask, deny, or session.
         scope: String,
         rule: String,
     },
@@ -4966,13 +4972,9 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
     let mut store = permissions::PermissionStore::load()?;
     match action {
         ApprovalsSubcommand::List => {
-            println!("{}", store.display_tab("allow"));
-            println!();
-            println!("{}", store.display_tab("deny"));
-            println!();
-            println!("{}", store.display_tab("ask"));
-            println!();
-            println!("{}", store.display_tab("workspace"));
+            for tab in ["allow", "ask", "deny"] {
+                println!("{}", store.display_tab(tab, &[], &[]));
+            }
             Ok(())
         }
         ApprovalsSubcommand::Allow { rule } => {
@@ -4990,6 +4992,12 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
             println!("Always deny: {}", rule.trim());
             Ok(())
         }
+        ApprovalsSubcommand::Ask { rule } => {
+            store.ask_always(rule);
+            store.save()?;
+            println!("Always ask: {}", rule.trim());
+            Ok(())
+        }
         ApprovalsSubcommand::Session { rule } => {
             store.allow_session_for_process(rule);
             println!("Allow for this process: {}", rule.trim());
@@ -4998,11 +5006,12 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
         ApprovalsSubcommand::Remove { scope, rule } => {
             let removed = match scope.as_str() {
                 "allow" => store.remove_always_allow(rule),
+                "ask" => store.remove_ask(rule),
                 "deny" => store.remove_always_deny(rule),
                 "session" => store.remove_session(rule),
                 other => {
                     anyhow::bail!(
-                        "unknown approval scope '{}'; use allow, deny, or session",
+                        "unknown approval scope '{}'; use allow, ask, deny, or session",
                         other
                     )
                 }
@@ -5501,7 +5510,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
     // the flags were inert (CLI-DEBUG-CONTROLS-INERT-01).
     let effective_log_filter = init_tracing(cli.verbose, cli.debug.as_ref());
 
-    sandbox::set_sandbox_disabled(cli.no_sandbox);
+    let no_sandbox_requested =
+        cli.no_sandbox || std::env::var_os("AGIWORKFORCE_NO_SANDBOX").is_some();
+    sandbox::set_sandbox_mode(sandbox::launch_mode(no_sandbox_requested, None, None));
     if cli.no_sandbox && sandbox::sandbox_settings().forced {
         eprintln!(
             "{} --no-sandbox is ignored: your organization requires the sandbox",
@@ -5604,6 +5615,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
     } else {
         config::CliConfig::load_without_project()?
     };
+    let user_sandbox_mode = config::CliConfig::load()
+        .ok()
+        .and_then(|config| config.default.sandbox_mode);
+    sandbox::set_sandbox_mode(sandbox::launch_mode(
+        no_sandbox_requested,
+        user_sandbox_mode.as_deref(),
+        app_config.default.sandbox_mode.as_deref(),
+    ));
 
     // Pull any user-defined `[providers.<name>]` blocks into the runtime
     // OpenAI-compatible registry (OpenRouter, NVIDIA NIM, Groq, Together,
@@ -5672,6 +5691,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     None,
                     exec_provider_override.as_deref(),
                 )?;
+                session.additional_context_dirs =
+                    crate::path_security::registered_additional_workspace_roots();
                 session.apply_ui_config(&app_config);
                 session.apply_tool_filters(
                     &normalized_cli_options.allowed_tools,
@@ -6138,10 +6159,23 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
             Command::RemoteControl => {
                 let workspace_root = std::env::current_dir()?;
-                let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
-                    app_config.clone(),
-                    workspace_root.clone(),
-                )?);
+                let host = std::sync::Arc::new(
+                    app_server::CliDeveloperSessionHost::new(
+                        app_config.clone(),
+                        workspace_root.clone(),
+                    )?
+                    .with_bypass_permissions_available(
+                        cli.allow_dangerously_skip_permissions
+                            || normalized_cli_options
+                                .effective_permissions(
+                                    cli.mode,
+                                    cli.dangerously_skip_permissions,
+                                    cli.yes,
+                                    None,
+                                )
+                                .skip_permissions,
+                    ),
+                );
                 remote_control::run(host, &workspace_root).await
             }
             Command::AppServer {
@@ -6154,10 +6188,20 @@ async fn run_cli(cli: Cli) -> Result<()> {
             } => {
                 cli_options::set_memory_enabled(!no_memory);
                 let workspace_root = std::env::current_dir()?;
-                let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
-                    app_config.clone(),
-                    workspace_root,
-                )?);
+                let host = std::sync::Arc::new(
+                    app_server::CliDeveloperSessionHost::new(app_config.clone(), workspace_root)?
+                        .with_bypass_permissions_available(
+                            cli.allow_dangerously_skip_permissions
+                                || normalized_cli_options
+                                    .effective_permissions(
+                                        cli.mode,
+                                        cli.dangerously_skip_permissions,
+                                        cli.yes,
+                                        None,
+                                    )
+                                    .skip_permissions,
+                        ),
+                );
                 let capabilities = host.capabilities();
                 let _heartbeat = device_registry::spawn_heartbeat_loop();
                 if listen == "stdio" {
@@ -6176,11 +6220,6 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             "AGI_CLI_SERVER_ADDR (or default 127.0.0.1:8788) must be a valid SocketAddr",
                         )
                     });
-                if !allow_public_listen && !addr.ip().is_loopback() {
-                    anyhow::bail!(
-                        "app-server refuses non-loopback listen address {addr}; pass --allow-public-listen only after adding network/firewall controls"
-                    );
-                }
                 let token = auth_token
                     .clone()
                     .or_else(|| std::env::var("AGI_APP_SERVER_TOKEN").ok())
@@ -6197,6 +6236,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         auth_token: Some(token),
                         allowed_origins: allowed_origin.clone(),
                         allow_query_token: *allow_query_token,
+                        allow_public_listen: *allow_public_listen,
                     },
                     host,
                     capabilities,
@@ -7775,6 +7815,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             resume_managed_session,
             effective_max_turns,
             effective_skip_permissions,
+            cli.allow_dangerously_skip_permissions,
             model_fallback_chain.clone(),
             cli.name,
             team_mode,
@@ -7783,7 +7824,6 @@ async fn run_cli(cli: Cli) -> Result<()> {
             effective_provider_override.map(str::to_string),
             effective_permission_mode,
             effective_auto_approve_plan,
-            sandbox::sandbox_disabled(),
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
@@ -8223,6 +8263,7 @@ pub async fn run_oneshot(
         custom_system_prompt,
         resolved_provider_override,
     )?;
+    session.additional_context_dirs = crate::path_security::registered_additional_workspace_roots();
     session.apply_ui_config(config);
     session.max_turns = max_turns;
     session.max_budget_usd = max_budget_usd;
@@ -8266,7 +8307,7 @@ pub async fn run_oneshot(
     // Wire --session-id: override the auto-generated session UUID with the
     // caller-supplied one.  Must be called after enable_managed_session so
     // the managed session object exists.
-    if let Some(ref sid) = session_id_override.as_ref().filter(|_| !resuming) {
+    if let Some(sid) = session_id_override.as_ref().filter(|_| !resuming) {
         session.override_session_id(sid)?;
     }
     if let Some(seed) = auto_route_seed {

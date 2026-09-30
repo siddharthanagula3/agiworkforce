@@ -351,6 +351,8 @@ pub fn recording_approval_callback(
                 detail: Vec::new(),
                 proposal: None,
                 saves_always_allow: request.saves_always_allow,
+                tool_subject: None,
+                requires_explicit_decision: request.requires_explicit_decision,
             };
             let decision = inner(request).await;
             if let Ok(mut activity) = activity.lock() {

@@ -5,7 +5,11 @@ import {
   ChatStateManager,
   type ExtToWebviewMessage,
 } from '../features/sidebar-webview/ChatStateManager';
-import { getNonce, getWebviewContent } from '../features/sidebar-webview/webviewContent';
+import {
+  getNonce,
+  getWebviewContent,
+  webviewResourceRoots,
+} from '../features/sidebar-webview/webviewContent';
 import { alertSessionActivity } from '../features/sidebar-webview/sessionActivityAlert';
 import { parseBoundWebviewMessage } from '../protocol/webviewMessages';
 import { type ConversationTreeProvider } from '../features/trees';
@@ -50,7 +54,7 @@ export class ChatEditorPanel {
     const panel = vscode.window.createWebviewPanel(ChatEditorPanel.viewType, title, column, {
       enableScripts: true,
       retainContextWhenHidden: true,
-      localResourceRoots: [extensionUri],
+      localResourceRoots: webviewResourceRoots(extensionUri),
     });
     const instance = new ChatEditorPanel(
       panel,
@@ -150,7 +154,10 @@ export class ChatEditorPanel {
       diffDecorationProvider,
     );
     const model = normalizeConfiguredModelId(Config.model());
-    this.panel.webview.options = { enableScripts: true, localResourceRoots: [extensionUri] };
+    this.panel.webview.options = {
+      enableScripts: true,
+      localResourceRoots: webviewResourceRoots(extensionUri),
+    };
     this.panel.webview.html = getWebviewContent(
       this.panel.webview,
       extensionUri,

@@ -34,6 +34,7 @@ export interface MutableConfigValues {
   'composer.followUpBehavior': ComposerFollowUpBehavior;
   contextLines: number;
   'editorContext.autoAttach': boolean;
+  respectGitIgnore: boolean;
   telemetryEnabled: boolean;
   hoverEnabled: boolean;
   codeLensEnabled: boolean;
@@ -77,6 +78,7 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'agent.thinking',
   'composer.followUpBehavior',
   'editorContext.autoAttach',
+  'respectGitIgnore',
   'telemetryEndpoint',
   'activateOnStartup',
 ] as const satisfies readonly MutableConfigKey[];
@@ -104,6 +106,7 @@ const DEFAULTS = {
   composerFollowUpBehavior: 'queue',
   contextLines: 50,
   editorContextAutoAttach: true,
+  respectGitIgnore: true,
   telemetryEnabled: false,
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
   currentTier: 'unknown',
@@ -187,6 +190,9 @@ export const Config = {
   editorContextAutoAttach(): boolean {
     return get<boolean>('editorContext.autoAttach', DEFAULTS.editorContextAutoAttach);
   },
+  respectGitIgnore(): boolean {
+    return get<boolean>('respectGitIgnore', DEFAULTS.respectGitIgnore);
+  },
   apiEndpoint(): string {
     return getUserScoped<string>('apiEndpoint', DEFAULTS.apiEndpoint);
   },
@@ -222,6 +228,7 @@ export const Config = {
         'composer.followUpBehavior': this.composerFollowUpBehavior(),
         contextLines: this.contextLines(),
         'editorContext.autoAttach': this.editorContextAutoAttach(),
+        respectGitIgnore: this.respectGitIgnore(),
         telemetryEnabled: this.telemetryEnabled(),
         hoverEnabled: this.hoverEnabled(),
         codeLensEnabled: this.codeLensEnabled(),

@@ -270,7 +270,9 @@ pub fn handle_shared_command(
         }
         "/stats" => ParityCommandResult::SystemMessage(render_stats(session)),
         "/passes" => ParityCommandResult::SystemMessage(render_passes(session)),
-        "/sandbox" => ParityCommandResult::SystemMessage(render_sandbox(session)),
+        "/sandbox" => {
+            ParityCommandResult::SystemMessage(crate::sandbox::handle_sandbox_command(arg))
+        }
         "/agents" => ParityCommandResult::SystemMessage(render_agents(arg)),
         "/chrome" => ParityCommandResult::SystemMessage(render_chrome()),
         "/ide" => ParityCommandResult::SystemMessage(render_ide()),
@@ -357,7 +359,7 @@ pub fn handle_shared_command(
 pub fn handle_add_dir(session: &mut AgentSession, arg: &str) -> String {
     let dirs = split_shell_words(arg);
     if dirs.is_empty() {
-        let roots = crate::path_security::registered_additional_workspace_roots();
+        let roots = &session.additional_context_dirs;
         if roots.is_empty() {
             return "Usage: /add-dir <directory> [more directories...]\nNo directories are added yet.".to_string();
         }
@@ -453,7 +455,7 @@ pub fn render_context_files(session: &AgentSession) -> String {
         }
     }
 
-    let roots = crate::path_security::registered_additional_workspace_roots();
+    let roots = &session.additional_context_dirs;
     if roots.is_empty() {
         lines.push("  additional directories: none".to_string());
     } else {
@@ -750,22 +752,8 @@ pub fn render_passes(session: &AgentSession) -> String {
         session.plan_approved,
         session.auto_approve_safe,
         session.skip_permissions,
-        crate::path_security::registered_additional_workspace_roots().len(),
+        session.additional_context_dirs.len(),
     )
-}
-
-pub fn render_sandbox(session: &AgentSession) -> String {
-    let roots = crate::path_security::registered_additional_workspace_roots();
-    let mut lines = vec![
-        "Sandbox".to_string(),
-        format!("  permission mode: {:?}", session.permission_mode),
-        format!("  skip permissions: {}", session.skip_permissions),
-        format!("  additional roots: {}", roots.len()),
-    ];
-    for root in roots {
-        lines.push(format!("    {}", root.display()));
-    }
-    lines.join("\n")
 }
 
 pub fn handle_tag(session: &mut AgentSession, arg: &str) -> String {
@@ -1786,7 +1774,7 @@ pub fn render_doctor(session: &AgentSession) -> String {
     ));
     lines.push(format!(
         "  additional roots: {}",
-        crate::path_security::registered_additional_workspace_roots().len()
+        session.additional_context_dirs.len()
     ));
     lines.push(format!(
         "  attached files: {}",
