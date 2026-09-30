@@ -81,6 +81,7 @@
       "@workflow/world-local": "4.4.0",
       "@hono/node-server": ">=1.19.15",
       "@opentelemetry/core": ">=2.8.0",
+      "@grpc/grpc-js": "^1.14.5",
       "body-parser": ">=2.3.0",
       "deepmerge-ts": ">=8.0.0",
       "markdown-it": ">=14.2.0",
