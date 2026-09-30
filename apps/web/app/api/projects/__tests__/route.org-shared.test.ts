@@ -55,6 +55,7 @@ function projectRow(overrides: Record<string, unknown> = {}): Record<string, unk
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-02T00:00:00.000Z',
     conversation_count: 0,
+    server_version: '7',
     ...overrides,
   };
 }
@@ -267,10 +268,13 @@ describe('the payload says which projects the caller may write', () => {
     const response = await GET_PROJECT(detailRequest(SHARED_PROJECT), {
       params: Promise.resolve({ id: SHARED_PROJECT }),
     });
-    const body = (await response.json()) as { project: { isOrgShared: boolean } };
+    const body = (await response.json()) as {
+      project: { isOrgShared: boolean; serverVersion: string };
+    };
 
     expect(response.status).toBe(200);
     expect(body.project.isOrgShared).toBe(true);
+    expect(body.project.serverVersion).toBe('7');
   });
 
   it('marks an owned detail body not shared', async () => {

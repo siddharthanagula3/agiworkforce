@@ -55,6 +55,7 @@ const DIRECT_FAILOVER_PROVIDERS = new Set([
   'moonshot',
   'perplexity',
 ]);
+const RETIRED_DIRECT_FAILOVER_PROVIDERS = new Set(['perplexity']);
 const NON_CHAT_MODEL_TYPES = new Set(['image', 'video', 'audio', 'embedding', 'tts', 'stt']);
 
 function providerApiModelId(model: ModelMetadata): string {
@@ -89,13 +90,34 @@ describe('aggregator routing', () => {
     expect(isManagedOpenRouterRoute(providerApiModelId(model))).toBe(true);
   });
 
-  it.each([...DIRECT_FAILOVER_PROVIDERS])(
-    "does not admit %s's OpenRouter route to managed traffic",
+  it.each(
+    [...DIRECT_FAILOVER_PROVIDERS].filter(
+      (provider) => !RETIRED_DIRECT_FAILOVER_PROVIDERS.has(provider),
+    ),
+  )("does not admit %s's OpenRouter route to managed traffic", (provider) => {
+    const model = requireCatalogModel(
+      (candidate) => candidate.provider === provider && isChatModel(candidate),
+    );
+    expect(isManagedOpenRouterRoute(providerApiModelId(model))).toBe(false);
+  });
+
+  it.each([...RETIRED_DIRECT_FAILOVER_PROVIDERS])(
+    "did not admit %s's OpenRouter route to managed traffic while its models were served",
     (provider) => {
       const model = requireCatalogModel(
-        (candidate) => candidate.provider === provider && isChatModel(candidate),
+        (candidate) =>
+          candidate.provider === provider &&
+          !NON_CHAT_MODEL_TYPES.has(candidate.modelType) &&
+          Boolean(candidate.deprecation_date),
       );
-      expect(isManagedOpenRouterRoute(providerApiModelId(model))).toBe(false);
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(Date.parse(String(model.deprecation_date)) - 24 * 60 * 60 * 1000);
+        expect(isChatModel(model)).toBe(true);
+        expect(isManagedOpenRouterRoute(providerApiModelId(model))).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
     },
   );
 

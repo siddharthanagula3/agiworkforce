@@ -1,9 +1,10 @@
 /**
  * model-store · deprecation_date propagation (CLR-01 / mqp-08)
  *
- * `isCurrentModel()` already drops a model outright once its catalog
- * `deprecation_date` has passed, that behavior is unchanged and reasserted
- * here. What's new is that a model whose `deprecation_date` is still in the
+ * `isCurrentModel()` in @agiworkforce/types drops a model outright once its
+ * catalog `deprecation_date` has passed; the picker list the store reads is
+ * filtered through it, so the mocked list below applies the real predicate and
+ * the drop is reasserted here. What's new is that a model whose `deprecation_date` is still in the
  * future now carries it forward onto `AIModel.deprecationDate`, so
  * ComposerFooter's row renderer (see ComposerFooter.deprecation-warning.test.tsx)
  * has real data to render a "Leaving on <date>" warning from instead of the
@@ -28,11 +29,16 @@ vi.mock('@agiworkforce/types', async () => {
   return {
     ...actual,
     getAutoRoutingProfiles: () => [],
-    getModelsForTierAndSurface: () => [
-      { id: 'fixture-scheduled-model' },
-      { id: 'fixture-retired-model' },
-      { id: 'fixture-plain-model' },
-    ],
+    getModelsForTierAndSurface: () =>
+      [
+        { id: 'fixture-scheduled-model', deprecation_date: nearFutureIso },
+        { id: 'fixture-retired-model', deprecation_date: pastIso },
+        { id: 'fixture-plain-model', deprecation_date: null },
+      ]
+        .filter((model) =>
+          actual.isCurrentModel(model as unknown as Parameters<typeof actual.isCurrentModel>[0]),
+        )
+        .map(({ id }) => ({ id })),
   };
 });
 

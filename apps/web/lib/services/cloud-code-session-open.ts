@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   CLOUD_CODE_NETWORK_ACCESS,
   type CloudCodeNetworkAccess,
-  type CloudCodeSession,
   type CreateCloudCodeSessionInput,
 } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
@@ -26,6 +25,7 @@ import {
   createCloudCodeSession,
   isCloudCodeSchemaUnavailable,
   type CloudCodeOwner,
+  type OpenedCloudCodeSession,
 } from '@/lib/services/cloud-code-session-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
@@ -60,7 +60,7 @@ export async function openCloudCodeSession(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
   body: Record<string, unknown>,
-): Promise<Response | CloudCodeSession> {
+): Promise<Response | OpenedCloudCodeSession> {
   if (!e2bProvisioningReady()) {
     throw createError.capabilityUnavailable(
       'Managed Code is not enabled for this deployment. Use the desktop app for local code.',
@@ -160,13 +160,12 @@ export async function openCloudCodeSession(
   if (accessGateResponse) return accessGateResponse;
   const planTier = entitlement.plan;
   try {
-    const session = await createCloudCodeSession(
+    return await createCloudCodeSession(
       db,
       owner,
       body as unknown as CreateCloudCodeSessionInput,
       planTier,
     );
-    return session;
   } catch (error) {
     rethrowCloudCodeError(error);
   }

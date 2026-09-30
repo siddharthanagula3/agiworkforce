@@ -91,8 +91,10 @@ describe('scalar-returning RPCs are never read through select *', () => {
     const scalar = (fn: string) => SCALAR_RETURNS.test(returnTypes.get(fn) ?? '');
     expect(scalar('claim_beta_invite')).toBe(true);
     expect(scalar('delete_user_data')).toBe(true);
-    // Both call sites are now aliased, so neither expands the function at all.
-    for (const file of ['app/api/claim-offer/route.ts', 'app/api/user/data/route.ts']) {
+    // The claim call site is aliased, so it never expands the function. The
+    // delete_user_data call site left with /api/user/data in d44a6db329; the
+    // sweep above still refuses any new one that reads it through select *.
+    for (const file of ['app/api/claim-offer/route.ts']) {
       const source = readFileSync(join(WEB_ROOT, file), 'utf8');
       expect(source).not.toMatch(/select\s+\*\s+from\s+(claim_beta_invite|delete_user_data)/u);
       expect(source).toMatch(/as result/u);
