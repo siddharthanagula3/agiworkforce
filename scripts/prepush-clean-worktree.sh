@@ -29,22 +29,11 @@ if [ "$(git -C "$WORKTREE_DIR" rev-parse --is-bare-repository)" = "true" ]; then
   git -C "$WORKTREE_DIR" config --worktree core.bare false
 fi
 
-while IFS= read -r pkg_dir; do
-  [ -n "$pkg_dir" ] || continue
-  [ -d "$pkg_dir/node_modules" ] || continue
-  if [ "$pkg_dir" = "$REPO_ROOT" ]; then
-    rel_node_modules="node_modules"
-  else
-    rel_node_modules="${pkg_dir#"$REPO_ROOT"/}/node_modules"
-  fi
-  target="$WORKTREE_DIR/$rel_node_modules"
-  mkdir -p "$target"
-  while IFS= read -r -d '' entry; do
-    ln -sfn "$entry" "$target/$(basename "$entry")"
-  done < <(find "$pkg_dir/node_modules" -mindepth 1 -maxdepth 1 -print0)
-done < <(cd "$REPO_ROOT" && pnpm -r list --depth -1 --parseable 2>/dev/null)
+node "$(dirname "${BASH_SOURCE[0]}")/lib/worktree-dependencies.mjs" "$REPO_ROOT" "$WORKTREE_DIR"
 
 cd "$WORKTREE_DIR"
+export CARGO_TARGET_DIR="$(pwd -P)/target"
+unset NODE_PATH
 eval "$CHAIN_CMD"
 
 if [ -n "${AGI_PREPUSH_DIFF_CMD:-}" ]; then
