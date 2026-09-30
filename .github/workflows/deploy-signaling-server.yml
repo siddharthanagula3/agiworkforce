@@ -199,7 +199,7 @@ jobs:
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: ${{ env.SERVICE_DIR }}
+          context: .
           file: ${{ env.SERVICE_DIR }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -247,7 +247,7 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          cd ${{ env.SERVICE_DIR }}
+          cp services/signaling-server/railway.toml railway.toml
           railway up --service signaling-server --detach
 
       - name: Verify deployment health
@@ -297,8 +297,7 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          cd ${{ env.SERVICE_DIR }}
-          flyctl deploy --remote-only --wait-timeout 300
+          flyctl deploy . --config services/signaling-server/fly.toml --dockerfile services/signaling-server/Dockerfile --remote-only --wait-timeout 300
 
       - name: Verify deployment health
         env:

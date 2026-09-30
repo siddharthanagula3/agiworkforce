@@ -1,117 +1,48 @@
-# =============================================================================
-# WebSocket Signaling Server Dockerfile
-# =============================================================================
-# Multi-stage build for minimal production image
-# Uses pnpm for consistency with the monorepo
-#
-# Build standalone:
-#   docker build -t signaling-server .
-#
-# Build from monorepo root (recommended for CI):
-#   docker build -f services/signaling-server/Dockerfile \
-#     --build-context service=services/signaling-server .
-# =============================================================================
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS deps
 
-# =============================================================================
-# Stage 1: Dependencies
-# =============================================================================
-FROM node:24-alpine AS deps
+WORKDIR /workspace
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches/ ./patches/
+COPY services/signaling-server/package.json ./services/signaling-server/package.json
+RUN corepack enable && pnpm install --filter @agiworkforce/signaling-server... --frozen-lockfile --ignore-scripts
 
-RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS builder
 
-WORKDIR /app
+WORKDIR /workspace
+COPY --from=deps /workspace/ ./
+COPY services/signaling-server/tsconfig.docker.json ./services/signaling-server/tsconfig.json
+COPY services/signaling-server/src/ ./services/signaling-server/src/
+RUN corepack enable && pnpm --filter @agiworkforce/signaling-server run build
 
-# Copy package manifest + lockfile for reproducible installs
-COPY package.json pnpm-lock.yaml* ./
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS prod-deps
 
-# Install all dependencies (including devDependencies for build)
-# Uses lockfile if present (monorepo context), otherwise generates one
-RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+WORKDIR /workspace
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches/ ./patches/
+COPY services/signaling-server/package.json ./services/signaling-server/package.json
+RUN corepack enable && pnpm install --filter @agiworkforce/signaling-server... --prod --frozen-lockfile --ignore-scripts
 
-# =============================================================================
-# Stage 2: Build
-# =============================================================================
-FROM node:24-alpine AS builder
-
-RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
-
-WORKDIR /app
-
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
-
-# Copy TypeScript configuration (use Docker-specific config that doesn't extend base)
-COPY tsconfig.docker.json ./tsconfig.json
-COPY src/ ./src/
-
-# Build TypeScript to JavaScript
-RUN pnpm run build
-
-# =============================================================================
-# Stage 3: Production Dependencies
-# =============================================================================
-FROM node:24-alpine AS prod-deps
-
-RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
-
-WORKDIR /app
-
-COPY package.json pnpm-lock.yaml* ./
-
-# Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile 2>/dev/null || pnpm install --prod && \
-    pnpm store prune
-
-# =============================================================================
-# Stage 4: Production Runtime
-# =============================================================================
-FROM node:24-alpine AS production
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS production
 
 RUN rm -rf /usr/local/lib/node_modules/npm && \
-    rm -f /usr/local/bin/npm /usr/local/bin/npx
-
-# Security: Install dumb-init for proper signal handling
-# This ensures SIGTERM/SIGINT are properly forwarded to Node.js
-RUN apk add --no-cache dumb-init
-
-# Security: Create non-root user and group
-RUN addgroup --system --gid 1001 nodejs && \
+    rm -f /usr/local/bin/npm /usr/local/bin/npx && \
+    apk add --no-cache dumb-init && \
+    addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 signaling
 
-WORKDIR /app
+WORKDIR /workspace/services/signaling-server
+COPY --from=prod-deps --chown=signaling:nodejs /workspace/node_modules/ /workspace/node_modules/
+COPY --from=prod-deps --chown=signaling:nodejs /workspace/services/signaling-server/node_modules/ ./node_modules/
+COPY --from=builder --chown=signaling:nodejs /workspace/services/signaling-server/dist/ ./dist/
+COPY --chown=signaling:nodejs services/signaling-server/package.json ./
 
-# Copy production dependencies
-COPY --from=prod-deps /app/node_modules ./node_modules
-
-# Copy built application
-COPY --from=builder /app/dist ./dist
-
-# Copy package.json for runtime metadata
-COPY package.json ./
-
-# Security: Set ownership to non-root user
-RUN chown -R signaling:nodejs /app
-
-# Switch to non-root user
 USER signaling
-
-# Environment variables with sensible defaults
 ENV NODE_ENV=production \
     PORT=4000 \
     SIGNALING_HOST=0.0.0.0 \
     SIGNALING_WS_PATH=/ws
-
-# Expose the WebSocket/HTTP port
 EXPOSE 4000
-
-# Health check - verify HTTP endpoint (WebSocket shares the same port)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1
-
-# Use dumb-init for proper signal handling (SIGTERM, SIGINT)
-# This ensures graceful shutdown of WebSocket connections
+    CMD wget --no-verbose --tries=1 --spider http://localhost:4000/ready || exit 1
 ENTRYPOINT ["dumb-init", "--"]
-
-# Start the application
 CMD ["node", "dist/index.js"]

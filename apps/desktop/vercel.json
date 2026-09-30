@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "pnpm install --filter @agiworkforce/desktop...",
+  "installCommand": "pnpm install --filter @agiworkforce/desktop... --frozen-lockfile",
   "buildCommand": "VITE_BUILD_TARGET=web vite build",
   "outputDirectory": "dist",
   "framework": null,

@@ -1,0 +1,17 @@
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+!patches/
+!patches/*.patch
+!services/
+!services/signaling-server/
+!services/signaling-server/package.json
+!services/signaling-server/tsconfig.docker.json
+!services/signaling-server/src/
+!services/signaling-server/src/**
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
