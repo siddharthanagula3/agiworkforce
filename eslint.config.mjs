@@ -453,6 +453,27 @@ export default [
   },
 
   {
+    files: [
+      'audit/live-check/2026-09-29-ecosystem-review/mobile-race-repro.cjs',
+      'audit/live-check/2026-09-29-ecosystem-review/reproduce-scheduled-refusal.cjs',
+    ],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        Buffer: 'readonly',
+        console: 'readonly',
+        process: 'readonly',
+        AbortController: 'readonly',
+        AbortSignal: 'readonly',
+        DOMException: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+      },
+    },
+  },
+
+  {
     files: ['apps/extension-vscode/*.js'],
     languageOptions: {
       sourceType: 'commonjs',

@@ -1,0 +1,992 @@
+{
+  "schema_version": 1,
+  "agent": "/root/claude_current",
+  "created_at_utc": "2026-09-29T21:37:44.518349+00:00",
+  "scope": "Read-only public Electron local developer-runtime cleanup review; account changes, subprocess shutdown, registry replacement and stale notifications. The earlier broader protocol/security reading is retained as coverage; permissions/security hypotheses are unclassified.",
+  "instructions_followed": [
+    "Current integration AGENTS.md",
+    "audit/README.md",
+    "Known-flaws register searched for account/permission/protocol/runtime/reconnect/desktop entries",
+    ".agents/skills/code-review/SKILL.md",
+    "Root narrowed task: no exploits or source edits"
+  ],
+  "baseline": {
+    "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e",
+    "branch": "work/billing-e2e",
+    "head": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+    "dirty_in_lane": []
+  },
+  "branch_revalidation": [
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e",
+      "head": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+      "dirty_in_lane": [],
+      "critical_file_sha256": {
+        "apps/desktop/electron/runtime/developerSessionService.ts": "f048ed798c787645e63b07c870432d13fe86142812892a97c42c061e87773753",
+        "apps/desktop/electron/main.ts": "17db634a493031b22271b27ee3e21e687c6bc2660bd99382c6bcd1987e03d6a4",
+        "apps/desktop/electron/runtime/developerAccountSync.ts": "2639cea96c0ab66c61146cd7e12bc809fb72e9b5991bd6afd9d35d59a1ff857a",
+        "apps/desktop/electron/runtime/backgroundActivity.ts": "7ba3ed6eaaa843eab2a75e99cf5fd4115261a54c6e9e05d6e0f1a0ed0d992df4",
+        "apps/cli/src/app_server/developer_host.rs": "24b2d7d314e3c87eaef23eb61cc4be6da8c00790800853617840e48c8cc97603",
+        "crates/agiworkforce-app-server/src/developer_sessions.rs": "0a668ba82896065b1bd51406b47548a5e5e32d3e1d9256578660059302f4520a"
+      },
+      "critical_files_equal_integration": true
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/codex-land",
+      "head": "6e2d370e5394f9e1c1f3231e7a43c4e9cf0a7043",
+      "dirty_in_lane": [],
+      "critical_file_sha256": {
+        "apps/desktop/electron/runtime/developerSessionService.ts": "f048ed798c787645e63b07c870432d13fe86142812892a97c42c061e87773753",
+        "apps/desktop/electron/main.ts": "17db634a493031b22271b27ee3e21e687c6bc2660bd99382c6bcd1987e03d6a4",
+        "apps/desktop/electron/runtime/developerAccountSync.ts": "2639cea96c0ab66c61146cd7e12bc809fb72e9b5991bd6afd9d35d59a1ff857a",
+        "apps/desktop/electron/runtime/backgroundActivity.ts": "7ba3ed6eaaa843eab2a75e99cf5fd4115261a54c6e9e05d6e0f1a0ed0d992df4",
+        "apps/cli/src/app_server/developer_host.rs": "24b2d7d314e3c87eaef23eb61cc4be6da8c00790800853617840e48c8cc97603",
+        "crates/agiworkforce-app-server/src/developer_sessions.rs": "0a668ba82896065b1bd51406b47548a5e5e32d3e1d9256578660059302f4520a"
+      },
+      "critical_files_equal_integration": true
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-desktop-cli",
+      "head": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "dirty_in_lane": [
+        " M apps/desktop/electron/__tests__/dispatcher.test.ts",
+        " M apps/desktop/electron/__tests__/filesystemService.test.ts",
+        " M apps/desktop/electron/runtime/dispatcher.ts",
+        " M apps/desktop/electron/runtime/filesystemService.ts"
+      ],
+      "critical_file_sha256": {
+        "apps/desktop/electron/runtime/developerSessionService.ts": "f048ed798c787645e63b07c870432d13fe86142812892a97c42c061e87773753",
+        "apps/desktop/electron/main.ts": "17db634a493031b22271b27ee3e21e687c6bc2660bd99382c6bcd1987e03d6a4",
+        "apps/desktop/electron/runtime/developerAccountSync.ts": "2639cea96c0ab66c61146cd7e12bc809fb72e9b5991bd6afd9d35d59a1ff857a",
+        "apps/desktop/electron/runtime/backgroundActivity.ts": "7ba3ed6eaaa843eab2a75e99cf5fd4115261a54c6e9e05d6e0f1a0ed0d992df4",
+        "apps/cli/src/app_server/developer_host.rs": "24b2d7d314e3c87eaef23eb61cc4be6da8c00790800853617840e48c8cc97603",
+        "crates/agiworkforce-app-server/src/developer_sessions.rs": "0a668ba82896065b1bd51406b47548a5e5e32d3e1d9256578660059302f4520a"
+      },
+      "critical_files_equal_integration": true
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-cli-final",
+      "head": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+      "dirty_in_lane": [
+        " M crates/agiworkforce-app-server/src/lib.rs",
+        " M crates/agiworkforce-app-server/tests/developer_sessions.rs"
+      ],
+      "critical_file_sha256": {
+        "apps/desktop/electron/runtime/developerSessionService.ts": "f048ed798c787645e63b07c870432d13fe86142812892a97c42c061e87773753",
+        "apps/desktop/electron/main.ts": "17db634a493031b22271b27ee3e21e687c6bc2660bd99382c6bcd1987e03d6a4",
+        "apps/desktop/electron/runtime/developerAccountSync.ts": "2639cea96c0ab66c61146cd7e12bc809fb72e9b5991bd6afd9d35d59a1ff857a",
+        "apps/desktop/electron/runtime/backgroundActivity.ts": "7ba3ed6eaaa843eab2a75e99cf5fd4115261a54c6e9e05d6e0f1a0ed0d992df4",
+        "apps/cli/src/app_server/developer_host.rs": "24b2d7d314e3c87eaef23eb61cc4be6da8c00790800853617840e48c8cc97603",
+        "crates/agiworkforce-app-server/src/developer_sessions.rs": "0a668ba82896065b1bd51406b47548a5e5e32d3e1d9256578660059302f4520a"
+      },
+      "critical_files_equal_integration": true
+    },
+    {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-mcp-rust",
+      "head": "b996209e04100b8ae04f01c8dc2e6539c18b5c26",
+      "dirty_in_lane": [
+        " M apps/cli/src/app_server/surfaces.rs"
+      ],
+      "critical_file_sha256": {
+        "apps/desktop/electron/runtime/developerSessionService.ts": "985a149f0564df0fab47f75c03dda331eebb763fa50422b907bdae67db169624",
+        "apps/desktop/electron/main.ts": "742fdea0224f9c0eeef3e58dd22215607647298d53ee2ee45be647d1b5ceb560",
+        "apps/desktop/electron/runtime/developerAccountSync.ts": "d5d999c9c771493fbef8532fa88b487614915d424dca13424ce81e10cfb2a802",
+        "apps/desktop/electron/runtime/backgroundActivity.ts": "7ba3ed6eaaa843eab2a75e99cf5fd4115261a54c6e9e05d6e0f1a0ed0d992df4",
+        "apps/cli/src/app_server/developer_host.rs": "0e3208d222c9ab26e0392572e4fe117ecf40f4cfa8aa6c6ad22e96c3603a993d",
+        "crates/agiworkforce-app-server/src/developer_sessions.rs": "9c19ea3702437d26197d0fd04e64c3b3702baa202c2080daca5d6c808f5f0154"
+      },
+      "critical_files_equal_integration": false
+    }
+  ],
+  "answer_to_old_before_new": {
+    "unsupported_handshake_or_protocol_failure": "No. The old process is unregistered without initiating shutdown; retry may spawn a replacement while it remains alive.",
+    "explicit_stop": "No guarantee. stdin ends, registry entry is removed immediately, and a 1,500 ms kill is scheduled, but there is no awaited exit before new ensureServer admission.",
+    "observed_child_exit": "Exit callback removes the entry; replacement after this observed exit follows that exit. Descendant-tree cleanup after an abnormal process exit was not independently verified.",
+    "account_change": "Account adoption does not stop local developer runtimes. It stops remote pairing and queues credential reconciliation.",
+    "app_quit": "Stop is initiated but exit is not awaited; actual detached-child exit was not observed."
+  },
+  "journeys": [
+    {
+      "name": "Open folder with incompatible installed CLI and retry",
+      "steps": [
+        "spawn app-server in approved root",
+        "initialize response rejected by handshake",
+        "closeServer marks closed/removes registry",
+        "retry opens a new app-server"
+      ],
+      "completed_trace": true,
+      "execution": "source/test review only",
+      "finding_ids": [
+        "ELECTRON-LIFECYCLE-01"
+      ]
+    },
+    {
+      "name": "Stop background coding runtime, immediately resume same session",
+      "steps": [
+        "stopBackgroundWork calls stopDeveloperRuntime",
+        "terminate sends EOF and schedules kill",
+        "closeServer removes current registry entry",
+        "readyServer may spawn/handshake replacement",
+        "old stdout listener still exists and consumer accepts same-thread events"
+      ],
+      "completed_trace": true,
+      "execution": "source/test review only",
+      "finding_ids": [
+        "ELECTRON-LIFECYCLE-02",
+        "ELECTRON-LIFECYCLE-03"
+      ]
+    },
+    {
+      "name": "Shell signs out or switches account while local work is active",
+      "steps": [
+        "useDesktopAccount reports settled renderer identity",
+        "dispatcher reportShellIdentity invokes main adoption listeners",
+        "main closes/reset windows and stops active remote pairing",
+        "syncDeveloperAccounts queues credential reconciliation",
+        "CLI account_logout revokes/forgets managed credentials without interrupting turns"
+      ],
+      "completed_trace": true,
+      "execution": "source/test review only",
+      "classification": "Observed lifecycle; product/security impact unclassified"
+    },
+    {
+      "name": "Quit application during delayed CLI request or shutdown",
+      "steps": [
+        "will-quit calls stopAllDeveloperRuntimes",
+        "terminate sends EOF and schedules unref-ed fallback",
+        "stdio server must leave inline request before reading EOF",
+        "transport EOF calls host.shutdown",
+        "host cancels processes/approvals/tasks and releases writer leases"
+      ],
+      "completed_trace": true,
+      "execution": "source/test review only",
+      "classification": "Fallback behavior observed; actual surviving child unknown"
+    }
+  ],
+  "findings": [
+    {
+      "id": "ELECTRON-LIFECYCLE-01",
+      "priority": "P2",
+      "classification": "concrete lifecycle defect; source confirmed, not executed",
+      "title": "Handshake/protocol rejection discards the registry handle without stopping the subprocess",
+      "known_flaw_id": null,
+      "trigger": "Configure an installed CLI that answers initialize with an unsupported protocol, runtime version or missing thread/turn capability. Open an approved coding folder, then retry the unavailable folder. Malformed output and oversized incomplete frames use the same disposal path.",
+      "evidence": [
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 678,
+          "end": 705
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 774,
+          "end": 776
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 283,
+          "end": 292
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 714,
+          "end": 716
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 730,
+          "end": 756
+        }
+      ],
+      "trace": "The CLI is spawned with piped stdio. handshake throws after initialize; its catch calls closeServer. closeServer marks closed, rejects requests, removes the map entry and emits runtime-stopped, but neither ends stdin nor kills/detaches the child. The next ensureServer sees no registered server and spawns another. The rejected child retains its open pipe and is excluded from stopAllDeveloperRuntimes, which iterates the map.",
+      "impact": "An ordinary compatibility mismatch can leave an idle app-server alive on every retry. If disposal follows a protocol failure during a running turn, the unregistered runtime can also continue work. No resource-exhaustion magnitude or live leakage was measured.",
+      "existing_tests": {
+        "path": "apps/desktop/electron/__tests__/developerSessionService.test.ts",
+        "ranges": [
+          [
+            420,
+            439
+          ]
+        ],
+        "assessment": "Tests unavailable result and hint for an old CLI, but makes no assertion that the rejected child ended or exited."
+      },
+      "verification_gap": "No mounted Electron run, process listing after a rejected handshake, or new regression test executed.",
+      "suggested_repair_boundary": "Dispose failed handshakes and framing failures through the same owned shutdown path as explicit stop; retain child ownership until exit."
+    },
+    {
+      "id": "ELECTRON-LIFECYCLE-02",
+      "priority": "P2",
+      "classification": "concrete lifecycle defect; source confirmed, not executed",
+      "title": "Notifications from a closed runtime remain eligible to mutate the current session",
+      "known_flaw_id": null,
+      "trigger": "Stop a runtime or discard it after a protocol failure while stdout has a buffered notification or emits another data chunk. Start or reopen the same root/session during the cleanup interval.",
+      "evidence": [
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 295,
+          "end": 338
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 434,
+          "end": 483
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 755,
+          "end": 756
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 1195,
+          "end": 1207
+        },
+        {
+          "path": "apps/desktop/electron/main.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/main.ts",
+          "start": 1539,
+          "end": 1546
+        },
+        {
+          "path": "apps/web/features/code/hooks/use-local-session.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/code/hooks/use-local-session.ts",
+          "start": 104,
+          "end": 121
+        },
+        {
+          "path": "apps/web/features/code/hooks/use-local-session.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/code/hooks/use-local-session.ts",
+          "start": 206,
+          "end": 235
+        }
+      ],
+      "trace": "The stdout listener captures the old server. acceptChunk/acceptLine/handleNotification have no early server.closed or registry-generation check. acceptChunk tests closed only after accepting one line, so each later chunk can still deliver its first notification. Notifications carry root/thread/turn ids but no runtime generation. The local session consumer filters the thread but does not check the event turn id before appending output, replacing approval or settling the current turn.",
+      "impact": "A late old-turn delta can append to a replacement turn, a stale approval can reappear after runtime-stopped cleared it, or a late finished event can settle the newer turn in the same thread. This concerns ordinary buffered callbacks; no forged protocol input or exploit was constructed.",
+      "existing_tests": {
+        "paths": [
+          "apps/desktop/electron/__tests__/developerSessionService.test.ts",
+          "apps/web/features/code/hooks/use-local-session.test.ts"
+        ],
+        "ranges": [
+          [
+            822,
+            854
+          ],
+          [
+            222,
+            238
+          ]
+        ],
+        "assessment": "Cover stop/exit notification and different-thread filtering. No delayed old-child notification after stop or same-thread old-turn/new-turn interleaving is asserted."
+      },
+      "verification_gap": "No asynchronous child/React regression test executed. Cross-account or permission impact remains unclassified.",
+      "suggested_repair_boundary": "Fence old-child callbacks by current runtime identity and closed state; consumers should match the current turn before applying turn-specific events."
+    },
+    {
+      "id": "ELECTRON-LIFECYCLE-03",
+      "priority": "P2",
+      "classification": "source-confirmed sequencing gap; user-visible failure timing not executed",
+      "title": "Explicit stop allows a replacement runtime before the prior runtime has exited",
+      "known_flaw_id": null,
+      "trigger": "Use Stop background coding runtime, then immediately open/resume/start work in that folder while the prior CLI is still shutting down.",
+      "evidence": [
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 1195,
+          "end": 1216
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 283,
+          "end": 292
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 714,
+          "end": 716
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 774,
+          "end": 788
+        },
+        {
+          "path": "apps/desktop/electron/runtime/backgroundActivity.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/backgroundActivity.ts",
+          "start": 67,
+          "end": 78
+        },
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "start": 3855,
+          "end": 3890
+        },
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "start": 3943,
+          "end": 3952
+        }
+      ],
+      "trace": "terminate ends stdin and schedules SIGKILL after 1,500 ms, then synchronously calls closeServer, which removes the map entry. stopDeveloperRuntime returns void and exposes no exit promise. ensureServer can immediately spawn a replacement; readyServer waits only for that new child handshake. The prior CLI releases its writer leases at the end of asynchronous host shutdown, after terminating process trees and waiting for managers/tasks.",
+      "impact": "Old and new runtimes may overlap for the same approved folder. A fast restart can encounter the old writer lease instead of resuming immediately, and old work can finish during the newly available runtime interval. No overlap duration or visible conflict was measured.",
+      "existing_tests": {
+        "path": "apps/desktop/electron/__tests__/developerSessionService.test.ts",
+        "ranges": [
+          [
+            832,
+            841
+          ]
+        ],
+        "assessment": "The FakeChild end method only sets ended=true and never emits exit. The test explicitly expects a second spawn after stop; it cannot establish old-child exit before replacement."
+      },
+      "verification_gap": "No real subprocess timing, writer-conflict reproduction or shutdown/restart integration test executed.",
+      "suggested_repair_boundary": "Keep a stopping registry entry with an exit/shutdown promise and sequence replacement admission after it, while retaining a bounded kill fallback."
+    }
+  ],
+  "observations_and_unknowns": [
+    {
+      "id": "ACCOUNT-CHANGE-CLEANUP",
+      "status": "observed source behavior; product/security interpretation unclassified",
+      "evidence": [
+        {
+          "path": "apps/desktop/electron/main.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/main.ts",
+          "start": 819,
+          "end": 836
+        },
+        {
+          "path": "apps/desktop/electron/runtime/dispatcher.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/dispatcher.ts",
+          "start": 1275,
+          "end": 1281
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 642,
+          "end": 675
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerAccountSync.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerAccountSync.ts",
+          "start": 47,
+          "end": 87
+        },
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "start": 3244,
+          "end": 3251
+        }
+      ],
+      "description": "Account changes close secondary windows, reset a kept conversation route and stop active remote control. The renderer command queues account reconciliation without awaiting it. Neither adoptReportedAccount nor account_logout interrupts active local developer turns. Credential reconciliation signs out only a machine sign-in owned by the shell; a terminal sign-in made separately is intentionally preserved. Local session/permission ownership across account changes needs a product decision and a live lifecycle check; no cross-account leak is claimed."
+    },
+    {
+      "id": "APP-QUIT-FALLBACK",
+      "status": "observed source behavior; actual survival of a detached subprocess unknown",
+      "evidence": [
+        {
+          "path": "apps/desktop/electron/main.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/main.ts",
+          "start": 1570,
+          "end": 1577
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 730,
+          "end": 735
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 1195,
+          "end": 1207
+        },
+        {
+          "path": "crates/agiworkforce-app-server/src/developer_sessions.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-app-server/src/developer_sessions.rs",
+          "start": 1455,
+          "end": 1484
+        },
+        {
+          "path": "crates/agiworkforce-app-server/src/developer_sessions.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-app-server/src/developer_sessions.rs",
+          "start": 1516,
+          "end": 1529
+        }
+      ],
+      "description": "will-quit synchronously requests stop and does not wait for subprocess exit. The 1,500 ms hard-kill timer is unref-ed. The stdio server does perform host shutdown after EOF/broken pipe, and its host shutdown is substantial. If Electron exits before the timer fires and the CLI is blocked in a long request, that fallback is not guaranteed to execute. A real app quit during delayed CLI shutdown has not been run, so surviving children are unknown."
+    },
+    {
+      "id": "ACCOUNT-SYNC-QUEUE",
+      "status": "source behavior confirmed; cancellation/timing impact unknown",
+      "evidence": [
+        {
+          "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+          "start": 642,
+          "end": 665
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerAccountSync.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerAccountSync.ts",
+          "start": 19,
+          "end": 19
+        },
+        {
+          "path": "apps/desktop/electron/runtime/developerAccountSync.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerAccountSync.ts",
+          "start": 70,
+          "end": 87
+        },
+        {
+          "path": "crates/agiworkforce-app-server/src/developer_sessions.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-app-server/src/developer_sessions.rs",
+          "start": 1481,
+          "end": 1484
+        },
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "start": 3171,
+          "end": 3238
+        }
+      ],
+      "description": "Account reconciliation is one global Promise chain; login/wait is awaited with a 180,000 ms client timeout and is processed inline by the stdio server. A later sign-out reconcile can therefore queue behind the in-flight sign-in. No account generation or abort token is shown in this path. Live timing and eventual credential outcome have not been checked."
+    }
+  ],
+  "coverage": [
+    {
+      "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerSessionService.ts",
+      "sha256": "f048ed798c787645e63b07c870432d13fe86142812892a97c42c061e87773753",
+      "ranges": [
+        [
+          1,
+          135
+        ],
+        [
+          264,
+          545
+        ],
+        [
+          567,
+          792
+        ],
+        [
+          1038,
+          1098
+        ],
+        [
+          1135,
+          1217
+        ]
+      ],
+      "purpose": "server registry, framing, notifications, timeout, account reconciliation, handshake, turn/session start, shutdown",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/desktop/electron/main.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/main.ts",
+      "sha256": "17db634a493031b22271b27ee3e21e687c6bc2660bd99382c6bcd1987e03d6a4",
+      "ranges": [
+        [
+          306,
+          343
+        ],
+        [
+          419,
+          450
+        ],
+        [
+          808,
+          836
+        ],
+        [
+          990,
+          1019
+        ],
+        [
+          1425,
+          1495
+        ],
+        [
+          1530,
+          1584
+        ]
+      ],
+      "purpose": "IPC sender ownership, event broadcasting, account adoption, window close, startup and quit",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/developerAccountSync.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/developerAccountSync.ts",
+      "sha256": "2639cea96c0ab66c61146cd7e12bc809fb72e9b5991bd6afd9d35d59a1ff857a",
+      "ranges": [
+        [
+          1,
+          88
+        ]
+      ],
+      "purpose": "complete account reconciliation sequence and login wait",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/backgroundActivity.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/backgroundActivity.ts",
+      "sha256": "7ba3ed6eaaa843eab2a75e99cf5fd4115261a54c6e9e05d6e0f1a0ed0d992df4",
+      "ranges": [
+        [
+          1,
+          92
+        ]
+      ],
+      "purpose": "complete tracked subprocess ownership and stop controls",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/cliAccountStore.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/cliAccountStore.ts",
+      "sha256": "8a4b2657d9bdc6d75284146e12067d6e75b4805a2623cb14ddb08cad28997e51",
+      "ranges": [
+        [
+          1,
+          45
+        ]
+      ],
+      "purpose": "complete shell-owned machine credential marker",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/desktop/electron/shellIdentity.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/shellIdentity.ts",
+      "sha256": "f6991f2cbfd6aa80189c52763afa43ff0fd3fbd497e3b95ec68e1eb299b48215",
+      "ranges": [
+        [
+          1,
+          144
+        ]
+      ],
+      "purpose": "complete shell identity reports and device approval bridge",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/dispatcher.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/runtime/dispatcher.ts",
+      "sha256": "91bfde650bbba6c88cffd438d4e57a90b928f6a32c20bcd101e3bdb82aea23f7",
+      "ranges": [
+        [
+          520,
+          550
+        ],
+        [
+          918,
+          935
+        ],
+        [
+          1270,
+          1287
+        ],
+        [
+          1390,
+          1457
+        ]
+      ],
+      "purpose": "developer command permission mapping, root revoke, account report and dispatcher admission",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/cli/src/app_server/developer_host.rs",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+      "sha256": "24b2d7d314e3c87eaef23eb61cc4be6da8c00790800853617840e48c8cc97603",
+      "ranges": [
+        [
+          350,
+          428
+        ],
+        [
+          3135,
+          3260
+        ],
+        [
+          3838,
+          3965
+        ],
+        [
+          7031,
+          7105
+        ]
+      ],
+      "purpose": "pending login and runtime ownership, inline login wait, logout, host shutdown and process-tree test",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/cli/src/app_server/account.rs",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/account.rs",
+      "sha256": "ebf27f81591aa156bdceb8e8db72febf43f9231b80836de468e2015f596d6ae6",
+      "ranges": [
+        [
+          230,
+          269
+        ],
+        [
+          410,
+          450
+        ]
+      ],
+      "purpose": "completed device grant persistence and actual sign-out implementation",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "crates/agiworkforce-app-server/src/lib.rs",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-app-server/src/lib.rs",
+      "sha256": "5fe7afeffd08ff7e33045e7e35edf794ebb1e82bf557d4654dbf6f26b3fe6d6d",
+      "ranges": [
+        [
+          265,
+          340
+        ],
+        [
+          449,
+          557
+        ]
+      ],
+      "purpose": "shared authenticated WebSocket host and sequential connection request handling",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "crates/agiworkforce-app-server/src/developer_sessions.rs",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-app-server/src/developer_sessions.rs",
+      "sha256": "0a668ba82896065b1bd51406b47548a5e5e32d3e1d9256578660059302f4520a",
+      "ranges": [
+        [
+          1,
+          175
+        ],
+        [
+          570,
+          675
+        ],
+        [
+          790,
+          963
+        ],
+        [
+          1380,
+          1548
+        ]
+      ],
+      "purpose": "protocol dispatch, account methods and stdio EOF shutdown",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/src/developer_session.rs",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-protocol/src/developer_session.rs",
+      "sha256": "15709b70b5d802a90407b31a950a2201e79b42cd61e94c96b3797c3219218c81",
+      "ranges": [
+        [
+          1728,
+          1778
+        ]
+      ],
+      "purpose": "typed interrupt/approval response fields",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/web/features/desktop-host/hooks/use-desktop-account.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/desktop-host/hooks/use-desktop-account.ts",
+      "sha256": "ecd5ec0bbc635b9ae866af64966f9aa7f560406930c4169b6cf7f11842341ac0",
+      "ranges": [
+        [
+          1,
+          25
+        ]
+      ],
+      "purpose": "complete renderer sign-in/sign-out report trigger",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/web/features/desktop-host/lib/runtime-client.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/desktop-host/lib/runtime-client.ts",
+      "sha256": "db2643ca8261e626ac26e3e5180777662b92e2fa4b71ee6e016cefa7ba37d094",
+      "ranges": [
+        [
+          514,
+          527
+        ]
+      ],
+      "purpose": "renderer account report to native command",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/web/features/code/hooks/use-local-session.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/code/hooks/use-local-session.ts",
+      "sha256": "2f24d46979ea72558a5953444cf347fc7e0bf8c423a1422f36725a6c35dbe49d",
+      "ranges": [
+        [
+          1,
+          318
+        ]
+      ],
+      "purpose": "complete local session event consumer and current turn cleanup",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "packages/platform/utils/src/remoteControl/remoteControlHost.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/packages/platform/utils/src/remoteControl/remoteControlHost.ts",
+      "sha256": "d7aa0dad5de189ca1490ab1ab43644520927d15a8e6d98789fb3156fed5c6651",
+      "ranges": [
+        [
+          1,
+          210
+        ],
+        [
+          260,
+          550
+        ]
+      ],
+      "purpose": "remote host registration, per-generation callbacks, account-change stop target and queue",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "packages/platform/utils/src/remoteControl/codeRemoteController.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/packages/platform/utils/src/remoteControl/codeRemoteController.ts",
+      "sha256": "f79a629fd2883733e894c3d6f930f5027787049bbb85db4fb7bd2636bfa8c43d",
+      "ranges": [
+        [
+          1,
+          235
+        ],
+        [
+          348,
+          425
+        ],
+        [
+          455,
+          486
+        ],
+        [
+          507,
+          553
+        ],
+        [
+          618,
+          679
+        ],
+        [
+          718,
+          754
+        ],
+        [
+          858,
+          867
+        ]
+      ],
+      "purpose": "remote start lifecycle and stopped-runtime event consumer",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/desktop/electron/remote/remoteControlService.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/remote/remoteControlService.ts",
+      "sha256": "a33b8a43c8353d4b991a1d0abb0731d439f4d7e4ed2410d6e36b0cfa04a40098",
+      "ranges": [
+        [
+          1,
+          224
+        ]
+      ],
+      "purpose": "complete public Electron remote adapter and stop",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/developerSessionService.test.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/__tests__/developerSessionService.test.ts",
+      "sha256": "2cb1d2e7ae7dc519a1d5a535c32d26170d050fe1b453689b997193cf6a7e36ee",
+      "ranges": [
+        [
+          1,
+          175
+        ],
+        [
+          219,
+          275
+        ],
+        [
+          385,
+          462
+        ],
+        [
+          710,
+          750
+        ],
+        [
+          795,
+          925
+        ]
+      ],
+      "purpose": "fake subprocess instrument, account logout, version rejection, explicit stop, exit/replacement assertions",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/developerAccountSync.test.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/__tests__/developerAccountSync.test.ts",
+      "sha256": "1a4047f75c8b9e979c0dcc53f3aad1036872a3525937c606cbf5d94f9903e75e",
+      "ranges": [
+        [
+          1,
+          196
+        ]
+      ],
+      "purpose": "complete ordinary account reconciliation tests",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/remoteControlHost.test.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/desktop/electron/__tests__/remoteControlHost.test.ts",
+      "sha256": "8dd32b5353f965d3c89064cbd0e7c6fc724e79d66480b824526ab7452c87264e",
+      "ranges": [
+        [
+          1,
+          271
+        ]
+      ],
+      "purpose": "signed control and peer reconnect/stop tests",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "apps/web/features/code/hooks/use-local-session.test.ts",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/web/features/code/hooks/use-local-session.test.ts",
+      "sha256": "b6fdcdfeac48f40d2fad1bfe10f012e797c98684c4ed08ce7723e91e5f30e193",
+      "ranges": [
+        [
+          215,
+          239
+        ]
+      ],
+      "purpose": "runtime-stopped and different-thread filtering assertions",
+      "mode": "source read; no execution"
+    },
+    {
+      "path": "crates/agiworkforce-app-server/tests/developer_sessions.rs",
+      "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-app-server/tests/developer_sessions.rs",
+      "sha256": "43341a8c419b8a8ef5188396ce741624a3c7e81484cd708c8924d4ce68199408",
+      "ranges": [
+        [
+          388,
+          486
+        ],
+        [
+          1478,
+          1554
+        ]
+      ],
+      "purpose": "shutdown waits for host quiet, EOF quiescence, typed account logout assertions",
+      "mode": "source read; no execution"
+    }
+  ],
+  "earlier_broader_source_reading": [
+    {
+      "path": "apps/desktop/electron/runtime/permissionManager.ts",
+      "ranges": [
+        [
+          1,
+          396
+        ]
+      ],
+      "status": "Read before narrowed task; permission/account interpretation left unclassified"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/pathGuard.ts",
+      "ranges": [
+        [
+          1,
+          124
+        ]
+      ],
+      "status": "Read before narrowed task; filesystem race/security hypotheses left unclassified; no exploit constructed"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/filesystemService.ts",
+      "ranges": [
+        [
+          1,
+          270
+        ]
+      ],
+      "status": "Read before narrowed task; no filesystem security finding classified here"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/workspaceStore.ts",
+      "ranges": [
+        [
+          1,
+          148
+        ]
+      ],
+      "status": "Read before narrowed task; no workspace security finding classified here"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/shellService.ts",
+      "ranges": [
+        [
+          1,
+          246
+        ]
+      ],
+      "status": "Read account-change cancellation call inventory and first half of shell ownership; broader shell behavior incomplete"
+    },
+    {
+      "path": "apps/desktop/electron/preload.ts",
+      "ranges": [
+        [
+          1,
+          190
+        ]
+      ],
+      "status": "Read before narrowed task; native bridge entry boundary"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/pathGuard.test.ts",
+      "ranges": [
+        [
+          1,
+          114
+        ]
+      ],
+      "status": "Read before narrowed task; static path assertions only"
+    }
+  ],
+  "verification": {
+    "commands": "git rev-parse/status/diff name inventory, rg file/text discovery, numbered source reads, SHA-256 byte comparisons, local Node constructor source inspection",
+    "tests_executed": [],
+    "builds_executed": [],
+    "live_apps_or_providers_executed": [],
+    "exploit_probes_constructed": false,
+    "source_changes": false,
+    "canonical_register_changes": false,
+    "artifact_only_write": "/private/tmp/agi-ecosystem-audit-20260929/electron-protocol-review.json",
+    "limits": [
+      "All defect confidence comes from current source and meaningful test-instrument inspection; test pass status is unknown.",
+      "No capacity/uptime/exhaustion claims are made.",
+      "Internal Tauri is a separate retained implementation and was not treated as the public desktop.",
+      "Account isolation, permission revocation, filesystem races and concurrent credential/logout security hypotheses remain unclassified in this narrowed report.",
+      "p-mcp-rust has older different source, not a newer integrated fix."
+    ]
+  }
+}
