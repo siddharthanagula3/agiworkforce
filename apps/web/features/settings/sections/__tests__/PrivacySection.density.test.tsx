@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PRODUCT_ANALYTICS_CONSENT_PATH } from '@agiworkforce/types';
 import React from 'react';
 
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
@@ -11,7 +12,8 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
-vi.mock('@agiworkforce/ui', () => ({
+vi.mock('@agiworkforce/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
   Switch: ({
     checked,
     onCheckedChange,
@@ -62,11 +64,32 @@ vi.mock('../../services/conversation-data-service', () => ({
 
 import { PrivacySection } from '../PrivacySection';
 
+const fetchMock = vi.fn();
+
+beforeEach(() => {
+  fetchMock.mockResolvedValue(Response.json({}));
+  vi.stubGlobal('fetch', fetchMock);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+async function waitForLoadedPrivacy() {
+  await waitFor(() => {
+    expect(fetchMock).toHaveBeenCalledWith(PRODUCT_ANALYTICS_CONSENT_PATH, {
+      credentials: 'same-origin',
+    });
+    expect(screen.queryByText(/loading account settings/i)).toBeNull();
+    expect(screen.queryByText(/loading your product analytics choice/i)).toBeNull();
+  });
+}
+
 describe('PrivacySection row density', () => {
   it('renders no prose card and no lingering loading or saved text when nothing changed', async () => {
     render(<PrivacySection />);
 
-    await waitFor(() => expect(screen.queryByText(/loading account settings/i)).toBeNull());
+    await waitForLoadedPrivacy();
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByText('Saved')).toBeNull();
     expect(screen.queryByText(/local-first/i)).toBeNull();
@@ -76,7 +99,7 @@ describe('PrivacySection row density', () => {
 
   it('shows a saved state only after an actual change', async () => {
     render(<PrivacySection />);
-    await waitFor(() => expect(screen.queryByText(/loading account settings/i)).toBeNull());
+    await waitForLoadedPrivacy();
     expect(screen.queryByRole('status')).toBeNull();
 
     await userEvent.click(screen.getByRole('switch', { name: /Share crash and error reports/i }));

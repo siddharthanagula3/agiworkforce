@@ -15,6 +15,7 @@ vi.mock('@/lib/logger', () => ({
 
 vi.stubGlobal('fetch', fetchMock);
 
+import { CLI_SIGNED_MANIFEST_ASSETS } from '@/lib/releases/github-cli-releases';
 import { GET as getLatestCliRelease } from '../cli/latest/route';
 
 const CLI_TAG = 'v-cli-1.0.0';
@@ -44,20 +45,36 @@ function githubRelease(id: number, tagName: string, assets: ReturnType<typeof gi
   };
 }
 
-function publishedCliRelease() {
-  return githubRelease(1, CLI_TAG, [
-    githubAsset(
-      11,
-      'agiworkforce-darwin-arm64.tar.gz',
-      `${CLI_BASE_URL}/agiworkforce-darwin-arm64.tar.gz`,
-    ),
-    githubAsset(
-      12,
-      'agiworkforce-linux-x64.tar.gz',
-      `${CLI_BASE_URL}/agiworkforce-linux-x64.tar.gz`,
-    ),
-    githubAsset(13, 'agiworkforce-win32-x64.zip', `${CLI_BASE_URL}/agiworkforce-win32-x64.zip`),
+function signedManifestAssets(tagName: string) {
+  const base = CLI_BASE_URL.replace(CLI_TAG, tagName);
+  return CLI_SIGNED_MANIFEST_ASSETS.map((name, index) =>
+    githubAsset(20 + index, name, `${base}/${name}`),
+  );
+}
+
+function publishedCliRelease(tagName = CLI_TAG, signed = true) {
+  const base = CLI_BASE_URL.replace(CLI_TAG, tagName);
+  return githubRelease(1, tagName, [
+    githubAsset(11, 'agiworkforce-darwin-arm64.tar.gz', `${base}/agiworkforce-darwin-arm64.tar.gz`),
+    githubAsset(12, 'agiworkforce-linux-x64.tar.gz', `${base}/agiworkforce-linux-x64.tar.gz`),
+    githubAsset(13, 'agiworkforce-win32-x64.zip', `${base}/agiworkforce-win32-x64.zip`),
+    ...(signed ? signedManifestAssets(tagName) : []),
   ]);
+}
+
+function serveRelease(release: ReturnType<typeof githubRelease>, unavailable?: string) {
+  fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const target =
+      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (target.startsWith('https://api.github.com/repos/')) {
+      return Response.json([release, githubRelease(2, 'v-desktop-1.2.0')]);
+    }
+    if (init?.method === 'HEAD') {
+      const exists = release.assets.some((asset) => asset.browser_download_url === target);
+      return new Response(null, { status: exists && target !== unavailable ? 200 : 404 });
+    }
+    return new Response(null, { status: 404 });
+  });
 }
 
 function makeRequest(): never {
@@ -77,9 +94,8 @@ afterEach(() => {
 
 describe('GET /api/releases/cli/latest', () => {
   it('publishes a download for every archive the CLI release actually carries', async () => {
-    fetchMock.mockResolvedValue(
-      Response.json([publishedCliRelease(), githubRelease(2, 'v-desktop-1.2.0')]),
-    );
+    const release = publishedCliRelease();
+    serveRelease(release);
 
     const response = await getLatestCliRelease(makeRequest());
     expect(response.status).toBe(200);
@@ -97,10 +113,20 @@ describe('GET /api/releases/cli/latest', () => {
     for (const download of payload.downloads) {
       expect(download.downloadUrl.startsWith(`${CLI_BASE_URL}/`)).toBe(true);
     }
+    for (const asset of release.assets) {
+      expect(fetchMock).toHaveBeenCalledWith(
+        asset.browser_download_url,
+        expect.objectContaining({ method: 'HEAD', cache: 'no-store', redirect: 'follow' }),
+      );
+    }
+    for (const [, init] of fetchMock.mock.calls.filter(([, init]) => init?.method === 'HEAD')) {
+      expect(init?.headers).toBeUndefined();
+    }
   });
 
   it('reports the CLI as unavailable when the release carries no archive', async () => {
-    fetchMock.mockResolvedValue(Response.json([githubRelease(1, CLI_TAG)]));
+    const tagName = 'v-cli-1.1.0';
+    serveRelease(githubRelease(1, tagName, signedManifestAssets(tagName)));
 
     const response = await getLatestCliRelease(makeRequest());
 
@@ -111,7 +137,7 @@ describe('GET /api/releases/cli/latest', () => {
   });
 
   it('reports the CLI as unavailable when no CLI release has been tagged', async () => {
-    fetchMock.mockResolvedValue(Response.json([githubRelease(1, 'v-desktop-1.2.0')]));
+    serveRelease(githubRelease(1, 'v-desktop-1.2.0'));
 
     const response = await getLatestCliRelease(makeRequest());
 
@@ -119,20 +145,51 @@ describe('GET /api/releases/cli/latest', () => {
   });
 
   it('refuses an archive URL that is not a GitHub release download', async () => {
-    fetchMock.mockResolvedValue(
-      Response.json([
-        githubRelease(1, CLI_TAG, [
-          githubAsset(
-            11,
-            'agiworkforce-linux-x64.tar.gz',
-            'https://cdn.example.test/agiworkforce-linux-x64.tar.gz',
-          ),
-        ]),
+    const tagName = 'v-cli-1.2.0';
+    const untrustedUrl = 'https://cdn.example.test/agiworkforce-linux-x64.tar.gz';
+    serveRelease(
+      githubRelease(1, tagName, [
+        ...signedManifestAssets(tagName),
+        githubAsset(11, 'agiworkforce-linux-x64.tar.gz', untrustedUrl),
       ]),
     );
 
     const response = await getLatestCliRelease(makeRequest());
 
     expect(response.status).toBe(404);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/api\.github\.com\/repos\/.*\/releases\?/),
+      expect.any(Object),
+    );
+    expect(fetchMock.mock.calls.some(([input]) => input === untrustedUrl)).toBe(false);
+  });
+
+  it('refuses reachable archives without the complete signed manifest', async () => {
+    const release = publishedCliRelease('v-cli-1.3.0', false);
+    serveRelease(release);
+
+    const response = await getLatestCliRelease(makeRequest());
+
+    expect(response.status).toBe(404);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^https:\/\/api\.github\.com\/repos\/.*\/releases\?/),
+      expect.any(Object),
+    );
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'HEAD')).toBe(false);
+  });
+
+  it('refuses a signed manifest that an anonymous visitor cannot retrieve', async () => {
+    const release = publishedCliRelease('v-cli-1.4.0');
+    const signature = release.assets.find((asset) => asset.name === CLI_SIGNED_MANIFEST_ASSETS[1]);
+    expect(signature).toBeDefined();
+    serveRelease(release, signature!.browser_download_url);
+
+    const response = await getLatestCliRelease(makeRequest());
+
+    expect(response.status).toBe(404);
+    expect(fetchMock).toHaveBeenCalledWith(
+      signature!.browser_download_url,
+      expect.objectContaining({ method: 'HEAD' }),
+    );
   });
 });
