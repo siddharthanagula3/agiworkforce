@@ -4738,13 +4738,36 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 return Ok(());
             }
             for row in rows {
+                let config: Option<mcp::McpServerConfig> = registry_file
+                    .entry(&row.name)
+                    .cloned()
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .with_context(|| {
+                        format!("registry entry for '{}' is not a server config", row.name)
+                    })?;
+                let refusal = config
+                    .as_ref()
+                    .filter(|_| row.enabled)
+                    .and_then(|config| mcp::policy_refusal(&row.name, config));
                 println!(
                     "{:<24} {:<8} {:<6} {}",
                     terminal_text::sanitize_terminal_text(&row.name),
-                    if row.enabled { "enabled" } else { "disabled" },
+                    match (&refusal, row.enabled) {
+                        (Some(_), _) => "blocked",
+                        (None, true) => "enabled",
+                        (None, false) => "disabled",
+                    },
                     terminal_text::sanitize_terminal_text(&row.kind),
                     terminal_text::sanitize_terminal_text(&row.target)
                 );
+                if let Some(reason) = refusal {
+                    println!(
+                        "{:<24} {}",
+                        "",
+                        terminal_text::sanitize_terminal_text(&reason)
+                    );
+                }
             }
             Ok(())
         }

@@ -653,17 +653,22 @@ const pluginUpdateResponseSchema = pluginListResponseSchema.extend({
 
 export type PluginUpdate = z.infer<typeof pluginUpdateResponseSchema>;
 
-const mcpServerStatusSchema = z.enum(['configured', 'authorized', 'needs_auth']);
+const mcpServerStatusSchema = z.enum(['configured', 'authorized', 'needs_auth', 'blocked']);
 const mcpServerListResponseSchema = z.object({
   servers: z
     .array(
-      z.object({
-        name: z.string().min(1).max(200),
-        transport: z.string().min(1).max(32),
-        scope: z.enum(['project', 'user', 'plugin']),
-        status: mcpServerStatusSchema,
-        url: z.string().max(16_384).optional(),
-      }),
+      z
+        .object({
+          name: z.string().min(1).max(200),
+          transport: z.string().min(1).max(32),
+          scope: z.enum(['project', 'user', 'plugin']),
+          status: mcpServerStatusSchema,
+          policyRefusal: z.string().min(1).max(4_096).optional(),
+          url: z.string().max(16_384).optional(),
+        })
+        .refine((server) => server.status !== 'blocked' || server.policyRefusal !== undefined, {
+          message: 'Blocked MCP servers must explain the workspace policy refusal',
+        }),
     )
     .max(1_000),
 });

@@ -249,12 +249,20 @@ fn mcp_status(state: McpCredentialState) -> McpServerConfiguredStatus {
 pub fn list_mcp_servers(workspace_root: &Path) -> McpServerListResponse {
     let servers = crate::mcp::discover_servers(workspace_root)
         .into_iter()
-        .map(|server| McpServerSummary {
-            transport: server.config.transport_kind().to_string(),
-            scope: mcp_scope(server.origin),
-            status: mcp_status(server.credential),
-            url: server.url,
-            name: server.name,
+        .map(|server| {
+            let policy_refusal = crate::mcp::policy_refusal(&server.name, &server.config);
+            McpServerSummary {
+                transport: server.config.transport_kind().to_string(),
+                scope: mcp_scope(server.origin),
+                status: if policy_refusal.is_some() {
+                    McpServerConfiguredStatus::Blocked
+                } else {
+                    mcp_status(server.credential)
+                },
+                policy_refusal,
+                url: server.url,
+                name: server.name,
+            }
         })
         .collect();
     McpServerListResponse { servers }
@@ -586,7 +594,10 @@ pub fn run_command(
             let text = servers
                 .servers
                 .iter()
-                .map(|server| format!("{} ({})", server.name, server.transport))
+                .map(|server| match &server.policy_refusal {
+                    Some(reason) => format!("{} (blocked): {reason}", server.name),
+                    None => format!("{} ({})", server.name, server.transport),
+                })
                 .collect::<Vec<_>>()
                 .join("\n");
             structured(SlashCommandResultKind::Mcp, text, servers)
@@ -610,7 +621,7 @@ pub fn run_command(
     }
 }
 
-fn startable_server(
+async fn startable_server(
     workspace_root: &Path,
     name: &str,
 ) -> Result<crate::mcp::DiscoveredMcpServer, DeveloperSessionHostError> {
@@ -629,6 +640,12 @@ fn startable_server(
             "'{name}' comes from this workspace's .mcp.json, and project servers start only once the workspace is trusted. Run /trust grant in agi, then try again."
         )));
     }
+    if let Some(reason) =
+        crate::cloud::workspace_policy::mcp_server_refusal(&server.name, server.url.as_deref())
+            .await
+    {
+        return Err(DeveloperSessionHostError::conflict(reason));
+    }
     Ok(server)
 }
 
@@ -641,7 +658,7 @@ pub async fn test_mcp_server(
     name: &str,
     limit: std::time::Duration,
 ) -> Result<McpServerTestResponse, DeveloperSessionHostError> {
-    let server = startable_server(workspace_root, name)?;
+    let server = startable_server(workspace_root, name).await?;
     let started = std::time::Instant::now();
     let outcome = tokio::time::timeout(limit, async {
         let mut connection =
@@ -716,7 +733,7 @@ pub async fn inspect_mcp_server(
     name: &str,
     limit: std::time::Duration,
 ) -> Result<McpServerInspectResponse, DeveloperSessionHostError> {
-    let server = startable_server(workspace_root, name)?;
+    let server = startable_server(workspace_root, name).await?;
     let outcome = tokio::time::timeout(limit, async {
         let mut connection =
             crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
@@ -750,7 +767,7 @@ pub async fn mcp_server_tools(
     name: &str,
     limit: std::time::Duration,
 ) -> Result<McpServerToolsResponse, DeveloperSessionHostError> {
-    let server = startable_server(workspace_root, name)?;
+    let server = startable_server(workspace_root, name).await?;
     let listed = tokio::time::timeout(limit, async {
         let mut connection =
             crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
@@ -1614,5 +1631,105 @@ mod tests {
                 "{target}: {error}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod workspace_mcp_refusal_tests {
+    use super::*;
+    use crate::cloud::workspace_policy::with_test_policy;
+    use crate::mcp::{with_test_configs, McpServerConfig};
+    use std::collections::HashMap;
+
+    fn server_configs() -> HashMap<String, McpServerConfig> {
+        HashMap::from([
+            (
+                "blocked-local-fixture".to_string(),
+                McpServerConfig::stdio(
+                    "/nonexistent/agi-mcp-policy-fixture",
+                    Vec::new(),
+                    HashMap::new(),
+                ),
+            ),
+            (
+                "allowed-remote-fixture".to_string(),
+                McpServerConfig::http("https://mcp.example.test/mcp", HashMap::new()),
+            ),
+            (
+                "blocked-apex-fixture".to_string(),
+                McpServerConfig::http("https://example.test/mcp", HashMap::new()),
+            ),
+        ])
+    }
+
+    fn policy() -> serde_json::Value {
+        serde_json::json!({"code": {"allowedMcpServers": ["*.example.test"]}})
+    }
+
+    #[test]
+    fn workspace_mcp_listing_reports_policy_refusal_before_connecting() {
+        with_test_policy(policy(), || {
+            with_test_configs(server_configs(), || {
+                let listed = serde_json::to_value(list_mcp_servers(Path::new("/unused"))).unwrap();
+                for name in ["blocked-local-fixture", "blocked-apex-fixture"] {
+                    let row = listed["servers"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|row| row["name"] == name)
+                        .unwrap();
+                    assert_eq!(row["status"], "blocked");
+                    assert!(row["policyRefusal"].as_str().unwrap().contains(name));
+                    assert!(row["policyRefusal"]
+                        .as_str()
+                        .unwrap()
+                        .contains("not started"));
+                }
+                let allowed = listed["servers"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|row| row["name"] == "allowed-remote-fixture")
+                    .unwrap();
+                assert_eq!(allowed["status"], "needs_auth");
+                assert!(allowed.get("policyRefusal").is_none());
+            })
+        });
+    }
+
+    #[test]
+    fn workspace_mcp_admission_reports_conflict_for_disconnected_probes() {
+        with_test_policy(policy(), || {
+            with_test_configs(server_configs(), || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    let root = Path::new("/unused");
+                    let limit = std::time::Duration::from_secs(1);
+                    let test = test_mcp_server(root, "blocked-local-fixture", limit)
+                        .await
+                        .unwrap_err();
+                    let inspect = inspect_mcp_server(root, "blocked-local-fixture", limit)
+                        .await
+                        .unwrap_err();
+                    let tools = mcp_server_tools(root, "blocked-local-fixture", limit)
+                        .await
+                        .unwrap_err();
+                    for error in [test, inspect, tools] {
+                        assert_eq!(error.code(), -32009);
+                        assert!(error.to_string().contains("allows only listed MCP hosts"));
+                    }
+                    let config = server_configs().remove("blocked-local-fixture").unwrap();
+                    let error =
+                        crate::mcp::McpConnection::connect("blocked-local-fixture", &config)
+                            .await
+                            .err()
+                            .expect("transport must remain blocked");
+                    assert!(error.to_string().contains("allows only listed MCP hosts"));
+                });
+            })
+        });
     }
 }

@@ -1267,6 +1267,7 @@ impl DeveloperSessionHost for SurfaceHost {
                 transport: "http".to_string(),
                 scope: McpServerScope::User,
                 status: McpServerConfiguredStatus::NeedsAuth,
+                policy_refusal: None,
                 url: Some("https://api.githubcopilot.com/mcp".to_string()),
             }],
         })

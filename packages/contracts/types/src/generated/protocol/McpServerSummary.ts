@@ -10,5 +10,6 @@ export type McpServerSummary = {
   transport: string;
   scope: McpServerScope;
   status: McpServerConfiguredStatus;
+  policyRefusal?: string;
   url?: string;
 };

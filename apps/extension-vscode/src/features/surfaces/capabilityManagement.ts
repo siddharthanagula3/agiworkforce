@@ -55,6 +55,7 @@ const MCP_STATUS_LABELS: Record<McpServerListResponse['servers'][number]['status
   configured: 'Configured',
   authorized: 'Signed in',
   needs_auth: 'Needs sign-in',
+  blocked: 'Blocked by your workspace',
 };
 
 const REMOVE = 'Remove';
@@ -630,7 +631,7 @@ export async function manageMcpServers(
           : [];
         for (const server of result.value.servers) {
           const actions: ManagedAction[] = [
-            ...(inspects
+            ...(inspects && server.status !== 'blocked'
               ? [
                   {
                     button: {
@@ -644,7 +645,7 @@ export async function manageMcpServers(
                   },
                 ]
               : []),
-            ...(toolLists
+            ...(toolLists && server.status !== 'blocked'
               ? [
                   {
                     button: { iconPath: new vscode.ThemeIcon('list-tree'), tooltip: 'Show tools' },
@@ -676,9 +677,11 @@ export async function manageMcpServers(
             );
           }
           items.push({
-            label: `$(${server.status === 'needs_auth' ? 'key' : 'plug'}) ${server.name}`,
+            label: `$(${server.status === 'blocked' ? 'lock' : server.status === 'needs_auth' ? 'key' : 'plug'}) ${server.name}`,
             description: `${MCP_STATUS_LABELS[server.status]}, ${server.transport}, ${server.scope}`,
-            ...(server.url === undefined ? {} : { detail: server.url }),
+            ...([server.policyRefusal, server.url].filter(Boolean).length === 0
+              ? {}
+              : { detail: [server.policyRefusal, server.url].filter(Boolean).join(' · ') }),
             ...(server.status === 'needs_auth'
               ? { run: () => adapter.call('mcpLogin', server.name) }
               : {}),

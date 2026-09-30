@@ -1216,8 +1216,21 @@ fn unfenced_diff(text: &str) -> Option<String> {
 }
 
 pub fn render_mcp(session: &AgentSession) -> String {
+    let mut blocked: Vec<String> = crate::mcp::McpManager::load_configs()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|(name, config)| {
+            crate::mcp::policy_refusal(name, config).map(|reason| format!("  {reason}"))
+        })
+        .collect();
+    blocked.sort();
+    let blocked = if blocked.is_empty() {
+        String::new()
+    } else {
+        format!("\nBlocked by your workspace\n{}", blocked.join("\n"))
+    };
     let Some(tools) = session.mcp_info() else {
-        return "No MCP servers connected.".to_string();
+        return format!("No MCP servers connected.{blocked}");
     };
 
     let mut servers: Vec<&str> = tools.iter().map(|tool| tool.server_name.as_str()).collect();
@@ -1241,7 +1254,7 @@ pub fn render_mcp(session: &AgentSession) -> String {
             lines.push(format!("    ... +{} more", server_tools.len() - 5));
         }
     }
-    lines.join("\n")
+    format!("{}{blocked}", lines.join("\n"))
 }
 
 pub fn handle_output_style(session: &mut AgentSession, arg: &str) -> String {
@@ -2572,6 +2585,34 @@ mod tests {
             },
             None,
         )
+    }
+
+    #[test]
+    fn workspace_mcp_slash_lists_refusals_when_no_server_connected() {
+        crate::cloud::workspace_policy::with_test_policy(
+            serde_json::json!({"code": {"allowMcpServers": false}}),
+            || {
+                crate::mcp::with_test_configs(
+                    std::collections::HashMap::from([(
+                        "blocked-parity-fixture".to_string(),
+                        crate::mcp::McpServerConfig::stdio(
+                            "/nonexistent/agi-mcp-policy-fixture",
+                            Vec::new(),
+                            std::collections::HashMap::new(),
+                        ),
+                    )]),
+                    || {
+                        let text = render_mcp(&test_session());
+                        assert!(text.contains("Blocked by your workspace"));
+                        assert!(
+                            text.contains("MCP server 'blocked-parity-fixture' was not started")
+                        );
+                        assert!(text.contains("administrator has turned MCP servers off"));
+                        assert!(!text.contains("needs authentication"));
+                    },
+                )
+            },
+        );
     }
 
     fn prepare_local_handoff_draft(session: &mut AgentSession, destination: PrivacyMode) {
