@@ -34,7 +34,8 @@ vi.mock('@/lib/services/aggregator-routing', () => ({
   validateRouteSelection: vi.fn(),
 }));
 
-vi.mock('./request-processor', () => ({
+vi.mock('./request-processor', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./request-processor')>()),
   resolveRequestEffort: vi.fn(() => undefined),
   buildThinkingConfig: vi.fn(() => undefined),
 }));

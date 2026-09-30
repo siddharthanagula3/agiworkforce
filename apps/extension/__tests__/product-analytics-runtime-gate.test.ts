@@ -4,7 +4,8 @@ import {
   PRODUCT_ANALYTICS_NOTICE_VERSION,
 } from '@agiworkforce/types';
 
-vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/features/cloud-bridge/freeTrialClient')>()),
   FREE_TRIAL_GATEWAY: 'https://gateway.test',
   getAuthToken: async () => 'token',
 }));

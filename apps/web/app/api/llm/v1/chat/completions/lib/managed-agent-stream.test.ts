@@ -56,7 +56,9 @@ vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal
   finalizeObservedManagedUsage: (input: unknown) => finalize(input),
 }));
 
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  usageCreditsEnabled: vi.fn(async () => false),
   estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
     source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
 
