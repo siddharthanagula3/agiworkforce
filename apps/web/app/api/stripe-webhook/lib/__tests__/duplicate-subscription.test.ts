@@ -67,6 +67,24 @@ interface FakeSubscription {
   created: number;
   latest_invoice: string | null;
   product?: string;
+  metadata?: Record<string, string>;
+}
+
+interface FakeInvoice {
+  id: string;
+  subscriptionId: string;
+  customerId: string;
+  status: string;
+  auto_advance: boolean;
+}
+
+interface FakeRefund {
+  id: string;
+  amount: number;
+  payment_intent?: string;
+  charge?: string;
+  metadata: Record<string, string>;
+  status: string;
 }
 
 function stripeSubscription(fake: FakeSubscription) {
@@ -78,7 +96,7 @@ function stripeSubscription(fake: FakeSubscription) {
     cancel_at_period_end: false,
     canceled_at: null,
     latest_invoice: fake.latest_invoice,
-    metadata: { user_id: 'user_1', plan_tier: 'pro' },
+    metadata: { user_id: 'user_1', plan_tier: 'pro', ...fake.metadata },
     items: {
       data: [
         {
@@ -98,10 +116,20 @@ function stripeSubscription(fake: FakeSubscription) {
 function harness(options: {
   trackedSubscriptionId: string | null;
   subscriptions: FakeSubscription[];
-  paidPaymentIntents?: Record<string, string[]>;
+  paidPaymentIntents?: Record<string, Array<string | { id: string; amount: number | null }>>;
+  invoices?: FakeInvoice[];
+  refunds?: FakeRefund[];
+  paymentAmounts?: Record<string, number>;
 }) {
   const statements: Array<{ sql: string; params: unknown[] }> = [];
   const byId = new Map(options.subscriptions.map((fake) => [fake.id, fake]));
+  const invoices = new Map((options.invoices ?? []).map((invoice) => [invoice.id, invoice]));
+  const refunds = [...(options.refunds ?? [])];
+  const invoiceObject = (invoice: FakeInvoice) => ({
+    ...invoice,
+    customer: invoice.customerId,
+    parent: { subscription_details: { subscription: invoice.subscriptionId } },
+  });
   const respond = async (sql: string, params: unknown[] = []) => {
     statements.push({ sql, params });
     if (sql.includes('select stripe_subscription_id from subscriptions where user_id')) {
@@ -129,18 +157,79 @@ function harness(options: {
       cancel: vi.fn(async (id: string) => {
         const fake = byId.get(id);
         if (fake) fake.status = 'canceled';
+        for (const invoice of invoices.values()) {
+          if (invoice.customerId === 'cus_1' && invoice.status === 'open') {
+            invoice.auto_advance = false;
+          }
+        }
         return { id, status: 'canceled' };
+      }),
+      update: vi.fn(async (id: string, params: { metadata: Record<string, string> }) => {
+        const fake = byId.get(id);
+        if (!fake) throw new Error('Subscription missing');
+        fake.metadata = { ...fake.metadata, ...params.metadata };
+        return stripeSubscription(fake);
       }),
     },
     invoicePayments: {
       list: vi.fn(async ({ invoice }: { invoice: string }) => ({
         data: (options.paidPaymentIntents?.[invoice] ?? []).map((paymentIntent, index) => ({
           id: `inpay_${invoice}_${index}`,
-          payment: { type: 'payment_intent', payment_intent: paymentIntent },
+          amount_paid: typeof paymentIntent === 'string' ? 2000 : paymentIntent.amount,
+          payment: {
+            type: 'payment_intent',
+            payment_intent: typeof paymentIntent === 'string' ? paymentIntent : paymentIntent.id,
+          },
         })),
+        has_more: false,
       })),
     },
-    refunds: { create: vi.fn(async () => ({ id: 're_1' })) },
+    refunds: {
+      list: vi.fn(async (params: { payment_intent?: string; charge?: string }) => ({
+        data: refunds.filter((refund) =>
+          params.payment_intent
+            ? refund.payment_intent === params.payment_intent
+            : refund.charge === params.charge,
+        ),
+        has_more: false,
+      })),
+      create: vi.fn(async (params: Omit<FakeRefund, 'id' | 'status'>) => {
+        const reference = params.payment_intent ?? params.charge ?? '';
+        const alreadyRefunded = refunds
+          .filter((refund) => (refund.payment_intent ?? refund.charge) === reference)
+          .reduce((sum, refund) => sum + refund.amount, 0);
+        const remaining = (options.paymentAmounts?.[reference] ?? 2000) - alreadyRefunded;
+        const amount = params.amount ?? remaining;
+        if (amount <= 0 || amount > remaining) {
+          throw new stripeErrors.StripeInvalidRequestError('Refund exceeds remaining charge');
+        }
+        const refund = { ...params, amount, id: `re_${refunds.length + 1}`, status: 'succeeded' };
+        refunds.push(refund);
+        return refund;
+      }),
+    },
+    invoices: {
+      list: vi.fn(async (params: { subscription: string; status: string }) => ({
+        data: [...invoices.values()]
+          .filter(
+            (invoice) =>
+              invoice.subscriptionId === params.subscription && invoice.status === params.status,
+          )
+          .map(invoiceObject),
+        has_more: false,
+      })),
+      retrieve: vi.fn(async (id: string) => {
+        const invoice = invoices.get(id);
+        if (!invoice) throw new Error('Invoice missing');
+        return invoiceObject(invoice);
+      }),
+      update: vi.fn(async (id: string, params: { auto_advance: boolean }) => {
+        const invoice = invoices.get(id);
+        if (!invoice) throw new Error('Invoice missing');
+        invoice.auto_advance = params.auto_advance;
+        return invoiceObject(invoice);
+      }),
+    },
     customers: {
       retrieve: vi.fn(async () => ({ id: 'cus_1', email: 'buyer@example.com', deleted: false })),
     },
@@ -154,6 +243,9 @@ function harness(options: {
     db: db as never,
     stripe: stripe as never as Stripe,
     stripeMock: stripe,
+    invoices,
+    refunds,
+    subscriptions: byId,
     statements,
     upserts: () => statements.filter(({ sql }) => sql.includes('insert into subscriptions')),
   };
@@ -193,7 +285,7 @@ describe('a second live Stripe subscription for the same account', () => {
     expect(mocks.allocateCredits).not.toHaveBeenCalled();
     expect(world.stripeMock.refunds.create).toHaveBeenCalledWith(
       expect.objectContaining({ payment_intent: 'pi_B', reason: 'duplicate' }),
-      { idempotencyKey: 'duplicate-subscription-refund:inpay_in_B_0' },
+      { idempotencyKey: 'duplicate-subscription-refund:inpay_in_B_0:0' },
     );
     expect(world.stripeMock.subscriptions.cancel).toHaveBeenCalledWith(
       'sub_B',
@@ -222,7 +314,7 @@ describe('a second live Stripe subscription for the same account', () => {
     );
   });
 
-  it('refunds before canceling, so a failed cancel retries with the refund already done', async () => {
+  it('refunds before canceling', async () => {
     const world = harness({
       trackedSubscriptionId: 'sub_A',
       subscriptions: [
@@ -430,6 +522,259 @@ describe('a second live Stripe subscription for the same account', () => {
   });
 });
 
+describe('duplicate settlement preserves invoice collection and allocated payments', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function settlementWorld(options: Partial<Parameters<typeof harness>[0]> = {}) {
+    return harness({
+      trackedSubscriptionId: 'sub_A',
+      subscriptions: [
+        { id: 'sub_A', status: 'past_due', created: 100, latest_invoice: 'in_A' },
+        { id: 'sub_B', status: 'active', created: 200, latest_invoice: 'in_B' },
+      ],
+      invoices: [
+        {
+          id: 'in_A_collecting',
+          subscriptionId: 'sub_A',
+          customerId: 'cus_1',
+          status: 'open',
+          auto_advance: true,
+        },
+        {
+          id: 'in_A_paused',
+          subscriptionId: 'sub_A',
+          customerId: 'cus_1',
+          status: 'open',
+          auto_advance: false,
+        },
+        {
+          id: 'in_B',
+          subscriptionId: 'sub_B',
+          customerId: 'cus_1',
+          status: 'open',
+          auto_advance: true,
+        },
+      ],
+      ...options,
+    });
+  }
+
+  it('models Stripe cancellation disabling finalized invoice collection for the whole customer', async () => {
+    const world = settlementWorld();
+
+    await world.stripeMock.subscriptions.cancel('sub_B');
+
+    expect(world.invoices.get('in_A_collecting')?.auto_advance).toBe(false);
+    expect(world.invoices.get('in_A_paused')?.auto_advance).toBe(false);
+    expect(world.invoices.get('in_B')?.auto_advance).toBe(false);
+  });
+
+  it('restores only kept invoices that collected automatically before cancellation', async () => {
+    const world = settlementWorld();
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(world.invoices.get('in_A_collecting')?.auto_advance).toBe(true);
+    expect(world.invoices.get('in_A_paused')?.auto_advance).toBe(false);
+    expect(world.invoices.get('in_B')?.auto_advance).toBe(false);
+    expect(world.stripeMock.invoices.update).toHaveBeenCalledTimes(1);
+    expect(world.stripeMock.invoices.update).toHaveBeenCalledWith(
+      'in_A_collecting',
+      { auto_advance: true },
+      { idempotencyKey: 'duplicate-subscription-collection:sub_B:in_A_collecting' },
+    );
+    expect(world.stripeMock.subscriptions.update.mock.invocationCallOrder[0]).toBeLessThan(
+      world.stripeMock.subscriptions.cancel.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('does not cancel when the original collection state cannot be saved durably', async () => {
+    const world = settlementWorld();
+    world.stripeMock.subscriptions.update.mockRejectedValueOnce(new Error('metadata unavailable'));
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('metadata unavailable');
+
+    expect(world.stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+    expect(world.invoices.get('in_A_collecting')?.auto_advance).toBe(true);
+  });
+
+  it('recovers from an invoice restore failure after cancellation without recapturing paused state', async () => {
+    const world = settlementWorld();
+    world.stripeMock.invoices.update.mockRejectedValueOnce(new Error('restore unavailable'));
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('restore unavailable');
+    expect(world.subscriptions.get('sub_B')?.status).toBe('canceled');
+    expect(world.invoices.get('in_A_collecting')?.auto_advance).toBe(false);
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(world.invoices.get('in_A_collecting')?.auto_advance).toBe(true);
+    expect(world.invoices.get('in_A_paused')?.auto_advance).toBe(false);
+    expect(world.stripeMock.invoices.list).toHaveBeenCalledTimes(1);
+    expect(world.stripeMock.subscriptions.cancel).toHaveBeenCalledTimes(1);
+    expect(mocks.recordNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers when Stripe canceled the duplicate but the cancel response was lost', async () => {
+    const world = settlementWorld();
+    const cancel = world.stripeMock.subscriptions.cancel.getMockImplementation()!;
+    world.stripeMock.subscriptions.cancel.mockImplementationOnce(async (id: string) => {
+      await cancel(id);
+      throw new Error('cancel response lost');
+    });
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('cancel response lost');
+    expect(world.invoices.get('in_A_collecting')?.auto_advance).toBe(false);
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(world.invoices.get('in_A_collecting')?.auto_advance).toBe(true);
+    expect(world.stripeMock.subscriptions.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a failed cancellation without refunding the duplicate allocation twice', async () => {
+    const world = settlementWorld({ paidPaymentIntents: { in_B: ['pi_B'] } });
+    world.stripeMock.subscriptions.cancel.mockRejectedValueOnce(new Error('cancel unavailable'));
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('cancel unavailable');
+    expect(world.subscriptions.get('sub_B')?.status).toBe('active');
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(world.stripeMock.refunds.create).toHaveBeenCalledTimes(1);
+    expect(world.stripeMock.subscriptions.cancel).toHaveBeenCalledTimes(2);
+    expect(world.invoices.get('in_A_collecting')?.auto_advance).toBe(true);
+  });
+
+  it('does not resume collection again after settlement completed and an operator paused an invoice', async () => {
+    const world = settlementWorld();
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+    world.invoices.get('in_A_collecting')!.auto_advance = false;
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(world.invoices.get('in_A_collecting')?.auto_advance).toBe(false);
+    expect(world.stripeMock.invoices.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('refunds only the duplicate invoice allocation when a payment paid several invoices', async () => {
+    const world = settlementWorld({
+      paidPaymentIntents: { in_B: [{ id: 'pi_shared', amount: 500 }] },
+      paymentAmounts: { pi_shared: 3000 },
+    });
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(world.stripeMock.refunds.create).toHaveBeenCalledWith(
+      {
+        payment_intent: 'pi_shared',
+        amount: 500,
+        reason: 'duplicate',
+        metadata: {
+          duplicate_subscription_id: 'sub_B',
+          duplicate_invoice_payment_id: 'inpay_in_B_0',
+        },
+      },
+      { idempotencyKey: 'duplicate-subscription-refund:inpay_in_B_0:0' },
+    );
+  });
+
+  it('reconciles an allocated refund after metadata persistence failed without an idempotency cache', async () => {
+    const world = settlementWorld({
+      paidPaymentIntents: { in_B: [{ id: 'pi_shared', amount: 500 }] },
+      paymentAmounts: { pi_shared: 3000 },
+    });
+    world.stripeMock.subscriptions.update.mockRejectedValueOnce(new Error('metadata unavailable'));
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('metadata unavailable');
+    expect(world.refunds).toHaveLength(1);
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(world.stripeMock.refunds.create).toHaveBeenCalledTimes(1);
+    expect(world.refunds.reduce((sum, refund) => sum + refund.amount, 0)).toBe(500);
+  });
+
+  it('refunds only the remaining allocated amount after a prior partial duplicate refund', async () => {
+    const world = settlementWorld({
+      paidPaymentIntents: { in_B: [{ id: 'pi_shared', amount: 500 }] },
+      refunds: [
+        {
+          id: 're_previous',
+          payment_intent: 'pi_shared',
+          amount: 200,
+          status: 'succeeded',
+          metadata: {
+            duplicate_subscription_id: 'sub_B',
+            duplicate_invoice_payment_id: 'inpay_in_B_0',
+          },
+        },
+        {
+          id: 're_unrelated',
+          payment_intent: 'pi_shared',
+          amount: 100,
+          status: 'succeeded',
+          metadata: {},
+        },
+      ],
+    });
+
+    await upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B'));
+
+    expect(world.stripeMock.refunds.create).toHaveBeenCalledWith(
+      expect.objectContaining({ payment_intent: 'pi_shared', amount: 300 }),
+      { idempotencyKey: 'duplicate-subscription-refund:inpay_in_B_0:200' },
+    );
+  });
+
+  it('refuses cancellation when the paid invoice allocation is absent', async () => {
+    const world = settlementWorld({
+      paidPaymentIntents: { in_B: [{ id: 'pi_shared', amount: null }] },
+    });
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('no verifiable refundable allocation');
+
+    expect(world.stripeMock.refunds.create).not.toHaveBeenCalled();
+    expect(world.stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+  });
+
+  it('refuses cancellation when the kept invoice listing is incomplete', async () => {
+    const world = settlementWorld();
+    world.stripeMock.invoices.list.mockResolvedValueOnce({ data: [], has_more: true });
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('Kept invoices exceed');
+
+    expect(world.stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+  });
+
+  it('refuses cancellation when the duplicate payment listing is incomplete', async () => {
+    const world = settlementWorld();
+    world.stripeMock.invoicePayments.list.mockResolvedValueOnce({ data: [], has_more: true });
+
+    await expect(
+      upsertSubscriptionFromSession(world.db, world.stripe, secondCheckout('sub_B')),
+    ).rejects.toThrow('Duplicate invoice payments exceed');
+
+    expect(world.stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+  });
+});
+
 describe('refunding a charge from another subscription', () => {
   function refundWorld(invoiceSubscriptionId: string) {
     const statements: string[] = [];
@@ -466,6 +811,7 @@ describe('refunding a charge from another subscription', () => {
       }),
     };
     const stripe = {
+      refunds: { list: vi.fn(async () => ({ data: [] as FakeRefund[], has_more: false })) },
       invoicePayments: {
         list: vi.fn(async () => ({
           data: [
@@ -511,6 +857,103 @@ describe('refunding a charge from another subscription', () => {
 
     expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
       true,
+    );
+  });
+
+  it.each(['succeeded', 'pending'])(
+    'keeps the tracked allowance when a shared payment has only a %s duplicate refund',
+    async (status) => {
+      const world = refundWorld('sub_A');
+      Object.assign(world.charge, { amount: 3000, amount_refunded: 500, refunded: false });
+      world.stripe.refunds.list.mockResolvedValueOnce({
+        has_more: false,
+        data: [
+          {
+            id: 're_duplicate',
+            amount: 500,
+            status,
+            metadata: {
+              duplicate_subscription_id: 'sub_B',
+              duplicate_invoice_payment_id: 'inpay_B',
+            },
+          },
+        ],
+      });
+
+      await handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never);
+
+      expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
+        false,
+      );
+      expect(world.statements.some((sql) => sql.includes("plan_tier = 'free'"))).toBe(false);
+    },
+  );
+
+  it('still revokes a fully refunded kept allocation when a shared payment also refunded a duplicate', async () => {
+    const world = refundWorld('sub_A');
+    Object.assign(world.charge, { amount: 3000, amount_refunded: 3000, refunded: true });
+    world.stripe.refunds.list.mockResolvedValueOnce({
+      has_more: false,
+      data: [
+        {
+          id: 're_duplicate',
+          amount: 500,
+          status: 'succeeded',
+          metadata: {
+            duplicate_subscription_id: 'sub_B',
+            duplicate_invoice_payment_id: 'inpay_B',
+          },
+        },
+        { id: 're_plan', amount: 2500, status: 'succeeded', metadata: {} },
+      ],
+    });
+
+    await handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never);
+
+    expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
+      true,
+    );
+    expect(world.statements.some((sql) => sql.includes("plan_tier = 'free'"))).toBe(true);
+  });
+
+  it('refuses newer duplicate receipts that could hide an ordinary refund in an older charge event', async () => {
+    const world = refundWorld('sub_A');
+    Object.assign(world.charge, { amount: 3000, amount_refunded: 250, refunded: false });
+    world.stripe.refunds.list.mockResolvedValueOnce({
+      has_more: false,
+      data: [
+        {
+          id: 're_duplicate_later',
+          amount: 500,
+          status: 'pending',
+          metadata: {
+            duplicate_subscription_id: 'sub_B',
+            duplicate_invoice_payment_id: 'inpay_B',
+          },
+        },
+        { id: 're_ordinary', amount: 250, status: 'succeeded', metadata: {} },
+      ],
+    });
+
+    await expect(
+      handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never),
+    ).rejects.toThrow('Duplicate refund receipts exceed the charge refund snapshot');
+
+    expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
+      false,
+    );
+  });
+
+  it('retries an incomplete charge refund listing before revoking any kept allowance', async () => {
+    const world = refundWorld('sub_A');
+    world.stripe.refunds.list.mockResolvedValueOnce({ data: [], has_more: true });
+
+    await expect(
+      handleChargeRefunded(world.db as never, world.stripe as never, world.charge as never),
+    ).rejects.toThrow('Charge refunds exceed');
+
+    expect(world.statements.some((sql) => sql.includes('revoke_plan_allowance_microusd'))).toBe(
+      false,
     );
   });
 });

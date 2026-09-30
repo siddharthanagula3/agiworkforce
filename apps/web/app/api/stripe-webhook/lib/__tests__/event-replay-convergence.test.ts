@@ -367,6 +367,7 @@ function makeLedgerDb(seed: StoredSubscription | null) {
 }
 
 const stripeStub = {
+  refunds: { list: async () => ({ data: [], has_more: false }) },
   subscriptions: {
     retrieve: async () => ({
       id: 'sub_1',

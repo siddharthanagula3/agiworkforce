@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
@@ -42,6 +42,10 @@ import {
   resolveSubscriptionSeats,
 } from './seats';
 import { toStoredSubscriptionStatus } from './subscription-status';
+import {
+  cancelDuplicateSubscription,
+  duplicateCollectionSnapshot,
+} from './duplicate-subscription-settlement';
 
 async function claimStripeBillingOwnership(
   db: DatabaseAdapter,
@@ -62,33 +66,13 @@ const LIVE_STRIPE_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
   'trialing',
   'past_due',
 ]);
-const DUPLICATE_REFUND_PAGE_SIZE = 10;
-
-type StripeRefundTarget = { payment_intent: string } | { charge: string };
-
-function stripeReference(value: string | { id: string } | null | undefined): string | null {
-  if (!value) return null;
-  return typeof value === 'string' ? value : value.id;
-}
-
-function refundTargetOf(payment: Stripe.InvoicePayment.Payment): StripeRefundTarget | null {
-  if (payment.type === 'payment_intent') {
-    const paymentIntent = stripeReference(payment.payment_intent);
-    return paymentIntent ? { payment_intent: paymentIntent } : null;
-  }
-  if (payment.type === 'charge') {
-    const charge = stripeReference(payment.charge);
-    return charge ? { charge } : null;
-  }
-  return null;
-}
 
 async function readLiveTrackedStripeSubscription(
   db: DatabaseAdapter,
   stripe: Stripe,
   userId: string,
   incomingSubscriptionId: string,
-): Promise<Stripe.Subscription | null> {
+): Promise<{ tracked: Stripe.Subscription | null; differs: boolean }> {
   const [row] = await db.query<{ stripe_subscription_id: string | null }>(
     'select stripe_subscription_id from subscriptions where user_id = $1 limit 1',
     [userId],
@@ -98,58 +82,18 @@ async function readLiveTrackedStripeSubscription(
     !isStripeSubscriptionId(trackedSubscriptionId) ||
     trackedSubscriptionId === incomingSubscriptionId
   ) {
-    return null;
+    return { tracked: null, differs: false };
   }
   try {
     const tracked = await stripe.subscriptions.retrieve(trackedSubscriptionId);
-    return LIVE_STRIPE_SUBSCRIPTION_STATUSES.has(tracked.status) ? tracked : null;
+    return {
+      tracked: LIVE_STRIPE_SUBSCRIPTION_STATUSES.has(tracked.status) ? tracked : null,
+      differs: true,
+    };
   } catch (error) {
-    if (isStripeResourceMissing(error)) return null;
+    if (isStripeResourceMissing(error)) return { tracked: null, differs: true };
     throw error;
   }
-}
-
-async function refundDuplicateSubscriptionInvoice(
-  stripe: Stripe,
-  subscription: Stripe.Subscription,
-): Promise<number> {
-  const invoiceId = stripeReference(subscription.latest_invoice);
-  if (!invoiceId) return 0;
-  const payments = await stripe.invoicePayments.list({
-    invoice: invoiceId,
-    status: 'paid',
-    limit: DUPLICATE_REFUND_PAGE_SIZE,
-  });
-  let refunded = 0;
-  for (const invoicePayment of payments.data) {
-    const target = refundTargetOf(invoicePayment.payment);
-    if (!target) {
-      logger.error(
-        { subscriptionId: subscription.id, invoicePaymentId: invoicePayment.id },
-        'Duplicate subscription payment has no refundable Stripe charge; refund it by hand',
-      );
-      continue;
-    }
-    try {
-      await stripe.refunds.create(
-        {
-          ...target,
-          reason: 'duplicate',
-          metadata: { duplicate_subscription_id: subscription.id },
-        },
-        { idempotencyKey: `duplicate-subscription-refund:${invoicePayment.id}` },
-      );
-      refunded += 1;
-    } catch (error) {
-      if (
-        !(error instanceof Stripe.errors.StripeInvalidRequestError) ||
-        error.code !== 'charge_already_refunded'
-      ) {
-        throw error;
-      }
-    }
-  }
-  return refunded;
 }
 
 async function settleDuplicateStripeSubscription(
@@ -162,29 +106,35 @@ async function settleDuplicateStripeSubscription(
     `select pg_advisory_xact_lock(hashtextextended('agi:stripe-subscription-owner:' || $1, 0))`,
     [userId],
   );
-  const tracked = await readLiveTrackedStripeSubscription(
+  const trackedState = await readLiveTrackedStripeSubscription(
     db,
     stripe,
     userId,
     incomingSubscriptionId,
   );
-  if (!tracked) return false;
+  if (!trackedState.differs) return false;
 
   const incoming = await stripe.subscriptions.retrieve(incomingSubscriptionId);
+  const snapshot = duplicateCollectionSnapshot(incoming);
+  const tracked = trackedState.tracked;
+  if (!tracked && !snapshot) return false;
   const context = {
     userId,
-    trackedSubscriptionId: tracked.id,
+    trackedSubscriptionId: snapshot?.kept ?? tracked?.id,
     incomingSubscriptionId,
     incomingStatus: incoming.status,
   };
-  if (await resolveEnterprisePlanTier(stripe, incoming.items.data[0]?.price ?? null)) {
+  if (
+    !snapshot &&
+    (await resolveEnterprisePlanTier(stripe, incoming.items.data[0]?.price ?? null))
+  ) {
     logger.error(
       context,
       'An enterprise subscription replaces a live self-serve subscription; cancel the self-serve subscription in Stripe',
     );
     return false;
   }
-  if (!LIVE_STRIPE_SUBSCRIPTION_STATUSES.has(incoming.status)) {
+  if (!snapshot && !LIVE_STRIPE_SUBSCRIPTION_STATUSES.has(incoming.status)) {
     logger.warn(
       context,
       'Ignoring a Stripe subscription that is not live while the account keeps a live one',
@@ -192,12 +142,7 @@ async function settleDuplicateStripeSubscription(
     return true;
   }
 
-  const refundedPayments = await refundDuplicateSubscriptionInvoice(stripe, incoming);
-  await stripe.subscriptions.cancel(
-    incoming.id,
-    { prorate: false, invoice_now: false },
-    { idempotencyKey: `duplicate-subscription-cancel:${incoming.id}` },
-  );
+  const refundedPayments = await cancelDuplicateSubscription(stripe, incoming, tracked);
   logger.error(
     { ...context, refundedPayments },
     'Canceled a duplicate Stripe subscription; the account keeps the subscription it already had',
