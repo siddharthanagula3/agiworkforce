@@ -12,7 +12,7 @@ delete this file when it is empty. An entry marked "same fix as" closes with its
 primary. Codex's raw report stays outside the repository, in its read-only
 worktree `.worktrees/codex-reaudit/audit/codex-reaudit-2026-09-30/`.
 
-Open now: 456 entries (167 defects, 289 half-built).
+Open now: 454 entries (165 defects, 289 half-built).
 
 ## Signaling relay
 
@@ -22,7 +22,6 @@ Open now: 456 entries (167 defects, 289 half-built).
 - **06/2361** (defect): Drop the duplicate memory field and add a WebSocket capacity measurement recorded in the capacity runbook. Files: `services/signaling-server/fly.toml`, `docs/runbooks/capacity-and-load-testing.md`.
 - **C-02** (defect, security, high): Set ws maxPayload on the signaling WebSocketServer (3x MAX_MESSAGE_SIZE) so oversized frames are refused before buffering (100 MiB default today). Files: `services/signaling-server/src/index.ts`, `services/signaling-server/src/constants.ts`, `services/signaling-server/__tests__/websocket/payload-limit.test.ts`.
 - **C-03** (defect, security, high): Make register-time rehydration non-rejecting and separate unavailable from missing so a slow Neon lookup cannot raise unhandled rejections that crash the relay. Files: `services/signaling-server/src/index.ts`, `services/signaling-server/src/rehydration.ts`, `services/signaling-server/__tests__/rehydration.test.ts`.
-- **C-05** (defect, medium): Give the signaling Neon pool connection/statement timeouts and make /ready probe the database instead of two in-process booleans. Files: `services/signaling-server/src/index.ts`, `services/signaling-server/src/db.ts`, `services/signaling-server/src/probes.ts`.
 - **C-08** (defect, low): Pin the signaling relay to one Fly machine (deploy --ha=false, min_machines_running=1) because peer matching is per process. Files: `services/signaling-server/fly.toml`, `.github/workflows/deploy-signaling-server.yml`, `services/signaling-server/README.md`.
 - **C-11** (defect, security, medium): Make relay pair tokens single-device and rotating (per-role rotation state, bind device id) so a leaked token cannot retake a role; return only the initiator token. Files: `services/signaling-server/src/pair-token.ts`, `services/signaling-server/src/index.ts`, `services/signaling-server/src/db.ts`.
 - **F-DESK-003** (defect, security, low): Add isSecureRelayUrl and refuse non-loopback ws: relay URLs in the remote-control host, pairing routes and signaling client. Files: `packages/contracts/types/src/pairing.ts`, `packages/platform/utils/src/remoteControl/remoteControlHost.ts`, `packages/platform/utils/src/signaling.ts`.
@@ -33,7 +32,6 @@ Open now: 456 entries (167 defects, 289 half-built).
 - **06/2227** (defect, security): Reject ws: relay URLs unless the host is loopback (localhost/127.0.0.1/::1) and add a test that a non-loopback ws: address is refused. Same fix as F-DESK-003. Files: `packages/platform/utils/src/remoteControl/remoteControlHost.ts`, `packages/platform/utils/src/__tests__/remoteControlHost.test.ts`.
 - **06/2301** (defect, security): Reject a non-wss relay address in parseStartRequest except for loopback hosts in development, with a test for ws: refusal. Same fix as F-DESK-003. Files: `packages/platform/utils/src/remoteControl/remoteControlHost.ts`, `packages/platform/utils/src/remoteControl/__tests__/`.
 - **06/2342** (defect, security): Pass maxPayload: MAX_MESSAGE_SIZE_BYTES to the WebSocketServer, measure bytes rather than string length, and drop or close sockets whose bufferedAmount exceeds a cap. Same fix as C-02. Files: `services/signaling-server/src/index.ts`, `services/signaling-server/src/constants.ts`.
-- **06/2350** (defect): Set statement_timeout, query_timeout and connectionTimeoutMillis on the Neon Pool. Same fix as C-05. Files: `services/signaling-server/src/db.ts`.
 - **06/2359** (defect): Enforce and document single-machine deployment (flyctl deploy --ha=false and a README architecture note) or add cross-machine routing. Same fix as C-08. Files: `services/signaling-server/fly.toml`, `.github/workflows/deploy-signaling-server.yml`, `services/signaling-server/README.md`.
 
 ## Web
