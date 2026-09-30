@@ -481,10 +481,32 @@ describe('managed usage request service', () => {
 });
 
 describe('usage credits switch for fast mode', () => {
-  it('is on only when the subscription turned usage credits on', async () => {
-    await expect(usageCreditsEnabled(fakeDb([{ enabled: true }]), 'user-1')).resolves.toBe(true);
-    await expect(usageCreditsEnabled(fakeDb([{ enabled: false }]), 'user-1')).resolves.toBe(false);
+  it('reads the payer opt-in even when there is no purchased balance', async () => {
+    const db = fakeDb([{ overage_enabled: true, available_microusd: 0 }]);
+    await expect(usageCreditsEnabled(db, 'user-1')).resolves.toBe(true);
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('where subscription.user_id = $1'),
+      ['user-1'],
+    );
+  });
+
+  it('does not inherit a workspace owner opt-in when the member holds no row', async () => {
     await expect(usageCreditsEnabled(fakeDb([]), 'user-1')).resolves.toBe(false);
+  });
+
+  it.each([false, null, 'true', 1])('fails closed for opt-in value %s', async (enabled) => {
+    await expect(
+      usageCreditsEnabled(
+        fakeDb([{ overage_enabled: enabled, available_microusd: 100_000 }]),
+        'user-1',
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it('fails closed when the payer state is unavailable', async () => {
+    const db = fakeDb([]);
+    vi.mocked(db.query).mockRejectedValueOnce(new Error('payer state unavailable'));
+    await expect(usageCreditsEnabled(db, 'user-1')).resolves.toBe(false);
   });
 });
 
