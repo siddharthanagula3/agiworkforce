@@ -143,12 +143,6 @@ fn set_file_permissions(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// On non-Unix platforms, this is a no-op (Windows ACLs handle security differently).
-#[cfg(all(not(unix), test))]
-fn set_file_permissions(_path: &Path) -> Result<()> {
-    Ok(())
-}
-
 /// Check whether auth.json has secure permissions (owner-only on Unix).
 /// Returns `true` if permissions are secure, `false` otherwise.
 /// On non-Unix platforms, always returns `true`.
