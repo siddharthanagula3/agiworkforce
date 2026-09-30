@@ -174,7 +174,16 @@ fn read_existing_text_for_preview(
     std::fs::read_to_string(file_path).map_err(|e| format!("Failed to read existing file: {e}"))
 }
 
+#[cfg(test)]
 async fn patch_target_paths(patch: &str) -> std::result::Result<Vec<PathBuf>, String> {
+    let cwd = std::env::current_dir().map_err(|reason| reason.to_string())?;
+    patch_target_paths_with_cwd(patch, &cwd).await
+}
+
+pub(super) async fn patch_target_paths_with_cwd(
+    patch: &str,
+    cwd: &Path,
+) -> std::result::Result<Vec<PathBuf>, String> {
     let targets = crate::apply_patch::parsed_patch_targets(patch)
         .await
         .map_err(|reason| format!("Patch target rejected: {reason}"))?;
@@ -184,9 +193,9 @@ async fn patch_target_paths(patch: &str) -> std::result::Result<Vec<PathBuf>, St
         let raw = target
             .to_str()
             .ok_or("Patch target rejected: non-UTF-8 path")?;
-        let path = validate_file_write_path(raw)
+        let path = crate::path_security::validate_workspace_write_path_with_cwd(raw, cwd)
             .map_err(|reason| format!("Patch target rejected: {reason}"))?;
-        if std::fs::symlink_metadata(&target)
+        if std::fs::symlink_metadata(cwd.join(&target))
             .is_ok_and(|metadata| metadata.file_type().is_symlink())
         {
             return Err("Patch target rejected: symbolic link source or target".to_string());
@@ -1024,6 +1033,7 @@ pub(super) async fn execute_apply_patch(
     args: &HashMap<String, String>,
     require_confirm: bool,
     approval_callback: Option<&ApprovalCallback>,
+    workspace_root: Option<&Path>,
 ) -> Result<ToolResult> {
     let patch = match args.get("patch") {
         Some(p) => p,
@@ -1035,7 +1045,10 @@ pub(super) async fn execute_apply_patch(
             });
         }
     };
-    let patch_paths = match patch_target_paths(patch).await {
+    let cwd = workspace_root
+        .map(Path::to_path_buf)
+        .unwrap_or(std::env::current_dir()?);
+    let patch_paths = match patch_target_paths_with_cwd(patch, &cwd).await {
         Ok(paths) => paths,
         Err(message) => {
             return Ok(ToolResult {
@@ -1120,7 +1133,7 @@ pub(super) async fn execute_apply_patch(
         }
     }
 
-    match crate::apply_patch::apply_git_patch(patch, None).await {
+    match crate::apply_patch::apply_git_patch(patch, Some(&cwd)).await {
         Ok(r) => {
             let mut out = String::new();
             if !r.applied.is_empty() {
@@ -1830,7 +1843,7 @@ mod tests {
         });
         let args = HashMap::from([("patch".to_string(), patch)]);
 
-        let result = execute_apply_patch(&args, true, Some(&callback))
+        let result = execute_apply_patch(&args, true, Some(&callback), None)
             .await
             .unwrap();
 
@@ -1862,7 +1875,7 @@ mod tests {
         );
         let args = HashMap::from([("patch".to_string(), patch)]);
 
-        let result = execute_apply_patch(&args, false, None).await.unwrap();
+        let result = execute_apply_patch(&args, false, None, None).await.unwrap();
 
         assert!(!result.success, "{}", result.output);
         assert!(

@@ -242,7 +242,6 @@ fn is_agent_instruction_path(path: &Path) -> bool {
 }
 
 const PROTECTED_DIRECTORIES: &[&str] = &[
-    ".git",
     ".vscode",
     ".idea",
     ".husky",
@@ -294,8 +293,17 @@ const PROTECTED_FILES: &[&str] = &[
 
 pub fn is_protected_path(path: &Path) -> bool {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let roots = allowed_workspace_roots(&cwd);
-    [path.to_path_buf(), resolve_for_denylist(path)]
+    is_protected_path_with_cwd(path, &cwd)
+}
+
+pub fn is_protected_path_with_cwd(path: &Path, cwd: &Path) -> bool {
+    let roots = allowed_workspace_roots(cwd);
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+    [absolute.clone(), resolve_for_denylist(&absolute)]
         .iter()
         .any(|candidate| {
             let relative = roots
@@ -325,7 +333,11 @@ fn names_protected_location(path: &Path) -> bool {
         match name.as_str() {
             ".claude" | ".agiworkforce" => next != Some("worktrees"),
             ".config" => next == Some("git"),
-            other => PROTECTED_DIRECTORIES.contains(&other),
+            other => {
+                PROTECTED_DIRECTORIES.contains(&other)
+                    || agiworkforce_protocol::permissions::PROTECTED_METADATA_PATH_NAMES
+                        .contains(&other)
+            }
         }
     })
 }
