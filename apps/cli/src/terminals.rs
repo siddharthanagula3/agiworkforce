@@ -77,6 +77,87 @@ pub(crate) struct NewOutput {
     pub(crate) state: CommandState,
 }
 
+#[derive(Default)]
+struct InputState {
+    history: String,
+    uncertain: bool,
+}
+
+pub(crate) struct InputTransaction {
+    command: Arc<BackgroundCommand>,
+    _guard: tokio::sync::OwnedMutexGuard<()>,
+    text: String,
+    cumulative: String,
+}
+
+impl InputTransaction {
+    pub(crate) fn cumulative_input(&self) -> &str {
+        &self.cumulative
+    }
+
+    pub(crate) async fn send(self) -> Result<()> {
+        {
+            let mut state = lock(&self.command.input_state);
+            if self.command.state() != CommandState::Running {
+                anyhow::bail!("{} is no longer taking input", self.command.id);
+            }
+            state.history.clone_from(&self.cumulative);
+            state.uncertain = true;
+        }
+        let result = deliver_input(&self.command, &self.text).await;
+        if result.is_ok() {
+            lock(&self.command.input_state).uncertain = false;
+        } else {
+            self.command.kill();
+        }
+        result
+    }
+}
+
+impl Drop for InputTransaction {
+    fn drop(&mut self) {
+        if lock(&self.command.input_state).uncertain {
+            self.command.kill();
+        }
+    }
+}
+
+pub(crate) async fn prepare_input(
+    command: Arc<BackgroundCommand>,
+    text: &str,
+) -> Result<InputTransaction> {
+    if text
+        .chars()
+        .any(|character| character.is_control() && character != '\n')
+    {
+        anyhow::bail!(
+            "Send plain text with LF line endings; terminal editing controls are not supported"
+        );
+    }
+    let guard = command.input_transaction.clone().lock_owned().await;
+    let cumulative = {
+        let state = lock(&command.input_state);
+        if state.uncertain {
+            anyhow::bail!(
+                "Input delivery is uncertain; stop this command before sending more input"
+            );
+        }
+        if command.state() != CommandState::Running {
+            anyhow::bail!("{} is no longer taking input", command.id);
+        }
+        if state.history.len().saturating_add(text.len()) > KEPT_OUTPUT_BYTES {
+            anyhow::bail!("The command input history limit was reached; start a new command");
+        }
+        format!("{}{text}", state.history)
+    };
+    Ok(InputTransaction {
+        command,
+        _guard: guard,
+        text: text.into(),
+        cumulative,
+    })
+}
+
 pub(crate) struct BackgroundCommand {
     pub(crate) id: String,
     pub(crate) command: String,
@@ -85,6 +166,8 @@ pub(crate) struct BackgroundCommand {
     status: watch::Sender<Status>,
     stop_requested: AtomicBool,
     input: Mutex<Option<Box<dyn Write + Send>>>,
+    input_transaction: Arc<tokio::sync::Mutex<()>>,
+    input_state: Mutex<InputState>,
     output: Mutex<OutputLog>,
     tree: Mutex<Option<DetachedProcessTree>>,
 }
@@ -146,9 +229,10 @@ impl BackgroundCommand {
         } else {
             CommandState::Exited(code)
         };
-        lock(&self.input).take();
-        lock(&self.tree).take();
         self.status.send_modify(|status| status.state = state);
+        lock(&self.input).take();
+        *lock(&self.input_state) = InputState::default();
+        lock(&self.tree).take();
     }
 
     fn kill(&self) {
@@ -188,6 +272,8 @@ pub(crate) fn start(
         status,
         stop_requested: AtomicBool::new(false),
         input: Mutex::new(spawned.input),
+        input_transaction: Arc::new(tokio::sync::Mutex::new(())),
+        input_state: Mutex::new(InputState::default()),
         output: Mutex::new(OutputLog::default()),
         tree: Mutex::new(Some(DetachedProcessTree::track(Some(child.id())))),
     });
@@ -341,7 +427,7 @@ pub(crate) async fn read_new(command: &BackgroundCommand, wait: Duration) -> New
     }
 }
 
-pub(crate) async fn send_input(command: &Arc<BackgroundCommand>, text: &str) -> Result<()> {
+async fn deliver_input(command: &Arc<BackgroundCommand>, text: &str) -> Result<()> {
     let Some(mut writer) = lock(&command.input).take() else {
         anyhow::bail!("{} is not taking input", command.id);
     };
@@ -429,4 +515,112 @@ fn plain_text(bytes: &[u8]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[cfg(test)]
+mod input_tests {
+    use super::*;
+
+    fn command(writer: Box<dyn Write + Send>) -> Arc<BackgroundCommand> {
+        let (status, _) = watch::channel(Status {
+            state: CommandState::Running,
+            open_outputs: 0,
+        });
+        Arc::new(BackgroundCommand {
+            id: "input-test".into(),
+            command: "controlled interactive input".into(),
+            started_at: Utc::now(),
+            terminal: true,
+            status,
+            stop_requested: AtomicBool::new(false),
+            input: Mutex::new(Some(writer)),
+            input_transaction: Arc::new(tokio::sync::Mutex::new(())),
+            input_state: Mutex::new(InputState::default()),
+            output: Mutex::new(OutputLog::default()),
+            tree: Mutex::new(None),
+        })
+    }
+
+    #[tokio::test]
+    async fn input_transactions_serialize_history_and_clear_it_on_exit() {
+        let command = command(Box::new(std::io::sink()));
+        let first = prepare_input(command.clone(), "pri").await.unwrap();
+        let (started, attempted) = tokio::sync::oneshot::channel();
+        let next = command.clone();
+        let second = tokio::spawn(async move {
+            started.send(()).unwrap();
+            prepare_input(next, "ntf controlled\n").await.unwrap()
+        });
+        attempted.await.unwrap();
+        assert!(
+            !second.is_finished(),
+            "second input skipped the transaction lock"
+        );
+        first.send().await.unwrap();
+        let second = second.await.unwrap();
+        assert_eq!(second.cumulative_input(), "printf controlled\n");
+        second.send().await.unwrap();
+        command.finish(Some(0));
+        assert!(lock(&command.input_state).history.is_empty());
+    }
+
+    #[tokio::test]
+    async fn input_controls_and_history_overflow_fail_before_transmission() {
+        let command = command(Box::new(std::io::sink()));
+        for text in ["text\t", "text\r", "text\u{7f}", "text\u{8}", "text\u{1b}"] {
+            assert!(prepare_input(command.clone(), text).await.is_err());
+        }
+        lock(&command.input_state).history = "x".repeat(KEPT_OUTPUT_BYTES);
+        assert!(prepare_input(command.clone(), "overflow").await.is_err());
+        assert_eq!(lock(&command.input_state).history.len(), KEPT_OUTPUT_BYTES);
+    }
+
+    struct HeldWriter {
+        entered: Option<tokio::sync::oneshot::Sender<()>>,
+        released: Arc<(Mutex<bool>, std::sync::Condvar)>,
+    }
+
+    impl Write for HeldWriter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if let Some(entered) = self.entered.take() {
+                let _ = entered.send(());
+            }
+            let (released, signal) = &*self.released;
+            let mut ready = lock(released);
+            while !*ready {
+                ready = signal.wait(ready).unwrap();
+            }
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn canceled_or_timed_out_input_never_assumes_delivery_was_undone() {
+        for cancel in [false, true] {
+            let (entered, started) = tokio::sync::oneshot::channel();
+            let released = Arc::new((Mutex::new(false), std::sync::Condvar::new()));
+            let command = command(Box::new(HeldWriter {
+                entered: Some(entered),
+                released: released.clone(),
+            }));
+            let transaction = prepare_input(command.clone(), "controlled line\n")
+                .await
+                .unwrap();
+            let sending = tokio::spawn(async move { transaction.send().await });
+            started.await.unwrap();
+            if cancel {
+                sending.abort();
+            }
+            let result = sending.await;
+            *lock(&released.0) = true;
+            released.1.notify_all();
+            assert!(result.is_err() || result.unwrap().is_err());
+            assert!(command.stop_requested.load(Ordering::SeqCst));
+            assert!(prepare_input(command.clone(), "retry\n").await.is_err());
+            assert!(lock(&command.input_state).uncertain);
+        }
+    }
 }

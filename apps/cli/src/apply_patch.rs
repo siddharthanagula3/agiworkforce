@@ -7,6 +7,64 @@ use crate::terminal_style as ts;
 
 const GIT_APPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+pub(crate) async fn parsed_patch_targets(patch: &str) -> Result<Vec<PathBuf>> {
+    let inspection = tempfile::tempdir()?;
+    let mut targets = Vec::new();
+    for (option, reverse) in [
+        ("--numstat", false),
+        ("--numstat", true),
+        ("--summary", false),
+    ] {
+        let mut command = tokio::process::Command::new("git");
+        command
+            .args(["apply", option, "-z"])
+            .current_dir(inspection.path())
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE");
+        if reverse {
+            command.arg("--reverse");
+        }
+        let output = crate::process_tree::output(
+            command,
+            Some(patch.as_bytes().to_vec()),
+            Some(GIT_APPLY_TIMEOUT),
+        )
+        .await?;
+        if !output.status.success() {
+            return Err(anyhow!("Refusing patch: git could not parse its targets"));
+        }
+        if option == "--summary" {
+            let summary = std::str::from_utf8(&output.stdout)?;
+            if summary.lines().any(|line| {
+                line.starts_with(" create mode 120000 ")
+                    || (line.starts_with(" mode change ") && line.contains(" => 120000 "))
+            }) {
+                return Err(anyhow!(
+                    "Refusing patch: symbolic link creation is not allowed"
+                ));
+            }
+            continue;
+        }
+        for record in output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|row| !row.is_empty())
+        {
+            let raw = std::str::from_utf8(record)?;
+            let path = raw
+                .splitn(3, '\t')
+                .nth(2)
+                .filter(|path| !path.is_empty())
+                .ok_or_else(|| anyhow!("Refusing patch: malformed target record"))?;
+            targets.push(PathBuf::from(path));
+        }
+    }
+    if targets.is_empty() {
+        return Err(anyhow!("Refusing patch: no file targets"));
+    }
+    Ok(targets)
+}
+
 struct TempPatchFile(PathBuf);
 
 impl TempPatchFile {
@@ -62,75 +120,104 @@ fn validate_patch_targets(patch: &str, cwd: &Path) -> Result<()> {
         //   --- a/src/foo.rs
         //   +++ b/src/foo.rs
         //   --- /dev/null            (new file, fine, special-case)
-        //   diff --git a/x b/y       (we read the a/b paths from --- / +++)
-        let raw = if let Some(rest) = line.strip_prefix("--- ") {
-            rest
-        } else if let Some(rest) = line.strip_prefix("+++ ") {
-            rest
+        //   rename to src/bar.rs     (rename and copy headers carry no a/ or b/)
+        let (header, target) = if let Some(raw) = line
+            .strip_prefix("--- ")
+            .or_else(|| line.strip_prefix("+++ "))
+        {
+            // git emits "/dev/null" for create / delete halves, that's fine.
+            let trimmed = raw.split('\t').next().unwrap_or(raw).trim();
+            if trimmed == "/dev/null" || trimmed.is_empty() {
+                continue;
+            }
+            // Strip the `a/` or `b/` prefix git uses by default. Patches generated
+            // with `--no-prefix` won't have it; that path is treated as project-
+            // relative as-is.
+            let target = trimmed
+                .strip_prefix("a/")
+                .or_else(|| trimmed.strip_prefix("b/"))
+                .unwrap_or(trimmed);
+            (trimmed, target)
+        } else if let Some(raw) = ["rename from ", "rename to ", "copy from ", "copy to "]
+            .iter()
+            .find_map(|prefix| line.strip_prefix(prefix))
+        {
+            (raw.trim(), raw.trim())
+        } else if let Some(raw) = line.strip_prefix("diff --git ") {
+            for name in raw.split_whitespace().take(2) {
+                let target = name
+                    .strip_prefix("a/")
+                    .or_else(|| name.strip_prefix("b/"))
+                    .unwrap_or(name);
+                validate_patch_target(name, Path::new(target), &cwd_canonical)?;
+            }
+            continue;
         } else {
             continue;
         };
+        validate_patch_target(header, Path::new(target), &cwd_canonical)?;
+    }
 
-        // git emits "/dev/null" for create / delete halves, that's fine.
-        let trimmed = raw.split('\t').next().unwrap_or(raw).trim();
-        if trimmed == "/dev/null" || trimmed.is_empty() {
-            continue;
+    Ok(())
+}
+
+fn validate_patch_target(header: &str, target_path: &Path, cwd_canonical: &Path) -> Result<()> {
+    if target_path.is_absolute() {
+        return Err(anyhow!(
+            "Refusing patch, header references absolute path: {}",
+            header
+        ));
+    }
+
+    // Walk components; reject anything that climbs above cwd.
+    let mut depth: i32 = 0;
+    for comp in target_path.components() {
+        match comp {
+            Component::ParentDir => depth -= 1,
+            Component::Normal(_) => depth += 1,
+            Component::CurDir => {}
+            Component::RootDir | Component::Prefix(_) => {
+                return Err(anyhow!(
+                    "Refusing patch, header has rooted path component: {}",
+                    header
+                ));
+            }
         }
-
-        // Strip the `a/` or `b/` prefix git uses by default. Patches generated
-        // with `--no-prefix` won't have it; that path is treated as project-
-        // relative as-is.
-        let target = trimmed
-            .strip_prefix("a/")
-            .or_else(|| trimmed.strip_prefix("b/"))
-            .unwrap_or(trimmed);
-
-        let target_path = Path::new(target);
-
-        if target_path.is_absolute() {
+        if depth < 0 {
             return Err(anyhow!(
-                "Refusing patch, header references absolute path: {}",
-                trimmed
+                "Refusing patch, header escapes project root via `..`: {}",
+                header
             ));
         }
+    }
 
-        // Walk components; reject anything that climbs above cwd.
-        let mut depth: i32 = 0;
-        for comp in target_path.components() {
-            match comp {
-                Component::ParentDir => depth -= 1,
-                Component::Normal(_) => depth += 1,
-                Component::CurDir => {}
-                Component::RootDir | Component::Prefix(_) => {
-                    return Err(anyhow!(
-                        "Refusing patch, header has rooted path component: {}",
-                        trimmed
-                    ));
-                }
-            }
-            if depth < 0 {
-                return Err(anyhow!(
-                    "Refusing patch, header escapes project root via `..`: {}",
-                    trimmed
-                ));
-            }
+    let mut leading = cwd_canonical.to_path_buf();
+    for component in target_path.parent().into_iter().flat_map(Path::components) {
+        leading.push(component);
+        if std::fs::symlink_metadata(&leading).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            return Err(anyhow!(
+                "Refusing patch, header passes through a symbolic link: {}",
+                header
+            ));
         }
+    }
 
-        // For paths that resolve under cwd, double-check the canonical form
-        // doesn't slip out via symlink. We can only canonicalize when the
-        // file already exists; for new files the depth check above is enough.
-        let absolute = cwd_canonical.join(target_path);
-        if absolute.exists() {
-            let canonical = absolute
-                .canonicalize()
-                .map_err(|e| anyhow!("Cannot resolve patch target {}: {}", trimmed, e))?;
-            if !canonical.starts_with(&cwd_canonical) {
-                return Err(anyhow!(
-                    "Refusing patch, header resolves outside project root: {} -> {}",
-                    trimmed,
-                    canonical.display()
-                ));
-            }
+    // For paths that resolve under cwd, double-check the canonical form
+    // doesn't slip out via symlink.
+    let absolute = cwd_canonical.join(target_path);
+    if let Ok(metadata) = std::fs::symlink_metadata(&absolute) {
+        if metadata.file_type().is_symlink() {
+            return Err(anyhow!("Refusing patch: symbolic link target: {header}"));
+        }
+        let canonical = absolute
+            .canonicalize()
+            .map_err(|e| anyhow!("Cannot resolve patch target {}: {}", header, e))?;
+        if !canonical.starts_with(cwd_canonical) {
+            return Err(anyhow!(
+                "Refusing patch, header resolves outside project root: {} -> {}",
+                header,
+                canonical.display()
+            ));
         }
     }
 
@@ -142,6 +229,15 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
 
     // CLI-NEW-007 fix: validate every target path before invoking `git apply`.
     validate_patch_targets(patch, cwd)?;
+    let cwd_canonical = cwd.canonicalize()?;
+    for target in parsed_patch_targets(patch).await? {
+        let name = target
+            .to_str()
+            .ok_or_else(|| anyhow!("Refusing non-UTF-8 target"))?;
+        validate_patch_target(name, &target, &cwd_canonical)?;
+        crate::path_security::validate_workspace_write_path_with_cwd(name, &cwd_canonical)
+            .map_err(|reason| anyhow!(reason))?;
+    }
     let parsed = crate::diff_model::Diff::parse(patch);
     let tmp_path = std::env::temp_dir().join(format!("agi-patch-{}.patch", uuid::Uuid::new_v4()));
     // Write with restricted permissions (0o600) to prevent other users from reading
@@ -314,6 +410,69 @@ mod patch_validation_tests {
     fn allows_dev_null_for_create_or_delete() {
         let patch = "--- /dev/null\n+++ b/src/new_file.rs\n@@ -0,0 +1,1 @@\n+content\n";
         validate_patch_targets(patch, Path::new(".")).expect("/dev/null half must pass");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_a_new_file_under_a_symlinked_parent() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let outside = tempfile::tempdir().expect("outside");
+        std::os::unix::fs::symlink(outside.path(), workspace.path().join("linked"))
+            .expect("create symlink");
+        let patch = "--- /dev/null\n+++ b/linked/planted.sh\n@@ -0,0 +1 @@\n+echo planted\n";
+
+        let err = validate_patch_targets(patch, workspace.path()).unwrap_err();
+
+        assert!(err.to_string().contains("symbolic link"), "got: {err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_a_rename_into_a_symlinked_parent() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let outside = tempfile::tempdir().expect("outside");
+        std::fs::write(workspace.path().join("notes.txt"), "kept\n").expect("seed file");
+        std::os::unix::fs::symlink(outside.path(), workspace.path().join("linked"))
+            .expect("create symlink");
+        let patch = "diff --git a/notes.txt b/linked/notes.txt\n\
+similarity index 100%\n\
+rename from notes.txt\n\
+rename to linked/notes.txt\n";
+
+        let err = validate_patch_targets(patch, workspace.path()).unwrap_err();
+
+        assert!(err.to_string().contains("symbolic link"), "got: {err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_a_dangling_link_at_the_target() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let outside = tempfile::tempdir().expect("outside");
+        std::os::unix::fs::symlink(
+            outside.path().join("captured.txt"),
+            workspace.path().join("notes.txt"),
+        )
+        .expect("create dangling link");
+        let patch = "--- /dev/null\n+++ b/notes.txt\n@@ -0,0 +1 @@\n+captured\n";
+
+        assert!(validate_patch_targets(patch, workspace.path()).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_an_empty_new_file_under_a_symlinked_parent() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let outside = tempfile::tempdir().expect("outside");
+        std::os::unix::fs::symlink(outside.path(), workspace.path().join("linked"))
+            .expect("create symlink");
+        let patch = "diff --git a/linked/planted b/linked/planted\n\
+new file mode 100644\n\
+index 0000000..e69de29\n";
+
+        let err = validate_patch_targets(patch, workspace.path()).unwrap_err();
+
+        assert!(err.to_string().contains("symbolic link"), "got: {err}");
     }
 
     #[test]

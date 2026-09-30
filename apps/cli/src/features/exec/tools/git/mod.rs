@@ -11,6 +11,30 @@ mod operations;
 
 pub(super) use operations::execute_git_tool;
 
+pub(super) fn worktree_permission_command(
+    tool_name: &str,
+    args: &HashMap<String, String>,
+) -> Option<String> {
+    match tool_name {
+        "enter_worktree" => args
+            .get("branch")
+            .filter(|branch| !branch.is_empty())
+            .map(|branch| {
+                format!(
+                    "git worktree add {} {branch}",
+                    args.get("target_dir")
+                        .map(String::as_str)
+                        .unwrap_or("<auto-dir>")
+                )
+            }),
+        "exit_worktree" => args
+            .get("path")
+            .filter(|path| !path.is_empty())
+            .map(|path| format!("git worktree remove {path}")),
+        _ => None,
+    }
+}
+
 async fn worktree_approval_denial(
     tool_name: &str,
     prompt: &str,
@@ -107,10 +131,8 @@ pub(super) async fn execute_enter_worktree(
     };
     let base = args.get("base").cloned();
     let target_dir = args.get("target_dir").map(std::path::PathBuf::from);
-    let permission_command = match &target_dir {
-        Some(dir) => format!("git worktree add {} {}", dir.display(), branch),
-        None => format!("git worktree add <auto-dir> {}", branch),
-    };
+    let permission_command =
+        worktree_permission_command("enter_worktree", args).expect("validated branch");
     if let Some(denial) = worktree_approval_denial(
         "enter_worktree",
         "Create this git worktree?",
@@ -178,7 +200,8 @@ pub(super) async fn execute_exit_worktree(
             });
         }
     };
-    let permission_command = format!("git worktree remove {}", path.display());
+    let permission_command =
+        worktree_permission_command("exit_worktree", args).expect("validated path");
     if let Some(denial) = worktree_approval_denial(
         "exit_worktree",
         "Remove this git worktree?",

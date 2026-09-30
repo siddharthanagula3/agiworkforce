@@ -93,6 +93,7 @@ pub async fn run_repl(
 
     let mut session =
         AgentSession::new_with_provider(model, sys_context, custom_system_prompt, provider);
+    session.additional_context_dirs = crate::path_security::registered_additional_workspace_roots();
     session.apply_ui_config(config);
     crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
@@ -816,6 +817,7 @@ pub async fn attach_url_context(url: &str, session: &mut AgentSession) -> Result
         args: std::collections::HashMap::from([("url".to_string(), url.to_string())]),
     };
     let opts = crate::tools::ToolExecOptions {
+        additional_workspace_roots: session.additional_context_dirs.clone(),
         mcp_tool_definitions: None,
         require_confirmation: false,
         auto_approve_safe: session.auto_approve_safe,
@@ -823,7 +825,7 @@ pub async fn attach_url_context(url: &str, session: &mut AgentSession) -> Result
         quiet: true,
         approval_callback: None,
         privacy_mode: session.privacy_mode,
-        workspace_root: std::env::current_dir().ok(),
+        workspace_root: session.workspace_root(),
     };
     let result = crate::tools::execute_tool_with_opts(&call, &opts).await?;
     if !result.success {
@@ -850,6 +852,7 @@ pub async fn run_user_shell_command(
         args: std::collections::HashMap::from([("command".to_string(), cmd.to_string())]),
     };
     let opts = crate::tools::ToolExecOptions {
+        additional_workspace_roots: session.additional_context_dirs.clone(),
         mcp_tool_definitions: None,
         require_confirmation,
         auto_approve_safe: session.auto_approve_safe,
@@ -857,11 +860,7 @@ pub async fn run_user_shell_command(
         quiet: session.quiet,
         approval_callback: None,
         privacy_mode: session.privacy_mode,
-        workspace_root: session
-            .managed_session
-            .as_ref()
-            .and_then(|managed| managed.workspace_root.clone())
-            .or_else(|| std::env::current_dir().ok()),
+        workspace_root: session.workspace_root(),
     };
     let result = crate::tools::execute_tool_with_opts(&call, &opts).await?;
     let context_msg = format!(
@@ -884,6 +883,7 @@ async fn run_advisor_question(
         args: std::collections::HashMap::from([("question".to_string(), question.to_string())]),
     };
     let opts = crate::tools::ToolExecOptions {
+        additional_workspace_roots: Vec::new(),
         mcp_tool_definitions: None,
         require_confirmation: false,
         auto_approve_safe: true,

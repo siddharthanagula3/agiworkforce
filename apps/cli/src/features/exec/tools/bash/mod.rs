@@ -86,34 +86,33 @@ pub(super) async fn execute_run_command(
         .await;
     }
 
-    let result: std::io::Result<std::process::Output> = if crate::sandbox::sandbox_disabled() {
-        let command_process = match &structured {
-            Some((program, args)) => {
-                let mut process = tokio::process::Command::new(program);
-                process.args(args);
-                process
+    let cwd = crate::path_security::validation_workspace();
+    let unrestricted = crate::sandbox::sandbox_disabled_for_workspace(&cwd);
+    let result: std::io::Result<std::process::Output> = {
+        if !unrestricted {
+            if let Some(refusal) = internal_destination_refusal(command) {
+                return Ok(refusal);
             }
-            None => crate::process_tree::shell_command(command),
+        }
+        let network = if unrestricted {
+            crate::sandbox::NetworkPolicy::Allow
+        } else {
+            sandbox_network_policy(command, require_confirmation, approval_callback).await
         };
-        let mut command_process = command_process;
-        crate::interactive::mark_agent_spawned(&mut command_process);
-        if let Some(dir) = &working_dir {
-            command_process.current_dir(dir);
-        }
-        crate::process_tree::output(command_process, None, Some(COMMAND_TIMEOUT)).await
-    } else {
-        if let Some(refusal) = internal_destination_refusal(command) {
-            return Ok(refusal);
-        }
-        let network =
-            sandbox_network_policy(command, require_confirmation, approval_callback).await;
-        let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let run_in = working_dir.clone().unwrap_or_else(|| cwd.clone());
         let cmd = command.to_string();
         let structured = structured.clone();
         let sandbox_result = async move {
-            let mgr = crate::sandbox::SandboxManager::for_command_execution(cwd.clone(), network)
-                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            let mgr = if unrestricted {
+                crate::sandbox::SandboxManager::new(
+                    crate::sandbox::SandboxPolicy::DangerFullAccess,
+                    cwd.clone(),
+                )
+                .with_network(network)
+            } else {
+                crate::sandbox::SandboxManager::for_agent_command(cwd.clone(), network)
+                    .map_err(|e| std::io::Error::other(e.to_string()))?
+            };
             let executed = match &structured {
                 Some((program, args)) => {
                     crate::sandbox::execute_sandboxed_program_with_timeout(
@@ -238,17 +237,23 @@ async fn start_in_background(
         success: false,
         output,
     };
-    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let cwd = crate::path_security::validation_workspace();
     let run_in = working_dir.unwrap_or_else(|| cwd.clone());
-    let manager = if crate::sandbox::sandbox_disabled() {
-        None
+    let manager = if crate::sandbox::sandbox_disabled_for_workspace(&cwd) {
+        Some(
+            crate::sandbox::SandboxManager::new(
+                crate::sandbox::SandboxPolicy::DangerFullAccess,
+                cwd.clone(),
+            )
+            .with_network(crate::sandbox::NetworkPolicy::Allow),
+        )
     } else {
         if let Some(refusal) = internal_destination_refusal(command) {
             return Ok(refusal);
         }
         let network =
             sandbox_network_policy(command, require_confirmation, approval_callback).await;
-        match crate::sandbox::SandboxManager::for_command_execution(cwd, network) {
+        match crate::sandbox::SandboxManager::for_agent_command(cwd, network) {
             Ok(manager) => Some(manager),
             Err(error) => {
                 return Ok(refuse(format!(
@@ -289,7 +294,9 @@ async fn start_in_background(
 
 pub(super) async fn execute_command_output(
     args: &HashMap<String, String>,
+    pending_input: Option<crate::terminals::InputTransaction>,
     require_confirmation: bool,
+    approved_this_call: bool,
     approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let result = |success: bool, output: String| ToolResult {
@@ -314,7 +321,7 @@ pub(super) async fn execute_command_output(
         ));
     };
     print_tool_status("command_output", &background.id);
-    if let Some(input) = args.get("input").filter(|input| !input.is_empty()) {
+    if args.get("input").is_some_and(|input| !input.is_empty()) {
         if background.state() != crate::terminals::CommandState::Running {
             let output = crate::terminals::read_new(&background, std::time::Duration::ZERO).await;
             return Ok(result(
@@ -325,29 +332,53 @@ pub(super) async fn execute_command_output(
                 ),
             ));
         }
-        let typed: String = input
-            .chars()
-            .filter(|character| !character.is_control() || matches!(character, '\n' | '\r'))
-            .collect();
-        if !typed.trim().is_empty() {
-            match approve_command(
-                "command_output",
-                typed.trim(),
-                vec![format!(
-                    "typed into {}, which runs: {}",
-                    background.id,
-                    redact_tool_output(&background.command)
-                )],
-                require_confirmation,
-                approval_callback,
+        let Some(input) = pending_input else {
+            return Ok(result(
+                false,
+                "Input could not be validated for this running command".into(),
+            ));
+        };
+        let evaluation = crate::features::exec::exec_policy::evaluate_command(
+            &crate::features::exec::exec_policy::load_policy()?,
+            input.cumulative_input(),
+        );
+        if evaluation.decision == agiworkforce_execpolicy::Decision::Forbidden {
+            return Ok(result(
+                false,
+                "Input was blocked by the execution policy and was not sent".into(),
+            ));
+        }
+        if !approved_this_call
+            && (require_confirmation
+                || (evaluation.decision == agiworkforce_execpolicy::Decision::Prompt
+                    && evaluation.matched_rule))
+        {
+            let request = ApprovalRequest::new(
+                ApprovalRequestKind::Exec {
+                    command: format!("Input to {}", background.id),
+                },
+                "Allow sending input to this running command?",
+                vec![background.id.clone()],
             )
-            .await?
-            {
-                Ok(_) => {}
-                Err(refusal) => return Ok(refusal),
+            .with_tool_subject("command_output", serde_json::json!({"id": background.id}))
+            .requiring_explicit_decision();
+            let allowed = match request_approval(approval_callback, request).await {
+                Some(decision) => approval_allows(decision),
+                None if !std::io::IsTerminal::is_terminal(&std::io::stdin()) => false,
+                None => Confirm::new()
+                    .with_prompt("Allow sending input to this running command?")
+                    .default(false)
+                    .interact()
+                    .unwrap_or(false),
+            };
+            if !allowed {
+                return Ok(result(
+                    false,
+                    "Input was not approved and was not sent".into(),
+                ));
             }
         }
-        if let Err(error) = crate::terminals::send_input(&background, input).await {
+        if let Err(error) = input.send().await {
             return Ok(result(false, format!("{error:#}")));
         }
     }
@@ -411,6 +442,10 @@ pub(super) async fn approve_command(
     // executes. A `Forbidden` decision is a hard block that no confirmation can
     // override. Confirmation is only waived when EVERY segment matched an explicit
     // allow rule.
+    let asks = require_confirmation
+        && crate::permissions::PermissionStore::load()
+            .unwrap_or_default()
+            .asks_before(command);
     {
         use crate::features::exec::exec_policy::{evaluate_command, load_policy};
         use agiworkforce_execpolicy::Decision;
@@ -427,7 +462,7 @@ pub(super) async fn approve_command(
                 }));
             }
             Decision::Prompt if evaluation.matched_rule => require_confirmation = true,
-            Decision::Allow if policy_waives_confirmation(&evaluation, command) => {
+            Decision::Allow if !asks && policy_waives_confirmation(&evaluation, command) => {
                 require_confirmation = false
             }
             Decision::Prompt | Decision::Allow => {}
@@ -437,7 +472,7 @@ pub(super) async fn approve_command(
     if require_confirmation {
         let safety = classify_command(command);
         let hook_bypass = bypasses_git_hooks(command);
-        if !matches!(safety, CommandSafety::Safe) {
+        if asks || !matches!(safety, CommandSafety::Safe) {
             let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
 
             match saved_command_decision(&perms, command, safety) {
@@ -595,6 +630,12 @@ pub(super) fn command_working_dir(
         return Ok(None);
     };
     let dir = crate::path_security::validate_workspace_path(requested)?;
+    let workspace = crate::path_security::validation_workspace()
+        .canonicalize()
+        .map_err(|error| format!("Cannot resolve command workspace: {error}"))?;
+    if !dir.starts_with(&workspace) {
+        return Err("Working directory is outside the command workspace".to_string());
+    }
     if !dir.is_dir() {
         return Err(format!("{requested} is not a directory"));
     }
@@ -678,7 +719,7 @@ pub(super) fn saved_command_decision(
     safety: CommandSafety,
 ) -> Option<bool> {
     match perms.check_command_allowing_hook_bypass(command) {
-        Some(true) if safety == CommandSafety::Dangerous => None,
+        Some(true) if safety == CommandSafety::Dangerous || perms.asks_before(command) => None,
         decision => decision,
     }
 }
@@ -687,6 +728,70 @@ pub(super) fn saved_command_decision(
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn working_directory_cannot_use_an_additional_root() {
+        let workspace = tempfile::tempdir().unwrap();
+        let extra = tempfile::tempdir().unwrap();
+        let args = HashMap::from([(
+            "working_dir".to_string(),
+            extra.path().display().to_string(),
+        )]);
+        let result = crate::path_security::scope_workspace_paths_sync(
+            workspace.path().canonicalize().unwrap(),
+            vec![extra.path().canonicalize().unwrap()],
+            || command_working_dir(&args),
+        );
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn foreground_command_uses_scoped_workspace_by_default() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let args = HashMap::from([("command".to_string(), "pwd".to_string())]);
+        let result = crate::path_security::scope_workspace_paths(
+            Some(root.clone()),
+            Vec::new(),
+            execute_run_command(&args, false, None),
+        )
+        .await
+        .unwrap();
+        assert!(result.success, "{}", result.output);
+        assert!(result
+            .output
+            .lines()
+            .any(|line| line == root.to_string_lossy()));
+    }
+
+    #[tokio::test]
+    async fn background_command_uses_scoped_workspace_by_default() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let args = HashMap::from([
+            ("command".to_string(), "pwd > command-cwd.txt".to_string()),
+            ("run_in_background".to_string(), "true".to_string()),
+        ]);
+        let result = crate::path_security::scope_workspace_paths(
+            Some(root.clone()),
+            Vec::new(),
+            execute_run_command(&args, false, None),
+        )
+        .await
+        .unwrap();
+        assert!(result.success, "{}", result.output);
+        let marker = root.join("command-cwd.txt");
+        for _ in 0..100 {
+            if marker.exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            std::fs::read_to_string(marker).unwrap().trim(),
+            root.to_string_lossy()
+        );
+    }
 
     #[test]
     fn network_needing_commands_are_recognised_through_chains() {
@@ -947,6 +1052,24 @@ mod tests {
         perms.deny_always("rm");
         assert_eq!(
             saved_command_decision(&perms, dangerous, CommandSafety::Dangerous),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn an_ask_rule_outranks_a_saved_allow_but_not_a_saved_deny() {
+        let mut perms = crate::permissions::PermissionStore::default();
+        perms.allow_always("cargo publish");
+        perms.ask_always("cargo publish");
+
+        assert_eq!(
+            saved_command_decision(&perms, "cargo publish --dry-run", CommandSafety::Unknown),
+            None
+        );
+
+        perms.deny_always("cargo publish");
+        assert_eq!(
+            saved_command_decision(&perms, "cargo publish", CommandSafety::Unknown),
             Some(false)
         );
     }

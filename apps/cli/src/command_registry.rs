@@ -221,7 +221,7 @@ fn append_tui_shortcuts(help: &mut String) {
     help.push_str("\nKeyboard shortcuts:\n");
     let _ = writeln!(
         help,
-        "  {:<14} Cycle mode: Default -> Plan -> AcceptEdits -> Bypass -> FullAuto",
+        "  {:<14} Cycle mode: Default -> Plan -> AcceptEdits, then Bypass -> FullAuto when started with --allow-dangerously-skip-permissions",
         "Shift+Tab"
     );
     let _ = writeln!(help, "  {:<14} Open command palette", "/");

@@ -332,6 +332,109 @@ function fakeRuntime(
 describe('LocalRuntimeClient', () => {
   afterEach(() => vi.useRealTimers());
 
+  it('passes bypass launch authority only from the trusted consent callback', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      bypassPermissionsAvailable: () => true,
+      spawn: runtime.spawn,
+    });
+    try {
+      await client.initialize();
+      expect(vi.mocked(runtime.spawn).mock.calls[0]?.slice(0, 2)).toEqual([
+        'agi',
+        ['--allow-dangerously-skip-permissions', 'app-server'],
+      ]);
+    } finally {
+      await client.dispose();
+    }
+  });
+
+  it('keeps launch authority off when the consent callback refuses it', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      bypassPermissionsAvailable: () => false,
+      spawn: runtime.spawn,
+    });
+    try {
+      await client.initialize();
+      expect(vi.mocked(runtime.spawn).mock.calls[0]?.[1]).toEqual(['app-server']);
+    } finally {
+      await client.dispose();
+    }
+  });
+
+  it('blocks new turns until a consent transition is explicitly restarted', async () => {
+    const runtime = fakeRuntime();
+    let consented = false;
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      bypassPermissionsAvailable: () => consented,
+      spawn: runtime.spawn,
+    });
+    const turn = {
+      threadId: 'thread-1',
+      input: [{ type: 'text' as const, text: 'Continue', text_elements: [] }],
+    };
+    try {
+      await client.initialize();
+      consented = true;
+      await expect(client.startTurn(turn)).rejects.toThrow('Restart Local Runtime');
+      expect(runtime.requests.map((request) => request.method)).toEqual(['initialize']);
+      await client.restart();
+      expect(vi.mocked(runtime.spawn).mock.calls[1]?.[1]).toEqual([
+        '--allow-dangerously-skip-permissions',
+        'app-server',
+      ]);
+      await expect(client.startTurn(turn)).resolves.toMatchObject({ status: 'running' });
+      consented = false;
+      await expect(client.startTurn(turn)).rejects.toThrow('Restart Local Runtime');
+      await client.restart();
+      expect(vi.mocked(runtime.spawn).mock.calls[2]?.[1]).toEqual(['app-server']);
+      await expect(client.startTurn(turn)).resolves.toMatchObject({ status: 'running' });
+    } finally {
+      await client.dispose();
+    }
+  });
+
+  it('keeps interruption and approvals available while a permission restart is deferred', async () => {
+    const runtime = fakeRuntime();
+    let consented = false;
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      bypassPermissionsAvailable: () => consented,
+      spawn: runtime.spawn,
+    });
+    try {
+      await client.initialize();
+      consented = true;
+      await client.interruptTurn({ threadId: 'thread-1', turnId: 'turn-1' });
+      await client.respondToApproval({
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        requestId: 'approval-1',
+        decision: 'denied',
+      });
+      expect(runtime.requests.map((request) => request.method)).toEqual([
+        'initialize',
+        'turn/interrupt',
+        'approval/respond',
+      ]);
+      expect(vi.mocked(runtime.spawn).mock.calls).toHaveLength(1);
+    } finally {
+      await client.dispose();
+    }
+  });
+
   it('rejects servers that can silently ignore security-sensitive turn controls', async () => {
     const runtime = fakeRuntime(4);
     const client = new LocalRuntimeClient({

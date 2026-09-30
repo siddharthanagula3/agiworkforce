@@ -67,4 +67,30 @@ describe('the developer-runtime banner has a way out', () => {
 
     expect(restartAll).toHaveBeenCalledOnce();
   });
+  it.each([undefined, 'Restart Local Runtime'])(
+    'requires an explicit restart after permissions change (%s)',
+    async (choice) => {
+      vi.spyOn(LocalRuntimePool.prototype, 'requiresPermissionRestart').mockReturnValue(true);
+      const restart = vi
+        .spyOn(LocalRuntimePool.prototype, 'restartAll')
+        .mockResolvedValue({ restartedWorkspaces: 1 });
+      vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce(choice);
+      const listeners = listenersOf(vscode.workspace.onDidChangeConfiguration);
+      for (const listener of listeners) {
+        listener({ affectsConfiguration: (key: string) => key === 'agiWorkforce.agent.mode' });
+      }
+      await vi.waitFor(() =>
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+          'Apply the changed agent permissions?',
+          expect.objectContaining({
+            modal: true,
+            detail: expect.stringContaining('stops running local turns'),
+          }),
+          'Restart Local Runtime',
+        ),
+      );
+      if (choice === undefined) expect(restart).not.toHaveBeenCalled();
+      else await vi.waitFor(() => expect(restart).toHaveBeenCalledOnce());
+    },
+  );
 });
