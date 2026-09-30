@@ -199,6 +199,63 @@ function normalizeSha(value) {
   return SHA_PATTERN.test(sha) ? sha : null;
 }
 
+export async function readRelayRelease(rawBaseUrl, options = {}) {
+  const baseUrl = parseDeploymentUrl(rawBaseUrl);
+  if (
+    baseUrl.protocol !== 'https:' ||
+    baseUrl.username ||
+    baseUrl.password ||
+    baseUrl.search ||
+    baseUrl.hash
+  ) {
+    throw new Error('The relay origin must use HTTPS without credentials');
+  }
+  const response = await (options.fetchImpl ?? fetch)(new URL('/health', baseUrl), {
+    headers: { accept: 'application/json' },
+    redirect: 'manual',
+    cache: 'no-store',
+    signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS),
+  });
+  if (response.status !== 200) throw new Error('The relay did not return a healthy response');
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error('The relay did not return its health contract');
+  }
+  if (
+    body?.status !== 'healthy' ||
+    body.dependencies?.database?.status !== 'ok' ||
+    !options.expectedTarget ||
+    body.deployment?.target !== options.expectedTarget ||
+    !/^[0-9a-f]{40}$/.test(body.deployment?.version ?? '')
+  ) {
+    throw new Error('The relay did not return a verified release identity');
+  }
+  return body.deployment.version;
+}
+
+export async function verifyRelayCommit(rawBaseUrl, expectedSha, options = {}) {
+  if (!/^[0-9a-f]{40}$/.test(expectedSha ?? '')) {
+    throw new Error('The relay candidate must be a full commit');
+  }
+  const sleep = options.sleep ?? delay;
+  let lastError;
+  for (let attempt = 0; attempt < (options.attempts ?? ATTEMPTS); attempt += 1) {
+    try {
+      const deployed = await readRelayRelease(rawBaseUrl, options);
+      if (deployed !== expectedSha) throw new Error('The relay is serving another candidate');
+      return deployed;
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 < (options.attempts ?? ATTEMPTS)) {
+        await sleep(options.retryDelayMs ?? RETRY_DELAY_MS);
+      }
+    }
+  }
+  throw lastError;
+}
+
 // Env-supplied SHAs are sometimes abbreviated, so compare on the shorter prefix.
 function sameCommit(deployed, expected) {
   const length = Math.min(deployed.length, expected.length);

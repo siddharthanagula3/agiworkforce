@@ -77,7 +77,7 @@ function stepByName(job, name) {
 
 /** A step fails the job unless it is told not to. */
 function stepCanFailTheJob(step) {
-  return step['continue-on-error'] !== true;
+  return step['continue-on-error'] === undefined || step['continue-on-error'] === false;
 }
 
 function checkDeployingJobs({ document, contract, workflow, errors }) {
@@ -157,6 +157,30 @@ function checkRequiredSteps({ document, contract, workflow, errors }) {
           `gates. ${gate.why}`,
       );
     }
+    for (const consumer of gate.gatesJobs ?? []) {
+      const deploying = byName.get(consumer);
+      if (!deploying || !upstreamJobs(document, consumer).has(gate.job)) {
+        errors.push(`${workflow}:${consumer} does not wait for ${gate.id}. ${gate.why}`);
+      }
+      if (
+        !stepCanFailTheJob(job) ||
+        step.if !== undefined ||
+        /\b(always|failure|cancelled)\s*\(/.test(deploying?.if ?? '')
+      ) {
+        errors.push(`${workflow}:${consumer} can bypass ${gate.id}. ${gate.why}`);
+      }
+    }
+    if (
+      gate.command &&
+      (step.if !== undefined ||
+        !stepCanFailTheJob(job) ||
+        step.run?.trim() !== gate.command ||
+        step.env?.GITHUB_SHA !== contract.verifiedCommitRef ||
+        checkoutRefs(job).length !== 1 ||
+        checkoutRefs(job)[0] !== contract.verifiedCommitRef)
+    ) {
+      errors.push(`${workflow}:${gate.job} does not run ${gate.id} on the verified candidate.`);
+    }
     const body = [step.run, step.uses, JSON.stringify(step.with ?? '')].filter(Boolean).join('\n');
     if (typeof gate.evidence === 'string' && !new RegExp(gate.evidence).test(body)) {
       errors.push(
@@ -178,6 +202,87 @@ function checkRequiredSteps({ document, contract, workflow, errors }) {
     if (typeof gate.why !== 'string' || gate.why.trim().length === 0) {
       errors.push(`${CONTRACT_PATH}: gate ${gate.id} carries no reason.`);
     }
+  }
+}
+
+function checkRelayGates({ repoRoot, contract, errors }) {
+  const relay = contract.releaseReadiness?.relay;
+  if (!relay) {
+    errors.push(`${CONTRACT_PATH}: declares no relay release owner.`);
+    return;
+  }
+  let document;
+  try {
+    document = readWorkflow(repoRoot, relay.workflow);
+  } catch {
+    errors.push(`${relay.workflow}: could not read the relay deploy gates.`);
+    return;
+  }
+  const candidateRef = '${{ needs.gate.outputs.sha }}';
+  for (const [name, deploymentStep] of [
+    ['deploy-fly', 'Deploy to Fly.io'],
+    ['deploy-railway', 'Deploy to Railway'],
+  ]) {
+    const job = document.jobs?.[name];
+    const gate = stepByName(job, 'Require green scanning for this commit');
+    const order = steps(job).map((step) => step.name);
+    if (
+      !job ||
+      !job.if?.includes("github.ref == 'refs/heads/main'") ||
+      !stepCanFailTheJob(job) ||
+      !gate ||
+      !stepCanFailTheJob(gate) ||
+      gate.if !== undefined ||
+      gate.env?.GITHUB_SHA !== candidateRef ||
+      gate.run?.trim() !== 'node scripts/production-deploy-scope.mjs --release-ready' ||
+      order.indexOf(deploymentStep) < 0 ||
+      order.indexOf(gate?.name) > order.indexOf(deploymentStep) ||
+      checkoutRefs(job).length !== 1 ||
+      checkoutRefs(job)[0] !== candidateRef
+    ) {
+      errors.push(`${relay.workflow}:${name} can deploy without candidate CI and scanning.`);
+    }
+  }
+  const serving = document.jobs?.[relay.job];
+  const verification = stepByName(serving, `${relay.verificationStepPrefix}${candidateRef}`);
+  if (
+    serving?.name !== relay.jobName ||
+    !verification ||
+    !stepCanFailTheJob(verification) ||
+    verification.if !== undefined ||
+    verification.env?.GITHUB_SHA !== candidateRef ||
+    verification.run?.trim() !== 'node scripts/production-deploy-scope.mjs --verify-relay'
+  ) {
+    errors.push(`${relay.workflow}:${relay.job} does not verify the serving candidate.`);
+  }
+  const production = readWorkflow(repoRoot, contract.workflow);
+  const webConcurrency = production.jobs?.['deploy-web']?.concurrency;
+  if (
+    !serving?.concurrency?.group ||
+    webConcurrency?.group !== serving.concurrency.group ||
+    webConcurrency['cancel-in-progress'] !== false
+  ) {
+    errors.push(`${contract.workflow}: web does not serialize with the serving relay deployment.`);
+  }
+  const publication = document.jobs?.['relay-verdict'];
+  const receipt = stepByName(publication, 'Publish the relay verdict for this commit');
+  if (
+    !publication ||
+    !stepCanFailTheJob(publication) ||
+    !upstreamJobs(document, 'relay-verdict').has(relay.job) ||
+    !publication.if?.includes('always()') ||
+    !receipt ||
+    !stepCanFailTheJob(receipt) ||
+    receipt.if !== undefined ||
+    receipt.env?.GITHUB_SHA !== candidateRef ||
+    receipt.env?.RELAY_DEPLOY_RESULT !== `\${{ needs.${relay.job}.result }}` ||
+    receipt.run?.trim() !== 'node scripts/production-deploy-scope.mjs --publish-relay-verdict' ||
+    checkoutRefs(publication).length !== 1 ||
+    checkoutRefs(publication)[0] !== candidateRef
+  ) {
+    errors.push(
+      `${relay.workflow}: does not publish the candidate relay verdict on both outcomes.`,
+    );
   }
 }
 
@@ -222,6 +327,7 @@ export function checkDeployGates(repoRoot = REPO_ROOT) {
 
   const deployingJobs = checkDeployingJobs({ document, contract, workflow, errors });
   checkRequiredSteps({ document, contract, workflow, errors });
+  checkRelayGates({ repoRoot, contract, errors });
   checkRollback({ document, contract, workflow, errors });
 
   return { errors, report: { deployingJobs, gates: contract.gates.length } };

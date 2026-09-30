@@ -6,6 +6,8 @@ import {
   verifyApiHost,
   verifyDeployedCommit,
   verifyDeployment,
+  readRelayRelease,
+  verifyRelayCommit,
 } from './verify-deployment.mjs';
 
 const HEAD_SHA = 'e15df56e3a1b4c5d6e7f8091a2b3c4d5e6f70819';
@@ -370,4 +372,106 @@ test('the probed host is the api. subdomain of the app host, not the app host', 
 
 test('an app URL that is not http or https is rejected before any API host probe', () => {
   assert.throws(() => apiHostUrlFor('ftp://agiworkforce.com'), /must use http or https/);
+});
+
+test('relay verification reads the existing healthy release contract and checks the full candidate', async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url: new URL(url), options });
+    return new Response(
+      JSON.stringify({
+        status: 'healthy',
+        deployment: { target: 'fly', version: HEAD_SHA },
+        dependencies: { database: { status: 'ok' } },
+      }),
+    );
+  };
+  assert.equal(
+    await verifyRelayCommit('https://relay.fixture.invalid', HEAD_SHA, {
+      expectedTarget: 'fly',
+      fetchImpl,
+      attempts: 1,
+    }),
+    HEAD_SHA,
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url.pathname, '/health');
+  assert.equal(calls[0].options.redirect, 'manual');
+  assert.equal(calls[0].options.cache, 'no-store');
+});
+
+test('a healthy old relay, abbreviated identity, wrong target or unready database cannot create a serving verdict', async () => {
+  for (const mutate of [
+    (body) => {
+      body.deployment.version = OLDER_SHA;
+    },
+    (body) => {
+      body.deployment.version = HEAD_SHA.slice(0, 7);
+    },
+    (body) => {
+      delete body.deployment.version;
+    },
+    (body) => {
+      body.deployment.target = 'railway';
+    },
+    (body) => {
+      body.dependencies.database.status = 'down';
+    },
+    (body) => {
+      body.status = 'degraded';
+    },
+  ]) {
+    let reached = 0;
+    const fetchImpl = async () => {
+      reached += 1;
+      const body = {
+        status: 'healthy',
+        deployment: { target: 'fly', version: HEAD_SHA },
+        dependencies: { database: { status: 'ok' } },
+      };
+      mutate(body);
+      return new Response(JSON.stringify(body));
+    };
+    await assert.rejects(
+      verifyRelayCommit('https://relay.fixture.invalid', HEAD_SHA, {
+        expectedTarget: 'fly',
+        fetchImpl,
+        attempts: 1,
+      }),
+    );
+    assert.equal(reached, 1);
+  }
+});
+
+test('relay verification waits for the candidate and refuses redirects, invalid bodies and transport errors', async () => {
+  let calls = 0;
+  const fetchImpl = async () =>
+    new Response(
+      JSON.stringify({
+        status: 'healthy',
+        deployment: { target: 'fly', version: ++calls === 1 ? OLDER_SHA : HEAD_SHA },
+        dependencies: { database: { status: 'ok' } },
+      }),
+    );
+  assert.equal(
+    await verifyRelayCommit('https://relay.fixture.invalid', HEAD_SHA, {
+      expectedTarget: 'fly',
+      fetchImpl,
+      attempts: 2,
+      sleep: async () => {},
+    }),
+    HEAD_SHA,
+  );
+  assert.equal(calls, 2);
+  for (const fetchImpl of [
+    async () => new Response('', { status: 302 }),
+    async () => new Response('not json'),
+    async () => {
+      throw new Error('transport unavailable');
+    },
+  ]) {
+    await assert.rejects(
+      readRelayRelease('https://relay.fixture.invalid', { expectedTarget: 'fly', fetchImpl }),
+    );
+  }
 });
