@@ -159,7 +159,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
         <label htmlFor="file-upload" className="cursor-pointer block">
           <Upload className="w-10 h-10 mx-auto text-gray-400 mb-3" />
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Drag & drop files here, or click to select
+            Drag &amp; drop files here, or click to select
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
             {accept === '*' ? 'Any file type' : `Accepted: ${accept.replace(/,/g, ', ')}`}

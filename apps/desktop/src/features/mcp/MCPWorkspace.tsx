@@ -77,7 +77,7 @@ export default function MCPWorkspace() {
         <div className="flex items-center gap-2">
           <Server className="w-5 h-5 text-primary" />
           <h1 className="text-h2">Tool Management</h1>
-          <span className="text-sm text-muted-foreground">Integrations & Automations</span>
+          <span className="text-sm text-muted-foreground">Integrations &amp; Automations</span>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={isLoading}>

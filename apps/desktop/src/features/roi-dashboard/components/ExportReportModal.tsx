@@ -14,13 +14,7 @@ import {
 } from '@/ui/Dialog';
 import { Input } from '@/ui/Input';
 import { Label } from '@/ui/Label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import type { ExportOptions } from '../../../types/roi';
 import { useROIStore } from '../roiStore';
 
@@ -167,7 +161,7 @@ export function ExportReportModal({ open, onClose }: ExportReportModalProps) {
                   htmlFor="includeCharts"
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
-                  Charts & Visualizations
+                  Charts &amp; Visualizations
                 </label>
               </div>
 
