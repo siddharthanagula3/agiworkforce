@@ -38,11 +38,18 @@ describe('deployment build contexts', () => {
             readFileSync(path.join(root, 'services/signaling-server', file)),
           );
         }
+        mkdirSync(path.join(service, 'scripts'));
+        writeFileSync(
+          path.join(service, 'scripts/check-fly-machines.mjs'),
+          readFileSync(path.join(root, 'services/signaling-server/scripts/check-fly-machines.mjs')),
+        );
         writeFileSync(
           path.join(bin, cli),
           `#!/usr/bin/env node
 const fs = require('node:fs');
-fs.writeFileSync(process.env.RELAY_CAPTURE, JSON.stringify({cwd:process.cwd(),args:process.argv.slice(2)}));
+const args = process.argv.slice(2);
+if (args[0] === 'machine' && args[1] === 'list') process.stdout.write(JSON.stringify([{id:'fixture',state:'started'}]));
+else fs.writeFileSync(process.env.RELAY_CAPTURE, JSON.stringify({cwd:process.cwd(),args}));
 `,
           { mode: 0o755 },
         );
@@ -51,7 +58,7 @@ fs.writeFileSync(process.env.RELAY_CAPTURE, JSON.stringify({cwd:process.cwd(),ar
         );
         const script = step.run.replaceAll('${{ env.SERVICE_DIR }}', 'services/signaling-server');
         const capture = path.join(temporary, 'capture.json');
-        execFileSync('/bin/sh', ['-eu', '-c', script], {
+        execFileSync('/bin/bash', ['-eu', '-c', script], {
           cwd: temporary,
           env: { ...process.env, PATH: `${bin}:${process.env['PATH']}`, RELAY_CAPTURE: capture },
         });

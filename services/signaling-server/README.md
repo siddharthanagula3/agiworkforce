@@ -43,12 +43,39 @@ is canonical, and it is the only one a client, a probe or a runbook may use:
 
 The canonical name is a DNS record pointed at whichever target is serving.
 A provider-assigned origin is a failover address, never an address to publish:
-Fly runs with `auto_stop_machines = 'stop'` and `min_machines_running = 0`, so a
-client pinned to the provider origin reaches a machine that may be asleep, and a
-target swap silently strands it.
+A client pinned to a provider origin cannot follow a canonical target swap.
 
 Set both origins in `SIGNALING_FAILOVER_URLS` so the readiness check proves each
 target is serving, not only the one DNS currently resolves to.
+
+## Serving topology
+
+Peer matching, admission and connection limits belong to one process. Serve the
+canonical endpoint from exactly one relay instance. Do not run multiple Railway
+replicas or route the same canonical endpoint to Fly and Railway concurrently.
+Failover requires disconnecting the old instance before switching the endpoint;
+clients reconnect to the replacement. Database credential rotation remains
+atomic, but it does not distribute live peer ownership.
+
+The Fly configuration disables automatic stopping and requires one minimum
+machine.
+The deployment workflow checks machine inventory before deployment, creates no
+HA spare (`--ha=false`), then requires exactly one started machine afterward.
+Production deployment jobs share one concurrency group and finish without
+cancellation by another run. A stopped spare also blocks deployment. The guard counts all non-destroyed
+machines, so reconcile any unexpected helper or spare before retrying. It never
+deletes a machine automatically. Manual scaling outside this workflow remains
+unsupported and must preserve the same topology.
+
+Deployments use a rolling restart of the sole machine, with `/ready` gating
+traffic and `SIGTERM` followed by a 35-second host grace period. The process
+allows at most 30 seconds for shutdown. A restart interrupts WebSocket peers;
+clients reconnect with their latest role credential.
+
+Configuration and CLI behavior were checked against [Fly's configuration
+reference](https://docs.fly.io/reference/configuration/) and the [machine-list
+implementation](https://github.com/superfly/flyctl/blob/master/internal/command/machine/list.go)
+on September 30, 2026.
 
 ## Probes
 
