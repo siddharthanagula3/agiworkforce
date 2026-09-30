@@ -21,27 +21,68 @@ const isTest = process.env['NODE_ENV'] === 'test';
 
 const logLevel = process.env['LOG_LEVEL'] ?? (isProduction ? 'info' : isTest ? 'silent' : 'debug');
 
-export const logger = pino({
-  name: 'signaling-server',
-  level: logLevel,
-  ...(isProduction
-    ? {
-        formatters: {
-          level: (label) => ({ level: label }),
-        },
-        timestamp: pino.stdTimeFunctions.isoTime,
-      }
-    : {
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'HH:MM:ss.l',
-            ignore: 'pid,hostname',
-          },
-        },
-      }),
-});
+export const LOG_REDACTED_PATHS = [
+  'error',
+  '*.error',
+  'stack',
+  '*.stack',
+  'pairToken',
+  '*.pairToken',
+  'pairTokens',
+  '*.pairTokens',
+  'token',
+  '*.token',
+  'secret',
+  '*.secret',
+  'authorization',
+  '*.authorization',
+  'headers',
+  '*.headers',
+  'connectionString',
+  '*.connectionString',
+  'metadata',
+  '*.metadata',
+  'payload',
+  '*.payload',
+  'sdp',
+  '*.sdp',
+  'candidate',
+  '*.candidate',
+] as const;
+
+export function buildLogger(destination?: pino.DestinationStream, level: string = logLevel) {
+  return pino(
+    {
+      name: 'signaling-server',
+      level,
+      redact: { paths: [...LOG_REDACTED_PATHS], censor: '[REDACTED]' },
+      ...(isProduction || destination
+        ? {
+            formatters: {
+              level: (label: string) => ({ level: label }),
+            },
+            timestamp: pino.stdTimeFunctions.isoTime,
+          }
+        : {
+            transport: {
+              target: 'pino-pretty',
+              options: {
+                colorize: true,
+                translateTime: 'HH:MM:ss.l',
+                ignore: 'pid,hostname',
+              },
+            },
+          }),
+    },
+    destination,
+  );
+}
+
+export const logger = buildLogger();
+
+export function logUnhandledRejection(error: unknown): void {
+  logger.fatal({ error }, 'Unhandled promise rejection');
+}
 
 export function createChildLogger(correlationId: string) {
   return logger.child({ correlationId });

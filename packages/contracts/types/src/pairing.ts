@@ -1,3 +1,5 @@
+import { isLoopbackHostname } from './url';
+
 /**
  * Pairing Types
  *
@@ -149,4 +151,50 @@ export function isRelayPairingCode(value: string): boolean {
 
 export function isBridgePairingCode(value: string): boolean {
   return typeof value === 'string' && BRIDGE_PAIRING_CODE_PATTERN.test(value);
+}
+
+function isSecureRelayAddress(
+  value: unknown,
+  secureProtocol: string,
+  localProtocol: string,
+  allowInsecureLoopback: boolean,
+): value is string {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > 2_048 ||
+    /[\s\\]/u.test(value) ||
+    [...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)
+  )
+    return false;
+  try {
+    const url = new URL(value);
+    if (
+      url.username ||
+      url.password ||
+      url.hash ||
+      value.includes('#') ||
+      /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/iu.test(value)
+    )
+      return false;
+    return (
+      url.protocol === secureProtocol ||
+      (allowInsecureLoopback && url.protocol === localProtocol && isLoopbackHostname(url.hostname))
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isSecureRelayUrl(value: unknown, allowInsecureLoopback = false): value is string {
+  return isSecureRelayAddress(value, 'wss:', 'ws:', allowInsecureLoopback);
+}
+
+export function isSecureRelayHttpUrl(
+  value: unknown,
+  allowInsecureLoopback = false,
+): value is string {
+  return (
+    isSecureRelayAddress(value, 'https:', 'http:', allowInsecureLoopback) && !value.includes('?')
+  );
 }

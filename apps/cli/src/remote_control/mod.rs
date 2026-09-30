@@ -152,13 +152,68 @@ fn now_iso() -> String {
 fn web_base() -> Result<String> {
     let raw = std::env::var("AGIWORKFORCE_API_BASE")
         .unwrap_or_else(|_| crate::tier_cache::default_api_base().to_string());
-    crate::tier_cache::resolve_agi_api_base(&raw)
-        .ok_or_else(|| anyhow!("The AGI Workforce address is not valid: {raw}"))
+    validate_pairing_base(&raw)
+}
+
+fn parse_remote_url(raw: &str) -> Result<reqwest::Url> {
+    if raw
+        .chars()
+        .any(|character| character.is_control() || character.is_whitespace() || character == '\\')
+    {
+        bail!("Remote Control address contains unsafe characters");
+    }
+    let url = reqwest::Url::parse(raw).context("Remote Control address is not valid")?;
+    let authority = raw
+        .split_once("://")
+        .map(|(_, rest)| rest.split(['/', '?', '#']).next().unwrap_or_default());
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || authority.is_some_and(|value| value.contains('@'))
+        || url.fragment().is_some()
+        || url.host_str().is_none()
+    {
+        bail!("Remote Control address contains unsupported authority or fragment");
+    }
+    Ok(url)
+}
+
+fn local_http_base(url: &reqwest::Url) -> bool {
+    url.scheme() == "http" && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"))
+}
+
+fn validate_pairing_base(raw: &str) -> Result<String> {
+    let url = parse_remote_url(raw)?;
+    if url.query().is_some() {
+        bail!("Remote Control API address cannot contain a query");
+    }
+    crate::tier_cache::resolve_agi_api_base(raw)
+        .ok_or_else(|| anyhow!("The AGI Workforce address is not valid"))
+}
+
+fn relay_http_url(raw: &str, origin: &str) -> Result<reqwest::Url> {
+    let mut url = parse_remote_url(raw)?;
+    let local = parse_remote_url(&validate_pairing_base(origin)?)?;
+    match url.scheme() {
+        "wss" => {
+            url.set_scheme("https")
+                .map_err(|_| anyhow!("Invalid relay scheme"))?;
+        }
+        "ws" if local_http_base(&local)
+            && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]")) =>
+        {
+            url.set_scheme("http")
+                .map_err(|_| anyhow!("Invalid relay scheme"))?;
+        }
+        _ => bail!("Remote Control requires an encrypted relay outside explicit local development"),
+    }
+    Ok(url)
 }
 
 async fn request_pairing(base: &str, jwt: &str) -> Result<Pairing> {
+    let base = validate_pairing_base(base)?;
     let client = reqwest::Client::builder()
         .timeout(PAIRING_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
         .build()?;
     let response = crate::cloud::handshake::apply(client.post(format!("{base}{PAIR_PATH}")))
         .header("Authorization", format!("Bearer {jwt}"))
@@ -189,10 +244,7 @@ async fn request_pairing(base: &str, jwt: &str) -> Result<Pairing> {
         && code
             .chars()
             .all(|character| character.is_ascii_uppercase() || character.is_ascii_digit());
-    if !valid_code
-        || !(ws_url.starts_with("wss://") || ws_url.starts_with("ws://"))
-        || pair_token.is_empty()
-    {
+    if !valid_code || relay_http_url(&ws_url, &base).is_err() || pair_token.is_empty() {
         bail!("AGI Workforce answered the pairing request with something this build cannot read");
     }
     Ok(Pairing {
@@ -203,20 +255,17 @@ async fn request_pairing(base: &str, jwt: &str) -> Result<Pairing> {
 }
 
 async fn open_socket(ws_url: &str, origin: &str) -> Result<Socket> {
-    let http_url = if let Some(rest) = ws_url.strip_prefix("wss://") {
-        format!("https://{rest}")
-    } else if let Some(rest) = ws_url.strip_prefix("ws://") {
-        format!("http://{rest}")
-    } else {
-        bail!("Remote Control needs a ws:// or wss:// relay address");
-    };
+    let http_url = relay_http_url(ws_url, origin)?;
     let key = {
         use rand::Rng;
         let mut bytes = [0u8; 16];
         rand::rng().fill_bytes(&mut bytes);
         base64::engine::general_purpose::STANDARD.encode(bytes)
     };
-    let client = reqwest::Client::builder().http1_only().build()?;
+    let client = reqwest::Client::builder()
+        .http1_only()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?;
     let response = client
         .get(http_url)
         .header("Connection", "Upgrade")
@@ -374,7 +423,23 @@ impl<H: DeveloperSessionHost> Relay<H> {
             .and_then(Value::as_str)
             .unwrap_or_default();
         match kind {
-            "registered" => Ok((Vec::new(), None)),
+            "registered" => {
+                let Some(token) = frame["pairToken"].as_str().filter(|token| {
+                    token.len() == <Sha256 as Digest>::output_size() * 2
+                        && token
+                            .bytes()
+                            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+                }) else {
+                    return Ok((
+                        Vec::new(),
+                        Some(SessionEnd::Ended(
+                            "The relay returned an invalid pairing credential".to_string(),
+                        )),
+                    ));
+                };
+                self.pairing.pair_token = token.to_string();
+                Ok((Vec::new(), None))
+            }
             "peer_ready" => {
                 let metadata = frame.get("metadata").cloned().unwrap_or(Value::Null);
                 let Some(salt) = metadata.get("dispatchSalt").and_then(Value::as_str) else {
@@ -622,6 +687,234 @@ mod tests {
     use super::*;
 
     const PROMPT: Duration = Duration::from_millis(500);
+
+    #[test]
+    fn relay_url_policy_requires_tls_or_explicit_local_configuration() {
+        for url in ["wss://relay.example/ws", "wss://[::1]/ws"] {
+            assert!(relay_http_url(url, "https://agiworkforce.com").is_ok());
+        }
+        for url in [
+            "ws://localhost:4000/ws",
+            "ws://127.0.0.1:4000/ws",
+            "ws://[::1]:4000/ws",
+        ] {
+            assert!(relay_http_url(url, "http://127.0.0.1:3100").is_ok());
+            assert!(relay_http_url(url, "https://agiworkforce.com").is_err());
+        }
+        for url in [
+            "ws://relay.example/ws",
+            "ws://192.168.1.2/ws",
+            "ws://127.0.0.2/ws",
+            "ws://localhost.evil.example/ws",
+            "wss://user@relay.example/ws",
+            "wss://@relay.example/ws",
+            "wss://relay.example/ws#fragment",
+            "wss://relay.example/ws\n",
+            "wss://relay.example/ws path",
+            "wss://relay.example/ws\\path",
+        ] {
+            assert!(
+                relay_http_url(url, "http://127.0.0.1:3100").is_err(),
+                "{url:?}"
+            );
+        }
+        assert!(relay_http_url("ws://127.0.0.1/ws", "http://relay.example").is_err());
+        for base in [
+            "https://user@agiworkforce.com",
+            "http://127.0.0.1/?token=fixture",
+            "http://127.0.0.1/#fragment",
+            "https://agiworkforce.com\\@evil.example",
+        ] {
+            assert!(validate_pairing_base(base).is_err(), "{base:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn unsafe_relay_urls_are_rejected_before_connection() {
+        for suffix in ["#fragment", "/ws\\path", "/ws\n"] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let url = format!("ws://{address}{suffix}");
+            let (connection, operation) = tokio::join!(
+                tokio::time::timeout(Duration::from_millis(100), listener.accept()),
+                tokio::time::timeout(
+                    Duration::from_millis(150),
+                    open_socket(&url, "http://127.0.0.1")
+                ),
+            );
+            assert!(
+                matches!(operation, Ok(Err(_))),
+                "unsafe URL must fail promptly: {suffix:?}"
+            );
+            assert!(
+                connection.is_err(),
+                "unsafe URL reached the listener: {suffix:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn production_origin_refuses_plaintext_loopback_before_connection() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let url = format!("ws://{address}/ws");
+        let (connection, operation) = tokio::join!(
+            tokio::time::timeout(Duration::from_millis(100), listener.accept()),
+            tokio::time::timeout(
+                Duration::from_millis(150),
+                open_socket(&url, "https://agiworkforce.com")
+            ),
+        );
+        assert!(
+            matches!(operation, Ok(Err(_))),
+            "plaintext relay must fail promptly"
+        );
+        assert!(
+            connection.is_err(),
+            "production relay reached a plaintext listener"
+        );
+    }
+
+    #[tokio::test]
+    async fn unsafe_pairing_base_is_rejected_before_credentials_are_sent() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let base = format!("http://user:password@{address}");
+        let (connection, operation) = tokio::join!(
+            tokio::time::timeout(Duration::from_millis(100), listener.accept()),
+            tokio::time::timeout(
+                Duration::from_millis(150),
+                request_pairing(&base, "private-fixture-jwt")
+            ),
+        );
+        assert!(
+            matches!(operation, Ok(Err(_))),
+            "unsafe pairing base must fail promptly"
+        );
+        assert!(
+            connection.is_err(),
+            "unsafe pairing base reached the listener"
+        );
+    }
+
+    fn test_relay(
+        workspace: &Path,
+        store: &Path,
+    ) -> Relay<crate::app_server::CliDeveloperSessionHost> {
+        let host = crate::app_server::CliDeveloperSessionHost::new_with_store(
+            crate::config::CliConfig::default(),
+            workspace.to_path_buf(),
+            crate::runtime::session_control::ManagedSessionStore::new(store.to_path_buf()),
+            false,
+        )
+        .expect("host");
+        Relay {
+            code_host: CodeHost::new(
+                Arc::new(host),
+                "root".to_string(),
+                "folder".to_string(),
+                workspace.to_string_lossy().to_string(),
+            ),
+            pairing: Pairing {
+                code: "ABCDEF123456".to_string(),
+                ws_url: "ws://127.0.0.1".to_string(),
+                pair_token: "a".repeat(64),
+            },
+            secret: "c".repeat(64),
+            dispatch: None,
+            receipts: VecDeque::new(),
+            receipt_keys: HashSet::new(),
+            phone: None,
+            status: Arc::new(|_| {}),
+        }
+    }
+
+    #[tokio::test]
+    async fn serve_stops_before_peer_frames_after_invalid_registration() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        let mut relay = test_relay(workspace.path(), store.path());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept");
+            let mut socket = tokio_tungstenite::accept_async(stream)
+                .await
+                .expect("handshake");
+            while let Some(Ok(message)) = socket.next().await {
+                let Message::Text(text) = message else {
+                    continue;
+                };
+                if serde_json::from_str::<Value>(&text).expect("json")["type"] == "register" {
+                    break;
+                }
+            }
+            socket
+                .send(Message::Text(
+                    json!({ "type": "registered" }).to_string().into(),
+                ))
+                .await
+                .expect("reply");
+            socket
+                .send(Message::Text(
+                    json!({ "type": "peer_ready", "metadata": { "dispatchSalt": "valid-salt" } })
+                        .to_string()
+                        .into(),
+                ))
+                .await
+                .expect("peer frame");
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        });
+        let socket = connect(&format!("ws://{address}/ws"), "http://127.0.0.1")
+            .await
+            .expect("connect");
+        let (_stop_sender, stop) = tokio::sync::watch::channel(false);
+        let (_notification_sender, mut notifications) = tokio::sync::broadcast::channel(1);
+        let end = tokio::time::timeout(PROMPT, relay.serve(&stop, socket, &mut notifications))
+            .await
+            .expect("prompt termination");
+        assert!(matches!(end, SessionEnd::Ended(_)));
+        assert!(relay.dispatch.is_none());
+        assert_eq!(relay.pairing.pair_token, "a".repeat(64));
+        server.await.expect("server");
+    }
+
+    #[tokio::test]
+    async fn registration_replaces_the_credential_used_by_reconnect() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        let mut relay = test_relay(workspace.path(), store.path());
+        let token = "b".repeat(64);
+        let (_, end) = relay
+            .on_frame(&json!({ "type": "registered", "pairToken": token }).to_string())
+            .await
+            .expect("frame");
+        assert!(end.is_none());
+        let Message::Text(frame) = register_frame(&relay.pairing) else {
+            panic!("registration")
+        };
+        assert_eq!(
+            serde_json::from_str::<Value>(&frame).expect("json")["pairToken"],
+            token
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_registration_replacement_ends_the_session() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        for token in [Value::Null, json!("short"), json!("A".repeat(64))] {
+            let mut relay = test_relay(workspace.path(), store.path());
+            let (_, end) = relay
+                .on_frame(&json!({ "type": "registered", "pairToken": token }).to_string())
+                .await
+                .expect("frame");
+            assert!(matches!(end, Some(SessionEnd::Ended(_))));
+            assert_eq!(relay.pairing.pair_token, "a".repeat(64));
+        }
+    }
 
     fn cancel_soon() -> Stop {
         let (sender, receiver) = tokio::sync::watch::channel(false);

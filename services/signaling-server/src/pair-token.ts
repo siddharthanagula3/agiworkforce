@@ -1,4 +1,5 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { z } from 'zod';
 
 export type PairTokenRole = 'desktop' | 'mobile';
 
@@ -7,12 +8,62 @@ export interface PairTokenClaims {
   role: PairTokenRole;
   createdAt: number;
   accountId: string;
+  deviceId: string;
+  generation: string;
+}
+
+export interface PairCredential {
+  deviceId: string;
+  generation: string;
+}
+
+const credentialSchema = z
+  .object({
+    deviceId: z.guid(),
+    generation: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+
+const CREDENTIAL_KEYS: Readonly<Record<PairTokenRole, string>> = Object.freeze({
+  desktop: 'desktopPairCredential',
+  mobile: 'mobilePairCredential',
+});
+
+export function pairCredentialKey(role: PairTokenRole): string {
+  return CREDENTIAL_KEYS[role];
+}
+
+export function pairCredential(
+  metadata: Record<string, unknown> | null | undefined,
+  role: PairTokenRole,
+): PairCredential | null {
+  const parsed = credentialSchema.safeParse(metadata?.[pairCredentialKey(role)]);
+  return parsed.success ? parsed.data : null;
+}
+
+export function freshPairCredential(deviceId: string | null): PairCredential {
+  return { deviceId: deviceId ?? randomUUID(), generation: randomBytes(32).toString('hex') };
+}
+
+export function withPairCredential(
+  metadata: Record<string, unknown> | null | undefined,
+  role: PairTokenRole,
+  credential: PairCredential,
+): Record<string, unknown> {
+  return { ...(metadata ?? {}), [pairCredentialKey(role)]: credential };
 }
 
 // Length-prefixed so no field can be moved into its neighbour: an account id is
 // opaque to this server and may contain the separator.
 function signedPayload(claims: PairTokenClaims): string {
-  return [claims.code, claims.role, String(claims.createdAt), claims.accountId]
+  return [
+    claims.code,
+    claims.role,
+    String(claims.createdAt),
+    claims.accountId,
+    claims.deviceId,
+    claims.generation,
+  ]
     .map((field) => `${field.length}:${field}`)
     .join('|');
 }
@@ -58,8 +109,13 @@ export function verifyPairToken(
   presented: string | undefined,
   claims: PairTokenClaims,
 ): boolean {
-  if (!presented) return false;
+  if (!presented || !/^[a-f0-9]{64}$/.test(presented)) return false;
   if (!claims.accountId) return false;
+  if (
+    !credentialSchema.safeParse({ deviceId: claims.deviceId, generation: claims.generation })
+      .success
+  )
+    return false;
   let presentedBuf: Buffer;
   try {
     presentedBuf = Buffer.from(presented, 'hex');
