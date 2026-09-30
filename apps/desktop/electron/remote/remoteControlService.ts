@@ -48,6 +48,7 @@ function createSocket(wsUrl: string): WebSocket {
 export function configureRemoteControl(emit: (state: RemoteControlState) => void): void {
   host?.stop();
   host = createRemoteControlHost({
+    allowInsecureLoopback: !app.isPackaged,
     code: {
       listSessions: () => listDeveloperSessions({ includeCloud: true }),
       readActivity: readDeveloperSessionActivity,

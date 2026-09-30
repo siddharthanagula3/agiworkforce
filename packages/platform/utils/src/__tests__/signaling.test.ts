@@ -36,6 +36,7 @@ function connect(): { socket: FakeWebSocket; events: SignalingEvent[]; client: S
   const events: SignalingEvent[] = [];
   const client = new SignalingClient({
     wsUrl: 'ws://localhost:4000',
+    allowInsecureLoopback: true,
     code: 'ABCD1234WXYZ',
     pairToken: 'token',
     role: 'desktop',
@@ -59,6 +60,7 @@ describe('SignalingClient, server-sent reconnect messages', () => {
   it('retains the replacement credential before notifying the registration owner', () => {
     const options = {
       wsUrl: 'ws://localhost:4000',
+      allowInsecureLoopback: true,
       code: 'ABCD1234WXYZ',
       role: 'desktop' as const,
       pairToken: 'a'.repeat(64),
@@ -163,6 +165,44 @@ describe('SignalingClient, server-sent reconnect messages', () => {
 });
 
 describe('SignalingClient, host-supplied socket', () => {
+  it('permits an explicitly enabled local development socket', () => {
+    const createSocket = vi.fn((url: string) => new FakeWebSocket(url) as unknown as WebSocket);
+    const client = new SignalingClient({
+      wsUrl: 'ws://[::1]:4000/ws',
+      allowInsecureLoopback: true,
+      code: 'ABCD1234WXYZ',
+      pairToken: 'private-credential',
+      role: 'desktop',
+      onEvent: vi.fn(),
+      createSocket,
+    });
+    expect(createSocket).toHaveBeenCalledWith('ws://[::1]:4000/ws');
+    client.close();
+  });
+
+  it.each([
+    'ws://relay.example/ws',
+    'ws://localhost:4000/ws',
+    'wss://token@relay.example/ws',
+    'wss://relay.example/ws#token',
+    'wss://relay.example/\nws',
+  ])('refuses %s before invoking a host socket factory', (wsUrl) => {
+    const createSocket = vi.fn((url: string) => new FakeWebSocket(url) as unknown as WebSocket);
+    expect(
+      () =>
+        new SignalingClient({
+          wsUrl,
+          code: 'ABCD1234WXYZ',
+          pairToken: 'private-credential',
+          role: 'desktop',
+          onEvent: vi.fn(),
+          createSocket,
+        }),
+    ).toThrow();
+    expect(createSocket).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
   it('opens the socket the host builds, so a non-browser host can present its origin', () => {
     const built: string[] = [];
     new SignalingClient({

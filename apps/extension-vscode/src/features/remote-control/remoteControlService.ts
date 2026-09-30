@@ -132,6 +132,7 @@ export class VscodeRemoteControl implements vscode.Disposable {
     private readonly _runtimes: LocalRuntimePool,
   ) {
     this._host = createRemoteControlHost({
+      allowInsecureLoopback: this._context.extensionMode === vscode.ExtensionMode.Development,
       code: this._dependencies(),
       deviceName: () =>
         t('remote.deviceName', { host: os.hostname().replace(/\.local$/iu, '') || 'VS Code' }),

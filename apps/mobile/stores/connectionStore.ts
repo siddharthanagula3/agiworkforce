@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { SignalingClient, endsPairing } from '@agiworkforce/utils/signaling';
-import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
+import { isSecureRelayUrl, type SignalingEvent, type SignalKind } from '@agiworkforce/types';
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
 import * as Crypto from 'expo-crypto';
 import Constants from 'expo-constants';
@@ -973,6 +973,10 @@ export const useConnectionStore = create<ConnectionState>()(
             }
           }
 
+          if (!isSecureRelayUrl(signalingWsUrl, __DEV__)) {
+            throw new Error('The relay address must use a secure WebSocket connection.');
+          }
+
           const appVersion = Constants.expoConfig?.version ?? '0.0.0';
 
           if (!isCurrentConnectionAttempt(attemptId)) return;
@@ -1028,6 +1032,7 @@ export const useConnectionStore = create<ConnectionState>()(
           setupPeerConnection();
 
           signalingClient = new SignalingClient({
+            allowInsecureLoopback: __DEV__,
             wsUrl: signalingWsUrl,
             code: parsed.code,
             role: 'mobile',
@@ -1154,7 +1159,30 @@ export const useConnectionStore = create<ConnectionState>()(
               }
             },
           });
-        })();
+        })().catch((error: unknown) => {
+          if (!isCurrentConnectionAttempt(attemptId)) return;
+          invalidateConnectionAttempt();
+          clearConnectWatchdog();
+          detachSignalingClient();
+          cleanupPeerConnection();
+          forgetPairingSecret();
+          hmacState = null;
+          pendingControlQueue.length = 0;
+          clearPendingControlAcks();
+          set({
+            status: 'error',
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Secure pairing could not start. Generate a new code and try again.',
+            pairingCode: null,
+            pairToken: null,
+            desktopName: null,
+            desktopMetadata: null,
+            connectionQuality: 'disconnected',
+            reconnectStartedAt: null,
+          });
+        });
       },
 
       recordHeartbeat: (latencyMs?: number) => {

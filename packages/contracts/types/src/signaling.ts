@@ -211,4 +211,5 @@ export interface SignalingClientOptions {
   onEvent: (event: SignalingEvent) => void;
   heartbeatIntervalMs?: number;
   createSocket?: (wsUrl: string) => WebSocket;
+  allowInsecureLoopback?: boolean;
 }

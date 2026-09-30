@@ -152,13 +152,68 @@ fn now_iso() -> String {
 fn web_base() -> Result<String> {
     let raw = std::env::var("AGIWORKFORCE_API_BASE")
         .unwrap_or_else(|_| crate::tier_cache::default_api_base().to_string());
-    crate::tier_cache::resolve_agi_api_base(&raw)
-        .ok_or_else(|| anyhow!("The AGI Workforce address is not valid: {raw}"))
+    validate_pairing_base(&raw)
+}
+
+fn parse_remote_url(raw: &str) -> Result<reqwest::Url> {
+    if raw
+        .chars()
+        .any(|character| character.is_control() || character.is_whitespace() || character == '\\')
+    {
+        bail!("Remote Control address contains unsafe characters");
+    }
+    let url = reqwest::Url::parse(raw).context("Remote Control address is not valid")?;
+    let authority = raw
+        .split_once("://")
+        .map(|(_, rest)| rest.split(['/', '?', '#']).next().unwrap_or_default());
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || authority.is_some_and(|value| value.contains('@'))
+        || url.fragment().is_some()
+        || url.host_str().is_none()
+    {
+        bail!("Remote Control address contains unsupported authority or fragment");
+    }
+    Ok(url)
+}
+
+fn local_http_base(url: &reqwest::Url) -> bool {
+    url.scheme() == "http" && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"))
+}
+
+fn validate_pairing_base(raw: &str) -> Result<String> {
+    let url = parse_remote_url(raw)?;
+    if url.query().is_some() {
+        bail!("Remote Control API address cannot contain a query");
+    }
+    crate::tier_cache::resolve_agi_api_base(raw)
+        .ok_or_else(|| anyhow!("The AGI Workforce address is not valid"))
+}
+
+fn relay_http_url(raw: &str, origin: &str) -> Result<reqwest::Url> {
+    let mut url = parse_remote_url(raw)?;
+    let local = parse_remote_url(&validate_pairing_base(origin)?)?;
+    match url.scheme() {
+        "wss" => {
+            url.set_scheme("https")
+                .map_err(|_| anyhow!("Invalid relay scheme"))?;
+        }
+        "ws" if local_http_base(&local)
+            && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]")) =>
+        {
+            url.set_scheme("http")
+                .map_err(|_| anyhow!("Invalid relay scheme"))?;
+        }
+        _ => bail!("Remote Control requires an encrypted relay outside explicit local development"),
+    }
+    Ok(url)
 }
 
 async fn request_pairing(base: &str, jwt: &str) -> Result<Pairing> {
+    let base = validate_pairing_base(base)?;
     let client = reqwest::Client::builder()
         .timeout(PAIRING_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
         .build()?;
     let response = crate::cloud::handshake::apply(client.post(format!("{base}{PAIR_PATH}")))
         .header("Authorization", format!("Bearer {jwt}"))
@@ -189,10 +244,7 @@ async fn request_pairing(base: &str, jwt: &str) -> Result<Pairing> {
         && code
             .chars()
             .all(|character| character.is_ascii_uppercase() || character.is_ascii_digit());
-    if !valid_code
-        || !(ws_url.starts_with("wss://") || ws_url.starts_with("ws://"))
-        || pair_token.is_empty()
-    {
+    if !valid_code || relay_http_url(&ws_url, &base).is_err() || pair_token.is_empty() {
         bail!("AGI Workforce answered the pairing request with something this build cannot read");
     }
     Ok(Pairing {
@@ -203,20 +255,17 @@ async fn request_pairing(base: &str, jwt: &str) -> Result<Pairing> {
 }
 
 async fn open_socket(ws_url: &str, origin: &str) -> Result<Socket> {
-    let http_url = if let Some(rest) = ws_url.strip_prefix("wss://") {
-        format!("https://{rest}")
-    } else if let Some(rest) = ws_url.strip_prefix("ws://") {
-        format!("http://{rest}")
-    } else {
-        bail!("Remote Control needs a ws:// or wss:// relay address");
-    };
+    let http_url = relay_http_url(ws_url, origin)?;
     let key = {
         use rand::Rng;
         let mut bytes = [0u8; 16];
         rand::rng().fill_bytes(&mut bytes);
         base64::engine::general_purpose::STANDARD.encode(bytes)
     };
-    let client = reqwest::Client::builder().http1_only().build()?;
+    let client = reqwest::Client::builder()
+        .http1_only()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?;
     let response = client
         .get(http_url)
         .header("Connection", "Upgrade")
@@ -638,6 +687,115 @@ mod tests {
     use super::*;
 
     const PROMPT: Duration = Duration::from_millis(500);
+
+    #[test]
+    fn relay_url_policy_requires_tls_or_explicit_local_configuration() {
+        for url in ["wss://relay.example/ws", "wss://[::1]/ws"] {
+            assert!(relay_http_url(url, "https://agiworkforce.com").is_ok());
+        }
+        for url in [
+            "ws://localhost:4000/ws",
+            "ws://127.0.0.1:4000/ws",
+            "ws://[::1]:4000/ws",
+        ] {
+            assert!(relay_http_url(url, "http://127.0.0.1:3100").is_ok());
+            assert!(relay_http_url(url, "https://agiworkforce.com").is_err());
+        }
+        for url in [
+            "ws://relay.example/ws",
+            "ws://192.168.1.2/ws",
+            "ws://127.0.0.2/ws",
+            "ws://localhost.evil.example/ws",
+            "wss://user@relay.example/ws",
+            "wss://@relay.example/ws",
+            "wss://relay.example/ws#fragment",
+            "wss://relay.example/ws\n",
+            "wss://relay.example/ws path",
+            "wss://relay.example/ws\\path",
+        ] {
+            assert!(
+                relay_http_url(url, "http://127.0.0.1:3100").is_err(),
+                "{url:?}"
+            );
+        }
+        assert!(relay_http_url("ws://127.0.0.1/ws", "http://relay.example").is_err());
+        for base in [
+            "https://user@agiworkforce.com",
+            "http://127.0.0.1/?token=fixture",
+            "http://127.0.0.1/#fragment",
+            "https://agiworkforce.com\\@evil.example",
+        ] {
+            assert!(validate_pairing_base(base).is_err(), "{base:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn unsafe_relay_urls_are_rejected_before_connection() {
+        for suffix in ["#fragment", "/ws\\path", "/ws\n"] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let url = format!("ws://{address}{suffix}");
+            let (connection, operation) = tokio::join!(
+                tokio::time::timeout(Duration::from_millis(100), listener.accept()),
+                tokio::time::timeout(
+                    Duration::from_millis(150),
+                    open_socket(&url, "http://127.0.0.1")
+                ),
+            );
+            assert!(
+                matches!(operation, Ok(Err(_))),
+                "unsafe URL must fail promptly: {suffix:?}"
+            );
+            assert!(
+                connection.is_err(),
+                "unsafe URL reached the listener: {suffix:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn production_origin_refuses_plaintext_loopback_before_connection() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let url = format!("ws://{address}/ws");
+        let (connection, operation) = tokio::join!(
+            tokio::time::timeout(Duration::from_millis(100), listener.accept()),
+            tokio::time::timeout(
+                Duration::from_millis(150),
+                open_socket(&url, "https://agiworkforce.com")
+            ),
+        );
+        assert!(
+            matches!(operation, Ok(Err(_))),
+            "plaintext relay must fail promptly"
+        );
+        assert!(
+            connection.is_err(),
+            "production relay reached a plaintext listener"
+        );
+    }
+
+    #[tokio::test]
+    async fn unsafe_pairing_base_is_rejected_before_credentials_are_sent() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let base = format!("http://user:password@{address}");
+        let (connection, operation) = tokio::join!(
+            tokio::time::timeout(Duration::from_millis(100), listener.accept()),
+            tokio::time::timeout(
+                Duration::from_millis(150),
+                request_pairing(&base, "private-fixture-jwt")
+            ),
+        );
+        assert!(
+            matches!(operation, Ok(Err(_))),
+            "unsafe pairing base must fail promptly"
+        );
+        assert!(
+            connection.is_err(),
+            "unsafe pairing base reached the listener"
+        );
+    }
 
     fn test_relay(
         workspace: &Path,

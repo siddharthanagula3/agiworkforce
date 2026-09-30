@@ -4,6 +4,7 @@ import type {
   SignalingClientOptions,
   SignalKind,
 } from '@agiworkforce/types';
+import { isSecureRelayUrl } from '@agiworkforce/types';
 
 export type { SignalingRole, SignalingEvent, SignalingClientOptions, SignalKind };
 
@@ -123,6 +124,9 @@ export class SignalingClient {
   }
 
   private connect() {
+    if (!isSecureRelayUrl(this.options.wsUrl, this.options.allowInsecureLoopback)) {
+      throw new Error('The relay address must use a secure WebSocket connection.');
+    }
     const socket = this.options.createSocket
       ? this.options.createSocket(this.options.wsUrl)
       : new WebSocket(this.options.wsUrl);
