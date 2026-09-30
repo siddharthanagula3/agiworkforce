@@ -20,9 +20,13 @@ import {
   issuePairToken as mintPairToken,
   pairingAccountId,
   verifyPairToken as checkPairToken,
+  freshPairCredential,
+  pairCredential,
+  withPairCredential,
+  type PairCredential,
 } from './pair-token.js';
 import {
-  bindSessionDevice,
+  rotatePairCredential,
   deleteSessionByCode,
   deleteSessionsForDevice,
   getSessionByCode,
@@ -165,16 +169,18 @@ function internalCallerKey(subjectOf: (req: Request) => unknown) {
   };
 }
 
-const REQUIRE_PAIR_TOKEN =
-  (process.env['SIGNALING_REQUIRE_PAIR_TOKEN'] ?? '1').toLowerCase() === '1' ||
-  process.env['NODE_ENV'] === 'production';
-
 function buildPairTokenSecret(): string {
   return SIGNALING_SECRET ?? COMPARE_KEY.toString('hex');
 }
 
-function issuePairToken(code: string, role: Role, createdAt: number, accountId: string): string {
-  return mintPairToken(buildPairTokenSecret(), { code, role, createdAt, accountId });
+function issuePairToken(
+  code: string,
+  role: Role,
+  createdAt: number,
+  accountId: string,
+  credential: PairCredential,
+): string {
+  return mintPairToken(buildPairTokenSecret(), { code, role, createdAt, accountId, ...credential });
 }
 
 function verifyPairToken(
@@ -183,10 +189,16 @@ function verifyPairToken(
   role: Role,
   createdAt: number,
   accountId: string | null,
+  credential: PairCredential | null,
 ): boolean {
-  if (!REQUIRE_PAIR_TOKEN) return true;
-  if (!accountId) return false;
-  return checkPairToken(buildPairTokenSecret(), presented, { code, role, createdAt, accountId });
+  if (!accountId || !credential) return false;
+  return checkPairToken(buildPairTokenSecret(), presented, {
+    code,
+    role,
+    createdAt,
+    accountId,
+    ...credential,
+  });
 }
 
 const DEFAULT_TTL_SECONDS = Number(
@@ -430,6 +442,9 @@ const pendingRehydrations = new Map<
   }
 >();
 const pendingDeletions = new Map<string, ReturnType<typeof deleteSessionByCode>>();
+type CredentialClaimState = { valid: boolean; deviceIds: readonly string[] };
+const pendingCredentialClaims = new Map<string, Set<CredentialClaimState>>();
+const credentialAdmissions = new Set<string>();
 
 metrics.setConnectionCountCallback(() => connectionManager.getConnectionCount());
 metrics.setSessionCountCallback(() => activeSessions.size);
@@ -654,9 +669,14 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
 
   logger.info({ correlationId, ttlSeconds }, 'Creating pairing session');
 
+  const credential = freshPairCredential(device?.id ?? null);
   const result = await insertSessionWithRetry(
     ttlSeconds,
-    device ? withPairingDevice(metadata, device.role, device.id) : metadata,
+    withPairCredential(
+      device ? withPairingDevice(metadata, device.role, device.id) : metadata,
+      initiator,
+      credential,
+    ),
   );
 
   if ('error' in result) {
@@ -672,7 +692,7 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
   logger.info({ correlationId, code, expiresAt }, 'Pairing session created');
   metrics.recordPairingRequest(true);
 
-  const initiatorPairToken = issuePairToken(code, initiator, createdAt, accountId);
+  const initiatorPairToken = issuePairToken(code, initiator, createdAt, accountId, credential);
 
   return res.json({
     code,
@@ -767,43 +787,90 @@ app.post('/pairings/:code/claim', pairingClaimLimiter, async (req, res) => {
     return res.status(403).json({ error: claim.reason });
   }
 
-  const activeSession = activeSessions.get(code);
-  if (activeSession?.participants.mobile) {
-    return res.status(409).json({ error: 'pairing_role_in_use' });
-  }
-
-  const deviceId = parsedBody.data.deviceId ?? null;
-  const heldBy = pairingDeviceId(sessionData.metadata, 'mobile');
-  if (heldBy !== null && heldBy !== deviceId) {
-    return res.status(409).json({ error: 'pairing_role_in_use' });
-  }
-  if (deviceId !== null && heldBy === null) {
-    const bound = await bindSessionDevice(
-      code,
-      'mobile',
-      deviceId,
-      withPairingDevice(sessionData.metadata, 'mobile', deviceId),
-    );
-    if (bound.error) {
-      logger.error({ code, error: bound.error }, 'Failed to record the device claiming a pairing');
-      return res.status(500).json({ error: 'db_update_error' });
-    }
-    if (!bound.data) {
+  const releaseAdmission = admitCredentialMutation(code, parsedBody.data.role);
+  if (!releaseAdmission) return res.status(409).json({ error: 'pairing_role_in_use' });
+  try {
+    const activeSession = activeSessions.get(code);
+    if (activeSession?.participants.mobile) {
       return res.status(409).json({ error: 'pairing_role_in_use' });
     }
-    await pendingRehydrations.get(code)?.promise;
-    const live = activeSessions.get(code);
-    if (live) live.metadata = withPairingDevice(live.metadata, 'mobile', deviceId);
-  }
-  if (deviceId !== null) connectionManager.reinstateDevice(deviceId);
 
-  return res.json({
-    code,
-    role: parsedBody.data.role,
-    pairToken: issuePairToken(code, parsedBody.data.role, sessionData.created_at, claim.accountId),
-    expiresAt: sessionData.expires_at,
-    wsUrl: publicWsUrl,
-  });
+    const deviceId = parsedBody.data.deviceId ?? null;
+    const heldBy = pairingDeviceId(sessionData.metadata, 'mobile');
+    if (heldBy !== null && heldBy !== deviceId) {
+      return res.status(409).json({ error: 'pairing_role_in_use' });
+    }
+    const previous = pairCredential(sessionData.metadata, 'mobile');
+    if (
+      previous !== null &&
+      (heldBy === null || deviceId === null || previous.deviceId !== deviceId)
+    ) {
+      return res.status(409).json({ error: 'pairing_role_in_use' });
+    }
+    if (
+      pairingDeviceIds(sessionData.metadata).some((id) => connectionManager.isDeviceRevoked(id)) ||
+      (deviceId !== null && connectionManager.isDeviceRevoked(deviceId))
+    ) {
+      return res.status(403).json({ error: 'device_revoked' });
+    }
+    return await trackCredentialClaim(
+      code,
+      [...pairingDeviceIds(sessionData.metadata), ...(deviceId === null ? [] : [deviceId])],
+      async (state) => {
+        const credential = freshPairCredential(deviceId);
+        invalidatePairingSnapshot(code);
+        const rotated = await rotatePairCredential(
+          sessionData,
+          'mobile',
+          claim.accountId,
+          previous,
+          credential,
+          deviceId,
+        );
+        if (rotated.error) return res.status(503).json({ error: 'persistence_unavailable' });
+        if (!rotated.data) return res.status(409).json({ error: 'pairing_role_in_use' });
+        const live = activeSessions.get(code);
+        if (
+          !state.valid ||
+          pendingDeletions.has(code) ||
+          sessionData.expires_at <= Date.now() ||
+          (activeSession !== undefined && live !== activeSession)
+        ) {
+          return res.status(404).json(generic404);
+        }
+        if (live?.participants.mobile)
+          return res.status(409).json({ error: 'pairing_role_in_use' });
+        if (
+          pairingDeviceIds(rotated.data.metadata).some((id) =>
+            connectionManager.isDeviceRevoked(id),
+          )
+        ) {
+          return res.status(403).json({ error: 'device_revoked' });
+        }
+        if (live) {
+          live.metadata = withPairCredential(live.metadata, 'mobile', credential);
+          if (deviceId !== null)
+            live.metadata = withPairingDevice(live.metadata, 'mobile', deviceId);
+        }
+
+        return res.json({
+          code,
+          role: parsedBody.data.role,
+          pairToken: issuePairToken(
+            code,
+            parsedBody.data.role,
+            sessionData.created_at,
+            claim.accountId,
+            credential,
+          ),
+          expiresAt: sessionData.expires_at,
+          wsUrl: publicWsUrl,
+        });
+      },
+    );
+  } finally {
+    releaseAdmission();
+  }
 });
 
 app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
@@ -854,12 +921,18 @@ app.post('/devices/:deviceId/revoke', deviceRevokeLimiter, async (req, res) => {
     pending.state.revoking = true;
   }
 
+  for (const claims of pendingCredentialClaims.values()) {
+    for (const state of claims) {
+      if (state.deviceIds.includes(deviceId)) state.valid = false;
+    }
+  }
   const { data: deletedCodes, error } = await deleteSessionsForDevice(deviceId);
   if (error) {
     logger.error({ deviceId, error }, 'Failed to delete the pairings of a revoked device');
     return res.status(500).json({ error: 'db_delete_error', closed });
   }
   for (const code of deletedCodes ?? []) {
+    for (const state of pendingCredentialClaims.get(code) ?? []) state.valid = false;
     const pending = pendingRehydrations.get(code);
     if (pending) {
       pending.state.valid = false;
@@ -1318,7 +1391,31 @@ function validateSignalPayload(kind: string, payload: unknown): boolean {
   }
 }
 
+function admitCredentialMutation(code: string, role: Role): (() => void) | null {
+  const key = `${code}:${role}`;
+  if (credentialAdmissions.has(key)) return null;
+  credentialAdmissions.add(key);
+  return () => credentialAdmissions.delete(key);
+}
+
 async function handleRegister(
+  socket: WebSocket,
+  message: RegisterMessage,
+  correlationId: string,
+): Promise<void> {
+  const releaseAdmission = admitCredentialMutation(message.code, message.role);
+  if (!releaseAdmission) {
+    refuseRetryably(socket);
+    return;
+  }
+  try {
+    await registerWithCredential(socket, message, correlationId);
+  } finally {
+    releaseAdmission();
+  }
+}
+
+async function registerWithCredential(
   socket: WebSocket,
   message: RegisterMessage,
   correlationId: string,
@@ -1371,6 +1468,7 @@ async function handleRegister(
       message.role,
       session.createdAt,
       pairingAccountId(session.metadata),
+      pairCredential(session.metadata, message.role),
     )
   ) {
     logger.warn(
@@ -1423,6 +1521,51 @@ async function handleRegister(
     return;
   }
 
+  const accountId = pairingAccountId(session.metadata);
+  const previous = pairCredential(session.metadata, message.role);
+  if (!accountId || !previous || (deviceId !== null && previous.deviceId !== deviceId)) {
+    socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
+    socket.close();
+    return;
+  }
+  const credential = freshPairCredential(previous.deviceId);
+  invalidatePairingSnapshot(message.code);
+  const rotated = await rotatePairCredential(
+    { code: session.code, created_at: session.createdAt },
+    message.role,
+    accountId,
+    previous,
+    credential,
+    deviceId,
+  );
+  if (socket.readyState !== WebSocket.OPEN) return;
+  if (rotated.error) {
+    refuseRetryably(socket);
+    return;
+  }
+  if (
+    !rotated.data ||
+    activeSessions.get(message.code) !== session ||
+    pendingDeletions.has(message.code) ||
+    isSessionExpired(session)
+  ) {
+    socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
+    socket.close();
+    return;
+  }
+  if (pairingDeviceIds(rotated.data.metadata).some((id) => connectionManager.isDeviceRevoked(id))) {
+    socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
+    socket.close();
+    return;
+  }
+  if (session.participants[message.role]) {
+    socket.send(JSON.stringify({ type: 'error', error: 'role_already_connected' }));
+    socket.close();
+    return;
+  }
+  if (deviceId !== null && !connectionManager.bindDevice(socket, deviceId)) return;
+  session.metadata = withPairCredential(session.metadata, message.role, credential);
+
   const participant: Participant = {
     socket,
     role: message.role,
@@ -1443,6 +1586,13 @@ async function handleRegister(
   socket.send(
     JSON.stringify({
       type: 'registered',
+      pairToken: issuePairToken(
+        message.code,
+        message.role,
+        session.createdAt,
+        accountId,
+        credential,
+      ),
       role: message.role,
       code: message.code,
       expiresAt: session.expiresAt,
@@ -1549,6 +1699,31 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
     kind: message.kind,
     payload: payloadToForward,
   });
+}
+
+async function trackCredentialClaim<T>(
+  code: string,
+  deviceIds: readonly string[],
+  work: (state: CredentialClaimState) => Promise<T>,
+): Promise<T> {
+  const state: CredentialClaimState = { valid: true, deviceIds };
+  const claims = pendingCredentialClaims.get(code) ?? new Set<CredentialClaimState>();
+  claims.add(state);
+  pendingCredentialClaims.set(code, claims);
+  try {
+    return await work(state);
+  } finally {
+    claims.delete(state);
+    if (claims.size === 0) pendingCredentialClaims.delete(code);
+  }
+}
+
+function invalidatePairingSnapshot(code: string): void {
+  const pending = pendingRehydrations.get(code);
+  if (pending) {
+    pending.state.valid = false;
+    pending.state.revoking = true;
+  }
 }
 
 function rehydrateSession(code: string): Promise<RehydrationOutcome> | null {
@@ -1720,6 +1895,7 @@ function endPairing(session: Session): void {
 }
 
 function deleteStoredPairing(code: string): ReturnType<typeof deleteSessionByCode> {
+  for (const state of pendingCredentialClaims.get(code) ?? []) state.valid = false;
   const existing = pendingDeletions.get(code);
   if (existing) return existing;
   const pending = pendingRehydrations.get(code);

@@ -62,13 +62,8 @@ describe('registration races with pairing lifecycle', () => {
     const deviceId = '8f76b26b-367b-4d50-8c74-6a53ee221aac';
     const row = store.rows.get(code);
     expect(row).toBeDefined();
-    const bound = await db.bindSessionDevice(
-      code,
-      'mobile',
-      deviceId,
-      withPairingDevice(row?.metadata, 'mobile', deviceId),
-    );
-    expect(bound.data).toEqual({ code });
+    if (!row) throw new Error('pairing was not stored');
+    row.metadata = withPairingDevice(row.metadata, 'mobile', deviceId);
     const revoked = await fetch(`${relay.http}/devices/${deviceId}/revoke`, {
       method: 'POST',
       headers: { authorization: `Bearer ${INTERNAL_SECRET}`, 'content-type': 'application/json' },

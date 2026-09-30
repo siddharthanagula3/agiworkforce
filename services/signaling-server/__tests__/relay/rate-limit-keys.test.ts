@@ -24,7 +24,7 @@ function claim(code: string, accountId: string, bearer = INTERNAL_SECRET): Promi
   return fetch(`${relay.http}/pairings/${code}/claim`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${bearer}` },
-    body: JSON.stringify({ role: 'mobile', accountId }),
+    body: JSON.stringify({ role: 'mobile', accountId, deviceId: ACCOUNT_C }),
   });
 }
 

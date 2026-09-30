@@ -15,6 +15,20 @@ The relay's `qrData` contains only the code. Remote-control clients generate
 their own `agiw3` QR secret locally, so the relay never receives the private
 key material used for control messages.
 
+Each successful registration atomically consumes its role credential and
+returns a replacement in `registered.pairToken`. Reconnecting clients keep the
+replacement in memory. Credentials bind the account, pairing creation time,
+role, device identifier and a random generation. The database updates only that
+role's credential, preserving the other role's concurrent changes.
+
+An authenticated mobile claim can recover a disconnected role only when its
+registered device identifier matches. Recovery rotates the credential and does
+not reinstate revoked devices. Pairings without a registered device identifier
+need a fresh pairing after losing their credential. Rotation rejects consumed
+tokens; an unused current token remains a bearer credential and must be kept
+private. Registration and recovery admission are process-local, so peer matching
+requires one serving relay process.
+
 ## Canonical endpoint
 
 Two deploy targets exist (`fly.toml` and `railway.toml`). Exactly one hostname

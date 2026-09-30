@@ -1041,7 +1041,7 @@ export const useConnectionStore = create<ConnectionState>()(
                   break;
 
                 case 'registered':
-                  set({ sessionExpiresAt: event.expiresAt });
+                  set({ sessionExpiresAt: event.expiresAt, pairToken: event.pairToken });
                   if (event.peerConnected) {
                     set({ status: 'connecting' });
                   }

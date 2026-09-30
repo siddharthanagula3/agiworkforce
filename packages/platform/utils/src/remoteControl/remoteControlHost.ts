@@ -406,6 +406,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     if (eventGeneration !== generation) return;
     switch (event.type) {
       case 'registered':
+        if (active) active = { ...active, pairToken: event.pairToken };
         registered = true;
         reconnectAttempts = 0;
         if (state.status === 'reconnecting') publish({ status: 'waiting', error: null });

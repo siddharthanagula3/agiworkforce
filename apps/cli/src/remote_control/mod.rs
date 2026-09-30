@@ -374,7 +374,23 @@ impl<H: DeveloperSessionHost> Relay<H> {
             .and_then(Value::as_str)
             .unwrap_or_default();
         match kind {
-            "registered" => Ok((Vec::new(), None)),
+            "registered" => {
+                let Some(token) = frame["pairToken"].as_str().filter(|token| {
+                    token.len() == <Sha256 as Digest>::output_size() * 2
+                        && token
+                            .bytes()
+                            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+                }) else {
+                    return Ok((
+                        Vec::new(),
+                        Some(SessionEnd::Ended(
+                            "The relay returned an invalid pairing credential".to_string(),
+                        )),
+                    ));
+                };
+                self.pairing.pair_token = token.to_string();
+                Ok((Vec::new(), None))
+            }
             "peer_ready" => {
                 let metadata = frame.get("metadata").cloned().unwrap_or(Value::Null);
                 let Some(salt) = metadata.get("dispatchSalt").and_then(Value::as_str) else {
@@ -622,6 +638,125 @@ mod tests {
     use super::*;
 
     const PROMPT: Duration = Duration::from_millis(500);
+
+    fn test_relay(
+        workspace: &Path,
+        store: &Path,
+    ) -> Relay<crate::app_server::CliDeveloperSessionHost> {
+        let host = crate::app_server::CliDeveloperSessionHost::new_with_store(
+            crate::config::CliConfig::default(),
+            workspace.to_path_buf(),
+            crate::runtime::session_control::ManagedSessionStore::new(store.to_path_buf()),
+            false,
+        )
+        .expect("host");
+        Relay {
+            code_host: CodeHost::new(
+                Arc::new(host),
+                "root".to_string(),
+                "folder".to_string(),
+                workspace.to_string_lossy().to_string(),
+            ),
+            pairing: Pairing {
+                code: "ABCDEF123456".to_string(),
+                ws_url: "ws://127.0.0.1".to_string(),
+                pair_token: "a".repeat(64),
+            },
+            secret: "c".repeat(64),
+            dispatch: None,
+            receipts: VecDeque::new(),
+            receipt_keys: HashSet::new(),
+            phone: None,
+            status: Arc::new(|_| {}),
+        }
+    }
+
+    #[tokio::test]
+    async fn serve_stops_before_peer_frames_after_invalid_registration() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        let mut relay = test_relay(workspace.path(), store.path());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept");
+            let mut socket = tokio_tungstenite::accept_async(stream)
+                .await
+                .expect("handshake");
+            while let Some(Ok(message)) = socket.next().await {
+                let Message::Text(text) = message else {
+                    continue;
+                };
+                if serde_json::from_str::<Value>(&text).expect("json")["type"] == "register" {
+                    break;
+                }
+            }
+            socket
+                .send(Message::Text(
+                    json!({ "type": "registered" }).to_string().into(),
+                ))
+                .await
+                .expect("reply");
+            socket
+                .send(Message::Text(
+                    json!({ "type": "peer_ready", "metadata": { "dispatchSalt": "valid-salt" } })
+                        .to_string()
+                        .into(),
+                ))
+                .await
+                .expect("peer frame");
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        });
+        let socket = connect(&format!("ws://{address}/ws"), "http://127.0.0.1")
+            .await
+            .expect("connect");
+        let (_stop_sender, stop) = tokio::sync::watch::channel(false);
+        let (_notification_sender, mut notifications) = tokio::sync::broadcast::channel(1);
+        let end = tokio::time::timeout(PROMPT, relay.serve(&stop, socket, &mut notifications))
+            .await
+            .expect("prompt termination");
+        assert!(matches!(end, SessionEnd::Ended(_)));
+        assert!(relay.dispatch.is_none());
+        assert_eq!(relay.pairing.pair_token, "a".repeat(64));
+        server.await.expect("server");
+    }
+
+    #[tokio::test]
+    async fn registration_replaces_the_credential_used_by_reconnect() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        let mut relay = test_relay(workspace.path(), store.path());
+        let token = "b".repeat(64);
+        let (_, end) = relay
+            .on_frame(&json!({ "type": "registered", "pairToken": token }).to_string())
+            .await
+            .expect("frame");
+        assert!(end.is_none());
+        let Message::Text(frame) = register_frame(&relay.pairing) else {
+            panic!("registration")
+        };
+        assert_eq!(
+            serde_json::from_str::<Value>(&frame).expect("json")["pairToken"],
+            token
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_registration_replacement_ends_the_session() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        for token in [Value::Null, json!("short"), json!("A".repeat(64))] {
+            let mut relay = test_relay(workspace.path(), store.path());
+            let (_, end) = relay
+                .on_frame(&json!({ "type": "registered", "pairToken": token }).to_string())
+                .await
+                .expect("frame");
+            assert!(matches!(end, Some(SessionEnd::Ended(_))));
+            assert_eq!(relay.pairing.pair_token, "a".repeat(64));
+        }
+    }
 
     fn cancel_soon() -> Stop {
         let (sender, receiver) = tokio::sync::watch::channel(false);

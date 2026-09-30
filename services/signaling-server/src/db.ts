@@ -8,7 +8,7 @@ import {
 import { queryWithStatementTimeout } from './db-query.js';
 import { withinDeadline } from './deadline.js';
 import { logger } from './logger.js';
-import type { PairTokenRole } from './pair-token.js';
+import { pairCredentialKey, type PairCredential, type PairTokenRole } from './pair-token.js';
 import { pairingDeviceKey } from './pairing-device.js';
 
 interface DbError {
@@ -157,15 +157,27 @@ export async function deleteSessionByCode(code: string): Promise<{ error: DbErro
   return queryNoReturn('DELETE FROM signaling_sessions WHERE code = $1', [code]);
 }
 
-export async function bindSessionDevice(
-  code: string,
+export async function rotatePairCredential(
+  session: Pick<SignalingSession, 'code' | 'created_at'>,
   role: PairTokenRole,
-  deviceId: string,
-  metadata: Record<string, unknown>,
-): Promise<QueryResultWrapper<{ code: string }>> {
+  accountId: string,
+  previous: PairCredential | null,
+  replacement: PairCredential,
+  registeredDeviceId: string | null,
+): Promise<QueryResultWrapper<{ metadata: Record<string, unknown> }>> {
   const sql =
-    'UPDATE signaling_sessions SET metadata = $2 WHERE code = $1 AND coalesce(metadata ->> $3::text, $4::text) = $4::text RETURNING code';
-  return queryOne<{ code: string }>(sql, [code, metadata, pairingDeviceKey(role), deviceId]);
+    "UPDATE signaling_sessions SET metadata = jsonb_set(CASE WHEN $8::text IS NULL THEN coalesce(metadata, '{}'::jsonb) ELSE jsonb_set(coalesce(metadata, '{}'::jsonb), ARRAY[$7::text], to_jsonb($8::text), true) END, ARRAY[$4::text], $6::jsonb, true) WHERE code = $1 AND created_at = $2 AND expires_at > $9 AND metadata ->> 'userId' = $3 AND metadata -> $4::text IS NOT DISTINCT FROM $5::jsonb AND (metadata ->> $7::text IS NULL OR metadata ->> $7::text = $8::text) RETURNING metadata";
+  return queryOne(sql, [
+    session.code,
+    session.created_at,
+    accountId,
+    pairCredentialKey(role),
+    previous === null ? null : JSON.stringify(previous),
+    JSON.stringify(replacement),
+    pairingDeviceKey(role),
+    registeredDeviceId,
+    Date.now(),
+  ]);
 }
 
 export async function deleteSessionsForDevice(
