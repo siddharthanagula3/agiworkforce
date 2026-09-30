@@ -39,6 +39,7 @@ function policy(overrides: Record<string, unknown> = {}, canManagePolicy = true)
         allowedMcpHosts: [],
         allowedWebDomains: [],
         blockedWebDomains: [],
+        toolRules: [],
         updatedAt: null,
         ...overrides,
       },
@@ -82,6 +83,7 @@ describe('WorkspaceConnectorPolicy plugin and MCP host lists', () => {
       allowedMcpHosts: ['*.corp.example'],
       allowedWebDomains: [],
       blockedWebDomains: [],
+      toolRules: [],
     });
   });
 
