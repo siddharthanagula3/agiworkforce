@@ -2263,13 +2263,13 @@ async fn connect_connector_internal(
                 args: Vec::new(),
                 env: HashMap::new(),
                 enabled: true,
-                transport: Some(TransportConfig::Http(HttpSseConfig {
+                transport: Some(TransportConfig::Http(Box::new(HttpSseConfig {
                     url: url.to_string(),
                     oauth_client_id,
                     oauth_client_secret,
                     oauth_token_url: token_url.map(str::to_string),
                     ..Default::default()
-                })),
+                }))),
             };
             (config.clone(), config, true)
         }
