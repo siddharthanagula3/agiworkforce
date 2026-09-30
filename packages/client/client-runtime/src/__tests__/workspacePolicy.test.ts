@@ -67,10 +67,11 @@ describe('workspace policy poller', () => {
     const stop = poller.start();
     await vi.advanceTimersByTimeAsync(0);
     expect(isWorkspaceFeatureEnabled(poller.getSnapshot().policy, 'code')).toBe(true);
+    expect(disabledWorkspaceFeatures(poller.getSnapshot().policy)).toEqual(['fast_mode']);
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(poller.getSnapshot().policy?.revision).toBe(2);
-    expect(disabledWorkspaceFeatures(poller.getSnapshot().policy)).toEqual(['code']);
+    expect(disabledWorkspaceFeatures(poller.getSnapshot().policy)).toEqual(['code', 'fast_mode']);
     expect(seen[seen.length - 1]).toBe(false);
     expect(request.mock.calls[1]?.[0]).toEqual({ 'If-None-Match': '"a"' });
     stop();

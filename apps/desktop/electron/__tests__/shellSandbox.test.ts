@@ -10,7 +10,6 @@ import {
   SEATBELT_EXECUTABLE,
   SEATBELT_NETWORK_RULES,
   SEATBELT_PROCESS_RULES,
-  SEATBELT_SHARED_WRITE_PATHS,
   SEATBELT_SYSTEM_READ_PATHS,
   bubblewrapArgs,
   detectShellSandbox,
@@ -43,15 +42,20 @@ describe('seatbelt spawn plan', () => {
     expect(plan.args[1]).toContain('(deny default)');
   });
 
-  it('allows writes only inside the approved folder, the scratch folder and shared temp', () => {
+  it('allows writes only inside the approved folder and its private scratch folder', () => {
     const profile = seatbeltProfile(base);
     expect(writeRules(profile)).toEqual([
       '(allow file-write* (literal "/dev/null"))',
-      '(allow file-write* (subpath "/tmp") (subpath "/private/tmp"))',
       '(allow file-write* (subpath "/work/project") (subpath "/scratch/agi-shell-scratch-1"))',
     ]);
     expect(profile).not.toContain('(allow default)');
     expect(profile).not.toContain(os.homedir());
+  });
+
+  it('does not grant reads of other sessions in shared temporary directories', () => {
+    const profile = seatbeltProfile(base);
+    expect(profile).not.toContain('(subpath "/tmp")');
+    expect(profile).not.toContain('(subpath "/private/tmp")');
   });
 
   it('never makes a toolchain folder writable', () => {
@@ -187,9 +191,7 @@ describe('parity with the CLI seatbelt profile', () => {
     const cliPaths = new Set(
       [...cliProfile.matchAll(/\(subpath \\?"(\/[^"{\\]*)\\?"\)/g)].map((match) => match[1]),
     );
-    expect(cliPaths).toEqual(
-      new Set([...SEATBELT_SYSTEM_READ_PATHS, ...SEATBELT_SHARED_WRITE_PATHS]),
-    );
+    expect(cliPaths).toEqual(new Set(SEATBELT_SYSTEM_READ_PATHS));
     for (const extra of SEATBELT_DESKTOP_READ_PATHS) expect(cliPaths.has(extra)).toBe(false);
   });
 });
@@ -198,16 +200,20 @@ describe.runIf(process.platform === 'darwin' && existsSync(SEATBELT_EXECUTABLE))
   'a real sandbox-exec run',
   () => {
     let folder: string;
+    let peerFolder: string;
     let root: WorkspaceRoot;
     const outside = path.join(os.homedir(), `agi-sandbox-escape-${randomUUID()}.txt`);
 
     beforeAll(async () => {
       folder = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agi-sandboxed-')));
       root = { id: 'r', path: folder, name: 'sandboxed', grantedAtMs: 0, lastOpenedAtMs: 0 };
+      peerFolder = await fs.mkdtemp('/private/tmp/agi-other-session-');
+      await fs.writeFile(path.join(peerFolder, 'token.txt'), 'other-session-fixture');
     });
 
     afterAll(async () => {
       await fs.rm(folder, { recursive: true, force: true });
+      await fs.rm(peerFolder, { recursive: true, force: true });
       await fs.rm(outside, { force: true });
     });
 
@@ -245,6 +251,26 @@ describe.runIf(process.platform === 'darwin' && existsSync(SEATBELT_EXECUTABLE))
       const result = await run(`require('fs').readdirSync(require('os').homedir())`);
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain('EPERM');
+    });
+
+    it('cannot read a different session in shared temporary storage', async () => {
+      const result = await run(
+        `console.log(require('fs').readFileSync('${path.join(peerFolder, 'token.txt')}', 'utf8'))`,
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('EPERM');
+      expect(result.stdout).not.toContain('other-session-fixture');
+    });
+
+    it('cannot overwrite a different session in shared temporary storage', async () => {
+      const result = await run(
+        `require('fs').writeFileSync('${path.join(peerFolder, 'token.txt')}', 'overwritten')`,
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('EPERM');
+      expect(await fs.readFile(path.join(peerFolder, 'token.txt'), 'utf8')).toBe(
+        'other-session-fixture',
+      );
     });
   },
 );
