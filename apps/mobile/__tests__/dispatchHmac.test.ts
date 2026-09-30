@@ -404,6 +404,39 @@ describe('Replay rejection, nonce sliding-window cache', () => {
     if (!r2.ok) expect(r2.reason).toBe('nonce_replay');
   });
 
+  it('accepts a concurrently delivered authentic nonce only once', async () => {
+    const senderState = await makeState();
+    const receiverState = await makeState();
+    const envelope = await signMessage(senderState, 'ping', {});
+
+    const results = await Promise.all([
+      verifyMessage(receiverState, envelope),
+      verifyMessage(receiverState, envelope),
+    ]);
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => !result.ok)).toEqual([{ ok: false, reason: 'nonce_replay' }]);
+    expect(receiverState.nonceCache.size).toBe(1);
+  });
+
+  it('does not let an invalid concurrent signature reserve an authentic nonce', async () => {
+    const senderState = await makeState();
+    const receiverState = await makeState();
+    const envelope = await signMessage(senderState, 'ping', {});
+
+    const results = await Promise.all([
+      verifyMessage(receiverState, { ...envelope, hmac: '00'.repeat(32) }),
+      verifyMessage(receiverState, envelope),
+    ]);
+
+    expect(results).toEqual([{ ok: false, reason: 'hmac_mismatch' }, { ok: true }]);
+    expect(receiverState.nonceCache.size).toBe(1);
+    expect(await verifyMessage(receiverState, envelope)).toEqual({
+      ok: false,
+      reason: 'nonce_replay',
+    });
+  });
+
   it('accepts different nonces for the same payload and ts', async () => {
     const senderState = await makeState();
     const receiverState = await makeState();
