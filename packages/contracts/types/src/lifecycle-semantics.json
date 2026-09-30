@@ -207,6 +207,48 @@
   ],
   "readExemptions": [
     {
+      "file": "apps/web/lib/connectors/google-user-data-runs.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "Resolves the Google provenance of a published app or retrieval source. Withdrawing its source chat cannot release copied content from no-training routing; this probe returns only the marker, never conversation content."
+    },
+    {
+      "file": "apps/web/lib/connectors/google-user-data-runs.ts",
+      "table": "web_artifacts",
+      "class": "ownership-check",
+      "why": "Resolves the owner-bound origin conversation of an indexed artifact to preserve its Google no-training constraint through withdrawal. This probe returns only the origin id; content retrieval enforces withdrawal separately."
+    },
+    {
+      "file": "apps/web/lib/connectors/google-user-data-runs.ts",
+      "table": "media_assets",
+      "class": "ownership-check",
+      "why": "Resolves the owner-bound origin conversation of an indexed library file to preserve its Google no-training constraint through withdrawal. This probe returns only the origin id; content retrieval enforces withdrawal separately."
+    },
+    {
+      "file": "apps/web/lib/connectors/google-user-data-runs.ts",
+      "table": "user_projects",
+      "class": "ownership-check",
+      "why": "Fences a project knowledge source to its owner while checking Google provenance. A withdrawn project still owns its copied or restorable source data, so withdrawal cannot erase the no-training constraint; no project content is returned."
+    },
+    {
+      "file": "apps/web/lib/connectors/google-user-data-runs.ts",
+      "table": "project_knowledge_files",
+      "class": "ownership-check",
+      "why": "Checks whether an indexed project knowledge source originated from a Google connector. Withdrawing the source cannot erase the provenance of copied or restorable text; the probe returns only a boolean and content retrieval filters withdrawal separately."
+    },
+    {
+      "file": "apps/web/lib/connectors/google-user-data.ts",
+      "table": "project_knowledge_files",
+      "class": "ownership-check",
+      "why": "Checks Google connector provenance for conversation routing and indexed descendants. A withdrawn knowledge source may already have contributed text, so it must retain its no-training constraint; these probes return no source content."
+    },
+    {
+      "file": "apps/web/lib/connectors/google-user-data.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "Reads the sticky Google provenance marker and project relationship for no-training routing, including copied or restorable content. Withdrawal cannot clear that provenance; these probes return only markers and relationship ids, not conversation content."
+    },
+    {
       "file": "apps/web/app/api/chat/conversations/[id]/messages/lib/message-thread.ts",
       "table": "web_messages",
       "class": "write-path",

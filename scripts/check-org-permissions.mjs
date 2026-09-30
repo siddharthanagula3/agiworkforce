@@ -117,7 +117,7 @@ export const PRIMARY_OWNER_ROLE_READS = new Map([
   ],
   [
     'apps/web/lib/services/organization-membership-service.ts',
-    'the one gate for the lifecycle acts only the Primary Owner may perform',
+    'owns the gates for lifecycle acts and usage-credit fast-mode activation only the Primary Owner may perform',
   ],
   [
     'apps/web/lib/services/organization-member-admin-service.ts',

@@ -80,6 +80,12 @@ export const REVOCATION_AT_CALLER = [
  */
 export const CROSS_WORKSPACE_STATEMENTS = [
   {
+    file: 'apps/web/lib/services/entitlement-resolution.ts',
+    match: /^select 1 as member from public\.organization_members where user_id = \$1 limit 1$/,
+    reason:
+      'the caller-scoped self-membership existence probe decides whether a failed seat lookup must throw; it reads no member data and must consider every workspace the authenticated user belongs to',
+  },
+  {
     file: 'apps/web/lib/services/organization-invitation-service.ts',
     match: /set status = 'expired'[\s\S]*?where status = 'pending'/,
     reason:
