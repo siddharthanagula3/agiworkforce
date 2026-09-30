@@ -411,6 +411,7 @@ const wss = new WebSocketServer({ server, path: wsPath, maxPayload: WS_MAX_PAYLO
 
 const activeSessions = new Map<string, Session>();
 const clients = new WeakMap<WebSocket, ConnectedClient>();
+const registeringClients = new WeakSet<WebSocket>();
 
 const pendingApprovals = new Map<string, PendingApproval[]>();
 
@@ -422,8 +423,13 @@ type RehydrationOutcome =
 
 const pendingRehydrations = new Map<
   string,
-  { promise: Promise<RehydrationOutcome>; createdAt: number }
+  {
+    promise: Promise<RehydrationOutcome>;
+    createdAt: number;
+    state: { valid: boolean; revoking?: boolean };
+  }
 >();
+const pendingDeletions = new Map<string, ReturnType<typeof deleteSessionByCode>>();
 
 metrics.setConnectionCountCallback(() => connectionManager.getConnectionCount());
 metrics.setSessionCountCallback(() => activeSessions.size);
@@ -816,13 +822,7 @@ app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
 
   const code = codeValidation.data;
 
-  const active = activeSessions.get(code);
-  if (active) {
-    disconnectParticipants(active);
-    activeSessions.delete(code);
-  }
-
-  const { error } = await deleteSessionByCode(code);
+  const { error } = await deleteStoredPairing(code);
 
   if (error) {
     logger.error({ code, error }, 'Failed to delete pairing session');
@@ -848,13 +848,26 @@ app.post('/devices/:deviceId/revoke', deviceRevokeLimiter, async (req, res) => {
   const reason = bodyValidation.data.reason ?? DEVICE_REVOKED_REASON;
   const closed = connectionManager.revokeDevice(deviceId, reason);
   const endedCodes = new Set(endPairingsNamingDevice(deviceId));
+  for (const pending of pendingRehydrations.values()) {
+    pending.state.valid = false;
+    pending.state.revoking = true;
+  }
 
   const { data: deletedCodes, error } = await deleteSessionsForDevice(deviceId);
   if (error) {
     logger.error({ deviceId, error }, 'Failed to delete the pairings of a revoked device');
     return res.status(500).json({ error: 'db_delete_error', closed });
   }
-  for (const code of deletedCodes ?? []) endedCodes.add(code);
+  for (const code of deletedCodes ?? []) {
+    const pending = pendingRehydrations.get(code);
+    if (pending) {
+      pending.state.valid = false;
+      pending.state.revoking = false;
+    }
+    const active = activeSessions.get(code);
+    if (active) endPairing(active);
+    endedCodes.add(code);
+  }
 
   logger.info({ deviceId, reason, closed, pairingsEnded: endedCodes.size }, 'Device revoked');
   return res.json({ closed, pairingsEnded: endedCodes.size });
@@ -1020,16 +1033,23 @@ wss.on('connection', (socket, request) => {
     }
 
     if (!clients.has(socket)) {
+      if (registeringClients.has(socket)) {
+        socket.send(JSON.stringify({ type: 'error', error: 'registration_in_progress' }));
+        return;
+      }
       const parsed = registerMessageSchema.safeParse(data);
       if (!parsed.success) {
         socket.send(JSON.stringify({ type: 'error', error: 'registration_required' }));
         return;
       }
-      handleRegister(socket, parsed.data, correlationId).catch((error: unknown) => {
-        logger.error({ correlationId, error }, 'Registration failed');
-        metrics.recordError('register_failed');
-        refuseRetryably(socket);
-      });
+      registeringClients.add(socket);
+      void handleRegister(socket, parsed.data, correlationId)
+        .catch((error: unknown) => {
+          logger.error({ correlationId, error }, 'Registration failed');
+          metrics.recordError('register_failed');
+          refuseRetryably(socket);
+        })
+        .finally(() => registeringClients.delete(socket));
       return;
     }
 
@@ -1306,6 +1326,7 @@ async function handleRegister(
     }
 
     const outcome = await rehydration;
+    if (socket.readyState !== WebSocket.OPEN) return;
     if (outcome.kind === 'unavailable') {
       logger.error(
         { correlationId, code: message.code, reason: outcome.reason },
@@ -1520,6 +1541,9 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
 }
 
 function rehydrateSession(code: string): Promise<RehydrationOutcome> | null {
+  if (pendingDeletions.has(code)) {
+    return Promise.resolve({ kind: 'unavailable', reason: 'db_error' });
+  }
   const pending = pendingRehydrations.get(code);
   if (pending) return pending.promise;
 
@@ -1533,7 +1557,8 @@ function rehydrateSession(code: string): Promise<RehydrationOutcome> | null {
     if (pendingRehydrations.size > MAX_PENDING_REHYDRATIONS) return null;
   }
 
-  const entry = { promise: loadSession(code), createdAt: Date.now() };
+  const state = { valid: true };
+  const entry = { promise: loadSession(code, state), createdAt: Date.now(), state };
   pendingRehydrations.set(code, entry);
   const clear = () => {
     if (pendingRehydrations.get(code) === entry) pendingRehydrations.delete(code);
@@ -1542,11 +1567,18 @@ function rehydrateSession(code: string): Promise<RehydrationOutcome> | null {
   return entry.promise;
 }
 
-async function loadSession(code: string): Promise<RehydrationOutcome> {
+async function loadSession(
+  code: string,
+  state: { valid: boolean; revoking?: boolean },
+): Promise<RehydrationOutcome> {
   const existing = activeSessions.get(code);
   if (existing) return { kind: 'session', session: existing };
 
   const lookup = await lookupSession(() => getSessionByCode(code), REHYDRATION_TIMEOUT_MS);
+  if (!state.valid) {
+    return state.revoking ? { kind: 'unavailable', reason: 'db_error' } : { kind: 'missing' };
+  }
+  if (pendingDeletions.has(code)) return { kind: 'missing' };
   if (lookup.kind !== 'found') return lookup;
   if (lookup.row.expires_at <= Date.now()) return { kind: 'expired' };
 
@@ -1676,6 +1708,25 @@ function endPairing(session: Session): void {
   pendingApprovals.delete(session.code);
 }
 
+function deleteStoredPairing(code: string): ReturnType<typeof deleteSessionByCode> {
+  const existing = pendingDeletions.get(code);
+  if (existing) return existing;
+  const pending = pendingRehydrations.get(code);
+  if (pending) {
+    pending.state.valid = false;
+    pending.state.revoking = false;
+  }
+  const active = activeSessions.get(code);
+  if (active) endPairing(active);
+  const operation = deleteSessionByCode(code);
+  pendingDeletions.set(code, operation);
+  const clear = () => {
+    if (pendingDeletions.get(code) === operation) pendingDeletions.delete(code);
+  };
+  void operation.then(clear, clear);
+  return operation;
+}
+
 async function handleEndPairing(socket: WebSocket, correlationId: string): Promise<void> {
   metrics.recordMessage('end_pairing');
   const client = clients.get(socket);
@@ -1688,13 +1739,13 @@ async function handleEndPairing(socket: WebSocket, correlationId: string): Promi
   const session = activeSessions.get(client.code);
   if (session) endPairing(session);
 
-  const { error } = await deleteSessionByCode(client.code);
+  const { error } = await deleteStoredPairing(client.code);
   if (error) logger.error({ code: client.code, error }, 'Failed to delete an ended pairing');
 }
 
 async function endRevokedPairing(session: Session): Promise<void> {
   endPairing(session);
-  const { error } = await deleteSessionByCode(session.code);
+  const { error } = await deleteStoredPairing(session.code);
   if (error) logger.error({ code: session.code, error }, 'Failed to delete a revoked pairing');
 }
 
