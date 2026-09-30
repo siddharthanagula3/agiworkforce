@@ -648,7 +648,7 @@
       "digest": "c44e248279b97b4d",
       "implementation": [
         "apps/web/app/api",
-        "apps/web/lib/legal/published-counts.ts#measureRouteIsolation"
+        "apps/web/lib/legal/route-isolation-counts.ts#measureRouteIsolation"
       ],
       "proof": [
         {
