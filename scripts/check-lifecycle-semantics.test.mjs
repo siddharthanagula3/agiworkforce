@@ -9,6 +9,7 @@ import {
   CONTRACT_PATH,
   MIGRATIONS_DIR,
   READ_CLASSES,
+  REPO_ROOT,
   SEMANTICS_MODULE,
   checkLifecycleSemantics,
   findMarkedTables,
@@ -95,6 +96,12 @@ test.after(() => {
 
 test('a clean fixture passes', () => {
   const { errors, unrecorded } = checkLifecycleSemantics(fixture());
+  assert.deepEqual(errors, []);
+  assert.deepEqual(unrecorded, []);
+});
+
+test('repository content reads preserve withdrawal and provenance reads declare their purpose', () => {
+  const { errors, unrecorded } = checkLifecycleSemantics(REPO_ROOT);
   assert.deepEqual(errors, []);
   assert.deepEqual(unrecorded, []);
 });

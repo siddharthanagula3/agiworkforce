@@ -36,6 +36,8 @@ const SERVER_ONLY_COLUMNS = Object.freeze({
     created_by: 'provenance is an audit field, not a transcript field',
     updated_by: 'provenance is an audit field, not a transcript field',
     origin_surface: 'provenance is an audit field, not a transcript field',
+    google_user_data_at:
+      'sticky Google source provenance enforces no-training routing on the server and is never client-controlled transcript data',
   }),
   message: Object.freeze({
     conversation_id: 'the reader already addressed the conversation to get here',

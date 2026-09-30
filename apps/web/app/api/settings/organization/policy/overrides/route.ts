@@ -19,7 +19,8 @@ import {
 } from '@/lib/services/organization-policy-override-service';
 import { policyScopeSubjectExists } from '../policy-subject';
 import { requireWorkspaceConsolePermission } from '../../workspace-access';
-import { ControlsPatchSchema, assertOwnerTurnsOnFastMode } from '../controls-schema';
+import { ControlsPatchSchema } from '../controls-schema';
+import { assertOwnerTurnsOnFastMode } from '@/lib/services/organization-membership-service';
 
 export const runtime = 'nodejs';
 
