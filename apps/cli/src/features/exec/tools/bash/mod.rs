@@ -745,52 +745,135 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[cfg(windows)]
+    async fn assert_windows_run_command_refusal(background: bool) {
+        use crate::native_process_test_fixture::{
+            assert_windows_backend_refusal, windows_refusal_probe, Input, NativeProcessFixture,
+        };
+
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let fixture = NativeProcessFixture::new();
+        fixture
+            .scope(async {
+                let workspace = tempfile::tempdir().expect("Windows refusal workspace");
+                let root = workspace.path().canonicalize().unwrap();
+                let probe = windows_refusal_probe(&root, COMMAND_TIMEOUT).await;
+                let command = probe.command_string();
+                assert_eq!(
+                    parse_simple_command(&command),
+                    Some(("cmd.exe".to_string(), probe.args.clone()))
+                );
+                let args = HashMap::from([
+                    ("command".to_string(), command),
+                    ("run_in_background".to_string(), background.to_string()),
+                ]);
+                let result = crate::path_security::scope_workspace_paths(
+                    Some(root),
+                    Vec::new(),
+                    execute_run_command(&args, false, None),
+                )
+                .await
+                .expect("Windows refusal must be a tool result");
+                assert!(!result.success);
+                assert_windows_backend_refusal(&result.output);
+                probe.assert_marker_absent();
+            })
+            .await;
+        fixture.assert_inputs(&[
+            Input::ExecRules,
+            Input::DeviceIdentity,
+            Input::ManagedSettings,
+        ]);
+    }
+
     #[tokio::test]
     async fn foreground_command_uses_scoped_workspace_by_default() {
-        let workspace = tempfile::tempdir().unwrap();
-        let root = workspace.path().canonicalize().unwrap();
-        let args = HashMap::from([("command".to_string(), "pwd".to_string())]);
-        let result = crate::path_security::scope_workspace_paths(
-            Some(root.clone()),
-            Vec::new(),
-            execute_run_command(&args, false, None),
-        )
-        .await
-        .unwrap();
-        assert!(result.success, "{}", result.output);
-        assert!(result
-            .output
-            .lines()
-            .any(|line| line == root.to_string_lossy()));
+        #[cfg(windows)]
+        {
+            assert_windows_run_command_refusal(false).await;
+        }
+        #[cfg(not(windows))]
+        {
+            use crate::native_process_test_fixture::{Input, NativeProcessFixture};
+
+            let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+            NativeProcessFixture::require_backend();
+            let fixture = NativeProcessFixture::new();
+            fixture
+                .scope(async {
+                    let workspace = tempfile::tempdir().unwrap();
+                    let root = workspace.path().canonicalize().unwrap();
+                    let args = HashMap::from([("command".to_string(), "pwd".to_string())]);
+                    let result = crate::path_security::scope_workspace_paths(
+                        Some(root.clone()),
+                        Vec::new(),
+                        execute_run_command(&args, false, None),
+                    )
+                    .await
+                    .unwrap();
+                    assert!(result.success, "{}", result.output);
+                    assert!(result
+                        .output
+                        .lines()
+                        .any(|line| line == root.to_string_lossy()));
+                })
+                .await;
+            fixture.assert_inputs(&[
+                Input::ExecRules,
+                Input::DeviceIdentity,
+                Input::ManagedSettings,
+            ]);
+        }
     }
 
     #[tokio::test]
     async fn background_command_uses_scoped_workspace_by_default() {
-        let workspace = tempfile::tempdir().unwrap();
-        let root = workspace.path().canonicalize().unwrap();
-        let args = HashMap::from([
-            ("command".to_string(), "pwd > command-cwd.txt".to_string()),
-            ("run_in_background".to_string(), "true".to_string()),
-        ]);
-        let result = crate::path_security::scope_workspace_paths(
-            Some(root.clone()),
-            Vec::new(),
-            execute_run_command(&args, false, None),
-        )
-        .await
-        .unwrap();
-        assert!(result.success, "{}", result.output);
-        let marker = root.join("command-cwd.txt");
-        for _ in 0..100 {
-            if marker.exists() {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        #[cfg(windows)]
+        {
+            assert_windows_run_command_refusal(true).await;
         }
-        assert_eq!(
-            std::fs::read_to_string(marker).unwrap().trim(),
-            root.to_string_lossy()
-        );
+        #[cfg(not(windows))]
+        {
+            use crate::native_process_test_fixture::{Input, NativeProcessFixture};
+
+            let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+            NativeProcessFixture::require_backend();
+            let fixture = NativeProcessFixture::new();
+            fixture
+                .scope(async {
+                    let workspace = tempfile::tempdir().unwrap();
+                    let root = workspace.path().canonicalize().unwrap();
+                    let args = HashMap::from([
+                        ("command".to_string(), "pwd > command-cwd.txt".to_string()),
+                        ("run_in_background".to_string(), "true".to_string()),
+                    ]);
+                    let result = crate::path_security::scope_workspace_paths(
+                        Some(root.clone()),
+                        Vec::new(),
+                        execute_run_command(&args, false, None),
+                    )
+                    .await
+                    .unwrap();
+                    assert!(result.success, "{}", result.output);
+                    let marker = root.join("command-cwd.txt");
+                    for _ in 0..100 {
+                        if marker.exists() {
+                            break;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    }
+                    assert_eq!(
+                        std::fs::read_to_string(marker).unwrap().trim(),
+                        root.to_string_lossy()
+                    );
+                })
+                .await;
+            fixture.assert_inputs(&[
+                Input::ExecRules,
+                Input::DeviceIdentity,
+                Input::ManagedSettings,
+            ]);
+        }
     }
 
     #[test]
