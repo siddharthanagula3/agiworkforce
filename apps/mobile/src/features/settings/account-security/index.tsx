@@ -37,7 +37,7 @@ import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { TwoFactorSection } from './TwoFactorSection';
-import { AskFromSiriSetting } from '@/src/features/siri/AskFromSiriSetting';
+import { AskFromSiriSetting } from '@/src/features/siri';
 import {
   DEFAULT_SESSION_TIMEOUT,
   SESSION_TIMEOUT_MINUTES,
