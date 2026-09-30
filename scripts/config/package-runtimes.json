@@ -265,7 +265,8 @@
       "./agi-work-progress": "universal",
       "./task-display": "universal",
       "./composer-editor": "universal",
-      "./composer-editor.css": "asset"
+      "./composer-editor.css": "asset",
+      "./ime-composition": "universal"
     }
   }
 }

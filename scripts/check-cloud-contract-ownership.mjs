@@ -76,6 +76,8 @@ const cloudModules = [
   'device-authorization',
   'notifications',
   'mobile-push',
+  'mobile-intent',
+  'bank-accounts',
 ];
 
 const cloudMovedFiles = [

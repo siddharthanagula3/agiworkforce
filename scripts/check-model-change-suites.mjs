@@ -36,7 +36,7 @@ export const ROUTING_REPLAYS = Object.freeze([
   },
   {
     label: 'the Rust Auto resolver replay',
-    command: /cargo test -p agiworkforce-model-registry --test auto_route_conformance\b/,
+    command: /cargo test --locked -p agiworkforce-model-registry --test auto_route_conformance\b/,
   },
 ]);
 

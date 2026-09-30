@@ -51,6 +51,7 @@ export default function AppLayout() {
         <Drawer.Screen name="connectors/index" options={HIDDEN} />
         <Drawer.Screen name="connectors/[id]" options={HIDDEN} />
         <Drawer.Screen name="connectors/oauth" options={HIDDEN} />
+        <Drawer.Screen name="connectors/bank-complete" options={HIDDEN} />
         <Drawer.Screen name="github/installed" options={HIDDEN} />
         <Drawer.Screen name="continuity/index" options={HIDDEN} />
         <Drawer.Screen name="skills/index" options={HIDDEN} />

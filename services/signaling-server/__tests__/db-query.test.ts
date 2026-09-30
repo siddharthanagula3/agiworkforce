@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { Pool } from '@neondatabase/serverless';
+import type { SignalingDatabasePool } from '../src/db.js';
 import { describe, expect, it, vi } from 'vitest';
 import { queryWithStatementTimeout } from '../src/db-query.js';
 
@@ -8,7 +8,10 @@ function fixture() {
     query: vi.fn().mockResolvedValue({ rows: [] }),
     release: vi.fn(),
   });
-  const pool = { connect: vi.fn().mockResolvedValue(client) } as unknown as Pick<Pool, 'connect'>;
+  const pool = { connect: vi.fn().mockResolvedValue(client) } as unknown as Pick<
+    SignalingDatabasePool,
+    'connect'
+  >;
   const report = vi.fn();
   return { client, pool, report };
 }

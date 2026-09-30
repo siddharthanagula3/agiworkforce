@@ -116,6 +116,9 @@ export function LinkedBanks({ onChanged }: { onChanged: () => void }) {
           {error}
         </p>
       ) : null}
+      {!error && items?.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No banks linked yet.</p>
+      ) : null}
       <ul className="space-y-3">
         {(items ?? []).map((item) => (
           <li key={item.id} className="rounded-lg border border-border/60 bg-card px-4 py-3">
