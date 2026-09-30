@@ -590,7 +590,11 @@ export function normalizeWebDomain(raw: string): string | null {
       return null;
     }
   }
-  value = value.replace(/^\*\./, '').replace(/^\./, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
+  if (/[\n\r\u2028\u2029]/.test(value)) return null;
+  value = value.replace(/^\*\./, '').replace(/^\./, '');
+  const pathStart = value.indexOf('/');
+  if (pathStart !== -1) value = value.slice(0, pathStart);
+  value = value.replace(/:\d+$/, '');
   if (value.startsWith('www.')) value = value.slice(4);
   return WEB_DOMAIN_PATTERN.test(value) ? value : null;
 }

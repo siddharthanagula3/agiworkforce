@@ -31,6 +31,31 @@ const tags: ConnectorInputField = {
 };
 
 describe('connector input field checks', () => {
+  it.each([
+    ['a@b.co', null],
+    ['a@.b', 'bad_format'],
+    ['a@b.', 'bad_format'],
+    ['a@...', null],
+    ['a@b..c', null],
+    ['a.b+c@sub.example', null],
+    ['a@@b.co', 'bad_format'],
+    ['a@b. c', 'bad_format'],
+    ['a@b.\nc', 'bad_format'],
+  ])('keeps the email format decision for %j', (value, expected) => {
+    const field: ConnectorInputField = { ...email, maxLength: undefined };
+    expect(connectorInputFieldIssue(field, value)).toBe(expected);
+  });
+
+  it('bounds validation of an oversized email with an internal space', () => {
+    const field: ConnectorInputField = { ...email, maxLength: undefined };
+    const value = `a@${'.'.repeat(60_000)} b`;
+    const started = performance.now();
+    const issue = connectorInputFieldIssue(field, value);
+    const elapsed = performance.now() - started;
+    expect(issue).toBe('bad_format');
+    expect(elapsed).toBeLessThan(500);
+  });
+
   it('names the issue and keeps the same message as before', () => {
     const cases: Array<[ConnectorInputField, string | string[] | undefined, string, string]> = [
       [email, '', 'required', 'This is required.'],

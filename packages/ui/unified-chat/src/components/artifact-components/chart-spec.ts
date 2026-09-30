@@ -128,7 +128,10 @@ function describeSeries(spec: ChartSpec, entry: ChartSeriesSpec): string | null 
 }
 
 export function summarizeChart(spec: ChartSpec, fallbackTitle?: string): string {
-  const title = (spec.title ?? fallbackTitle?.trim())?.replace(/[.!?]+$/, '');
+  const rawTitle = spec.title ?? fallbackTitle?.trim();
+  let titleEnd = rawTitle?.length ?? 0;
+  while (titleEnd > 0 && '.!?'.includes(rawTitle![titleEnd - 1]!)) titleEnd -= 1;
+  const title = rawTitle?.slice(0, titleEnd);
   const xAxis = spec.xLabel ?? spec.xKey;
   const pointCount = translateUiPlural('chat', 'counts.chartPoints', spec.rows.length, {
     one: '{{count}} point',

@@ -13,7 +13,35 @@ import {
   CreateCustomConnectorResponseSchema,
   DeleteCustomConnectorResponseSchema,
   webDomainAllowed,
+  normalizeWebDomain,
 } from '../connectors';
+
+describe('normalizeWebDomain', () => {
+  it.each([
+    [' *.WWW.Example.COM:443/path ', 'example.com'],
+    ['.example.com/path', 'example.com'],
+    ['https://www.example.com/a\nb', 'example.com'],
+    ['example.com/path\nmore', null],
+    ['example.com/path\rmore', null],
+    ['example.com/path\u2028more', null],
+    ['example.com/path\u2029more', null],
+    ['example.com/path\n/more', null],
+    ['example.com/path\n', 'example.com'],
+    ['example.com/path with spaces', 'example.com'],
+    ['localhost', null],
+  ])('normalizes %j without changing its policy meaning', (raw, expected) => {
+    expect(normalizeWebDomain(raw)).toBe(expected);
+  });
+
+  it('bounds normalization of a long malformed path', () => {
+    const raw = `example.com${'/'.repeat(60_000)}\nx`;
+    const started = performance.now();
+    const domain = normalizeWebDomain(raw);
+    const elapsed = performance.now() - started;
+    expect(domain).toBeNull();
+    expect(elapsed).toBeLessThan(500);
+  });
+});
 
 describe('ConnectorConnectionSchema / ListConnectorsResponseSchema', () => {
   it('accepts a user-sourced row (route.ts:151-158)', () => {

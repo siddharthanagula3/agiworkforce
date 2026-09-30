@@ -218,11 +218,25 @@ const MODEL_LINE_SIZE = /^(?:\d+x)?\d+(?:\.\d+)?[bkmt]$|^a\d+(?:\.\d+)?b$/i;
 const MODEL_LINE_CODE = /^[a-z]\d+(?:\.\d+)*[a-z]?$/i;
 const MODEL_LINE_TRAILING_VERSION = /^([a-z][a-z.]*[a-z])\d+(?:\.\d+)*$/i;
 
+function stripModelLineAnnotations(name: string): string {
+  const fragments: string[] = [];
+  let start = 0;
+  while (start < name.length) {
+    const open = name.indexOf('(', start);
+    if (open === -1) break;
+    const close = name.indexOf(')', open + 1);
+    if (close === -1) break;
+    fragments.push(name.slice(start, open), ' ');
+    start = close + 1;
+  }
+  fragments.push(name.slice(start));
+  return fragments.join('');
+}
+
 export function resolveModelLineLabel(displayName: string): string {
   const prefixEnd = displayName.indexOf(': ');
   const name = prefixEnd > 0 ? displayName.slice(prefixEnd + 2) : displayName;
-  const words = name
-    .replace(/\([^)]*\)/g, ' ')
+  const words = stripModelLineAnnotations(name)
     .split(/[\s-]+/)
     .filter(Boolean);
   const kept = words.flatMap((word, index) => {
