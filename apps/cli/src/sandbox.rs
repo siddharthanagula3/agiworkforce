@@ -358,6 +358,14 @@ pub fn sandbox_disabled_requested() -> bool {
     sandbox_mode() == SandboxMode::Unrestricted
 }
 
+pub fn sandbox_disabled_for_workspace(workspace: &Path) -> bool {
+    resolve_sandbox_disabled(
+        sandbox_disabled_requested(),
+        sandbox_settings().forced,
+        crate::trust::restrictions_for(workspace).unrestricted_shell,
+    )
+}
+
 pub fn sandbox_disabled() -> bool {
     resolve_sandbox_disabled(
         sandbox_disabled_requested(),
@@ -945,6 +953,7 @@ async fn execute_sandboxed_in_environment(
                 command
             }
         };
+        apply_environment_policy(&mut cmd, scrub_environment);
         crate::interactive::mark_agent_spawned(&mut cmd);
         if let Some(dir) = cwd {
             cmd.current_dir(dir);
@@ -1060,6 +1069,49 @@ mod environment_and_policy_tests {
         assert!(settings.scrub_environment);
         assert!(settings.sandbox_user_hooks);
         assert!(settings.sandbox_mcp_servers);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn unrestricted_execution_still_honors_environment_scrubbing() {
+        let workspace = tempfile::tempdir().unwrap();
+        let manager = SandboxManager::new(
+            SandboxPolicy::DangerFullAccess,
+            workspace.path().to_path_buf(),
+        );
+        let variable = "AGI_SANDBOX_ENV_REGRESSION_SENTINEL";
+        let previous = std::env::var_os(variable);
+        std::env::set_var(variable, "controlled-private-value");
+        let script = "printf '%s' \"$AGI_SANDBOX_ENV_REGRESSION_SENTINEL\"";
+        let inherited = execute_sandboxed_in_environment(
+            &manager,
+            Invocation::Shell(script),
+            Some(workspace.path()),
+            None,
+            Some(std::time::Duration::from_secs(5)),
+            false,
+        )
+        .await;
+        let scrubbed = execute_sandboxed_in_environment(
+            &manager,
+            Invocation::Shell(script),
+            Some(workspace.path()),
+            None,
+            Some(std::time::Duration::from_secs(5)),
+            true,
+        )
+        .await;
+        if let Some(value) = previous {
+            std::env::set_var(variable, value);
+        } else {
+            std::env::remove_var(variable);
+        }
+        let inherited = inherited.unwrap();
+        let scrubbed = scrubbed.unwrap();
+        assert!(inherited.status.success());
+        assert_eq!(inherited.stdout, b"controlled-private-value");
+        assert!(scrubbed.status.success());
+        assert!(scrubbed.stdout.is_empty(), "environment scrub was bypassed");
     }
 
     #[test]

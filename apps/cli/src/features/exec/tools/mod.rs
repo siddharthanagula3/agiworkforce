@@ -913,7 +913,13 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             execute_multiedit(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
         "powershell" => {
-            execute_powershell(&call.args, require_confirm, opts.approval_callback.as_ref()).await
+            execute_powershell(
+                &call.args,
+                require_confirm,
+                opts.approval_callback.as_ref(),
+                opts.workspace_root.as_deref(),
+            )
+            .await
         }
         "notebook_edit" => execute_notebook_edit(&call.args, require_confirm).await,
         "todo_read" => execute_todo_read(opts.workspace_root.as_deref()).await,
@@ -2066,6 +2072,7 @@ async fn execute_powershell(
     args: &HashMap<String, String>,
     require_confirmation: bool,
     approval_callback: Option<&ApprovalCallback>,
+    workspace_root: Option<&std::path::Path>,
 ) -> Result<ToolResult> {
     let command = match args.get("command") {
         Some(command) => command.clone(),
@@ -2080,7 +2087,13 @@ async fn execute_powershell(
 
     // The same containment run_command has: a directory inside the workspace,
     // checked before anything is asked or run.
-    let working_dir = match bash::command_working_dir(args) {
+    let workspace = workspace_root
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or(std::env::current_dir()?);
+    let working_dir = match crate::powershell_tool::working_directory(
+        args.get("working_dir").map(String::as_str),
+        &workspace,
+    ) {
         Ok(dir) => dir,
         Err(reason) => {
             return Ok(ToolResult {
@@ -2183,12 +2196,12 @@ async fn execute_powershell(
 
     let request = crate::powershell_tool::PowerShellRequest {
         command,
-        working_dir: working_dir.map(|dir| dir.display().to_string()),
+        working_dir: Some(working_dir.display().to_string()),
         timeout_sec,
         safe_mode,
     };
 
-    match crate::powershell_tool::execute(&request).await {
+    match crate::powershell_tool::execute_for_workspace(&request, &workspace).await {
         Ok(output) => {
             let mut combined = String::new();
             if !output.stdout.is_empty() {
@@ -2391,7 +2404,7 @@ mod tests {
             outside.path().display().to_string(),
         );
 
-        let result = execute_powershell(&args, true, None)
+        let result = execute_powershell(&args, true, None, None)
             .await
             .expect("tool result");
 
