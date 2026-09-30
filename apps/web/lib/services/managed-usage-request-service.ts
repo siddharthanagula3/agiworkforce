@@ -32,6 +32,7 @@ import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-e
 import { BLOCK_APPEAL_PATH, recordAuditEvent } from '@/lib/security-audit';
 import { maybeTriggerAutoReload } from '@/lib/services/auto-reload-service';
 import { getRollingUsage } from '@/lib/server/rolling-usage';
+import { getSpendableCredits } from '@/lib/server/spendable-credits';
 import {
   ROLLING_SESSION_WINDOW_HOURS,
   ROLLING_WEEKLY_WINDOW_HOURS,
@@ -634,13 +635,7 @@ async function attributeToApiKey(
 
 /** Whether usage credits are turned on, which fast mode needs whatever bonus credits remain. */
 export async function usageCreditsEnabled(db: DatabaseAdapter, userId: string): Promise<boolean> {
-  const rows = await db.query<{ enabled: boolean | null }>(
-    `select coalesce(bool_or(subscription_row.overage_enabled), false) as enabled
-       from public.subscriptions subscription_row
-      where subscription_row.user_id = $1`,
-    [userId],
-  );
-  return rows[0]?.enabled === true;
+  return (await getSpendableCredits(db, userId)).overageEnabled;
 }
 
 export async function reserveManagedUsageRequest(
