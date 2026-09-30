@@ -12,18 +12,36 @@ async function openAuth(page: Page, route: string): Promise<void> {
   await mockAuthProvider(page);
   await page.goto(route, { waitUntil: 'load' });
   await expect(page.getByTestId('auth-layout')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+  const submit = page.getByRole('button', { name: 'Continue', exact: true });
+  if (route === '/signup') {
+    await expect(page.getByTestId('auth-age-confirmation').getByRole('checkbox')).not.toBeChecked();
+    await expect(submit).toBeDisabled();
+    for (const provider of await page.getByTestId('auth-layout').getByRole('button').all()) {
+      await expect(provider).toBeDisabled();
+    }
+  } else {
+    await expect(submit).toBeEnabled();
+  }
 }
 
 test.describe('auth flow states', () => {
   for (const route of ROUTES) {
-    test(`${route} starts on the email step with the field focused`, async ({ page }) => {
+    test(`${route} starts on the email step with its required consent state`, async ({ page }) => {
       await openAuth(page, route);
 
       const email = page.getByLabel('Email address');
       await expect(email).toBeVisible();
-      await expect(email).toBeFocused();
-      await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+      if (route === '/signup') {
+        await expect(email).not.toBeFocused();
+        const confirmation = page.getByTestId('auth-age-confirmation').getByRole('checkbox');
+        await confirmation.check();
+        await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+        await confirmation.uncheck();
+        await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
+      } else {
+        await expect(email).toBeFocused();
+        await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+      }
     });
 
     test(`${route} keeps a live region in the tree before it has anything to say`, async ({
@@ -39,6 +57,18 @@ test.describe('auth flow states', () => {
     test(`${route} reaches every control from the keyboard alone`, async ({ page }) => {
       await openAuth(page, route);
 
+      if (route === '/signup') {
+        const confirmation = page.getByTestId('auth-age-confirmation').getByRole('checkbox');
+        const maximumTabs = (await page.locator('button, input, a[href]').count()) * 2;
+        for (let step = 0; step < maximumTabs; step += 1) {
+          if (await confirmation.evaluate((element) => element === document.activeElement)) break;
+          await page.keyboard.press('Tab');
+        }
+        await expect(confirmation).toBeFocused();
+        await page.keyboard.press('Space');
+        await expect(confirmation).toBeChecked();
+        await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+      }
       const controls = await page
         .getByTestId('auth-layout')
         .locator('button, input, a[href]')

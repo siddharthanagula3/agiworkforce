@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockAuthProvider } from './lib/mock-auth-provider';
 
 const WELL_FORMED_HANDOFF = 'A'.repeat(43);
 
@@ -69,6 +70,13 @@ test.describe('desktop sign-in handoff pages', () => {
   test('/auth/desktop/complete without a grant says the sign-in did not finish', async ({
     page,
   }) => {
+    const redemptions: string[] = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/auth/desktop/redeem') {
+        redemptions.push(request.method());
+      }
+    });
+    await mockAuthProvider(page);
     await page.goto('/auth/desktop/complete', { waitUntil: 'domcontentloaded' });
 
     await expect(
@@ -78,5 +86,6 @@ test.describe('desktop sign-in handoff pages', () => {
       page.getByRole('alert').filter({ hasText: 'This sign-in link is incomplete.' }),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Sign in here instead' })).toBeVisible();
+    expect(redemptions).toEqual([]);
   });
 });

@@ -68,7 +68,7 @@ describe('/trust row-level isolation claim', () => {
   const databaseBacked = measured.rlsScoped + measured.ownerOnly;
 
   it('measures at build time exactly what this test measures from the tree', async () => {
-    const { measureRouteIsolation } = await import('@/lib/legal/published-counts');
+    const { measureRouteIsolation } = await import('@/lib/legal/route-isolation-counts');
     expect(measureRouteIsolation(API_ROOT)).toEqual({
       rlsScoped: measured.rlsScoped,
       ownerConnection: measured.ownerOnly,
@@ -95,9 +95,16 @@ describe('/trust row-level isolation claim', () => {
     );
   });
 
-  it('builds the page statically, so the measurement runs where the route files exist', () => {
-    expect(page).toContain("export const dynamic = 'force-static';");
-    expect(page).toContain('const ROUTE_ISOLATION = measureRouteIsolation();');
+  it('publishes exactly the build-time measurement without forcing static nonce rendering', async () => {
+    const { ROUTE_ISOLATION_COUNTS } = await import('@/lib/legal/published-counts');
+    expect(ROUTE_ISOLATION_COUNTS).toEqual({
+      rlsScoped: measured.rlsScoped,
+      ownerConnection: measured.ownerOnly,
+      noDatabase: measured.noDatabase,
+      databaseBacked,
+    });
+    expect(page).not.toContain("export const dynamic = 'force-static';");
+    expect(page).not.toContain('measureRouteIsolation');
   });
 
   it('never rounds the claim in its own favour', () => {

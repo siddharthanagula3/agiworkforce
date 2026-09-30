@@ -8,6 +8,7 @@ import { withSentryConfig } from '@sentry/nextjs';
 import { API_HOST_REWRITE_ROUTES } from './lib/api-host-route-contract';
 import { BOT_PROTECTION_MODES, resolveBotProtectionMode } from './lib/security/bot-protection';
 import { isPlatformHosted } from './lib/server/hosting';
+import { writeRouteIsolationCounts } from './lib/legal/route-isolation-counts';
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(configDir, '../..');
@@ -247,4 +248,11 @@ const withOptionalSentry = (config: NextConfig): NextConfig =>
 
 // Applied inside withWorkflow, not around it: withWorkflow returns a phase
 // function rather than a config object, which withSentryConfig cannot take.
-export default withWorkflow(withOptionalSentry(withOptionalBotId(withBundleAnalyzer(nextConfig))));
+const workflowConfig = withWorkflow(
+  withOptionalSentry(withOptionalBotId(withBundleAnalyzer(nextConfig))),
+);
+
+export default function config(phase: string, context: { defaultConfig: NextConfig }) {
+  writeRouteIsolationCounts(phase, configDir);
+  return workflowConfig(phase, context);
+}
