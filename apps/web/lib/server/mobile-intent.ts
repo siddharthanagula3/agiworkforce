@@ -2,7 +2,7 @@ import 'server-only';
 
 import { randomBytes } from 'node:crypto';
 
-import { classifyTaskLocally } from '@agiworkforce/routing';
+import { classifyTaskLocally, estimateTokens } from '@agiworkforce/routing';
 import { getSlotForModel, isFlagshipRoutingSlot } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { accountAccessDecision } from '@/lib/auth/account-status';
@@ -151,7 +151,7 @@ export async function answerMobileIntentAsk(input: {
   const estimatedCostMicrousd = LLMCostCalculator.estimateCostMicrousd(
     route.provider,
     route.modelKey,
-    Math.ceil((prompt.length + ASK_DIRECTIVE.length) / 3.5) + 32,
+    estimateTokens(`${ASK_DIRECTIVE}\n${prompt}`, route.modelKey) + 32,
     MAX_OUTPUT_TOKENS,
   );
   const requestId = randomBytes(16).toString('hex');
