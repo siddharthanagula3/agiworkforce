@@ -174,49 +174,27 @@ fn read_existing_text_for_preview(
     std::fs::read_to_string(file_path).map_err(|e| format!("Failed to read existing file: {e}"))
 }
 
-fn normalize_patch_target(raw: &str) -> Option<String> {
-    let trimmed = raw.split('\t').next().unwrap_or(raw).trim();
-    if trimmed.is_empty() || trimmed == "/dev/null" {
-        return None;
-    }
-    let stripped = trimmed
-        .strip_prefix("a/")
-        .or_else(|| trimmed.strip_prefix("b/"))
-        .unwrap_or(trimmed);
-    Some(stripped.to_string())
-}
-
-fn patch_target_paths(patch: &str) -> std::result::Result<Vec<PathBuf>, String> {
+async fn patch_target_paths(patch: &str) -> std::result::Result<Vec<PathBuf>, String> {
+    let targets = crate::apply_patch::parsed_patch_targets(patch)
+        .await
+        .map_err(|reason| format!("Patch target rejected: {reason}"))?;
     let mut seen = HashSet::new();
     let mut paths = Vec::new();
-
-    for line in patch.lines() {
-        let mut candidates = Vec::new();
-        if let Some(rest) = line.strip_prefix("--- ") {
-            candidates.push(rest);
-        } else if let Some(rest) = line.strip_prefix("+++ ") {
-            candidates.push(rest);
-        } else if let Some(rest) = line.strip_prefix("diff --git ") {
-            let parts: Vec<&str> = rest.split_whitespace().collect();
-            if parts.len() >= 2 {
-                candidates.push(parts[0]);
-                candidates.push(parts[1]);
-            }
+    for target in targets {
+        let raw = target
+            .to_str()
+            .ok_or("Patch target rejected: non-UTF-8 path")?;
+        let path = validate_file_write_path(raw)
+            .map_err(|reason| format!("Patch target rejected: {reason}"))?;
+        if std::fs::symlink_metadata(&target)
+            .is_ok_and(|metadata| metadata.file_type().is_symlink())
+        {
+            return Err("Patch target rejected: symbolic link source or target".to_string());
         }
-
-        for candidate in candidates {
-            let Some(target) = normalize_patch_target(candidate) else {
-                continue;
-            };
-            if !seen.insert(target.clone()) {
-                continue;
-            }
-            let path = validate_file_write_path(&target)
-                .map_err(|reason| format!("Patch target rejected: {}", reason))?;
+        if seen.insert(path.clone()) {
             paths.push(path);
         }
     }
-
     Ok(paths)
 }
 
@@ -1057,7 +1035,7 @@ pub(super) async fn execute_apply_patch(
             });
         }
     };
-    let patch_paths = match patch_target_paths(patch) {
+    let patch_paths = match patch_target_paths(patch).await {
         Ok(paths) => paths,
         Err(message) => {
             return Ok(ToolResult {
@@ -1728,8 +1706,8 @@ mod tests {
         assert_eq!(*approval_count.lock().expect("approval count lock"), 1);
     }
 
-    #[test]
-    fn patch_target_paths_extracts_workspace_files() {
+    #[tokio::test]
+    async fn patch_target_paths_extracts_workspace_files() {
         let tmp = tempfile::tempdir_in(".").expect("tempdir");
         let path = tmp.path().join("patch-target.txt");
         std::fs::write(&path, "old\n").expect("write file");
@@ -1738,7 +1716,7 @@ mod tests {
             "diff --git a/{target} b/{target}\n--- a/{target}\n+++ b/{target}\n@@ -1,1 +1,1 @@\n-old\n+new\n"
         );
 
-        let paths = patch_target_paths(&patch).expect("patch targets");
+        let paths = patch_target_paths(&patch).await.expect("patch targets");
 
         assert_eq!(paths.len(), 1);
         assert!(paths[0].ends_with(Path::new("patch-target.txt")));
@@ -1753,6 +1731,81 @@ mod tests {
             paths[0].to_string_lossy().starts_with("patch-sha256:"),
             "unexpected target: {}",
             paths[0].display()
+        );
+    }
+
+    #[tokio::test]
+    async fn patch_target_paths_rejects_copies_renames_and_quoted_instruction_paths() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let root = tmp.path().display();
+        for operation in ["copy", "rename"] {
+            let patch = format!(
+                "diff --git a/{root}/notes.md b/{root}/notes.md\nsimilarity index 100%\n{operation} from {root}/notes.md\n{operation} to {root}/.agiworkforce/rules/q.md\n"
+            );
+            let parsed = crate::apply_patch::parsed_patch_targets(&patch)
+                .await
+                .expect("valid patch");
+            assert!(parsed
+                .iter()
+                .any(|target| target.ends_with(".agiworkforce/rules/q.md")));
+            assert!(
+                patch_target_paths(&patch).await.is_err(),
+                "allowed {operation}"
+            );
+        }
+        let patch = format!(
+            "diff --git \"a/{root}/.agiworkforce/rule\\163/q.md\" \"b/{root}/.agiworkforce/rule\\163/q.md\"\nnew file mode 100644\n--- /dev/null\n+++ \"b/{root}/.agiworkforce/rule\\163/q.md\"\n@@ -0,0 +1 @@\n+injected\n"
+        );
+        let parsed = crate::apply_patch::parsed_patch_targets(&patch)
+            .await
+            .expect("valid quoted patch");
+        assert!(parsed
+            .iter()
+            .any(|target| target.ends_with(".agiworkforce/rules/q.md")));
+        assert!(
+            patch_target_paths(&patch).await.is_err(),
+            "allowed quoted rules"
+        );
+    }
+
+    #[tokio::test]
+    async fn patch_target_paths_rejects_new_symlinks() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let root = tmp.path().display();
+        let patch = format!(
+            "diff --git a/{root}/alias b/{root}/alias\nnew file mode 120000\n--- /dev/null\n+++ b/{root}/alias\n@@ -0,0 +1 @@\n+docs\n"
+        );
+        assert!(patch_target_paths(&patch).await.is_err(), "allowed symlink");
+    }
+
+    #[tokio::test]
+    async fn patch_target_paths_rejects_protected_sources() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let root = tmp.path().display();
+        for operation in ["copy", "rename"] {
+            let patch = format!(
+                "diff --git a/{root}/.agiworkforce/rules/q.md b/{root}/notes.md\nsimilarity index 100%\n{operation} from {root}/.agiworkforce/rules/q.md\n{operation} to {root}/notes.md\n"
+            );
+            assert!(
+                patch_target_paths(&patch).await.is_err(),
+                "allowed protected {operation} source"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn patch_target_paths_rejects_copied_symlinks() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        std::fs::write(tmp.path().join("notes.md"), "kept\n").expect("seed file");
+        std::os::unix::fs::symlink("notes.md", tmp.path().join("alias")).expect("symlink");
+        let root = tmp.path().display();
+        let patch = format!(
+            "diff --git a/{root}/alias b/{root}/newalias\nsimilarity index 100%\ncopy from {root}/alias\ncopy to {root}/newalias\n"
+        );
+        assert!(
+            patch_target_paths(&patch).await.is_err(),
+            "allowed copied symlink"
         );
     }
 
