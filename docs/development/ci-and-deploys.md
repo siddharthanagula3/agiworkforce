@@ -215,8 +215,13 @@ any branch through a `workflow_dispatch`.
 the commits being pushed rather than the shared working tree. It creates a
 detached linked worktree of `HEAD` under a temp directory
 (`AGI_PREPUSH_WORKTREE_PARENT` to override, default
-`${TMPDIR:-/tmp}/agi-prepush-worktree`), symlinks each workspace package's
-`node_modules` contents into it, runs the guard chain there, then removes the
+`${TMPDIR:-/tmp}/agi-prepush-worktree`), verifies the source and candidate
+workspace manifests and lockfile, then mirrors installed dependencies into
+candidate-local directories. External package files retain their installed
+bytes and executable modes; workspace aliases and generated binary paths
+resolve inside the candidate. Absolute or out-of-inventory dependency links
+fail closed. Each candidate owns its Cargo target directory. It runs the
+guard chain there, then removes the
 worktree on every exit path. A guard that reads `git ls-files -co
 --exclude-standard` (AGENTS.md §12) sees only what is in `HEAD`, so an
 uncommitted or untracked file elsewhere in the shared tree can no longer block
