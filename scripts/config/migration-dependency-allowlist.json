@@ -1,4 +1,10 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 351,
+      "reason": "The GitHub install authorization table is named only to exclude live credentials, and the Siri token export selects existing columns without updated_at. This guard correlates unrelated updated_at exports across the same file; neither export depends on the new columns. The canonical deployment record still refuses production until migration 0351 is applied."
+    }
+  ]
 }

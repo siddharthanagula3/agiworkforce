@@ -391,6 +391,13 @@ test('the row timestamps migration adds the columns the contract depends on', ()
   assert.ok(tables.get('mcp_response_cache').has('created_at'));
 });
 
+test('rewritten authentication flows record their last mutation', () => {
+  const tables = readTableColumns(REPO_ROOT);
+  for (const table of ['github_install_authorizations', 'mobile_intent_tokens']) {
+    assert.ok(tables.get(table)?.has('updated_at'), `${table} has no last-write timestamp`);
+  }
+});
+
 const OPERATION_ROLE_DEFAULTS = {
   operationId: { column: 'id', why: 'the handle a caller quotes' },
   startedAt: { column: 'started_at', why: 'when the work began' },
