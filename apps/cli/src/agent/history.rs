@@ -42,7 +42,7 @@ impl AgentSession {
         for file in &self.attached_context_files {
             lines.push(format!("  Attached file      {}", file.display()));
         }
-        for dir in &self.additional_context_dirs {
+        for dir in &self.additional_context_dirs() {
             lines.push(format!("  Added directory    {}", dir.display()));
         }
         let turns = self
@@ -102,9 +102,10 @@ impl AgentSession {
                 "the conversation before that prompt is no longer in this session (it was compacted or cleared), so only its code can be restored"
             );
         }
-        let files = mode
-            .restores_code()
-            .then(|| self.checkpoint_log.restore_files(index));
+        let files = mode.restores_code().then(|| {
+            self.checkpoint_log
+                .restore_files(index, self.checkpoint_file_authority())
+        });
         if mode.restores_conversation() {
             self.messages.truncate(message_count);
             self.checkpoint_log.truncate(index);
@@ -176,9 +177,10 @@ impl AgentSession {
         args: &serde_json::Value,
         root: Option<&std::path::Path>,
     ) {
+        let authority = self.checkpoint_file_authority().cloned();
         let captured: Vec<std::path::PathBuf> = checkpoints::edited_paths(tool, args, root)
             .into_iter()
-            .filter(|path| self.checkpoint_log.capture(path))
+            .filter(|path| self.checkpoint_log.capture(path, authority.as_ref()))
             .collect();
         if !captured.is_empty() {
             self.checkpoint_captures
@@ -192,7 +194,9 @@ impl AgentSession {
             return;
         };
         if !ok {
-            self.checkpoint_log.forget_unchanged(&captured);
+            let authority = self.checkpoint_file_authority().cloned();
+            self.checkpoint_log
+                .forget_unchanged(&captured, authority.as_ref());
             self.report_unsaved_checkpoints();
         }
     }

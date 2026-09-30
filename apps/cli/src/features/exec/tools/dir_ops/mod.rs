@@ -34,6 +34,13 @@ fn withhold_credential_matches(output: &str) -> (String, usize) {
     let mut withheld = 0usize;
     for line in output.lines() {
         match matched_file(line) {
+            Some(path)
+                if crate::path_security::is_checkpoint_internal_path(std::path::Path::new(
+                    path,
+                )) =>
+            {
+                withheld += 1;
+            }
             Some(path) if crate::sensitive_files::is_sensitive_file(path) => withheld += 1,
             _ => kept.push(line),
         }
@@ -43,7 +50,7 @@ fn withhold_credential_matches(output: &str) -> (String, usize) {
 
 fn withholding_note(withheld: usize) -> String {
     format!(
-        "\n[{withheld} match(es) withheld: they are in files the credential-file policy covers, so \
+        "\n[{withheld} match(es) withheld: they are in private checkpoint storage or files the credential-file policy covers, so \
          their contents would reach the model and the session transcript. Open those files \
          yourself, or pass the one value the task needs.]"
     )
@@ -94,6 +101,10 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
     command.arg("-rn").arg("--include=*").arg("-m").arg("200");
     for directory in crate::repo::index_policy::excluded_directory_names() {
         command.arg(format!("--exclude-dir={directory}"));
+    }
+    for pattern in crate::path_security::checkpoint_internal_globs() {
+        command.arg(format!("--exclude-dir={pattern}"));
+        command.arg(format!("--exclude={pattern}"));
     }
     command.arg("--").arg(pattern).arg(&validated_path);
     let result = crate::process_tree::output(command, None, Some(COMMAND_TIMEOUT)).await;
@@ -178,6 +189,9 @@ pub(super) async fn execute_list_directory(args: &HashMap<String, String>) -> Re
     };
 
     while let Ok(Some(entry)) = read_dir.next_entry().await {
+        if crate::path_security::is_checkpoint_internal_path(&entry.path()) {
+            continue;
+        }
         let name = entry.file_name().to_string_lossy().to_string();
         let metadata = entry.metadata().await;
 
@@ -278,6 +292,10 @@ pub(super) async fn execute_grep_files(
     if let Some(g) = include {
         cmd.arg("--glob").arg(g);
     }
+    for pattern in crate::path_security::checkpoint_internal_globs() {
+        cmd.arg("--glob").arg(format!("!**/{pattern}"));
+        cmd.arg("--glob").arg(format!("!**/{pattern}/**"));
+    }
     cmd.arg("--").arg(pattern).arg(&validated_path);
     match crate::process_tree::output(cmd, None, Some(COMMAND_TIMEOUT)).await {
         Ok(o) => {
@@ -296,6 +314,10 @@ pub(super) async fn execute_grep_files(
             fb.arg("-rn").arg("--max-count=100");
             for directory in crate::repo::index_policy::excluded_directory_names() {
                 fb.arg(format!("--exclude-dir={directory}"));
+            }
+            for pattern in crate::path_security::checkpoint_internal_globs() {
+                fb.arg(format!("--exclude-dir={pattern}"));
+                fb.arg(format!("--exclude={pattern}"));
             }
             fb.arg("--").arg(pattern).arg(&validated_path);
             match crate::process_tree::output(fb, None, Some(COMMAND_TIMEOUT)).await {
@@ -388,6 +410,9 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
     let mut matches = Vec::new();
     let mut truncated = false;
     for path in paths.filter_map(|p| p.ok()) {
+        if crate::path_security::is_checkpoint_internal_path(&path) {
+            continue;
+        }
         let in_workspace = path
             .canonicalize()
             .map(|c| c.starts_with(&cwd_canonical))

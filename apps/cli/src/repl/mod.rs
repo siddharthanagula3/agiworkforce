@@ -93,7 +93,9 @@ pub async fn run_repl(
 
     let mut session =
         AgentSession::new_with_provider(model, sys_context, custom_system_prompt, provider);
-    session.additional_context_dirs = crate::path_security::registered_additional_workspace_roots();
+    session.set_additional_context_dirs(
+        crate::path_security::registered_additional_workspace_roots(),
+    )?;
     session.apply_ui_config(config);
     crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
@@ -816,7 +818,7 @@ pub async fn attach_url_context(url: &str, session: &mut AgentSession) -> Result
         args: std::collections::HashMap::from([("url".to_string(), url.to_string())]),
     };
     let opts = crate::tools::ToolExecOptions {
-        additional_workspace_roots: session.additional_context_dirs.clone(),
+        additional_workspace_roots: session.additional_context_dirs(),
         mcp_tool_definitions: None,
         require_confirmation: false,
         auto_approve_safe: session.auto_approve_safe,
@@ -851,7 +853,7 @@ pub async fn run_user_shell_command(
         args: std::collections::HashMap::from([("command".to_string(), cmd.to_string())]),
     };
     let opts = crate::tools::ToolExecOptions {
-        additional_workspace_roots: session.additional_context_dirs.clone(),
+        additional_workspace_roots: session.additional_context_dirs(),
         mcp_tool_definitions: None,
         require_confirmation,
         auto_approve_safe: session.auto_approve_safe,

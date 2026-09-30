@@ -359,7 +359,7 @@ pub fn handle_shared_command(
 pub fn handle_add_dir(session: &mut AgentSession, arg: &str) -> String {
     let dirs = split_shell_words(arg);
     if dirs.is_empty() {
-        let roots = &session.additional_context_dirs;
+        let roots = &session.additional_context_dirs();
         if roots.is_empty() {
             return "Usage: /add-dir <directory> [more directories...]\nNo directories are added yet.".to_string();
         }
@@ -455,7 +455,7 @@ pub fn render_context_files(session: &AgentSession) -> String {
         }
     }
 
-    let roots = &session.additional_context_dirs;
+    let roots = &session.additional_context_dirs();
     if roots.is_empty() {
         lines.push("  additional directories: none".to_string());
     } else {
@@ -752,7 +752,7 @@ pub fn render_passes(session: &AgentSession) -> String {
         session.plan_approved,
         session.auto_approve_safe,
         session.skip_permissions,
-        session.additional_context_dirs.len(),
+        session.additional_context_dirs().len(),
     )
 }
 
@@ -1787,7 +1787,7 @@ pub fn render_doctor(session: &AgentSession) -> String {
     ));
     lines.push(format!(
         "  additional roots: {}",
-        session.additional_context_dirs.len()
+        session.additional_context_dirs().len()
     ));
     lines.push(format!(
         "  attached files: {}",
@@ -2700,7 +2700,7 @@ mod tests {
         let output = handle_add_dir(&mut session, &dir.path().to_string_lossy());
 
         assert!(output.contains("added:"));
-        assert_eq!(session.additional_context_dirs.len(), 1);
+        assert_eq!(session.additional_context_dirs().len(), 1);
         crate::path_security::clear_additional_workspace_roots_for_tests();
     }
 

@@ -344,6 +344,7 @@ impl ApprovalReply {
 pub struct CliDeveloperSessionHost {
     config: Arc<CliConfig>,
     workspace_root: PathBuf,
+    workspace_file_authority: crate::path_security::WorkspaceFileAuthority,
     store: ManagedSessionStore,
     load_integrations: bool,
     bypass_permissions_available: bool,
@@ -385,11 +386,15 @@ impl CliDeveloperSessionHost {
         store: ManagedSessionStore,
         load_integrations: bool,
     ) -> Result<Self, DeveloperSessionHostError> {
-        let workspace_root = canonical_directory(&workspace_root)?;
+        let workspace_file_authority =
+            crate::path_security::WorkspaceFileAuthority::new(&workspace_root)
+                .map_err(invalid_request)?;
+        let workspace_root = workspace_file_authority.root().to_path_buf();
         let (notifications, _) = broadcast::channel(1024);
         Ok(Self {
             config: Arc::new(config),
             workspace_root,
+            workspace_file_authority,
             store,
             load_integrations,
             bypass_permissions_available: false,
@@ -597,6 +602,7 @@ impl CliDeveloperSessionHost {
             Some(authority.provider.as_str()),
         )
         .map_err(invalid_request)?;
+        agent.install_workspace_file_authority(self.workspace_file_authority.clone());
         agent.apply_ui_config(&self.config);
         agent.bypass_permissions_available = self.bypass_permissions_available;
         agent
@@ -1530,6 +1536,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         refresh_account_memory_setting().await;
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
+        agent.install_workspace_file_authority(self.workspace_file_authority.clone());
         agent.apply_ui_config(&self.config);
         agent.bypass_permissions_available = self.bypass_permissions_available;
         agent.quiet = true;
