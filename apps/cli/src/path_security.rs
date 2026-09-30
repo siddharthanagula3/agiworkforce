@@ -225,8 +225,19 @@ fn is_agent_instruction_path(path: &Path) -> bool {
     // case-insensitive filesystems: `.AGIWORKFORCE/RULES/x.md` is the very same
     // directory `memory.rs` globs, so it has to be the very same denial.
     let normalized = path.to_string_lossy().replace('\\', "/").to_lowercase();
+    let components: Vec<&str> = normalized
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect();
     AGENT_INSTRUCTION_DIRS.iter().any(|dir| {
-        normalized.contains(&format!("/{dir}/")) || normalized.starts_with(&format!("{dir}/"))
+        let protected: Vec<&str> = dir.split('/').collect();
+        components.iter().enumerate().any(|(index, component)| {
+            *component == protected[0]
+                && components[index..]
+                    .iter()
+                    .zip(&protected)
+                    .all(|(actual, expected)| actual == expected)
+        })
     })
 }
 
@@ -876,6 +887,26 @@ mod repo_relative_tests {
 mod agent_instruction_denylist_tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn instruction_directories_and_their_ancestors_are_not_writable() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        for target in [
+            ".agiworkforce",
+            ".agiworkforce/rules",
+            ".agiworkforce/commands",
+            ".agiworkforce/prompts",
+            ".agiworkforce/prompts/claude",
+            ".claude",
+            ".claude/commands",
+        ] {
+            assert!(
+                validate_workspace_write_path_with_cwd(target, tmp.path()).is_err(),
+                "trusted instruction ancestor was writable: {target}"
+            );
+        }
+        assert!(validate_workspace_write_path_with_cwd("docs/rules.md", tmp.path()).is_ok());
+    }
 
     /// The attack this closes: one approved `write_file`, with content from a
     /// poisoned web page or MCP tool result, lands in a directory the CLI loads

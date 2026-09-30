@@ -7,6 +7,64 @@ use crate::terminal_style as ts;
 
 const GIT_APPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+pub(crate) async fn parsed_patch_targets(patch: &str) -> Result<Vec<PathBuf>> {
+    let inspection = tempfile::tempdir()?;
+    let mut targets = Vec::new();
+    for (option, reverse) in [
+        ("--numstat", false),
+        ("--numstat", true),
+        ("--summary", false),
+    ] {
+        let mut command = tokio::process::Command::new("git");
+        command
+            .args(["apply", option, "-z"])
+            .current_dir(inspection.path())
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE");
+        if reverse {
+            command.arg("--reverse");
+        }
+        let output = crate::process_tree::output(
+            command,
+            Some(patch.as_bytes().to_vec()),
+            Some(GIT_APPLY_TIMEOUT),
+        )
+        .await?;
+        if !output.status.success() {
+            return Err(anyhow!("Refusing patch: git could not parse its targets"));
+        }
+        if option == "--summary" {
+            let summary = std::str::from_utf8(&output.stdout)?;
+            if summary.lines().any(|line| {
+                line.starts_with(" create mode 120000 ")
+                    || (line.starts_with(" mode change ") && line.contains(" => 120000 "))
+            }) {
+                return Err(anyhow!(
+                    "Refusing patch: symbolic link creation is not allowed"
+                ));
+            }
+            continue;
+        }
+        for record in output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|row| !row.is_empty())
+        {
+            let raw = std::str::from_utf8(record)?;
+            let path = raw
+                .splitn(3, '\t')
+                .nth(2)
+                .filter(|path| !path.is_empty())
+                .ok_or_else(|| anyhow!("Refusing patch: malformed target record"))?;
+            targets.push(PathBuf::from(path));
+        }
+    }
+    if targets.is_empty() {
+        return Err(anyhow!("Refusing patch: no file targets"));
+    }
+    Ok(targets)
+}
+
 struct TempPatchFile(PathBuf);
 
 impl TempPatchFile {
@@ -147,7 +205,10 @@ fn validate_patch_target(header: &str, target_path: &Path, cwd_canonical: &Path)
     // For paths that resolve under cwd, double-check the canonical form
     // doesn't slip out via symlink.
     let absolute = cwd_canonical.join(target_path);
-    if std::fs::symlink_metadata(&absolute).is_ok() {
+    if let Ok(metadata) = std::fs::symlink_metadata(&absolute) {
+        if metadata.file_type().is_symlink() {
+            return Err(anyhow!("Refusing patch: symbolic link target: {header}"));
+        }
         let canonical = absolute
             .canonicalize()
             .map_err(|e| anyhow!("Cannot resolve patch target {}: {}", header, e))?;
@@ -168,6 +229,15 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
 
     // CLI-NEW-007 fix: validate every target path before invoking `git apply`.
     validate_patch_targets(patch, cwd)?;
+    let cwd_canonical = cwd.canonicalize()?;
+    for target in parsed_patch_targets(patch).await? {
+        let name = target
+            .to_str()
+            .ok_or_else(|| anyhow!("Refusing non-UTF-8 target"))?;
+        validate_patch_target(name, &target, &cwd_canonical)?;
+        crate::path_security::validate_workspace_write_path_with_cwd(name, &cwd_canonical)
+            .map_err(|reason| anyhow!(reason))?;
+    }
     let parsed = crate::diff_model::Diff::parse(patch);
     let tmp_path = std::env::temp_dir().join(format!("agi-patch-{}.patch", uuid::Uuid::new_v4()));
     // Write with restricted permissions (0o600) to prevent other users from reading
