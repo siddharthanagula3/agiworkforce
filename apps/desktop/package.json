@@ -66,7 +66,7 @@
     "@radix-ui/react-tabs": "^1.1.21",
     "@radix-ui/react-toggle": "^1.1.18",
     "@radix-ui/react-tooltip": "^1.2.16",
-    "@sentry/react": "^10.75.0",
+    "@sentry/react": "^11.0.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-deep-link": "^2.4.10",
     "@tauri-apps/plugin-dialog": "^2.7.3",
@@ -85,7 +85,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
     "dompurify": "^3.4.15",
-    "framer-motion": "^13.4.0",
+    "framer-motion": "^13.4.4",
     "fuse.js": "^7.5.0",
     "i18next": "^26.4.2",
     "i18next-browser-languagedetector": "^8.2.1",
@@ -122,7 +122,7 @@
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.6.1",
+    "@types/node": "^26.6.3",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -130,7 +130,7 @@
     "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.70.0",
     "@vitejs/plugin-react-swc": "^4.3.3",
-    "@vitest/coverage-v8": "^5.0.1",
+    "@vitest/coverage-v8": "^5.0.2",
     "@vitest/ui": "^5.0.0",
     "@wdio/cli": "^9.31.8",
     "@wdio/globals": "^9.31.3",
@@ -153,6 +153,6 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "7.0.2",
     "vite": "^8.3.0",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.2"
   }
 }
