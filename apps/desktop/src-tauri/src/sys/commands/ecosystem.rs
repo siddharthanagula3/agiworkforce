@@ -328,10 +328,10 @@ fn imported_server_to_mcp_config(
             env: HashMap::new(),
             enabled: false,
             transport: imported.url.clone().map(|url| {
-                crate::core::mcp::TransportConfig::Http(crate::core::mcp::HttpSseConfig {
+                crate::core::mcp::TransportConfig::Http(Box::new(crate::core::mcp::HttpSseConfig {
                     url,
                     ..Default::default()
-                })
+                }))
             }),
         }
     }
