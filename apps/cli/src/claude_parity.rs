@@ -899,8 +899,22 @@ fn unfenced_diff(text: &str) -> Option<String> {
 }
 
 pub fn render_mcp(session: &AgentSession) -> String {
+    let mut blocked: Vec<String> = crate::mcp::McpManager::load_configs()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|(name, config)| {
+            crate::mcp::policy_refusal(config)
+                .map(|reason| format!("  {name} is not started: {reason}."))
+        })
+        .collect();
+    blocked.sort();
+    let blocked = if blocked.is_empty() {
+        String::new()
+    } else {
+        format!("\nBlocked by your workspace\n{}", blocked.join("\n"))
+    };
     let Some(tools) = session.mcp_info() else {
-        return "No MCP servers connected.".to_string();
+        return format!("No MCP servers connected.{blocked}");
     };
 
     let mut servers: Vec<&str> = tools.iter().map(|tool| tool.server_name.as_str()).collect();
@@ -924,7 +938,7 @@ pub fn render_mcp(session: &AgentSession) -> String {
             lines.push(format!("    ... +{} more", server_tools.len() - 5));
         }
     }
-    lines.join("\n")
+    format!("{}{blocked}", lines.join("\n"))
 }
 
 pub fn handle_output_style(session: &mut AgentSession, arg: &str) -> String {

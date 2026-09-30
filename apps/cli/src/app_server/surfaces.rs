@@ -618,6 +618,11 @@ fn startable_server(
             "'{name}' comes from this workspace's .mcp.json, and project servers start only once the workspace is trusted. Run /trust grant in agi, then try again."
         )));
     }
+    if let Some(reason) = crate::mcp::policy_refusal(&server.config) {
+        return Err(DeveloperSessionHostError::conflict(format!(
+            "'{name}' is not started: {reason}."
+        )));
+    }
     Ok(server)
 }
 

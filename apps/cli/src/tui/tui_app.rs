@@ -4285,6 +4285,12 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     });
                     let status = if disabled {
                         McpStatus::Disabled
+                    } else if configured
+                        .get(name)
+                        .and_then(crate::mcp::policy_refusal)
+                        .is_some()
+                    {
+                        McpStatus::Blocked
                     } else if tool_count > 0 {
                         McpStatus::Connected
                     } else if signed_out_remote {
@@ -4303,6 +4309,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 label: "Configured servers".to_string(),
                 servers,
             }]);
+            for name in &names {
+                if let Some(reason) = configured.get(name).and_then(crate::mcp::policy_refusal) {
+                    text.push_str(&format!("\n{name} is not started: {reason}."));
+                }
+            }
             text.push_str(
                 "\n/mcp tools [server] lists tools · /mcp restart reconnects · agi mcp login <name> signs in to a remote server · /mcp enable|disable <name>",
             );

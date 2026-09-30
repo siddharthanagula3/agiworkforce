@@ -3707,14 +3707,26 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
                 );
                 return Ok(());
             }
+            let configs = mcp::McpManager::load_configs().unwrap_or_default();
             for row in rows {
+                let refusal = configs
+                    .get(&row.name)
+                    .filter(|_| row.enabled)
+                    .and_then(mcp::policy_refusal);
                 println!(
                     "{:<24} {:<8} {:<6} {}",
                     terminal_text::sanitize_terminal_text(&row.name),
-                    if row.enabled { "enabled" } else { "disabled" },
+                    match (&refusal, row.enabled) {
+                        (Some(_), _) => "blocked",
+                        (None, true) => "enabled",
+                        (None, false) => "disabled",
+                    },
                     terminal_text::sanitize_terminal_text(&row.kind),
                     terminal_text::sanitize_terminal_text(&row.target)
                 );
+                if let Some(reason) = refusal {
+                    println!("{:<24} not started: {reason}", "");
+                }
             }
             Ok(())
         }
