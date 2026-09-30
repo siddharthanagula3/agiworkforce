@@ -428,7 +428,7 @@ import { moderateManagedPrompt } from '@/lib/moderation';
 import { timePhase } from '@/lib/observability/phase-timer';
 import { assertCapabilityAvailable, readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
-import { WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
+import { FAST_MODE_CAPABILITY, WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
 import { CHAT_TURN_PHASE } from './turn-phases';
 
 export const ChatCompletionRequestSchema = z
@@ -2976,6 +2976,19 @@ export async function processRequest(
   creditBalancePromise?.catch(() => {});
 
   const chatSurface = resolveAuthenticatedSurface(request, auth);
+  if (chatRequest.speed === 'fast') {
+    const { organizationId: fastWorkspaceId } = await scopedDbPromise;
+    const fastSubject = buildFlagSubject(request, {
+      userId,
+      workspaceId: fastWorkspaceId,
+      role: null,
+      plan: subscription.plan_tier,
+      surface: chatSurface,
+    });
+    await assertCapabilityAvailable(fastSubject, FAST_MODE_CAPABILITY, 'Fast mode', undefined, {
+      failClosed: true,
+    });
+  }
   // A declaration is a claim about the caller's own device, never an
   // authorization: it decides which device tools are offered, and the device
   // refuses or prompts for every step it produces. Only the desktop and mobile

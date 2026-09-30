@@ -68,6 +68,8 @@ import {
   type Effort,
   getPickerModelTier,
   evaluateModelEnvironment,
+  featureDefinition,
+  featureMaturityLabel,
   getModelMetadataById,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
@@ -1161,6 +1163,10 @@ export function ComposerFooter({
   const hasEffortControl = supportsAdaptive && effortChips.length > 0;
   const showThinkingSwitch = showsThinkingSwitch(reasoning);
   const fastTier = getModelMetadataById(selectedModel.id)?.fastTier;
+  const fastModeDefinition = featureDefinition('fast_mode');
+  const fastModeMaturityLabel = fastModeDefinition
+    ? featureMaturityLabel(fastModeDefinition.maturity)
+    : null;
   const fastAvailability = useFastModeAvailability(
     Boolean(fastTier),
     knownTier === null ? null : !freePlan,
@@ -1758,7 +1764,14 @@ export function ComposerFooter({
                 {fastTier && (
                   <div className="mt-3 border-t border-[var(--chat-border)] pt-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium text-foreground">Fast mode</span>
+                      <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        Fast mode
+                        {fastModeMaturityLabel && (
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {fastModeMaturityLabel}
+                          </span>
+                        )}
+                      </span>
                       <Switch
                         checked={fastOn}
                         disabled={!fastAvailability.allowed}

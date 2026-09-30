@@ -7,7 +7,7 @@ vi.mock('next/navigation', () => ({
 }));
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import React from 'react';
-import { EFFORT_LABEL } from '@agiworkforce/types';
+import { EFFORT_LABEL, featureDefinition, featureMaturityLabel } from '@agiworkforce/types';
 
 const sel = vi.hoisted(() => ({ id: 'fixture-six-level' }));
 
@@ -22,6 +22,13 @@ const MODELS = vi.hoisted(() => [
   {
     id: 'fixture-always-on',
     name: 'Always-On Fixture',
+    provider: 'Anthropic',
+    providerKey: 'anthropic',
+    description: 'Adaptive reasoning',
+  },
+  {
+    id: 'fixture-fast-mode',
+    name: 'Fast Mode Fixture',
     provider: 'Anthropic',
     providerKey: 'anthropic',
     description: 'Adaptive reasoning',
@@ -89,6 +96,13 @@ const REASONING_BY_MODEL = vi.hoisted(
         defaultEffort: 'medium',
         canDisableThinking: false,
       },
+      'fixture-fast-mode': {
+        capable: true,
+        control: 'always_on',
+        supportedEfforts: ['low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        canDisableThinking: false,
+      },
       'fixture-four-level': {
         capable: true,
         control: 'always_on',
@@ -125,6 +139,22 @@ const REASONING_BY_MODEL = vi.hoisted(
       },
     }) as Record<string, Record<string, unknown>>,
 );
+
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const fastModel = actual.listCanonicalModels().find((model) => model.fastTier);
+  if (!fastModel) throw new Error('The catalogue must declare a fast model');
+  return {
+    ...actual,
+    getModelMetadataById: (id: string) =>
+      id === 'fixture-fast-mode' ? { ...fastModel, id } : actual.getModelMetadataById(id),
+  };
+});
+
+vi.mock('@/features/chat/hooks/use-fast-mode-availability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/chat/hooks/use-fast-mode-availability')>()),
+  useFastModeAvailability: () => ({ allowed: true, reason: null }),
+}));
 
 vi.mock('@shared/stores/model-store', () => ({
   useModelStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -325,6 +355,24 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     thinking.enabled = true;
     thinking.effort = 'medium';
     billing.tier = 'max';
+  });
+
+  it('registers Fast mode as a governed beta feature', () => {
+    expect(featureDefinition('fast_mode')).toMatchObject({
+      maturity: 'beta',
+      governance: { userFacing: true, killSwitch: 'fast_mode' },
+    });
+  });
+
+  it('shows the canonical Beta label beside Fast mode in the effort panel', () => {
+    sel.id = 'fixture-fast-mode';
+    render(<ComposerFooter />);
+
+    const label = screen.getByText('Fast mode');
+    expect(label.parentElement).toHaveTextContent(featureMaturityLabel('beta') ?? '');
+    expect(screen.getByText(featureMaturityLabel('beta') ?? '')).toHaveClass(
+      'text-muted-foreground',
+    );
   });
 
   it('(a) Six-Level Fixture exposes its six exact levels on the effort slider', () => {
