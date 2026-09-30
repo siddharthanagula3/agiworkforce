@@ -12,7 +12,7 @@ delete this file when it is empty. An entry marked "same fix as" closes with its
 primary. Codex's raw report stays outside the repository, in its read-only
 worktree `.worktrees/codex-reaudit/audit/codex-reaudit-2026-09-30/`.
 
-Open now: 467 entries (177 defects, 290 half-built).
+Open now: 465 entries (175 defects, 290 half-built).
 
 ## Signaling relay
 
@@ -261,7 +261,6 @@ Open now: 467 entries (177 defects, 290 half-built).
 - **04/1174** (defect): Parse on/off in the TUI /fast, be idempotent, and pass config.default.fast_model as the REPL does. Files: `apps/cli/src/tui/tui_app.rs`.
 - **04/1205** (defect, security): Have /privacy-settings print (and open user-initiated) the web Settings > Privacy URL and correct the registry description to match what it does. Files: `apps/cli/src/claude_parity.rs`, `crates/agiworkforce-command-registry/src/lib.rs`.
 - **04/1213** (defect): Retitle the command to what it does (show API base and proxy environment) or remove it, and drop the 'set' promise from the registry description and the '# Remote-env defaults' heading. Files: `crates/agiworkforce-command-registry/src/lib.rs`, `apps/cli/src/claude_parity.rs`, `apps/cli/src/tui/tui_app.rs`.
-- **04/1267** (defect, security): Add a protected-path list (.git, .agiworkforce config, policy and hooks, .husky, .vscode, .idea, shell rc files) that is never auto-approved by acceptEdits or session allows and always prompts, with the prompt naming the path; bypass remains the only... Files: `apps/cli/src/path_security.rs`, `apps/cli/src/features/exec/tools/mod.rs`, `apps/cli/src/features/exec/tools/file_ops/mod.rs`.
 - **04/1304** (defect): Remove the double delivery: skip files in MemoryManager tiers that instruction_sources already loaded (or drop the project/local tiers from the memory block), and add a test that one CLAUDE.md appears once. Files: `apps/cli/src/memory.rs`, `apps/cli/src/agent/prompt.rs`, `apps/cli/src/agent/mod.rs`.
 - **04/1307** (defect): Scan rule directories recursively (following symlinks safely), accept `paths:` as well as `globs:`, and expand brace alternatives before matching, with tests. Files: `apps/cli/src/memory.rs`.
 - **04/1310** (defect): Surface the truncated flag and skipped file names as a startup notice and in /status or /context, and warn when a single instruction file is very large; same defect as 04/1088. Files: `apps/cli/src/compaction.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/repl/mod.rs`.
@@ -285,7 +284,6 @@ Open now: 467 entries (177 defects, 290 half-built).
 - **06/2312** (defect): Call kill_all_process_trees on every non-TUI exit path (headless interrupt, SIGTERM/SIGHUP/CTRL_CLOSE) and start MCP stdio children in their own process group so their descendants are torn down with them. Files: `apps/cli/src/lib.rs`, `apps/cli/src/process_tree.rs`, `crates/agiworkforce-mcp/src/transport/stdio.rs`.
 - **06/2316** (defect): Run execute_glob's walk and canonicalize loop (and the small std::fs reads in file_ops preview and memory_tool) inside tokio::task::spawn_blocking. Files: `apps/cli/src/features/exec/tools/dir_ops/mod.rs`, `apps/cli/src/features/exec/tools/file_ops/mod.rs`, `apps/cli/src/features/exec/tools/memory_tool.rs`.
 - **06/2319** (defect): Replace the expect on AGI_CLI_SERVER_ADDR with a user-facing error, reject a malformed --listen instead of silently falling back, and optionally enable clippy unwrap_used for non-test CLI code. Files: `apps/cli/src/lib.rs`, `Cargo.toml`.
-- **06/2320** (defect, security): Run patch_target_paths (validate_file_write_path) on every apply_patch call regardless of require_confirm and fail the tool when it errors, and have apply_git_patch reject a new file under a symlinked parent. Files: `apps/cli/src/features/exec/tools/file_ops/mod.rs`, `apps/cli/src/apply_patch.rs`.
 - **06/2326** (defect, security): Reject requests whose Host is not the bound loopback host/port (DNS-rebinding defence), compare the token in constant time, and enforce the loopback default inside the library bind path so no caller can skip it. Files: `crates/agiworkforce-app-server/src/lib.rs`, `apps/cli/src/lib.rs`.
 - **F-CLI-TUI-003** (defect, security, low): Key TUI and REPL prompt history by workspace so Up/Down recall does not leak prompts across projects. Files: `apps/cli/src/tui/prompt_history.rs`, `apps/cli/src/tui/tui_app.rs`, `apps/cli/src/repl/mod.rs`.
 - **F-CLI-TUI-004** (defect, security, low): Reload keybindings live after /config set, stop /config set from saving the merged config, then add contexts/chords/unbind. Files: `apps/cli/src/keybindings.rs`, `apps/cli/src/tui/tui_app.rs`, `apps/cli/src/config.rs`.
