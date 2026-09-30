@@ -4022,34 +4022,6 @@ Verification: Current guard outputs and isolated fixtures captured in instrument
 
 Resolution/acceptance: Include nonignored untracked files, hash each content variant, preserve review results only for identical hashes, invalidate changed variants and label scope explicitly.
 
-## MOBILE-HMAC-CONCURRENT-REPLAY-01
-
-Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
-
-Concurrent copies of one signed companion frame both pass nonce replay checks. Nonce presence is tested before awaiting the digest and recorded afterward without a second check. Sequential duplicate rejected and invalid MAC rejected; concurrent authentic duplicate accepted twice; nonce cache then has one entry.
-
-Impact/trigger: Duplicate authenticated inbound control frames can be applied, including repeated UI updates and notifications. This is not a signature forgery or demonstrated arbitrary command execution.
-
-Start at `apps/mobile/lib/dispatchHmac.ts:304` in `.worktrees/billing-e2e`. Evidence and full anchors: [`mobile-control-review.json`](../live-check/2026-09-29-ecosystem-review/mobile-control-review.json).
-
-Verification: mobile-race-repro.cjs exited0 and confirmed both failures plus sequential replay/bad-MAC controls. Limit: Native app/signaling/notifications not run; unchanged module logic exercised with cryptographic controls and deterministic async timing.
-
-Resolution/acceptance: After a valid digest, atomically recheck and record the nonce before returning acceptance. Do not let an invalid MAC reserve a nonce.
-
-## MOBILE-CONTROL-AFTER-DISCONNECT-01
-
-Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
-
-A previously received companion frame mutates state after disconnect. Incoming verification does not capture and revalidate the attempt/HMAC session after its await. The signaling callback only checks the attempt before verification. Actual disconnect clears agents; releasing the pending digest restores old-pair-agent while status remains disconnected.
-
-Impact/trigger: Old paired task data can reappear after unpairing. Account-switch leakage and a native notification delivery were not demonstrated.
-
-Start at `apps/mobile/stores/connectionStore.ts:589` in `.worktrees/billing-e2e`. Evidence and full anchors: [`mobile-control-review.json`](../live-check/2026-09-29-ecosystem-review/mobile-control-review.json).
-
-Verification: mobile-race-repro.cjs exited0 and confirmed both failures plus sequential replay/bad-MAC controls. Limit: Native app/signaling/notifications not run; unchanged module logic exercised with cryptographic controls and deterministic async timing.
-
-Resolution/acceptance: Capture the incoming connection generation and HMAC identity, then check both after verification and before applying payloads. Apply the same ownership check to queued controls.
-
 ## SCHEDULE-POLICY-REFUSAL-AS-SUCCESS-01
 
 Severity: Medium. Status: open in source snapshot `49d0c30f`; deployment unknown.
