@@ -603,6 +603,157 @@ describe('native mobile IAP hook', () => {
     expect(result.current.restoring).toBe(false);
   });
 
+  describe('every Restore purchases pass finishes', () => {
+    const subscription = MOBILE_IAP_PRODUCT_DEFINITIONS.find(
+      (item) => item.kind === 'subscription',
+    )!;
+    const verified = {
+      success: true,
+      kind: 'subscription',
+      productKey: subscription.key,
+      status: 'already_processed',
+      planTier: subscription.planTier,
+      currentPeriodEnd: '2026-10-01T00:00:00.000Z',
+    };
+
+    function storeReceipt(purchaseToken: string | null, overrides: Record<string, unknown> = {}) {
+      return {
+        productId: 'fixture.subscription.restore',
+        purchaseToken,
+        purchaseState: 'purchased',
+        ...overrides,
+      };
+    }
+
+    async function renderBilling() {
+      const hook = renderHook(() => useMobileIap({ enabled: true }));
+      await waitFor(() => expect(hook.result.current.loading).toBe(false));
+      return hook;
+    }
+
+    beforeEach(() => {
+      mockFetchCatalog.mockResolvedValue({
+        enabled: false,
+        platform: 'ios',
+        appAccountToken: null,
+        products: [],
+        unavailableReason: 'New purchases are unavailable.',
+        unavailableCode: null,
+      });
+      mockVerifyPurchase.mockResolvedValue(verified);
+    });
+
+    it('after a purchase confirmed earlier in the same visit', async () => {
+      const receipt = storeReceipt('fixture-buy-then-restore-token');
+      const { result } = await renderBilling();
+      await act(async () => {
+        mockCallbacks['onPurchaseSuccess']?.(receipt);
+      });
+      await waitFor(() => expect(mockRefreshTier).toHaveBeenCalledTimes(1));
+
+      Object.assign(mockIapState, { availablePurchases: [receipt] });
+      await act(async () => result.current.restore());
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.restoring).toBe(false);
+      expect(mockVerifyPurchase).toHaveBeenCalledTimes(1);
+      expect(mockFinishTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('after Billing confirmed a stranded Google Play purchase on open', async () => {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+      Object.assign(mockIapState, {
+        availablePurchases: [
+          storeReceipt('fixture-stranded-then-restore-token', { isAcknowledgedAndroid: false }),
+        ],
+      });
+      const { result } = await renderBilling();
+      await waitFor(() => expect(mockRefreshTier).toHaveBeenCalledTimes(1));
+
+      await act(async () => result.current.restore());
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.restoring).toBe(false);
+      expect(mockVerifyPurchase).toHaveBeenCalledTimes(1);
+      expect(mockFinishTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('when the store returns only a pending payment', async () => {
+      const { result } = await renderBilling();
+      Object.assign(mockIapState, {
+        availablePurchases: [
+          storeReceipt('fixture-pending-restore-token', { purchaseState: 'pending' }),
+        ],
+      });
+
+      await act(async () => result.current.restore());
+
+      await waitFor(() => expect(result.current.restoring).toBe(false));
+      expect(result.current.error).toBe(
+        'Payment is pending in the store. Access will update after payment completes.',
+      );
+      expect(mockVerifyPurchase).not.toHaveBeenCalled();
+    });
+
+    it('when the store returns a purchase without a token', async () => {
+      const { result } = await renderBilling();
+      Object.assign(mockIapState, { availablePurchases: [storeReceipt(null)] });
+
+      await act(async () => result.current.restore());
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.restoring).toBe(false);
+      expect(mockVerifyPurchase).not.toHaveBeenCalled();
+    });
+
+    it('each time it is tapped again with the same receipts', async () => {
+      const { result } = await renderBilling();
+      Object.assign(mockIapState, {
+        availablePurchases: [storeReceipt('fixture-restore-twice-token')],
+      });
+
+      await act(async () => result.current.restore());
+      await waitFor(() => expect(result.current.restoring).toBe(false));
+      expect(mockFinishTransaction).toHaveBeenCalledTimes(1);
+
+      await act(async () => result.current.restore());
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.restoring).toBe(false);
+      expect(mockVerifyPurchase).toHaveBeenCalledTimes(1);
+      expect(mockFinishTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('only after every restored purchase is confirmed', async () => {
+      let resolveSlowVerification: ((value: unknown) => void) | undefined;
+      mockVerifyPurchase.mockResolvedValueOnce(verified).mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSlowVerification = resolve;
+        }),
+      );
+      const { result } = await renderBilling();
+      Object.assign(mockIapState, {
+        availablePurchases: [
+          storeReceipt('fixture-restore-fast-token'),
+          storeReceipt('fixture-restore-slow-token'),
+        ],
+      });
+
+      await act(async () => result.current.restore());
+      await waitFor(() => expect(mockRefreshTier).toHaveBeenCalledTimes(1));
+      await act(async () => undefined);
+      expect(mockVerifyPurchase).toHaveBeenCalledTimes(2);
+      expect(result.current.restoring).toBe(true);
+
+      await act(async () => {
+        resolveSlowVerification?.(verified);
+      });
+
+      await waitFor(() => expect(result.current.restoring).toBe(false));
+      expect(mockFinishTransaction).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('leaves an unverified purchase unfinished when new purchases are disabled', async () => {
     mockFetchCatalog.mockResolvedValue({
       enabled: false,

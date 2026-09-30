@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+const { auditSpy } = vi.hoisted(() => ({
+  auditSpy: vi.fn(async (_event: Record<string, unknown>) => undefined),
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  recordAuditEvent: auditSpy,
+}));
 import { createHash } from 'node:crypto';
 
 const mocks = vi.hoisted(() => ({
@@ -118,6 +126,32 @@ describe('POST /api/github/install/complete', () => {
     const response = await POST(completeRequest({ state: STATE, code: 'one-time-code' }));
 
     expect(await statusOf(response)).toBe('already_linked');
+  });
+
+  it('records the linked installation, and never the code, state or token', async () => {
+    const response = await POST(completeRequest({ state: STATE, code: 'one-time-code' }));
+
+    expect(await statusOf(response)).toBe('connected');
+    expect(auditSpy).toHaveBeenCalledTimes(1);
+    const event = auditSpy.mock.calls[0]![0];
+    expect(event).toMatchObject({ userId: 'user-1', eventType: 'connector_added' });
+    expect(event['detail']).toEqual({
+      resourceType: 'github_installation',
+      resourceId: '987654',
+      resourceName: 'verified-org',
+      source: 'github',
+      status: 'connected',
+    });
+    expect(JSON.stringify(event['detail'])).not.toMatch(/one-time-code|ghu_|verifier|b{64}/);
+  });
+
+  it('records nothing when the installation does not link', async () => {
+    mocks.link.mockResolvedValue(false);
+    await POST(completeRequest({ state: STATE, code: 'one-time-code' }));
+    mocks.findInstallation.mockResolvedValue(null);
+    await POST(completeRequest({ state: STATE, code: 'one-time-code' }));
+
+    expect(auditSpy).not.toHaveBeenCalled();
   });
 
   it('closes a denied authorization without exchanging anything', async () => {

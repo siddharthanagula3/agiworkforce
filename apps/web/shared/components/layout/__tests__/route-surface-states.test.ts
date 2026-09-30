@@ -104,7 +104,6 @@ const declaresTitle = (segment: Segment) =>
 const ROUTES_WITHOUT_A_LOADING_BOUNDARY: Record<string, string> = {
   'auth/desktop': 'awaits only its own searchParams, so there is no request to wait on',
   'auth/sso-callback': 'awaits only its own searchParams, so there is no request to wait on',
-  docs: 'awaits only its own searchParams to pick a topic redirect, so there is no request to wait on',
   'legal/archive/[policy]':
     'prerendered through generateStaticParams with dynamicParams off, so nothing resolves at request time',
   'legal/archive/[policy]/[date]':

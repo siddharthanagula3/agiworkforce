@@ -17,11 +17,7 @@ const DATA_SOURCE = [
 // Single-record panels: there is no list to be empty, and each renders its own
 // unset state in words the list-shaped signals do not match.
 const UNSET_STATE: Readonly<Record<string, string>> = {
-  'WorkspaceAuditStreaming.tsx': 'No destination',
-  'WorkspaceBillingSummary.tsx': 'No workspace selected',
   'WorkspaceDataRegion.tsx': 'Choose a region…',
-  'WorkspaceIdentityPanels.tsx': 'No workspace selected',
-  'WorkspaceSpendLimit.tsx': 'Set limit',
 };
 
 function consolePanels(): { file: string; source: string }[] {

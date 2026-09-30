@@ -18,6 +18,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { readBodyCapped } from '@/lib/url-fetch/guarded-fetch';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { openCloudCodeSession } from '@/lib/services/cloud-code-session-open';
@@ -130,9 +131,23 @@ async function handleHandoff(request: NextRequest) {
     },
   );
   if (opened instanceof Response) return opened;
+  if (!opened.reused) {
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      request,
+      eventType: 'code_session_lifecycle_changed',
+      detail: {
+        resourceType: 'code_session',
+        resourceId: opened.session.id,
+        status: 'opened',
+        source: 'handoff',
+      },
+    });
+  }
 
   const response = {
-    session: opened,
+    session: opened.session,
     start: admitted.admission.start,
     seedPrompt: buildCloudCodeHandoffSeedPrompt(handoff, admitted.admission),
     warnings: handoff.workspace.uncommittedChanges ? ['uncommitted_changes_not_included'] : [],

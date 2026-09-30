@@ -3573,7 +3573,8 @@ export async function* runToolLoop(
       ? callerDeclaredTools
       : callerDeclaredTools.filter(
           (name) =>
-            !PLATFORM_TOOL_METADATA[name] && !mcpTools.some((tool) => tool.qualifiedName === name),
+            !mcpTools.some((tool) => tool.qualifiedName === name) &&
+            (isBrowserCommand(name) || !PLATFORM_TOOL_METADATA[name]),
         ),
   );
   const auditToolCall = (

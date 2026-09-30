@@ -743,7 +743,28 @@ describe('createCloudCodeSession quota enforcement', () => {
     const first = await createCloudCodeSession(db, OWNER, createInput(0), PLAN_TIER);
     const second = await createCloudCodeSession(db, OWNER, createInput(0), PLAN_TIER);
 
-    expect(second.id).toBe(first.id);
+    expect(first.reused).toBe(false);
+    expect(second.reused).toBe(true);
+    expect(second.session.id).toBe(first.session.id);
+    expect(db.rows).toHaveLength(1);
+  });
+
+  it('reports the session a concurrent request inserted first as reused', async () => {
+    const db = createFakeDb();
+    const winner = await createCloudCodeSession(db, OWNER, createInput(0), PLAN_TIER);
+    const racing: FakeDb = {
+      ...db,
+      transaction: async () => {
+        throw Object.assign(new Error('duplicate key value violates unique constraint'), {
+          code: '23505',
+        });
+      },
+    };
+
+    const loser = await createCloudCodeSession(racing, OWNER, createInput(0), PLAN_TIER);
+
+    expect(loser.reused).toBe(true);
+    expect(loser.session.id).toBe(winner.session.id);
     expect(db.rows).toHaveLength(1);
   });
 
@@ -808,7 +829,7 @@ describe('createCloudCodeSession extra egress hosts', () => {
 
   it('persists the normalized extra hosts and returns them from the created session', async () => {
     const db = createFakeDb();
-    const session = await createCloudCodeSession(
+    const { session } = await createCloudCodeSession(
       db,
       OWNER,
       { ...createInput(0), extraHosts: ['Example.com', 'example.com', 'other.example.com'] },
@@ -820,7 +841,7 @@ describe('createCloudCodeSession extra egress hosts', () => {
 
   it('reports no extra hosts for a session created without any', async () => {
     const db = createFakeDb();
-    const session = await createCloudCodeSession(db, OWNER, createInput(0), PLAN_TIER);
+    const { session } = await createCloudCodeSession(db, OWNER, createInput(0), PLAN_TIER);
 
     expect(session.extraHosts).toEqual([]);
   });
@@ -840,7 +861,7 @@ describe('createCloudCodeSession extra egress hosts', () => {
       PLAN_TIER,
     );
 
-    expect(second.id).toBe(first.id);
+    expect(second).toMatchObject({ session: { id: first.session.id }, reused: true });
     expect(db.rows).toHaveLength(1);
   });
 
@@ -859,7 +880,7 @@ describe('createCloudCodeSession extra egress hosts', () => {
       PLAN_TIER,
     );
 
-    expect(second.id).toBe(first.id);
+    expect(second).toMatchObject({ session: { id: first.session.id }, reused: true });
     expect(db.rows).toHaveLength(1);
   });
 
@@ -920,7 +941,7 @@ describe('createCloudCodeSession codex proxy bootstrap', () => {
 
   it('writes a codex config.toml pointing at the session proxy root and the credential env var, once at creation', async () => {
     const db = createFakeDb();
-    const session = await createCloudCodeSession(
+    const { session } = await createCloudCodeSession(
       db,
       OWNER,
       { ...createInput(0), runtimeId: 'codex' },
@@ -971,7 +992,7 @@ describe('cloud code session run lease', () => {
   });
 
   async function readySession(db: FakeDb): Promise<string> {
-    const session = await createCloudCodeSession(db, OWNER, createInput(0), PLAN_TIER);
+    const { session } = await createCloudCodeSession(db, OWNER, createInput(0), PLAN_TIER);
     expect(session.state).toBe('ready');
     return session.id;
   }
@@ -1238,7 +1259,7 @@ describe('commitAndPushCloudCodeSession', () => {
     vi.mocked(getE2BExecutor).mockResolvedValue(
       executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
     );
-    const session = await createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);
+    const { session } = await createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);
     expect(session.state).toBe('ready');
     return session.id;
   }
@@ -1389,7 +1410,7 @@ describe('the branch a repository session works on', () => {
     vi.mocked(getE2BExecutor).mockResolvedValue(
       executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
     );
-    return createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);
+    return (await createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER)).session;
   }
 
   it('is cut before any work, and never the ref the clone checked out', async () => {

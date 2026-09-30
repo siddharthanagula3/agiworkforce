@@ -16,6 +16,11 @@ vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock('@/lib/server/terms', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  readTermsStanding: async () => ({ kind: 'current' }),
+}));
+
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
