@@ -1,12 +1,12 @@
-import type { Pool, QueryResult } from '@neondatabase/serverless';
+import type { SignalingDatabasePool, SignalingDatabaseQueryResult } from './db.js';
 
 export async function queryWithStatementTimeout(
-  pool: Pick<Pool, 'connect'>,
+  pool: Pick<SignalingDatabasePool, 'connect'>,
   sql: string,
   params: unknown[],
   timeoutMs: number,
   reportTransportError: (error: unknown) => void,
-): Promise<QueryResult> {
+): Promise<SignalingDatabaseQueryResult> {
   const client = await pool.connect();
   client.on('error', reportTransportError);
   let releaseError: Error | undefined;

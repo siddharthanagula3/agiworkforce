@@ -507,6 +507,7 @@
       "tables": [
         "connector_call_events",
         "connector_tool_permissions",
+        "github_install_authorizations",
         "organization_shared_connectors",
         "user_connectors",
         "user_custom_connectors"

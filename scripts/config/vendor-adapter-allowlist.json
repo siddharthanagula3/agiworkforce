@@ -2,10 +2,7 @@
   "schemaVersion": 1,
   "vendors": [
     {
-      "packages": [
-        "@upstash/redis",
-        "@upstash/ratelimit"
-      ],
+      "packages": ["@upstash/redis", "@upstash/ratelimit"],
       "port": "@agiworkforce/key-value",
       "files": [
         {
@@ -16,10 +13,7 @@
       ]
     },
     {
-      "packages": [
-        "@aws-sdk/client-s3",
-        "@aws-sdk/s3-request-presigner"
-      ],
+      "packages": ["@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"],
       "port": "@agiworkforce/object-storage",
       "files": [
         {
@@ -35,9 +29,7 @@
       ]
     },
     {
-      "packages": [
-        "@neondatabase/serverless"
-      ],
+      "packages": ["@neondatabase/serverless"],
       "port": "@agiworkforce/data-layer",
       "files": [
         {
@@ -69,13 +61,16 @@
           "path": "services/signaling-server/src/db.ts",
           "owner": false,
           "reason": "a separate service outside apps/web that needs its own Neon client rather than the web app's port instance."
+        },
+        {
+          "path": "services/signaling-server/__tests__/fixtures/db-timeout-check.ts",
+          "owner": false,
+          "reason": "independently verifies the actual Neon driver through disposable PostgreSQL and transaction-pooled PgBouncer, including transport timeouts and pool cleanup; importing the service's configured client would initialize it before the local fixture is ready."
         }
       ]
     },
     {
-      "packages": [
-        "pg"
-      ],
+      "packages": ["pg"],
       "port": "@agiworkforce/data-layer",
       "files": [
         {

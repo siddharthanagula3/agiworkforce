@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Switch } from '@agiworkforce/ui';
+import { Spinner, Switch } from '@agiworkforce/ui';
 import {
   PRODUCT_ANALYTICS_CONSENT_PATH,
   PRODUCT_ANALYTICS_CONSENT_PURPOSE,
@@ -98,6 +98,12 @@ export function ProductAnalyticsConsentRow() {
         {state.kind === 'unavailable' ? (
           <span role="alert" style={{ fontSize: 12, color: 'var(--chat-accent-primary-text)' }}>
             Your product analytics choice could not be loaded.
+          </span>
+        ) : null}
+        {state.kind === 'loading' ? (
+          <span role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Spinner size="sm" aria-hidden="true" />
+            Loading your product analytics choice
           </span>
         ) : null}
         {error ? (

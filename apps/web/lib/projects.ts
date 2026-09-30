@@ -16,13 +16,14 @@ const ACCENT_COLORS: readonly ProjectAccentColor[] = [
   'zinc',
 ];
 const IMPORT_SOURCES: readonly ProjectImportSource[] = ['claude', 'openai', 'manual'];
-type PrivacyMode = ManagedCloudProject['defaultPrivacyMode'];
-type ProviderMode = ManagedCloudProject['defaultProviderMode'];
-type SourceSurface = ManagedCloudProject['allowedSurfaces'][number];
 
-const SURFACES: readonly SourceSurface[] = [...SYNCED_APP_SURFACES];
+const SURFACES: readonly ManagedCloudProject['allowedSurfaces'][number][] = [
+  ...SYNCED_APP_SURFACES,
+];
 
-const DEFAULT_ALLOWED_SURFACES: SourceSurface[] = [...SYNCED_APP_SURFACES];
+const DEFAULT_ALLOWED_SURFACES: ManagedCloudProject['allowedSurfaces'][number][] = [
+  ...SYNCED_APP_SURFACES,
+];
 
 export interface MappedProject {
   id: string;
@@ -37,9 +38,9 @@ export interface MappedProject {
   usesAccountInstructions: boolean;
   usesAccountStyle: boolean;
   metadata: Record<string, unknown> | null;
-  defaultPrivacyMode: PrivacyMode;
-  defaultProviderMode: ProviderMode;
-  allowedSurfaces: SourceSurface[];
+  defaultPrivacyMode: ManagedCloudProject['defaultPrivacyMode'];
+  defaultProviderMode: ManagedCloudProject['defaultProviderMode'];
+  allowedSurfaces: ManagedCloudProject['allowedSurfaces'][number][];
   defaultModelId: string | null;
   conversationCount: number;
   lastUsedAt: string | null;
@@ -62,11 +63,11 @@ function asBool(value: unknown, fallback: boolean): boolean {
 }
 
 /** user_projects_managed_privacy_check holds every cloud project to managed. */
-function asPrivacyMode(_value: unknown): PrivacyMode {
+function asPrivacyMode(_value: unknown): ManagedCloudProject['defaultPrivacyMode'] {
   return 'managed';
 }
 
-function asProviderMode(value: unknown): ProviderMode {
+function asProviderMode(value: unknown): ManagedCloudProject['defaultProviderMode'] {
   return value === 'ManagedNative' ? 'ManagedNative' : 'ManagedGateway';
 }
 
@@ -82,10 +83,11 @@ function asImportSource(value: unknown): ProjectImportSource | null {
     : null;
 }
 
-function asAllowedSurfaces(value: unknown): SourceSurface[] {
+function asAllowedSurfaces(value: unknown): ManagedCloudProject['allowedSurfaces'][number][] {
   if (!Array.isArray(value)) return [...DEFAULT_ALLOWED_SURFACES];
   const filtered = value.filter(
-    (s): s is SourceSurface => typeof s === 'string' && (SURFACES as readonly string[]).includes(s),
+    (s): s is ManagedCloudProject['allowedSurfaces'][number] =>
+      typeof s === 'string' && (SURFACES as readonly string[]).includes(s),
   );
   return filtered.length > 0 ? filtered : [...DEFAULT_ALLOWED_SURFACES];
 }
@@ -109,7 +111,9 @@ export function mapKnowledgeFileRow(row: Record<string, unknown>): ProjectKnowle
     checksumSha256: String(row['checksum_sha256'] ?? ''),
     summary: asString(row['summary']),
     sourceSurface:
-      typeof row['source_surface'] === 'string' ? (row['source_surface'] as SourceSurface) : 'web',
+      typeof row['source_surface'] === 'string'
+        ? (row['source_surface'] as ManagedCloudProject['allowedSurfaces'][number])
+        : 'web',
     addedByUserId: asString(row['added_by_user_id']),
     addedAt: String(row['added_at'] ?? ''),
     retentionExpiresAt: asString(row['retention_expires_at']),

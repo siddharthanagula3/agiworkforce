@@ -1,4 +1,4 @@
-import { Pool } from '@neondatabase/serverless';
+import { Pool, type QueryResult } from '@neondatabase/serverless';
 import {
   DB_CONNECTION_TIMEOUT_MS,
   DB_PROBE_TIMEOUT_MS,
@@ -10,6 +10,9 @@ import { withinDeadline } from './deadline.js';
 import { logger } from './logger.js';
 import { pairCredentialKey, type PairCredential, type PairTokenRole } from './pair-token.js';
 import { pairingDeviceKey } from './pairing-device.js';
+
+export type SignalingDatabasePool = Pool;
+export type SignalingDatabaseQueryResult = QueryResult;
 
 interface DbError {
   code?: string;

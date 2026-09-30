@@ -159,7 +159,10 @@ mod tests {
         let personal_scope =
             root_scope(&personal, Some(&default_root)).expect("personal is scoped");
         assert_ne!(work_scope, personal_scope);
-        assert_eq!(root_scope(&work, Some(&default_root)), Some(work_scope.clone()));
+        assert_eq!(
+            root_scope(&work, Some(&default_root)),
+            Some(work_scope.clone())
+        );
         assert_eq!(
             root_scope(&work.join("."), Some(&default_root)),
             Some(work_scope),

@@ -234,10 +234,7 @@ const sourceScans = [
     include: /^apps\/cli\/src\/.*\.rs$/,
     exclude: /(?:^|\/)tests\//,
     pattern: /env::var(?:_os)?\(\s*"([A-Z][A-Z0-9_]*)"\s*\)/g,
-    productSource: (contents) => {
-      const testModule = [...contents.matchAll(/#\[cfg\(test\)\]\s*mod\s+\w+\s*\{/g)].at(-1);
-      return testModule ? contents.slice(0, testModule.index) : contents;
-    },
+    productSource: stripRustTestModules,
   },
   {
     scope: 'mobile',
@@ -268,6 +265,82 @@ const sourceScans = [
     pattern: /process\.env(?:\[\s*['"`]([A-Z][A-Z0-9_]*)['"`]\s*\]|\.([A-Z][A-Z0-9_]*))/g,
   },
 ];
+
+export function stripRustTestModules(contents) {
+  const code = contents.split('');
+  const mask = (start, end) => {
+    for (let i = start; i < end; i++) {
+      if (code[i] !== '\n' && code[i] !== '\r') code[i] = ' ';
+    }
+  };
+  for (let cursor = 0; cursor < contents.length;) {
+    const start = cursor;
+    if (contents.startsWith('//', cursor)) {
+      const end = contents.indexOf('\n', cursor + 2);
+      cursor = end < 0 ? contents.length : end;
+    } else if (contents.startsWith('/*', cursor)) {
+      cursor += 2;
+      let depth = 1;
+      while (cursor < contents.length && depth > 0) {
+        if (contents.startsWith('/*', cursor)) {
+          depth++;
+          cursor += 2;
+        } else if (contents.startsWith('*/', cursor)) {
+          depth--;
+          cursor += 2;
+        } else cursor++;
+      }
+      if (depth !== 0) throw new Error('Unterminated Rust comment in environment inventory');
+    } else {
+      const raw = contents.slice(cursor).match(/^(?:b|c)?r(#+)?"/);
+      if (raw) {
+        const delimiter = `"${raw[1] ?? ''}`;
+        const end = contents.indexOf(delimiter, cursor + raw[0].length);
+        if (end < 0) throw new Error('Unterminated Rust raw string in environment inventory');
+        cursor = end + delimiter.length;
+      } else if (contents[cursor] === '"') {
+        cursor++;
+        let closed = false;
+        while (cursor < contents.length) {
+          if (contents[cursor] === '\\') cursor += 2;
+          else if (contents[cursor++] === '"') {
+            closed = true;
+            break;
+          }
+        }
+        if (!closed) throw new Error('Unterminated Rust string in environment inventory');
+      } else {
+        const character = contents
+          .slice(cursor)
+          .match(/^'(?:[^'\\\r\n]|\\(?:u\{[\da-fA-F_]+\}|x[\da-fA-F]{2}|.))'/u);
+        if (character) cursor += character[0].length;
+        else {
+          cursor++;
+          continue;
+        }
+      }
+    }
+    mask(start, cursor);
+  }
+  const masked = code.join('');
+  const output = contents.split('');
+  const modules =
+    /#\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{/g;
+  for (const match of masked.matchAll(modules)) {
+    let cursor = match.index + match[0].length;
+    let depth = 1;
+    while (cursor < masked.length && depth > 0) {
+      if (masked[cursor] === '{') depth++;
+      else if (masked[cursor] === '}') depth--;
+      cursor++;
+    }
+    if (depth !== 0) throw new Error('Unterminated Rust test module in environment inventory');
+    for (let i = match.index; i < cursor; i++) {
+      if (output[i] !== '\n' && output[i] !== '\r') output[i] = ' ';
+    }
+  }
+  return output.join('');
+}
 
 const staleExampleKeys = new Map([
   ['apps/desktop/.env.example', new Set(['VITE_SIGNALING_URL', 'VITE_SIGNALING_HTTP_URL'])],

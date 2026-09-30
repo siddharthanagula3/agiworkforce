@@ -203,6 +203,17 @@ test('a routing replay that may fail softly no longer counts', () => {
   );
 });
 
+test('the Rust routing replay requires the frozen lockfile', () => {
+  const errors = errorsFor({
+    ci: (doc) => {
+      const job = jobRunning(doc, /auto_route_conformance/);
+      const step = job.steps.find((entry) => /auto_route_conformance/.test(entry.run ?? ''));
+      step.run = step.run.replace('cargo test --locked', 'cargo test');
+    },
+  });
+  assert.ok(errors.some((error) => /Rust Auto resolver replay/.test(error)));
+});
+
 test('dropping the affected test run fails', () => {
   const errors = errorsFor({
     ci: (doc) => {

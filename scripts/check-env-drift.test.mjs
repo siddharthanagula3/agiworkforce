@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { stripRustTestModules } from './env-doctor.mjs';
 
 import {
   compareEnvKeys,
@@ -14,6 +15,74 @@ import {
 } from './check-env-drift.mjs';
 
 const okResponse = (body) => ({ ok: true, status: 200, json: async () => body });
+
+test('rust environment inventory excludes every test module and retains interleaved production', () => {
+  const source = [
+    'fn first() { env::var("AGI_FIRST"); }',
+    '#[cfg(test)] mod first_tests { fn test() { env::var("AGI_TEST_ONE"); } }',
+    'fn second() { env::var("AGI_SECOND"); }',
+    '#[cfg(test)] mod second_tests { fn test() { env::var("AGI_TEST_TWO"); } }',
+    'fn third() { env::var("AGI_THIRD"); }',
+  ].join('\n');
+  const result = stripRustTestModules(source);
+  for (const key of ['AGI_FIRST', 'AGI_SECOND', 'AGI_THIRD']) assert.ok(result.includes(key));
+  for (const key of ['AGI_TEST_ONE', 'AGI_TEST_TWO']) assert.ok(!result.includes(key));
+});
+
+test('rust environment inventory ignores braces in strings, chars and nested comments', () => {
+  const source = [
+    '#[cfg(test)] mod tests {',
+    'let normal = "}\\\"{";',
+    'let raw = br###" } \" { "###;',
+    "let brace = '}';",
+    '/* } /* { */ } */',
+    '// }',
+    'env::var("AGI_TEST_ONLY");',
+    '}',
+    'fn product() { env::var("AGI_PRODUCT"); }',
+  ].join('\n');
+  const result = stripRustTestModules(source);
+  assert.ok(!result.includes('AGI_TEST_ONLY'));
+  assert.ok(result.includes('AGI_PRODUCT'));
+});
+
+test('rust environment inventory retains non-test modules and Rust lifetimes', () => {
+  const source = [
+    '#[cfg(unix)] mod product {',
+    'fn read<\'a>(value: &\'a str) { env::var("AGI_UNIX"); }',
+    '}',
+    '#[cfg(test)] mod tests { env::var("AGI_TEST_ONLY"); }',
+    'fn later<\'a>(value: &\'a str) { env::var("AGI_LATER"); }',
+  ].join('\n');
+  const result = stripRustTestModules(source);
+  assert.ok(result.includes('AGI_UNIX'));
+  assert.ok(result.includes('AGI_LATER'));
+  assert.ok(!result.includes('AGI_TEST_ONLY'));
+});
+
+test('rust environment inventory ignores test declarations inside literals and comments', () => {
+  const source = [
+    'const EXAMPLE: &str = r#"#[cfg(test)] mod fake { }"#;',
+    '// #[cfg(test)] mod fake { }',
+    '/* #[cfg(test)] mod fake { } */',
+    'fn product() { env::var("AGI_PRODUCT"); }',
+  ].join('\n');
+  assert.equal(stripRustTestModules(source), source);
+});
+
+test('rust environment inventory recognizes extra attributes on a test module', () => {
+  const source = [
+    '#[cfg(test)] #[allow(dead_code)] pub(crate) mod tests { env::var("AGI_TEST_ONLY"); }',
+    'fn product() { env::var("AGI_PRODUCT"); }',
+  ].join('\n');
+  const result = stripRustTestModules(source);
+  assert.ok(!result.includes('AGI_TEST_ONLY'));
+  assert.ok(result.includes('AGI_PRODUCT'));
+});
+
+test('rust environment inventory fails closed on an unterminated test module', () => {
+  assert.throws(() => stripRustTestModules('#[cfg(test)] mod tests {'), /Unterminated/);
+});
 
 test('a deleted required variable is reported as drift', () => {
   const drift = compareEnvKeys({
