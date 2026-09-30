@@ -126,6 +126,8 @@ export const DB_CONNECTION_TIMEOUT_MS = 5_000;
 
 export const DB_QUERY_TIMEOUT_MS = 5_000;
 
+export const DB_STATEMENT_TIMEOUT_MS = 4_000;
+
 export const DB_PROBE_TIMEOUT_MS = 5_000;
 
 export const DB_CHECK_TTL_MS = 15_000;

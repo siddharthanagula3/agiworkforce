@@ -1,6 +1,11 @@
-import type { QueryResult } from '@neondatabase/serverless';
 import { Pool } from '@neondatabase/serverless';
-import { DB_CONNECTION_TIMEOUT_MS, DB_PROBE_TIMEOUT_MS, DB_QUERY_TIMEOUT_MS } from './constants.js';
+import {
+  DB_CONNECTION_TIMEOUT_MS,
+  DB_PROBE_TIMEOUT_MS,
+  DB_QUERY_TIMEOUT_MS,
+  DB_STATEMENT_TIMEOUT_MS,
+} from './constants.js';
+import { queryWithStatementTimeout } from './db-query.js';
 import { withinDeadline } from './deadline.js';
 import { logger } from './logger.js';
 import type { PairTokenRole } from './pair-token.js';
@@ -89,7 +94,13 @@ function toDbError(error: unknown): DbError {
 
 async function queryOne<T>(sql: string, params: unknown[] = []): Promise<QueryResultWrapper<T>> {
   try {
-    const result = (await pool.query(sql, params)) as QueryResult;
+    const result = await queryWithStatementTimeout(
+      pool,
+      sql,
+      params,
+      DB_STATEMENT_TIMEOUT_MS,
+      reportTransportError,
+    );
     const row = result.rows?.[0] as T | undefined;
     return { data: (row as T) ?? null, error: null };
   } catch (error) {
@@ -99,7 +110,13 @@ async function queryOne<T>(sql: string, params: unknown[] = []): Promise<QueryRe
 
 async function queryRows<T>(sql: string, params: unknown[] = []): Promise<QueryResultWrapper<T[]>> {
   try {
-    const result = (await pool.query(sql, params)) as QueryResult;
+    const result = await queryWithStatementTimeout(
+      pool,
+      sql,
+      params,
+      DB_STATEMENT_TIMEOUT_MS,
+      reportTransportError,
+    );
     return { data: (result.rows ?? []) as T[], error: null };
   } catch (error) {
     return { data: null, error: toDbError(error) };
@@ -111,7 +128,13 @@ async function queryNoReturn(
   params: unknown[] = [],
 ): Promise<{ error: DbError | null }> {
   try {
-    await pool.query(sql, params);
+    await queryWithStatementTimeout(
+      pool,
+      sql,
+      params,
+      DB_STATEMENT_TIMEOUT_MS,
+      reportTransportError,
+    );
     return { error: null };
   } catch (error) {
     return { error: toDbError(error) };
