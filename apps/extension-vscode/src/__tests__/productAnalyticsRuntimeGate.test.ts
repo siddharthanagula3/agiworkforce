@@ -5,11 +5,15 @@ import {
   PRODUCT_ANALYTICS_NOTICE_VERSION,
 } from '@agiworkforce/types';
 
-vi.mock('../utils/api', () => ({
+vi.mock('../utils/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/api')>()),
   getAccountToken: async () => 'token',
   getCloudWebOrigin: () => 'https://agiworkforce.test',
 }));
-vi.mock('../platform/config', () => ({ Config: { telemetryEnabled: () => true } }));
+vi.mock('../platform/config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../platform/config')>();
+  return { ...actual, Config: { ...actual.Config, telemetryEnabled: () => true } };
+});
 vi.mock('../platform/platformHeaders', () => ({ platformRequestHeaders: () => ({}) }));
 
 import {

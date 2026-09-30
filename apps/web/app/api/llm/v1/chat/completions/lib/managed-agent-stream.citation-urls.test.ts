@@ -26,10 +26,9 @@ vi.mock('@/lib/server/neon-db', () => {
   };
   return { getNeonDb: () => pool };
 });
-// A factory that omits a real export hands the module under test `undefined`
-// and the failure surfaces somewhere else entirely, which is what
-// check:mock-exports exists to stop. Every export the module uses is present.
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  usageCreditsEnabled: vi.fn(async () => false),
   markManagedUsageClientDelivered: vi.fn(),
   estimateMicrousdOf: vi.fn(() => 0),
   MANAGED_CHAT_CONTRACT_VERSION: 'test',

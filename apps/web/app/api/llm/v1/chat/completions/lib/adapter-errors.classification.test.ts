@@ -28,7 +28,8 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
   resolveProviderFromModel: vi.fn(() => 'openai'),
   listAvailableManagedProviderIds: () => new Set<string>(),
 }));
-vi.mock('./request-processor', () => ({
+vi.mock('./request-processor', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./request-processor')>()),
   resolveRequestEffort: vi.fn(() => undefined),
   buildThinkingConfig: vi.fn(() => undefined),
 }));
