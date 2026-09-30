@@ -70,6 +70,8 @@ vi.mock('stripe', () => {
     checkout = {
       sessions: {
         create: mockCheckoutCreate,
+        list: vi.fn(async () => ({ data: [] })),
+        expire: vi.fn(),
       },
     };
     customers = {

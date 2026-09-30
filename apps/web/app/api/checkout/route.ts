@@ -56,6 +56,12 @@ const CHECKOUT_ENABLED =
 
 const TRIAL_CHECKOUT_TTL_SECONDS = 3600;
 const DAY_MS = 86_400_000;
+const OPEN_CHECKOUT_PAGE_SIZE = 100;
+const CHECKOUT_ATTEMPT_METADATA_KEY = 'checkout_attempt';
+const BILLING_UNVERIFIED_MESSAGE =
+  'Billing details could not be verified. No checkout was created; please retry.';
+const LIVE_SUBSCRIPTION_CONFLICT_MESSAGE =
+  'This account already has an active subscription with our payment provider. Open Billing to manage it, or contact support if your plan is not showing yet.';
 
 function trialDisclosure(input: {
   trialDays: number;
@@ -97,6 +103,53 @@ async function findLiveStripeSubscription(
     }
   }
   return null;
+}
+
+async function listOpenSubscriptionCheckouts(
+  stripe: Stripe,
+  customerId: string,
+  userId: string,
+): Promise<Stripe.Checkout.Session[]> {
+  const page = await stripe.checkout.sessions.list({
+    customer: customerId,
+    status: 'open',
+    limit: OPEN_CHECKOUT_PAGE_SIZE,
+  });
+  return page.data.filter(
+    (session) => session.mode === 'subscription' && session.metadata?.['user_id'] === userId,
+  );
+}
+
+async function expireOpenCheckout(stripe: Stripe, sessionId: string): Promise<boolean> {
+  try {
+    await stripe.checkout.sessions.expire(sessionId);
+    return true;
+  } catch (error) {
+    if (!(error instanceof Stripe.errors.StripeInvalidRequestError)) throw error;
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.status === 'expired') return true;
+    if (session.status === 'complete') return false;
+    throw error;
+  }
+}
+
+async function expireCheckouts(
+  stripe: Stripe,
+  sessions: readonly Stripe.Checkout.Session[],
+): Promise<boolean> {
+  for (const session of sessions) {
+    if (!(await expireOpenCheckout(stripe, session.id))) return false;
+  }
+  return true;
+}
+
+function checkoutPrecedes(
+  earlier: Pick<Stripe.Checkout.Session, 'created' | 'id'>,
+  later: Pick<Stripe.Checkout.Session, 'created' | 'id'>,
+): boolean {
+  return (
+    earlier.created < later.created || (earlier.created === later.created && earlier.id < later.id)
+  );
 }
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
@@ -166,7 +219,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
   const { priceId, currency } = priceSelection;
 
-  let stripeCustomerId: string | null = null;
+  let stripeCustomerId: string;
   const stripe = getStripeClient();
 
   type SubRow = Pick<
@@ -235,9 +288,10 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
   let hadStoredStripeCustomer = false;
 
-  async function createStripeCustomerForUser(): Promise<string | null> {
+  async function createStripeCustomerForUser(): Promise<string> {
+    let customer: Stripe.Customer;
     try {
-      const customer = await stripe.customers.create(
+      customer = await stripe.customers.create(
         {
           email: user.email,
           metadata: {
@@ -246,32 +300,31 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         },
         { idempotencyKey: `checkout-customer:${user.id}` },
       );
-
-      try {
-        await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
-          customer.id,
-          user.id,
-        ]);
-      } catch (error) {
-        logger.error(
-          { error, userId: user.id, stripeCustomerId: customer.id },
-          'Created Stripe customer but could not persist the profile link',
-        );
-      }
-
-      logger.info(
-        { userId: user.id, customerId: customer.id },
-        'Created new Stripe customer and stored in profile',
-      );
-      return customer.id;
-    } catch (err) {
+    } catch (error) {
       logger.error(
-        { error: err, userId: user.id },
-        'Failed to create Stripe customer, proceeding without customer ID',
+        { error, userId: user.id },
+        'Failed to create Stripe customer; refusing checkout',
       );
-      // Continue without customer ID - Stripe will create one during checkout
-      return null;
+      throw createError.serviceUnavailable(BILLING_UNVERIFIED_MESSAGE).asUserSafe();
     }
+
+    try {
+      await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
+        customer.id,
+        user.id,
+      ]);
+    } catch (error) {
+      logger.error(
+        { error, userId: user.id, stripeCustomerId: customer.id },
+        'Created Stripe customer but could not persist the profile link',
+      );
+    }
+
+    logger.info(
+      { userId: user.id, customerId: customer.id },
+      'Created new Stripe customer and stored in profile',
+    );
+    return customer.id;
   }
 
   if (isStripeCustomerId(profile?.stripe_customer_id)) {
@@ -292,7 +345,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     stripeCustomerId = await createStripeCustomerForUser();
   }
 
-  if (hadStoredStripeCustomer && stripeCustomerId) {
+  if (hadStoredStripeCustomer) {
     let liveSubscription: Stripe.Subscription | null = null;
     try {
       liveSubscription = await findLiveStripeSubscription(stripe, stripeCustomerId);
@@ -302,11 +355,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
           { error, userId: user.id, customerId: stripeCustomerId },
           'Failed to verify existing Stripe subscriptions before checkout',
         );
-        throw createError
-          .serviceUnavailable(
-            'Billing details could not be verified. No checkout was created; please retry.',
-          )
-          .asUserSafe();
+        throw createError.serviceUnavailable(BILLING_UNVERIFIED_MESSAGE).asUserSafe();
       }
 
       // A stored id Stripe does not recognise, which is what every customer
@@ -334,9 +383,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         },
         'Refusing checkout: Stripe is already billing a subscription for this customer',
       );
-      throw createError.conflict(
-        'This account already has an active subscription with our payment provider. Open Billing to manage it, or contact support if your plan is not showing yet.',
-      );
+      throw createError.conflict(LIVE_SUBSCRIPTION_CONFLICT_MESSAGE);
     }
   }
 
@@ -376,13 +423,38 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     requested_seats: String(quantity),
   };
 
+  let earlierCheckoutsSettled: boolean;
+  try {
+    const openCheckouts = await listOpenSubscriptionCheckouts(stripe, stripeCustomerId, user.id);
+    earlierCheckoutsSettled = await expireCheckouts(
+      stripe,
+      openCheckouts.filter(
+        (session) =>
+          !requestIdempotencyKey ||
+          session.metadata?.[CHECKOUT_ATTEMPT_METADATA_KEY] !== requestIdempotencyKey,
+      ),
+    );
+  } catch (error) {
+    logger.error(
+      { error, userId: user.id, customerId: stripeCustomerId },
+      'Failed to close open subscription checkouts before creating a new one',
+    );
+    throw createError.serviceUnavailable(BILLING_UNVERIFIED_MESSAGE).asUserSafe();
+  }
+  if (!earlierCheckoutsSettled) {
+    logger.warn(
+      { userId: user.id, customerId: stripeCustomerId },
+      'Refusing checkout: another subscription checkout for this account just completed',
+    );
+    throw createError.conflict(LIVE_SUBSCRIPTION_CONFLICT_MESSAGE);
+  }
+
   try {
     const checkoutSessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',
       locale: 'auto', // Auto-detect browser locale to prevent i18n module errors
       currency,
-      customer: stripeCustomerId || undefined, // Use existing customer if available
-      customer_email: stripeCustomerId ? undefined : user.email, // Only set if no customer
+      customer: stripeCustomerId,
       line_items: [
         {
           price: priceId,
@@ -392,7 +464,13 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       success_url: `${returnOrigin}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${returnOrigin}/pricing`,
       client_reference_id: user.id, // Primary identifier for webhook
-      metadata: { ...checkoutMetadata, ...withdrawalConsentMetadata() },
+      metadata: {
+        ...checkoutMetadata,
+        ...withdrawalConsentMetadata(),
+        ...(requestIdempotencyKey
+          ? { [CHECKOUT_ATTEMPT_METADATA_KEY]: requestIdempotencyKey }
+          : {}),
+      },
       subscription_data: {
         metadata: { ...checkoutMetadata, ...withdrawalConsentMetadata() },
         ...trialParams.subscriptionData,
@@ -405,16 +483,42 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         terms_of_service_acceptance: { message: withdrawalConsentMessage() },
       },
       allow_promotion_codes: true,
-      ...buildCheckoutTaxParams({ hasExistingCustomer: Boolean(stripeCustomerId) }),
+      ...buildCheckoutTaxParams({ hasExistingCustomer: true }),
     };
     const checkoutSession = requestIdempotencyKey
       ? await stripe.checkout.sessions.create(checkoutSessionParams, {
-          idempotencyKey: `checkout:${user.id}:${plan}:${quantity}:${requestIdempotencyKey}`,
+          idempotencyKey: `checkout:${user.id}:${plan}:${billingInterval}:${quantity}:${requestIdempotencyKey}`,
         })
       : await stripe.checkout.sessions.create(checkoutSessionParams);
 
     if (!checkoutSession.url) {
       throw createError.internal('Failed to generate checkout URL');
+    }
+
+    let siblingCompleted = false;
+    try {
+      const openCheckouts = await listOpenSubscriptionCheckouts(stripe, stripeCustomerId, user.id);
+      siblingCompleted = !(await expireCheckouts(
+        stripe,
+        openCheckouts.filter(
+          (session) =>
+            session.id !== checkoutSession.id && checkoutPrecedes(session, checkoutSession),
+        ),
+      ));
+    } catch (error) {
+      logger.warn(
+        { error, userId: user.id, sessionId: checkoutSession.id },
+        'Could not close earlier subscription checkouts after creating a new one',
+      );
+    }
+    if (siblingCompleted) {
+      await expireOpenCheckout(stripe, checkoutSession.id).catch((error: unknown) => {
+        logger.error(
+          { error, userId: user.id, sessionId: checkoutSession.id },
+          'Could not expire a checkout created while another one completed',
+        );
+      });
+      throw createError.conflict(LIVE_SUBSCRIPTION_CONFLICT_MESSAGE);
     }
 
     await recordAuditEvent({
