@@ -34,8 +34,8 @@ const signalingResponseSchema = z.object({
   wsUrl: z.string(),
   qrData: z.string(),
   pairTokens: z.object({
-    desktop: z.string(),
-    mobile: z.string(),
+    desktop: z.string().min(1).optional(),
+    mobile: z.string().min(1).optional(),
   }),
 });
 
@@ -101,6 +101,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         Authorization: `Bearer ${signalingSecret}`,
       },
       body: JSON.stringify({
+        initiator,
         ttlSeconds: ttlSeconds ?? DEFAULT_TTL_SECONDS,
         metadata: { userId, desktopId: desktopId ?? null, initiator },
         ...(deviceId ? { device: { role: initiator, id: deviceId } } : {}),
@@ -129,6 +130,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { code, expiresAt, expiresIn, httpUrl, wsUrl, pairTokens } = payload.data;
+  const initiatorToken = pairTokens[initiator];
+  if (!initiatorToken) {
+    logger.error('Signaling server omitted the initiator credential');
+    return NextResponse.json({ error: 'Invalid response from signaling server' }, { status: 502 });
+  }
 
   // The desktop starting a pairing is the user taking remote work back on for
   // this device after a "Stop remote work"; nothing else re-enables it.
@@ -140,8 +146,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       [deviceId, userId],
     );
   }
-
-  const peerToken = initiator === 'desktop' ? pairTokens.mobile : pairTokens.desktop;
 
   await recordWorkspaceAuditEvent(db, request, {
     userId,
@@ -157,8 +161,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     code,
     expiresAt,
     expiresIn,
-    qrData: `agiw:${code}:${peerToken}`,
+    qrData: `agiw:${code}`,
     signaling: { httpUrl, wsUrl },
-    pairTokens,
+    pairTokens: { [initiator]: initiatorToken },
   });
 }

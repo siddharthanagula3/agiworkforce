@@ -114,6 +114,46 @@ describe('POST /api/pair/initiate audit trail', () => {
     expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
   });
 
+  it.each(['desktop', 'mobile'] as const)(
+    'returns only the %s initiator token, without a peer credential in the QR',
+    async (initiator) => {
+      const fetchMock = vi.fn(
+        async (_input: RequestInfo | URL, _init?: RequestInit) =>
+          new Response(JSON.stringify(signalingPayload()), { status: 200 }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const response = await POST(pairRequest({ initiator }));
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(Object.keys(body.pairTokens)).toEqual([initiator]);
+      expect(body.qrData).toBe('agiw:ABC123');
+      expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string).initiator).toBe(initiator);
+    },
+  );
+
+  it('accepts the relay response with only the initiator credential', async () => {
+    const payload = { ...signalingPayload(), pairTokens: { desktop: 'desktop-token' } };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })),
+    );
+    const response = await POST(pairRequest({ initiator: 'desktop' }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).pairTokens).toEqual({ desktop: 'desktop-token' });
+  });
+
+  it('rejects a relay response that has only the other role credential', async () => {
+    const payload = { ...signalingPayload(), pairTokens: { mobile: 'mobile-token' } };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })),
+    );
+    const response = await POST(pairRequest({ initiator: 'desktop' }));
+    expect(response.status).toBe(502);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
+  });
+
   it('never reaches the signaling server when the workspace has turned Remote Control off', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

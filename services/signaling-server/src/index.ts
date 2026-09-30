@@ -447,6 +447,7 @@ const metadataSchema = z
 const pairingRoleSchema = z.enum(['desktop', 'mobile']);
 
 const pairingRequestSchema = z.object({
+  initiator: pairingRoleSchema.default('desktop'),
   ttlSeconds: z.number().min(30).max(900).optional(),
   metadata: metadataSchema,
   device: z.object({ role: pairingRoleSchema, id: deviceIdSchema }).strict().optional(),
@@ -638,7 +639,11 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
     return res.status(400).json({ error: z.treeifyError(parseResult.error) });
   }
 
-  const { ttlSeconds = DEFAULT_TTL_SECONDS, metadata, device } = parseResult.data;
+  const { ttlSeconds = DEFAULT_TTL_SECONDS, metadata, device, initiator } = parseResult.data;
+
+  if (device && device.role !== initiator) {
+    return res.status(400).json({ error: 'initiator_device_mismatch' });
+  }
 
   const accountId = pairingAccountId(metadata);
   if (!accountId) {
@@ -667,8 +672,7 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
   logger.info({ correlationId, code, expiresAt }, 'Pairing session created');
   metrics.recordPairingRequest(true);
 
-  const desktopPairToken = issuePairToken(code, 'desktop', createdAt, accountId);
-  const mobilePairToken = issuePairToken(code, 'mobile', createdAt, accountId);
+  const initiatorPairToken = issuePairToken(code, initiator, createdAt, accountId);
 
   return res.json({
     code,
@@ -681,10 +685,7 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
       httpUrl: publicHttpUrl,
       wsUrl: publicWsUrl,
     },
-    pairTokens: {
-      desktop: desktopPairToken,
-      mobile: mobilePairToken,
-    },
+    pairTokens: { [initiator]: initiatorPairToken },
   });
 });
 

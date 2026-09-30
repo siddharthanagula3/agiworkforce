@@ -3,6 +3,17 @@
 Pairing, signaling and the authenticated WebSocket relay for cross-device
 sessions.
 
+## Pairing credentials
+
+Creating a pairing returns only the initiator's role credential in
+`pairTokens`. Send `initiator` as `desktop` or `mobile`; it defaults to
+`desktop`. A supplied device must have the same role. The other peer obtains
+its credential through the authenticated claim flow.
+
+The relay's `qrData` contains only the code. Remote-control clients generate
+their own `agiw3` QR secret locally, so the relay never receives the private
+key material used for control messages.
+
 ## Canonical endpoint
 
 Two deploy targets exist (`fly.toml` and `railway.toml`). Exactly one hostname
