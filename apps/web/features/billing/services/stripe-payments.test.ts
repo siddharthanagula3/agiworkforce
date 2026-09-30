@@ -72,6 +72,24 @@ describe('stripe payments', () => {
     });
   });
 
+  it('sends a fresh checkout idempotency key with every plan checkout', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: 'https://checkout.example/max-15x' }),
+    } as Response);
+
+    await upgradeToMax15xPlan({ userId: 'user_1', userEmail: 'user@example.com' });
+    await upgradeToMax15xPlan({ userId: 'user_1', userEmail: 'user@example.com' });
+
+    const keys = fetchMock.mock.calls.map(
+      (call) => (call[1]?.headers as Record<string, string>)['Idempotency-Key'],
+    );
+    expect(fetchMock.mock.calls.every((call) => call[0] === '/api/checkout')).toBe(true);
+    expect(keys).toHaveLength(2);
+    for (const key of keys) expect(key).toMatch(/^agi\.checkout\.web\.[0-9a-f-]{36}$/);
+    expect(new Set(keys).size).toBe(2);
+  });
+
   it('never lets the browser choose the charged currency', async () => {
     const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
