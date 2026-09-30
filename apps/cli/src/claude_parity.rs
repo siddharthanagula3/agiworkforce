@@ -842,7 +842,7 @@ pub fn render_vim(arg: &str) -> String {
 
 pub fn review_prompt(arg: &str) -> String {
     let review_scope = if arg.trim().is_empty() {
-        "my current code changes. Run `git diff` to see what changed"
+        "my current code changes, including unstaged, staged and untracked files. Run `git diff`, `git diff --cached`, and `git ls-files --others --exclude-standard`, then read the listed untracked files"
     } else {
         arg.trim()
     };
@@ -2539,6 +2539,18 @@ pub mod connectors {
 mod tests {
     use super::*;
     use crate::context::SystemContext;
+
+    #[test]
+    fn review_default_scope_includes_staged_and_untracked_files() {
+        let ParityCommandResult::Prompt(prompt) =
+            handle_shared_command("/review", "", &mut test_session())
+        else {
+            panic!("review must reach the prompt provider");
+        };
+        assert!(prompt.contains("git diff --cached"));
+        assert!(prompt.contains("git ls-files --others --exclude-standard"));
+        assert!(prompt.contains("read the listed untracked files"));
+    }
 
     fn test_session() -> AgentSession {
         AgentSession::new(

@@ -21,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Spinner,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import {
   CLOUD_CODE_DEFAULT_TURN_STEPS,
@@ -49,6 +50,7 @@ import {
   LOCAL_AGENT_MODE_HINTS,
   LOCAL_CODE_COPY,
   LOCAL_FAILURE_ACTION_LABELS,
+  LOCAL_REVIEW_COMMAND,
   localAgentMode,
   localApprovalPrompts,
   localFailureAction,
@@ -88,6 +90,7 @@ export interface LocalSessionPanelProps {
   initialPrompt?: string;
   onPromptSent?: () => void;
   onClose: () => void;
+  onEditorDirtyChange?: (dirty: boolean) => void;
 }
 
 function LocalModeControl({
@@ -260,12 +263,34 @@ export function LocalSessionPanel({
   initialPrompt,
   onPromptSent,
   onClose,
+  onEditorDirtyChange,
 }: LocalSessionPanelProps) {
   const state = useLocalSession(session);
   const tests = useLocalTests(session.rootId);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const { confirm, dialog } = useConfirmAction();
+  useEffect(() => {
+    onEditorDirtyChange?.(editorDirty);
+  }, [editorDirty, onEditorDirtyChange]);
+  const closeChanges = () => {
+    const close = () => {
+      setEditorDirty(false);
+      setChangesOpen(false);
+    };
+    if (!editorDirty) {
+      close();
+      return;
+    }
+    confirm({
+      title: LOCAL_CODE_COPY.discardEditsTitle,
+      description: LOCAL_CODE_COPY.discardLocalEditsDescription,
+      confirmLabel: LOCAL_CODE_COPY.discardFileEdits,
+      onConfirm: close,
+    });
+  };
   const vsCodeHref = continueLocalSessionInVsCodeHref(session);
   const resumeCommand = localSessionResumeCommand(session.id);
   const testsRunning = tests.status === 'running';
@@ -319,6 +344,16 @@ export function LocalSessionPanel({
     );
   };
 
+  const review = () => {
+    if (busy) return;
+    void state.send(
+      LOCAL_REVIEW_COMMAND,
+      model === '' || model === session.model ? undefined : model,
+      activeMode,
+      boundedTurns ? turnSteps : undefined,
+    );
+  };
+
   return (
     <>
       <header className={styles['header']}>
@@ -346,7 +381,7 @@ export function LocalSessionPanel({
             aria-label={CODE_COPY.changes}
             aria-pressed={changesOpen}
             title={CODE_COPY.changes}
-            onClick={() => setChangesOpen((open) => !open)}
+            onClick={() => (changesOpen ? closeChanges() : setChangesOpen(true))}
           >
             <PanelsTopLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
           </button>
@@ -606,10 +641,17 @@ export function LocalSessionPanel({
             rootId={session.rootId}
             title={session.title}
             refreshKey={state.messages.length}
-            onClose={() => setChangesOpen(false)}
+            sessionBusy={busy}
+            onReview={review}
+            onClose={() => {
+              setEditorDirty(false);
+              setChangesOpen(false);
+            }}
+            onDirtyChange={setEditorDirty}
           />
         )}
       </div>
+      {dialog}
     </>
   );
 }

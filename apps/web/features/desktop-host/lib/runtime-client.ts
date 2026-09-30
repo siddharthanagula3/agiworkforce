@@ -26,6 +26,7 @@ import {
   type FileBinaryContent,
   type FileSearchMatch,
   type FileTextContent,
+  type FileTextWrite,
   type LocalChatMessage,
   type LocalChatResult,
   type LocalModel,
@@ -91,8 +92,18 @@ export function readWorkspaceText(rootId: string, path: string): Promise<FileTex
   return invoke<FileTextContent>('file_read_text', { rootId, path });
 }
 
-export function writeWorkspaceText(rootId: string, path: string, text: string): Promise<unknown> {
-  return invoke<unknown>('file_write_text', { rootId, path, text });
+export function writeWorkspaceText(
+  rootId: string,
+  path: string,
+  text: string,
+  expectedSha256?: string,
+): Promise<FileTextWrite> {
+  return invoke<FileTextWrite>('file_write_text', {
+    rootId,
+    path,
+    text,
+    ...(expectedSha256 === undefined ? {} : { expectedSha256 }),
+  });
 }
 
 export function revokeWorkspaceRoot(rootId: string): Promise<boolean> {

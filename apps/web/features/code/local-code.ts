@@ -17,9 +17,12 @@ import {
   providerLabels,
   type CloudCodeAgentStep,
   type CloudCodeAgentStopReason,
+  type CloudCodeGoalCommand,
 } from '@agiworkforce/types';
 import { getModelMetadata } from '@shared/config/llm';
 import type { CodeApprovalPrompt, CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
+
+export const LOCAL_REVIEW_COMMAND: CloudCodeGoalCommand = '/review';
 
 export const LOCAL_CODE_COPY = {
   heading: 'On this device',
@@ -70,12 +73,28 @@ export const LOCAL_CODE_COPY = {
   discardFailed: 'That change could not be discarded.',
   commandFailed: 'That command could not be run.',
   editFile: 'Edit',
+  reviewCode: 'Review code',
   closeFile: 'Close the file',
   openingFile: 'Opening the file',
   saveFile: 'Save',
   fileReadFailed: 'That file could not be opened.',
   fileSaveFailed: 'That file could not be saved.',
+  fileUnsupportedEncoding: 'This file is not UTF-8. Open it in your editor to change it.',
+  discardLocalEditsDescription:
+    'Your unsaved file edits will be discarded. You cannot recover them after leaving.',
   fileTooLarge: 'This file is too large to edit here. Open it in your editor instead.',
+  discardFileEdits: 'Discard',
+  reloadFile: 'Reload',
+  overwriteFile: 'Overwrite',
+  fileChangedOnDisk: 'This file changed on disk since you opened it.',
+  fileDeletedOnDisk:
+    'This file was deleted since you opened it. Overwrite to create it again with your version.',
+  discardEditsTitle: 'Discard your edits?',
+  discardEditsDescription: (path: string): string =>
+    `Your unsaved edits to ${path} cannot be recovered.`,
+  overwriteFileTitle: 'Overwrite the file on disk?',
+  overwriteFileDescription: (path: string): string =>
+    `Your version replaces what is on disk at ${path} now. Changes made there since you opened it cannot be recovered unless they were committed.`,
   pushAndOpenPullRequest: 'Push and open a pull request',
   pullRequestOnGitHub: 'Open a pull request on GitHub',
   pullRequestNotConnected:

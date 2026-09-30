@@ -21,6 +21,7 @@ export const DESKTOP_RUNTIME_ERROR_CODES = [
   'not-a-directory',
   'not-a-file',
   'too-large',
+  'conflict',
   'io-error',
   'unsupported-platform',
   'cancelled',

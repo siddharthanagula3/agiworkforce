@@ -113,7 +113,22 @@ const listDeveloperModels = vi.fn(async () => ({
   defaultModelId: null,
 }));
 
-vi.mock('@/features/desktop-host', () => ({
+vi.mock('@/features/desktop-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/desktop-host')>()),
+  readDeveloperSessionChanges: vi.fn(async () => ({
+    files: [{ path: 'src/edit.ts', state: 'modified', originalPath: null }],
+    diff: '',
+    diffTruncated: false,
+    folderPrefix: '',
+  })),
+  readWorkspaceText: vi.fn(async (_rootId: string, path: string) => ({
+    path,
+    text: path === 'package.json' ? '{}' : 'original',
+    sizeBytes: 8,
+    modifiedAtMs: 1,
+    truncated: false,
+    sha256: 'a'.repeat(64),
+  })),
   ContinueOnDesktop: ({
     label,
     fallbackHref,
@@ -2613,5 +2628,65 @@ describe('what the local chip row and menu say about a folder', () => {
     expect(
       screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
     ).toBeDisabled();
+  });
+});
+
+describe('leaving unsaved local edits', () => {
+  it.each([
+    'Changes',
+    'Back to cloud sessions',
+    'Another local session',
+    'Cloud session',
+    'New',
+    'New session in qa-project',
+  ])('confirms %s at its navigation owner', async (destination) => {
+    const user = userEvent.setup();
+    host = {};
+    const other = { ...localSession, id: 'another-local', title: 'Another local session' };
+    localGroups = [folder({ sessions: [localSession, other] })];
+    if (destination === 'New session in qa-project')
+      startDeveloperSession.mockResolvedValueOnce({
+        ...localSession,
+        id: 'new-local',
+        title: 'New local session',
+      });
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability,
+        sessions: [{ ...session, title: 'Cloud session' }],
+        runtimes: [],
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+    await user.click(await screen.findByRole('button', { name: new RegExp(localSession.title) }));
+    await user.click(await screen.findByRole('button', { name: 'Changes' }));
+    await user.click(await screen.findByRole('button', { name: 'Edit src/edit.ts' }));
+    const field = await screen.findByLabelText('src/edit.ts');
+    fireEvent.change(field, { target: { value: 'unsaved' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+    if (destination === 'Cloud session') {
+      await openSession(user, destination);
+    } else {
+      await user.click(
+        screen.getByRole('button', {
+          name: destination === 'Another local session' ? /^Another local session/ : destination,
+        }),
+      );
+    }
+    const dialog = await screen.findByRole('alertdialog');
+    expect(field).toHaveValue('unsaved');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(field).toHaveValue('unsaved');
+    if (destination === 'Cloud session') await openSession(user, destination);
+    else
+      await user.click(
+        screen.getByRole('button', {
+          name: destination === 'Another local session' ? /^Another local session/ : destination,
+        }),
+      );
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }),
+    );
+    await waitFor(() => expect(screen.queryByLabelText('src/edit.ts')).not.toBeInTheDocument());
   });
 });
