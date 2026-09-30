@@ -1188,6 +1188,12 @@
           "scope": "resource",
           "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send."
         },
+        "agiWorkforce.respectGitIgnore": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Leave files that git ignores out of `@` file search, and send only the path of an ignored file that is open in the editor. Takes effect while `#search.useIgnoreFiles#` is also on."
+        },
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
           "default": false,

@@ -10,13 +10,20 @@
 
 import * as vscode from 'vscode';
 import { type WorkspaceFileReference } from '../features/chat-participant/promptReferences';
+import { gitIgnoredPaths } from './contextExclusion';
 
 export interface MentionTarget extends WorkspaceFileReference {
   label: string;
 }
 
+interface MentionCandidate {
+  uri: vscode.Uri;
+  target: MentionTarget;
+}
+
 const FILE_RESULT_LIMIT = 15;
 const SYMBOL_RESULT_LIMIT = 8;
+const CANDIDATES_PER_RESULT = 4;
 
 function lineLabel(range: WorkspaceFileReference['range']): string {
   if (range === undefined) return '';
@@ -38,16 +45,23 @@ function selectionIn(uri: vscode.Uri): WorkspaceFileReference['range'] {
   };
 }
 
-async function fileMatches(query: string): Promise<MentionTarget[]> {
+async function fileMatches(query: string): Promise<MentionCandidate[]> {
   const files = await vscode.workspace.findFiles(
     `**/*${query}*`,
     '**/node_modules/**',
-    FILE_RESULT_LIMIT,
+    FILE_RESULT_LIMIT * CANDIDATES_PER_RESULT,
   );
   return files.map((uri) => {
     const path = vscode.workspace.asRelativePath(uri);
     const range = selectionIn(uri);
-    return { path, label: `${path}${lineLabel(range)}`, ...(range === undefined ? {} : { range }) };
+    return {
+      uri,
+      target: {
+        path,
+        label: `${path}${lineLabel(range)}`,
+        ...(range === undefined ? {} : { range }),
+      },
+    };
   });
 }
 
@@ -57,7 +71,7 @@ function symbolKindLabel(kind: unknown): string {
   return typeof name === 'string' ? name.toLowerCase() : 'symbol';
 }
 
-async function symbolMatches(query: string): Promise<MentionTarget[]> {
+async function symbolMatches(query: string): Promise<MentionCandidate[]> {
   let symbols: vscode.SymbolInformation[] | undefined;
   try {
     symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
@@ -69,7 +83,7 @@ async function symbolMatches(query: string): Promise<MentionTarget[]> {
   }
   if (!Array.isArray(symbols)) return [];
 
-  const targets: MentionTarget[] = [];
+  const candidates: MentionCandidate[] = [];
   for (const symbol of symbols) {
     const location = symbol.location as vscode.Location | undefined;
     if (location?.uri === undefined || location.range === undefined) continue;
@@ -80,24 +94,36 @@ async function symbolMatches(query: string): Promise<MentionTarget[]> {
       endLine: location.range.end.line,
       endCharacter: location.range.end.character,
     };
-    targets.push({
-      path,
-      range,
-      label: `${symbol.name} · ${symbolKindLabel(symbol.kind)} · ${path}${lineLabel(range)}`,
+    candidates.push({
+      uri: location.uri,
+      target: {
+        path,
+        range,
+        label: `${symbol.name} · ${symbolKindLabel(symbol.kind)} · ${path}${lineLabel(range)}`,
+      },
     });
-    if (targets.length === SYMBOL_RESULT_LIMIT) break;
+    if (candidates.length === SYMBOL_RESULT_LIMIT * CANDIDATES_PER_RESULT) break;
   }
-  return targets;
+  return candidates;
 }
 
 export async function searchMentionTargets(query: string): Promise<MentionTarget[]> {
   const [symbols, files] = await Promise.all([
-    symbolMatches(query).catch(() => [] as MentionTarget[]),
-    fileMatches(query).catch(() => [] as MentionTarget[]),
+    symbolMatches(query).catch(() => [] as MentionCandidate[]),
+    fileMatches(query).catch(() => [] as MentionCandidate[]),
   ]);
+  const ignored = await gitIgnoredPaths([...symbols, ...files].map((candidate) => candidate.uri));
+  const offered = (candidates: MentionCandidate[], limit: number): MentionTarget[] =>
+    candidates
+      .filter((candidate) => !ignored.has(candidate.uri.fsPath))
+      .slice(0, limit)
+      .map((candidate) => candidate.target);
   const seen = new Set<string>();
   const targets: MentionTarget[] = [];
-  for (const target of [...symbols, ...files]) {
+  for (const target of [
+    ...offered(symbols, SYMBOL_RESULT_LIMIT),
+    ...offered(files, FILE_RESULT_LIMIT),
+  ]) {
     const key = `${target.path}#${target.range?.startLine ?? ''}:${target.range?.endLine ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);

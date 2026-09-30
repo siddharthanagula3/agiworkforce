@@ -1553,6 +1553,21 @@ export function getSettingsWebviewContent(
                 <span class="toggle-track" aria-hidden="true"></span>
               </label>
             </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-respect-gitignore">Respect .gitignore</label>
+                <span class="setting-description">Leave files git ignores out of @ file search, and send only the path of one that is open in the editor. Works while VS Code's search.useIgnoreFiles is on.</span>
+              </div>
+              <label class="toggle" title="Respect .gitignore">
+                <input
+                  id="setting-respect-gitignore"
+                  data-setting="respectGitIgnore"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
           </div>
 
           <div class="card">
@@ -1997,6 +2012,7 @@ ${capabilityAvailabilityRows}
           'composer.followUpBehavior': 'Active-turn send',
           contextLines: 'Context lines',
           'editorContext.autoAttach': 'Editor context',
+          respectGitIgnore: 'Respect .gitignore',
           telemetryEnabled: 'Telemetry',
           'memory.enabled': 'Memory',
           hoverEnabled: 'Hover actions',

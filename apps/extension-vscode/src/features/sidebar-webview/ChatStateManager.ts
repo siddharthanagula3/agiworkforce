@@ -129,10 +129,12 @@ import {
   buildContextAttachment,
   resolveContextMenuState,
   resolveEditorContext,
+  withholdGitIgnoredContext,
   type ContextMenuItemState,
   type EditorContextChip,
   type EditorContextSnapshot,
 } from '../../data/composerContext';
+import { isGitIgnoredCached } from '../../data/contextExclusion';
 import { searchMentionTargets } from '../../data/mentionSearch';
 import type { ApprovalDecision, ContextAttachmentKind } from '../../protocol/webviewMessages';
 import {
@@ -867,6 +869,7 @@ export class ChatStateManager {
     }
   >();
   private readonly _editorContextListeners: vscode.Disposable[] = [];
+  private _editorContextSequence = 0;
   private _answerRatings: Promise<void> = Promise.resolve();
   private readonly _activeModelChanged = new vscode.EventEmitter<string>();
   readonly onDidChangeActiveModel = this._activeModelChanged.event;
@@ -883,9 +886,9 @@ export class ChatStateManager {
     this._activeModel = Config.model();
     this._cliCapabilities = new CliCapabilityAdapter(this._localRuntimes);
     this._editorContextListeners.push(
-      vscode.window.onDidChangeActiveTextEditor(() => this.pushEditorContext()),
-      vscode.window.onDidChangeTextEditorSelection(() => this.pushEditorContext()),
-      vscode.languages.onDidChangeDiagnostics(() => this.pushEditorContext()),
+      vscode.window.onDidChangeActiveTextEditor(() => void this.pushEditorContext()),
+      vscode.window.onDidChangeTextEditorSelection(() => void this.pushEditorContext()),
+      vscode.languages.onDidChangeDiagnostics(() => void this.pushEditorContext()),
       onApprovalAnsweredOnPhone((answer) => this._approvalAnsweredOnPhone(answer)),
     );
     if (this._workspaceState !== undefined) {
@@ -1000,7 +1003,7 @@ export class ChatStateManager {
         void this.pushStartSuggestions();
         void this.pushWebSearchSetup();
         this.pushActiveProject();
-        this.pushEditorContext();
+        void this.pushEditorContext();
         if (this._loadedConversation !== undefined && this._thread !== undefined) {
           this._postLoadedConversation();
           this._postProviderBadgeForSession(
@@ -1156,7 +1159,7 @@ export class ChatStateManager {
         this._sessionApprovals.clear();
         this._draftDisallowedTools = undefined;
         this._clearPendingApprovals();
-        this.pushEditorContext();
+        void this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
         this._followDefaultModel();
         await this._pushUsageMeterOnBoundaryChange();
@@ -1196,7 +1199,7 @@ export class ChatStateManager {
         this._sessionApprovals.clear();
         this._draftDisallowedTools = undefined;
         this._clearPendingApprovals();
-        this.pushEditorContext();
+        void this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
         this._followDefaultModel();
         await this._pushUsageMeterOnBoundaryChange();
@@ -1398,7 +1401,7 @@ export class ChatStateManager {
 
       case 'dismissEditorContext': {
         this._dismissedEditorContext.add(msg.payload.id);
-        this.pushEditorContext();
+        await this.pushEditorContext();
         break;
       }
 
@@ -2651,11 +2654,14 @@ export class ChatStateManager {
     };
   }
 
-  pushEditorContext(): void {
-    this._post({
-      type: 'editorContext',
-      payload: { chips: resolveEditorContext(this._dismissedEditorContext).chips },
-    });
+  async pushEditorContext(): Promise<void> {
+    const sequence = ++this._editorContextSequence;
+    const snapshot = await withholdGitIgnoredContext(
+      resolveEditorContext(this._dismissedEditorContext),
+      isGitIgnoredCached,
+    );
+    if (sequence !== this._editorContextSequence) return;
+    this._post({ type: 'editorContext', payload: { chips: snapshot.chips } });
   }
 
   dispose(): void {
@@ -2837,7 +2843,7 @@ export class ChatStateManager {
     this._sessionApprovals.clear();
     this._draftDisallowedTools = undefined;
     this._clearPendingApprovals();
-    this.pushEditorContext();
+    void this.pushEditorContext();
     this._dropQueuedSends('Queued follow-up cancelled when the conversation was reset.');
     this._dropInFlightSend('Message cancelled when the conversation was reset.');
     this._dropSteeringSends('Steer cancelled when the conversation was reset.');
@@ -3113,7 +3119,7 @@ export class ChatStateManager {
     };
     this._dismissedEditorContext.clear();
     this._lastUserTurn = { role: 'user', text, references: request.references };
-    this.pushEditorContext();
+    void this.pushEditorContext();
 
     if (this._turnLifecycleActive) {
       if (this._sendQueue.size() + this._steeringSends.size >= MAX_QUEUED_SENDS) {
@@ -3606,8 +3612,9 @@ export class ChatStateManager {
           projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
         });
         const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
-        const contextFiles = contextFilesForWorkspace(cwd, request.editorContext.contextFiles);
-        const editorContextInputs: UserInput[] = request.editorContext.texts.map((text) => ({
+        const editorContext = await withholdGitIgnoredContext(request.editorContext);
+        const contextFiles = contextFilesForWorkspace(cwd, editorContext.contextFiles);
+        const editorContextInputs: UserInput[] = editorContext.texts.map((text) => ({
           type: 'text',
           text,
           text_elements: [],

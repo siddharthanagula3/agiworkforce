@@ -282,7 +282,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
 
   public pushEditorContext(): void {
-    this._stateManager.pushEditorContext();
+    void this._stateManager.pushEditorContext();
   }
 
   public activeRoute(): ModelRoute | undefined {
