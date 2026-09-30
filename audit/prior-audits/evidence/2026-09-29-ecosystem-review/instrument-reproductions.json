@@ -1,0 +1,26 @@
+{
+  "missing_implementation_evidence": {
+    "exit": 0,
+    "stdout": "audit worklist is current (200 files).\n",
+    "stderr": ""
+  },
+  "fabricated_reachability_evidence": {
+    "exit": 0,
+    "stdout": "{\"records\":654,\"tally\":{\"built\":465,\"partial\":1,\"stub\":0,\"unwired\":0,\"broken\":0,\"missing\":183,\"unclear\":5},\"surfaces\":{\"apps/web\":75,\"apps/desktop\":50,\"apps/chrome-extension\":49,\"apps/mobile\":54,\"apps/cli\":63,\"apps/ide-extensions\":41,\"apps/slack-app\":38,\"apps/github-app\":37,\"packages/core-agent\":37,\"packages/extensibility\":21,\"packages/tools/mcp\":19,\"packages/permissions\":19,\"packages/sessions\":19,\"packages/memory\":15,\"packages/auth\":22,\"packages/settings\":14,\"packages/platform\":31,\"packages/safety\":12,\"admin-and-billing\":26,\"release-infra\":12}}\n",
+    "stderr": ""
+  },
+  "file_ledger_coverage_reset": {
+    "source_files": 2,
+    "ledger_rows": 1,
+    "untracked_included": false,
+    "status_after_regeneration": "not-started",
+    "full_file_evidence_after": false,
+    "source_commit": "672ff317e4cd-dirty"
+  },
+  "file_inventory_unbound_to_source_content": {
+    "source_hash_before": "2f38083dffca2f3066e3f400406481cf460833008aa1bc22e4a1d842704f6255",
+    "source_hash_after": "51cb778f1212bb990b9f934d0d7c1195703f226d0353e8a42e9b750887588368",
+    "ledger_bytes_identical": true,
+    "source_commit": "672ff317e4cd-dirty"
+  }
+}

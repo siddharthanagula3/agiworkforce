@@ -1,0 +1,793 @@
+{
+  "lane": "Rust / CLI / public Electron developer host / VS Code seams",
+  "recorded_at": "2026-09-29T21:19:29.684894+00:00",
+  "scope": "Read-only audit of latest integrated code and relevant pending dirty work; no valuation, no canonical register modifications, no paid/provider requests.",
+  "snapshots": {
+    "main": "615a7858bd46f5772a3db1c3c7e333441acd3dae",
+    "integration": {
+      "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e",
+      "head": "49d0c30f38ca53570dd4eade84548c9cf43705ae",
+      "status": "clean during revalidation"
+    },
+    "newer_fix_cli_auth": {
+      "head": "6e2d370e5394f9e1c1f3231e7a43c4e9cf0a7043",
+      "native_lane_diff_vs_integration": "empty"
+    },
+    "worktree_dirty_scan": {
+      "registered_worktrees_checked": 41,
+      "native_lane_paths": [
+        "apps/cli",
+        "crates",
+        "apps/desktop/electron",
+        "apps/extension-vscode",
+        "apps/desktop/src-tauri"
+      ],
+      "dirty_worktrees": [
+        {
+          "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-cli-final",
+          "head": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+          "files": [
+            {
+              "path": "apps/cli/src/agent/mod.rs",
+              "sha256": "72797d358a721bfd86901e5a0d8b9f1b35d16559e4f4199d1b14222fbe10b814"
+            },
+            {
+              "path": "apps/cli/src/apply_patch.rs",
+              "sha256": "3cfcbb2cadd750f91c9d1c5e6e4c4650007e821b5d53c4d56a0c7d779fb64d8d"
+            },
+            {
+              "path": "apps/cli/src/command_registry.rs",
+              "sha256": "35b31a26f73bfebb8becc513da4602b5f3dd3d8e582806a886df0409cba7c7a2"
+            },
+            {
+              "path": "apps/cli/src/features/exec/tools/file_ops/mod.rs",
+              "sha256": "719c22c79187ac029b94c87e8816e52961f383dec562c5f1c485381d0e12193d"
+            },
+            {
+              "path": "apps/cli/src/features/exec/tools/mod.rs",
+              "sha256": "2b29bc23c44e64f85ac894b46f89067da101329d9eac63e5b3b841cc76158a5b"
+            },
+            {
+              "path": "apps/cli/src/features/exec/tools/task_registry/mod.rs",
+              "sha256": "121151ab6deb8db2e5e1739e962ffec9ebf55b8a60376839ae080a37d576f792"
+            },
+            {
+              "path": "apps/cli/src/lib.rs",
+              "sha256": "3d45a4e730a6fa79368828687667b021d7f2e701b860dee99c461036719a9e41"
+            },
+            {
+              "path": "apps/cli/src/platform/lsp/client.rs",
+              "sha256": "3997e1b1217cd6a8e367ce5c2b1b560ddefe96d4a0cfc8f8599da2d18fc1e6d0"
+            },
+            {
+              "path": "apps/cli/src/platform/lsp/mod.rs",
+              "sha256": "61d7d70b34e15509d663c93e2d40be19c26da6e566abf436298ebe70988cbf54"
+            },
+            {
+              "path": "apps/cli/src/tui/tui_app.rs",
+              "sha256": "406288c55155579d6431d52944ecfd7bc3b045aa43c719384cf499b8ca3c0703"
+            },
+            {
+              "path": "crates/agiworkforce-app-server/src/lib.rs",
+              "sha256": "0476513eb350b58e1eb1afe7c79899600bef4dca57af92ea0e326b896c4c79f1"
+            },
+            {
+              "path": "crates/agiworkforce-app-server/tests/developer_sessions.rs",
+              "sha256": "87a5d3e69460ff97b0ae4061b846c0b2a395a6fe8164fe7c74c95a7cb40c7f96"
+            }
+          ]
+        },
+        {
+          "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-desktop-cli",
+          "head": "563f1873926d18601427454ccc4e5d810ac7dfcf",
+          "files": [
+            {
+              "path": "apps/desktop/electron/__tests__/dispatcher.test.ts",
+              "sha256": "84cfc5859f7fe51459c7ca5206afec3af10062402ef814ac3af1bae9e165dcc3"
+            },
+            {
+              "path": "apps/desktop/electron/__tests__/filesystemService.test.ts",
+              "sha256": "1f70b77f497ad9ac11b1a758aed4ffbfa0a3450f6e78c547f851c6c711738b00"
+            },
+            {
+              "path": "apps/desktop/electron/runtime/dispatcher.ts",
+              "sha256": "9ed5747523ed3a90221ebceac9840b210354713459abe68267a7fed2a1229c2f"
+            },
+            {
+              "path": "apps/desktop/electron/runtime/filesystemService.ts",
+              "sha256": "b741913af7af179127c82a1370d9b6b175cc5636333fa9e9f1f88664e305e5f8"
+            }
+          ]
+        },
+        {
+          "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-mcp-rust",
+          "head": "b996209e04100b8ae04f01c8dc2e6539c18b5c26",
+          "files": [
+            {
+              "path": "apps/cli/src/app_server/surfaces.rs",
+              "sha256": "835c4e1f5199ea69da98e9e017fa511512f4cbd1b6d5e6df2a61f82b7c7edd6c"
+            },
+            {
+              "path": "apps/cli/src/claude_parity.rs",
+              "sha256": "b3470f3c3219efea75b58fb39a6b57f09dba901ea12efd74e5302126968e8a7c"
+            },
+            {
+              "path": "apps/cli/src/cloud/workspace_policy.rs",
+              "sha256": "6974b82433ab3e0eb5700559771b01ce8bfe4d809eaba1475adb0c8e5fc24f7f"
+            },
+            {
+              "path": "apps/cli/src/lib.rs",
+              "sha256": "ee8434d806359ed42c40e9439f9225cd04adcecf49aebe7eb9cbcccfd63adfdb"
+            },
+            {
+              "path": "apps/cli/src/mcp/mod.rs",
+              "sha256": "a8059bf7fc1d6e4eeab7f63450d01cb4e730726bac5d01646d508639702b5228"
+            },
+            {
+              "path": "apps/cli/src/tui/tui_app.rs",
+              "sha256": "9cae30e82bd3058bf964b9ce83e20ee72a13e1d51094754d52268469b08d3a4e"
+            },
+            {
+              "path": "apps/cli/src/tui/widgets/screen_renderers.rs",
+              "sha256": "53b2af3f6cdc3150565a7417f18b2215b8556af763471c485eb847a22e5c4dca"
+            }
+          ]
+        }
+      ]
+    },
+    "critical_path_byte_comparison": [
+      {
+        "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/codex-land",
+        "critical_paths_byte_comparison": {
+          "apps/cli/src/agent/checkpoints.rs": true,
+          "apps/cli/src/app_server/developer_host.rs": true,
+          "apps/extension-vscode/src/core/commandSetup.ts": true,
+          "crates/agiworkforce-mcp/src/cache.rs": true,
+          "apps/cli/src/terminals.rs": true
+        }
+      },
+      {
+        "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-cli-final",
+        "critical_paths_byte_comparison": {
+          "apps/cli/src/agent/checkpoints.rs": true,
+          "apps/cli/src/app_server/developer_host.rs": true,
+          "apps/extension-vscode/src/core/commandSetup.ts": true,
+          "crates/agiworkforce-mcp/src/cache.rs": true,
+          "apps/cli/src/terminals.rs": true
+        }
+      },
+      {
+        "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-desktop-cli",
+        "critical_paths_byte_comparison": {
+          "apps/cli/src/agent/checkpoints.rs": true,
+          "apps/cli/src/app_server/developer_host.rs": true,
+          "apps/extension-vscode/src/core/commandSetup.ts": true,
+          "crates/agiworkforce-mcp/src/cache.rs": true,
+          "apps/cli/src/terminals.rs": true
+        }
+      },
+      {
+        "worktree": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-mcp-rust",
+        "critical_paths_byte_comparison": {
+          "apps/cli/src/agent/checkpoints.rs": true,
+          "apps/cli/src/app_server/developer_host.rs": false,
+          "apps/extension-vscode/src/core/commandSetup.ts": false,
+          "crates/agiworkforce-mcp/src/cache.rs": true,
+          "apps/cli/src/terminals.rs": true
+        }
+      }
+    ]
+  },
+  "journeys": [
+    {
+      "name": "VS Code local prompt -> shared Rust turn -> approval/steer/stop -> persisted recovery",
+      "path": [
+        "ChatStateManager send and local model/trust validation",
+        "LocalRuntimeClient turn/start and typed notifications",
+        "CliDeveloperSessionHost start_turn exclusive claim, provider route pin and writer lease",
+        "agent.chat TurnHostAdapter -> shared agent-core -> tool policy/approval callback",
+        "approval/respond scopes request+thread+turn and supports edited content; turn/steer queues prepared input",
+        "interrupt_turn process cleanup/cancel/persistence; reconnect exposes partial output and pending approvals"
+      ],
+      "observations": [
+        "Real shared harness adoption and fail-closed route/sandbox controls exist.",
+        "Stop path has the documented multi-connection race; crash lifecycle status remains known gap."
+      ],
+      "verification": "Source trace, selected meaningful tests read; no live model completion or application invocation."
+    },
+    {
+      "name": "VS Code rewind -> Rust checkpoint -> filesystem restoration",
+      "path": [
+        "ChatStateManager confirmation/rewind API",
+        "developer_host rewind_thread blocks active turn and claims writer",
+        "AgentSession rewind_to validates conversation checkpoint then restores files",
+        "CheckpointLog content-addressed blobs/Absent state",
+        "restore report propagates restored/removed/skipped paths and conversation state"
+      ],
+      "observations": [
+        "Working code+conversation restoration implementation exists.",
+        "Parent symlink swap escapes approved paths during unsandboxed restore, primitive reproduced."
+      ],
+      "verification": "Source trace plus exact filesystem guard temporary probe; full UI/app-server unexecuted."
+    },
+    {
+      "name": "MCP tool/read lifecycle -> transport -> auth/cache + CLI/IDE/cloud continuation",
+      "path": [
+        "Configured project/global/plugin servers are loaded under workspace trust",
+        "McpConnection negotiates legacy/modern transport and uses bounded frame/response policies",
+        "Modern read cache keys method+params, scopes private cache to auth epoch and invalidates on notifications",
+        "App-server handoff validates persisted thread ownership; VS Code admits and accepts receipt",
+        "CLI cloud start reviews task+GitHub branch transfer; cloud teleport fetches pushed working branch"
+      ],
+      "observations": [
+        "MCP schema/auth/framing are substantive implementation.",
+        "Aggregate cache lacks bounds; VS Code accepted handoff is not activated.",
+        "Cloud transfer is explicitly repository+task; terminal conversation/env/MCP/settings stay local."
+      ],
+      "verification": "Read current code and pending policy hardening; no external MCP server or cloud execution."
+    }
+  ],
+  "findings": [
+    {
+      "id": "rust-developer-01",
+      "priority": "P1",
+      "kind": "security/correctness",
+      "title": "Checkpoint rewind follows swapped parent symlinks outside the approved workspace",
+      "known_flaw_id": null,
+      "status": "current implementation; primitive verified",
+      "trigger": "Capture workspace/sub/file during an approved edit, then replace sub with a symlink to a directory outside the workspace before choosing code rewind. An outside regular file of the same name is overwritten; a file captured as Absent is deleted through the symlink.",
+      "evidence": "Snapshot paths are lexical root joins, not stable confined handles. restore_files checks the final file only for Contents; symlink_metadata follows symlink parents, so an outside regular leaf passes. Absent directly removes the lexical path. The app-server rewind checks thread/writer ownership but never revalidates snapshot paths against the workspace or executes these writes in its shell sandbox.",
+      "anchors": [
+        {
+          "path": "apps/cli/src/agent/checkpoints.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/agent/checkpoints.rs",
+          "line": 322,
+          "end_line": 350
+        },
+        {
+          "path": "apps/cli/src/agent/checkpoints.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/agent/checkpoints.rs",
+          "line": 521,
+          "end_line": 536
+        },
+        {
+          "path": "apps/cli/src/agent/checkpoints.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/agent/checkpoints.rs",
+          "line": 555,
+          "end_line": 603
+        },
+        {
+          "path": "apps/cli/src/agent/history.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/agent/history.rs",
+          "line": 172,
+          "end_line": 187
+        },
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "line": 2040,
+          "end_line": 2085
+        }
+      ],
+      "verification": {
+        "method": "Exact unsafe_to_overwrite function extracted from current source into a standalone Rust probe; same restore filesystem operations performed in temporary directories.",
+        "commands": [
+          "rustc /private/tmp/agi-ecosystem-audit-20260929/checkpoint_symlink_probe.rs -o /private/tmp/agi-ecosystem-audit-20260929/checkpoint_symlink_probe",
+          "/private/tmp/agi-ecosystem-audit-20260929/checkpoint_symlink_probe /private/tmp/agi-ecosystem-audit-20260929/checkpoint-symlink-probe"
+        ],
+        "observed": [
+          "extracted_guard_reason=None",
+          "outside_file_overwritten=true",
+          "outside_new_file_removed=true"
+        ],
+        "artifact": "/private/tmp/agi-ecosystem-audit-20260929/checkpoint_symlink_probe.rs",
+        "limitations": "Primitive reproduction, not full CLI build, mounted app-server or rendered UI. No user files touched."
+      },
+      "suggested_change": "Revalidate every snapshot destination under the owned workspace immediately before restore/delete and reject symlink ancestors; use confined/no-follow filesystem operations to avoid a check/write race. Keep skipped-file reporting."
+    },
+    {
+      "id": "rust-developer-02",
+      "priority": "P2",
+      "kind": "handoff correctness",
+      "title": "Continue CLI Session accepts the chosen thread but never opens it in VS Code",
+      "known_flaw_id": null,
+      "status": "current implementation; statically traced",
+      "trigger": "With a different sidebar thread active, invoke Continue CLI Session or a developer-session deep link for a specific CLI thread and confirm Continue here.",
+      "evidence": "continueCliSessionHere selects newest/requested ID, validates and accepts its handoff, then only executes agi-workforce.chat. That command reveals native chat or the sidebar; it does not resume the accepted thread. The existing fork command explicitly calls sidebarProvider.resumeConversation(forkedId), demonstrating the required activation is separate. Deep links reach the same command.",
+      "anchors": [
+        {
+          "path": "apps/extension-vscode/src/core/commandSetup.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/extension-vscode/src/core/commandSetup.ts",
+          "line": 498,
+          "end_line": 533
+        },
+        {
+          "path": "apps/extension-vscode/src/core/commandSetup.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/extension-vscode/src/core/commandSetup.ts",
+          "line": 1024,
+          "end_line": 1038
+        },
+        {
+          "path": "apps/extension-vscode/src/core/commandSetup.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/extension-vscode/src/core/commandSetup.ts",
+          "line": 1338,
+          "end_line": 1351
+        },
+        {
+          "path": "apps/extension-vscode/src/features/context-handoff/developerSessionLink.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/extension-vscode/src/features/context-handoff/developerSessionLink.ts",
+          "line": 29,
+          "end_line": 35
+        }
+      ],
+      "verification": {
+        "method": "Read complete command consumer and target command.",
+        "limitations": "No mounted VS Code invocation; existing admission helper tests do not exercise this command-to-sidebar activation."
+      },
+      "suggested_change": "After acceptance, reveal first-party chat and resume newest.id; only record acceptance once backend admission and activation succeed. Add a command test with a different active thread."
+    },
+    {
+      "id": "rust-developer-03",
+      "priority": "P2",
+      "kind": "concurrency/cancellation",
+      "title": "Interrupt releases turn ownership before cleanup finishes",
+      "known_flaw_id": null,
+      "status": "current implementation; static interleaving verified, runtime reproduction pending",
+      "trigger": "Two authenticated WebSocket connections to the same app-server host: interrupt an active turn on one connection while starting a new turn on the same thread on the other. The old process tree shutdown yields long enough for the new start to proceed.",
+      "evidence": "interrupt_turn removes running_turns[thread] and drops its lock before awaiting process-tree shutdown. start_turn uses only that map as its in-process active claim; the same writer lease renews successfully. Old cleanup later takes session-wide subagent and memory managers, removes steering by thread alone, and calls cancel_turn on the shared current history. A new turn can therefore be accepted before the old transcript/cleanup settles, lose its steering/managers, or make the interrupt wait behind its long-held session mutex. WebSocket upgrades clone one shared host, while individual sockets process requests independently.",
+      "anchors": [
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "line": 2991,
+          "end_line": 3048
+        },
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "line": 2315,
+          "end_line": 2346
+        },
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "line": 1094,
+          "end_line": 1115
+        },
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "line": 2593,
+          "end_line": 2640
+        },
+        {
+          "path": "crates/agiworkforce-app-server/src/lib.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-app-server/src/lib.rs",
+          "line": 285,
+          "end_line": 305
+        }
+      ],
+      "verification": {
+        "method": "Read locks, release points, awaits, writer-lease behavior, shared WebSocket host and existing tests.",
+        "limitations": "Single stdio connection serializes requests and mitigates this particular trigger. No direct race harness executed. Existing interrupt test awaits complete cleanup before reload (developer_host.rs6897-6921); simultaneous-start test covers start/start, not interrupt/start."
+      },
+      "suggested_change": "Keep a stopping claim until process, subagents, steering, partial-history finalization and persistence settle; scope all cleanup to the interrupted turn generation."
+    },
+    {
+      "id": "rust-developer-04",
+      "priority": "P2",
+      "kind": "bounded resources",
+      "title": "Modern MCP read cache retains unlimited responses and expired distinct keys",
+      "known_flaw_id": null,
+      "status": "current implementation; statically traced",
+      "trigger": "A configured modern MCP server returns ttlMs on resources/read; a long-lived client reads many distinct resource URIs without list-change notifications, including expired keys it never requests again.",
+      "evidence": "Events owns a HashMap with no entry/byte limit. store clones every complete cacheable result. cached evicts an expired entry only when that exact key is requested again; notifications clear only selected prefixes when a notification arrives. Per-frame/per-response transport bounds do not constrain aggregate cached memory. Modern dispatch reaches store for a zero-round normal response.",
+      "anchors": [
+        {
+          "path": "crates/agiworkforce-mcp/src/cache.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-mcp/src/cache.rs",
+          "line": 10,
+          "end_line": 28
+        },
+        {
+          "path": "crates/agiworkforce-mcp/src/cache.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-mcp/src/cache.rs",
+          "line": 54,
+          "end_line": 87
+        },
+        {
+          "path": "crates/agiworkforce-mcp/src/cache.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-mcp/src/cache.rs",
+          "line": 96,
+          "end_line": 109
+        },
+        {
+          "path": "crates/agiworkforce-mcp/src/client.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/crates/agiworkforce-mcp/src/client.rs",
+          "line": 673,
+          "end_line": 694
+        }
+      ],
+      "verification": {
+        "method": "Read entire cache module and dispatch call site.",
+        "limitations": "No OOM/load run or live server request; prerequisite is modern protocol and server-provided TTL. TTL overflow hypothesis was separately rejected on host."
+      },
+      "suggested_change": "Bound total cache bytes and entries, periodically prune expired entries, clamp TTL, and use an eviction policy before cloning/inserting."
+    },
+    {
+      "id": "rust-developer-05",
+      "priority": "P2",
+      "kind": "bounded resources",
+      "title": "Background command pool caps finished history but leaves running commands unbounded",
+      "known_flaw_id": null,
+      "status": "current implementation; statically traced",
+      "trigger": "An agent repeatedly launches background servers/watchers or long-lived shell commands across turns without command_stop.",
+      "evidence": "terminals::start spawns the child, output reader thread(s) and waiter thread before storing it in a process-global vector. The only retention guard counts finished commands; running children are never capped. Each command can retain up to 1MiB output. Background commands intentionally survive turn lifetime, so the running-turn concurrency limit does not bound this pool. The caller has no active-command admission check.",
+      "anchors": [
+        {
+          "path": "apps/cli/src/terminals.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/terminals.rs",
+          "line": 14,
+          "end_line": 30
+        },
+        {
+          "path": "apps/cli/src/terminals.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/terminals.rs",
+          "line": 173,
+          "end_line": 230
+        },
+        {
+          "path": "apps/cli/src/features/exec/tools/bash/mod.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/features/exec/tools/bash/mod.rs",
+          "line": 229,
+          "end_line": 270
+        }
+      ],
+      "verification": {
+        "method": "Read start path, retention policy, background tool caller and searched all CLI call sites for active-command caps.",
+        "limitations": "No stress run or resource exhaustion reproduced; local process resource risk, not demonstrated remote tenant interference."
+      },
+      "suggested_change": "Reserve bounded per-session/process active slots before spawning; expose explicit stop/cleanup and reject further starts with actionable feedback when full."
+    },
+    {
+      "id": "rust-developer-06",
+      "priority": "P2",
+      "kind": "recovery",
+      "title": "Crash recovery loses terminal turn status",
+      "known_flaw_id": "CLI-THREAD-STATUS-NOT-PERSISTED-01",
+      "status": "existing known flaw revalidated",
+      "trigger": "The CLI/app-server dies while a turn is in progress, then another host reads the persisted thread.",
+      "evidence": "status_for returns Archived from persistence, then consults only current pending_approvals and running_turns maps, else Idle. thread_summary uses that result. Restart reconstructs neither map and does not infer interruption from a persisted turn record. The writer lease is returned separately and does not determine status. Normal explicit interruption persists partial history, but does not establish crash interruption semantics.",
+      "anchors": [
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "line": 780,
+          "end_line": 801
+        },
+        {
+          "path": "apps/cli/src/app_server/developer_host.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/app_server/developer_host.rs",
+          "line": 884,
+          "end_line": 893
+        }
+      ],
+      "verification": {
+        "method": "Read current status path and matched canonical known-flaw row.",
+        "limitations": "No intentional process crash run. Do not create a duplicate canonical row."
+      },
+      "suggested_change": "Persist turn lifecycle/recovery markers and reconcile unfinished turns at startup; preserve partial output and explain why a turn ended."
+    }
+  ],
+  "candidate_findings_not_counted": [
+    {
+      "title": "Proposed approval cleanup rejection can orphan the backend approval",
+      "anchors": [
+        {
+          "path": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+          "line": 2534,
+          "end_line": 2556
+        },
+        {
+          "path": "apps/extension-vscode/src/features/permissions/proposedChangeReview.ts",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/extension-vscode/src/features/permissions/proposedChangeReview.ts",
+          "line": 127,
+          "end_line": 139
+        }
+      ],
+      "evidence": "Pending approval is deleted before finish/discard cleanup outside try; editor save/tab-close rejection prevents response or interruption.",
+      "reason_not_confirmed": "No actual VS Code rejection reproduced; retain for focused mocked failure test/mounted validation, not a final confirmed finding."
+    }
+  ],
+  "partial_capabilities": [
+    {
+      "name": "Cloud continuation",
+      "status": "implemented partial transfer, intentional explicit trust review",
+      "anchors": [
+        {
+          "path": "apps/cli/src/cloud/code_handoff.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/cloud/code_handoff.rs",
+          "line": 318,
+          "end_line": 379
+        },
+        {
+          "path": "apps/cli/src/cloud/code_handoff.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/cloud/code_handoff.rs",
+          "line": 410,
+          "end_line": 437
+        },
+        {
+          "path": "apps/cli/src/cloud/code_teleport.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/cloud/code_teleport.rs",
+          "line": 122,
+          "end_line": 182
+        }
+      ],
+      "limits": "GitHub repository plus task/pushed branch; conversations, environment variables, local MCP and settings do not transfer. Teleport requires clean local checkout and a cloud branch pushed to GitHub. No claim of reusable cloud environment parity or laptop-closed live execution."
+    },
+    {
+      "name": "LSP diagnostics",
+      "status": "unsupported honestly, synchronous LSP probes improved in dirty work",
+      "anchors": [
+        {
+          "path": "apps/cli/src/features/exec/tools/task_registry/mod.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/billing-e2e/apps/cli/src/features/exec/tools/task_registry/mod.rs",
+          "line": 716,
+          "end_line": 741
+        },
+        {
+          "path": "apps/cli/src/features/exec/tools/task_registry/mod.rs",
+          "absolute_path": "/Users/siddhartha/Desktop/agiworkforce/.worktrees/p-cli-final/apps/cli/src/features/exec/tools/task_registry/mod.rs",
+          "line": 772,
+          "end_line": 799
+        }
+      ],
+      "limits": "Diagnostics tool returns success=false/checked=false; notification collection still absent, including pending LSP upgrade."
+    },
+    {
+      "name": "Tauri retained internal runtime",
+      "status": "separate retained implementation, not public Desktop runtime",
+      "limits": "Non-streaming local turns share agent-core; streaming and other internal native harness paths remain separate. Do not count retained Tauri as a seventh user-facing surface."
+    }
+  ],
+  "pending_work_review": [
+    {
+      "worktree": "p-cli-final",
+      "read_scope": "All dirty file inventory; complete small approval-mode, app-server transport, patch validation diffs; LSP production implementation and tests portions; selected tool file-ops/task-registry deltas. Some large test-diff output truncated, not claimed fully read.",
+      "changes": "Launch opt-in for approval-bypass modes; loopback Host/bind guard and token comparison; patch targets checked even with no confirmation, parent-symlink rejection, rename/copy header validation; LSP initialization/didOpen/error propagation and workspace/sensitive-file validation.",
+      "relationship_to_findings": "Does not modify checkpoints.rs, developer_host.rs cancellation path, MCP cache.rs or VS Code handoff command. These pending fixes do not resolve the six recorded findings. Tests were read but not executed."
+    },
+    {
+      "worktree": "p-desktop-cli",
+      "read_scope": "Complete four dirty source/test diffs",
+      "changes": "SHA256 precondition for text writes and conflict response, caller propagation and related tests.",
+      "relationship_to_findings": "Improves external concurrent write protection in Electron filesystem service; independent of Rust checkpoint restore. The precondition is check-then-write and not a filesystem atomic compare-and-swap."
+    },
+    {
+      "worktree": "p-mcp-rust",
+      "read_scope": "Complete seven dirty file diffs",
+      "changes": "Workspace administrator MCP allow/deny/host restrictions enforced before connecting, visible blocked states across CLI/TUI/server test surface.",
+      "relationship_to_findings": "Does not bound shared modern read cache. Additional changes improve policy but require merge, release and runtime verification."
+    }
+  ],
+  "positive_verified_implementation": [
+    "CLI/VS Code and public Electron developer sessions share the Rust host and agent-core execution boundary.",
+    "App-server approval responses validate pending request ID, thread and turn; edited content requires an allowing decision and a proposed-content snapshot.",
+    "Local privacy mismatch rejects any cross-boundary provider route; explicit fork/review semantics exist.",
+    "Normal command/background command startup fails closed when required OS sandbox is unavailable; explicit no-sandbox requires trusted workspace and no forced organization policy.",
+    "Persistence uses atomic staging, collision detection and bounded managed-session records; writer leases avoid silent cross-process writers.",
+    "Checkpoint snapshots are content-addressed, bounded per file/count, restore actual bytes and report skipped paths."
+  ],
+  "coverage": {
+    "instructions": [
+      {
+        "path": "AGENTS.md",
+        "scope": "complete current integration contract"
+      },
+      {
+        "path": "audit/README.md",
+        "scope": "complete main audit operating contract"
+      },
+      {
+        "path": "audit/registers/known-flaws.md",
+        "scope": "relevant lane row/search coverage, current integration"
+      },
+      {
+        "path": ".agents/skills/code-review/SKILL.md",
+        "scope": "complete"
+      },
+      {
+        "path": ".claude/rules/README.md",
+        "scope": "complete"
+      }
+    ],
+    "current_integration_sources": [
+      {
+        "path": "apps/cli/src/app_server/developer_host.rs",
+        "read_scope": "status/model/thread/session routes, start/steer/interrupt/approval/handoff/rewind/delete/reconnect and selected tests; not entire 8k-line file"
+      },
+      {
+        "path": "apps/cli/src/agent/chat.rs",
+        "read_scope": "cancel/history, send/engine invocation, tool preparation/execution/hooks/filters and selected tests"
+      },
+      {
+        "path": "apps/cli/src/agent/mod.rs",
+        "read_scope": "privacy boundary and session/checkpoint lifecycle ranges"
+      },
+      {
+        "path": "apps/cli/src/agent/history.rs",
+        "read_scope": "checkpoint capture/restore/rewind1-205"
+      },
+      {
+        "path": "apps/cli/src/agent/checkpoints.rs",
+        "read_scope": "complete production implementation1-604"
+      },
+      {
+        "path": "apps/cli/src/platform/runtime/session.rs",
+        "read_scope": "atomic persistence/collision/quarantine/size-bounds ranges"
+      },
+      {
+        "path": "apps/cli/src/platform/runtime/writer_lease.rs",
+        "read_scope": "lease type, expiration and claim/release ranges"
+      },
+      {
+        "path": "apps/cli/src/platform/runtime/session_handoff.rs",
+        "read_scope": "1-230 plus referenced test names"
+      },
+      {
+        "path": "apps/cli/src/cloud/code_handoff.rs",
+        "read_scope": "1-455"
+      },
+      {
+        "path": "apps/cli/src/cloud/code_teleport.rs",
+        "read_scope": "100-215"
+      },
+      {
+        "path": "apps/cli/src/app_server/cloud_threads.rs",
+        "read_scope": "1-140"
+      },
+      {
+        "path": "apps/cli/src/app_server/surfaces.rs",
+        "read_scope": "instruction/plugin/MCP/install surfaces ranges"
+      },
+      {
+        "path": "apps/cli/src/installs.rs",
+        "read_scope": "1-290"
+      },
+      {
+        "path": "apps/cli/src/marketplace.rs",
+        "read_scope": "591-654 and signature/update/test searches"
+      },
+      {
+        "path": "apps/cli/src/sandbox.rs",
+        "read_scope": "1-240 and687-752"
+      },
+      {
+        "path": "apps/cli/src/features/exec/tools/bash/mod.rs",
+        "read_scope": "205-315"
+      },
+      {
+        "path": "apps/cli/src/features/exec/tools/mod.rs",
+        "read_scope": "tool execution/privacy/policy/search ranges"
+      },
+      {
+        "path": "apps/cli/src/features/exec/tools/task_registry/mod.rs",
+        "read_scope": "LSP diagnostics implementation searches"
+      },
+      {
+        "path": "apps/cli/src/platform/runtime/tool_catalog.rs",
+        "read_scope": "background tool description and1260-1340; LSP catalogue searches"
+      },
+      {
+        "path": "apps/cli/src/terminals.rs",
+        "read_scope": "1-85 and169-240 plus stop/list/search paths"
+      },
+      {
+        "path": "apps/cli/src/remote_control/host.rs",
+        "read_scope": "1-135 and capability/approval redaction search"
+      },
+      {
+        "path": "apps/cli/src/schedules/triggers.rs",
+        "read_scope": "1-95"
+      },
+      {
+        "path": "apps/cli/src/models/provider_dispatch.rs",
+        "read_scope": "1-160"
+      },
+      {
+        "path": "crates/agiworkforce-agent-core/src/engine.rs",
+        "read_scope": "1-270 and test/source function inventory"
+      },
+      {
+        "path": "crates/agiworkforce-agent-core/tests/turn_loop.rs",
+        "read_scope": "budget/cancel/order/timeouts test/function inventory"
+      },
+      {
+        "path": "crates/agiworkforce-llm/src/spec.rs",
+        "read_scope": "1-120"
+      },
+      {
+        "path": "crates/agiworkforce-mcp/src/cache.rs",
+        "read_scope": "complete1-115"
+      },
+      {
+        "path": "crates/agiworkforce-mcp/src/client.rs",
+        "read_scope": "260-510 and658-721"
+      },
+      {
+        "path": "crates/agiworkforce-mcp/src/config.rs",
+        "read_scope": "43-150"
+      },
+      {
+        "path": "crates/agiworkforce-mcp/src/security.rs",
+        "read_scope": "1-200"
+      },
+      {
+        "path": "crates/agiworkforce-app-server/src/developer_sessions.rs",
+        "read_scope": "trait1-240, dispatch850-1140, stdio1439-1551"
+      },
+      {
+        "path": "crates/agiworkforce-app-server/src/lib.rs",
+        "read_scope": "271-520; pending dirty diff also read"
+      },
+      {
+        "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+        "read_scope": "approved-root/runtime spawn ranges and1135-1210"
+      },
+      {
+        "path": "apps/extension-vscode/src/integrations/localRuntimeClient.ts",
+        "read_scope": "request/start/steer/interrupt/approval/handoff ranges and connection/recovery searches"
+      },
+      {
+        "path": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+        "read_scope": "resume2140-2215, approval2525-2620, rewind2690-2774, send3570-3702, writer4050-4115, stop4315-4365"
+      },
+      {
+        "path": "apps/extension-vscode/src/features/permissions/proposedChangeReview.ts",
+        "read_scope": "complete1-150"
+      },
+      {
+        "path": "apps/extension-vscode/src/core/commandSetup.ts",
+        "read_scope": "handoff410-550, chat730-750/1017-1040, activation1330-1364"
+      },
+      {
+        "path": "apps/extension-vscode/src/features/context-handoff/developerSessionLink.ts",
+        "read_scope": "complete1-59"
+      },
+      {
+        "path": "apps/extension-vscode/src/features/sidebar-webview/sidebarProvider.ts",
+        "read_scope": "activation delegation searches"
+      },
+      {
+        "path": "apps/extension-vscode/src/__tests__/chatStateManager.test.ts",
+        "read_scope": "approval failure/session/abort tests inventory, not executed"
+      },
+      {
+        "path": "apps/desktop/src-tauri/src/sys/commands/chat/local_turn_host.rs",
+        "read_scope": "1-155, retained internal runtime seam"
+      },
+      {
+        "path": "apps/desktop/src-tauri/Cargo.toml",
+        "read_scope": "dependency/provenance ranges"
+      }
+    ]
+  },
+  "verification_gaps": [
+    "No cargo test, clippy, full build, typecheck, mounted UI, live inference, vendor MCP, cloud environment or laptop-closed execution run.",
+    "Existing tests are implementation evidence, not claims of current passing status.",
+    "Code signatures/notarization/installers/published extension and CLI artifact equivalence to inspected source remain unknown.",
+    "Broader Tauri egress/dependency advisories were not re-audited end to end in this audit lane.",
+    "Selected large dirty LSP/test diffs had truncated outputs; exact production paths above were read subsequently."
+  ],
+  "rejected_hypotheses": [
+    {
+      "hypothesis": "u64::MAX ttlMs panics Instant addition on this host",
+      "result": "Rejected by standalone probe: max_ttl_panicked=false. No TTL-overflow finding."
+    },
+    {
+      "hypothesis": "Latest MCP framing remains unbounded when security option is None",
+      "result": "Rejected: latest config defaults cap frames and responses; main-only observation is stale."
+    }
+  ]
+}
