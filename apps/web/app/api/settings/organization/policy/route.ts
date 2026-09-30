@@ -29,7 +29,8 @@ import {
   type AdminPolicyInput,
 } from '@/lib/services/organization-policy-service';
 import type { AdminPolicy, WorkspaceControls } from '@agiworkforce/types';
-import { ControlsPatchSchema, assertOwnerTurnsOnFastMode } from './controls-schema';
+import { ControlsPatchSchema } from './controls-schema';
+import { assertOwnerTurnsOnFastMode } from '@/lib/services/organization-membership-service';
 import { isIpAllowed, isValidCidr } from '@/lib/services/ip-allow-list';
 import { invalidateIpAllowListCache } from '@/lib/services/organization-ip-allow-list-cache';
 import { resolveMfaEnrolled } from '@/lib/mfa-policy-gate';

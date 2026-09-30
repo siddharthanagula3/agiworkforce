@@ -114,6 +114,11 @@ function run(root) {
   }
 }
 
+test('the repository uses canonical permission and Primary Owner gates', () => {
+  const { status, output } = run(REPO_ROOT);
+  assert.equal(status, 0, output);
+});
+
 test('passes on a tree where every mutating route asks the grid', () => {
   const root = fixture();
   const { status, output } = run(root);

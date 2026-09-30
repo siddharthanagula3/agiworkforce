@@ -16,6 +16,7 @@ const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   'check-membership-isolation.mjs',
 );
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function writeFile(root, relative, contents) {
   const target = path.join(root, relative);
@@ -60,8 +61,18 @@ function fixture() {
     if (fs.existsSync(path.join(root, entry.file))) continue;
     writeFile(root, entry.file, 'export const nothing = null;\n');
   }
+  writeFile(
+    root,
+    'apps/web/lib/services/entitlement-resolution.ts',
+    "export async function holdsWorkspaceMembership(db, userId) { return db.query('select 1 as member from public.organization_members where user_id = $1 limit 1', [userId]); }\n",
+  );
   return root;
 }
+
+test('the repository scopes membership reads or declares their exact purpose', () => {
+  const { status, output } = run(REPO_ROOT);
+  assert.equal(status, 0, output);
+});
 
 function run(root) {
   try {
@@ -80,8 +91,32 @@ test('passes when every membership statement names its workspace', () => {
   assert.equal(status, 0, output);
   assert.match(
     output,
-    new RegExp(`5 statement\\(s\\) over ${MEMBERSHIP_TABLES.length} membership table\\(s\\)`),
+    new RegExp(`6 statement\\(s\\) over ${MEMBERSHIP_TABLES.length} membership table\\(s\\)`),
   );
+});
+
+test('the self-membership declaration does not excuse another read in its module', () => {
+  const root = fixture();
+  fs.appendFileSync(
+    path.join(root, 'apps/web/lib/services/entitlement-resolution.ts'),
+    "export async function otherMembers(db) { return db.query('select user_id from public.organization_members limit 1'); }\n",
+  );
+  const { status, output } = run(root);
+  assert.equal(status, 1);
+  assert.match(output, /name no workspace/);
+});
+
+test('a self-membership declaration is stale when its user predicate disappears', () => {
+  const root = fixture();
+  writeFile(
+    root,
+    'apps/web/lib/services/entitlement-resolution.ts',
+    "export async function holdsWorkspaceMembership(db) { return db.query('select 1 as member from public.organization_members limit 1'); }\n",
+  );
+  const { status, output } = run(root);
+  assert.equal(status, 1);
+  assert.match(output, /name no workspace/);
+  assert.match(output, /match nothing any more/);
 });
 
 test('fails on a membership statement with no workspace predicate', () => {
