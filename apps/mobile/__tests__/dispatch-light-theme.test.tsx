@@ -109,7 +109,7 @@ describe('Dispatch surfaces in light theme', () => {
     const screen = render(<QRScanner onScan={jest.fn()} onClose={jest.fn()} />);
     fireEvent.press(screen.getByLabelText('Enter code manually'));
 
-    const instructions = screen.getByText(/Settings → Connections/);
+    const instructions = screen.getByText(/Settings → Capabilities → Remote Control/);
     expect(instructions.props.style).toMatchObject({ color: lightColors.textSecondary });
     expect(instructions.props.style).not.toMatchObject({
       color: lightColors.cameraOverlayTextMuted,
