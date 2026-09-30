@@ -31,12 +31,13 @@ vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
 
 import { POST } from '../route';
 
-function ask(token: string | null, body: unknown) {
+function ask(token: string | null, body: unknown, headers: Record<string, string> = {}) {
   return new Request('http://localhost:3000/api/mobile/intent/ask', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...headers,
     },
     body: JSON.stringify(body),
   }) as never;
@@ -46,6 +47,23 @@ describe('POST /api/mobile/intent/ask', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
+
+  const cookieCredentialHeaders: Record<string, string>[] = [
+    {},
+    { authorization: 'Basic cookie-session' },
+  ];
+
+  it.each(cookieCredentialHeaders)(
+    'refuses a session cookie without a bearer token even with headers %j',
+    async (headers) => {
+      const res = await POST(
+        ask(null, { prompt: 'Hello' }, { cookie: '__session=another-account', ...headers }),
+      );
+      expect(res.status).toBe(401);
+      expect(mockResolve).not.toHaveBeenCalled();
+      expect(mockAnswer).not.toHaveBeenCalled();
+    },
+  );
 
   it('fails closed without a live token and answers nothing', async () => {
     mockResolve.mockResolvedValueOnce(null);
@@ -65,9 +83,17 @@ describe('POST /api/mobile/intent/ask', () => {
       installId: 'install-1',
     });
     mockAnswer.mockResolvedValueOnce({ text: 'Paris.', conversationId: 'c1' });
-    const res = await POST(ask('agi_it_live', { prompt: 'Capital of France?' }));
+    const res = await POST(
+      ask('agi_it_live', { prompt: 'Capital of France?' }, { cookie: '__session=another-account' }),
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ text: 'Paris.', conversationId: 'c1' });
+    expect(mockResolve).toHaveBeenCalledWith('agi_it_live');
+    expect(mockAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        owner: expect.objectContaining({ userId: 'user-1', tokenId: 'token-1' }),
+      }),
+    );
   });
 
   it('refuses a prompt longer than the cap', async () => {

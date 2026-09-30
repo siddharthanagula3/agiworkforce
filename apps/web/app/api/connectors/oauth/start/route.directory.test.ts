@@ -34,7 +34,8 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
 vi.mock('@/lib/connectors/mcp-discovery', () => ({
   beginMcpAuthorization: (...a: unknown[]) => mocks.begin(...a),
 }));
-vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
+vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/mcp-directory-targets')>()),
   findDirectoryTargetByRemoteUrl: vi.fn(async () => null),
   isDirectoryServerId: vi.fn(() => false),
   normalizeRemoteUrl: vi.fn((url: string) => url),
