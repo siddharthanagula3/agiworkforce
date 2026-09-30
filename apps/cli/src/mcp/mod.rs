@@ -195,6 +195,19 @@ impl McpServerConfig {
     }
 }
 
+pub fn server_host(config: &McpServerConfig) -> Option<String> {
+    match config.as_transport() {
+        McpTransport::Stdio { .. } => None,
+        McpTransport::Sse { url, .. } | McpTransport::Http { url, .. } => reqwest::Url::parse(&url)
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_string)),
+    }
+}
+
+pub fn policy_refusal(config: &McpServerConfig) -> Option<String> {
+    crate::cloud::workspace_policy::mcp_server_refusal(server_host(config).as_deref())
+}
+
 /// Whether a configured MCP transport may be opened inside the active trust
 /// boundary. Stdio is the only Local transport: SSE and Streamable HTTP are
 /// network egress even when their tool schemas look read-only.
@@ -1348,6 +1361,15 @@ impl McpManager {
                     eprintln!(
                         "  MCP server '{}': blocked in Local privacy mode; use an explicit BYOK or Managed continuation before connecting a remote MCP server",
                         name
+                    );
+                }
+                continue;
+            }
+            if let Some(reason) = policy_refusal(config) {
+                if !quiet {
+                    eprintln!(
+                        "  MCP server '{}': not started: {reason}",
+                        crate::terminal_text::sanitize_terminal_text(name)
                     );
                 }
                 continue;

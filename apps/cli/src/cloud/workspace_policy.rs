@@ -21,6 +21,33 @@ struct EffectiveWorkspacePolicy {
     governed: bool,
     #[serde(default)]
     controls: Option<WorkspaceControls>,
+    #[serde(default)]
+    code: Option<CodeControls>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CodeControls {
+    #[serde(default = "allowed_by_default")]
+    allow_mcp_servers: bool,
+    #[serde(default)]
+    allowed_mcp_servers: Vec<String>,
+}
+
+fn allowed_by_default() -> bool {
+    true
+}
+
+fn host_matches(pattern: &str, host: &str) -> bool {
+    let host = host.trim().to_ascii_lowercase();
+    let rule = pattern.trim().to_ascii_lowercase();
+    if rule.is_empty() || host.is_empty() {
+        return false;
+    }
+    match rule.strip_prefix("*.") {
+        Some(domain) => host == domain || host.ends_with(&rule[1..]),
+        None => host == rule,
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -87,6 +114,32 @@ pub fn feature_enabled(feature: &str) -> bool {
 
 pub fn governed() -> bool {
     with_current(|policy| policy.governed)
+}
+
+pub fn mcp_server_refusal(host: Option<&str>) -> Option<String> {
+    with_current(|policy| {
+        let code = policy.code.as_ref()?;
+        if !code.allow_mcp_servers {
+            return Some("your workspace administrator has turned off MCP servers".to_string());
+        }
+        if code.allowed_mcp_servers.is_empty()
+            || host.is_some_and(|host| {
+                code.allowed_mcp_servers
+                    .iter()
+                    .any(|pattern| host_matches(pattern, host))
+            })
+        {
+            return None;
+        }
+        Some(format!(
+            "your workspace administrator allows MCP servers only at {}, and {}",
+            code.allowed_mcp_servers.join(", "),
+            match host {
+                Some(host) => format!("this one is at {host}"),
+                None => "this one runs as a local command".to_string(),
+            }
+        ))
+    })
 }
 
 pub fn hooks_allowed() -> bool {

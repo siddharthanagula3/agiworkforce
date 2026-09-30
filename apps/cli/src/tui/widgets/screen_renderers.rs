@@ -127,6 +127,7 @@ pub enum McpStatus {
     Disabled,
     NeedsAuth,
     Failed,
+    Blocked,
 }
 
 impl McpStatus {
@@ -136,6 +137,7 @@ impl McpStatus {
             McpStatus::Disabled => "◯ disabled",
             McpStatus::NeedsAuth => "△ needs authentication",
             McpStatus::Failed => "✘ failed",
+            McpStatus::Blocked => "⊘ blocked by your workspace",
         }
     }
 }
