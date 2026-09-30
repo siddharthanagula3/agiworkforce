@@ -42,6 +42,8 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   DOUBLE_CLICK: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   RIGHT_CLICK: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   FILL_FORM: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  FIND_ELEMENTS: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  FILL_FIELDS: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
 
   CREATE_SCHEDULED_TASK: { senderClass: 'extension-page-only', allowsCrossTab: true },
   UPDATE_SCHEDULED_TASK: { senderClass: 'extension-page-only', allowsCrossTab: true },

@@ -106,6 +106,94 @@ describe('GET /api/user/export completeness', () => {
     });
   });
 
+  it('exports linked bank metadata and exclusions without authentication material', async () => {
+    const createdAt = '2026-09-01T00:00:00.000Z';
+    const updatedAt = '2026-09-02T00:00:00.000Z';
+    const credentialFixture = 'never-export-this-credential';
+    const items = [
+      {
+        id: 'bank-item-linked',
+        plaid_item_id: 'linked-item-fixture',
+        institution_name: 'Fixture bank',
+        excluded_account_ids: ['account-hidden-fixture'],
+        created_at: createdAt,
+        updated_at: updatedAt,
+      },
+      {
+        id: 'bank-item-legacy',
+        plaid_item_id: null,
+        institution_name: null,
+        excluded_account_ids: [],
+        created_at: createdAt,
+        updated_at: updatedAt,
+      },
+    ];
+    mockQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from bank_account_items')
+        ? items.map((item) => ({
+            ...item,
+            created_at: new Date(item.created_at),
+            user_id: 'user_export',
+            access_token_enc: credentialFixture,
+          }))
+        : [],
+    );
+
+    const response = await GET(exportRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data.bank_account_items).toEqual(items);
+    expect(JSON.stringify(body)).not.toContain(credentialFixture);
+    expect(body.data.bank_account_items[0]).not.toHaveProperty('access_token_enc');
+    expect(body.data.bank_account_items[0]).not.toHaveProperty('user_id');
+    const reads = mockQuery.mock.calls.filter(([sql]) =>
+      String(sql).includes('from bank_account_items'),
+    );
+    expect(reads).toHaveLength(1);
+    expect(reads[0]?.[0]).toMatch(/where user_id = \$1/);
+    expect(reads[0]?.[0]).not.toMatch(/\*|access_token_enc/);
+    expect(reads[0]?.[1]).toEqual(['user_export']);
+  });
+
+  it('names linked banks as unavailable instead of silently omitting a failed read', async () => {
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from bank_account_items')) throw new Error('linked banks unavailable');
+      return [];
+    });
+
+    const response = await GET(exportRequest());
+    const body = await response.json();
+
+    expect(response.headers.get('X-Export-Status')).toBe('partial');
+    expect(body.success).toBe(false);
+    expect(body.data.export_metadata.completeness.unavailable_sections).toEqual([
+      'bank_account_items',
+    ]);
+  });
+
+  it('reports invalid linked bank rows instead of calling their omission complete', async () => {
+    mockQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from bank_account_items') ? [{ id: 'bank-item-invalid' }] : [],
+    );
+
+    const response = await GET(exportRequest());
+    const body = await response.json();
+
+    expect(body.status).toBe('partial');
+    expect(body.data.export_metadata.completeness.skipped_rows).toEqual([
+      { section: 'bank_account_items', count: 1 },
+    ]);
+  });
+
+  it('does not read linked banks before the requester authenticates', async () => {
+    mockGetClerkAuthUser.mockRejectedValueOnce(new Error('Sign-in required'));
+
+    await expect(GET(exportRequest())).rejects.toThrow('Sign-in required');
+
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
   it('marks the export partial and names the section when a read fails', async () => {
     mockQuery.mockImplementation(async (sql: string) => {
       if (sql.includes('from web_conversations')) throw new Error('relation is being rebuilt');

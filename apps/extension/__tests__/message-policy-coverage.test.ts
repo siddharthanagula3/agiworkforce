@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { EXTENSION_PAGE_ONLY_MESSAGE_TYPES, MESSAGE_POLICY } from '../src/background/policy';
+import { describe, expect, it, vi } from 'vitest';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
+import {
+  DOM_MUTATION_MESSAGE_TYPES,
+  EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
+  MESSAGE_POLICY,
+  isTrustedExtensionPageSender,
+} from '../src/background/policy';
 
 const backgroundSource = readFileSync(resolve(process.cwd(), 'src/background.ts'), 'utf8');
 
@@ -76,4 +83,78 @@ describe('handlers with no content-script sender are extension-page-only', () =>
       expect(MESSAGE_POLICY[type]?.senderClass).toBe('allowlisted-tab');
     }
   });
+});
+
+function executableDispatcher() {
+  const source = ts.createSourceFile(
+    'background.ts',
+    backgroundSource,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const declarations = ['senderTabAllowedToMutate', 'dispatchAuthorizedMessage'].map((name) => {
+    const node = source.statements.find(
+      (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === name,
+    );
+    if (!node) throw new Error(`Missing background function ${name}`);
+    return node.getText(source);
+  });
+  const handleMessageAsync = vi.fn(async () => ({ success: true }));
+  const code = ts.transpileModule(declarations.join('\n'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+  }).outputText;
+  const dispatch = runInNewContext(`${code}\ndispatchAuthorizedMessage;`, {
+    EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
+    DOM_MUTATION_MESSAGE_TYPES,
+    isTrustedExtensionPageSender,
+    handleMessageAsync,
+    chrome: {
+      runtime: { id: 'extension-test', getURL: () => 'chrome-extension://extension-test/' },
+    },
+    logger: { warn: vi.fn(), error: vi.fn() },
+    originOfUrl: (url: string) => new URL(url).origin,
+  }) as (message: unknown, sender: unknown, response: (value: unknown) => void) => boolean;
+  return { dispatch, handleMessageAsync };
+}
+
+function elementMessage(type: string, tabId: number | undefined) {
+  return type === 'FILL_FIELDS'
+    ? { type, tabId, fields: [{ selector: '#name', value: 'Ada' }] }
+    : { type, tabId, query: 'name' };
+}
+
+describe('element messages enforce the actual background target gate', () => {
+  it.each(['FIND_ELEMENTS', 'FILL_FIELDS'])(
+    'rejects a foreign tab for %s before dispatch',
+    (type) => {
+      const { dispatch, handleMessageAsync } = executableDispatcher();
+      const response = vi.fn();
+      expect(
+        dispatch(
+          elementMessage(type, 99),
+          { tab: { id: 10, url: 'https://approved.example/' } },
+          response,
+        ),
+      ).toBe(false);
+      expect(response).toHaveBeenCalledWith({
+        success: false,
+        error: 'Cross-tab DOM mutation is not allowed.',
+      });
+      expect(handleMessageAsync).not.toHaveBeenCalled();
+    },
+  );
+  it.each(['FIND_ELEMENTS', 'FILL_FIELDS'])(
+    'admits %s with its sender tab or an implicit target',
+    async (type) => {
+      for (const tabId of [10, undefined]) {
+        const { dispatch, handleMessageAsync } = executableDispatcher();
+        const response = vi.fn();
+        const sender = { tab: { id: 10, url: 'https://approved.example/' } };
+        const message = elementMessage(type, tabId);
+        expect(dispatch(message, sender, response)).toBe(true);
+        expect(handleMessageAsync).toHaveBeenCalledWith(message, sender);
+        await vi.waitFor(() => expect(response).toHaveBeenCalledWith({ success: true }));
+      }
+    },
+  );
 });

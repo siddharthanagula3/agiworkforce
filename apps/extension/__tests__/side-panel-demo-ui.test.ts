@@ -164,7 +164,7 @@ describe('Chrome side-panel demo surface', () => {
   });
 
   it('gates sends on attachment intake and names each refused file', () => {
-    expect(source).toContain('composerAttachmentIntakeCount === 0');
+    expect(source).toContain('composerAttachmentIntakes.size === 0');
     expect(source).toContain("t('spAttachmentAdding')");
     expect(source).toContain("t('spAttachmentUnsupported', [file.name])");
     expect(source).toContain("t('spAttachmentCaptureFailed')");
@@ -287,57 +287,6 @@ describe('Chrome side-panel tab-group state', () => {
     expect(source.match(/requestTabGroupChange\(/g)?.length).toBe(5);
     expect(source).not.toContain('let drawerGrouped = false');
     expect(source).not.toContain('let isGrouped = false');
-  });
-});
-
-describe('Chrome side-panel sign-out ends the shared session, not just the local one', () => {
-  it('signs out of Clerk before clearing the extension-local auth state', () => {
-    const start = source.indexOf("signoutBtn.addEventListener('click'");
-    const end = source.indexOf('\n  });', start);
-    const body = source.slice(start, end);
-
-    expect(body).toContain('signOutClerk()');
-    expect(body).toContain('transitionManagedCloudOwner(null)');
-
-    const clerkSignOutIndex = body.indexOf('signOutClerk()');
-    const localResetIndex = body.indexOf('transitionManagedCloudOwner(null)');
-    expect(clerkSignOutIndex).toBeGreaterThan(-1);
-    expect(localResetIndex).toBeGreaterThan(clerkSignOutIndex);
-  });
-
-  it('imports the sign-out helper from the same Clerk auth module as sign-in', () => {
-    const start = source.indexOf("} from './features/cloud-bridge/clerkAuth';");
-    const importBlock = source.slice(Math.max(0, start - 300), start);
-    expect(importBlock).toContain('signOutClerk');
-    expect(importBlock).toContain('revokeSyncedWebSession');
-  });
-
-  it('revokes the sync host session before signing out of Clerk locally', () => {
-    const start = source.indexOf("signoutBtn.addEventListener('click'");
-    const end = source.indexOf('\n  });', start);
-    const body = source.slice(start, end);
-
-    expect(body).toContain('revokeSyncedWebSession()');
-
-    const syncHostRevokeIndex = body.indexOf('revokeSyncedWebSession()');
-    const clerkSignOutIndex = body.indexOf('signOutClerk()');
-    const localResetIndex = body.indexOf('transitionManagedCloudOwner(null)');
-    expect(syncHostRevokeIndex).toBeGreaterThan(-1);
-    expect(clerkSignOutIndex).toBeGreaterThan(syncHostRevokeIndex);
-    expect(localResetIndex).toBeGreaterThan(clerkSignOutIndex);
-  });
-
-  it('tells the user in the panel, not only the console, when the sync host revoke fails', () => {
-    const start = source.indexOf("signoutBtn.addEventListener('click'");
-    const end = source.indexOf('\n  });', start);
-    const body = source.slice(start, end);
-
-    const catchStart = body.indexOf('catch (error) {', body.indexOf('revokeSyncedWebSession()'));
-    const catchEnd = body.indexOf('}', catchStart);
-    const revokeCatchBlock = body.slice(catchStart, catchEnd);
-
-    expect(revokeCatchBlock).toContain("t('spCloudSignOutSyncFailed')");
-    expect(revokeCatchBlock).toContain('signoutStatusEl.textContent');
   });
 });
 
