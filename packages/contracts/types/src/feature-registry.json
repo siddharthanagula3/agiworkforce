@@ -589,6 +589,32 @@
         "trustBoundary": "managed-cloud",
         "rolloutFlag": null
       }
+    },
+    "fast_mode": {
+      "label": "Fast mode",
+      "domain": "chat",
+      "maturity": "beta",
+      "dependsOn": ["chat"],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "governance": {
+        "owner": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+        "exitCriteria": "First-party fast routing, paid-plan and workspace-owner opt-in, caller-owned usage-credit funding, provider speed fallback settlement, and operator disable tests pass; provider access is confirmed for the production account and Anthropic removes the research-preview restriction.",
+        "killSwitch": "fast_mode",
+        "dataMigration": "The persisted agi-thinking-store fast preference and existing workspace fast_mode policy remain unchanged; usage reservations and settlements keep their billing history, and disabling admission migrates no rows.",
+        "rolloutRing": "fast_mode",
+        "support": "Beta: support triages admission, provider and billing failures without a response-time commitment; first-party provider access and dedicated Fast mode rate limits can keep requests unavailable.",
+        "userFacing": true
+      },
+      "gates": {
+        "entitlement": "managed_chat",
+        "policy": "fast_mode",
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
     }
   }
 }
