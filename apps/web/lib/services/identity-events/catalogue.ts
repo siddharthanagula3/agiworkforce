@@ -270,7 +270,7 @@ export const IDENTITY_SECURITY_EVENTS: Readonly<
     severity: 'error',
     title: 'A recovery key was used on your account',
     message:
-      'Account recovery started. Your account unlocks for whoever entered the key when the waiting period ends. If this was not you, cancel the recovery from account security with one of your passkeys or security keys.',
+      'Account recovery started. Your account unlocks for whoever entered the key when the waiting period ends. If this was not you, secure your account by cancelling the recovery from account security with one of your passkeys or security keys.',
     auditEventType: 'account_security_recovery_started',
     resourceType: 'account_security',
     settingsSection: 'security',

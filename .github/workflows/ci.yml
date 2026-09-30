@@ -1164,10 +1164,13 @@ jobs:
             marketing-mobile-nav.spec.ts \
             marketing-mount-scroll.spec.ts \
             marketing-stage-contrast.spec.ts \
+            policy-version-history.spec.ts \
+            public-account-pages.spec.ts \
             public-auth-clean.spec.ts \
             qa-14-public-route-contrast.spec.ts \
             quick-ask-entry.spec.ts \
             release-notes.spec.ts \
+            shared-link-pages.spec.ts \
             trial-cancel.spec.ts \
             --project=chromium --workers=2 --retries=1 --global-timeout=1500000
 
