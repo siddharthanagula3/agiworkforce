@@ -109,6 +109,7 @@ import {
   DISPATCH_HMAC_REQUIRED_AFTER,
   type HmacSessionState,
 } from '../lib/dispatchHmac';
+import { DISPATCH_MAX_MESSAGE_AGE_MS } from '@agiworkforce/types';
 
 const PAIRING_SECRET = '9f'.repeat(32);
 
@@ -123,6 +124,28 @@ async function makeState(
 
 function cloneState(state: HmacSessionState): HmacSessionState {
   return { secret: state.secret, nonceCache: new Map(state.nonceCache) };
+}
+
+function holdNextDigest() {
+  const { digest } = jest.requireMock('expo-crypto') as {
+    digest: jest.Mock<Promise<ArrayBuffer>, [string, ArrayBuffer]>;
+  };
+  const hash = digest.getMockImplementation();
+  if (!hash) throw new Error('Digest mock is missing its real hash implementation');
+  let entered!: () => void;
+  let release!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const resume = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  digest.mockImplementationOnce(async (...args) => {
+    entered();
+    await resume;
+    return hash(...args);
+  });
+  return { started, release };
 }
 
 describe('Key derivation, deriveDispatchSecret', () => {
@@ -381,6 +404,40 @@ describe('Replay rejection, timestamp window', () => {
     const receiverState = await makeState();
     const result = await verifyMessage(receiverState, env);
     expect(result.ok).toBe(true);
+  });
+
+  it.each([1, -1])(
+    'rejects a timestamp leaving its window during hashing with clock direction %s',
+    async (direction) => {
+      const senderState = await makeState();
+      const receiverState = await makeState();
+      const envelope = await signMessage(senderState, 'ping', {});
+      const now = jest.spyOn(Date, 'now').mockReturnValue(envelope.ts);
+      const barrier = holdNextDigest();
+      const verifying = verifyMessage(receiverState, envelope);
+      await barrier.started;
+      now.mockReturnValue(envelope.ts + direction * (DISPATCH_MAX_MESSAGE_AGE_MS + 1));
+      barrier.release();
+
+      expect(await verifying).toEqual({ ok: false, reason: 'timestamp_expired' });
+      expect(receiverState.nonceCache.size).toBe(0);
+    },
+  );
+
+  it('records the current nonce claim time after delayed authentic hashing', async () => {
+    const senderState = await makeState();
+    const receiverState = await makeState();
+    const envelope = await signMessage(senderState, 'ping', {});
+    const now = jest.spyOn(Date, 'now').mockReturnValue(envelope.ts);
+    const barrier = holdNextDigest();
+    const verifying = verifyMessage(receiverState, envelope);
+    await barrier.started;
+    const claimedAt = envelope.ts + DISPATCH_MAX_MESSAGE_AGE_MS - 1;
+    now.mockReturnValue(claimedAt);
+    barrier.release();
+
+    expect(await verifying).toEqual({ ok: true });
+    expect(receiverState.nonceCache.get(envelope.nonce)).toBe(claimedAt);
   });
 
   void RealDateNow;

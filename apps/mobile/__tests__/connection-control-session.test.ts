@@ -1,5 +1,9 @@
 import { waitFor } from '@testing-library/react-native';
-import type { SignalingClientOptions, SignalingEvent } from '@agiworkforce/types';
+import {
+  DISPATCH_MAX_MESSAGE_AGE_MS,
+  type SignalingClientOptions,
+  type SignalingEvent,
+} from '@agiworkforce/types';
 
 let mockDigestBarrier: { entered: () => void; resume: Promise<void> } | null = null;
 let mockNonceCounter = 0;
@@ -154,6 +158,7 @@ describe('Connection control session ownership', () => {
 
   afterEach(() => {
     useConnectionStore.getState().disconnect();
+    jest.restoreAllMocks();
   });
 
   it('applies authentic controls and notifications in the current session', async () => {
@@ -271,6 +276,31 @@ describe('Connection control session ownership', () => {
       await drainControlWork();
       expect(useConnectionStore.getState().status).toBe('connected');
       expect(useConnectionStore.getState().lastHeartbeatLatencyMs).not.toBeNull();
+    },
+  );
+
+  it.each(['connected', 'stale', 'reconnecting'] as const)(
+    'rejects a control expiring during verification in the same %s session',
+    async (status) => {
+      const session = await connectSession();
+      const envelope = await agentEnvelope(session.sender, 'expired-agent');
+      useConnectionStore.setState({ status });
+      const barrier = holdNextDigest();
+      deliverControl(session.emit, envelope);
+      await barrier.started;
+      jest.spyOn(Date, 'now').mockReturnValue(envelope.ts + DISPATCH_MAX_MESSAGE_AGE_MS + 1);
+      barrier.release();
+      await drainControlWork();
+      expect(useAgentStore.getState().agents).toEqual([]);
+      expect(useConnectionStore.getState().status).toBe(status);
+      const heartbeat = await signMessage(session.sender, 'heartbeat_ack', {
+        action: 'heartbeat_ack',
+        timestamp: Date.now(),
+      });
+      deliverControl(session.emit, heartbeat);
+      await drainControlWork();
+      expect(useConnectionStore.getState().status).toBe('connected');
+      expect(useConnectionStore.getState().lastHeartbeatLatencyMs).toBe(0);
     },
   );
 
