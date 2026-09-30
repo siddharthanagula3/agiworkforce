@@ -101,7 +101,13 @@ vi.mock('stripe', () => {
     static errors = stripeErrors;
     customers = { create: stripeMocks.createCustomer };
     subscriptions = { list: stripeMocks.listSubscriptions };
-    checkout = { sessions: { create: stripeMocks.createCheckoutSession } };
+    checkout = {
+      sessions: {
+        create: stripeMocks.createCheckoutSession,
+        list: vi.fn(async () => ({ data: [] })),
+        expire: vi.fn(),
+      },
+    };
   }
   return { default: StripeMock };
 });

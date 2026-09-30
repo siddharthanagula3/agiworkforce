@@ -80,6 +80,8 @@ vi.mock('stripe', () => ({
     checkout = {
       sessions: {
         create: stripeMocks.createCheckoutSession,
+        list: vi.fn(async () => ({ data: [] })),
+        expire: vi.fn(),
       },
     };
   },

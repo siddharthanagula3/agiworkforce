@@ -208,4 +208,31 @@ describe('Desktop Stripe upgrade flow', () => {
     await expect(action()).resolves.toMatch(/now open in your browser/i);
     expect(mocks.openExternalUrl).toHaveBeenCalledWith(expect.stringMatching(/\/pricing$/));
   });
+
+  it.each([
+    ['checkout', () => openCheckout('pro')],
+    ['the billing portal', () => openBillingPortal()],
+  ])('shows why %s is unavailable instead of blaming Stripe configuration', async (_l, action) => {
+    mocks.requestAssertBoundary.mockImplementation(() => undefined);
+    mocks.requestFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            message:
+              'Billing details could not be verified. No checkout was created; please retry.',
+          },
+        }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    await expect(action()).resolves.toBe(
+      'Billing details could not be verified. No checkout was created; please retry.',
+    );
+
+    mocks.requestFetch.mockResolvedValueOnce(new Response('upstream down', { status: 503 }));
+
+    await expect(action()).resolves.toBe('Billing is temporarily unavailable. Please try again.');
+    expect(mocks.openDesktopBillingWindow).not.toHaveBeenCalled();
+  });
 });

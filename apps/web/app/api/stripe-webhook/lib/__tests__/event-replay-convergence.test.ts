@@ -254,12 +254,13 @@ function makeLedgerDb(seed: StoredSubscription | null) {
       if (dispute) dispute['revoked_at'] = new Date(NOW * 1000).toISOString();
       return [];
     }
-    if (text.includes('select id as subscription_id, plan_tier')) {
+    if (text.includes('select id as subscription_id, stripe_subscription_id, plan_tier')) {
       const row = table.find((entry) => entry.stripe_customer_id === params[0]);
       return row
         ? [
             {
               subscription_id: row.id,
+              stripe_subscription_id: row.stripe_subscription_id,
               plan_tier: row.plan_tier,
               current_period_start: row.current_period_start,
               current_period_end: row.current_period_end,
@@ -366,6 +367,7 @@ function makeLedgerDb(seed: StoredSubscription | null) {
 }
 
 const stripeStub = {
+  refunds: { list: async () => ({ data: [], has_more: false }) },
   subscriptions: {
     retrieve: async () => ({
       id: 'sub_1',

@@ -151,7 +151,7 @@ export async function openBillingPortal(
     headers: await addCsrfHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${authToken}`,
-      'Idempotency-Key': `agi.checkout.web.${crypto.randomUUID()}`,
+      'Idempotency-Key': `agi.portal.web.${crypto.randomUUID()}`,
     }),
     body: JSON.stringify({ ...(returnPath ? { returnPath } : {}), ...(flow ? { flow } : {}) }),
   });
@@ -224,6 +224,7 @@ async function upgradeToPlan(data: {
     headers: await addCsrfHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${authToken}`,
+      'Idempotency-Key': `agi.checkout.web.${crypto.randomUUID()}`,
     }),
     body: JSON.stringify({
       plan: data.plan,

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
@@ -21,7 +21,9 @@ import {
   MICROUSD_PER_LEDGER_CENT,
 } from '@/lib/server/managed-usage-policy';
 import { toIsoTimestamp } from '@/lib/server/capability-limit-resets';
-import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import { isStripeResourceMissing, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import { recordAuditEvent } from '@/lib/security-audit';
+import { recordNotification } from '@/lib/services/notification-service';
 import {
   applySubscriptionOwnerHandoff,
   subscriptionOwnerHandoffConflictMessage,
@@ -40,6 +42,10 @@ import {
   resolveSubscriptionSeats,
 } from './seats';
 import { toStoredSubscriptionStatus } from './subscription-status';
+import {
+  cancelDuplicateSubscription,
+  duplicateCollectionSnapshot,
+} from './duplicate-subscription-settlement';
 
 async function claimStripeBillingOwnership(
   db: DatabaseAdapter,
@@ -53,6 +59,124 @@ async function claimStripeBillingOwnership(
     'CRITICAL: refusing to provision a Stripe subscription while another billing channel is still entitled',
   );
   throw createError.conflict(subscriptionOwnerHandoffConflictMessage(handoff));
+}
+
+const LIVE_STRIPE_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
+  'active',
+  'trialing',
+  'past_due',
+]);
+
+async function readLiveTrackedStripeSubscription(
+  db: DatabaseAdapter,
+  stripe: Stripe,
+  userId: string,
+  incomingSubscriptionId: string,
+): Promise<{ tracked: Stripe.Subscription | null; differs: boolean }> {
+  const [row] = await db.query<{ stripe_subscription_id: string | null }>(
+    'select stripe_subscription_id from subscriptions where user_id = $1 limit 1',
+    [userId],
+  );
+  const trackedSubscriptionId = row?.stripe_subscription_id;
+  if (
+    !isStripeSubscriptionId(trackedSubscriptionId) ||
+    trackedSubscriptionId === incomingSubscriptionId
+  ) {
+    return { tracked: null, differs: false };
+  }
+  try {
+    const tracked = await stripe.subscriptions.retrieve(trackedSubscriptionId);
+    return {
+      tracked: LIVE_STRIPE_SUBSCRIPTION_STATUSES.has(tracked.status) ? tracked : null,
+      differs: true,
+    };
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return { tracked: null, differs: true };
+    throw error;
+  }
+}
+
+async function settleDuplicateStripeSubscription(
+  db: DatabaseAdapter,
+  stripe: Stripe,
+  userId: string,
+  incomingSubscriptionId: string,
+): Promise<boolean> {
+  await db.execute(
+    `select pg_advisory_xact_lock(hashtextextended('agi:stripe-subscription-owner:' || $1, 0))`,
+    [userId],
+  );
+  const trackedState = await readLiveTrackedStripeSubscription(
+    db,
+    stripe,
+    userId,
+    incomingSubscriptionId,
+  );
+  if (!trackedState.differs) return false;
+
+  const incoming = await stripe.subscriptions.retrieve(incomingSubscriptionId);
+  const snapshot = duplicateCollectionSnapshot(incoming);
+  const tracked = trackedState.tracked;
+  if (!tracked && !snapshot) return false;
+  const context = {
+    userId,
+    trackedSubscriptionId: snapshot?.kept ?? tracked?.id,
+    incomingSubscriptionId,
+    incomingStatus: incoming.status,
+  };
+  if (
+    !snapshot &&
+    (await resolveEnterprisePlanTier(stripe, incoming.items.data[0]?.price ?? null))
+  ) {
+    logger.error(
+      context,
+      'An enterprise subscription replaces a live self-serve subscription; cancel the self-serve subscription in Stripe',
+    );
+    return false;
+  }
+  if (!snapshot && !LIVE_STRIPE_SUBSCRIPTION_STATUSES.has(incoming.status)) {
+    logger.warn(
+      context,
+      'Ignoring a Stripe subscription that is not live while the account keeps a live one',
+    );
+    return true;
+  }
+
+  const refundedPayments = await cancelDuplicateSubscription(stripe, incoming, tracked);
+  logger.error(
+    { ...context, refundedPayments },
+    'Canceled a duplicate Stripe subscription; the account keeps the subscription it already had',
+  );
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'plan_changed',
+    outcome: 'denied',
+    severity: 'warning',
+    endpoint: '/api/stripe-webhook',
+    surface: 'stripe_webhook',
+    detail: {
+      resourceType: 'subscription',
+      resourceId: incoming.id,
+      source: 'stripe_webhook',
+      status: 'canceled',
+      reason: 'duplicate_subscription',
+      count: refundedPayments,
+    },
+  });
+  await recordNotification(db, {
+    userId,
+    category: 'billing',
+    severity: 'warning',
+    title: 'We canceled a duplicate subscription',
+    message:
+      refundedPayments > 0
+        ? 'A second checkout started a subscription this account already has. We canceled it and refunded its payment. Your plan is unchanged.'
+        : 'A second checkout started a subscription this account already has. We canceled it before it charged you. Your plan is unchanged.',
+    target: { kind: 'settings', id: 'billing' },
+    dedupeKey: `duplicate-subscription:${incoming.id}`,
+  });
+  return true;
 }
 
 export async function ensureProfileExists(
@@ -437,6 +561,14 @@ export async function upsertSubscriptionFromSession(
     throw new Error('Cannot determine user_id for subscription');
   }
 
+  const stripeSubId = session.subscription as string | null;
+  if (
+    isStripeSubscriptionId(stripeSubId) &&
+    (await settleDuplicateStripeSubscription(db, stripe, resolvedUserId, stripeSubId))
+  ) {
+    return;
+  }
+
   let customerEmail: string | null = null;
   if (session.customer) {
     try {
@@ -490,8 +622,6 @@ export async function upsertSubscriptionFromSession(
       );
     }
   }
-
-  const stripeSubId = session.subscription as string | null;
 
   let stripePriceId: string | null = null;
   if (session.line_items?.data && session.line_items.data.length > 0) {
@@ -1279,6 +1409,10 @@ export async function updateSubscriptionFromStripeSubscription(
       }
 
       if (resolvedUserId) {
+        if (await settleDuplicateStripeSubscription(db, stripe, resolvedUserId, stripeSubId)) {
+          return;
+        }
+
         let replacedUnlinkedEntitlement: { id: string; planTier: string } | null = null;
         if (subscription.metadata?.['replace_unlinked_entitlement'] === 'true') {
           const previousPlanTier = subscription.metadata?.['upgrade_from']?.toLowerCase();

@@ -3,9 +3,25 @@ import { NextRequest } from 'next/server';
 
 const stripeMocks = vi.hoisted(() => ({
   createCheckoutSession: vi.fn(),
+  listCheckoutSessions: vi.fn(),
+  expireCheckoutSession: vi.fn(),
+  retrieveCheckoutSession: vi.fn(),
   createCustomer: vi.fn(),
   listSubscriptions: vi.fn(),
 }));
+
+const stripeErrors = vi.hoisted(() => {
+  class StripeError extends Error {}
+  class StripeInvalidRequestError extends StripeError {}
+  return {
+    StripeError,
+    StripeCardError: class extends StripeError {},
+    StripeInvalidRequestError,
+    StripeAuthenticationError: class extends StripeError {},
+    StripeRateLimitError: class extends StripeError {},
+    StripeConnectionError: class extends StripeError {},
+  };
+});
 
 const dbMocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -66,6 +82,7 @@ vi.mock('@/lib/server/billing-waitlist-access', async (importOriginal) => ({
 }));
 vi.mock('stripe', () => ({
   default: class StripeMock {
+    static errors = stripeErrors;
     customers = {
       create: stripeMocks.createCustomer,
     };
@@ -75,6 +92,9 @@ vi.mock('stripe', () => ({
     checkout = {
       sessions: {
         create: stripeMocks.createCheckoutSession,
+        list: stripeMocks.listCheckoutSessions,
+        expire: stripeMocks.expireCheckoutSession,
+        retrieve: stripeMocks.retrieveCheckoutSession,
       },
     };
   },
@@ -108,8 +128,14 @@ describe('POST /api/checkout', () => {
     stripeMocks.listSubscriptions.mockResolvedValue({ data: [] });
     stripeMocks.createCheckoutSession.mockResolvedValue({
       id: 'cs_test_123',
+      created: 1_800_000_100,
       url: 'https://checkout.stripe.test/cs_test_123',
     });
+    stripeMocks.listCheckoutSessions.mockResolvedValue({ data: [] });
+    stripeMocks.expireCheckoutSession.mockImplementation(async (id: string) => ({
+      id,
+      status: 'expired',
+    }));
     waitlistAccessMocks.hasAccess.mockResolvedValue(true);
   });
 
@@ -226,7 +252,7 @@ describe('POST /api/checkout', () => {
 
     expect(response.status).toBe(200);
     expect(stripeMocks.createCheckoutSession).toHaveBeenCalledWith(expect.any(Object), {
-      idempotencyKey: 'checkout:user_123:max_15x:1:agi.checkout.desktop.request-1',
+      idempotencyKey: 'checkout:user_123:max_15x:monthly:1:agi.checkout.desktop.request-1',
     });
   });
 
@@ -461,6 +487,198 @@ describe('POST /api/checkout', () => {
     });
   });
 
+  describe('one payable subscription checkout per account', () => {
+    function openSession(id: string, created: number, overrides: Record<string, unknown> = {}) {
+      return {
+        id,
+        created,
+        mode: 'subscription',
+        status: 'open',
+        metadata: { user_id: 'user_123' },
+        ...overrides,
+      };
+    }
+
+    function returningCustomer() {
+      dbMocks.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('from subscriptions')) return [];
+        if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_123' }];
+        return [];
+      });
+    }
+
+    function checkoutRequest(idempotencyKey?: string) {
+      return new NextRequest('https://agiworkforce.com/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-vercel-ip-country': 'US',
+          ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+        },
+        body: JSON.stringify({ plan: 'max_15x', billingInterval: 'monthly' }),
+      });
+    }
+
+    it('expires an older open subscription checkout before creating a new one', async () => {
+      returningCustomer();
+      stripeMocks.listCheckoutSessions.mockResolvedValueOnce({
+        data: [openSession('cs_older', 1_800_000_000)],
+      });
+
+      const response = await POST(checkoutRequest());
+
+      expect(response.status).toBe(200);
+      expect(stripeMocks.listCheckoutSessions).toHaveBeenCalledWith({
+        customer: 'cus_123',
+        status: 'open',
+        limit: 100,
+      });
+      expect(stripeMocks.expireCheckoutSession).toHaveBeenCalledWith('cs_older');
+      expect(stripeMocks.expireCheckoutSession.mock.invocationCallOrder[0]).toBeLessThan(
+        stripeMocks.createCheckoutSession.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('leaves an open credit top-up checkout alone', async () => {
+      returningCustomer();
+      stripeMocks.listCheckoutSessions.mockResolvedValue({
+        data: [
+          openSession('cs_topup', 1_800_000_000, {
+            mode: 'payment',
+            metadata: { user_id: 'user_123', type: 'credit_topup' },
+          }),
+        ],
+      });
+
+      const response = await POST(checkoutRequest());
+
+      expect(response.status).toBe(200);
+      expect(stripeMocks.expireCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('refuses with 409 when the older checkout completed before it could be expired', async () => {
+      returningCustomer();
+      stripeMocks.listCheckoutSessions.mockResolvedValueOnce({
+        data: [openSession('cs_older', 1_800_000_000)],
+      });
+      stripeMocks.expireCheckoutSession.mockRejectedValueOnce(
+        new stripeErrors.StripeInvalidRequestError('Only open sessions can be expired'),
+      );
+      stripeMocks.retrieveCheckoutSession.mockResolvedValueOnce({
+        id: 'cs_older',
+        status: 'complete',
+      });
+
+      const response = await POST(checkoutRequest());
+
+      expect(response.status).toBe(409);
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('creates nothing when open checkouts cannot be listed', async () => {
+      returningCustomer();
+      stripeMocks.listCheckoutSessions.mockRejectedValueOnce(new Error('stripe unavailable'));
+
+      const response = await POST(checkoutRequest());
+
+      expect(response.status).toBe(503);
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('creates nothing when an older checkout cannot be expired', async () => {
+      returningCustomer();
+      stripeMocks.listCheckoutSessions.mockResolvedValueOnce({
+        data: [openSession('cs_older', 1_800_000_000)],
+      });
+      stripeMocks.expireCheckoutSession.mockRejectedValueOnce(new Error('stripe unavailable'));
+
+      const response = await POST(checkoutRequest());
+
+      expect(response.status).toBe(503);
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('fails closed without a Stripe customer instead of checking out by email', async () => {
+      stripeMocks.createCustomer.mockRejectedValueOnce(new Error('stripe unavailable'));
+
+      const response = await POST(checkoutRequest());
+
+      expect(response.status).toBe(503);
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('always checks out against the account customer, never a bare email', async () => {
+      const response = await POST(checkoutRequest());
+
+      expect(response.status).toBe(200);
+      const params = stripeMocks.createCheckoutSession.mock.calls[0]?.[0] as Record<
+        string,
+        unknown
+      >;
+      expect(params['customer']).toBe('cus_123');
+      expect(params).not.toHaveProperty('customer_email');
+    });
+
+    it('keeps only the newest checkout open when two requests race', async () => {
+      returningCustomer();
+      stripeMocks.listCheckoutSessions.mockResolvedValueOnce({ data: [] }).mockResolvedValueOnce({
+        data: [
+          openSession('cs_test_123', 1_800_000_100),
+          openSession('cs_racing', 1_800_000_050),
+          openSession('cs_newer', 1_800_000_200),
+        ],
+      });
+
+      const response = await POST(checkoutRequest());
+
+      expect(response.status).toBe(200);
+      expect(stripeMocks.expireCheckoutSession.mock.calls.map((call) => call[0])).toEqual([
+        'cs_racing',
+      ]);
+    });
+
+    it('does not expire the checkout a retried request already created', async () => {
+      returningCustomer();
+      stripeMocks.listCheckoutSessions.mockResolvedValueOnce({
+        data: [
+          openSession('cs_test_123', 1_800_000_100, {
+            metadata: { user_id: 'user_123', checkout_attempt: 'agi.checkout.web.retry-1' },
+          }),
+        ],
+      });
+
+      const response = await POST(checkoutRequest('agi.checkout.web.retry-1'));
+
+      expect(response.status).toBe(200);
+      expect(stripeMocks.expireCheckoutSession).not.toHaveBeenCalled();
+      expect(stripeMocks.createCheckoutSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ checkout_attempt: 'agi.checkout.web.retry-1' }),
+        }),
+        { idempotencyKey: 'checkout:user_123:max_15x:monthly:1:agi.checkout.web.retry-1' },
+      );
+    });
+
+    it('withdraws its own checkout when a racing one completed meanwhile', async () => {
+      returningCustomer();
+      stripeMocks.listCheckoutSessions
+        .mockResolvedValueOnce({ data: [] })
+        .mockResolvedValueOnce({ data: [openSession('cs_racing', 1_800_000_050)] });
+      stripeMocks.expireCheckoutSession.mockRejectedValueOnce(
+        new stripeErrors.StripeInvalidRequestError('Only open sessions can be expired'),
+      );
+      stripeMocks.retrieveCheckoutSession.mockResolvedValueOnce({
+        id: 'cs_racing',
+        status: 'complete',
+      });
+
+      const response = await POST(checkoutRequest());
+
+      expect(response.status).toBe(409);
+      expect(stripeMocks.expireCheckoutSession).toHaveBeenLastCalledWith('cs_test_123');
+    });
+  });
+
   it('does not create a customer or checkout when billing state cannot be verified', async () => {
     dbMocks.query.mockReset().mockRejectedValue(new Error('database unavailable'));
 
@@ -553,8 +771,8 @@ describe('POST /api/checkout', () => {
         (call) => (call[1] as { idempotencyKey: string }).idempotencyKey,
       );
       expect(keys).toEqual([
-        'checkout:user_123:team:5:agi.team.request-1',
-        'checkout:user_123:team:40:agi.team.request-1',
+        'checkout:user_123:team:monthly:5:agi.team.request-1',
+        'checkout:user_123:team:monthly:40:agi.team.request-1',
       ]);
       expect(new Set(keys).size).toBe(2);
     });
