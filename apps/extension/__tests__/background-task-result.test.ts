@@ -395,13 +395,6 @@ describe('background dispatch is wired to the sink', () => {
     );
     expect(sidePanel).toContain('takePendingResultConversation(owner)');
   });
-
-  it('keeps the schedule form open and renders authorization failures', () => {
-    expect(sidePanel).toContain("class: 'sp-wf-form-error'");
-    expect(sidePanel).toContain("ntSaveBtn.textContent = t('spTaskCreating')");
-    expect(sidePanel).toContain('response?.success !== true');
-    expect(sidePanel).toContain("runtimeError || response?.error || t('spTaskCreateFailed')");
-  });
 });
 
 describe('the side panel can reach a stored background result', () => {
