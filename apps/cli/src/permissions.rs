@@ -485,9 +485,10 @@ impl PermissionStore {
 
     fn stored_decision(&self, command: &str) -> Option<PermissionDecision> {
         match self.check_command(command) {
-            Some(true) => Some(PermissionDecision::Allow),
             Some(false) => Some(PermissionDecision::Deny),
-            None => self.asks_before(command).then_some(PermissionDecision::Ask),
+            _ if self.asks_before(command) => Some(PermissionDecision::Ask),
+            Some(true) => Some(PermissionDecision::Allow),
+            None => None,
         }
     }
 
@@ -500,6 +501,9 @@ impl PermissionStore {
     ) -> CodePermissionProfile {
         let mut profile = permission_profile_for(self.active_mode);
         for (capability, command) in CAPABILITY_COMMANDS {
+            if profile.decision(*capability) == PermissionDecision::Deny {
+                continue;
+            }
             if let Some(decision) = self.stored_decision(command) {
                 profile.capabilities.set(*capability, decision);
             }
@@ -1190,6 +1194,65 @@ mod tests {
         assert_eq!(
             accept_edits.decision(CodeCapability::GitPush),
             PermissionDecision::Ask
+        );
+    }
+
+    #[test]
+    fn permission_profiles_preserve_hard_mode_denials_over_stored_rules() {
+        for mode in [PermissionMode::Plan, PermissionMode::DontAsk] {
+            for ask in [false, true] {
+                let mut store = PermissionStore {
+                    active_mode: Some(mode),
+                    ..PermissionStore::default()
+                };
+                for command in ["git commit", "git push", "git rebase"] {
+                    if ask {
+                        store.ask_always(command);
+                    } else {
+                        store.allow_always(command);
+                    }
+                }
+                let profile = store.code_permission_profile(None);
+                for capability in [
+                    CodeCapability::GitCommit,
+                    CodeCapability::GitPush,
+                    CodeCapability::GitHistoryRewrite,
+                ] {
+                    assert_eq!(
+                        profile.decision(capability),
+                        PermissionDecision::Deny,
+                        "{mode:?}, {capability:?}, ask={ask}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn permission_profiles_follow_deny_then_ask_then_allow_precedence() {
+        let mut store = PermissionStore::default();
+        store.allow_always("git push");
+        store.ask_always("git push");
+        assert_eq!(
+            store
+                .code_permission_profile(None)
+                .decision(CodeCapability::GitPush),
+            PermissionDecision::Ask
+        );
+        store.deny_always("git push");
+        assert_eq!(
+            store
+                .code_permission_profile(None)
+                .decision(CodeCapability::GitPush),
+            PermissionDecision::Deny
+        );
+        store.remove_always_deny("git push");
+        store.remove_ask("git push");
+        assert_eq!(
+            store
+                .code_permission_profile(None)
+                .decision(CodeCapability::GitPush),
+            PermissionDecision::Allow
         );
     }
 
