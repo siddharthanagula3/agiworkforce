@@ -1,6 +1,14 @@
+import { workspaceFileFixture } from './workspaceFileFixture';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+let contextFixture: Awaited<ReturnType<typeof workspaceFileFixture>> | undefined;
+afterEach(async () => {
+  await contextFixture?.dispose();
+  contextFixture = undefined;
+});
+
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import { validateEndpointUrl } from '../utils/api';
 import { buildPromptReferenceInputs } from '../features/chat-participant/promptReferences';
 
@@ -178,8 +186,16 @@ describe('VSCODE-06, @file injection (system-role trust elevation via file conte
   });
 
   it('caps the referenced content at 20,000 characters across every reference', async () => {
+    contextFixture = await workspaceFileFixture([
+      'src/file0.ts',
+      'src/file1.ts',
+      'src/file2.ts',
+      'src/file3.ts',
+      'src/file4.ts',
+    ]);
+    const root = contextFixture.root;
     const references = Array.from({ length: 5 }, (_, index) =>
-      reference(vscode.Uri.file(`/workspace/src/file${index}.ts`)),
+      reference(vscode.Uri.file(path.join(root, `src/file${index}.ts`))),
     );
     vi.mocked(vscode.workspace.openTextDocument).mockImplementation(async () =>
       documentReturning('x'.repeat(8_000)),
@@ -190,7 +206,7 @@ describe('VSCODE-06, @file injection (system-role trust elevation via file conte
 
     const inputs = await buildPromptReferenceInputs(references);
     const referencedChars = inputs
-      .map((input) => (input as { text: string }).text.match(/x+/u)?.[0].length ?? 0)
+      .map((input) => (input as { text: string }).text.match(/x{2,}/u)?.[0].length ?? 0)
       .reduce((total, length) => total + length, 0);
 
     expect(referencedChars).toBe(20_000);
@@ -198,8 +214,23 @@ describe('VSCODE-06, @file injection (system-role trust elevation via file conte
   });
 
   it('never sends more than eight references however many the user attaches', async () => {
+    contextFixture = await workspaceFileFixture([
+      'src/file0.ts',
+      'src/file1.ts',
+      'src/file2.ts',
+      'src/file3.ts',
+      'src/file4.ts',
+      'src/file5.ts',
+      'src/file6.ts',
+      'src/file7.ts',
+      'src/file8.ts',
+      'src/file9.ts',
+      'src/file10.ts',
+      'src/file11.ts',
+    ]);
+    const root = contextFixture.root;
     const references = Array.from({ length: 12 }, (_, index) =>
-      reference(vscode.Uri.file(`/workspace/src/file${index}.ts`)),
+      reference(vscode.Uri.file(path.join(root, `src/file${index}.ts`))),
     );
     vi.mocked(vscode.workspace.openTextDocument).mockImplementation(async () =>
       documentReturning('const x = 1;'),

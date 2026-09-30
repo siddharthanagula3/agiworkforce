@@ -12,7 +12,7 @@ delete this file when it is empty. An entry marked "same fix as" closes with its
 primary. Codex's raw report stays outside the repository, in its read-only
 worktree `.worktrees/codex-reaudit/audit/codex-reaudit-2026-09-30/`.
 
-Open now: 467 entries (177 defects, 290 half-built).
+Open now: 465 entries (176 defects, 289 half-built).
 
 ## Signaling relay
 
@@ -431,7 +431,6 @@ Open now: 467 entries (177 defects, 290 half-built).
 ## VS Code
 
 - **05/1545** (defect, security): Add an accept-edits agent mode to the extension (setting enum, picker, consent, app-server mapping) that auto-approves file edits and still asks for commands. Files: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/features/permissions/agentModeConsent.ts`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts`.
-- **05/1584** (defect, security): In resolveEditorContext and activeSelection, withhold selection/buffer text (send path only) when the file is on the credential denylist, matches files.exclude/search.exclude, or is gitignored. Files: `apps/extension-vscode/src/data/composerContext.ts`, `apps/extension-vscode/src/utils/pathSafety.ts`.
 - **05/1661** (defect): Keep the streaming message out of the live region (aria-busy or aria-hidden until done) and announce the finished reply once through a polite status region, plus working, ready and compacting status text. Files: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts`, `apps/extension-vscode/src/__tests__/accessibleNames.webview.test.ts`.
 - **06/2286** (defect, security): Restrict localResourceRoots in the sidebar and chat editor panel (both sites) to the out/ and media/ subfolders the webviews load from. Files: `apps/extension-vscode/src/features/sidebar-webview/sidebarProvider.ts`, `apps/extension-vscode/src/providers/chatEditorPanel.ts`.
 - **C-06** (defect, security, low): Carry repository identity in the cloud-task handoff URI so Continue in VS Code opens the right repo. Files: `packages/contracts/types/src/cloud-task-handoff-uri.ts`, `packages/contracts/types/src/cloud-code.ts`, `packages/contracts/types/src/__tests__/cloud-task-handoff-uri.test.ts`.
@@ -454,7 +453,6 @@ Open now: 467 entries (177 defects, 290 half-built).
 - **05/1602** (half-built, security): Add a note to the bypass consent and trust walkthrough that auto-approved edits can change settings.json or tasks.json and to prefer Ask mode and Restricted Mode for untrusted code. Files: `apps/extension-vscode/src/features/permissions/agentModeConsent.ts`, `apps/extension-vscode/media/walkthrough/04-trust.md`.
 - **05/1606** (half-built): Before resuming, find a ChatEditorPanel already bound to the thread id and reveal it instead of opening it again. Files: `apps/extension-vscode/src/core/commandSetup.ts`, `apps/extension-vscode/src/providers/chatEditorPanel.ts`.
 - **05/1617** (half-built): Add a Rename Session command (tree item and Sessions picker) backed by a thread/rename app-server method that persists the new title. Files: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/core/commandSetup.ts`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts`.
-- **05/1643** (half-built, security): Add an agiWorkforce respectGitIgnore setting (default true) and make mention search, the workspace indexer and the workspace structure listing skip gitignored paths when it is on. Files: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/platform/config.ts`, `apps/extension-vscode/src/data/mentionSearch.ts`.
 - **05/1654** (half-built, security): Implement the authenticated loopback bridge with a random port, token header, 0600 lock file in a 0700 AGI-home directory and only the diagnostics and selection tools visible to the model, shared with 05/1653 (paths and header names are AGI's own, not... Files: `apps/extension-vscode/src/integrations/**`, `apps/extension-vscode/src/extension.ts`, `apps/cli/src/**`.
 - **05/1655** (half-built, security): Add per-server enable/disable, a scope choice (local, user, project) on add, and a reconnect action to the MCP manager, with matching app-server methods. Files: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts`, `apps/extension-vscode/src/features/surfaces/cliCapabilities.ts`, `apps/cli/src/app_server/surfaces.rs`.
 - **05/1656** (half-built, security): Surface the CLI's existing marketplaces in VS Code: list and add (GitHub repo, URL, local path), refresh and remove marketplaces, browse and search plugins and install with a user, project or local scope choice. Files: `apps/extension-vscode/src/features/surfaces/capabilityManagement.ts`, `apps/extension-vscode/src/features/surfaces/cliCapabilities.ts`, `apps/cli/src/app_server/surfaces.rs`.

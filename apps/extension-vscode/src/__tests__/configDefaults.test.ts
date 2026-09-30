@@ -48,6 +48,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   model: 'agiWorkforce.model',
   composerFollowUpBehavior: 'agiWorkforce.composer.followUpBehavior',
   contextLines: 'agiWorkforce.contextLines',
+  respectGitIgnore: 'agiWorkforce.respectGitIgnore',
   editorContextAutoAttach: 'agiWorkforce.editorContext.autoAttach',
   telemetryEnabled: 'agiWorkforce.telemetryEnabled',
   telemetryEndpoint: 'agiWorkforce.telemetryEndpoint',
