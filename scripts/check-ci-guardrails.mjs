@@ -403,7 +403,7 @@ requireIncludes(
   "workspaces: 'apps/desktop/src-tauri -> target'",
 );
 requireIncludes('.github/workflows/release-desktop.yml', 'args: --bundles appimage,deb');
-requireIncludes('.github/workflows/release-desktop.yml', 'includeUpdaterJson: false');
+requireIncludes('.github/workflows/release-desktop.yml', 'uploadUpdaterJson: false');
 requireIncludes('.github/workflows/release-desktop.yml', 'Verify Linux release artifacts');
 requireIncludes('.github/workflows/release-desktop.yml', 'minisign -Vm');
 requireIncludes('.github/workflows/release-desktop.yml', 'dpkg-deb --info');
