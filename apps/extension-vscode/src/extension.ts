@@ -419,7 +419,13 @@ export function activate(context: vscode.ExtensionContext): void {
         syncCodeLensProvider?.();
       }
 
-      if (e.affectsConfiguration('agiWorkforce.editorContext.autoAttach')) {
+      if (
+        e.affectsConfiguration('agiWorkforce.editorContext.autoAttach') ||
+        e.affectsConfiguration('agiWorkforce.respectGitIgnore') ||
+        e.affectsConfiguration('search.useIgnoreFiles') ||
+        e.affectsConfiguration('search.exclude') ||
+        e.affectsConfiguration('files.exclude')
+      ) {
         sidebarProvider?.pushEditorContext();
       }
 

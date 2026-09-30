@@ -5,7 +5,7 @@ import { normalizeConfiguredModelId, type ModelRoute } from '../model-picker/mod
 import { Config } from '../../platform/config';
 import { ChatStateManager, type ExtToWebviewMessage } from './ChatStateManager';
 import { shouldShowOnboarding } from '../onboarding/onboardingState';
-import { getWebviewContent, getNonce } from './webviewContent';
+import { getWebviewContent, getNonce, webviewResourceRoots } from './webviewContent';
 import { parseBoundWebviewMessage } from '../../protocol/webviewMessages';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { resolveTierSync } from '../../integrations/tierResolver';
@@ -63,7 +63,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [this._extensionUri],
+      localResourceRoots: webviewResourceRoots(this._extensionUri),
     };
 
     const nonce = getNonce();
@@ -282,7 +282,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
 
   public pushEditorContext(): void {
-    this._stateManager.pushEditorContext();
+    void this._stateManager.pushEditorContext();
   }
 
   public activeRoute(): ModelRoute | undefined {

@@ -1880,8 +1880,8 @@
   {
     "item": "workspace-index",
     "surface": "apps/ide-extensions",
-    "status": "built",
-    "evidence": "apps/extension-vscode/src/data/workspaceIndexer.ts:30-249 WorkspaceIndexer class (500-file/5000-symbol cap, workspaceState cache, file watcher); instantiated and used at apps/extension-vscode/src/core/chatSetup.ts:67 'const indexer = new WorkspaceIndexer(context);'."
+    "status": "missing",
+    "evidence": "The inert WorkspaceIndexer and uncalled full-context/structure builders were removed. Mention discovery uses the native workspace symbol provider and bounded file search in apps/extension-vscode/src/data/mentionSearch.ts, with shared context policy validation. No production workspace index implementation remains."
   },
   {
     "item": "multi-root-workspace",

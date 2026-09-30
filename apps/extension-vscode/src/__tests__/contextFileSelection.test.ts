@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   ContextPanelProvider,
   validateWorkspaceContextFile,
@@ -7,10 +11,25 @@ import {
 import { HOST_CUSTOM_INSTRUCTIONS_KEY } from '../features/instructions';
 
 describe('workspace context-file selection', () => {
-  beforeEach(() => {
+  let root: string;
+  let originalFolders: typeof vscode.workspace.workspaceFolders;
+  let originalFolder: ((uri: vscode.Uri) => vscode.WorkspaceFolder | undefined) | undefined;
+
+  beforeEach(async () => {
+    root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agi-reference-')));
+    await fs.mkdir(path.join(root, 'src'));
+    await fs.writeFile(path.join(root, 'src/app.ts'), 'controlled ordinary code');
+    execFileSync('git', ['-c', 'init.templateDir=', 'init', '-q'], { cwd: root });
+    originalFolders = vscode.workspace.workspaceFolders;
+    originalFolder = vi.mocked(vscode.workspace.getWorkspaceFolder).getMockImplementation();
+    vi.mocked(vscode.workspace.getWorkspaceFolder).mockImplementation((uri) =>
+      uri.fsPath.startsWith(`${root}${path.sep}`)
+        ? { name: 'workspace', index: 0, uri: vscode.Uri.file(root) }
+        : undefined,
+    );
     vi.clearAllMocks();
     vscode.workspace.workspaceFolders = [
-      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+      { name: 'workspace', index: 0, uri: vscode.Uri.file(root) },
     ];
     vi.mocked(vscode.workspace.fs.stat).mockResolvedValue({
       type: vscode.FileType.File,
@@ -20,13 +39,45 @@ describe('workspace context-file selection', () => {
     });
   });
 
+  afterEach(async () => {
+    vscode.workspace.workspaceFolders = originalFolders;
+    if (originalFolder !== undefined)
+      vi.mocked(vscode.workspace.getWorkspaceFolder).mockImplementation(originalFolder);
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
   it('accepts an ordinary file inside an open workspace', async () => {
     await expect(
-      validateWorkspaceContextFile(vscode.Uri.file('/workspace/src/app.ts')),
+      validateWorkspaceContextFile(vscode.Uri.file(path.join(root, 'src/app.ts'))),
     ).resolves.toEqual({
       ok: true,
-      uri: vscode.Uri.file('/workspace/src/app.ts'),
+      uri: vscode.Uri.file(path.join(root, 'src/app.ts')),
     });
+  });
+
+  it('pins an ordinary symlink reference to its validated target', async () => {
+    const alias = path.join(root, 'alias.ts');
+    const target = path.join(root, 'src/app.ts');
+    await fs.symlink(target, alias);
+
+    expect(await validateWorkspaceContextFile(vscode.Uri.file(alias))).toEqual({
+      ok: true,
+      uri: vscode.Uri.file(target),
+    });
+  });
+
+  it('refuses unresolved references even when an editor reports cached file metadata', async () => {
+    expect(
+      (await validateWorkspaceContextFile(vscode.Uri.file(path.join(root, 'missing.ts')))).ok,
+    ).toBe(false);
+  });
+
+  it('refuses an explicit reference to a gitignored file', async () => {
+    const file = path.join(root, 'private.txt');
+    await fs.writeFile(file, 'CONTROLLED_CREDENTIAL_CONTENT');
+    await fs.writeFile(path.join(root, '.gitignore'), 'private.txt\n');
+
+    expect((await validateWorkspaceContextFile(vscode.Uri.file(file))).ok).toBe(false);
   });
 
   it('visibly rejects files outside every open workspace', async () => {
@@ -46,7 +97,7 @@ describe('workspace context-file selection', () => {
       size: 0,
     });
 
-    const result = await validateWorkspaceContextFile(vscode.Uri.file('/workspace/src'));
+    const result = await validateWorkspaceContextFile(vscode.Uri.file(path.join(root, 'src')));
 
     expect(result).toEqual({
       ok: false,
@@ -57,7 +108,7 @@ describe('workspace context-file selection', () => {
   it('does not add a rejected path to the context provider', async () => {
     const provider = new ContextPanelProvider();
     const addFile = vi.spyOn(provider, 'addFile');
-    const result = await validateWorkspaceContextFile(vscode.Uri.file('/workspace/.env'));
+    const result = await validateWorkspaceContextFile(vscode.Uri.file(path.join(root, '.env')));
 
     if (result.ok) provider.addFile(result.uri);
 

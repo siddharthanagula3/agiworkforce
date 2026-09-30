@@ -1,6 +1,14 @@
+import { workspaceFileFixture } from './workspaceFileFixture';
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+let contextFixture: Awaited<ReturnType<typeof workspaceFileFixture>> | undefined;
+afterEach(async () => {
+  await contextFixture?.dispose();
+  contextFixture = undefined;
+});
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import { activate } from '../extension';
 import { registerChatParticipant } from '../features/chat-participant/chatParticipant';
 import { SidebarProvider } from '../features/sidebar-webview/sidebarProvider';
@@ -60,11 +68,13 @@ describe('Code-OSS fork compatibility', () => {
   });
 
   it('prefills a selected file reference without invoking proprietary chat commands', async () => {
+    contextFixture = await workspaceFileFixture(['src/app.ts']);
+    const root = contextFixture.root;
     Object.defineProperty(vscode.chat, 'createChatParticipant', {
       configurable: true,
       value: undefined,
     });
-    const uri = vscode.Uri.file('/workspace/src/app.ts');
+    const uri = vscode.Uri.file(path.join(root, 'src/app.ts'));
     vscode.window.activeTextEditor = {
       document: { uri },
       selection: new vscode.Selection(4, 0, 6, 8),
