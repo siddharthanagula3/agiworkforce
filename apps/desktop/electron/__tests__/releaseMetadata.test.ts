@@ -23,7 +23,8 @@ describe('Electron cloud release source guards', () => {
 
   it('pins every downstream checkout to the validated release tag', () => {
     const downstream = releaseWorkflow.slice(releaseWorkflow.indexOf('\n  validate:'));
-    expect(downstream.match(/uses:\s*actions\/checkout@v\d+/g)).toHaveLength(2);
+    expect(downstream.match(/uses:\s*actions\/checkout@[a-f0-9]{40}\b/g)).toHaveLength(2);
+    expect(downstream).not.toMatch(/uses:\s*actions\/checkout@(?![a-f0-9]{40}\b)/);
     expect(
       downstream.match(/ref:\s*\$\{\{ needs\.prepare-release\.outputs\.tag \}\}/g),
     ).toHaveLength(2);
