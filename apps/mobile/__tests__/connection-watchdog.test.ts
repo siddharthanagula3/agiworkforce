@@ -78,6 +78,32 @@ async function connectAndAwaitSignaling(code = `agiw3:ABCD EFGH IJKL:${PAIRING_S
 }
 
 describe('Connection store connect watchdog', () => {
+  it('refuses an unsafe returned relay before creating peer or signaling resources', async () => {
+    mockClaimManualPairingToken.mockResolvedValueOnce({
+      code: 'ABCDEFGHIJKL',
+      pairToken: 'a'.repeat(64),
+      expiresAt: Date.now() + 300_000,
+      wsUrl: 'ws://signal.example.test/ws',
+    });
+    useConnectionStore.getState().connect(`agiw3:ABCDEFGHIJKL:${PAIRING_SECRET}`);
+    await waitFor(() =>
+      expect(useConnectionStore.getState()).toMatchObject({
+        status: 'error',
+        pairToken: null,
+        connectionQuality: 'disconnected',
+      }),
+    );
+    expect(useConnectionStore.getState().error).toBe(
+      'The relay address must use a secure WebSocket connection.',
+    );
+    expect(mockSignalingClient).not.toHaveBeenCalled();
+    expect(jest.requireMock('react-native-webrtc').RTCPeerConnection).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(PAST_WATCHDOG_MS);
+    expect(useConnectionStore.getState().error).toBe(
+      'The relay address must use a secure WebSocket connection.',
+    );
+  });
+
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
@@ -94,6 +120,27 @@ describe('Connection store connect watchdog', () => {
   afterEach(() => {
     useConnectionStore.getState().disconnect();
     jest.useRealTimers();
+  });
+
+  it('cleans peer resources and the watchdog when socket construction throws', async () => {
+    mockSignalingClient.mockImplementationOnce(() => {
+      throw new Error('Socket creation failed');
+    });
+    useConnectionStore.getState().connect(`agiw3:ABCDEFGHIJKL:${PAIRING_SECRET}`);
+    await waitFor(() =>
+      expect(useConnectionStore.getState()).toMatchObject({
+        status: 'error',
+        error: 'Socket creation failed',
+        pairToken: null,
+        pairingCode: null,
+      }),
+    );
+    const peer = jest
+      .requireMock('react-native-webrtc')
+      .RTCPeerConnection.mock.results.at(-1).value;
+    expect(peer.close).toHaveBeenCalled();
+    jest.advanceTimersByTime(PAST_WATCHDOG_MS);
+    expect(useConnectionStore.getState().error).toBe('Socket creation failed');
   });
 
   it('fails a connecting session that never hears from the desktop peer', async () => {
@@ -114,6 +161,7 @@ describe('Connection store connect watchdog', () => {
     await connectAndAwaitSignaling();
     capturedOnEvent?.({
       type: 'registered',
+      pairToken: 'b'.repeat(64),
       expiresAt: Date.now() + 300_000,
       peerConnected: false,
     } as SignalingEvent);
@@ -135,6 +183,22 @@ describe('Connection store connect watchdog', () => {
     jest.advanceTimersByTime(PAST_WATCHDOG_MS);
 
     expect(useConnectionStore.getState().status).toBe('connected');
+  });
+
+  it('reconnects with the replacement role credential without claiming the consumed token again', async () => {
+    await connectAndAwaitSignaling();
+    capturedOnEvent?.({
+      type: 'registered',
+      pairToken: 'b'.repeat(64),
+      expiresAt: Date.now() + 300_000,
+      peerConnected: false,
+    });
+    expect(useConnectionStore.getState().pairToken).toBe('b'.repeat(64));
+    capturedOnEvent?.({ type: 'close' });
+    useConnectionStore.getState().connect(`agiw3:ABCDEFGHIJKL:${PAIRING_SECRET}`);
+    await waitFor(() => expect(mockSignalingClient).toHaveBeenCalledTimes(2));
+    expect(mockSignalingClient.mock.calls[1][0].pairToken).toBe('b'.repeat(64));
+    expect(mockClaimManualPairingToken).toHaveBeenCalledTimes(1);
   });
 
   it('clears the watchdog when the user cancels a pending connect', async () => {

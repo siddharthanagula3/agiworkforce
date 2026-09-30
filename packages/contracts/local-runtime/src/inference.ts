@@ -1,3 +1,5 @@
+import { isLoopbackHostname } from '@agiworkforce/types';
+
 export const LOCAL_INFERENCE_COMMANDS = [
   'local_model_servers',
   'local_model_list',
@@ -186,8 +188,6 @@ export function assertLocalTurnCarriesNoAttachments(messages: readonly unknown[]
   }
 }
 
-const LOOPBACK_HOSTNAMES: readonly string[] = ['localhost', '127.0.0.1', '::1'];
-
 /**
  * Whether a base URL still means "this machine".
  *
@@ -204,8 +204,7 @@ export function isLoopbackBaseUrl(value: string): boolean {
     return false;
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-  const hostname = parsed.hostname.replace(/^\[/, '').replace(/\]$/, '').toLowerCase();
-  return LOOPBACK_HOSTNAMES.includes(hostname);
+  return isLoopbackHostname(parsed.hostname);
 }
 
 function trimTrailingSlashes(value: string): string {

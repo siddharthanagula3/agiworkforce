@@ -1,3 +1,4 @@
+import { isSecureRelayUrl, isSecureRelayHttpUrl } from '@agiworkforce/types';
 import {
   SignalingClient,
   type SignalingClientOptions,
@@ -56,7 +57,6 @@ interface PairingResponse {
   };
   pairTokens: {
     desktop: string;
-    mobile: string;
   };
 }
 
@@ -136,15 +136,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function hasAllowedUrlProtocol(value: unknown, protocols: readonly string[]): value is string {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 2_048) return false;
-  try {
-    return protocols.includes(new URL(value).protocol);
-  } catch {
-    return false;
-  }
-}
-
 function parsePairingResponse(value: unknown): PairingResponse | null {
   if (!isRecord(value) || !isRecord(value['signaling']) || !isRecord(value['pairTokens'])) {
     return null;
@@ -156,7 +147,6 @@ function parsePairingResponse(value: unknown): PairingResponse | null {
   const httpUrl = value['signaling']['httpUrl'];
   const wsUrl = value['signaling']['wsUrl'];
   const desktopToken = value['pairTokens']['desktop'];
-  const mobileToken = value['pairTokens']['mobile'];
   if (
     typeof code !== 'string' ||
     code.length < 8 ||
@@ -165,14 +155,11 @@ function parsePairingResponse(value: unknown): PairingResponse | null {
     !Number.isFinite(expiresAt) ||
     typeof expiresIn !== 'number' ||
     !Number.isFinite(expiresIn) ||
-    !hasAllowedUrlProtocol(httpUrl, ['http:', 'https:']) ||
-    !hasAllowedUrlProtocol(wsUrl, ['ws:', 'wss:']) ||
+    !isSecureRelayHttpUrl(httpUrl, import.meta.env.DEV) ||
+    !isSecureRelayUrl(wsUrl, import.meta.env.DEV) ||
     typeof desktopToken !== 'string' ||
     desktopToken.length === 0 ||
-    desktopToken.length > 16_384 ||
-    typeof mobileToken !== 'string' ||
-    mobileToken.length === 0 ||
-    mobileToken.length > 16_384
+    desktopToken.length > 16_384
   ) {
     return null;
   }
@@ -182,7 +169,7 @@ function parsePairingResponse(value: unknown): PairingResponse | null {
     expiresAt,
     expiresIn,
     signaling: { httpUrl, wsUrl },
-    pairTokens: { desktop: desktopToken, mobile: mobileToken },
+    pairTokens: { desktop: desktopToken },
   };
 }
 
@@ -725,6 +712,7 @@ export const useConnectionStore = create<MobileCompanionState>()(
           const pairingSecret = generatePairingSecret();
 
           const nextSignalingClient = new SignalingClient({
+            allowInsecureLoopback: import.meta.env.DEV,
             wsUrl: payload.signaling.wsUrl,
             code: payload.code,
             role: 'desktop',

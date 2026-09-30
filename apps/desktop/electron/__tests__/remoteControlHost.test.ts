@@ -26,8 +26,9 @@ const code = {
   readDiff: vi.fn(async () => null),
 };
 
-function makeHost() {
+function makeHost(allowInsecureLoopback = false) {
   return createRemoteControlHost({
+    allowInsecureLoopback,
     code,
     deviceName: () => 'Studio Mac',
     appVersion: () => '1.8.0',
@@ -69,6 +70,50 @@ beforeEach(() => {
 });
 
 describe('remote control host in the desktop main process', () => {
+  it('passes an explicitly enabled development loopback connection to the shared client', () => {
+    const host = makeHost(true);
+    host.start({ ...startRequest(), wsUrl: 'ws://127.0.0.1:4000/ws' });
+    expect(clientOptions).toMatchObject({
+      wsUrl: 'ws://127.0.0.1:4000/ws',
+      allowInsecureLoopback: true,
+    });
+    host.stop();
+  });
+
+  it.each([
+    'ws://relay.example/ws',
+    'ws://localhost:4000/ws',
+    'wss://token@relay.example/ws',
+    'wss://relay.example/ws#token',
+  ])('refuses unsafe relay %s before starting a client or changing state', (wsUrl) => {
+    const host = makeHost();
+    expect(() => host.start({ ...startRequest(), wsUrl })).toThrow();
+    expect(clientOptions).toBeNull();
+    expect(states).toEqual([]);
+  });
+
+  it('reconnects with the rotated credential instead of the consumed one', () => {
+    vi.useFakeTimers();
+    const host = makeHost();
+    try {
+      host.start(startRequest());
+      const first = clientOptions!;
+      first.onEvent({
+        type: 'registered',
+        pairToken: 'b'.repeat(64),
+        expiresAt: 1234,
+        peerConnected: false,
+      });
+      first.onEvent({ type: 'close' });
+      vi.advanceTimersByTime(1000);
+      expect(clientOptions).not.toBe(first);
+      expect(clientOptions?.pairToken).toBe('b'.repeat(64));
+    } finally {
+      host.stop();
+      vi.useRealTimers();
+    }
+  });
+
   it('registers as the desktop and publishes a QR payload carrying the out-of-band secret', () => {
     const host = makeHost();
     const state = host.start(startRequest());

@@ -104,7 +104,7 @@ function pairingResponse(code: string): Response {
         httpUrl: 'https://signal.example.test',
         wsUrl: 'wss://signal.example.test/ws',
       },
-      pairTokens: { desktop: `desktop-${code}`, mobile: `mobile-${code}` },
+      pairTokens: { desktop: `desktop-${code}` },
     }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },
   );

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isProxyTrusted, resolveClientIp, resolveTrustedProxyHops } from '../src/client-ip.js';
 import { WebSocketRateLimiter, WS_CONNECTION_LIMIT } from '../src/middleware/rateLimit.js';
+import { readTomlTables, tomlTable } from './deploy/toml-tables.js';
 
 const serviceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -84,6 +85,37 @@ describe('resolveClientIp', () => {
 
   it('reports unknown only when there is nothing left to fall back to', () => {
     expect(resolveClientIp(requestFrom(undefined), PROXIED)).toBe('unknown');
+  });
+});
+
+describe('the client address on the Fly deployment', () => {
+  const flyEnv: NodeJS.ProcessEnv = tomlTable(
+    readTomlTables(resolve(serviceRoot, 'fly.toml')),
+    'env',
+  );
+  const FLY_PROXY_SOCKET = 'fdaa:0:1:a7b:1c3:0:a:2';
+  const APP_IP = '66.241.124.10';
+
+  it('trusts the Fly proxy from the deployed configuration', () => {
+    expect(isProxyTrusted(flyEnv)).toBe(true);
+  });
+
+  it('takes the client Fly recorded, not the app address Fly appends after it', () => {
+    const req = requestFrom(FLY_PROXY_SOCKET, { 'x-forwarded-for': `${CLIENT_A}, ${APP_IP}` });
+    expect(resolveClientIp(req, flyEnv)).toBe(CLIENT_A);
+  });
+
+  it('ignores an address the client wrote ahead of the Fly entries', () => {
+    const req = requestFrom(FLY_PROXY_SOCKET, {
+      'x-forwarded-for': `${SPOOFED}, ${CLIENT_B}, ${APP_IP}`,
+    });
+    expect(resolveClientIp(req, flyEnv)).toBe(CLIENT_B);
+  });
+
+  it('gives two clients behind the same app address two identities', () => {
+    const a = requestFrom(FLY_PROXY_SOCKET, { 'x-forwarded-for': `${CLIENT_A}, ${APP_IP}` });
+    const b = requestFrom(FLY_PROXY_SOCKET, { 'x-forwarded-for': `${CLIENT_B}, ${APP_IP}` });
+    expect(resolveClientIp(a, flyEnv)).not.toBe(resolveClientIp(b, flyEnv));
   });
 });
 

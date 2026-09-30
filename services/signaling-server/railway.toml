@@ -2,14 +2,12 @@
 # Documentation: https://docs.railway.app/reference/config-as-code
 
 [build]
-# Use Nixpacks builder (default, auto-detects Node.js)
-builder = "nixpacks"
+builder = "DOCKERFILE"
 
-# Build command - compile TypeScript
-buildCommand = "npm run build"
+dockerfilePath = "services/signaling-server/Dockerfile"
 
 # Watch paths for rebuilds
-watchPatterns = ["src/**", "package.json", "tsconfig.json"]
+watchPatterns = ["services/signaling-server/**", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".npmrc", "patches/**"]
 
 [deploy]
 # Start command

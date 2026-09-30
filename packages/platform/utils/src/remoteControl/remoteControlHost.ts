@@ -4,6 +4,7 @@ import {
   clipRemoteResult,
   clipRemoteText,
   isRelayPairingCode,
+  isSecureRelayUrl,
   type DispatchTaskLifecycleStatus,
   type DispatchTaskPendingStep,
   type DispatchTaskReplyError,
@@ -60,6 +61,7 @@ export interface DispatchTaskPages {
 }
 
 export interface RemoteControlHostOptions {
+  allowInsecureLoopback?: boolean;
   code: Omit<CodeRemoteDependencies, 'send'>;
   deviceName: () => string;
   appVersion: () => string;
@@ -84,20 +86,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseStartRequest(args: Record<string, unknown>): RemoteControlStartRequest {
+function parseStartRequest(
+  args: Record<string, unknown>,
+  allowInsecureLoopback: boolean,
+): RemoteControlStartRequest {
   const { code, wsUrl, pairToken, expiresAt } = args;
   if (typeof code !== 'string' || !isRelayPairingCode(code)) {
     throw new RemoteControlRefused('The pairing code is not valid.');
   }
   if (typeof wsUrl !== 'string') throw new RemoteControlRefused('The relay address is missing.');
-  let protocol: string;
-  try {
-    protocol = new URL(wsUrl).protocol;
-  } catch {
-    throw new RemoteControlRefused('The relay address is not valid.');
-  }
-  if (protocol !== 'wss:' && protocol !== 'ws:') {
-    throw new RemoteControlRefused('The relay address is not a WebSocket address.');
+  if (!isSecureRelayUrl(wsUrl, allowInsecureLoopback)) {
+    throw new RemoteControlRefused('The relay address must use a secure WebSocket connection.');
   }
   if (
     typeof pairToken !== 'string' ||
@@ -406,6 +405,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     if (eventGeneration !== generation) return;
     switch (event.type) {
       case 'registered':
+        if (active) active = { ...active, pairToken: event.pairToken };
         registered = true;
         reconnectAttempts = 0;
         if (state.status === 'reconnecting') publish({ status: 'waiting', error: null });
@@ -474,7 +474,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   }
 
   function start(args: Record<string, unknown>): RemoteControlState {
-    const request = parseStartRequest(args);
+    const request = parseStartRequest(args, options.allowInsecureLoopback === true);
     stop();
     pairingSecret = generatePairingSecret();
     active = request;
@@ -494,6 +494,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   function connect(request: RemoteControlStartRequest): void {
     const eventGeneration = ++generation;
     const clientOptions = {
+      allowInsecureLoopback: options.allowInsecureLoopback,
       wsUrl: request.wsUrl,
       code: request.code,
       pairToken: request.pairToken,
