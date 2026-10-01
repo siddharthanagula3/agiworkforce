@@ -79,18 +79,26 @@ export function watchClamd(
   limitMs = CLAMD_UNRESPONSIVE_LIMIT_MS,
 ): Daemon {
   let scannedAt = Date.now();
+  let stopped = false;
   const timer = setInterval(() => {
     void scans().then((scanning) => {
+      if (stopped) return;
       if (scanning) {
         scannedAt = Date.now();
         return;
       }
       const silentMs = Date.now() - scannedAt;
       if (silentMs < limitMs) return;
+      stopped = true;
       clearInterval(timer);
       log('error', 'clamd_unresponsive', { silentMs });
       onUnresponsive();
     });
   }, intervalMs);
-  return { stop: () => clearInterval(timer) };
+  return {
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
 }
