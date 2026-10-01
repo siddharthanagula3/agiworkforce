@@ -87,6 +87,9 @@ pub struct McpTimeouts {
     pub max_read_cache_entries: Option<usize>,
     pub max_read_cache_bytes: Option<usize>,
     pub max_read_cache_ttl: Option<Duration>,
+    pub max_stderr_line_bytes: Option<usize>,
+    pub max_stderr_buffer_bytes: Option<usize>,
+    pub max_stderr_lines: Option<usize>,
     /// When `true`, remote transport URLs are validated against SSRF at connect time via
     /// [`crate::security::validate_server_url`]: loopback allowed,
     /// private/link-local/mapped ranges and numeric-domain obfuscation blocked.
@@ -123,6 +126,10 @@ pub const DEFAULT_MAX_READ_CACHE_BYTES: usize = 16 * 1024 * 1024;
 pub const DEFAULT_MAX_READ_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
 pub const READ_CACHE_PRUNE_INTERVAL: Duration = Duration::from_secs(1);
 
+pub const DEFAULT_MAX_STDERR_LINE_BYTES: usize = 16 * 1024;
+pub const DEFAULT_MAX_STDERR_BUFFER_BYTES: usize = 256 * 1024;
+pub const DEFAULT_MAX_STDERR_LINES: usize = 1000;
+
 impl McpTimeouts {
     /// The frame ceiling to enforce, whatever the host configured.
     pub fn frame_cap(&self) -> usize {
@@ -149,6 +156,20 @@ impl McpTimeouts {
         self.max_read_cache_ttl
             .unwrap_or(DEFAULT_MAX_READ_CACHE_TTL)
     }
+
+    pub fn stderr_line_cap(&self) -> usize {
+        self.max_stderr_line_bytes
+            .unwrap_or(DEFAULT_MAX_STDERR_LINE_BYTES)
+    }
+
+    pub fn stderr_buffer_cap(&self) -> usize {
+        self.max_stderr_buffer_bytes
+            .unwrap_or(DEFAULT_MAX_STDERR_BUFFER_BYTES)
+    }
+
+    pub fn stderr_lines_cap(&self) -> usize {
+        self.max_stderr_lines.unwrap_or(DEFAULT_MAX_STDERR_LINES)
+    }
 }
 
 impl Default for McpTimeouts {
@@ -162,6 +183,9 @@ impl Default for McpTimeouts {
             max_read_cache_entries: None,
             max_read_cache_bytes: None,
             max_read_cache_ttl: None,
+            max_stderr_line_bytes: None,
+            max_stderr_buffer_bytes: None,
+            max_stderr_lines: None,
             validate_urls: false,
             verify_tls: true,
             max_response_bytes: None,
@@ -181,6 +205,9 @@ mod tests {
         assert_eq!(t.max_frame_bytes, None);
         assert_eq!(t.frame_cap(), DEFAULT_MAX_FRAME_BYTES);
         assert_eq!(t.response_cap(), DEFAULT_MAX_RESPONSE_BYTES);
+        assert_eq!(t.stderr_line_cap(), DEFAULT_MAX_STDERR_LINE_BYTES);
+        assert_eq!(t.stderr_buffer_cap(), DEFAULT_MAX_STDERR_BUFFER_BYTES);
+        assert_eq!(t.stderr_lines_cap(), DEFAULT_MAX_STDERR_LINES);
     }
 
     #[test]
@@ -188,10 +215,16 @@ mod tests {
         let t = McpTimeouts {
             max_frame_bytes: Some(1024),
             max_response_bytes: Some(2048),
+            max_stderr_line_bytes: Some(32),
+            max_stderr_buffer_bytes: Some(80),
+            max_stderr_lines: Some(3),
             ..McpTimeouts::default()
         };
         assert_eq!(t.frame_cap(), 1024);
         assert_eq!(t.response_cap(), 2048);
+        assert_eq!(t.stderr_line_cap(), 32);
+        assert_eq!(t.stderr_buffer_cap(), 80);
+        assert_eq!(t.stderr_lines_cap(), 3);
     }
 
     #[test]

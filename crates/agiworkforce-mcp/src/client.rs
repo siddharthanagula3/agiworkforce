@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -28,7 +28,7 @@ use crate::resources::{
 };
 use crate::transport::http::{Exchange, HttpConn};
 use crate::transport::sse::SseConn;
-use crate::transport::stdio::StdioConn;
+use crate::transport::stdio::{StderrBuffer, StdioConn};
 
 const INPUT_REQUIRED_METHODS: &[&str] = &["tools/call", "prompts/get", "resources/read"];
 const MAX_INPUT_ROUNDS: usize = 10;
@@ -67,7 +67,7 @@ pub struct McpClient {
     negotiated: NegotiatedServer,
     request_id: u64,
     timeouts: McpTimeouts,
-    stderr_buf: Arc<Mutex<Vec<String>>>,
+    stderr_buf: Arc<StderrBuffer>,
     hooks: ClientHooks,
     events: Arc<Events>,
     notif_rx: Option<mpsc::Receiver<McpNotification>>,
@@ -95,7 +95,7 @@ impl McpClient {
     ) -> Result<Self> {
         let (notif_tx, notif_rx) = mpsc::channel::<McpNotification>(128);
         let events = Arc::new(Events::new(notif_tx, &timeouts));
-        let stderr_buf: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let stderr_buf = Arc::new(StderrBuffer::new(&timeouts));
         let conn = open_conn(
             server_name,
             &config,
@@ -233,10 +233,7 @@ impl McpClient {
     }
 
     pub fn drain_stderr(&self) -> Vec<String> {
-        self.stderr_buf
-            .lock()
-            .map(|mut lines| lines.drain(..).collect())
-            .unwrap_or_default()
+        self.stderr_buf.drain()
     }
 
     pub async fn is_alive(&mut self) -> bool {
@@ -278,11 +275,7 @@ impl McpClient {
     }
 
     fn with_stderr(&self, error: anyhow::Error) -> anyhow::Error {
-        let lines = self
-            .stderr_buf
-            .lock()
-            .map(|lines| lines.join("\n"))
-            .unwrap_or_default();
+        let lines = self.stderr_buf.snapshot().join("\n");
         if lines.is_empty() {
             error
         } else {
@@ -984,9 +977,7 @@ impl McpClient {
     }
 
     async fn reopen(&mut self) -> Result<()> {
-        if let Ok(mut lines) = self.stderr_buf.lock() {
-            lines.clear();
-        }
+        self.stderr_buf = Arc::new(StderrBuffer::new(&self.timeouts));
         self.conn = open_conn(
             &self.server_name,
             &self.transport_config,
@@ -1086,7 +1077,7 @@ async fn open_conn(
     timeouts: &McpTimeouts,
     hooks: &ClientHooks,
     events: &Arc<Events>,
-    stderr_buf: &Arc<Mutex<Vec<String>>>,
+    stderr_buf: &Arc<StderrBuffer>,
 ) -> Result<Conn> {
     Ok(match config {
         TransportConfig::Stdio { command, args, env } => Conn::Stdio(StdioConn::spawn(

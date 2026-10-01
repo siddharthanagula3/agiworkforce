@@ -32,7 +32,7 @@ describe('installed workflow serialization', () => {
     const input = {
       first: shared,
       second: shared,
-      count: 42n,
+      count: BigInt(42),
       date: new Date('2026-01-01T00:00:00.000Z'),
       entries: new Map([['entry', shared]]),
       bytes: new Uint8Array([1, 2, 3]),

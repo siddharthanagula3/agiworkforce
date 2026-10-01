@@ -16,6 +16,20 @@ fn main() {
     let mode = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "normal".to_string());
+    if mode == "stderr-lines" {
+        let mut stderr = std::io::stderr().lock();
+        for i in 0..5000 {
+            writeln!(stderr, "diagnostic {i:04} {}", "x".repeat(100)).unwrap();
+        }
+        writeln!(stderr, "stderr complete").unwrap();
+    }
+    if mode == "stderr-long-line" {
+        let mut stderr = std::io::stderr().lock();
+        for _ in 0..256 {
+            stderr.write_all(&[b'x'; 8192]).unwrap();
+        }
+        stderr.write_all(b"\nstderr complete\n").unwrap();
+    }
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     let mut lines = stdin.lock().lines();
