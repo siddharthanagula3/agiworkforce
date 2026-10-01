@@ -9,6 +9,7 @@ const fixture = vi.hoisted(() => ({
 }));
 
 type SentryModule = typeof import('@sentry/react');
+type AppModeModule = typeof import('../../stores/appModeStore');
 
 vi.mock('@sentry/react', async (importOriginal) => {
   const actual = await importOriginal<SentryModule>();
@@ -29,11 +30,18 @@ vi.mock('@sentry/react', async (importOriginal) => {
       }),
   };
 });
-vi.mock('../analytics', () => ({ analytics: { track: vi.fn() } }));
-vi.mock('../../stores/appModeStore', () => ({
-  useAppModeStore: { getState: () => ({}) },
-  selectPrivacyMode: () => fixture.privacyMode(),
+vi.mock('../analytics', () => ({
+  analytics: { track: vi.fn() },
+  AnalyticsService: vi.fn(),
 }));
+vi.mock('../../stores/appModeStore', async (importOriginal) => {
+  const actual = await importOriginal<AppModeModule>();
+  return {
+    ...actual,
+    useAppModeStore: { getState: () => ({}) },
+    selectPrivacyMode: () => fixture.privacyMode(),
+  };
+});
 
 import { ErrorTrackingService } from '../errorTracking';
 
