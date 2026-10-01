@@ -23,7 +23,10 @@ const dataSafety = JSON.parse(
   fs.readFileSync(path.join(mobileRoot, 'store-listing/android/data-safety.json'), 'utf8'),
 );
 
-function runReleaseGuard(input, pathValue = process.env.PATH) {
+function runReleaseGuard(
+  input,
+  parserEnvironment = path.join(mobileRoot, '.cache/privacy-parser'),
+) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agi-privacy-declarations-')));
   try {
     for (const directory of ['scripts/release', 'store-listing/ios', 'store-listing/android']) {
@@ -40,13 +43,21 @@ function runReleaseGuard(input, pathValue = process.env.PATH) {
     if (fs.existsSync(path.join(mobileRoot, parser))) {
       fs.copyFileSync(path.join(mobileRoot, parser), path.join(root, parser));
     }
+    if (parserEnvironment !== null) {
+      fs.mkdirSync(path.join(root, '.cache'));
+      fs.symlinkSync(
+        parserEnvironment,
+        path.join(root, '.cache/privacy-parser'),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+    }
     fs.writeFileSync(path.join(root, 'store-listing/ios/PrivacyInfo.xcprivacy'), input);
     return spawnSync(
       process.execPath,
       [path.join(root, 'scripts/release/verify-privacy-declarations.mjs')],
       {
         cwd: root,
-        env: { PATH: pathValue, EXPO_PUBLIC_API_URL: 'https://example.invalid' },
+        env: { PATH: process.env.PATH, EXPO_PUBLIC_API_URL: 'https://example.invalid' },
         encoding: 'utf8',
         timeout: 15000,
       },
@@ -194,10 +205,56 @@ test('Play comparison rejects an incomplete submitted manifest', () => {
 });
 
 test('the release command fails closed when Python is unavailable', () => {
-  const result = runReleaseGuard(manifestXml, '');
+  const result = runReleaseGuard(manifestXml, null);
   assert.equal(result.signal, null);
   assert.equal(result.status, 1);
   assert.doesNotMatch(result.stdout, /declaration agree/);
+});
+
+for (const [name, declaration] of [
+  ['internal entity', '<!ENTITY privacy "false">'],
+  ['unused entity', '<!ENTITY unused "not used">'],
+  ['external file entity', '<!ENTITY privacy SYSTEM "file:///etc/passwd">'],
+  ['external network entity', '<!ENTITY privacy SYSTEM "https://example.invalid/privacy">'],
+  [
+    'external parameter entity',
+    '<!ENTITY % privacy SYSTEM "https://example.invalid/privacy">%privacy;',
+  ],
+  [
+    'nested expansion',
+    '<!ENTITY a "aaaaaaaa"><!ENTITY b "&a;&a;&a;&a;"><!ENTITY privacy "&b;&b;&b;&b;">',
+  ],
+]) {
+  test(`the privacy parser rejects ${name} declarations before decoding`, () => {
+    const source = manifestXml.replace(
+      /<!DOCTYPE plist[^>]*>/u,
+      `<!DOCTYPE plist [${declaration}]>`,
+    );
+    assert.notEqual(source, manifestXml);
+    assert.throws(() => parsePrivacyManifest(source), /invalid privacy manifest/);
+    const result = runReleaseGuard(source);
+    assert.equal(result.signal, null);
+    assert.equal(result.status, 1);
+    assert.doesNotMatch(result.stdout, /declaration agree/);
+  });
+}
+
+test('the privacy parser retains ordinary XML character references', () => {
+  const source = manifestXml.replace('<string>CA92.1</string>', '<string>CA92&#46;1</string>');
+  assert.deepEqual(parsePrivacyManifest(source), manifest);
+});
+
+test('the release command fails closed without its XML parser dependency', () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agi-privacy-prerequisite-')));
+  try {
+    execFileSync('python3', ['-I', '-S', '-m', 'venv', '--without-pip', root]);
+    const result = runReleaseGuard(manifestXml, root);
+    assert.equal(result.signal, null);
+    assert.equal(result.status, 1);
+    assert.doesNotMatch(result.stdout, /declaration agree/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('a binary plist preserves the same privacy declaration', () => {

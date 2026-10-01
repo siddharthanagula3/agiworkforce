@@ -125,6 +125,12 @@ Mobile carries its own release state in
 `apps/mobile/src/features/release-state/mobileReleaseState.json`, because a
 store build cannot be changed after submission.
 
+Before running mobile Node tests or privacy release checks locally, run
+`pnpm --filter @agiworkforce/mobile setup:privacy-parser`. This installs the
+hash-pinned XML parser into the ignored mobile `.cache/privacy-parser` environment.
+CI prepares the same environment before those checks; validation never installs
+dependencies and refuses an unavailable parser.
+
 ## 7. Approvals and credentials
 
 Production deployment runs under the `production-web` GitHub environment, which
