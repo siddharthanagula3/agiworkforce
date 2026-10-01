@@ -1,17 +1,5 @@
 name: Deploy Staging Web
 
-# The tier production promotes through. It takes the same commit under the same
-# exact-SHA CI gate as .github/workflows/deploy-production.yml, applies the
-# pending migrations to a persistent staging database, and probes the staging
-# origin the same way the production gate probes the apex. It publishes its
-# verdict as a `staging-web` commit status, and deploy-production.yml waits for
-# that status before it promotes anything, so an artifact reaches production
-# only after the identical artifact served staging.
-#
-# Unlike the production job this one has no affected-surface filter: staging
-# tracks main commit for commit. A staging deploy that a scope filter skipped
-# would be a commit production could never promote.
-
 on:
   workflow_run:
     workflows: ['CI']
@@ -32,41 +20,40 @@ permissions:
   statuses: write
 
 jobs:
-  # Posted so the gate is never left polling for a tier nobody has provisioned.
-  # It is green because there is nothing failing, and the description is what
-  # says nothing was verified.
   unprovisioned:
     name: Declare the staging tier unprovisioned
     if: >-
       vars.STAGING_WEB_URL == '' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository
+        )
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Report no staging verification for this commit
         env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
           REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
           gh api --method POST "repos/$REPOSITORY/statuses/$HEAD_SHA" \
-            -f state=success \
+            -f state=error \
             -f context=staging-web \
             -f description='staging tier not provisioned; nothing was verified' \
             --silent
-          echo "::warning::vars.STAGING_WEB_URL is unset, so this commit reaches production without a staging deploy"
+          echo "::error::vars.STAGING_WEB_URL is unset; staging verification is required before production"
+          exit 1
 
   deploy:
     name: Deploy and verify the staging web artifact
-    # vars.STAGING_WEB_URL is the switch that turns the tier on. Until the
-    # staging origin and database exist this job does not run, the workflow
-    # still concludes success, and the production gate is not held by a tier
-    # nobody has provisioned yet.
     if: >-
       vars.STAGING_WEB_URL != '' &&
       (
@@ -90,7 +77,7 @@ jobs:
       AGI_STAGING_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
       STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
     steps:
-      - name: Checkout the CI-verified commit
+      - name: Checkout the candidate commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -211,7 +198,7 @@ jobs:
             echo "## Staging web deployment"
             echo
             echo "- Commit: \`$DEPLOYMENT_SHA\`"
-            echo "- Artifact: prebuilt and CI verified"
+            echo "- Artifact: prebuilt from $DEPLOYMENT_SHA"
             echo "- URL: $DEPLOYMENT_URL"
             echo "- Origin: $STAGING_WEB_URL"
             echo "- Migrations: applied to the staging database and recorded at target \`staging\`"

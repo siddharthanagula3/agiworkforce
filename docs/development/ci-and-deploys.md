@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform/release
-Last updated: 2026-09-24
+Last updated: 2026-10-01
 
 ## Production invariant
 
@@ -15,7 +15,7 @@ move between validation and deployment.
   push-triggered `CI` `workflow_run` for `main` from this repository, checks out
   `workflow_run.head_sha`, builds with the pinned Vercel CLI, and deploys only
   the prebuilt artifact. Its `staging-gate` job holds the promotion until the
-  staging run for that same commit has concluded.
+  staging origin has served and passed verification for that same commit.
 - Web staging is owned by `.github/workflows/deploy-staging.yml`, described
   under "Staging tier" below.
 - `vercel.json` disables automatic Git deployment for `main`, preventing the
@@ -55,11 +55,12 @@ re-enabled Vercel `main` auto-deploy.
 
 ## Staging tier
 
-`.github/workflows/deploy-staging.yml` owns the web staging tier. It fires on
-the same successful, push-triggered `CI` `workflow_run` as production and checks
-out the same `workflow_run.head_sha`, so staging and production are the same
-commit built the same way, and the only difference between the two is which
-environment's values the build was pulled with.
+`.github/workflows/deploy-staging.yml` owns the web staging tier. Its automatic
+trigger uses the same successful, push-triggered `CI` `workflow_run` as
+production and checks out the same `workflow_run.head_sha`. Staging builds with
+Vercel's preview environment; production builds separately with production
+values. They share a source commit, not an identical built artifact. A manual
+staging run uses the selected commit and does not establish that CI passed.
 
 It has no affected-surface filter. Staging tracks `main` commit for commit
 because the production gate below waits on it: a staging deploy skipped by a
@@ -85,11 +86,11 @@ What the run does, in order:
 
 `deploy-production.yml`'s `staging-gate` job then waits for that run's verdict
 before `deploy-web` starts. A staging run that fails, is cancelled, or never
-completes within 25 minutes stops the promotion. A run whose jobs were all
-skipped concludes `skipped`, which is the state while `vars.STAGING_WEB_URL` is
-unset, and is the one verdict that lets a promotion through without a staging
-deploy: the tier is off until it is provisioned, and turning it on is what makes
-the gate real.
+completes within 25 minutes stops the promotion. When the repository variable
+`STAGING_WEB_URL` is unset, eligible automatic and manual runs publish an error
+for their exact commit and fail. Production also rejects legacy success
+statuses whose description says staging was not provisioned. Provisioning and
+successful verification are required before promotion.
 
 ## Background components
 
@@ -188,18 +189,18 @@ Vercel owns the application runtime values pulled by `vercel pull`. Railway and
 Fly secrets stay in their existing protected production environments. No
 workflow prints secret values.
 
-The `staging-web` GitHub environment owns the staging tier, and the tier is off
-until all of it exists:
+The `staging-web` GitHub environment owns the staging secrets. The repository
+variable `STAGING_WEB_URL` enables the job before environment values are loaded.
+The tier requires:
 
 - `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`: the same Vercel project
-  as production. Staging is a preview-target deployment of it, not a second
-  project, so the artifact promoted to production is the artifact staging built.
+  as production. Staging deploys a preview build; production builds its own
+  artifact from the same source commit.
 - `AGI_STAGING_DATABASE_URL`: the persistent staging database. It is a separate
   Neon database, never a branch of production, because the migrations applied to
   it are the ones not yet applied to production.
-- `STAGING_WEB_URL` (variable): the staging origin, a custom domain assigned to
-  the Vercel project. Its absence is what keeps the tier and the production
-  staging gate dormant.
+- `STAGING_WEB_URL` (repository variable): the staging origin, a custom domain
+  assigned to the Vercel project. Its absence blocks production promotion.
 
 The Vercel project's preview environment must point at the staging database, or
 the deployment will run its migrations against one database and serve another.

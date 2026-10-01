@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import process from 'node:process';
 import test from 'node:test';
+import { URL } from 'node:url';
 
 import {
   RELEASE_READINESS,
@@ -182,8 +185,10 @@ test('shared JavaScript build inputs do not rebuild native binaries', () => {
   assert.match(formatGithubOutputs(scope), /^native=false$/m);
 });
 
-test('Rust builds run only for native inputs and cross-language sync parity', () => {
+test('Rust builds cover native execution inputs and cross-language sync parity', () => {
   for (const file of [
+    '.github/workflows/ci.yml',
+    '.cargo/audit.toml',
     'Cargo.lock',
     'Cargo.toml',
     'deny.toml',
@@ -197,13 +202,67 @@ test('Rust builds run only for native inputs and cross-language sync parity', ()
   }
 
   for (const file of [
-    '.github/workflows/ci.yml',
+    '.github/workflows/deploy-signaling-server.yml',
     'package.json',
     'pnpm-lock.yaml',
     'packages/ai/model-registry/catalog/models.curation.json',
     'packages/ai/routing/src/index.ts',
   ]) {
     assert.equal(classifyDeployScope([file]).native, false, file);
+  }
+});
+
+test('native prerequisite changes select their owning expensive lanes', () => {
+  const unselected = {
+    web: false,
+    signaling: false,
+    sandbox: false,
+    desktop: false,
+    native: false,
+    extension: false,
+    vscode: false,
+    mobile: false,
+  };
+
+  for (const file of [
+    '.cargo/audit.toml',
+    'scripts/prepare-linux-sandbox.py',
+    'scripts/collect-linux-sandbox-metadata.py',
+  ]) {
+    assert.equal(fs.existsSync(file), true, file);
+    assert.deepEqual(classifyDeployScope([file]), { ...unselected, native: true }, file);
+  }
+
+  for (const file of [
+    'apps/desktop/scripts/prepare-windows-native-messaging-sidecar.ps1',
+    'apps/desktop/scripts/verify-windows-manifests.ps1',
+  ]) {
+    assert.equal(fs.existsSync(file), true, file);
+    assert.deepEqual(
+      classifyDeployScope([file]),
+      { ...unselected, desktop: true, native: true },
+      file,
+    );
+  }
+
+  assert.equal(classifyDeployScope(['scripts/production-deploy-scope.mjs']).native, true);
+});
+
+test('the CI scope command emits native selection for its execution and configuration owners', () => {
+  for (const file of [
+    '.github/workflows/ci.yml',
+    '.cargo/audit.toml',
+    'scripts/prepare-linux-sandbox.py',
+    'apps/desktop/scripts/verify-windows-manifests.ps1',
+  ]) {
+    const result = spawnSync(process.execPath, ['scripts/production-deploy-scope.mjs'], {
+      input: `${file}\n`,
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    assert.equal(result.error, undefined, file);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /^native=true$/m, file);
   }
 });
 
@@ -534,7 +593,7 @@ function releaseApi(replace = () => undefined) {
       assert.fail(`Unexpected fixture API path ${url.pathname}`);
     }
     const replacement = replace(url, body, request) ?? {};
-    return new Response(JSON.stringify(replacement.body ?? body), {
+    return new globalThis.Response(JSON.stringify(replacement.body ?? body), {
       status: replacement.status ?? 200,
       headers: replacement.link ? { link: replacement.link } : {},
     });

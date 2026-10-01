@@ -57,7 +57,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git diff --name-only "origin/$BASE_REF"...HEAD \
               | node scripts/production-deploy-scope.mjs >> "$GITHUB_OUTPUT"
-          elif [ -n "${BEFORE_SHA:-}" ] && ! [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+          elif [ -n "${BEFORE_SHA:-}" ] && ! [[ "$BEFORE_SHA" =~ ^0+$ ]] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
             git diff --name-only "$BEFORE_SHA" HEAD \
               | node scripts/production-deploy-scope.mjs >> "$GITHUB_OUTPUT"
           else

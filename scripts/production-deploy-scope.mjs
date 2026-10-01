@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import console from 'node:console';
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
-import { pathToFileURL } from 'node:url';
+import { setTimeout } from 'node:timers';
+import { URL, URLSearchParams, pathToFileURL } from 'node:url';
 
 import { readRelayRelease, verifyRelayCommit } from './verify-deployment.mjs';
 
@@ -28,6 +30,15 @@ export const SURFACE_DEPLOY_WORKFLOWS = {
 
 const DEPLOY_WORKFLOW_FILE = 'deploy-production.yml';
 const RUNS_TO_SCAN = 30;
+
+const NATIVE_EXECUTION_FILES = new Set([
+  '.github/workflows/ci.yml',
+  'scripts/production-deploy-scope.mjs',
+  'scripts/prepare-linux-sandbox.py',
+  'scripts/collect-linux-sandbox-metadata.py',
+  'apps/desktop/scripts/prepare-windows-native-messaging-sidecar.ps1',
+  'apps/desktop/scripts/verify-windows-manifests.ps1',
+]);
 
 const SHARED_BUILD_FILES = new Set([
   '.npmrc',
@@ -143,6 +154,8 @@ export function classifyDeployScope(files, { all = false } = {}) {
     }
 
     if (
+      NATIVE_EXECUTION_FILES.has(file) ||
+      isWithin(file, '.cargo') ||
       file === 'Cargo.lock' ||
       file === 'Cargo.toml' ||
       file === 'deny.toml' ||
@@ -209,7 +222,7 @@ function log(message) {
 
 export async function githubJson(pathAndQuery, token, options = {}) {
   const apiUrl = options.apiUrl ?? process.env.GITHUB_API_URL ?? 'https://api.github.com';
-  const response = await (options.fetchImpl ?? fetch)(new URL(pathAndQuery, apiUrl), {
+  const response = await (options.fetchImpl ?? globalThis.fetch)(new URL(pathAndQuery, apiUrl), {
     headers: {
       accept: 'application/vnd.github+json',
       authorization: `Bearer ${token}`,
@@ -218,11 +231,11 @@ export async function githubJson(pathAndQuery, token, options = {}) {
     },
     redirect: 'error',
     signal: options.signal
-      ? AbortSignal.any([
+      ? globalThis.AbortSignal.any([
           options.signal,
-          AbortSignal.timeout(RELEASE_READINESS.requestTimeoutSeconds * 1000),
+          globalThis.AbortSignal.timeout(RELEASE_READINESS.requestTimeoutSeconds * 1000),
         ])
-      : AbortSignal.timeout(RELEASE_READINESS.requestTimeoutSeconds * 1000),
+      : globalThis.AbortSignal.timeout(RELEASE_READINESS.requestTimeoutSeconds * 1000),
     ...options.request,
   });
   if (!response.ok) {
@@ -435,7 +448,7 @@ export async function requireReleaseReady(environment = process.env, options = {
   const deadline = now() + timeoutMs;
   options = {
     ...options,
-    signal: AbortSignal.timeout(
+    signal: globalThis.AbortSignal.timeout(
       Math.max(RELEASE_READINESS.requestTimeoutSeconds * 1000, timeoutMs),
     ),
   };

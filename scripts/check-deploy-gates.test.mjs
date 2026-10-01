@@ -3,7 +3,9 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import process from 'node:process';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 import { stringify } from 'yaml';
 
@@ -22,6 +24,7 @@ import {
 const roots = [];
 const contract = loadContract(REPO_ROOT);
 const workflow = readWorkflow(REPO_ROOT, contract.workflow);
+const stagingWorkflow = readWorkflow(REPO_ROOT, 'deploy-staging.yml');
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -60,6 +63,161 @@ function errorsAfterRelay(mutate) {
   writeFileSync(path.join(root, WORKFLOW_DIR, file), stringify(document));
   return checkDeployGates(root).errors;
 }
+
+function runStagingStep(step, env = {}) {
+  const root = mkdtempSync(path.join(tmpdir(), 'staging-verdict-'));
+  roots.push(root);
+  const argumentsFile = path.join(root, 'gh-arguments');
+  const result = spawnSync(
+    'bash',
+    [
+      '-c',
+      `gh() {
+  printf '%s\\0' "$@" >> "$GH_API_ARGUMENTS"
+  printf '%s' "$STAGING_VERDICT"
+  return "$GH_API_EXIT"
+}
+sleep() { exit 86; }
+${step.run}`,
+    ],
+    {
+      cwd: REPO_ROOT,
+      env: {
+        PATH: process.env.PATH,
+        HEAD_SHA: 'a'.repeat(40),
+        REPOSITORY: 'fixture/repository',
+        GH_API_ARGUMENTS: argumentsFile,
+        GH_API_EXIT: '0',
+        STAGING_VERDICT: '',
+        ...env,
+      },
+      encoding: 'utf8',
+      timeout: 2000,
+    },
+  );
+  assert.equal(result.error, undefined);
+  assert.equal(result.signal, null);
+  return {
+    ...result,
+    apiArguments: readFileSync(argumentsFile, 'utf8').split('\0').slice(0, -1),
+  };
+}
+
+test('unconfigured staging reports both eligible triggers on their actual candidate', () => {
+  const job = stagingWorkflow.jobs.unprovisioned;
+  const step = job.steps.find(
+    (entry) => entry.name === 'Report no staging verification for this commit',
+  );
+  const completedRun = {
+    conclusion: 'success',
+    event: 'push',
+    head_branch: 'main',
+    head_sha: 'a'.repeat(40),
+    head_repository: { full_name: 'fixture/repository' },
+  };
+  for (const [eventName, stagingUrl, run, expected] of [
+    ['workflow_dispatch', '', {}, true],
+    ['workflow_run', '', completedRun, true],
+    ['workflow_dispatch', 'https://staging.example.invalid', {}, false],
+    ['workflow_run', 'https://staging.example.invalid', completedRun, false],
+    ['workflow_run', '', { ...completedRun, conclusion: 'failure' }, false],
+    ['workflow_run', '', { ...completedRun, conclusion: 'cancelled' }, false],
+    ['workflow_run', '', { ...completedRun, event: 'pull_request' }, false],
+    ['workflow_run', '', { ...completedRun, head_branch: 'feature' }, false],
+    [
+      'workflow_run',
+      '',
+      { ...completedRun, head_repository: { full_name: 'attacker/fork' } },
+      false,
+    ],
+  ]) {
+    const context = {
+      vars: { STAGING_WEB_URL: stagingUrl },
+      github: {
+        event_name: eventName,
+        sha: 'b'.repeat(40),
+        repository: 'fixture/repository',
+        event: { workflow_run: run },
+      },
+    };
+    assert.equal(runInNewContext(job.if, context, { timeout: 1000 }), expected);
+    if (!expected) continue;
+    const shaExpression = step.env.HEAD_SHA.replace(/^\$\{\{\s*|\s*\}\}$/g, '');
+    const candidate = runInNewContext(shaExpression, context, { timeout: 1000 });
+    assert.equal(candidate, eventName === 'workflow_dispatch' ? 'b'.repeat(40) : 'a'.repeat(40));
+    const result = runStagingStep(step, { HEAD_SHA: candidate });
+    assert.equal(result.status, 1);
+    assert.ok(result.apiArguments.includes(`repos/fixture/repository/statuses/${candidate}`));
+    assert.ok(result.apiArguments.includes('state=error'));
+  }
+});
+
+test('unconfigured staging posts an error for the exact candidate and fails', () => {
+  const step = stagingWorkflow.jobs.unprovisioned.steps.find(
+    (entry) => entry.name === 'Report no staging verification for this commit',
+  );
+  const result = runStagingStep(step);
+  assert.equal(result.status, 1);
+  assert.ok(result.apiArguments.includes(`repos/fixture/repository/statuses/${'a'.repeat(40)}`));
+  assert.ok(result.apiArguments.includes('state=error'));
+  assert.ok(result.apiArguments.includes('context=staging-web'));
+  assert.ok(!result.apiArguments.includes('state=success'));
+  assert.match(result.stdout, /::error::.*staging verification is required/);
+});
+
+test('production rejects an unverified legacy staging success', () => {
+  const step = workflow.jobs['staging-gate'].steps.find(
+    (entry) => entry.name === 'Wait for the staging verdict on this commit',
+  );
+  const result = runStagingStep(step, {
+    STAGING_VERDICT: 'success\tstaging tier not provisioned; nothing was verified',
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /::error::.*nothing was verified/);
+});
+
+test('production accepts verified staging and rejects failed or unavailable verdicts', () => {
+  const step = workflow.jobs['staging-gate'].steps.find(
+    (entry) => entry.name === 'Wait for the staging verdict on this commit',
+  );
+  const verified = runStagingStep(step, {
+    STAGING_VERDICT: 'success\tstaging served this commit and verified it',
+  });
+  assert.equal(verified.status, 0);
+  assert.ok(
+    verified.apiArguments.includes(`repos/fixture/repository/commits/${'a'.repeat(40)}/status`),
+  );
+  for (const state of ['failure', 'error']) {
+    assert.equal(runStagingStep(step, { STAGING_VERDICT: `${state}\trejected` }).status, 1);
+  }
+  assert.equal(runStagingStep(step, { STAGING_VERDICT: 'none\t' }).status, 86);
+  assert.equal(runStagingStep(step, { GH_API_EXIT: '1' }).status, 86);
+});
+
+test('staging publishes success only after its serving-path verification succeeds', () => {
+  const step = stagingWorkflow.jobs.deploy.steps.find(
+    (entry) => entry.name === 'Publish the staging verdict for this commit',
+  );
+  assert.equal(step.if, '${{ always() }}');
+  for (const outcome of ['success', 'failure', 'skipped', 'cancelled', '']) {
+    const result = runStagingStep(step, {
+      VERIFY_OUTCOME: outcome,
+      WORKFLOW_RUN_URL: 'https://github.com/fixture/repository/actions/runs/1',
+    });
+    assert.equal(result.status, 0);
+    assert.ok(
+      result.apiArguments.includes(`state=${outcome === 'success' ? 'success' : 'failure'}`),
+    );
+    assert.ok(result.apiArguments.includes(`repos/fixture/repository/statuses/${'a'.repeat(40)}`));
+  }
+});
+
+test('an unconfigured staging status cannot pass when its API call fails', () => {
+  const step = stagingWorkflow.jobs.unprovisioned.steps.find(
+    (entry) => entry.name === 'Report no staging verification for this commit',
+  );
+  assert.equal(runStagingStep(step, { GH_API_EXIT: '1' }).status, 1);
+});
 
 test('web promotion cannot remove or bypass the candidate release dependency', () => {
   for (const mutate of [

@@ -208,7 +208,8 @@ jobs:
                 echo "staging verdict for $HEAD_SHA: $description"
                 case "$description" in
                   *'not provisioned'*)
-                    echo "::warning::$description"
+                    echo "::error::$description"
+                    exit 1
                     ;;
                 esac
                 exit 0

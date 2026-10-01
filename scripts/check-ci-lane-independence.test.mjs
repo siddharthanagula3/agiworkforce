@@ -87,6 +87,102 @@ function lanesOf(job) {
 
 const jobs = parseJobs(fs.readFileSync(WORKFLOW, 'utf8'));
 
+test('CI change detection selects every lane when the prior commit is unavailable', () => {
+  const step = parseYaml(fs.readFileSync(WORKFLOW, 'utf8')).jobs.scope.steps.find(
+    (entry) => entry.id === 'scope',
+  );
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-change-scope-'));
+  const environment = {
+    PATH: process.env.PATH,
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_GLOBAL: path.join(directory, 'empty-config'),
+    GIT_AUTHOR_NAME: 'Scope Fixture',
+    GIT_AUTHOR_EMAIL: 'scope@example.invalid',
+    GIT_COMMITTER_NAME: 'Scope Fixture',
+    GIT_COMMITTER_EMAIL: 'scope@example.invalid',
+  };
+  function git(...args) {
+    const result = spawnSync('git', args, {
+      cwd: directory,
+      env: environment,
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  }
+  try {
+    fs.writeFileSync(environment.GIT_CONFIG_GLOBAL, '');
+    git('init', '--quiet');
+    fs.mkdirSync(path.join(directory, 'apps/web'), { recursive: true });
+    fs.writeFileSync(path.join(directory, 'apps/web/fixture.txt'), 'before');
+    git('add', 'apps/web/fixture.txt');
+    git('commit', '--quiet', '-m', 'fixture: before');
+    const before = git('rev-parse', 'HEAD');
+    git('update-ref', 'refs/remotes/origin/main', before);
+    fs.writeFileSync(path.join(directory, 'apps/web/fixture.txt'), 'after');
+    git('commit', '--quiet', '-am', 'fixture: after');
+    for (const file of [
+      'scripts/production-deploy-scope.mjs',
+      'scripts/verify-deployment.mjs',
+      'scripts/config/deploy-gates.json',
+    ]) {
+      fs.mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
+      fs.copyFileSync(path.join(process.cwd(), file), path.join(directory, file));
+    }
+
+    for (const [event, prior, all] of [
+      ['push', 'f'.repeat(40), true],
+      ['push', '0'.repeat(40), true],
+      ['push', '', true],
+      ['push', before, false],
+      ['pull_request', '', false],
+    ]) {
+      const output = path.join(directory, 'github-output');
+      fs.writeFileSync(output, '');
+      const result = spawnSync(
+        'bash',
+        ['-e', '-o', 'pipefail', '-c', step.run.replaceAll('${{ github.event_name }}', event)],
+        {
+          cwd: directory,
+          env: {
+            ...environment,
+            GITHUB_EVENT_NAME: event,
+            BEFORE_SHA: prior,
+            BASE_REF: 'main',
+            GITHUB_OUTPUT: output,
+          },
+          encoding: 'utf8',
+          timeout: 5000,
+        },
+      );
+      assert.equal(result.error, undefined);
+      assert.equal(result.signal, null);
+      assert.equal(result.status, 0, `${event}/${prior}: ${result.stderr}`);
+      const flags = Object.fromEntries(
+        fs
+          .readFileSync(output, 'utf8')
+          .trim()
+          .split('\n')
+          .map((line) => line.split('=')),
+      );
+      assert.deepEqual(flags, {
+        web: 'true',
+        signaling: String(all),
+        sandbox: String(all),
+        desktop: String(all),
+        native: String(all),
+        extension: String(all),
+        vscode: String(all),
+        mobile: String(all),
+      });
+    }
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('every job depends only on jobs that exist', () => {
   for (const [name, job] of jobs) {
     for (const dependency of job.needs) {
