@@ -12,7 +12,7 @@ delete this file when it is empty. An entry marked "same fix as" closes with its
 primary. Codex's raw report stays outside the repository, in its read-only
 worktree `.worktrees/codex-reaudit/audit/codex-reaudit-2026-09-30/`.
 
-Open now: 440 entries (155 defects, 285 half-built).
+Open now: 439 entries (154 defects, 285 half-built).
 
 ## Signaling relay
 
@@ -53,7 +53,6 @@ Open now: 440 entries (155 defects, 285 half-built).
 - **F-DESK-006** (defect, medium): Ignore Enter while an IME composition is active in every Code-surface composer. Files: `apps/web/features/code/components/CodeComposer.tsx`, `apps/web/features/code/components/LocalSessionPanel.tsx`, `apps/web/features/code/CloudCodePage.tsx`.
 - **F-DESK-016** (defect, medium): Add changed-on-disk warning, per-line diff comments and submit-all to the local Code changes panel. Files: `apps/web/features/code/code-diff.ts`, `apps/web/features/code/code-diff.test.ts`, `apps/web/features/code/review-comments.ts`.
 - **RISK-X01** (defect, security): Make getCsrfSecret throw in production when CSRF_SECRET is unset (keep the random fallback for dev/test only) and add a test. Files: `apps/web/lib/csrf.ts`, `apps/web/lib/__tests__/csrf.test.ts`.
-- **RISK-X03** (defect): Replace the literal NUL byte in retrieval-index-service.ts:288 with the '\0' escape (same hash input) so the file stops reading as binary. Files: `apps/web/lib/services/retrieval-index-service.ts`.
 - **ROOT-009** (defect, security, low): Batch SCIM user-group lookups instead of one query per row on list endpoints. Files: `apps/web/lib/server/scim/scim-provisioning-service.ts`, `apps/web/app/api/scim/v2/Users/route.ts`, `apps/web/app/api/scim/v2/Groups/route.ts`.
 - **ROOT-010** (defect, low): Correct the CLI distribution docs (install.sh only, no npm wrapper) and add a regression guard. Files: `docs/product/competitive-guidance.md`, `docs/product/definition.md`, `docs/architecture/release-architecture.md`.
 - **ROOT-011** (defect, security, low): Adopt fixed weekly usage windows (migration plus rolling-usage and reset display changes). Files: `apps/web/db/neon/0351_managed_usage_fixed_weekly_window.sql`, `apps/web/db/neon/down/0351_managed_usage_fixed_weekly_window.down.sql`, `apps/web/db/neon/managed-usage-fixed-weekly-window-migration.test.ts`.
