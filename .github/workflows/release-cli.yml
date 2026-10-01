@@ -225,32 +225,46 @@ jobs:
 
       - name: Build (cargo)
         if: '!matrix.cross'
+        shell: bash
         env:
+          CLI_BUILD_TARGET: ${{ matrix.target }}
+          CLI_BUILD_VOICE: ${{ runner.os != 'Linux' }}
           AGI_CLI_SENTRY_DSN: ${{ secrets.SENTRY_DSN_CLI }}
         # Voice ships on macOS and Windows only: cpal links libasound on Linux,
         # which would stop the binary from starting on hosts without ALSA.
-        run: cargo build --locked --release --target ${{ matrix.target }} -p agiworkforce-cli ${{ runner.os != 'Linux' && '--features voice' || '' }}
+        run: |
+          args=(--locked --release --target "$CLI_BUILD_TARGET" -p agiworkforce-cli)
+          if [[ "$CLI_BUILD_VOICE" == true ]]; then
+            args+=(--features voice)
+          fi
+          cargo build "${args[@]}"
 
       - name: Stage binary
         shell: bash
+        env:
+          CLI_PLATFORM: ${{ matrix.platform }}
+          CLI_MATRIX_OS: ${{ matrix.os }}
+          CLI_TARGET: ${{ matrix.target }}
         run: |
-          mkdir -p dist/cli/${{ matrix.platform }}/bin
-          if [[ "${{ matrix.os }}" == windows-* ]]; then
-            cp target/${{ matrix.target }}/release/agi.exe dist/cli/${{ matrix.platform }}/bin/
-            cp target/${{ matrix.target }}/release/agiworkforce.exe dist/cli/${{ matrix.platform }}/bin/
+          mkdir -p "dist/cli/${CLI_PLATFORM}/bin"
+          if [[ "$CLI_MATRIX_OS" == windows-* ]]; then
+            cp "target/${CLI_TARGET}/release/agi.exe" "dist/cli/${CLI_PLATFORM}/bin/"
+            cp "target/${CLI_TARGET}/release/agiworkforce.exe" "dist/cli/${CLI_PLATFORM}/bin/"
           else
-            cp target/${{ matrix.target }}/release/agi dist/cli/${{ matrix.platform }}/bin/
-            cp target/${{ matrix.target }}/release/agiworkforce dist/cli/${{ matrix.platform }}/bin/
-            chmod +x dist/cli/${{ matrix.platform }}/bin/agi
-            chmod +x dist/cli/${{ matrix.platform }}/bin/agiworkforce
+            cp "target/${CLI_TARGET}/release/agi" "dist/cli/${CLI_PLATFORM}/bin/"
+            cp "target/${CLI_TARGET}/release/agiworkforce" "dist/cli/${CLI_PLATFORM}/bin/"
+            chmod +x "dist/cli/${CLI_PLATFORM}/bin/agi"
+            chmod +x "dist/cli/${CLI_PLATFORM}/bin/agiworkforce"
           fi
 
       - name: Archive (tar.gz)
         if: matrix.archive == 'tar.gz'
         shell: bash
+        env:
+          CLI_PLATFORM: ${{ matrix.platform }}
         run: |
-          ARCHIVE_PLATFORM="${{ matrix.platform }}"
-          tar -czf "agiworkforce-${ARCHIVE_PLATFORM}.tar.gz" -C dist/cli/${{ matrix.platform }}/bin .
+          ARCHIVE_PLATFORM="$CLI_PLATFORM"
+          tar -czf "agiworkforce-${ARCHIVE_PLATFORM}.tar.gz" -C "dist/cli/${CLI_PLATFORM}/bin" .
 
       - name: Archive (zip)
         if: matrix.archive == 'zip'
@@ -263,10 +277,12 @@ jobs:
       - name: Smoke exact release archive (Unix)
         if: matrix.smoke && matrix.archive == 'tar.gz'
         shell: bash
+        env:
+          CLI_PLATFORM: ${{ matrix.platform }}
         run: |
           SMOKE_ROOT="$RUNNER_TEMP/agi-cli-release-smoke"
           mkdir -p "$SMOKE_ROOT"
-          tar -xzf "agiworkforce-${{ matrix.platform }}.tar.gz" -C "$SMOKE_ROOT"
+          tar -xzf "agiworkforce-${CLI_PLATFORM}.tar.gz" -C "$SMOKE_ROOT"
           AGI_CLI_SMOKE_BINARY="$SMOKE_ROOT/agi" \
             AGI_CLI_SMOKE_REQUIRE_ALIAS=1 \
             node apps/cli/scripts/cli-smoke.mjs
