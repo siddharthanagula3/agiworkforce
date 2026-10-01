@@ -30,6 +30,8 @@ function scanReport(results = [], overrides = {}) {
     results,
     errors: [],
     paths: { scanned: ['apps/web/lib/session.ts'] },
+    skipped_rules: [],
+    time: { fixpoint_timeouts: [] },
     ...overrides,
   };
 }
@@ -60,6 +62,37 @@ function runGate({
 const ACCEPTED = {
   entries: [{ rule: RULE, owner: '@siddhartha', expires: FAR_FUTURE, reason: 'fixture' }],
 };
+
+test('zero warnings refuse explicitly supplied missing original coverage provenance', () => {
+  const result = runGate({
+    results: [],
+    allowlist: { entries: [] },
+    flags: [
+      '--expected-version',
+      '1.172.0',
+      '--rule-bundle',
+      '/missing-coverage-fixture/bundle.json',
+      '--source-context',
+      '/missing-coverage-fixture/context.json',
+    ],
+  });
+  assert.equal(result.status, 1);
+});
+
+for (const flags of [
+  ['--expected-version'],
+  ['--expected-version', '--rule-bundle', 'private'],
+  ['--expected-version', '1.178.0'],
+  ['--rule-bundle', 'private', '--source-context', 'private'],
+  ['--expected-version', '1.178.0', '--expected-version', '1.178.0'],
+  ['--unrecognized-coverage-option'],
+  ['--allowlist-only', '--allowlist-only'],
+]) {
+  test(`invalid coverage options ${flags.filter((value) => value.startsWith('--')).join(',')} fail closed`, () => {
+    const result = runGate({ results: [], allowlist: { entries: [] }, flags });
+    assert.equal(result.status, 1);
+  });
+}
 
 test('a finding with no allowlist entry fails the gate', () => {
   const result = runGate({ results: [finding()], allowlist: { entries: [] } });
@@ -319,5 +352,69 @@ test('invalid JSON diagnostics do not echo report contents', () => {
   const result = runGate({ rawReport: marker, allowlist: { entries: [] } });
   assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
   assert.match(result.stderr, /not valid JSON/);
+  assert.ok(!`${result.stdout}${result.stderr}`.includes(marker));
+});
+
+const INTERNAL_WARNING = {
+  error_type: 'Fixpoint timeout',
+  message: `Fixpoint timeout while performing taint analysis at fixture.ts:1:1 [rules: 1, first: ${RULE}]`,
+  location: { path: 'apps/web/lib/session.ts', start: { line: 1, col: 1 } },
+};
+
+for (const [name, overrides] of [
+  ['missing skipped rules', { skipped_rules: undefined }],
+  ['null skipped rules', { skipped_rules: null }],
+  ['object skipped rules', { skipped_rules: {} }],
+  ['nonempty skipped rules', { skipped_rules: [{ rule_id: RULE }] }],
+  ['missing profiling', { time: undefined }],
+  ['null profiling', { time: null }],
+  ['missing fixpoint diagnostics', { time: {} }],
+  ['null fixpoint diagnostics', { time: { fixpoint_timeouts: null } }],
+  ['object fixpoint diagnostics', { time: { fixpoint_timeouts: {} } }],
+]) {
+  test(`${name} cannot pass as complete internal analysis`, () => {
+    const result = runGate({ report: scanReport([], overrides), allowlist: { entries: [] } });
+    assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
+    assert.doesNotMatch(result.stdout, /gate passed/);
+  });
+}
+
+for (const [name, warning] of [
+  ['faithful unresolved warning', INTERNAL_WARNING],
+  ['null warning', null],
+  ['unknown warning type', { ...INTERNAL_WARNING, error_type: 'unknown' }],
+  ['missing location', { ...INTERNAL_WARNING, location: undefined }],
+  [
+    'unselected source',
+    { ...INTERNAL_WARNING, location: { path: 'other.ts', start: { line: 1 } } },
+  ],
+  [
+    'invalid source position',
+    { ...INTERNAL_WARNING, location: { path: 'apps/web/lib/session.ts', start: { line: 0 } } },
+  ],
+  [
+    'aggregate rules',
+    { ...INTERNAL_WARNING, message: INTERNAL_WARNING.message.replace('rules: 1', 'rules: 2') },
+  ],
+]) {
+  test(`${name} requires verified structural coverage before acceptance`, () => {
+    const result = runGate({
+      report: scanReport([], { time: { fixpoint_timeouts: [warning] } }),
+      allowlist: { entries: [] },
+    });
+    assert.equal(result.status, 1, `${result.stdout}${result.stderr}`);
+    assert.doesNotMatch(result.stdout, /gate passed/);
+  });
+}
+
+test('internal diagnostics never echo source or vendor message values', () => {
+  const marker = 'synthetic-internal-private-marker';
+  const result = runGate({
+    report: scanReport([], {
+      time: { fixpoint_timeouts: [{ ...INTERNAL_WARNING, message: marker }] },
+    }),
+    allowlist: { entries: [] },
+  });
+  assert.equal(result.status, 1);
   assert.ok(!`${result.stdout}${result.stderr}`.includes(marker));
 });

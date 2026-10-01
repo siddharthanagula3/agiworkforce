@@ -170,7 +170,7 @@
     "db:rls-probe": "node apps/web/scripts/rls-probe.mjs",
     "db:lease-probe": "node apps/web/scripts/managed-usage-lease-probe.mjs",
     "test:db-migrate": "node --test scripts/neon-migrate.test.mjs",
-    "check:ci-guardrails": "node scripts/check-ci-guardrails.mjs && node --test scripts/production-deploy-scope.test.mjs scripts/verify-deployment.test.mjs scripts/check-semgrep-findings.test.mjs scripts/check-ci-lane-independence.test.mjs scripts/ci-failure-attribution.test.mjs scripts/check-action-pins.test.mjs",
+    "check:ci-guardrails": "node scripts/check-ci-guardrails.mjs && node --test scripts/production-deploy-scope.test.mjs scripts/verify-deployment.test.mjs scripts/check-semgrep-findings.test.mjs scripts/semgrep-coverage.test.mjs scripts/run-semgrep.test.mjs scripts/check-ci-lane-independence.test.mjs scripts/ci-failure-attribution.test.mjs scripts/check-action-pins.test.mjs",
     "check:cross-version-matrix": "node --test scripts/check-cross-version-matrix.test.mjs && node scripts/check-cross-version-matrix.mjs",
     "check:codeowners": "node scripts/check-codeowners-contract.mjs",
     "check:doc-status": "node scripts/check-doc-status.mjs",

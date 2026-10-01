@@ -383,6 +383,8 @@ jobs:
     name: Security scans
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      SEMGREP_VERSION: '1.178.0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -444,22 +446,18 @@ jobs:
         id: semgrep
         shell: bash
         run: |
-          set -uo pipefail
-          python3 -m pip install --quiet --disable-pip-version-check semgrep==1.172.0
-          set +e
-          semgrep scan \
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check "semgrep==$SEMGREP_VERSION"
+          if ! python3 scripts/run-semgrep.py \
+            --expected-version "$SEMGREP_VERSION" \
             --config p/security-audit \
             --config p/typescript \
             --config p/owasp-top-ten \
-            --metrics=off \
             --timeout=30 \
             --jobs=1 \
-            --json --output semgrep-results.json
-          status=$?
-          set -e
-
-          if [ "$status" -ge 2 ]; then
-            echo "::error::Semgrep failed to run (exit $status). This is a broken scanner, not a clean scan."
+            --state-dir "$RUNNER_TEMP/semgrep-analysis" \
+            --output semgrep-results.json; then
+            echo "::error::This is a broken scanner, not a clean scan."
             exit 1
           fi
 
@@ -476,11 +474,19 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: semgrep-results
-          path: semgrep-results.json
+          path: |
+            semgrep-results.json
+            ${{ runner.temp }}/semgrep-analysis/rules.json
+            ${{ runner.temp }}/semgrep-analysis/source-context.json
           retention-days: 14
 
       - name: Semgrep gate (unaccepted findings block the merge)
-        run: node scripts/check-semgrep-findings.mjs semgrep-results.json
+        shell: bash
+        run: |
+          node scripts/check-semgrep-findings.mjs semgrep-results.json scripts/semgrep-allowlist.json \
+            --expected-version "$SEMGREP_VERSION" \
+            --rule-bundle "$RUNNER_TEMP/semgrep-analysis/rules.json" \
+            --source-context "$RUNNER_TEMP/semgrep-analysis/source-context.json"
 
   contracts:
     name: Contracts and schemas
