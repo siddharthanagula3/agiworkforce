@@ -269,10 +269,9 @@ jobs:
       - name: Archive (zip)
         if: matrix.archive == 'zip'
         shell: pwsh
-        run: |
-          $archivePlatform = "${{ matrix.platform }}".Replace("win32-", "windows-")
-          cd dist/cli/${{ matrix.platform }}/bin
-          7z a "../../../../agiworkforce-$archivePlatform.zip" *
+        env:
+          CLI_PLATFORM: ${{ matrix.platform }}
+        run: . ./scripts/release/archive-cli-windows.ps1
 
       - name: Smoke exact release archive (Unix)
         if: matrix.smoke && matrix.archive == 'tar.gz'
