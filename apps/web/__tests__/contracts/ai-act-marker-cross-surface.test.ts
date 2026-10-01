@@ -14,7 +14,7 @@ const FIXTURE_MODEL_ID = 'fixture-cross-surface-model';
 const GENERATED_AT = '2026-05-17T00:00:00.000Z';
 
 function claimFromSidecar(payload: string): unknown {
-  const sidecar = payload.match(/<!-- agi:ai-generated:c2pa-claim (.*?) -->/)?.[1];
+  const sidecar = payload.match(/\x3c!-- agi:ai-generated:c2pa-claim (.*?) -->/)?.[1];
   if (!sidecar) throw new Error('no c2pa sidecar in payload');
   return JSON.parse(sidecar);
 }

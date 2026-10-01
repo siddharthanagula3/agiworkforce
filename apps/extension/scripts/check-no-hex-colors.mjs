@@ -43,7 +43,7 @@ const EXEMPT_LINE_RE = [
   /^\s*\/\//, // single-line TS/JS comment
   /^\s*\*/, // JSDoc / block comment continuation
   /^\s*\/\*/, // block comment open
-  /<!--/, // HTML comment
+  /\x3c!--/, // HTML comment
   /theme-color/, // <meta name="theme-color" ...>
   /color-scheme/, // <meta name="color-scheme" ...>
   /<meta[^>]+content/, // any <meta> with content attribute (covers theme-color meta)

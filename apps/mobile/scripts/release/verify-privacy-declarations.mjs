@@ -10,7 +10,7 @@ const XCPRIVACY_PATH = path.join(mobileRoot, 'store-listing/ios/PrivacyInfo.xcpr
 const DATA_SAFETY_PATH = path.join(mobileRoot, 'store-listing/android/data-safety.json');
 
 function stripComments(xml) {
-  return xml.replace(/<!--[\s\S]*?-->/gu, '');
+  return xml.replace(/\x3c!--[\s\S]*?-->/gu, '');
 }
 
 function sliceArray(xml, key) {
