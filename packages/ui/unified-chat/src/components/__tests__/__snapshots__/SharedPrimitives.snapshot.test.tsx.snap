@@ -160,7 +160,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
     <div
       aria-hidden="true"
       class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-muted-foreground"
-      style="color: rgb(16, 185, 129);"
+      style="color: rgb(16, 185, 129); background-color: color-mix(in srgb, rgb(16, 185, 129) 10%, transparent); border-color: color-mix(in srgb, rgb(16, 185, 129) 30%, transparent);"
     >
       <svg
         class="h-6 w-6"
