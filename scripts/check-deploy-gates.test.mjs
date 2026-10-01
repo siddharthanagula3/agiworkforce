@@ -45,6 +45,9 @@ function fixture(mutate, contractOverrides = {}) {
     stringify(readWorkflow(REPO_ROOT, relayWorkflow)),
   );
   writeFileSync(path.join(root, WORKFLOW_DIR, 'deploy-staging.yml'), stringify(stagingWorkflow));
+  for (const file of contract.releaseReadiness.workflows) {
+    writeFileSync(path.join(root, WORKFLOW_DIR, file), stringify(readWorkflow(REPO_ROOT, file)));
+  }
   writeFileSync(
     path.join(root, CONTRACT_PATH),
     JSON.stringify({ ...contract, ...contractOverrides }),
@@ -852,5 +855,46 @@ test('the deployment guard requires explicit protected aliases for build and dep
         }).some((error) => /staging database binding/.test(error)),
       );
     }
+  }
+});
+
+test('candidate release workflows produce evidence for documentation-only main pushes', () => {
+  for (const file of contract.releaseReadiness.workflows) {
+    const push = readWorkflow(REPO_ROOT, file).on?.push;
+    assert.ok(push?.branches?.includes('main'), `${file} must run on main`);
+    for (const filter of ['paths', 'paths-ignore', 'branches-ignore']) {
+      assert.equal(Object.hasOwn(push, filter), false, `${file} filters candidate evidence`);
+    }
+  }
+});
+
+test('the deployment guard rejects missing or filtered candidate release workflows', () => {
+  for (const file of contract.releaseReadiness.workflows) {
+    for (const mutate of [
+      (document) => {
+        delete document.on.push;
+      },
+      (document) => {
+        document.on.push.paths = ['apps/**'];
+      },
+      (document) => {
+        document.on.push['paths-ignore'] = ['docs/**'];
+      },
+      (document) => {
+        document.on.push.branches = ['develop'];
+      },
+      (document) => {
+        document.on.push.branches = ['main', '!main'];
+      },
+    ]) {
+      const root = fixture(() => {});
+      const document = readWorkflow(root, file);
+      mutate(document);
+      writeFileSync(path.join(root, WORKFLOW_DIR, file), stringify(document));
+      assert.ok(checkDeployGates(root).errors.some((error) => error.startsWith(`${file}:`)));
+    }
+    const root = fixture(() => {});
+    rmSync(path.join(root, WORKFLOW_DIR, file));
+    assert.ok(checkDeployGates(root).errors.some((error) => error.startsWith(`${file}:`)));
   }
 });

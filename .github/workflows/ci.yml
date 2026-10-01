@@ -3,10 +3,6 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - '.github/ISSUE_TEMPLATE/**'
   pull_request:
     branches: [main]
     paths-ignore:
@@ -718,6 +714,7 @@ jobs:
           xvfb-run --auto-servernum cargo test --locked -p agiworkforce-cli
           cargo test --locked --workspace --lib --exclude agiworkforce-desktop --exclude agiworkforce-cli
           cargo test --locked -p agiworkforce-app-server -p agiworkforce-protocol
+          cargo test --locked -p agiworkforce-mcp
 
       - name: Prepare the mobile privacy parser
         run: pnpm --filter @agiworkforce/mobile setup:privacy-parser

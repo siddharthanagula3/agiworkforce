@@ -200,6 +200,11 @@ requireIncludes(
 );
 requireGatedByCi('bash apps/desktop/check-wiring.sh', 'pnpm check:tauri-wiring');
 requireIncludes('.github/workflows/ci.yml', 'cargo test --locked -p agiworkforce-cli');
+requireMatches(
+  '.github/workflows/ci.yml',
+  /^\s*cargo test --locked -p agiworkforce-mcp\s*$/m,
+  'run the full MCP package, including integration tests',
+);
 requireNotIncludes(
   '.github/workflows/ci.yml',
   'cargo test --locked -p agiworkforce-desktop -p agiworkforce-cli --lib',

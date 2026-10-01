@@ -18,19 +18,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'apps/**'
-      - 'packages/**'
-      - 'crates/**'
-      - 'services/**'
-      - 'tools/evals/**'
-      - '.github/workflows/test-l1.yml'
-      - 'scripts/run-coverage*'
-      - 'scripts/check-coverage-floors*'
-      - 'scripts/lib/coverage-floors.mjs'
-      - 'vitest.config.ts'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
 
 concurrency:
   group: tests-l1-${{ github.ref }}
