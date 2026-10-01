@@ -21,6 +21,71 @@ fn stdio_cfg(mode: &str) -> TransportConfig {
     }
 }
 
+async fn assert_stdout_frame_closed(mode: &str) {
+    let timeouts = McpTimeouts {
+        max_frame_bytes: Some(4096),
+        list_tools: Duration::from_millis(500),
+        ..McpTimeouts::default()
+    };
+    let mut client = McpClient::connect(
+        "stdout-frame-cap",
+        stdio_cfg(mode),
+        timeouts,
+        support::decline_hooks(),
+    )
+    .await
+    .expect("the ordinary handshake fits within the configured frame cap");
+    let response = tokio::time::timeout(Duration::from_secs(3), client.list_tools()).await;
+    let _ = client.shutdown().await;
+    assert!(
+        client
+            .drain_stderr()
+            .iter()
+            .any(|line| line == "stdout frame prefix flushed"),
+        "the child must flush a full cap-sized prefix before the refusal assertion"
+    );
+    let error = response
+        .expect("frame refusal must finish without waiting for a delimiter")
+        .expect_err("stdout beyond the configured frame cap must be refused");
+    let detail = format!("{error:#}");
+    assert!(detail.contains("MCP server closed connection"), "{detail}");
+    assert!(!detail.contains("response timeout"), "{detail}");
+}
+
+#[tokio::test]
+async fn stdio_stdout_complete_oversized_frame_is_closed() {
+    assert_stdout_frame_closed("stdout-oversized-frame").await;
+}
+
+#[tokio::test]
+async fn stdio_stdout_incomplete_oversized_frame_is_closed_before_newline() {
+    assert_stdout_frame_closed("stdout-unfinished-frame").await;
+}
+
+#[tokio::test]
+async fn stdio_stdout_configured_cap_preserves_ordinary_frames() {
+    let mut client = McpClient::connect(
+        "stdout-normal",
+        stdio_cfg("normal"),
+        McpTimeouts {
+            max_frame_bytes: Some(4096),
+            ..McpTimeouts::default()
+        },
+        support::decline_hooks(),
+    )
+    .await
+    .expect("the ordinary handshake fits within the configured cap");
+    let tools = client.list_tools().await.expect("ordinary tool list");
+    assert_eq!(tools.len(), 1);
+    let result = client
+        .call_tool_value("echo", serde_json::json!({ "text": "λ🙂" }))
+        .await
+        .expect("ordinary tool call")
+        .expect("tool response");
+    assert_eq!(result["content"][0]["text"], "λ🙂");
+    client.shutdown().await.expect("the child shuts down");
+}
+
 #[tokio::test]
 async fn stdio_list_and_call() {
     let mut client = McpClient::connect(

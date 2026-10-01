@@ -70,6 +70,25 @@ fn main() {
             "notifications/initialized" => {}
             "notifications/cancelled" => {}
             "tools/list" => {
+                if mode == "stdout-oversized-frame" || mode == "stdout-unfinished-frame" {
+                    let bytes = if mode == "stdout-oversized-frame" {
+                        let mut frame = serde_json::to_vec(&serde_json::json!({
+                            "jsonrpc": "2.0", "id": id,
+                            "result": { "tools": [], "padding": "x".repeat(8192) }
+                        }))
+                        .unwrap();
+                        frame.push(b'\n');
+                        frame
+                    } else {
+                        vec![b'x'; 8192]
+                    };
+                    stdout.write_all(&bytes[..4096]).unwrap();
+                    stdout.flush().unwrap();
+                    writeln!(std::io::stderr(), "stdout frame prefix flushed").unwrap();
+                    let _ = stdout.write_all(&bytes[4096..]);
+                    let _ = stdout.flush();
+                    continue;
+                }
                 if mode == "stale" {
                     // Never answer, block until the child is killed. The client
                     // times out on this request.

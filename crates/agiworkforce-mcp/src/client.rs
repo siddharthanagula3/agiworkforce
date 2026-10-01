@@ -1080,11 +1080,10 @@ async fn open_conn(
     stderr_buf: &Arc<StderrBuffer>,
 ) -> Result<Conn> {
     Ok(match config {
-        TransportConfig::Stdio { command, args, env } => Conn::Stdio(StdioConn::spawn(
+        TransportConfig::Stdio { .. } => Conn::Stdio(StdioConn::spawn(
             server_name,
-            command,
-            args,
-            env,
+            config,
+            timeouts,
             stderr_buf,
             Arc::clone(events),
             hooks.clone(),
