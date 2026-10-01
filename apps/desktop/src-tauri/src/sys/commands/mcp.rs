@@ -1813,7 +1813,7 @@ mod filesystem_root_update_tests {
 
         let root = std::env::temp_dir().to_string_lossy().to_string();
         let changed = state
-            .update_filesystem_roots_for_session(&[root.clone()])
+            .update_filesystem_roots_for_session(std::slice::from_ref(&root))
             .await
             .expect("root update should succeed");
 

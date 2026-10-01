@@ -774,7 +774,7 @@ mod tests {
             env.get("AGI_HOOK_META_FILE"),
             Some(&"/tmp/test.txt".to_string())
         );
-        assert!(env.get("AGI_HOOK_CONTEXT_JSON").is_some());
+        assert!(env.contains_key("AGI_HOOK_CONTEXT_JSON"));
     }
 
     #[tokio::test]

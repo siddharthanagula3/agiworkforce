@@ -46,27 +46,29 @@
 //!   builder. Byte-parity is proven here for the covered common feature
 //!   surface modulo the enumerated deltas, but these stay on their adapters
 //!   because the two sides are not yet feature-equivalent:
-//!     CRATE GAPS (must be fixed before any switch):
-//!       * openai: no `items:{}` normalization for array tool schemas
-//!         (OpenAI rejects with `invalid_function_parameters`;
-//!         `ArrayItemsNormalized`) and no `image_url.detail` support;
-//!       * openai-responses: no `reasoning.effort` support at all;
-//!       * gemini: always sends `generationConfig.maxOutputTokens`, emitting
-//!         a literal `0` when the caller has no cap (`AlwaysMaxOutputTokens`)
-//!         and has no `thinkingConfig` support
-//!       (pinned by `crate_builders_cannot_express_desktop_features`).
-//!     DESKTOP-ONLY FEATURES the crate cannot express on these dialects:
-//!     tool_choice (crate type exists; not yet serialized for them),
-//!     output_config/response_format, server tools, audio, background,
-//!     previous_response_id, catalog model-id mapping (`get_api_model_id`),
-//!     and the FIX-007 max-tokens clamp (the latter two stay desktop
-//!     caller-side by design, as the anthropic switch shows).
-//!     CRATE-SIDE FIXES the desktop would GAIN by switching: openai
-//!     `stream_options.include_usage`, correct openai chat-completions tool
-//!     history (the desktop adapter DROPS assistant `tool_calls` and
-//!     `tool_call_id`: see `openai_chat_tool_history_divergence`), and
-//!     correct gemini functionResponse role/name (see
-//!     `gemini_tool_result_divergence`).
+//!   CRATE GAPS (must be fixed before any switch):
+//!   * openai: no `items:{}` normalization for array tool schemas
+//!     (OpenAI rejects with `invalid_function_parameters`;
+//!     `ArrayItemsNormalized`) and no `image_url.detail` support;
+//!   * openai-responses: no `reasoning.effort` support at all;
+//!   * gemini: always sends `generationConfig.maxOutputTokens`, emitting
+//!     a literal `0` when the caller has no cap (`AlwaysMaxOutputTokens`)
+//!     and has no `thinkingConfig` support
+//!     (pinned by `crate_builders_cannot_express_desktop_features`).
+//!
+//!   DESKTOP-ONLY FEATURES the crate cannot express on these dialects:
+//!   tool_choice (crate type exists; not yet serialized for them),
+//!   output_config/response_format, server tools, audio, background,
+//!   previous_response_id, catalog model-id mapping (`get_api_model_id`),
+//!   and the FIX-007 max-tokens clamp (the latter two stay desktop
+//!   caller-side by design, as the anthropic switch shows).
+//!
+//!   CRATE-SIDE FIXES the desktop would GAIN by switching: openai
+//!   `stream_options.include_usage`, correct openai chat-completions tool
+//!   history (the desktop adapter DROPS assistant `tool_calls` and
+//!   `tool_call_id`: see `openai_chat_tool_history_divergence`), and
+//!   correct gemini functionResponse role/name (see
+//!   `gemini_tool_result_divergence`).
 //!
 //! Model ids in fixtures are deliberately NON-CATALOG so the desktop's
 //! catalog model-id mapping (`get_api_model_id`, `get_canonicalized_id`) is

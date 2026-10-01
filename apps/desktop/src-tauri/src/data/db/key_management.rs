@@ -210,9 +210,9 @@ pub fn open_registered_main_database_connection() -> Result<Connection, String> 
 
     #[cfg(test)]
     {
-        return crate::data::db::encryption::open_keyed_connection(
+        crate::data::db::encryption::open_keyed_connection(
             crate::sys::utils::database_path().map_err(|error| error.to_string())?,
-        );
+        )
     }
 
     #[cfg(not(test))]

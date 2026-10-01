@@ -445,7 +445,7 @@ impl AgentOrchestrator {
         if let Some(agent) = agents.get_mut(id) {
             tracing::info!("[Orchestrator] Cancelling agent {}", id);
 
-            agent.core.stop();
+            agent.core.cancel_goal(&agent.goal.id).await?;
 
             agent.status.status = AgentState::Failed;
             agent.status.error = Some("Cancelled by user".to_string());
@@ -878,6 +878,245 @@ impl AgentOrchestrator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::automation::{input::ClipboardManager, PlatformDriver};
+    use crate::core::llm::{LLMProvider, LLMRequest, LLMResponse, Provider};
+    use agiworkforce_model_registry::TrustMode;
+    use std::error::Error;
+    use std::process::Command;
+    use std::time::Duration;
+    use tokio::sync::Notify;
+
+    struct PendingRequest {
+        stopped: Arc<Notify>,
+    }
+
+    impl Drop for PendingRequest {
+        fn drop(&mut self) {
+            self.stopped.notify_one();
+        }
+    }
+
+    struct BlockingProvider {
+        entered: Arc<Notify>,
+        stopped: Arc<Notify>,
+    }
+
+    #[async_trait::async_trait]
+    impl LLMProvider for BlockingProvider {
+        async fn send_message(
+            &self,
+            _request: &LLMRequest,
+        ) -> std::result::Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+            let _pending_request = PendingRequest {
+                stopped: self.stopped.clone(),
+            };
+            self.entered.notify_one();
+            std::future::pending().await
+        }
+
+        fn is_configured(&self) -> bool {
+            true
+        }
+
+        fn name(&self) -> &str {
+            "ollama"
+        }
+    }
+
+    fn run_isolated_cancellation_test(name: &str) -> bool {
+        let module = module_path!().split_once("::").expect("test module path").1;
+        let test_name = format!("{module}::{name}");
+        if std::env::var("AGIWORKFORCE_CANCELLATION_TEST_CHILD").as_deref()
+            == Ok(test_name.as_str())
+        {
+            let app_data = std::env::var_os("AGIWORKFORCE_APP_DATA_DIR")
+                .expect("isolated child app data directory");
+            assert!(std::fs::symlink_metadata(&app_data)
+                .expect("isolated child app data metadata")
+                .is_dir());
+            return false;
+        }
+
+        let app_data = tempfile::tempdir().expect("isolated cancellation app data");
+        let output = Command::new(std::env::current_exe().expect("test executable"))
+            .args(["--exact", &test_name, "--nocapture", "--test-threads=1"])
+            .env("AGIWORKFORCE_CANCELLATION_TEST_CHILD", &test_name)
+            .env("AGIWORKFORCE_APP_DATA_DIR", app_data.path())
+            .output()
+            .expect("run isolated cancellation regression");
+        let stdout = String::from_utf8(output.stdout).expect("libtest output");
+        let stderr = String::from_utf8(output.stderr).expect("libtest errors");
+        assert!(
+            output.status.success(),
+            "isolated cancellation regression failed: {stdout}\n{stderr}"
+        );
+        assert!(stdout.contains("1 passed; 0 failed; 0 ignored;"));
+        true
+    }
+
+    fn cancellation_fixture() -> (AgentOrchestrator, Arc<Notify>, Arc<Notify>) {
+        let entered = Arc::new(Notify::new());
+        let stopped = Arc::new(Notify::new());
+        let mut router = LLMRouter::new();
+        router.set_provider(
+            Provider::Ollama,
+            Box::new(BlockingProvider {
+                entered: entered.clone(),
+                stopped: stopped.clone(),
+            }),
+        );
+        let automation = Arc::new(AutomationService {
+            native: PlatformDriver::new().expect("native automation constructor"),
+            keyboard: TokioMutex::new(None),
+            mouse: TokioMutex::new(None),
+            clipboard: TokioMutex::new(ClipboardManager::default()),
+        });
+        let orchestrator = AgentOrchestrator::new(
+            1,
+            AGIConfig::default(),
+            Arc::new(tokio::sync::RwLock::new(router)),
+            automation,
+            None,
+        )
+        .expect("isolated orchestrator");
+        (orchestrator, entered, stopped)
+    }
+
+    fn cancellation_goal() -> Goal {
+        Goal {
+            id: Uuid::new_v4().to_string(),
+            description: "Write a file for the cancellation regression".to_string(),
+            priority: Priority::Medium,
+            deadline: None,
+            constraints: vec![
+                Constraint {
+                    name: "execution_model".to_string(),
+                    value: ConstraintValue::Custom {
+                        key: "execution_model".to_string(),
+                        value: crate::core::llm::models_config::get_default_model(
+                            &Provider::Ollama,
+                        )
+                        .to_string(),
+                    },
+                },
+                Constraint {
+                    name: "execution_provider".to_string(),
+                    value: ConstraintValue::Custom {
+                        key: "execution_provider".to_string(),
+                        value: Provider::Ollama.as_string().to_string(),
+                    },
+                },
+            ],
+            success_criteria: vec!["The requested file exists".to_string()],
+            trust_mode: Some(TrustMode::Local),
+        }
+    }
+
+    #[tokio::test]
+    async fn manual_cancellation_stops_the_submitted_goal_worker() {
+        if run_isolated_cancellation_test("manual_cancellation_stops_the_submitted_goal_worker") {
+            return;
+        }
+        let (orchestrator, entered, stopped) = cancellation_fixture();
+        let goal = cancellation_goal();
+        let agent_id = orchestrator
+            .spawn_agent(goal.clone())
+            .await
+            .expect("submit a real agent goal");
+        tokio::time::timeout(Duration::from_secs(5), entered.notified())
+            .await
+            .expect("the goal worker reached the blocked provider");
+        {
+            let agents = orchestrator.agents.lock().await;
+            let agent = agents.get(&agent_id).expect("submitted agent");
+            assert_eq!(
+                agent.core.get_task_state(&goal.id),
+                Some(AgentTaskState::Running)
+            );
+            assert!(agent
+                .core
+                .list_goals()
+                .iter()
+                .any(|active| active.id == goal.id));
+        }
+
+        orchestrator
+            .cancel_agent(&agent_id)
+            .await
+            .expect("manual cancellation");
+        tokio::time::timeout(Duration::from_secs(5), stopped.notified())
+            .await
+            .expect("manual cancellation dropped the pending provider future");
+        let agents = orchestrator.agents.lock().await;
+        let agent = agents.get(&agent_id).expect("cancelled agent");
+        assert_eq!(
+            agent.core.get_task_state(&goal.id),
+            Some(AgentTaskState::Cancelled)
+        );
+        assert!(!agent
+            .core
+            .list_goals()
+            .iter()
+            .any(|active| active.id == goal.id));
+        assert_eq!(agent.status.status, AgentState::Failed);
+        assert_eq!(agent.status.error.as_deref(), Some("Cancelled by user"));
+        assert!(agent.status.completed_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn manual_cancellation_failure_preserves_the_live_agent_status() {
+        if run_isolated_cancellation_test(
+            "manual_cancellation_failure_preserves_the_live_agent_status",
+        ) {
+            return;
+        }
+        let (orchestrator, entered, stopped) = cancellation_fixture();
+        let goal = cancellation_goal();
+        let agent_id = orchestrator
+            .spawn_agent(goal.clone())
+            .await
+            .expect("submit a real agent goal");
+        tokio::time::timeout(Duration::from_secs(5), entered.notified())
+            .await
+            .expect("the goal worker reached the blocked provider");
+        let missing_goal_id = format!("missing-{}", goal.id);
+        let before_status = {
+            let mut agents = orchestrator.agents.lock().await;
+            let agent = agents.get_mut(&agent_id).expect("submitted agent");
+            agent.goal.id = missing_goal_id.clone();
+            serde_json::to_value(&agent.status).expect("status before cancellation")
+        };
+
+        let result = orchestrator.cancel_agent(&agent_id).await;
+        let (after_status, task_state, still_active) = {
+            let agents = orchestrator.agents.lock().await;
+            let agent = agents.get(&agent_id).expect("live agent");
+            let status = serde_json::to_value(&agent.status).expect("status after cancellation");
+            let task_state = agent.core.get_task_state(&goal.id);
+            let still_active = agent
+                .core
+                .list_goals()
+                .iter()
+                .any(|active| active.id == goal.id);
+            agent
+                .core
+                .cancel_goal(&goal.id)
+                .await
+                .expect("stop the fixture worker");
+            (status, task_state, still_active)
+        };
+        tokio::time::timeout(Duration::from_secs(5), stopped.notified())
+            .await
+            .expect("the fixture worker stopped");
+        let error = result.expect_err("a missing goal cannot be reported as cancelled");
+        assert_eq!(
+            error.to_string(),
+            format!("Goal {missing_goal_id} not found")
+        );
+        assert_eq!(after_status, before_status);
+        assert_eq!(task_state, Some(AgentTaskState::Running));
+        assert!(still_active);
+    }
 
     #[test]
     fn test_resource_lock_file() {

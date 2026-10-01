@@ -265,7 +265,7 @@ async fn test_executor_with_working_dir() {
     assert_eq!(results.len(), 1);
     assert!(results[0].success);
     // The output should contain the temp directory path
-    assert!(results[0].stdout.trim().len() > 0);
+    assert!(!results[0].stdout.trim().is_empty());
 }
 
 #[tokio::test]

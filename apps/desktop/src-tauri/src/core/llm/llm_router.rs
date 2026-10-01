@@ -2244,8 +2244,7 @@ mod streaming_cost_guard_tests {
         let cumulative = Arc::new(parking_lot::Mutex::new(0.0));
         let (model, provider) = priced_model();
         let content = "observed streamed output before cancellation";
-        let observed_output = u32::try_from(TokenCounter::estimate_text_tokens(content))
-            .expect("test output estimate must fit");
+        let observed_output = TokenCounter::estimate_text_tokens(content);
         let priced_on =
             chrono::NaiveDate::from_ymd_opt(2026, 9, 1).expect("valid fixed pricing date");
         {
@@ -2286,8 +2285,7 @@ mod streaming_cost_guard_tests {
         let cumulative = Arc::new(parking_lot::Mutex::new(0.0));
         let (model, provider) = priced_model();
         let content = "enough observed streamed output to exceed one partial token";
-        let observed_output = u32::try_from(TokenCounter::estimate_text_tokens(content))
-            .expect("test output estimate must fit");
+        let observed_output = TokenCounter::estimate_text_tokens(content);
         assert!(
             observed_output > 1,
             "fixture must exceed partial provider usage"
