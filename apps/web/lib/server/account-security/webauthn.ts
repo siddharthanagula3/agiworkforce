@@ -6,7 +6,6 @@ import {
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
   type AuthenticationResponseJSON,
-  type AuthenticatorTransportFuture,
   type PublicKeyCredentialCreationOptionsJSON,
   type PublicKeyCredentialRequestOptionsJSON,
   type RegistrationResponseJSON,
@@ -21,15 +20,8 @@ import { logger } from '@/lib/logger';
 import { SITE_NAME, SITE_URL } from '@/lib/seo/site';
 import type { CredentialDeviceType, StoredCredential } from './store';
 
-const TRANSPORTS: readonly AuthenticatorTransportFuture[] = [
-  'ble',
-  'cable',
-  'hybrid',
-  'internal',
-  'nfc',
-  'smart-card',
-  'usb',
-];
+const TRANSPORTS = ['ble', 'cable', 'hybrid', 'internal', 'nfc', 'smart-card', 'usb'] as const;
+type AuthenticatorTransport = (typeof TRANSPORTS)[number];
 const PORTABLE_TRANSPORTS: ReadonlySet<string> = new Set([
   'ble',
   'cable',
@@ -52,11 +44,11 @@ export function relyingParty(): RelyingParty {
   return { id: url.hostname, name: SITE_NAME, origin: url.origin };
 }
 
-function isTransport(value: string): value is AuthenticatorTransportFuture {
+function isTransport(value: string): value is AuthenticatorTransport {
   return (TRANSPORTS as readonly string[]).includes(value);
 }
 
-function transportsOf(values: readonly string[]): AuthenticatorTransportFuture[] {
+function transportsOf(values: readonly string[]): AuthenticatorTransport[] {
   return values.filter(isTransport);
 }
 

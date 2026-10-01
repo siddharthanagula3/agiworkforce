@@ -12,6 +12,8 @@ import { ATTR_EXCEPTION_MESSAGE, ATTR_EXCEPTION_TYPE } from '@opentelemetry/sema
 import { scrubAttributes, scrubText } from '@agiworkforce/observability';
 
 import { newSpanId, newTraceId, type TraceContext } from './trace-context';
+import { retainSpanEvent } from './span-events';
+import { redactAttributes } from './redact';
 
 export type SpanKind = 'server' | 'client' | 'internal' | 'producer' | 'consumer';
 
@@ -101,5 +103,9 @@ export function startBridgedSpan(
 export function recordSpanEvent(name: string, attributes: Attributes): void {
   const span = trace.getActiveSpan();
   if (!span?.isRecording()) return;
-  span.addEvent(name, scrubAttributes(attributes));
+  const scrubbed = redactAttributes(scrubAttributes(attributes));
+  const now = Date.now();
+  const time: [number, number] = [Math.floor(now / 1000), (now % 1000) * 1e6];
+  span.addEvent(name, scrubbed, time);
+  retainSpanEvent(span, { name, attributes: scrubbed, time });
 }

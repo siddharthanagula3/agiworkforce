@@ -13,13 +13,15 @@ import {
   type SpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
-import { initOpenTelemetry, type NodeClient } from '@sentry/nextjs';
+import { suppressTracing, type init } from '@sentry/nextjs';
 
 import { deploymentAttributes } from './attributes';
 import type { OtelExportConfig } from './otel-config';
 import { keepSpanForExport } from './trace-sampling';
+import { PrivacyFilteredSpanExporter, readableSentrySpan } from './sentry-otel-export';
+import { beginSpanEvents } from './span-events';
 
-export type SentryTracingClient = NodeClient;
+export type SentryTracingClient = NonNullable<ReturnType<typeof init>>;
 
 export interface OtelTracing {
   shutdown(): Promise<void>;
@@ -82,62 +84,77 @@ export class TailBiasedSpanProcessor implements SpanProcessor {
   }
 }
 
+class SuppressedMetricExporter extends OTLPMetricExporter {
+  override export(...args: Parameters<OTLPMetricExporter['export']>): void {
+    suppressTracing(() => super.export(...args));
+  }
+}
+
 function otlpMetricReader(config: OtelExportConfig): PeriodicExportingMetricReader {
   return new PeriodicExportingMetricReader({
-    exporter: new OTLPMetricExporter({
+    exporter: new SuppressedMetricExporter({
       url: config.metricsEndpoint,
       headers: { ...config.headers },
     }),
   });
 }
 
-function otlpSpanProcessor(config: OtelExportConfig): SpanProcessor {
+function otlpSpanProcessor(
+  config: OtelExportConfig,
+  exporter: PrivacyFilteredSpanExporter,
+): SpanProcessor {
   return new TailBiasedSpanProcessor(
-    new BatchSpanProcessor(
-      new OTLPTraceExporter({ url: config.tracesEndpoint, headers: { ...config.headers } }),
-    ),
+    new BatchSpanProcessor(exporter),
     config.sampleRatio ?? FULL_SAMPLE_RATIO,
     config.slowSpanThresholdMs,
   );
 }
 
-/**
- * Sentry's Node SDK registers its own tracer provider and the OpenTelemetry API
- * refuses a second global registration, so when both are configured Sentry keeps
- * the provider and takes the OTLP exporter as an extra span processor. Building a
- * parallel provider here instead would leave Sentry's sampler, propagator and
- * context manager unregistered from the copy of its OpenTelemetry package that
- * Sentry itself reads.
- */
 export function startOtelSdk(
   config: OtelExportConfig,
   sentryClient?: SentryTracingClient | undefined,
 ): OtelTracing {
-  const processor = otlpSpanProcessor(config);
-  const metricReader = otlpMetricReader(config);
-
+  const exporter = new PrivacyFilteredSpanExporter(
+    new OTLPTraceExporter({ url: config.tracesEndpoint, headers: { ...config.headers } }),
+    sentryClient,
+  );
+  const processor = otlpSpanProcessor(config, exporter);
+  const resource = telemetryResource(config.serviceName);
   if (sentryClient) {
-    if (!process.env['OTEL_SERVICE_NAME']) process.env['OTEL_SERVICE_NAME'] = config.serviceName;
-    initOpenTelemetry(sentryClient, { spanProcessors: [processor] });
+    const unsubscribeStart = sentryClient.on('spanStart', beginSpanEvents);
+    const unsubscribe = sentryClient.on('spanEnd', (span) => {
+      const readable = readableSentrySpan(span, resource);
+      if (readable) {
+        exporter.captureContext(readable);
+        processor.onEnd(readable);
+      }
+    });
     const meterProvider = new MeterProvider({
-      resource: telemetryResource(config.serviceName),
-      readers: [metricReader],
+      resource,
+      readers: [otlpMetricReader(config)],
     });
     metrics.setGlobalMeterProvider(meterProvider);
     return {
       shutdown: async () => {
-        await Promise.all([processor.shutdown(), meterProvider.shutdown()]);
+        unsubscribe();
+        unsubscribeStart();
+        const results = await Promise.allSettled([processor.shutdown(), meterProvider.shutdown()]);
+        await exporter.shutdown();
+        const failure = results.find((result) => result.status === 'rejected');
+        if (failure?.status === 'rejected') throw failure.reason;
       },
     };
   }
-
   const sdk = new NodeSDK({
-    resource: telemetryResource(config.serviceName),
+    resource,
+    autoDetectResources: false,
     instrumentations: [...NO_INSTRUMENTATIONS],
     sampler: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
     spanProcessors: [processor],
-    metricReaders: [metricReader],
+    metricReaders: [otlpMetricReader(config)],
   });
   sdk.start();
-  return { shutdown: () => sdk.shutdown() };
+  return {
+    shutdown: () => sdk.shutdown(),
+  };
 }

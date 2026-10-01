@@ -1,9 +1,16 @@
+import { withScope } from '@sentry/nextjs';
 import { logger } from '@/lib/logger';
 import { OBSERVABILITY_ATTRIBUTE } from './attributes';
 import { SPAN_DOMAIN_ATTRIBUTE, startBridgedSpan, type SpanKind } from './otel-span-bridge';
 import { recordSpanMetrics } from './metrics';
 import { redactAttributes, redactValue, type SpanAttributeValue } from './redact';
-import { getTraceContext, runWithTraceContext, type TraceContext } from './trace-context';
+import {
+  getTraceContext,
+  runWithTraceContext,
+  captureEventTenant,
+  type TraceContext,
+  type TenantScope,
+} from './trace-context';
 
 export type { SpanKind };
 
@@ -78,82 +85,95 @@ export async function withSpan<R>(
   options: SpanOptions,
   fn: (span: ActiveSpan) => Promise<R> | R,
 ): Promise<R> {
-  const parent = getTraceContext();
-  const kind = options.kind ?? DEFAULT_SPAN_KIND;
-  const bridged = startBridgedSpan(name, kind, parent);
-  const context: TraceContext = {
-    traceId: bridged.traceId,
-    spanId: bridged.spanId,
-    sampled: bridged.sampled,
-    ...(parent?.requestId === undefined ? {} : { requestId: parent.requestId }),
-    ...(parent?.organizationId === undefined ? {} : { organizationId: parent.organizationId }),
-    ...(parent?.userId === undefined ? {} : { userId: parent.userId }),
-  };
-  const extra: Record<string, unknown> = {};
-  let refusal: SpanFailure | null = null;
-  const span: ActiveSpan = {
-    traceId: context.traceId,
-    spanId: context.spanId,
-    setAttributes(attributes) {
-      Object.assign(extra, attributes);
-    },
-    refuse(reason, detail) {
-      refusal ??= { type: reason, message: detail };
-    },
-  };
-  activeSpans.set(context, span);
-
-  const startedAt = Date.now();
-  const emit = (status: 'ok' | 'error', failure?: SpanFailure): void => {
-    const durationMs = Date.now() - startedAt;
-    const attributes = redactAttributes({ ...options.attributes, ...extra });
-    recordSpanMetrics({
-      name,
-      domain: options.domain,
-      outcome: status,
-      durationMs,
-      provider: spanLabel(attributes[OBSERVABILITY_ATTRIBUTE.providerName]),
-      model: spanLabel(attributes[OBSERVABILITY_ATTRIBUTE.requestModel]),
+  return withScope(async (scope) => {
+    const parent = getTraceContext();
+    let tenant: TenantScope = parent ?? {};
+    scope.addEventProcessor((event) => {
+      captureEventTenant(event, tenant);
+      return event;
     });
-    const record: Record<string, SpanAttributeValue | undefined> = {
-      event: 'span',
-      span_name: name,
-      span_kind: kind,
-      [SPAN_DOMAIN_ATTRIBUTE]: options.domain,
-      trace_id: context.traceId,
-      span_id: context.spanId,
-      parent_span_id: parent?.spanId,
-      duration_ms: durationMs,
-      status,
-      ...attributes,
+    const kind = options.kind ?? DEFAULT_SPAN_KIND;
+    const bridged = startBridgedSpan(name, kind, parent);
+    const context: TraceContext = {
+      traceId: bridged.traceId,
+      spanId: bridged.spanId,
+      sampled: bridged.sampled,
+      ...(parent?.requestId === undefined ? {} : { requestId: parent.requestId }),
+      ...(parent?.organizationId === undefined ? {} : { organizationId: parent.organizationId }),
+      ...(parent?.userId === undefined ? {} : { userId: parent.userId }),
     };
-    bridged.setAttributes({ ...attributes, [SPAN_DOMAIN_ATTRIBUTE]: options.domain });
-    if (failure) {
-      const message = redactValue(failure.message);
-      record['error.type'] = failure.type;
-      record['error.message'] = message;
-      bridged.setError(failure.type, message);
-      bridged.end();
-      logger.error(record, `span ${name} failed`);
-      return;
-    }
-    bridged.end();
-    // A line per query would dwarf every other log in production, and the span
-    // still reaches the collector, where the tail processor decides.
-    if (options.domain === QUIET_SPAN_DOMAIN) logger.debug(record, `span ${name}`);
-    else logger.info(record, `span ${name}`);
-  };
+    tenant = context;
+    const extra: Record<string, unknown> = {};
+    let refusal: SpanFailure | null = null;
+    const span: ActiveSpan = {
+      traceId: context.traceId,
+      spanId: context.spanId,
+      setAttributes(attributes) {
+        Object.assign(extra, attributes);
+      },
+      refuse(reason, detail) {
+        refusal ??= { type: reason, message: detail };
+      },
+    };
+    activeSpans.set(context, span);
 
-  try {
-    const result = await runWithTraceContext(context, () => bridged.runWith(() => fn(span)));
-    if (refusal) emit('error', refusal);
-    else emit('ok');
-    return result;
-  } catch (error) {
-    emit('error', {
-      type: error instanceof Error ? error.name : typeof error,
-      message: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
+    const startedAt = Date.now();
+    const emit = (status: 'ok' | 'error', failure?: SpanFailure): void => {
+      tenant = { organizationId: context.organizationId };
+      const durationMs = Date.now() - startedAt;
+      const attributes = redactAttributes({ ...options.attributes, ...extra });
+      recordSpanMetrics({
+        name,
+        domain: options.domain,
+        outcome: status,
+        durationMs,
+        provider: spanLabel(attributes[OBSERVABILITY_ATTRIBUTE.providerName]),
+        model: spanLabel(attributes[OBSERVABILITY_ATTRIBUTE.requestModel]),
+      });
+      const record: Record<string, SpanAttributeValue | undefined> = {
+        event: 'span',
+        span_name: name,
+        span_kind: kind,
+        [SPAN_DOMAIN_ATTRIBUTE]: options.domain,
+        trace_id: context.traceId,
+        span_id: context.spanId,
+        parent_span_id: parent?.spanId,
+        duration_ms: durationMs,
+        status,
+        ...attributes,
+      };
+      bridged.setAttributes({ ...attributes, [SPAN_DOMAIN_ATTRIBUTE]: options.domain });
+      if (failure) {
+        const message = redactValue(failure.message);
+        record['error.type'] = failure.type;
+        record['error.message'] = message;
+        bridged.setError(failure.type, message);
+        bridged.end();
+        logger.error(record, `span ${name} failed`);
+        return;
+      }
+      bridged.end();
+      // A line per query would dwarf every other log in production, and the span
+      // still reaches the collector, where the tail processor decides.
+      if (options.domain === QUIET_SPAN_DOMAIN) logger.debug(record, `span ${name}`);
+      else logger.info(record, `span ${name}`);
+    };
+
+    try {
+      const result = await runWithTraceContext(context, () => bridged.runWith(() => fn(span)));
+      runWithTraceContext(context, () => {
+        if (refusal) emit('error', refusal);
+        else emit('ok');
+      });
+      return result;
+    } catch (error) {
+      runWithTraceContext(context, () =>
+        emit('error', {
+          type: error instanceof Error ? error.name : typeof error,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      throw error;
+    }
+  });
 }

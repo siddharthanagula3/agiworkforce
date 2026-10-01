@@ -17,7 +17,8 @@ vi.mock('@sentry/nextjs', () => ({
   init: vi.fn(() => ({})),
   captureRequestError: vi.fn(),
   captureRouterTransitionStart: vi.fn(),
-  validateOpenTelemetrySetup: vi.fn(),
+  withStaticSpan: (callback: unknown) => callback,
+  openTelemetryIntegration: () => ({ name: 'OpenTelemetry' }),
 }));
 
 vi.mock('botid/client/core', () => ({

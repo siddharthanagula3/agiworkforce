@@ -4,7 +4,7 @@ import type { NextConfig } from 'next';
 import bundleAnalyzer from '@next/bundle-analyzer';
 import { withBotId } from 'botid/next/config';
 import { withWorkflow } from 'workflow/next';
-import { withSentryConfig } from '@sentry/nextjs';
+import { withSentryConfig } from '@sentry/nextjs/config';
 import { API_HOST_REWRITE_ROUTES } from './lib/api-host-route-contract';
 import { BOT_PROTECTION_MODES, resolveBotProtectionMode } from './lib/security/bot-protection';
 import { isPlatformHosted } from './lib/server/hosting';
@@ -238,7 +238,7 @@ const withOptionalSentry = (config: NextConfig): NextConfig =>
         ...sentryUpload,
         silent: true,
         telemetry: false,
-        disableLogger: true,
+        webpack: { treeshake: { removeDebugLogging: true } },
         widenClientFileUpload: true,
         // The maps go to Sentry, never to a browser: serving them publishes the
         // unminified application.

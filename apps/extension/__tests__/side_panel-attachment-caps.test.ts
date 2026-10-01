@@ -19,6 +19,11 @@ type ScanModule1 = typeof import('../src/features/cloud-bridge/freeTrialClient')
 type ScanModule2 = typeof import('../src/features/cloud-bridge/capabilityDocument');
 
 const chromeMock = vi.hoisted(() => {
+  Object.defineProperty(document, 'adoptedStyleSheets', {
+    configurable: true,
+    writable: true,
+    value: [],
+  });
   const event = () => ({ addListener: vi.fn(), removeListener: vi.fn(), hasListener: vi.fn() });
   const area = () => {
     const values: Record<string, unknown> = {};
@@ -346,6 +351,12 @@ beforeEach(async () => {
 });
 
 describe('side panel composer attachment caps', () => {
+  it('adopts the real side panel stylesheet in the browser fixture', () => {
+    expect(document.adoptedStyleSheets).toHaveLength(1);
+    expect(document.adoptedStyleSheets[0]).toBeInstanceOf(CSSStyleSheet);
+    expect(document.adoptedStyleSheets[0]?.cssRules.length).toBeGreaterThan(0);
+  });
+
   it('shows file-read progress while send is gated', async () => {
     pickFiles([imageFile(16, 'image/png', 'reading.png')]);
 

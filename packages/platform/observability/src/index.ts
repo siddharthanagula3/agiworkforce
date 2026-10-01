@@ -22,3 +22,5 @@ export {
   createSentryFetchAdapter,
   type SentryFetchAdapterOptions,
 } from './adapters/sentryFetchAdapter';
+
+export { createSentryDataCollectionOptions } from './adapters/sentryDataCollection';

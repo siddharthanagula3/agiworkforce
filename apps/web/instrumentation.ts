@@ -15,17 +15,20 @@ import {
   type CommonInitOptions,
   type TenantTaggedEvent,
 } from './lib/sentry-shared';
-import { getTenantScope } from './lib/observability/trace-context';
+import { eventTenant, ORGANIZATION_TRACE_ATTRIBUTE } from './lib/observability/trace-context';
 import { resolveOtelExportConfig, sentryTracesSampleRate } from './lib/observability/otel-config';
 import type { SentryTracingClient } from './lib/observability/otel-sdk';
 
 const NODE_RUNTIME = 'nodejs';
 const EDGE_RUNTIME = 'edge';
 
-function tagRequestOrganization(event: TenantTaggedEvent): void {
-  const { organizationId } = getTenantScope();
-  if (!organizationId) return;
-  event.tags = { ...event.tags, organization_id: organizationId };
+export function tagRequestOrganization(event: TenantTaggedEvent): void {
+  const { organizationId } = eventTenant(event);
+  if (typeof organizationId !== 'string' || organizationId.length === 0) {
+    if (event.tags) delete event.tags[ORGANIZATION_TRACE_ATTRIBUTE];
+    return;
+  }
+  event.tags = { ...event.tags, [ORGANIZATION_TRACE_ATTRIBUTE]: organizationId };
 }
 
 export async function register() {
@@ -98,16 +101,17 @@ export async function register() {
   if (isSentryConfigured() && (runtime === NODE_RUNTIME || runtime === EDGE_RUNTIME)) {
     const options: CommonInitOptions = { tenantTagHook: tagRequestOrganization };
     if (otelConfig) {
-      options.skipOpenTelemetrySetup = true;
+      options.enableOpenTelemetrySetup = true;
       options.tracesSampleRate = sentryTracesSampleRate(otelConfig);
     }
-    sentryClient = Sentry.init(commonInitOptions(options)) as SentryTracingClient | undefined;
+    sentryClient = Sentry.init({
+      ...commonInitOptions(options),
+    }) as SentryTracingClient | undefined;
   }
 
   if (otelConfig) {
     const { startOtelSdk } = await import('./lib/observability/otel-sdk');
     startOtelSdk(otelConfig, sentryClient);
-    if (sentryClient) Sentry.validateOpenTelemetrySetup();
 
     const { recordConfigurationState } = await import('./lib/observability/metrics');
     recordConfigurationState({
