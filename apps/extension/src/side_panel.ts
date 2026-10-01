@@ -43,6 +43,7 @@ import {
   PREFERRED_LENGTHS,
   PROVIDERS_IN_ORDER,
   RESPONSE_STYLES,
+  TERMINAL_AGENT_TASK_STATES,
   resolveModelEffort,
   USAGE_CRITICAL_REMAINING_PERCENT,
   USAGE_WARNING_REMAINING_PERCENT,
@@ -371,7 +372,8 @@ import {
   type ManagedCloudOwner,
 } from './features/cloud-bridge/managedCloudAuthority';
 import { normalizeShortcutStartUrl } from './features/shortcuts/origin';
-import { withTimeout } from './utils';
+import { logger, withTimeout } from './utils';
+import { MANAGED_RUN_CANCELLATION_TIMEOUT_MS } from './features/cloud-bridge/managedRunControl';
 import { platformRequestHeaders } from './platformHeaders';
 import { installSidePanelErrorReporting } from './features/observability/errorReporting';
 import { flushProductEvents, trackProductEvent } from './features/observability/productAnalytics';
@@ -6879,24 +6881,30 @@ async function readLinkedPage(url: string): Promise<PageContextCapture> {
   };
 }
 
-function requestStreamCancellation(streamId: string): Promise<void> {
+async function requestStreamCancellation(streamId: string): Promise<void> {
   const owner = ownerByStreamId.get(streamId);
-  if (!owner) return Promise.resolve();
+  if (!owner) throw new Error('Managed Cloud stream owner is unavailable.');
   const cloudRun =
     cloudRunsByStreamId.get(streamId) ??
     _ctx.messages.find((message) => message.id === streamId)?.cloudAgentRun;
-  return chrome.runtime
-    .sendMessage({
+  const response: unknown = await withTimeout(
+    chrome.runtime.sendMessage({
       type: 'CANCEL_STREAM',
       owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: streamId,
       ...(cloudRun ? { cloudRun } : {}),
-    })
-    .then(() => undefined)
-    .catch(() => {
-      // The service worker may have restarted before receiving the cancellation.
-    });
+    }),
+    MANAGED_RUN_CANCELLATION_TIMEOUT_MS,
+  );
+  if (
+    !response ||
+    typeof response !== 'object' ||
+    !('success' in response) ||
+    response.success !== true
+  ) {
+    throw new Error('Managed Cloud cancellation has not been confirmed.');
+  }
 }
 
 function stopManagedChatKeepalive(): void {
@@ -6974,7 +6982,9 @@ function armManagedStreamInactivityWatchdog(streamId: string): void {
   if (_ctx.streamTimeoutHandle) clearTimeout(_ctx.streamTimeoutHandle);
   _ctx.streamTimeoutHandle = setTimeout(() => {
     if (_ctx.isStreaming && _ctx.currentStreamId === streamId) {
-      requestStreamCancellation(streamId);
+      void requestStreamCancellation(streamId).catch(() => {
+        logger.warn('Managed Cloud cancellation was not confirmed after stream inactivity.');
+      });
       handleStreamError(streamId, 'No AGI Cloud activity was received for 90 seconds.');
     }
   }, 90_000);
@@ -7038,43 +7048,102 @@ let stoppingStreamId: string | null = null;
 
 function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
   const streamId = _ctx.currentStreamId;
-  if (streamId) {
-    const stopped = _ctx.messages.find((message) => message.id === streamId);
-    if (stopped && preservePartialOutput) stopped.stopping = true;
-    stoppingStreamId = streamId;
-    void requestStreamCancellation(streamId).finally(() => {
-      if (stopped) stopped.stopping = false;
-      if (stoppingStreamId === streamId) stoppingStreamId = null;
-      updateSendButton();
-      if (stopped && _ctx.messages.includes(stopped)) {
-        _ctx.needsMessageRebuild = true;
-        renderMessages();
-      }
-      if (preservePartialOutput) sendNextFollowUp();
-    });
-  }
-  stopManagedChatKeepalive();
-  if (_ctx.streamTimeoutHandle) {
-    clearTimeout(_ctx.streamTimeoutHandle);
-    _ctx.streamTimeoutHandle = null;
-  }
-  if (streamId) {
-    const existing = _ctx.messages.find((message) => message.id === streamId);
-    if (existing) existing.streaming = false;
+  if (!streamId) return;
+  const stopped = _ctx.messages.find((message) => message.id === streamId);
+  const owner = _ctx.managedCloudOwner;
+  const generation = _ctx.conversationGeneration;
+  const admittedRun = cloudRunsByStreamId.get(streamId) ?? stopped?.cloudAgentRun;
+  const expectedRun = admittedRun ? { ...admittedRun } : undefined;
+  const expectedRunId = expectedRun?.runId;
+  const clearStoppedStream = (): void => {
+    stopManagedChatKeepalive();
+    if (_ctx.currentStreamId === streamId) {
+      _ctx.isStreaming = false;
+      _ctx.currentStreamId = null;
+    }
+    if (stopped) stopped.streaming = false;
     resolvedRouteByStreamId.delete(streamId);
     quickModeByStreamId.delete(streamId);
     ownerByStreamId.delete(streamId);
     streamStartedAtById.delete(streamId);
+    removeThinking();
+    updateSendButton();
+  };
+  if (_ctx.streamTimeoutHandle) {
+    clearTimeout(_ctx.streamTimeoutHandle);
+    _ctx.streamTimeoutHandle = null;
   }
-  removeThinking();
-  _ctx.isStreaming = false;
-  _ctx.currentStreamId = null;
+  if (!preservePartialOutput) {
+    composerContextNotice = null;
+    updateAttachmentPreview();
+    void requestStreamCancellation(streamId).catch(() => {
+      logger.warn('Managed Cloud cancellation was not confirmed after leaving the chat.');
+    });
+    if (stoppingStreamId === streamId) stoppingStreamId = null;
+    clearStoppedStream();
+    return;
+  }
+  if (stoppingStreamId === streamId) return;
+  if (stopped) stopped.stopping = true;
+  stoppingStreamId = streamId;
   updateSendButton();
-  if (preservePartialOutput) {
+  _ctx.needsMessageRebuild = true;
+  renderMessages();
+  const isCurrent = (): boolean =>
+    stoppingStreamId === streamId &&
+    _ctx.conversationGeneration === generation &&
+    ((owner === null && _ctx.managedCloudOwner === null) ||
+      sameManagedCloudOwner(owner, _ctx.managedCloudOwner));
+  const completeStop = (): void => {
+    if (!isCurrent()) return;
+    if (stopped) stopped.stopping = false;
+    stoppingStreamId = null;
+    clearStoppedStream();
+    trackProductEvent('generation_stopped', stopped?.runtime);
     _ctx.needsMessageRebuild = true;
     saveMessages();
     renderMessages();
-  }
+    sendNextFollowUp();
+  };
+  void requestStreamCancellation(streamId)
+    .then(completeStop)
+    .catch(() => {
+      if (!isCurrent()) return;
+      const observed = stopped?.cloudAgentRun;
+      if (
+        expectedRunId &&
+        observed?.runId === expectedRunId &&
+        observed.state !== undefined &&
+        TERMINAL_AGENT_TASK_STATES.has(observed.state)
+      ) {
+        completeStop();
+        return;
+      }
+      if (expectedRun && owner) {
+        const retainedRun = observed && observed.runId === expectedRunId ? observed : expectedRun;
+        _ctx.currentStreamId = streamId;
+        _ctx.isStreaming = true;
+        cloudRunsByStreamId.set(streamId, { ...retainedRun });
+        ownerByStreamId.set(streamId, { ...owner });
+        if (stopped) {
+          stopped.streaming = true;
+          stopped.cloudAgentRun = { ...retainedRun };
+        }
+        startManagedChatKeepalive();
+      }
+      if (stopped) stopped.stopping = false;
+      stoppingStreamId = null;
+      returnFollowUpsToComposer();
+      composerContextNotice = t('spCancellationUnconfirmed');
+      updateAttachmentPreview();
+      if (_ctx.currentStreamId === streamId && _ctx.isStreaming) {
+        armManagedStreamInactivityWatchdog(streamId);
+      }
+      updateSendButton();
+      _ctx.needsMessageRebuild = true;
+      saveMessages();
+      renderMessages();
+    });
 }
 
 function mimeTypeOfDataUrl(dataUrl: string): string {
@@ -7831,15 +7900,7 @@ function updateSendButton(): void {
   }
   const btn = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
   if (!btn) return;
-  if (_ctx.isStreaming) {
-    btn.disabled = false;
-    btn.hidden = false;
-    btn.setAttribute('data-mode', 'stop');
-    btn.title = t('spSendStop');
-    btn.setAttribute('aria-label', t('spSendStopAria'));
-    clearChildren(btn);
-    btn.appendChild(renderIcon(Square, 14));
-  } else if (stoppingStreamId !== null) {
+  if (stoppingStreamId !== null) {
     btn.disabled = true;
     btn.hidden = false;
     btn.setAttribute('data-mode', 'stopping');
@@ -7847,6 +7908,14 @@ function updateSendButton(): void {
     btn.setAttribute('aria-label', t('spStopping'));
     clearChildren(btn);
     btn.appendChild(renderIcon(Loader2, 14, 'sp-send-stopping-icon'));
+  } else if (_ctx.isStreaming) {
+    btn.disabled = false;
+    btn.hidden = false;
+    btn.setAttribute('data-mode', 'stop');
+    btn.title = t('spSendStop');
+    btn.setAttribute('aria-label', t('spSendStopAria'));
+    clearChildren(btn);
+    btn.appendChild(renderIcon(Square, 14));
   } else {
     const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
     const text = input?.value ?? '';
@@ -14934,10 +15003,6 @@ function buildUI(): void {
   sendBtn.appendChild(renderIcon(ArrowUp, 16));
   sendBtn.addEventListener('click', () => {
     if (sendBtn.getAttribute('data-mode') === 'stop') {
-      trackProductEvent(
-        'generation_stopped',
-        _ctx.messages.find((message) => message.id === _ctx.currentStreamId)?.runtime,
-      );
       cancelCurrentManagedStream(true);
       return;
     }
@@ -16250,6 +16315,11 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   }
 
   if (chunk.error) {
+    if (chunk.cloudRun) {
+      cloudRunsByStreamId.set(chunk.id, { ...chunk.cloudRun });
+      const existing = _ctx.messages.find((message) => message.id === chunk.id);
+      if (existing) existing.cloudAgentRun = { ...chunk.cloudRun };
+    }
     quotaWarnedStreamIds.delete(chunk.id);
     if (chunk.errorCode === 'quota_exceeded' || chunk.errorCode === 'account_suspended') {
       void refreshCloudAccountUI();

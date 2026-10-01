@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type ToolLoopModule = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop');
+type WorkflowStreamModule = typeof import('./cloud-agent-workflow-stream');
+type UserConnectorToolsModule = typeof import('@/lib/user-connector-tools');
+
 const order: string[] = [];
 
 const mocks = vi.hoisted(() => ({
@@ -71,7 +75,10 @@ vi.mock('@/lib/services/cloud-agent-event-journal', () => ({
     flush: vi.fn(async () => undefined),
   }),
 }));
-vi.mock('@/lib/user-connector-tools', () => ({ makeUserConnectorExecutor: vi.fn() }));
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => {
+  const actual = await importOriginal<UserConnectorToolsModule>();
+  return { ...actual, makeUserConnectorExecutor: vi.fn() };
+});
 
 import { CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS } from '@/lib/deadline-policy';
 import { executeCloudAgentWorkflowInvocation } from './steps/execute-cloud-agent-invocation';
@@ -247,4 +254,123 @@ describe('a cancel reaches the provider call, not only the failover plan', () =>
     const options = mocks.runToolLoop.mock.calls[0]?.[1] as { maxDurationMs?: number };
     expect(options.maxDurationMs).toBe(CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS);
   });
+
+  it.each([true, false])(
+    'the real tool loop observes a persisted cancellation change: %s',
+    async (cancelRequested) => {
+      const actualLoop = await vi.importActual<ToolLoopModule>(
+        '@/app/api/llm/v1/chat/completions/lib/tool-loop',
+      );
+      const actualStream = await vi.importActual<WorkflowStreamModule>(
+        './cloud-agent-workflow-stream',
+      );
+      const input = makeInput();
+      input.approvalMode = 'auto';
+      input.processed.chatRequest.work_mode = 'chat';
+      input.mcpTools = [
+        {
+          qualifiedName: 'mcp__github__get_pull_request_diff',
+          serverId: 'github',
+          toolName: 'get_pull_request_diff',
+          description: 'Read a pull request diff',
+          origin: 'operator',
+          inputSchema: { type: 'object' },
+        },
+      ];
+      let flag = false;
+      mocks.isCancellationRequested.mockImplementation(async () => flag);
+      mocks.projectChunk.mockImplementation(actualStream.projectCloudAgentWorkflowChunk);
+      let signal: AbortSignal | undefined;
+      mocks.runToolLoop.mockImplementation((...args: Parameters<ToolLoopModule['runToolLoop']>) => {
+        signal = args[1]?.signal;
+        return actualLoop.runToolLoop(...args);
+      });
+      let releaseProvider!: () => void;
+      const providerPending = new Promise<void>((resolve) => {
+        releaseProvider = resolve;
+      });
+      let enteredProvider!: () => void;
+      const providerEntered = new Promise<void>((resolve) => {
+        enteredProvider = resolve;
+      });
+      let providerCalls = 0;
+      let toolCalls = 0;
+      mocks.executeOperation.mockImplementation(
+        async (_db: unknown, operation: { operationKind: 'provider' | 'tool' }) => {
+          if (operation.operationKind === 'tool') {
+            toolCalls += 1;
+            return { content: 'fixture diff', isError: false };
+          }
+          providerCalls += 1;
+          if (providerCalls === 1) {
+            enteredProvider();
+            await providerPending;
+          }
+          const first = providerCalls === 1;
+          return {
+            lines: [],
+            finishReason: first ? 'tool_calls' : 'stop',
+            pendingToolCalls: first
+              ? [
+                  {
+                    id: 'fixture-read-diff',
+                    qualifiedName: input.mcpTools[0]!.qualifiedName,
+                    args: {},
+                  },
+                ]
+              : [],
+            textContent: first ? '' : 'The diff is ready.',
+            publicTextTail: first ? '' : 'The diff is ready.',
+            canonicalText: first ? '' : 'The diff is ready.',
+            thinkingBlocks: [],
+            generatedFileRefs: [],
+            usage: {
+              providerCalls: 1,
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheReadTokens: 0,
+              cacheWriteTokens: 0,
+              cacheWrite1hTokens: 0,
+              reasoningTokens: 0,
+              providerCostDollars: 0,
+            },
+          };
+        },
+      );
+      let settled = false;
+      const invocation = executeCloudAgentWorkflowInvocation(input).finally(() => {
+        settled = true;
+      });
+      try {
+        await providerEntered;
+        expect(settled).toBe(false);
+        expect(providerCalls).toBe(1);
+        expect(toolCalls).toBe(0);
+        expect(signal).toBeDefined();
+        expect(signal!.aborted).toBe(false);
+        expect(mocks.isCancellationRequested).toHaveBeenCalledWith(db, {
+          userId: input.userId,
+          runId: input.runId,
+        });
+        flag = cancelRequested;
+        releaseProvider();
+        await expect(invocation).resolves.toEqual({
+          kind: 'terminal',
+          outcome: cancelRequested ? 'cancelled' : 'completed',
+        });
+        expect(signal!.aborted).toBe(cancelRequested);
+        expect(providerCalls).toBe(cancelRequested ? 1 : 2);
+        expect(toolCalls).toBe(cancelRequested ? 0 : 1);
+        expect(mocks.settle).toHaveBeenCalledWith(
+          input,
+          cancelRequested ? 'cancelled' : 'completed',
+          expect.any(Object),
+          undefined,
+        );
+      } finally {
+        releaseProvider();
+        await invocation;
+      }
+    },
+  );
 });
