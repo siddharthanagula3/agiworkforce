@@ -18,9 +18,9 @@ move between validation and deployment.
   staging origin has served and passed verification for that same commit.
 - Web staging is owned by `.github/workflows/deploy-staging.yml`, described
   under "Staging tier" below.
-- `vercel.json` disables automatic Git deployment for `main`, preventing the
-  Vercel Git integration from racing the CI-owned production promotion. Other
-  branches retain Vercel preview behavior.
+- `vercel.json` disables automatic Git deployments for all branches, preventing
+  the Vercel Git integration from racing CI-owned deployments. Staging and
+  production use the explicit workflow paths described here.
 - Signaling production is owned by
   `.github/workflows/deploy-signaling-server.yml`. Its automatic Railway path
   uses the same successful-`CI` and exact-SHA gate. A manual Railway/Fly run

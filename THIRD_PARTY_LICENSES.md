@@ -219,7 +219,7 @@ SOFTWARE.
   - OpenAI provider mark path from `icons/openai.svg`
   - Claude provider mark path from `icons/claude-color.svg`, used for Anthropic/Claude model rows
   - Gemini provider mark path from `icons/gemini.svg`, used for Google/Gemini model rows
-  - Perplexity provider mark path from `icons/perplexity.svg`, used for Sonar model rows
+  - Perplexity provider mark path from `icons/perplexity.svg`, used for Perplexity model rows
   - DeepSeek provider mark path from `icons/deepseek.svg`
   - Grok provider mark path from `icons/grok.svg`, used for xAI/Grok model rows
 
