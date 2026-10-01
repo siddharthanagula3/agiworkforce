@@ -9,88 +9,81 @@ const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 const XCPRIVACY_PATH = path.join(mobileRoot, 'store-listing/ios/PrivacyInfo.xcprivacy');
 const DATA_SAFETY_PATH = path.join(mobileRoot, 'store-listing/android/data-safety.json');
 
-function stripComments(xml) {
-  return xml.replace(/\x3c!--[\s\S]*?-->/gu, '');
-}
-
-function sliceArray(xml, key) {
-  const keyIndex = xml.indexOf(`<key>${key}</key>`);
-  if (keyIndex === -1) return null;
-  const start = xml.indexOf('<array', keyIndex);
-  if (start === -1) return null;
-  if (/^<array\s*\/>/u.test(xml.slice(start))) return '';
-  const open = xml.indexOf('>', start) + 1;
-  let depth = 1;
-  let cursor = open;
-  while (depth > 0) {
-    const nextOpen = xml.indexOf('<array>', cursor);
-    const nextClose = xml.indexOf('</array>', cursor);
-    if (nextClose === -1) throw new Error(`unterminated <array> for ${key}`);
-    if (nextOpen !== -1 && nextOpen < nextClose) {
-      depth += 1;
-      cursor = nextOpen + '<array>'.length;
-    } else {
-      depth -= 1;
-      cursor = nextClose + '</array>'.length;
-      if (depth === 0) return xml.slice(open, nextClose);
-    }
-  }
-  return '';
-}
-
-function splitDicts(arrayBody) {
-  const dicts = [];
-  let cursor = 0;
-  while (true) {
-    const start = arrayBody.indexOf('<dict>', cursor);
-    if (start === -1) break;
-    const end = arrayBody.indexOf('</dict>', start);
-    if (end === -1) throw new Error('unterminated <dict>');
-    dicts.push(arrayBody.slice(start + '<dict>'.length, end));
-    cursor = end + '</dict>'.length;
-  }
-  return dicts;
-}
-
-function stringValue(dictBody, key) {
-  const match = new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`, 'u').exec(dictBody);
-  return match ? match[1] : undefined;
-}
-
-function boolValue(dictBody, key) {
-  const match = new RegExp(`<key>${key}</key>\\s*<(true|false)\\s*/>`, 'u').exec(dictBody);
-  return match ? match[1] === 'true' : undefined;
-}
-
-function stringArrayValue(dictBody, key) {
-  const body = sliceArray(dictBody, key);
-  if (body === null) return undefined;
-  return [...body.matchAll(/<string>([^<]*)<\/string>/gu)].map((match) => match[1]);
-}
-
-export function parsePrivacyManifest(xml) {
-  const clean = stripComments(xml);
-  const accessed = splitDicts(sliceArray(clean, 'NSPrivacyAccessedAPITypes') ?? '').map((dict) => ({
-    NSPrivacyAccessedAPIType: stringValue(dict, 'NSPrivacyAccessedAPIType'),
-    NSPrivacyAccessedAPITypeReasons: stringArrayValue(dict, 'NSPrivacyAccessedAPITypeReasons'),
-  }));
-  const collected = splitDicts(sliceArray(clean, 'NSPrivacyCollectedDataTypes') ?? '').map(
-    (dict) => ({
-      NSPrivacyCollectedDataType: stringValue(dict, 'NSPrivacyCollectedDataType'),
-      NSPrivacyCollectedDataTypeLinked: boolValue(dict, 'NSPrivacyCollectedDataTypeLinked'),
-      NSPrivacyCollectedDataTypeTracking: boolValue(dict, 'NSPrivacyCollectedDataTypeTracking'),
-      NSPrivacyCollectedDataTypePurposes: stringArrayValue(
-        dict,
-        'NSPrivacyCollectedDataTypePurposes',
-      ),
-    }),
+function hasExactKeys(value, keys) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === keys.length &&
+    keys.every((key) => Object.hasOwn(value, key))
   );
-  return {
-    NSPrivacyAccessedAPITypes: accessed,
-    NSPrivacyCollectedDataTypes: collected,
-    NSPrivacyTracking: boolValue(clean, 'NSPrivacyTracking'),
-    NSPrivacyTrackingDomains: stringArrayValue(clean, 'NSPrivacyTrackingDomains') ?? [],
-  };
+}
+
+function isStringArray(value) {
+  return (
+    Array.isArray(value) &&
+    value.every((entry) => typeof entry === 'string' && entry.trim().length > 0)
+  );
+}
+
+function validatePrivacyManifest(manifest) {
+  const accessedKeys = ['NSPrivacyAccessedAPIType', 'NSPrivacyAccessedAPITypeReasons'];
+  const collectedKeys = [
+    'NSPrivacyCollectedDataType',
+    'NSPrivacyCollectedDataTypeLinked',
+    'NSPrivacyCollectedDataTypeTracking',
+    'NSPrivacyCollectedDataTypePurposes',
+  ];
+  if (
+    !hasExactKeys(manifest, [
+      'NSPrivacyAccessedAPITypes',
+      'NSPrivacyCollectedDataTypes',
+      'NSPrivacyTracking',
+      'NSPrivacyTrackingDomains',
+    ]) ||
+    typeof manifest.NSPrivacyTracking !== 'boolean' ||
+    !isStringArray(manifest.NSPrivacyTrackingDomains) ||
+    !Array.isArray(manifest.NSPrivacyAccessedAPITypes) ||
+    !manifest.NSPrivacyAccessedAPITypes.every(
+      (entry) =>
+        hasExactKeys(entry, accessedKeys) &&
+        typeof entry.NSPrivacyAccessedAPIType === 'string' &&
+        entry.NSPrivacyAccessedAPIType.trim().length > 0 &&
+        isStringArray(entry.NSPrivacyAccessedAPITypeReasons),
+    ) ||
+    !Array.isArray(manifest.NSPrivacyCollectedDataTypes) ||
+    !manifest.NSPrivacyCollectedDataTypes.every(
+      (entry) =>
+        hasExactKeys(entry, collectedKeys) &&
+        typeof entry.NSPrivacyCollectedDataType === 'string' &&
+        entry.NSPrivacyCollectedDataType.trim().length > 0 &&
+        typeof entry.NSPrivacyCollectedDataTypeLinked === 'boolean' &&
+        typeof entry.NSPrivacyCollectedDataTypeTracking === 'boolean' &&
+        isStringArray(entry.NSPrivacyCollectedDataTypePurposes),
+    )
+  ) {
+    throw new Error('invalid privacy manifest schema');
+  }
+  return manifest;
+}
+
+export function parsePrivacyManifest(source) {
+  try {
+    const parsed = execFileSync(
+      'python3',
+      ['-I', '-S', path.join(mobileRoot, 'scripts/release/parse-privacy-manifest.py')],
+      {
+        input: source,
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 10000,
+        maxBuffer: 4 * 1024 * 1024,
+      },
+    );
+    return validatePrivacyManifest(JSON.parse(parsed));
+  } catch {
+    throw new Error('invalid privacy manifest or unavailable plist parser');
+  }
 }
 
 function sortByKey(entries, key) {
@@ -98,25 +91,26 @@ function sortByKey(entries, key) {
 }
 
 export function compareManifests(submitted, built) {
+  validatePrivacyManifest(submitted);
+  validatePrivacyManifest(built);
   const failures = [];
   const normalize = (manifest) => ({
-    accessed: sortByKey(manifest.NSPrivacyAccessedAPITypes ?? [], 'NSPrivacyAccessedAPIType').map(
+    accessed: sortByKey(manifest.NSPrivacyAccessedAPITypes, 'NSPrivacyAccessedAPIType').map(
       (entry) => ({
         type: entry.NSPrivacyAccessedAPIType,
-        reasons: [...(entry.NSPrivacyAccessedAPITypeReasons ?? [])].sort(),
+        reasons: [...entry.NSPrivacyAccessedAPITypeReasons].sort(),
       }),
     ),
-    collected: sortByKey(
-      manifest.NSPrivacyCollectedDataTypes ?? [],
-      'NSPrivacyCollectedDataType',
-    ).map((entry) => ({
-      type: entry.NSPrivacyCollectedDataType,
-      linked: entry.NSPrivacyCollectedDataTypeLinked,
-      tracking: entry.NSPrivacyCollectedDataTypeTracking,
-      purposes: [...(entry.NSPrivacyCollectedDataTypePurposes ?? [])].sort(),
-    })),
-    tracking: manifest.NSPrivacyTracking ?? false,
-    trackingDomains: [...(manifest.NSPrivacyTrackingDomains ?? [])].sort(),
+    collected: sortByKey(manifest.NSPrivacyCollectedDataTypes, 'NSPrivacyCollectedDataType').map(
+      (entry) => ({
+        type: entry.NSPrivacyCollectedDataType,
+        linked: entry.NSPrivacyCollectedDataTypeLinked,
+        tracking: entry.NSPrivacyCollectedDataTypeTracking,
+        purposes: [...entry.NSPrivacyCollectedDataTypePurposes].sort(),
+      }),
+    ),
+    tracking: manifest.NSPrivacyTracking,
+    trackingDomains: [...manifest.NSPrivacyTrackingDomains].sort(),
   });
 
   const left = JSON.stringify(normalize(submitted));
@@ -130,12 +124,13 @@ export function compareManifests(submitted, built) {
 }
 
 export function compareDataSafety(manifest, dataSafety) {
+  validatePrivacyManifest(manifest);
   const failures = [];
   const declared = new Map(
     (dataSafety.collectedData ?? []).map((entry) => [entry.iosPrivacyManifestType, entry]),
   );
 
-  for (const entry of manifest.NSPrivacyCollectedDataTypes ?? []) {
+  for (const entry of manifest.NSPrivacyCollectedDataTypes) {
     const type = entry.NSPrivacyCollectedDataType;
     const android = declared.get(type);
     if (!android) {
@@ -157,7 +152,7 @@ export function compareDataSafety(manifest, dataSafety) {
   }
 
   const manifestTypes = new Set(
-    (manifest.NSPrivacyCollectedDataTypes ?? []).map((entry) => entry.NSPrivacyCollectedDataType),
+    manifest.NSPrivacyCollectedDataTypes.map((entry) => entry.NSPrivacyCollectedDataType),
   );
   for (const type of declared.keys()) {
     if (!manifestTypes.has(type)) {
@@ -209,7 +204,7 @@ function main() {
     }
   }
   if (failures.length === 0) {
-    const submitted = parsePrivacyManifest(fs.readFileSync(XCPRIVACY_PATH, 'utf8'));
+    const submitted = parsePrivacyManifest(fs.readFileSync(XCPRIVACY_PATH));
     const built = readBuiltManifest();
     const dataSafety = JSON.parse(fs.readFileSync(DATA_SAFETY_PATH, 'utf8'));
     failures.push(...compareManifests(submitted, built));
