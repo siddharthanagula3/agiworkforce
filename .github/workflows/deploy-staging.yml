@@ -140,10 +140,16 @@ jobs:
 
       - name: Build the staging artifact
         id: build
+        env:
+          AGI_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
         run: vercel build --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
       - name: Deploy the prebuilt artifact
         id: deploy
+        env:
+          AGI_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
         shell: bash
         run: |
           set -euo pipefail

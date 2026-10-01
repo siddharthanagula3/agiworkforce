@@ -578,7 +578,7 @@ function shellQuote(value) {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-function runStagingDeployment(preview, expected = stagingDatabase) {
+function runStagingDeployment(preview, expected = stagingDatabase, environment = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'staging-database-'));
   roots.push(root);
   mkdirSync(path.join(root, 'scripts'));
@@ -642,6 +642,7 @@ ${step.run}
           resolveEnv(value),
         ]),
       ),
+      ...environment,
     },
     encoding: 'utf8',
     timeout: 5000,
@@ -665,8 +666,8 @@ test('staging refuses missing or conflicting preview database aliases before mig
     `DATABASE_URL=${otherDatabase}\n`,
     `AGI_DATABASE_URL=${stagingDatabase}\nDATABASE_URL=${otherDatabase}\n`,
     `AGI_DATABASE_URL=${otherDatabase}\nDATABASE_URL=${stagingDatabase}\n`,
-    `AGI_DATABASE_URL=\nDATABASE_URL=${stagingDatabase}\n`,
-    `AGI_DATABASE_URL=${stagingDatabase}\nDATABASE_URL=\n`,
+    'AGI_DATABASE_URL=[REDACTED]\n',
+    'DATABASE_URL=[sensitive]\n',
   ]) {
     const result = runStagingDeployment(preview);
     assert.notEqual(result.status, 0);
@@ -681,6 +682,13 @@ test('staging binds build and prebuilt runtime aliases to the verified secret', 
     `AGI_DATABASE_URL=${stagingDatabase}\n`,
     `DATABASE_URL=${stagingDatabase}\n`,
     `AGI_DATABASE_URL="${stagingDatabase}"\nDATABASE_URL='${stagingDatabase}'\n`,
+    'AGI_DATABASE_URL=\n',
+    'DATABASE_URL=\n',
+    'AGI_DATABASE_URL=[SENSITIVE]\n',
+    'DATABASE_URL=[SENSITIVE]\n',
+    'AGI_DATABASE_URL=\nDATABASE_URL=[SENSITIVE]\n',
+    `AGI_DATABASE_URL=\nDATABASE_URL=${stagingDatabase}\n`,
+    `AGI_DATABASE_URL=${stagingDatabase}\nDATABASE_URL=\n`,
   ]) {
     const result = runStagingDeployment(preview);
     assert.equal(result.status, 0);
@@ -700,6 +708,34 @@ test('staging binds build and prebuilt runtime aliases to the verified secret', 
       );
     }
     assert.ok(!deploy.args.some((value) => value.includes(stagingDatabase)));
+  }
+});
+
+test('staging refuses absent or conflicting process database aliases before mutation', () => {
+  for (const name of ['AGI_DATABASE_URL', 'DATABASE_URL']) {
+    for (const value of [undefined, '', otherDatabase]) {
+      const result = runStagingDeployment(`DATABASE_URL=${stagingDatabase}\n`, stagingDatabase, {
+        [name]: value,
+      });
+      assert.notEqual(result.status, 0);
+      assert.ok(result.calls.every((call) => call.args[1] === 'pull'));
+      assert.ok(!`${result.stdout}${result.stderr}`.includes(stagingDatabase));
+      assert.ok(!`${result.stdout}${result.stderr}`.includes(otherDatabase));
+    }
+  }
+});
+
+test('staging refuses an invalid protected database URL before mutation', () => {
+  for (const expected of [
+    'https://staging.example.invalid/staging',
+    'postgresql://staging.example.invalid',
+    `${stagingDatabase}\n`,
+    ` ${stagingDatabase}`,
+  ]) {
+    const result = runStagingDeployment('DATABASE_URL=[SENSITIVE]\n', expected);
+    assert.notEqual(result.status, 0);
+    assert.ok(result.calls.every((call) => call.args[1] === 'pull'));
+    assert.ok(!`${result.stdout}${result.stderr}`.includes(expected));
   }
 });
 
@@ -803,5 +839,18 @@ test('the deployment guard rejects inconsistent aliases or a bypassable staging 
         /staging database binding|staging verdict/.test(error),
       ),
     );
+  }
+});
+
+test('the deployment guard requires explicit protected aliases for build and deploy', () => {
+  for (const id of ['build', 'deploy']) {
+    for (const name of ['AGI_DATABASE_URL', 'DATABASE_URL']) {
+      assert.ok(
+        errorsAfterStaging((document) => {
+          const step = document.jobs.deploy.steps.find((entry) => entry.id === id);
+          if (step.env) delete step.env[name];
+        }).some((error) => /staging database binding/.test(error)),
+      );
+    }
   }
 });

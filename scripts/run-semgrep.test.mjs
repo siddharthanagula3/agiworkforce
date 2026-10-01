@@ -53,14 +53,18 @@ function sdkFixture() {
     fs.writeFileSync(path.join(hostile, name), hostileCode, { mode: 0o755 });
   const state = path.join(directory, 'state');
   const output = path.join(directory, 'report.json');
-  function run(extra = '') {
+  function run(extra = '', captureFailure = false) {
     const body = `import importlib.util,sys,json,pathlib\nsys.dont_write_bytecode=True\nspec=importlib.util.spec_from_file_location('producer',${JSON.stringify(PRODUCER)})\np=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)\ndef resolve(configs,version,destination):\n destination.write_text('{"rules":[]}')\n return {'version':version}\np.resolve_bundle=resolve\np.sources=lambda *args: []\np.git=lambda cwd,args: (('a' if args[-1]=='HEAD' else 'b')*40).encode()\n${extra}\nsys.argv=['producer','--expected-version','1.0.0','--config','fixture','--timeout','1','--jobs','1','--state-dir',${JSON.stringify(state)},'--output',${JSON.stringify(output)}]\np.main()\n`;
-    return spawnSync(interpreter, ['-I', '-B', '-c', body], {
-      cwd,
-      encoding: 'utf8',
-      timeout: 15000,
-      env: { ...process.env, PATH: hostile + path.delimiter + process.env.PATH, PYTHONPATH: cwd },
-    });
+    return spawnSync(
+      interpreter,
+      ['-I', '-B', '-c', captureFailure ? body.replace('p.main()\n', 'sys.exit(p.cli())\n') : body],
+      {
+        cwd,
+        encoding: 'utf8',
+        timeout: 15000,
+        env: { ...process.env, PATH: hostile + path.delimiter + process.env.PATH, PYTHONPATH: cwd },
+      },
+    );
   }
   return { directory, interpreter, installed, cwd, hostile, marker, state, output, run };
 }
@@ -164,7 +168,7 @@ test('workflow owns one engine version and uses the canonical producer bundle fo
   assert.match(job.env.SEMGREP_VERSION, /^\d+\.\d+\.\d+$/);
   const scan = job.steps.find((step) => step.id === 'semgrep').run;
   assert.ok(scan.includes('"semgrep==$SEMGREP_VERSION"'));
-  assert.ok(scan.includes('python3 scripts/run-semgrep.py'));
+  assert.ok(scan.includes('"$RUNNER_TEMP/semgrep-venv/bin/python" -I -B scripts/run-semgrep.py'));
   assert.ok(scan.includes('--expected-version "$SEMGREP_VERSION"'));
   for (const config of ['p/security-audit', 'p/typescript', 'p/owasp-top-ten'])
     assert.ok(scan.includes(`--config ${config}`));
@@ -200,4 +204,131 @@ except PermissionError: pass
 else: raise AssertionError('unknown process group falsely certified stopped')
 `);
   assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test('user-site installation cannot satisfy the isolated scanner ownership contract', () => {
+  const fixture = sdkFixture();
+  try {
+    const userbase = path.join(fixture.directory, 'user');
+    const environment = { ...process.env, PYTHONUSERBASE: userbase };
+    const location = spawnSync(
+      'python3',
+      [
+        '-S',
+        '-B',
+        '-c',
+        'import sysconfig; print(sysconfig.get_path("purelib", scheme=sysconfig.get_preferred_scheme("user")))',
+      ],
+      { encoding: 'utf8', env: environment },
+    );
+    assert.equal(location.status, 0, location.stdout + location.stderr);
+    const installed = path.join(location.stdout.trim(), 'semgrep');
+    fs.cpSync(fixture.installed, installed, { recursive: true });
+    const probe = `import importlib.util,pathlib,semgrep\nassert pathlib.Path(semgrep.__file__).resolve().parent==pathlib.Path(${JSON.stringify(installed)})\nspec=importlib.util.spec_from_file_location('producer',${JSON.stringify(PRODUCER)})\np=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)\ntry:p.scanner_runtime('1.0.0')\nexcept RuntimeError as error:assert str(error)=='Scanner package is not owned by the installed interpreter.'\nelse:raise AssertionError('user-site scanner accepted')\n`;
+    const ordinary = spawnSync('python3', ['-B', '-c', probe], {
+      encoding: 'utf8',
+      env: environment,
+    });
+    assert.equal(ordinary.status, 0, ordinary.stdout + ordinary.stderr);
+    const isolated = spawnSync(
+      'python3',
+      [
+        '-I',
+        '-B',
+        '-c',
+        `import importlib.util,pathlib\nspec=importlib.util.find_spec('semgrep')\nassert spec is None or pathlib.Path(spec.origin).resolve().parent!=pathlib.Path(${JSON.stringify(installed)})\n`,
+      ],
+      { encoding: 'utf8', env: environment },
+    );
+    assert.equal(isolated.status, 0, isolated.stdout + isolated.stderr);
+  } finally {
+    fs.rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test('failure diagnostics identify reached boundaries without exception contents', () => {
+  for (const [stage, prepare] of [
+    [
+      'rule-resolution',
+      "p.resolve_bundle=lambda *args: (_ for _ in ()).throw(RuntimeError('fixture-private-url'))",
+    ],
+    ['scanner-runtime', ''],
+  ]) {
+    const fixture = sdkFixture();
+    try {
+      let injected = prepare;
+      if (stage === 'scanner-runtime') {
+        fs.rmSync(path.join(fixture.installed, 'bin', 'semgrep-core'));
+        injected = '';
+      }
+      const result = fixture.run(injected, true);
+      assert.equal(result.status, 1);
+      assert.equal(
+        result.stderr,
+        `Semgrep failed at ${stage}. This is a broken scanner, not a clean scan.\n`,
+      );
+      assert.ok(!result.stderr.includes('fixture-private-url'));
+      assert.ok(!fs.existsSync(fixture.output));
+    } finally {
+      fs.rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  }
+});
+
+test('actual workflow bootstrap installs and scans with one fresh isolated interpreter', () => {
+  const fixture = sdkFixture();
+  try {
+    const workflow = parse(fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
+    const scan = workflow.jobs.security.steps.find((step) => step.id === 'semgrep').run;
+    const python = spawnSync('python3', ['-I', '-S', '-c', 'import sys; print(sys.executable)'], {
+      encoding: 'utf8',
+    });
+    assert.equal(python.status, 0);
+    const runner = path.join(fixture.directory, 'runner');
+    const source = path.join(fixture.directory, 'workflow-source');
+    fs.mkdirSync(runner);
+    fs.mkdirSync(path.join(source, 'scripts'), { recursive: true });
+    const pipReceipt = path.join(fixture.directory, 'pip.json');
+    const wrapper = `#!${python.stdout.trim()}\nimport json,pathlib,shutil,subprocess,sys\nargs=sys.argv[1:]\nassert args[:3]==['-I','-m','venv'] and len(args)==4\nsubprocess.run([${JSON.stringify(python.stdout.trim())},*args],check=True)\ninterpreter=pathlib.Path(args[3])/'bin/python'\nlocation=subprocess.check_output([str(interpreter),'-I','-c','import sysconfig; print(sysconfig.get_path("purelib"))'],text=True).strip()\nshutil.copytree(${JSON.stringify(fixture.installed)},pathlib.Path(location)/'semgrep')\npip=${JSON.stringify(`import json,pathlib,sys\nassert sys.argv[1:]==['--isolated','install','--quiet','--disable-pip-version-check','semgrep==1.0.0']\npathlib.Path(${JSON.stringify(pipReceipt)}).write_text(json.dumps({'interpreter':sys.executable,'prefix':sys.prefix,'isolated':sys.flags.isolated}))\n`)}\nshutil.rmtree(pathlib.Path(location)/'pip')\n(pathlib.Path(location)/'pip.py').write_text(pip)\n`;
+    fs.writeFileSync(path.join(fixture.hostile, 'python3'), wrapper, { mode: 0o755 });
+    fs.writeFileSync(
+      path.join(source, 'scripts/run-semgrep.py'),
+      `import importlib.util,sys\nspec=importlib.util.spec_from_file_location('producer',${JSON.stringify(PRODUCER)})\np=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)\ndef resolve(configs,version,destination):\n destination.write_text('{"rules":[]}')\n return {'version':version}\np.resolve_bundle=resolve\np.sources=lambda *args:[]\np.git=lambda cwd,args:(('a' if args[-1]=='HEAD' else 'b')*40).encode()\nsys.exit(p.cli())\n`,
+    );
+    const output = path.join(fixture.directory, 'github-output');
+    const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', scan], {
+      encoding: 'utf8',
+      cwd: source,
+      timeout: 30000,
+      env: {
+        ...process.env,
+        PATH: fixture.hostile + path.delimiter + process.env.PATH,
+        RUNNER_TEMP: runner,
+        SEMGREP_VERSION: '1.0.0',
+        GITHUB_OUTPUT: output,
+        PYTHONPATH: fixture.cwd,
+      },
+    });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const installed = JSON.parse(fs.readFileSync(pipReceipt, 'utf8'));
+    const scanned = JSON.parse(
+      fs.readFileSync(path.join(source, 'semgrep-results.json'), 'utf8'),
+    ).fixtureIdentity;
+    assert.equal(installed.interpreter, path.join(runner, 'semgrep-venv/bin/python'));
+    assert.equal(scanned.interpreter, installed.interpreter);
+    assert.equal(installed.prefix, scanned.prefix);
+    assert.equal(installed.isolated, 1);
+    assert.equal(scanned.isolated, 1);
+    assert.equal(fs.readFileSync(output, 'utf8'), 'count=0\n');
+    assert.ok(!fs.existsSync(fixture.marker));
+    const reused = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', scan], {
+      encoding: 'utf8',
+      cwd: source,
+      timeout: 30000,
+      env: { ...process.env, RUNNER_TEMP: runner, SEMGREP_VERSION: '1.0.0', GITHUB_OUTPUT: output },
+    });
+    assert.notEqual(reused.status, 0, 'workflow reused an unverified installation');
+  } finally {
+    fs.rmSync(fixture.directory, { recursive: true, force: true });
+  }
 });

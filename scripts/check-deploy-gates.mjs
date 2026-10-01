@@ -326,6 +326,7 @@ function checkStagingGates({ repoRoot, errors }) {
   const declared = steps(job ?? {});
   const selected = orderedIds.map((id) => declared.find((step) => step.id === id));
   const database = selected[1];
+  const build = selected[3];
   const deployment = selected[4];
   const order = selected.map((step) => declared.indexOf(step));
   if (
@@ -338,6 +339,9 @@ function checkStagingGates({ repoRoot, errors }) {
         !stepCanFailTheJob(step) ||
         step.if !== undefined ||
         aliases.some((name) => step.env?.[name] !== undefined && step.env[name] !== expected),
+    ) ||
+    [build, deployment].some((step) =>
+      ['AGI_DATABASE_URL', 'DATABASE_URL'].some((name) => step?.env?.[name] !== expected),
     ) ||
     order.some((position, index) => index > 0 && position <= order[index - 1]) ||
     database?.run?.trim() !== 'node scripts/verify-staging-database.mjs' ||
