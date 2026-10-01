@@ -14,8 +14,8 @@
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "2.1.0",
-    "@modelcontextprotocol/core": "2.1.0",
+    "@modelcontextprotocol/client": "2.2.0",
+    "@modelcontextprotocol/core": "2.2.0",
     "@modelcontextprotocol/ext-apps": "2.0.3",
     "@modelcontextprotocol/ext-tasks": "0.1.0"
   },

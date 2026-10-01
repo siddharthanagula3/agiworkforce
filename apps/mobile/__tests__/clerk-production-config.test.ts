@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+jest.mock('@clerk/expo', () => ({ getClerkInstance: jest.fn() }));
+
 describe('Mobile Clerk publishable-key configuration', () => {
   const originalConfigAppEnv = process.env.APP_ENV;
   const originalAppEnv = process.env.EXPO_PUBLIC_APP_ENV;

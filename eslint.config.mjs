@@ -108,6 +108,7 @@ export default [
       'test-*.js',
       'apps/web/scripts/**',
       'apps/mobile/scripts/**',
+      'apps/mobile/.cache/privacy-parser/**',
       'apps/cli/scripts/**',
       'apps/extension-vscode/scripts/**',
       'packages/react-native-worklets/**',

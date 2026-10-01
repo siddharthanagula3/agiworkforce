@@ -4,6 +4,8 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import type { Artifact } from '../types/chat';
 
+jest.mock('@clerk/expo', () => ({ getClerkInstance: jest.fn() }));
+
 jest.mock('@/lib/clipboard', () => ({
   copyToClipboard: jest.fn().mockResolvedValue(true),
 }));

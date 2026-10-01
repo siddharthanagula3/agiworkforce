@@ -405,9 +405,9 @@
     "@eslint/js": "^9.39.5",
     "@neondatabase/serverless": "^1.1.0",
     "@playwright/test": "^1.58.2",
-    "@types/node": "^24.13.3",
-    "@typescript-eslint/eslint-plugin": "^8.57.2",
-    "@typescript-eslint/parser": "^8.57.2",
+    "@types/node": "^24.19.0",
+    "@typescript-eslint/eslint-plugin": "^8.71.0",
+    "@typescript-eslint/parser": "^8.71.0",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.5",
@@ -421,9 +421,9 @@
     "pg": "^8.23.0",
     "playwright": "^1.58.2",
     "prettier": "^3.9.8",
-    "smol-toml": "^1.8.0",
-    "tsx": "^4.21.0",
-    "turbo": "2.10.13",
+    "smol-toml": "^1.9.0",
+    "tsx": "^4.23.15",
+    "turbo": "2.11.5",
     "typescript": "5.9.3",
     "vitest": "^4.1.11",
     "yaml": "^2.9.1"
@@ -441,6 +441,6 @@
     ]
   },
   "dependencies": {
-    "simple-icons": "^16.30.0"
+    "simple-icons": "^16.33.0"
   }
 }
