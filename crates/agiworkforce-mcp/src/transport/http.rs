@@ -798,7 +798,7 @@ mod tests {
             None,
             &McpTimeouts::default(),
             hooks,
-            Arc::new(Events::new(tx)),
+            Arc::new(Events::new(tx, &McpTimeouts::default())),
         )
         .expect("connect")
     }

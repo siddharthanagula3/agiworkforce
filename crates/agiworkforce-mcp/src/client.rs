@@ -94,7 +94,7 @@ impl McpClient {
         hooks: ClientHooks,
     ) -> Result<Self> {
         let (notif_tx, notif_rx) = mpsc::channel::<McpNotification>(128);
-        let events = Arc::new(Events::new(notif_tx));
+        let events = Arc::new(Events::new(notif_tx, &timeouts));
         let stderr_buf: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         let conn = open_conn(
             server_name,

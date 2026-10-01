@@ -627,3 +627,50 @@ impl BrowserAuthorizer for DrivingBrowser {
         true
     }
 }
+
+pub fn http_modern_read_cache(ttl_ms: u64, payload_bytes: usize) -> (Router, Arc<HttpRecord>) {
+    let rec = Arc::new(HttpRecord::default());
+    let rec2 = Arc::clone(&rec);
+    let app = Router::new().route(
+        "/",
+        post(move |headers: HeaderMap, body: String| {
+            let rec = Arc::clone(&rec2);
+            async move {
+                let frame: serde_json::Value = serde_json::from_str(&body).unwrap();
+                let method = record(&rec, &headers, &frame);
+                let id = frame.get("id").cloned().unwrap_or(serde_json::Value::Null);
+                let result = match method.as_str() {
+                    "server/discover" => agiworkforce_mcp::server::discover_result(
+                        serde_json::json!({ "resources": {} }),
+                        0,
+                    ),
+                    "resources/read" => {
+                        let uri = frame["params"]["uri"].as_str().unwrap();
+                        let number = rec
+                            .requests
+                            .lock()
+                            .unwrap()
+                            .iter()
+                            .filter(|request| {
+                                request.method == "resources/read"
+                                    && request.body["params"]["uri"].as_str() == Some(uri)
+                            })
+                            .count();
+                        agiworkforce_mcp::server::cacheable(
+                            serde_json::json!({ "contents": [{
+                                "uri": uri,
+                                "text": format!("{number}:{}", "x".repeat(payload_bytes)),
+                                "mimeType": "text/plain"
+                            }] }),
+                            ttl_ms,
+                            agiworkforce_mcp::server::CacheScope::Private,
+                        )
+                    }
+                    _ => panic!("unexpected modern cache method {method}"),
+                };
+                json_response(StatusCode::OK, None, rpc_result(&id, result))
+            }
+        }),
+    );
+    (app, rec)
+}

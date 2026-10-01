@@ -84,6 +84,9 @@ pub struct McpTimeouts {
     /// knob would otherwise buffer them until the process dies. Read it through
     /// [`McpTimeouts::frame_cap`], never as a raw `Option`.
     pub max_frame_bytes: Option<usize>,
+    pub max_read_cache_entries: Option<usize>,
+    pub max_read_cache_bytes: Option<usize>,
+    pub max_read_cache_ttl: Option<Duration>,
     /// When `true`, remote transport URLs are validated against SSRF at connect time via
     /// [`crate::security::validate_server_url`]: loopback allowed,
     /// private/link-local/mapped ranges and numeric-domain obfuscation blocked.
@@ -115,6 +118,11 @@ pub const DEFAULT_MAX_FRAME_BYTES: usize = 50_000_000;
 /// [`McpTimeouts::max_response_bytes`] unset (the desktop 50 MB ceiling).
 pub const DEFAULT_MAX_RESPONSE_BYTES: u64 = 50_000_000;
 
+pub const DEFAULT_MAX_READ_CACHE_ENTRIES: usize = 128;
+pub const DEFAULT_MAX_READ_CACHE_BYTES: usize = 16 * 1024 * 1024;
+pub const DEFAULT_MAX_READ_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+pub const READ_CACHE_PRUNE_INTERVAL: Duration = Duration::from_secs(1);
+
 impl McpTimeouts {
     /// The frame ceiling to enforce, whatever the host configured.
     pub fn frame_cap(&self) -> usize {
@@ -126,6 +134,21 @@ impl McpTimeouts {
         self.max_response_bytes
             .unwrap_or(DEFAULT_MAX_RESPONSE_BYTES)
     }
+
+    pub fn read_cache_entries_cap(&self) -> usize {
+        self.max_read_cache_entries
+            .unwrap_or(DEFAULT_MAX_READ_CACHE_ENTRIES)
+    }
+
+    pub fn read_cache_bytes_cap(&self) -> usize {
+        self.max_read_cache_bytes
+            .unwrap_or(DEFAULT_MAX_READ_CACHE_BYTES)
+    }
+
+    pub fn read_cache_ttl_cap(&self) -> Duration {
+        self.max_read_cache_ttl
+            .unwrap_or(DEFAULT_MAX_READ_CACHE_TTL)
+    }
 }
 
 impl Default for McpTimeouts {
@@ -136,6 +159,9 @@ impl Default for McpTimeouts {
             call_tool: Duration::from_secs(120),
             health_check: Duration::from_secs(5),
             max_frame_bytes: None,
+            max_read_cache_entries: None,
+            max_read_cache_bytes: None,
+            max_read_cache_ttl: None,
             validate_urls: false,
             verify_tls: true,
             max_response_bytes: None,
