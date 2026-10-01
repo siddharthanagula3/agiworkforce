@@ -1,6 +1,7 @@
 use super::dangerous_commands::{
     BASE64_DANGEROUS_OPTIONS, FIND_DANGEROUS_OPTIONS, GIT_BRANCH_READONLY_FLAGS,
-    GIT_GLOBAL_OPTIONS_WITH_VALUE, GIT_SAFE_SUBCOMMANDS, RG_DANGEROUS_OPTIONS, SYSTEM_PATHS,
+    GIT_GLOBAL_OPTIONS_WITHOUT_VALUE, GIT_GLOBAL_OPTIONS_WITH_VALUE, GIT_PUSH_FORCE_FLAGS,
+    GIT_PUSH_OPTIONS_WITH_VALUE, GIT_SAFE_SUBCOMMANDS, RG_DANGEROUS_OPTIONS, SYSTEM_PATHS,
 };
 use super::CommandSafety;
 
@@ -168,7 +169,13 @@ pub(super) fn classify_base64(command: &str) -> CommandSafety {
 /// Classify `git`, enhanced validation that skips global options, blocks `-c`,
 /// and validates subcommands with their flags.
 pub(super) fn classify_git(command: &str) -> CommandSafety {
-    let args: Vec<&str> = command.split_whitespace().collect();
+    let Some(words) = shlex::split(command) else {
+        return CommandSafety::Unknown;
+    };
+    if words.is_empty() {
+        return CommandSafety::Unknown;
+    }
+    let args: Vec<&str> = words.iter().map(String::as_str).collect();
     let mut i = 1; // skip "git"
 
     // Block `git -c` (config override injection), all forms.
@@ -189,11 +196,15 @@ pub(super) fn classify_git(command: &str) -> CommandSafety {
             i += 2; // skip the option and its value
             continue;
         }
+        if GIT_GLOBAL_OPTIONS_WITHOUT_VALUE.contains(&arg) {
+            i += 1;
+            continue;
+        }
         // Skip --git-dir=value style
-        if GIT_GLOBAL_OPTIONS_WITH_VALUE
-            .iter()
-            .any(|opt| arg.starts_with(&format!("{}=", opt)))
-        {
+        if GIT_GLOBAL_OPTIONS_WITH_VALUE.iter().any(|opt| {
+            arg.starts_with(&format!("{}=", opt))
+                || (!opt.starts_with("--") && arg.starts_with(*opt) && arg.len() > opt.len())
+        }) {
             i += 1;
             continue;
         }
@@ -214,7 +225,9 @@ pub(super) fn classify_git(command: &str) -> CommandSafety {
         .collect::<Vec<_>>()
         .join(" ");
 
-    if normalized_sub.starts_with("push --force") || normalized_sub.starts_with("reset --hard") {
+    if (subcommand == "push" && git_push_has_force_arg(sub_args))
+        || normalized_sub.starts_with("reset --hard")
+    {
         return CommandSafety::Dangerous;
     }
 
@@ -250,6 +263,56 @@ pub(super) fn classify_git(command: &str) -> CommandSafety {
     CommandSafety::Unknown
 }
 
+fn git_push_has_force_arg(args: &[&str]) -> bool {
+    let mut repository_seen = false;
+    let mut options_ended = false;
+    let mut i = 0;
+    while i < args.len() {
+        let arg = args[i];
+        if !options_ended && (arg == "--" || arg == "--end-of-options") {
+            options_ended = true;
+        } else if !options_ended && GIT_PUSH_OPTIONS_WITH_VALUE.contains(&arg) {
+            i += 1;
+        } else if !options_ended && arg.starts_with("--") {
+            let (option, value) = arg
+                .split_once('=')
+                .map_or((arg, None), |(option, value)| (option, Some(value)));
+            if GIT_PUSH_OPTIONS_WITH_VALUE
+                .iter()
+                .any(|known| known.starts_with("--") && known.starts_with(option))
+            {
+                if value.is_none() {
+                    i += 1;
+                }
+            } else if GIT_PUSH_FORCE_FLAGS
+                .iter()
+                .any(|force| force.starts_with("--") && force.starts_with(option))
+            {
+                return true;
+            }
+        } else if !options_ended && arg.len() > 1 && arg.starts_with('-') {
+            let mut options = arg[1..].chars();
+            while let Some(option) = options.next() {
+                if option == 'o' {
+                    if options.as_str().is_empty() {
+                        i += 1;
+                    }
+                    break;
+                }
+                if option == 'f' {
+                    return true;
+                }
+            }
+        } else if repository_seen && arg.starts_with('+') {
+            return true;
+        } else {
+            repository_seen = true;
+        }
+        i += 1;
+    }
+    false
+}
+
 /// Classify `git branch`, safe only with read-only flags.
 pub(super) fn classify_git_branch(args: &[&str]) -> CommandSafety {
     if args.is_empty() {
@@ -282,6 +345,82 @@ pub(super) fn classify_mv(command: &str) -> CommandSafety {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn force_push_arguments_require_dangerous_classification() {
+        for command in [
+            "git push -f origin main",
+            "\"git\" push -f origin main",
+            "g\\it push -f origin main",
+            "git push origin main --force",
+            "git push -ofoo --force origin main",
+            "git push --force-with-lease origin main",
+            "git push --force-with-l=refs/heads/main:deadbeef origin main",
+            "git push origin main --force-with-lease=refs/heads/main:deadbeef",
+            "git push origin +main:main",
+            "git push --repo=other origin +main:main",
+            "git push --repo other origin +main:main",
+            "git push --mirror origin",
+            "git push origin --mir",
+            "git push -vf origin main",
+            "git -C /repo push -f origin main",
+            "git -C/repo push -f origin main",
+            "git --no-pager push -f origin main",
+            "git -P --no-optional-locks push origin +main",
+            "sh -c 'git push -f origin main'",
+            "git status && git push origin main --force",
+            "git -C '/repo with spaces' push origin +main",
+            "git --git-dir=/repo/.git push origin main '--force'",
+            "git push origin -- +main:main",
+            "git push - +main:main",
+            "git push --end-of-options origin +main:main",
+        ] {
+            assert_eq!(
+                super::super::classify_command(command),
+                CommandSafety::Dangerous,
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn force_push_text_in_operands_does_not_change_classification() {
+        for command in [
+            "git push origin main",
+            "git push +origin main",
+            "git push --repo=origin +main:main",
+            "git push --repo origin +main:main",
+            "git push origin refs/heads/--force",
+            "git push -o --force origin main",
+            "git push --push-option=--force origin main",
+            "git push --push-o --force origin main",
+            "git push --recei --force origin main",
+            "git push --recurse-submodules check +origin main",
+            "git push -o-f origin main",
+            "git push --receive-pack --force origin main",
+            "git push -- origin --force",
+            "git push --end-of-options origin --force",
+            "git push --force-if-includes origin main",
+            "git push --no-force origin main",
+            "git push --no-mirror origin main",
+            "git push --no-no-force origin main",
+            "git push --no-no-mirror origin main",
+        ] {
+            assert_eq!(
+                super::super::classify_command(command),
+                CommandSafety::Unknown,
+                "{command}"
+            );
+        }
+        assert_eq!(
+            super::super::classify_command("git log --oneline"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            super::super::classify_command("git push origin 'main"),
+            CommandSafety::Unknown
+        );
+    }
 
     #[test]
     fn strip_matched_quotes_strips_balanced_pairs_only() {

@@ -94,7 +94,6 @@ pub const DANGEROUS_COMMANDS: &[&str] = &[
 pub(super) const DANGEROUS_PREFIXES: &[&str] = &[
     "chmod 777",
     "launchctl unload",
-    "git push --force",
     "git reset --hard",
     // Package manager installs (system-level side effects)
     "apt install",
@@ -142,6 +141,34 @@ pub(super) const GIT_BRANCH_READONLY_FLAGS: &[&str] = &[
 /// Git global options that take a value and should be skipped to find the subcommand.
 pub(super) const GIT_GLOBAL_OPTIONS_WITH_VALUE: &[&str] =
     &["-C", "--git-dir", "--work-tree", "--namespace"];
+
+pub(super) const GIT_GLOBAL_OPTIONS_WITHOUT_VALUE: &[&str] = &[
+    "-p",
+    "--paginate",
+    "-P",
+    "--no-pager",
+    "--no-replace-objects",
+    "--no-lazy-fetch",
+    "--no-optional-locks",
+    "--no-advice",
+    "--bare",
+    "--literal-pathspecs",
+    "--glob-pathspecs",
+    "--noglob-pathspecs",
+    "--icase-pathspecs",
+];
+
+pub(super) const GIT_PUSH_FORCE_FLAGS: &[&str] =
+    &["-f", "--force", "--force-with-lease", "--mirror"];
+
+pub(super) const GIT_PUSH_OPTIONS_WITH_VALUE: &[&str] = &[
+    "--repo",
+    "--receive-pack",
+    "--exec",
+    "-o",
+    "--push-option",
+    "--recurse-submodules",
+];
 
 /// Flags that turn a repository's own git hooks off.
 ///

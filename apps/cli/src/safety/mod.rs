@@ -374,7 +374,11 @@ fn classify_named_program(segment: &str, prev_was_safe: bool, depth: usize) -> C
     }
 
     // `git`, enhanced subcommand validation.
-    if base_cmd == "git" {
+    if base_cmd == "git"
+        || shlex::split(trimmed)
+            .and_then(|words| words.into_iter().next())
+            .is_some_and(|program| strip_path(&program) == "git")
+    {
         // Turning the repository's hooks off is its own category. It rides on
         // an otherwise ordinary command, so the subcommand classifier below
         // would read `git commit --no-verify` as the `git commit` a user
