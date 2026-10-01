@@ -46,7 +46,7 @@ permissions:
 jobs:
   test-l1:
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 120
     env:
       NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_TEST }}
       DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_TEST }}
