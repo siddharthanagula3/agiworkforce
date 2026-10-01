@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/active-workspace-service');
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
@@ -50,7 +51,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveActiveOrganizationId: vi.fn(async () => null),
 }));
 

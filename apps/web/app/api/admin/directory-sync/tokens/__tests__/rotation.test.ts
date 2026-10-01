@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/rate-limit');
+type ScanModule1 = typeof import('@/lib/csrf');
+type ScanModule2 = typeof import('@/lib/security-audit');
+type ScanModule3 = typeof import('@/app/api/admin/directory-sync/directory-sync-access');
 
 vi.mock('server-only', () => ({}));
 
@@ -10,22 +14,20 @@ const ADMIN_ID = 'directory-admin';
 const access = vi.hoisted(() => ({ db: null as unknown }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule0>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule1>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule2>()),
   recordAuditEvent: vi.fn(async () => undefined),
   logSecurityEvent: vi.fn(async () => undefined),
 }));
 vi.mock('@/app/api/admin/directory-sync/directory-sync-access', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/app/api/admin/directory-sync/directory-sync-access')
-  >()),
+  ...(await importOriginal<ScanModule3>()),
   requireDirectorySyncAdmin: vi.fn(async () => ({
     db: access.db,
     userId: ADMIN_ID,

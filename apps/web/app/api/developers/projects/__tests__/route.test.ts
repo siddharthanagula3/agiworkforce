@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/developer-project-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -68,7 +69,7 @@ vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/services/developer-project-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/developer-project-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   listDeveloperProjects: mocks.listDeveloperProjects,
   createDeveloperProject: mocks.createDeveloperProject,
 }));

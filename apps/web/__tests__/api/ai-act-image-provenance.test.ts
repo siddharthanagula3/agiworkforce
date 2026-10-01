@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/error-handler');
+type ScanModule1 = typeof import('@/lib/server/media-storage');
+type ScanModule2 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -32,7 +35,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/neon-db', () => ({ getServiceClient: vi.fn(() => ({})) }));
 
 vi.mock('@/lib/error-handler', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/error-handler')>();
+  const actual = await importOriginal<ScanModule0>();
   return { withErrorHandler: actual.withErrorHandler, handleError: actual.handleError };
 });
 
@@ -44,7 +47,7 @@ const storageMocks = vi.hoisted(() => ({
   read: vi.fn(),
 }));
 vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/media-storage')>()),
+  ...(await importOriginal<ScanModule1>()),
   isMediaStorageConfigured: storageMocks.configured,
   isImageStorageConfigured: storageMocks.configured,
   storeMedia: storageMocks.store,
@@ -79,7 +82,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => rlsMocks.getUserScopedDb(...args),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   reserveManagedUsageRequest: managedUsageMocks.reserve,
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   finalizeManagedUsageRequest: managedUsageMocks.finalize,

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
+type ScanModule0 = typeof import('../scim-provisioning-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -8,7 +9,7 @@ const { reconcileMembership } = vi.hoisted(() => ({
 }));
 
 vi.mock('../scim-provisioning-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../scim-provisioning-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   reconcileMembership,
 }));
 

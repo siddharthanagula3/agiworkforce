@@ -8,13 +8,14 @@ import {
 } from '@agiworkforce/types';
 import { getRoutePricingForModel, modelRegistry } from '@agiworkforce/model-registry';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 const { routeOverrides } = vi.hoisted(() => ({
   routeOverrides: new Map<string, unknown>(),
 }));
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     getRegistryRoute: (routeId: string) =>

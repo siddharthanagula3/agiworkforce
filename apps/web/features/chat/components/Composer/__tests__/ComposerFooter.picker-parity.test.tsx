@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@shared/config/llm');
+type ScanModule1 = typeof import('@agiworkforce/ui');
+type ScanModule2 = typeof import('zustand/middleware');
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => undefined, replace: () => undefined }),
@@ -100,12 +103,12 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 vi.mock('@shared/config/llm', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/config/llm')>()),
+  ...(await importOriginal<ScanModule0>()),
   isModelAllowedForTier: (modelId: string) => modelId !== registryFixtures.locked.id,
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  const actual = await importOriginal<ScanModule1>();
   const { createContext, useContext, cloneElement } = await import('react');
   const PopoverContext = createContext<{ open: boolean; onOpenChange: (o: boolean) => void }>({
     open: false,
@@ -193,7 +196,7 @@ vi.mock('@features/chat/lib/use-model-favourites', () => ({
 }));
 
 vi.mock('zustand/middleware', async () => {
-  const actual = await vi.importActual<typeof import('zustand/middleware')>('zustand/middleware');
+  const actual = await vi.importActual<ScanModule2>('zustand/middleware');
   return { ...actual, persist: (config: (set: unknown) => unknown) => config };
 });
 

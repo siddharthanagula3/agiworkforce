@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { directoryRecord } from './fixtures';
+type ScanModule0 = typeof import('@/lib/connectors/directory/registry-client');
+type ScanModule1 = typeof import('@/lib/connectors/directory/snapshot-view');
+type ScanModule2 = typeof import('./fixtures');
 
 const mocks = vi.hoisted(() => ({
   fetchRegistryPage: vi.fn(),
@@ -21,9 +24,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/connectors/directory/registry-client', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/connectors/directory/registry-client')>(
-    '@/lib/connectors/directory/registry-client',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/connectors/directory/registry-client');
   return { ...actual, fetchRegistryPage: (...args: unknown[]) => mocks.fetchRegistryPage(...args) };
 });
 vi.mock('@/lib/connectors/directory/snapshot-cache', () => ({
@@ -47,9 +48,7 @@ vi.mock('@/lib/connectors/directory/favicon-probe', () => ({
   resolveSiteIconForRecord: (record: unknown) => mocks.resolveSiteIconForRecord(record),
 }));
 vi.mock('@/lib/connectors/directory/auth-probe', async () => {
-  const view = await vi.importActual<typeof import('@/lib/connectors/directory/snapshot-view')>(
-    '@/lib/connectors/directory/snapshot-view',
-  );
+  const view = await vi.importActual<ScanModule1>('@/lib/connectors/directory/snapshot-view');
   return {
     isAuthProbeCandidate: (record: DirectoryRecord) =>
       record.authMode === 'unknown' && view.networkRemoteUrl(record) !== null,
@@ -67,7 +66,7 @@ vi.mock('@/lib/connectors/directory/first-party', () => ({
   applyFirstPartyTargets: (records: unknown[]) => records,
 }));
 vi.mock('@/lib/connectors/directory/normalize', async () => {
-  const fixtures = await vi.importActual<typeof import('./fixtures')>('./fixtures');
+  const fixtures = await vi.importActual<ScanModule2>('./fixtures');
   return {
     normalizeRegistryEntry: (entry: RegistryEntry) => {
       if (typeof entry.server.name !== 'string') throw new TypeError('malformed entry');

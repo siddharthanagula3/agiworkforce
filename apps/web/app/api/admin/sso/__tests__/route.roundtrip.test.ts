@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/sso/domain-verification');
 
 vi.mock('server-only', () => ({}));
 
@@ -36,7 +37,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: (...args: unknown[]) => mockGetSubscription(...args) },
 }));
 vi.mock('@/lib/server/sso/domain-verification', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/sso/domain-verification')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     verifyDomainOwnership: (...args: unknown[]) => mockVerifyDomainOwnership(...args),

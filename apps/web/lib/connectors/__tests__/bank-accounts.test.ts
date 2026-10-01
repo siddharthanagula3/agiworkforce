@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/connectors/plaid-config');
+type ScanModule1 = typeof import('@/lib/custom-connector-crypto');
+type ScanModule2 = typeof import('@/lib/url-fetch/guarded-fetch');
+type ScanModule3 = typeof import('@/lib/connectors/oauth-store');
 
 interface ItemRow {
   id: string;
@@ -26,7 +30,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/connectors/plaid-config', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/plaid-config')>()),
+  ...(await importOriginal<ScanModule0>()),
   plaidApiOrigin: () => 'https://sandbox.plaid.com',
   plaidCredentials: () => ({
     origin: 'https://sandbox.plaid.com',
@@ -35,12 +39,12 @@ vi.mock('@/lib/connectors/plaid-config', async (importOriginal) => ({
   }),
 }));
 vi.mock('@/lib/custom-connector-crypto', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/custom-connector-crypto')>()),
+  ...(await importOriginal<ScanModule1>()),
   encryptConnectorToken: (token: string) => `enc:${token}`,
   decryptConnectorToken: (sealed: string) => sealed.replace(/^enc:/, ''),
 }));
 vi.mock('@/lib/url-fetch/guarded-fetch', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/url-fetch/guarded-fetch')>()),
+  ...(await importOriginal<ScanModule2>()),
   createDeadline: () => ({ release: () => undefined }),
   credentialedFetch: async (url: URL, init: { body: string }) => {
     const body = JSON.parse(init.body) as Record<string, unknown>;
@@ -53,7 +57,7 @@ vi.mock('@/lib/url-fetch/guarded-fetch', async (importOriginal) => ({
   },
 }));
 vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/oauth-store')>()),
+  ...(await importOriginal<ScanModule3>()),
   getConnectorOAuthGrant: async () => (state.grantToken ? { accessToken: state.grantToken } : null),
   upsertConnectorOAuthGrant: (...args: unknown[]) => {
     state.grantToken = (args[2] as { accessToken: string }).accessToken;

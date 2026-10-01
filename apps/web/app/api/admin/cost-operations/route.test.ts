@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/cost-rollups');
 
 const mocks = vi.hoisted(() => ({
   requirePlatformAdmin: vi.fn(),
@@ -10,9 +11,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/auth-guards', () => ({ requirePlatformAdmin: mocks.requirePlatformAdmin }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/services/cost-rollups', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/services/cost-rollups')>(
-    '@/lib/services/cost-rollups',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/services/cost-rollups');
   return { ...actual, readCostOperations: mocks.readCostOperations };
 });
 vi.mock('@/lib/logger', () => ({

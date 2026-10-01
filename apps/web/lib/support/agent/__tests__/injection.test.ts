@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/routing');
 
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/routing')>();
+  const actual = await importOriginal<ScanModule0>();
   const { modelMocks } = await import('./fixtures/model-mocks');
   return { ...actual, resolveAutoRoute: modelMocks.resolveAutoRoute };
 });

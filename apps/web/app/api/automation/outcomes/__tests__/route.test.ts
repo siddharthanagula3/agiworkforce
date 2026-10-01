@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/observability/automation-telemetry');
 
 vi.mock('server-only', () => ({}));
 
@@ -25,9 +26,7 @@ vi.mock('@/lib/security-audit', () => ({
 }));
 
 vi.mock('@/lib/observability/automation-telemetry', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/observability/automation-telemetry')>(
-    '@/lib/observability/automation-telemetry',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/observability/automation-telemetry');
   return { ...actual, recordAutomationOutcomes: mockRecord };
 });
 

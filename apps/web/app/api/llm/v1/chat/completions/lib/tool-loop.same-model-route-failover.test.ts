@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
 import { GATEWAY_BACKED_HARNESS_IDS, REGISTRY_HARNESS_IDS } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/cloud-agent-execution-service');
+type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
 vi.mock('workflow', () => ({
@@ -18,8 +20,7 @@ vi.mock('@/lib/services/cloud-agent-budget', () => ({
   authorizeCloudAgentOperation: async () => ({ allowed: true }),
 }));
 vi.mock('@/lib/services/cloud-agent-execution-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/cloud-agent-execution-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     claimCloudAgentExecutionOperation: receipts.claim,
@@ -42,8 +43,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     reserveManagedUsageProviderStep: vi.fn(),

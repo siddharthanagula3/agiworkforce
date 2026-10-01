@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../../../lib/runtimeEnvironment');
 
 /**
  * The Electron build must not offer a mode it cannot enter.
@@ -12,7 +13,7 @@ import { describe, expect, it, vi } from 'vitest';
  * the header banner that said the same thing.
  */
 vi.mock('../../../lib/runtimeEnvironment', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../lib/runtimeEnvironment')>()),
+  ...(await importOriginal<ScanModule0>()),
   isElectronHost: true,
   supportsLocalAppMode: false,
 }));

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createS3ObjectStore, type ObjectStore } from '@agiworkforce/object-storage';
 import { OBJECT_STORAGE_REQUEST_TIMEOUT_MS } from './object-storage-timeouts';
+type ScanModule0 = typeof import('./object-storage-runtime');
 
 const sendMock = vi.hoisted(() => vi.fn());
 const storeMock = vi.hoisted(() => ({ current: null as ObjectStore | null }));
 
 vi.mock('./object-storage-runtime', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./object-storage-runtime')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     getObjectStore: () => storeMock.current,

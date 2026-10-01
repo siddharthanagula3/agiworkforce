@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/security-audit');
 
 const { auditSpy } = vi.hoisted(() => ({
   auditSpy: vi.fn(async (_event: Record<string, unknown>): Promise<void> => undefined),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: auditSpy,
 }));
 
@@ -124,8 +125,7 @@ describe('PATCH /api/share/[token], workspace audience', () => {
   });
 
   it('stores the route pattern as the audit endpoint, so the rows never hold the live link', async () => {
-    const audit =
-      await vi.importActual<typeof import('@/lib/security-audit')>('@/lib/security-audit');
+    const audit = await vi.importActual<ScanModule0>('@/lib/security-audit');
     auditSpy.mockImplementationOnce((event) => audit.recordAuditEvent(event as never));
     mocks.privilegedExecute.mockResolvedValue(1);
 

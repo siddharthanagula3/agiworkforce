@@ -1,23 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('@/lib/observability/denials');
+type ScanModule2 = typeof import('@/lib/server/data-region');
+type ScanModule3 = typeof import('../flag-store');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/observability/denials', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/observability/denials')>()),
+  ...(await importOriginal<ScanModule1>()),
   recordCapabilityDenial: vi.fn(),
 }));
 
 const store = vi.hoisted(() => ({ definitions: [] as unknown[] }));
 
 vi.mock('@/lib/server/data-region', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/data-region')>()),
+  ...(await importOriginal<ScanModule2>()),
   managedCloudDataRegion: () => 'us-east-1',
 }));
 vi.mock('../flag-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../flag-store')>()),
+  ...(await importOriginal<ScanModule3>()),
   getActiveFlagDefinitions: async () => store.definitions,
   getSubjectOverrides: async () => [],
 }));

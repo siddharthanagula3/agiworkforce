@@ -1,5 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../../../services/clerkNativeAuth');
+type ScanModule1 = typeof import('../../../services/desktopNativeSignIn');
+type ScanModule2 = typeof import('../../../services/desktopSocialSignIn');
 
 vi.mock('../../../lib/runtimeEnvironment', () => ({
   isTauri: true,
@@ -22,9 +25,7 @@ const clerk = {
 };
 
 vi.mock('../../../services/clerkNativeAuth', async () => {
-  const actual = await vi.importActual<typeof import('../../../services/clerkNativeAuth')>(
-    '../../../services/clerkNativeAuth',
-  );
+  const actual = await vi.importActual<ScanModule0>('../../../services/clerkNativeAuth');
   return {
     ...actual,
     attemptPassword: (...args: unknown[]) => clerk.attemptPassword(...args),
@@ -41,9 +42,7 @@ vi.mock('../../../services/clerkNativeAuth', async () => {
 
 const exchange = vi.fn();
 vi.mock('../../../services/desktopNativeSignIn', async () => {
-  const actual = await vi.importActual<typeof import('../../../services/desktopNativeSignIn')>(
-    '../../../services/desktopNativeSignIn',
-  );
+  const actual = await vi.importActual<ScanModule1>('../../../services/desktopNativeSignIn');
   return {
     ...actual,
     exchangeClerkSessionForCloudCredential: (...args: unknown[]) => exchange(...args),
@@ -55,9 +54,7 @@ const social = {
   completeSocialSignIn: vi.fn(),
 };
 vi.mock('../../../services/desktopSocialSignIn', async () => {
-  const actual = await vi.importActual<typeof import('../../../services/desktopSocialSignIn')>(
-    '../../../services/desktopSocialSignIn',
-  );
+  const actual = await vi.importActual<ScanModule2>('../../../services/desktopSocialSignIn');
   return {
     ...actual,
     beginSocialSignIn: (...args: unknown[]) => social.beginSocialSignIn(...args),

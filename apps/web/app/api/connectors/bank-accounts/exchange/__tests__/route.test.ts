@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/connectors/bank-accounts');
 
 vi.mock('server-only', () => ({}));
 
@@ -78,7 +79,7 @@ vi.mock('@/lib/free-chat-surface-policy', () => ({
   resolveCloudChatSurface: () => 'web',
 }));
 vi.mock('@/lib/connectors/bank-accounts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/bank-accounts')>()),
+  ...(await importOriginal<ScanModule0>()),
   bankAccountsToolDefs: vi.fn(),
   createBankAccountsLinkToken: vi.fn(),
   executeBankAccountsTool: vi.fn(),

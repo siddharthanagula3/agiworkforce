@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import JSZip from 'jszip';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('./scanned-document-text');
 
 const storageMocks = vi.hoisted(() => {
   class StoredObjectTooLargeError extends Error {
@@ -37,7 +38,7 @@ const transcribeMocks = vi.hoisted(() => ({ transcribeScannedPages: vi.fn() }));
 vi.mock('@/lib/server/object-storage', () => storageMocks);
 vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => pdfMocks);
 vi.mock('./scanned-document-text', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./scanned-document-text')>()),
+  ...(await importOriginal<ScanModule0>()),
   transcribeScannedPages: (...args: unknown[]) =>
     transcribeMocks.transcribeScannedPages(...args) as unknown,
 }));

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/cloud-contracts');
 
 vi.mock('../../lib/runtimeEnvironment', () => ({
   isTauri: true,
@@ -27,7 +28,7 @@ const { createClientMock } = vi.hoisted(() => ({
   createClientMock: vi.fn((_config?: unknown) => ({})),
 }));
 vi.mock('@agiworkforce/cloud-contracts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/cloud-contracts')>()),
+  ...(await importOriginal<ScanModule0>()),
   createManagedCloudChatClient: createClientMock,
 }));
 

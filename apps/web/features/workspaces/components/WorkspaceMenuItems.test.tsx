@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceSummary } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/features/workspaces/lib/workspace-switch-interruptions');
 
 const state = vi.hoisted(() => ({
   activeWorkspaceId: null as string | null,
@@ -43,9 +44,7 @@ vi.mock('@/features/workspaces/hooks/use-workspaces', () => ({
 }));
 
 vi.mock('@/features/workspaces/lib/workspace-switch-interruptions', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/features/workspaces/lib/workspace-switch-interruptions')
-  >()),
+  ...(await importOriginal<ScanModule0>()),
   useWorkspaceSwitchInterruptions: () => state.interruptions,
 }));
 

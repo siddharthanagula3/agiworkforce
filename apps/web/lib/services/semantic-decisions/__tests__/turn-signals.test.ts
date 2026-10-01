@@ -1,11 +1,17 @@
 // @vitest-environment node
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('@/lib/feature-flags/flag-evaluation-service');
+type ScanModule2 = typeof import('@/lib/feature-flags/flag-store');
+type ScanModule3 = typeof import('../host');
+type ScanModule4 = typeof import('../trace-service');
+type ScanModule5 = typeof import('@/lib/observability/metrics');
 
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -27,21 +33,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock('next/server', () => ({ after: (task: unknown) => mocks.after(task) }));
 
 vi.mock('@/lib/feature-flags/flag-evaluation-service', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/lib/feature-flags/flag-evaluation-service')
-  >('@/lib/feature-flags/flag-evaluation-service');
+  const actual = await vi.importActual<ScanModule1>('@/lib/feature-flags/flag-evaluation-service');
   return { ...actual, evaluateFlagsForSubject: () => mocks.evaluateFlagsForSubject() };
 });
 
 vi.mock('@/lib/feature-flags/flag-store', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/feature-flags/flag-store')>(
-    '@/lib/feature-flags/flag-store',
-  );
+  const actual = await vi.importActual<ScanModule2>('@/lib/feature-flags/flag-store');
   return { ...actual, getActiveFlagDefinitions: () => mocks.getActiveFlagDefinitions() };
 });
 
 vi.mock('../host', async () => {
-  const actual = await vi.importActual<typeof import('../host')>('../host');
+  const actual = await vi.importActual<ScanModule3>('../host');
   return {
     ...actual,
     evaluateSemanticDecision: (input: unknown) => mocks.evaluateSemanticDecision(input),
@@ -49,7 +51,7 @@ vi.mock('../host', async () => {
 });
 
 vi.mock('../trace-service', async () => {
-  const actual = await vi.importActual<typeof import('../trace-service')>('../trace-service');
+  const actual = await vi.importActual<ScanModule4>('../trace-service');
   return {
     ...actual,
     persistSemanticDecisionTraces: (traces: unknown) => mocks.persistSemanticDecisionTraces(traces),
@@ -57,9 +59,7 @@ vi.mock('../trace-service', async () => {
 });
 
 vi.mock('@/lib/observability/metrics', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/observability/metrics')>(
-    '@/lib/observability/metrics',
-  );
+  const actual = await vi.importActual<ScanModule5>('@/lib/observability/metrics');
   return {
     ...actual,
     recordSemanticDecisionComparison: (input: unknown) =>

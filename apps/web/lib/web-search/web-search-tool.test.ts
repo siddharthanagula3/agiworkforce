@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/cogs-ledger-service');
 
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
 vi.mock('node:dns/promises', () => ({
@@ -8,7 +9,7 @@ vi.mock('node:dns/promises', () => ({
 
 const recordSettledProviderCost = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, recordSettledProviderCost };
 });
 

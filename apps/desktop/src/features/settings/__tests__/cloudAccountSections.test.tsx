@@ -15,6 +15,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../../../api/cloudAccountSettings');
 
 const mocks = vi.hoisted(() => ({
   getCloudAccountProfile: vi.fn(),
@@ -31,9 +32,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../api/cloudAccountSettings', async () => {
-  const actual = await vi.importActual<typeof import('../../../api/cloudAccountSettings')>(
-    '../../../api/cloudAccountSettings',
-  );
+  const actual = await vi.importActual<ScanModule0>('../../../api/cloudAccountSettings');
   return {
     ...actual,
     getCloudAccountProfile: mocks.getCloudAccountProfile,

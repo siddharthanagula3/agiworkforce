@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/mobile-intent-tokens');
 
 const { mockResolve, mockAnswer } = vi.hoisted(() => ({
   mockResolve: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock('@/lib/server/mobile-intent', () => {
 });
 
 vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/mobile-intent-tokens')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveMobileIntentToken: (...args: unknown[]) => mockResolve(...args),
 }));
 

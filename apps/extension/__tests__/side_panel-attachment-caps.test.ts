@@ -14,6 +14,9 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('../src/features/cloud-bridge/clerkAuth');
+type ScanModule1 = typeof import('../src/features/cloud-bridge/freeTrialClient');
+type ScanModule2 = typeof import('../src/features/cloud-bridge/capabilityDocument');
 
 const chromeMock = vi.hoisted(() => {
   const event = () => ({ addListener: vi.fn(), removeListener: vi.fn(), hasListener: vi.fn() });
@@ -140,7 +143,7 @@ const account = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/features/cloud-bridge/clerkAuth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/cloud-bridge/clerkAuth')>()),
+  ...(await importOriginal<ScanModule0>()),
   isClerkExtensionAuthConfigured: () => true,
   getFreshClerkAuthContext: async () =>
     account.signedIn ? { token: 'fixture-session', owner: account.owner } : null,
@@ -155,8 +158,7 @@ vi.mock('../src/features/cloud-bridge/clerkAuth', async (importOriginal) => ({
 }));
 
 vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../src/features/cloud-bridge/freeTrialClient')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     getManagedModelAccess: async (): Promise<
@@ -187,7 +189,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
   };
 });
 vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/cloud-bridge/capabilityDocument')>()),
+  ...(await importOriginal<ScanModule2>()),
   fetchAccountSummary: async () => ({
     displayName: account.owner.authIncarnation,
     email: null,

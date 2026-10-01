@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('../detect');
 
 vi.mock('../detect', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../detect')>()),
+  ...(await importOriginal<ScanModule0>()),
   isTauri: false,
   isTest: false,
 }));

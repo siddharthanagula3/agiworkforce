@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+type ScanModule0 = typeof import('@/lib/server/health-check');
+type ScanModule1 = typeof import('@/lib/server/slo/attainment');
 
 const { healthChecks, sloAttainment } = vi.hoisted(() => ({
   healthChecks: vi.fn(),
@@ -8,11 +10,11 @@ const { healthChecks, sloAttainment } = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/health-check', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/health-check')>()),
+  ...(await importOriginal<ScanModule0>()),
   getCachedHealthChecks: healthChecks,
 }));
 vi.mock('@/lib/server/slo/attainment', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/slo/attainment')>()),
+  ...(await importOriginal<ScanModule1>()),
   getCachedSloAttainment: sloAttainment,
 }));
 

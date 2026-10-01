@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { listCanonicalModels } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/server/terms');
+type ScanModule1 = typeof import('@/lib/server/neon-db');
+type ScanModule2 = typeof import('@agiworkforce/routing');
+type ScanModule3 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule4 = typeof import('@/lib/services/provider-adapter-service');
 
 const TRANSIENT_RETRY_MODEL = listCanonicalModels().find(
   (model) => model.transientSameRouteRetries === 1,
@@ -30,14 +35,14 @@ vi.mock('@/lib/model-tiers', () => ({
 // Terms standing is the auth gate's own concern (auth-gate-terms.test.ts); these
 // turns run for an account that accepted the current version.
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  ...(await importOriginal<ScanModule0>()),
   readTermsStanding: async () => ({ kind: 'current' }),
 }));
 
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
-    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    ...(await importOriginal<ScanModule1>()),
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
@@ -73,7 +78,7 @@ const routingMocks = vi.hoisted(() => ({
   resolveAutoRoute: vi.fn(),
 }));
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/routing')>()),
+  ...(await importOriginal<ScanModule2>()),
   resolveAutoRoute: (...args: unknown[]) => routingMocks.resolveAutoRoute(...args),
 }));
 
@@ -203,7 +208,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getVerifiedBearerUserScopedDb: rlsMocks.getUserScopedDb,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule3>()),
   reserveManagedUsageRequest: managedUsageMocks.reserve,
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   finalizeManagedUsageRequest: managedUsageMocks.finalize,
@@ -238,7 +243,7 @@ vi.mock('@/lib/services/credit-service', () => ({
 
 const mockGetProviderFromModel = vi.fn();
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/provider-adapter-service')>();
+  const actual = await importOriginal<ScanModule4>();
   return {
     ...actual,
     resolveProviderFromModel: (...args: unknown[]) => mockGetProviderFromModel(...args),

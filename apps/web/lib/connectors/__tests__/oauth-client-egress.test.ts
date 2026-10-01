@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/egress-policy');
 
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
 const transport = vi.hoisted(() => ({
@@ -17,7 +18,7 @@ vi.mock('node:dns/promises', () => ({
 }));
 vi.mock('@/lib/logger', () => ({ logger: loggerMocks }));
 vi.mock('@/lib/egress-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/egress-policy')>()),
+  ...(await importOriginal<ScanModule0>()),
   pinnedPublicFetch: (input: string | URL | Request, init?: RequestInit) =>
     transport.impl(input, init),
 }));

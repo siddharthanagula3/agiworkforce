@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
+type ScanModule0 = typeof import('@/lib/rate-limit');
+type ScanModule1 = typeof import('@shared/utils/env');
+type ScanModule2 = typeof import('@/lib/server/data-region');
+type ScanModule3 = typeof import('@/lib/feature-flags/flag-store');
 
 const mocks = vi.hoisted(() => ({
   definitions: [] as unknown[],
@@ -8,11 +12,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule0>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@shared/utils/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/utils/env')>()),
+  ...(await importOriginal<ScanModule1>()),
   getOptionalEnv: (name: string) =>
     name.endsWith('_GITHUB_OWNER')
       ? 'siddharthanagula3'
@@ -21,11 +25,11 @@ vi.mock('@shared/utils/env', async (importOriginal) => ({
         : undefined,
 }));
 vi.mock('@/lib/server/data-region', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/data-region')>()),
+  ...(await importOriginal<ScanModule2>()),
   managedCloudDataRegion: () => 'us-east-1',
 }));
 vi.mock('@/lib/feature-flags/flag-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/flag-store')>()),
+  ...(await importOriginal<ScanModule3>()),
   getActiveFlagDefinitions: async () => mocks.definitions,
   getSubjectOverrides: async () => [],
 }));

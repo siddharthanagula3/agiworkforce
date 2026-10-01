@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
 import { IdentityRequestRejectedError } from '@agiworkforce/identity';
+type ScanModule0 = typeof import('@/lib/server/session-revocation');
 
 vi.mock('server-only', () => ({}));
 
@@ -76,7 +77,7 @@ vi.mock('@/lib/server/step-up/second-factor', () => ({
   readSecondFactorStatus: mocks.factors,
 }));
 vi.mock('@/lib/server/session-revocation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/session-revocation')>()),
+  ...(await importOriginal<ScanModule0>()),
   revokeEveryOtherSession: mocks.revoke,
   finishIntentRevocation: mocks.finishIntent,
 }));

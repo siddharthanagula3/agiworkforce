@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 
 const CHAT_MODEL = requireProviderDefaultModel('openai');
 
@@ -59,7 +60,7 @@ const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
   mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
 }));
 vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
 }));
 

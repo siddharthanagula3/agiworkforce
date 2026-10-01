@@ -5,6 +5,11 @@ import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkfor
 import { createError } from '@/lib/errors';
 import { credentialSha256, readFreeQuotaState } from '@/lib/free-quota-authorization';
 import { loadFreePools } from '@/lib/server/free-pools';
+type ScanModule0 = typeof import('@/lib/auth-guards');
+type ScanModule1 = typeof import('@/lib/csrf');
+type ScanModule2 = typeof import('@/lib/rate-limit');
+type ScanModule3 = typeof import('@/lib/security-audit');
+type ScanModule4 = typeof import('@/lib/server/key-value');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
@@ -14,23 +19,23 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/auth-guards', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/auth-guards')>()),
+  ...(await importOriginal<ScanModule0>()),
   requirePlatformAdmin: mocks.admin,
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule1>()),
   requireCsrfToken: mocks.csrf,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule2>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule3>()),
   recordAuditEvent: mocks.audit,
 }));
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/key-value')>()),
+  ...(await importOriginal<ScanModule4>()),
   getKeyValueStore: () => mocks.store,
   getKeyValueProvider: () => 'upstash',
 }));

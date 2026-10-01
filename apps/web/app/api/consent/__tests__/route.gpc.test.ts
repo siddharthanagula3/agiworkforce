@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONSENT_PURPOSES, CONSENT_SURFACES } from '@/lib/consent-purposes';
+type ScanModule0 = typeof import('@/lib/csrf');
+type ScanModule1 = typeof import('@/lib/rate-limit');
+type ScanModule2 = typeof import('@/lib/api-auth');
+type ScanModule3 = typeof import('@/lib/server/consent-records');
 
 const mocks = vi.hoisted(() => ({
   recordConsentBatch: vi.fn(),
@@ -10,19 +14,19 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule0>()),
   requireCsrfToken: mocks.requireCsrfToken,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule1>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule2>()),
   getClerkAuthUser: mocks.getClerkAuthUser,
 }));
 vi.mock('@/lib/server/consent-records', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/consent-records')>()),
+  ...(await importOriginal<ScanModule3>()),
   recordConsentBatch: mocks.recordConsentBatch,
 }));
 

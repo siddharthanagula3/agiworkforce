@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('../lib/tool-approval-policy');
+type ScanModule1 = typeof import('@/lib/services/cloud-agent-run-service');
+type ScanModule2 = typeof import('@/lib/services/managed-usage-request-service');
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
@@ -40,7 +43,7 @@ vi.mock('@/lib/user-connector-tools', () => ({
 
 const policyMocks = vi.hoisted(() => ({ load: vi.fn(async () => 'ask_every_time') }));
 vi.mock('../lib/tool-approval-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/tool-approval-policy')>()),
+  ...(await importOriginal<ScanModule0>()),
   loadToolApprovalPolicy: policyMocks.load,
 }));
 
@@ -62,7 +65,7 @@ const checkpointMocks = vi.hoisted(() => ({
   isCancelled: vi.fn(async () => false),
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cloud-agent-run-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   claimCloudAgentApprovalCheckpoint: checkpointMocks.claim,
   saveCloudAgentApprovalCheckpoint: checkpointMocks.save,
   completeCloudAgentApprovalCheckpoint: checkpointMocks.complete,
@@ -73,7 +76,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   markManagedUsageProviderStarted: vi.fn(async () => undefined),
   markManagedUsageClientDelivered: vi.fn(async () => undefined),
   finalizeManagedUsageRequest: vi.fn(async () => ({ actualCostCents: 0 })),

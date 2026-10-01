@@ -1,5 +1,12 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop');
+type ScanModule1 =
+  typeof import('@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions');
+type ScanModule2 = typeof import('@/lib/user-connector-tools');
+type ScanModule3 = typeof import('@agiworkforce/routing');
+type ScanModule4 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule5 = typeof import('@/lib/services/llm-cost-calculator');
 
 vi.mock('server-only', () => ({}));
 
@@ -18,8 +25,7 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
 
 const mockLoadMcpToolDefs = vi.fn(async () => [] as unknown[]);
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, loadMcpToolDefs: () => mockLoadMcpToolDefs() };
 });
 
@@ -27,10 +33,7 @@ const mockLoadConnectorToolPermissions = vi.fn();
 vi.mock(
   '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions',
   async (importOriginal) => {
-    const actual =
-      await importOriginal<
-        typeof import('@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions')
-      >();
+    const actual = await importOriginal<ScanModule1>();
     return {
       ...actual,
       loadConnectorToolPermissions: (...args: unknown[]) =>
@@ -45,13 +48,13 @@ vi.mock('@/lib/connectors/connector-capability', () => ({
   connectorsAllowedWithoutRequest: (...args: unknown[]) => mockConnectorsAllowed(...args),
 }));
 vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/user-connector-tools')>()),
+  ...(await importOriginal<ScanModule2>()),
   loadUserConnectorToolCatalog: (...args: unknown[]) => mockLoadUserConnectorToolCatalog(...args),
   makeUserConnectorExecutor: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/routing')>();
+  const actual = await importOriginal<ScanModule3>();
   return {
     ...actual,
     classifyTaskLocally: vi.fn(() => ({ type: 'general', confidence: 0.8 })),
@@ -62,7 +65,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn() },
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule4>()),
   usageCreditsEnabled: vi.fn(async () => false),
   estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
     source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
@@ -84,7 +87,7 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   resolveManagedQuotaRecovery: vi.fn(),
 }));
 vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
+  ...(await importOriginal<ScanModule5>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/connectors/mcp-directory-targets');
 
 vi.mock('server-only', () => ({}));
 
@@ -45,7 +46,7 @@ vi.mock('@agiworkforce/mcp', () => ({
 
 const directoryByUrl = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/mcp-directory-targets')>()),
+  ...(await importOriginal<ScanModule0>()),
   findDirectoryTargetByRemoteUrl: directoryByUrl,
 }));
 

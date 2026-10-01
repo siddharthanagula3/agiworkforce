@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'crypto';
+type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 
 const {
   mockGetUserScopedDb,
@@ -44,7 +45,7 @@ const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
   mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
 }));
 vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
 }));
 

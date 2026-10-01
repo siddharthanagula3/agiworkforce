@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/data-rights-requests');
 
 const mocks = vi.hoisted(() => ({
   createDataRightsRequest: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock('@/lib/support/handoff/resend-client', () => ({
   sendSupportEmail: mocks.sendSupportEmail,
 }));
 vi.mock('@/lib/server/data-rights-requests', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/data-rights-requests')>()),
+  ...(await importOriginal<ScanModule0>()),
   createDataRightsRequest: mocks.createDataRightsRequest,
 }));
 

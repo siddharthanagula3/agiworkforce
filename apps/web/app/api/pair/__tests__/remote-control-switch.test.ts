@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
+type ScanModule0 = typeof import('@/lib/managed-compute-gate');
+type ScanModule1 = typeof import('@/lib/csrf');
+type ScanModule2 = typeof import('@/lib/rate-limit');
+type ScanModule3 = typeof import('@/lib/server/rls-db');
+type ScanModule4 = typeof import('@/lib/workspace-audit');
+type ScanModule5 = typeof import('@/lib/observability/denials');
+type ScanModule6 = typeof import('@/lib/server/data-region');
+type ScanModule7 = typeof import('@/lib/feature-flags/flag-store');
 
 const mocks = vi.hoisted(() => ({
   definitions: [] as unknown[],
@@ -9,19 +17,19 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/managed-compute-gate')>()),
+  ...(await importOriginal<ScanModule0>()),
   buildWorkspaceFeatureGateResponse: vi.fn(async () => null),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule1>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule2>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule3>()),
   getUserScopedDb: vi.fn(async () => ({
     db: { query: vi.fn(), execute: vi.fn() },
     userId: 'user_remote',
@@ -29,19 +37,19 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   })),
 }));
 vi.mock('@/lib/workspace-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/workspace-audit')>()),
+  ...(await importOriginal<ScanModule4>()),
   recordWorkspaceAuditEvent: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/observability/denials', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/observability/denials')>()),
+  ...(await importOriginal<ScanModule5>()),
   recordCapabilityDenial: vi.fn(),
 }));
 vi.mock('@/lib/server/data-region', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/data-region')>()),
+  ...(await importOriginal<ScanModule6>()),
   managedCloudDataRegion: () => 'us-east-1',
 }));
 vi.mock('@/lib/feature-flags/flag-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/flag-store')>()),
+  ...(await importOriginal<ScanModule7>()),
   getActiveFlagDefinitions: async () => mocks.definitions,
   getSubjectOverrides: async () => [],
 }));

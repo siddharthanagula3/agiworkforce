@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
+type ScanModule0 = typeof import('@/lib/client/csrf');
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -9,7 +10,7 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ScanModule0>()),
   addCsrfHeaders: vi.fn(async (headers: Record<string, string>) => ({
     ...headers,
     'x-csrf-token': 'csrf-token',

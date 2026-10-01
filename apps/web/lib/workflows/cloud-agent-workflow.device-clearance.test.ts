@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../device-steps/device-clearance-step');
 
 vi.mock('server-only', () => ({}));
 
@@ -22,7 +23,7 @@ const db = {
 
 vi.mock('workflow', () => ({ sleep: mocks.sleep }));
 vi.mock('../device-steps/device-clearance-step', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../device-steps/device-clearance-step')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     clearCloudAgentDevice: vi.fn(actual.clearCloudAgentDevice),

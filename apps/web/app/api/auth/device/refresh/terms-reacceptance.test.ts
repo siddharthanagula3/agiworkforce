@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/terms');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -26,7 +27,7 @@ const policy = vi.hoisted(() => ({
   effectiveAt: null as string | null,
 }));
 vi.mock('@/lib/server/terms', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/terms')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     termsStandingFor: (acceptance: { version: string } | null, now?: Date) =>

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -42,7 +43,7 @@ const lifecycle = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   usageCreditsEnabled: vi.fn(async () => false),
   estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
     source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,

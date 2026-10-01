@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -32,7 +33,7 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveSharedProjectScope: mockResolveSharedProjectScope,
 }));
 

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/cloud-contracts');
 
 const RELOCATED = '/api/relocated-preferences';
 
 vi.mock('@agiworkforce/cloud-contracts', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/cloud-contracts')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH: RELOCATED,

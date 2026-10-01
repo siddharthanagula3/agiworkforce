@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/release-audit-store');
 
 vi.mock('server-only', () => ({}));
 
@@ -12,9 +13,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 vi.mock('@/lib/server/release-audit-store', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/server/release-audit-store')>(
-    '@/lib/server/release-audit-store',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/server/release-audit-store');
   return { ...actual, readReleaseEvents: mocks.readReleaseEvents };
 });
 

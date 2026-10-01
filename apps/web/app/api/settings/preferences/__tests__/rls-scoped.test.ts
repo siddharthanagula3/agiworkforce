@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/active-workspace-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -16,7 +17,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/active-workspace-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, resolveActiveOrganizationId: h.resolveActiveOrganizationId };
 });
 vi.mock('@/lib/server/request-context-cache', () => ({

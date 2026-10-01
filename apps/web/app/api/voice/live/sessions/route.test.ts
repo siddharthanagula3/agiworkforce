@@ -7,6 +7,9 @@ import {
   resolveLiveVoiceDelegationTools,
 } from '@/lib/voice/live-voice-tools';
 import { WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
+type ScanModule0 = typeof import('@/lib/server/provider-training-opt-out');
+type ScanModule1 = typeof import('@/lib/services/entitlement-resolution');
+type ScanModule2 = typeof import('./lib/voice-session-budget');
 
 const LIVE_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live'))!;
 const BACKEND_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live_backend'))!;
@@ -26,7 +29,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/provider-training-opt-out', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/provider-training-opt-out')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     modelKeepsInputsOutOfTraining: (modelId: string) =>
@@ -72,11 +75,11 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<ScanModule1>()),
   resolveEntitlementBundle: (...args: unknown[]) => mocks.entitlement(...args),
 }));
 vi.mock('./lib/voice-session-budget', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./lib/voice-session-budget')>()),
+  ...(await importOriginal<ScanModule2>()),
   planVoiceSessionBlock: (...args: unknown[]) => mocks.planBlock(...args),
 }));
 vi.mock('@/lib/services/managed-compute-access', () => ({

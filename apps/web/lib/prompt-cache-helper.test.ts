@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<ScanModule0>();
   const fixture = {
     id: 'fixture-disjoint-tiered-pricing',
     provider: 'anthropic',

@@ -9,6 +9,7 @@ import {
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { SurfaceCredential } from './request-surface';
 import type { ProcessedRequest } from './request-processor';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('server-only', () => ({}));
 
@@ -33,7 +34,7 @@ const gatewayAdapter = {
 const buildGatewayRouteAdapter = vi.fn((_providerId: string) => gatewayAdapter);
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<ScanModule0>()),
   listProtocolRoutes: () => [],
   listGatewayRoutes: () => gatewayRoutes,
 }));

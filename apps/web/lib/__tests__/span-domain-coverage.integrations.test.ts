@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/jobs/job-service');
+type ScanModule1 = typeof import('@/lib/jobs/cancellation');
 
 const emitted: Array<Record<string, unknown>> = [];
 
@@ -47,7 +49,7 @@ vi.mock('@/lib/server/incident/dispatch', () => ({
   clearIncident: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/jobs/job-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/jobs/job-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     claimJobs: mocks.claimJobs,
@@ -59,7 +61,7 @@ vi.mock('@/lib/jobs/job-service', async (importOriginal) => {
   };
 });
 vi.mock('@/lib/jobs/cancellation', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/jobs/cancellation')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     watchJobCancellation: () => ({ stop: () => undefined }),

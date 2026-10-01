@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('./cloud-agent-workflow-input');
+type ScanModule1 = typeof import('@/app/api/llm/v1/chat/completions/lib/managed-failover');
 
 vi.mock('server-only', () => ({}));
 
@@ -31,7 +33,7 @@ vi.mock('@/lib/services/cloud-agent-execution-service', () => ({
 // `instanceof` check, and a locally-declared fake would make that check pass for
 // the wrong reason.
 vi.mock('./cloud-agent-workflow-input', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./cloud-agent-workflow-input')>()),
+  ...(await importOriginal<ScanModule0>()),
   buildCloudAgentWorkflowInput: workflowMocks.buildInput,
 }));
 vi.mock('./cloud-agent-workflow', () => ({ cloudAgentWorkflow: vi.fn() }));
@@ -42,9 +44,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/managed-agent-stream', () => ({
   buildManagedAgentStream: workflowMocks.buildStream,
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/managed-failover', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/app/api/llm/v1/chat/completions/lib/managed-failover')
-  >()),
+  ...(await importOriginal<ScanModule1>()),
   createFailoverPlan: () => ({ next: () => null }),
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-providers', () => ({

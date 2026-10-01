@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/security-audit');
+type ScanModule1 = typeof import('@/lib/triggers/trigger-service');
 
 const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
@@ -18,11 +20,11 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/triggers/trigger-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/triggers/trigger-service')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, createTrigger: mocks.createTrigger, listTriggers: mocks.listTriggers };
 });
 

@@ -13,9 +13,10 @@ import type { LocalRuntimeClient, LocalRuntimeEvent } from '../integrations/loca
 import type { LocalRuntimePool } from '../integrations/localRuntimePool';
 import { fetchTierInfo } from '../utils/api';
 import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
+type ScanModule0 = typeof import('../utils/api');
 
 vi.mock('../utils/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../utils/api')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, fetchTierInfo: vi.fn() };
 });
 

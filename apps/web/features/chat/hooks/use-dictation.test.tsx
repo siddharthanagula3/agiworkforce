@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<ScanModule0>()),
   getRoutingSlotModel: () => 'catalog-voice-transcription-model',
 }));
 

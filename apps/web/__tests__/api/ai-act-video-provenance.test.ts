@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/errors');
+type ScanModule1 = typeof import('@/lib/error-handler');
 
 vi.mock('server-only', () => ({}));
 
@@ -13,7 +15,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/errors', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/errors')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     createError: actual.createError,
     AppError: actual.AppError,
@@ -21,7 +23,7 @@ vi.mock('@/lib/errors', async (importOriginal) => {
   };
 });
 vi.mock('@/lib/error-handler', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/error-handler')>();
+  const actual = await importOriginal<ScanModule1>();
   return { withErrorHandler: actual.withErrorHandler, handleError: actual.handleError };
 });
 

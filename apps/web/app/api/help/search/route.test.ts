@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/support/agent/corpus');
 
 vi.mock('server-only', () => ({}));
 
@@ -10,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/support/agent/corpus', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/support/agent/corpus')>()),
+  ...(await importOriginal<ScanModule0>()),
   getSupportCorpus: mocks.getSupportCorpus,
 }));
 vi.mock('@/lib/support/agent/retrieval/retrieve', () => ({

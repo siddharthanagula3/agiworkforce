@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/plugin-registry-service');
+type ScanModule1 = typeof import('@/lib/services/plugin-installation-service');
 
 const {
   withRateLimitMock,
@@ -27,9 +29,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/services/plugin-registry-service', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/services/plugin-registry-service')>(
-    '@/lib/services/plugin-registry-service',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/services/plugin-registry-service');
   return {
     ...actual,
     listPluginRegistryEntries: listMock,
@@ -37,9 +37,7 @@ vi.mock('@/lib/services/plugin-registry-service', async () => {
   };
 });
 vi.mock('@/lib/services/plugin-installation-service', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/services/plugin-installation-service')>(
-    '@/lib/services/plugin-installation-service',
-  );
+  const actual = await vi.importActual<ScanModule1>('@/lib/services/plugin-installation-service');
   return {
     ...actual,
     countPluginInstallations: countInstallsMock,

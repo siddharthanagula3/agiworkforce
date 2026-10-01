@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/rate-limit');
+type ScanModule1 = typeof import('@/lib/csrf');
+type ScanModule2 = typeof import('@/lib/api-auth');
+type ScanModule3 = typeof import('@/lib/security-audit');
+type ScanModule4 = typeof import('@/lib/services/active-workspace-service');
+type ScanModule5 = typeof import('@/app/api/settings/team/team-admin-access');
+type ScanModule6 = typeof import('@/lib/server/neon-db');
 
 vi.mock('server-only', () => ({}));
 
@@ -18,27 +25,27 @@ vi.mock('@/lib/services/organization-permission-service', async () =>
 );
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule0>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule1>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule2>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'owner-user' })),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule3>()),
   recordAuditEvent: mockRecordAuditEvent,
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ScanModule4>()),
   resolveActiveOrganizationId: vi.fn(async () => ORGANIZATION_ID),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/settings/team/team-admin-access')>()),
+  ...(await importOriginal<ScanModule5>()),
   requireTeamAdminAccess: vi.fn(async () => ({
     plan: 'team',
     canManageTeam: true,
@@ -46,7 +53,7 @@ vi.mock('@/app/api/settings/team/team-admin-access', async (importOriginal) => (
   })),
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule6>()),
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockQuery(...args),
     execute: (...args: unknown[]) => mockExecute(...args),

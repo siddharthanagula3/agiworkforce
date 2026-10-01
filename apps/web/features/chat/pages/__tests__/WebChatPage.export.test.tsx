@@ -2,6 +2,12 @@ import type { ReactNode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('react-i18next');
+type ScanModule1 = typeof import('@/app/settings/_lib/preferences-client');
+type ScanModule2 = typeof import('@/lib/hooks/useMediaGeneration');
+type ScanModule3 = typeof import('@agiworkforce/ui');
+type ScanModule4 = typeof import('@agiworkforce/unified-chat');
+type ScanModule5 = typeof import('../../components/ConversationTitleMenu');
 
 const mocks = vi.hoisted(() => ({
   downloadAsMarkdown: vi.fn(async () => {}),
@@ -32,7 +38,7 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 
 vi.mock('react-i18next', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-i18next')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     useTranslation: () => ({
@@ -47,7 +53,7 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await importOriginal<ScanModule1>()),
   fetchPreferenceNamespace: async () => ({ browserReplyReady: false }),
   readAutonomousToolApprovalsAllowed: async () => false,
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
@@ -75,7 +81,7 @@ vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
 }));
 
 vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/hooks/useMediaGeneration')>();
+  const actual = await importOriginal<ScanModule2>();
   return {
     ...actual,
     useMediaGeneration: () => ({
@@ -161,11 +167,11 @@ vi.mock('@features/projects/services/managed-cloud-projects', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  const actual = await importOriginal<ScanModule3>();
   return { ...actual, Sidebar: () => null };
 });
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<ScanModule4>();
   return {
     ...actual,
     LocalByokHandoffDialog: () => null,
@@ -205,7 +211,7 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/ConversationTitleMenu')>()),
+  ...(await importOriginal<ScanModule5>()),
   ConversationTitleMenu: ({ onExport }: { onExport?: () => void }) =>
     onExport ? (
       <button type="button" data-testid="conversation-export" onClick={onExport}>

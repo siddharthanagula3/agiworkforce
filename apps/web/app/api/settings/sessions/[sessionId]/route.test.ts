@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/mobile-intent-tokens');
 
 vi.mock('server-only', () => ({}));
 
@@ -54,7 +55,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
 const mockRevokeSessionIntent = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/mobile-intent-tokens')>()),
+  ...(await importOriginal<ScanModule0>()),
   revokeSessionMobileIntentTokens: (...args: unknown[]) => mockRevokeSessionIntent(...args),
 }));
 

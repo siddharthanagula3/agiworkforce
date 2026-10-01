@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { TOP_UP_CONVERSION, quoteTopUp, type TopUpQuote } from '@agiworkforce/types';
 import type { NormalizedPayment } from '@/lib/server/payments/domain';
+type ScanModule0 = typeof import('@/app/api/stripe-webhook/lib/db');
 
 const mocks = vi.hoisted(() => ({
   grantCreditTopUp: vi.fn(),
@@ -10,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/app/api/stripe-webhook/lib/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/stripe-webhook/lib/db')>()),
+  ...(await importOriginal<ScanModule0>()),
   grantCreditTopUp: mocks.grantCreditTopUp,
   isCreditTopUpApplied: mocks.isCreditTopUpApplied,
 }));

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/infrastructure-cost');
 
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -6,7 +7,7 @@ vi.mock('@/lib/logger', () => ({
 
 const { mockRecordEmailSend } = vi.hoisted(() => ({ mockRecordEmailSend: vi.fn() }));
 vi.mock('@/lib/services/infrastructure-cost', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/infrastructure-cost')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordEmailSend: mockRecordEmailSend,
 }));
 

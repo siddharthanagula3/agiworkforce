@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/server/neon-chat');
+type ScanModule1 = typeof import('@/lib/server/model-catalogue');
+type ScanModule2 = typeof import('@/lib/services/tier-unit-quota-service');
 
 const CHAT_MODEL = requireProviderDefaultModel('openai');
 
@@ -31,7 +34,7 @@ const mockGetUserScopedDb = vi.fn();
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/server/neon-chat', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-chat')>()),
+  ...(await importOriginal<ScanModule0>()),
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 
@@ -45,7 +48,7 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 }));
 
 vi.mock('@/lib/server/model-catalogue', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/model-catalogue')>()),
+  ...(await importOriginal<ScanModule1>()),
   isConfiguredManagedModelRoute: vi.fn(() => true),
 }));
 
@@ -53,7 +56,7 @@ const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
   mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
 }));
 vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
 }));
 

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/free-trial-service');
 
 const {
   mockVerifyCron,
@@ -27,7 +28,7 @@ vi.mock('@/lib/services/credit-service', () => ({
   CreditService: { processPendingSettlements: mockProcessPendingSettlements },
 }));
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/free-trial-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   releaseExpiredFreeTrialReservations: mockReleaseExpiredFree,
 }));
 

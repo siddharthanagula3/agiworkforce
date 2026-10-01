@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/neon-db');
+type ScanModule1 = typeof import('@/lib/services/purchased-credit-expiry-service');
 
 const mocks = vi.hoisted(() => ({
   getNeonDb: vi.fn(),
@@ -9,11 +11,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   getNeonDb: mocks.getNeonDb,
 }));
 vi.mock('@/lib/services/purchased-credit-expiry-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/purchased-credit-expiry-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   expireDuePurchasedCredits: mocks.expireDuePurchasedCredits,
   remindExpiringPurchasedCredits: mocks.remindExpiringPurchasedCredits,
 }));

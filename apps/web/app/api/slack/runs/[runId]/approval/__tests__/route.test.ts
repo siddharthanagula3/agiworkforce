@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('next/server');
 
 vi.mock('server-only', () => ({}));
 
@@ -28,7 +29,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('next/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/server')>()),
+  ...(await importOriginal<ScanModule0>()),
   after: mocks.after,
 }));
 vi.mock('@/lib/rate-limit', () => ({

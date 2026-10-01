@@ -3,6 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import type { SearchResult, SearchStats } from '@/features/chat/services/global-search-service';
 import { CommandPalette } from './CommandPalette';
+type ScanModule0 = typeof import('@/features/chat/services/global-search-service');
+type ScanModule1 = typeof import('@agiworkforce/ui');
 
 const modelFixtureIds = vi.hoisted(() => ({
   primary: 'test-command-model-primary',
@@ -35,7 +37,7 @@ const globalSearch = vi.fn(
 );
 
 vi.mock('@/features/chat/services/global-search-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/chat/services/global-search-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   globalSearchService: { search: (...args: unknown[]) => globalSearch(...args) },
 }));
 
@@ -103,7 +105,7 @@ vi.mock('@/shared/stores/model-store', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>

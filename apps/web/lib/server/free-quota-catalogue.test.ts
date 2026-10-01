@@ -20,16 +20,18 @@ import {
   type FreeQuotaContext,
 } from './free-quota-catalogue';
 import { FreeQuotaInventorySchema, eligibleFreeEligibility, loadFreePools } from './free-pools';
+type ScanModule0 = typeof import('@/lib/free-quota-authorization');
+type ScanModule1 = typeof import('@/lib/server/media-storage');
 
 const mocks = vi.hoisted(() => ({ local: vi.fn(), storageConfigured: vi.fn(() => false) }));
 
 vi.mock('@/lib/free-quota-authorization', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/free-quota-authorization')>()),
+  ...(await importOriginal<ScanModule0>()),
   readLocalQuotaVerification: mocks.local,
 }));
 
 vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/media-storage')>()),
+  ...(await importOriginal<ScanModule1>()),
   isGeneratedMediaStorageConfigured: mocks.storageConfigured,
 }));
 

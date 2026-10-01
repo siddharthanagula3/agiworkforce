@@ -3,11 +3,12 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MessageBubble } from './MessageBubble';
 import { VariantPager } from './VariantPager';
+type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
 // The dynamically-imported markdown renderer resolves async through
 // next/dynamic; the inline stub keeps these assertions about the action row.
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     MarkdownContent: ({ content }: { content: string }) => (

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/organization-policy-gate');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -36,7 +37,7 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-policy-gate')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveSecretHandlingPolicy: (...a: unknown[]) => mocks.secretMode(...a),
 }));
 

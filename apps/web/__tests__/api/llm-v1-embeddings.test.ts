@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getModels, requireProviderDefaultModel } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
+type ScanModule0 = typeof import('@/lib/server/neon-db');
 
 const EMBEDDING_MODEL = getModels({ modelTypes: ['embedding'] })[0]!;
 const CHAT_MODEL_ID = requireProviderDefaultModel('anthropic');
@@ -34,7 +35,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
-    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    ...(await importOriginal<ScanModule0>()),
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });

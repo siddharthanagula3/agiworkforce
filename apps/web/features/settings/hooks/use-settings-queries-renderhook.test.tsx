@@ -2,6 +2,7 @@ import React from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('@shared/lib/get-auth-token', () => ({
   getAuthToken: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock('@shared/lib/logger', () => ({
 }));
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     requireProviderDefaultModel: vi.fn().mockReturnValue('fixture-model'),

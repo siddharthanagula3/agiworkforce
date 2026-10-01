@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+type ScanModule0 = typeof import('@/lib/services/cloud-code-session-service');
 
 const emitted: Array<Record<string, unknown>> = [];
 
@@ -24,7 +25,7 @@ vi.mock('@/lib/services/cloud-code-agent-service', () => ({
   executePersistedAgentTurn: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cloud-code-session-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, getCloudCodeSession: vi.fn(async () => ({ state: 'ready' })) };
 });
 vi.mock('@/lib/services/schedule-notification-service', () => ({

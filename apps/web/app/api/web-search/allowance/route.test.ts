@@ -2,6 +2,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
+type ScanModule0 = typeof import('@/lib/rate-limit');
+type ScanModule1 = typeof import('@/lib/server/rls-db');
+type ScanModule2 = typeof import('@/lib/api-auth');
+type ScanModule3 = typeof import('@/lib/services/entitlement-resolution');
+type ScanModule4 = typeof import('@/lib/web-search/search-budget');
 
 const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(),
@@ -13,24 +18,24 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule0>()),
   withRateLimit: mocks.rateLimit,
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule1>()),
   getUserScopedDb: mocks.scoped,
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule2>()),
   getClerkAuthUser: mocks.clerkAuth,
   assertAccountActive: mocks.accountActive,
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<ScanModule3>()),
   resolveEntitledPlanTier: mocks.plan,
 }));
 vi.mock('@/lib/web-search/search-budget', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/web-search/search-budget')>()),
+  ...(await importOriginal<ScanModule4>()),
   readSearchAllowance: mocks.allowance,
 }));
 

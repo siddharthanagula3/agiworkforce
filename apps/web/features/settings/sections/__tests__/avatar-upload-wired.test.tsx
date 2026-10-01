@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@shared/stores/web-settings-store');
 
 const mocks = vi.hoisted(() => ({
   uploadAvatar: vi.fn(),
@@ -53,7 +54,7 @@ vi.mock('@shared/stores/thinking-store', () => ({
 }));
 
 vi.mock('@shared/stores/web-settings-store', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/stores/web-settings-store')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ACCENT_COLORS: actual.ACCENT_COLORS,
     useSettingsStore: (selector: (state: unknown) => unknown) =>

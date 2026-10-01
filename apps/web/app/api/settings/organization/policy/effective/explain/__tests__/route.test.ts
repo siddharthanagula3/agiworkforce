@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
+type ScanModule0 = typeof import('@/lib/services/organization-permission-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -49,7 +50,7 @@ vi.mock('@/lib/authorization', () => ({
   resolveAuthorizationFacts: mocks.resolveAuthorizationFacts,
 }));
 vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-permission-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveOrganizationAccess: mocks.resolveOrganizationAccess,
 }));
 

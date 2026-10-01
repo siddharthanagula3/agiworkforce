@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/connector-call-log-service');
 
 const recordConnectorCall = vi.fn();
 const recordConnectorCallOutcome = vi.fn();
@@ -8,7 +9,7 @@ vi.mock('@/lib/services/infrastructure-cost', () => ({
 }));
 
 vi.mock('@/lib/services/connector-call-log-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/connector-call-log-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     recordConnectorCallOutcome: (...args: unknown[]) => recordConnectorCallOutcome(...args),

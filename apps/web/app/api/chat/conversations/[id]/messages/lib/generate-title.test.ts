@@ -4,9 +4,14 @@ import {
   listCanonicalModels,
   listManagedRoutesForModel,
 } from '@agiworkforce/types';
+type ScanModule0 = typeof import('next/server');
+type ScanModule1 = typeof import('@agiworkforce/routing');
+type ScanModule2 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule3 = typeof import('@/lib/services/entitlement-resolution');
+type ScanModule4 = typeof import('@/lib/services/free-trial-service');
 
 vi.mock('next/server', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('next/server')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, after: (fn: Promise<unknown>) => fn };
 });
 
@@ -31,7 +36,7 @@ const SELECTED_ROUTE = {
 
 const resolveAutoRouteMock = vi.fn(() => SELECTED_ROUTE);
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/routing')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, resolveAutoRoute: () => resolveAutoRouteMock() };
 });
 
@@ -68,7 +73,7 @@ const finalizeMock = vi.fn(async (..._args: unknown[]) => ({
 }));
 const markStartedMock = vi.fn(async (..._args: unknown[]) => {});
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   reserveManagedUsageRequest: (...args: unknown[]) => reserveMock(...args),
   finalizeManagedUsageRequest: (...args: unknown[]) => finalizeMock(...args),
   markManagedUsageProviderStarted: (...args: unknown[]) => markStartedMock(...args),
@@ -77,14 +82,14 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 
 const resolveEntitledPlanTierMock = vi.fn(async (..._args: unknown[]) => 'pro');
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<ScanModule3>()),
   resolveEntitledPlanTier: (...args: unknown[]) => resolveEntitledPlanTierMock(...args),
 }));
 
 const beginFreeTrialRequestMock = vi.fn();
 const settleFreeTrialRequestMock = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/free-trial-service')>()),
+  ...(await importOriginal<ScanModule4>()),
   beginFreeTrialRequest: (...args: unknown[]) => beginFreeTrialRequestMock(...args),
   settleFreeTrialRequest: (...args: unknown[]) => settleFreeTrialRequestMock(...args),
 }));

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@agiworkforce/types');
+type ScanModule1 = typeof import('@/lib/errors');
+type ScanModule2 = typeof import('@/lib/error-handler');
+type ScanModule3 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -16,7 +20,7 @@ vi.mock('@/lib/server/video-provider-release-policy', () => ({
 }));
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     getModelMetadataById: (id: string) => {
@@ -58,7 +62,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 vi.mock('@/lib/errors', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
+  const actual = await vi.importActual<ScanModule1>('@/lib/errors');
   return {
     createError: actual.createError,
     AppError: actual.AppError,
@@ -67,7 +71,7 @@ vi.mock('@/lib/errors', async () => {
 });
 
 vi.mock('@/lib/error-handler', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/error-handler')>('@/lib/error-handler');
+  const actual = await vi.importActual<ScanModule2>('@/lib/error-handler');
   return { withErrorHandler: actual.withErrorHandler, handleError: actual.handleError };
 });
 
@@ -157,7 +161,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => rlsMocks.getUserScopedDb(...args),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule3>()),
   reserveManagedUsageRequest: managedUsageMocks.reserve,
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   finalizeManagedUsageRequest: managedUsageMocks.finalize,

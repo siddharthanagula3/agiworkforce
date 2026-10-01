@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -9,7 +10,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<ScanModule0>();
   const fixture = {
     id: 'fixture-retail-model',
     provider: 'openai',

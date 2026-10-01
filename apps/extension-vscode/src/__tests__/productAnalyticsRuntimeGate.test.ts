@@ -4,14 +4,16 @@ import {
   PRODUCT_ANALYTICS_INGEST_PATH,
   PRODUCT_ANALYTICS_NOTICE_VERSION,
 } from '@agiworkforce/types';
+type ScanModule0 = typeof import('../utils/api');
+type ScanModule1 = typeof import('../platform/config');
 
 vi.mock('../utils/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../utils/api')>()),
+  ...(await importOriginal<ScanModule0>()),
   getAccountToken: async () => 'token',
   getCloudWebOrigin: () => 'https://agiworkforce.test',
 }));
 vi.mock('../platform/config', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../platform/config')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, Config: { ...actual.Config, telemetryEnabled: () => true } };
 });
 vi.mock('../platform/platformHeaders', () => ({ platformRequestHeaders: () => ({}) }));

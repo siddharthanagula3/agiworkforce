@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('@/lib/server/neon-db');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule1>()),
   getNeonDb: () => ({ query: vi.fn(async () => []), execute: vi.fn(async () => 1) }),
 }));
 

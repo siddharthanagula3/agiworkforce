@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/errors');
+type ScanModule1 = typeof import('@/lib/error-handler');
+type ScanModule2 = typeof import('@/lib/server/image-generation-jobs');
+type ScanModule3 = typeof import('../../app/api/media/image/lib/image-job-executor');
 
 vi.mock('server-only', () => ({}));
 
@@ -17,7 +21,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 vi.mock('@/lib/errors', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
+  const actual = await vi.importActual<ScanModule0>('@/lib/errors');
   return {
     createError: actual.createError,
     AppError: actual.AppError,
@@ -26,7 +30,7 @@ vi.mock('@/lib/errors', async () => {
 });
 
 vi.mock('@/lib/error-handler', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/error-handler')>('@/lib/error-handler');
+  const actual = await vi.importActual<ScanModule1>('@/lib/error-handler');
   return { withErrorHandler: actual.withErrorHandler, handleError: actual.handleError };
 });
 
@@ -68,7 +72,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 }));
 
 vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/image-generation-jobs')>();
+  const actual = await importOriginal<ScanModule2>();
   return {
     ...actual,
     isImageJobStoreReady: (...args: unknown[]) => mocks.storeReady(...args),
@@ -79,8 +83,7 @@ vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => {
 });
 
 vi.mock('../../app/api/media/image/lib/image-job-executor', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../app/api/media/image/lib/image-job-executor')>();
+  const actual = await importOriginal<ScanModule3>();
   return {
     ...actual,
     runImageGenerationJobAttempt: (...args: unknown[]) => mocks.runAttempt(...args),

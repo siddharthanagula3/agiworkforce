@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/support/account/context-resolver');
 
 const mocks = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
@@ -19,9 +20,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/support/account/context-resolver', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/support/account/context-resolver')>(
-    '@/lib/support/account/context-resolver',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/support/account/context-resolver');
   return {
     ...actual,
     resolveSupportAccountContext: mocks.resolveContext,

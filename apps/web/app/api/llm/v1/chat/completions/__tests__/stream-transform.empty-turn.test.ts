@@ -1,22 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('@/lib/cors');
+type ScanModule2 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule3 = typeof import('@/lib/services/llm-cost-calculator');
+type ScanModule4 = typeof import('@/lib/cost-tracker');
+type ScanModule5 = typeof import('@/lib/services/free-trial-service');
+type ScanModule6 = typeof import('../lib/assistant-turn-persistence');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/cors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/cors')>()),
+  ...(await importOriginal<ScanModule1>()),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   finalizeManagedUsageRequest: vi.fn(() => Promise.resolve()),
   markManagedUsageClientDelivered: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
+  ...(await importOriginal<ScanModule3>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),
@@ -31,12 +38,12 @@ vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
   resolveCacheRates: vi.fn(() => ({ read: 0, write5m: 0, write1h: 0 })),
 }));
 vi.mock('@/lib/cost-tracker', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/cost-tracker')>()),
+  ...(await importOriginal<ScanModule4>()),
   recordModelUsage: vi.fn(),
   toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/free-trial-service')>()),
+  ...(await importOriginal<ScanModule5>()),
   isEventPromotedRequest: () => false,
   settleFreeTrialRequest: vi.fn(() => Promise.resolve()),
   FREE_TRIAL_MODEL: 'fixture-free-trial-model',
@@ -46,7 +53,7 @@ vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
   applyFreeTrialProviderBudget: vi.fn(),
 }));
 vi.mock('../lib/assistant-turn-persistence', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/assistant-turn-persistence')>()),
+  ...(await importOriginal<ScanModule6>()),
   canPersistAssistantTurn: vi.fn(() => true),
   persistAssistantTurn: vi.fn(() => Promise.resolve()),
   patchAssistantTurnSourceUrls: vi.fn(() => Promise.resolve()),

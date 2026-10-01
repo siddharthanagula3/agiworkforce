@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createHash } from 'node:crypto';
+type ScanModule0 = typeof import('@/lib/server/file-storage');
 
 const {
   mockGetUserScopedDb,
@@ -62,7 +63,7 @@ vi.mock('@/lib/server/media-assets', () => ({
   getMediaAssetByContentHash: mockGetMediaAssetByContentHash,
 }));
 vi.mock('@/lib/server/file-storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/file-storage')>()),
+  ...(await importOriginal<ScanModule0>()),
   assertFileStorageAvailable: vi.fn().mockResolvedValue(undefined),
 }));
 

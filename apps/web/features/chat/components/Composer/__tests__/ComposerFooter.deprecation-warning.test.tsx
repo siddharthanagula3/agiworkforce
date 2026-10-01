@@ -14,6 +14,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/ui');
+type ScanModule1 = typeof import('zustand/middleware');
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => undefined, replace: () => undefined }),
@@ -149,7 +151,7 @@ vi.mock('@shared/stores/thinking-store', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<ScanModule0>()),
   useConfirmAction: () => ({ confirm: () => undefined, dialog: null }),
   useMenuKeyboard: () => undefined,
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -189,7 +191,7 @@ vi.mock('@agiworkforce/provider-protocol', () => ({
 }));
 
 vi.mock('zustand/middleware', async () => {
-  const actual = await vi.importActual<typeof import('zustand/middleware')>('zustand/middleware');
+  const actual = await vi.importActual<ScanModule1>('zustand/middleware');
   return {
     ...actual,
     persist: (config: (set: unknown) => unknown) => config,

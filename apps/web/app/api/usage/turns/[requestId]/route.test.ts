@@ -2,24 +2,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('@/lib/server/rls-db');
+type ScanModule2 = typeof import('@/lib/rate-limit');
+type ScanModule3 = typeof import('@/lib/cors');
 
 const mocks = vi.hoisted(() => ({ userScopedDb: vi.fn(), query: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule1>()),
   getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule2>()),
   withRateLimitHandler: (handler: unknown) => handler,
 }));
 vi.mock('@/lib/cors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/cors')>()),
+  ...(await importOriginal<ScanModule3>()),
   handleCorsPreflightRequest: vi.fn(() => null),
   withCorsRoute: (handler: unknown) => handler,
 }));

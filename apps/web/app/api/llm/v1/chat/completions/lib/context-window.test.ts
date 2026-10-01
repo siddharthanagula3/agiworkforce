@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('server-only', () => ({}));
 
@@ -6,7 +7,7 @@ const TEST_MODEL = 'context-window-test-model';
 const WIDE_TEST_MODEL = 'context-window-test-model-wide';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     getModelMetadataById: vi.fn((id?: string) => {

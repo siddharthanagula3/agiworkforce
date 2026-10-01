@@ -3,6 +3,7 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import type { ChatInputHandle as ScanType0 } from '../src/features/chat/components/ChatInput';
 
 const mockSelectedModel = 'fixture-local-model';
 const fixtureCloudModelLabel = 'Fixture Cloud Model';
@@ -117,8 +118,7 @@ describe('ChatInput payload disclosure', () => {
   });
 
   it('counts the files staged to leave the device', async () => {
-    const attachRef =
-      React.createRef<import('../src/features/chat/components/ChatInput').ChatInputHandle>();
+    const attachRef = React.createRef<ScanType0>();
     const { getByTestId, getByText } = render(
       <ChatInput
         onSend={jest.fn()}

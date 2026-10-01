@@ -8,6 +8,12 @@ import {
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
+type ScanModule0 = typeof import('@/lib/api-auth');
+type ScanModule1 = typeof import('@/lib/rate-limit');
+type ScanModule2 = typeof import('@/lib/server/rls-db');
+type ScanModule3 = typeof import('@/lib/server/key-value');
+type ScanModule4 = typeof import('@/lib/services/entitlement-resolution');
+type ScanModule5 = typeof import('@/lib/server/free-pools');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore | null,
@@ -15,28 +21,28 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule0>()),
   assertAccountActive: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule1>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule2>()),
   getUserScopedDb: vi.fn(async () => ({ userId: 'fixture-user', organizationId: null, db: {} })),
 }));
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/key-value')>()),
+  ...(await importOriginal<ScanModule3>()),
   getKeyValueStore: () => mocks.store,
   getKeyValueProvider: () => 'upstash',
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<ScanModule4>()),
   resolveEntitledPlanTier: mocks.plan,
 }));
 vi.mock('@/lib/server/free-pools', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/free-pools')>();
+  const actual = await importOriginal<ScanModule5>();
   return {
     ...actual,
     loadFreePools: () => {

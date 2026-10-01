@@ -12,11 +12,10 @@ import {
 } from '@/features/chat/stores/artifacts-store';
 import { useStreamingArtifactStore } from '@/features/chat/stores/streaming-artifact-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
+type ScanModule0 = typeof import('@/features/chat/components/artifacts/ArtifactPreview');
 
 vi.mock('@/features/chat/components/artifacts/ArtifactPreview', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/features/chat/components/artifacts/ArtifactPreview')
-  >()),
+  ...(await importOriginal<ScanModule0>()),
   ArtifactPreview: ({ artifact }: { artifact: { title?: string } }) => (
     <div data-testid="artifact-preview">{artifact.title}</div>
   ),

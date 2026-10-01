@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('@/lib/api-auth');
+type ScanModule2 = typeof import('@/lib/csrf');
+type ScanModule3 = typeof import('@/lib/rate-limit');
+type ScanModule4 = typeof import('@/lib/server/rls-db');
+type ScanModule5 = typeof import('@/lib/support/tickets/service');
+type ScanModule6 = typeof import('@/lib/services/account-usage-history-service');
+type ScanModule7 = typeof import('@/lib/services/managed-usage-summary-service');
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
@@ -15,36 +23,36 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule1>()),
   getClerkAuthUser: (...args: unknown[]) => mocks.auth(...args),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule2>()),
   requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule3>()),
   withRateLimit: (...args: unknown[]) => mocks.rateLimit(...args),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule4>()),
   getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
 }));
 vi.mock('@/lib/support/tickets/service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/support/tickets/service')>()),
+  ...(await importOriginal<ScanModule5>()),
   openTicket: (...args: unknown[]) => mocks.openTicket(...args),
 }));
 vi.mock('@/lib/services/account-usage-history-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/account-usage-history-service')>()),
+  ...(await importOriginal<ScanModule6>()),
   readAccountUsageHistory: (...args: unknown[]) => mocks.history(...args),
   readAccountUsageRecords: (...args: unknown[]) => mocks.records(...args),
 }));
 vi.mock('@/lib/services/managed-usage-summary-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-summary-service')>()),
+  ...(await importOriginal<ScanModule7>()),
   getManagedUsageSummary: (...args: unknown[]) => mocks.summary(...args),
 }));
 

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../../services/cloudChat');
 
 const updateCloudConversation = vi.hoisted(() => vi.fn());
 
 vi.mock('../../services/cloudChat', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../services/cloudChat')>()),
+  ...(await importOriginal<ScanModule0>()),
   updateCloudConversation,
 }));
 

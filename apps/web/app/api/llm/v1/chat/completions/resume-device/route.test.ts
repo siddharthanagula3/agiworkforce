@@ -1,5 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('../lib/auth-gate');
+type ScanModule2 = typeof import('../lib/turn-slot');
+type ScanModule3 = typeof import('@/lib/managed-compute-gate');
+type ScanModule4 = typeof import('../lib/request-processor');
+type ScanModule5 = typeof import('../lib/tool-loop');
+type ScanModule6 = typeof import('@/lib/user-connector-tools');
+type ScanModule7 = typeof import('../lib/connector-tool-permissions');
+type ScanModule8 = typeof import('../lib/tool-approval-policy');
+type ScanModule9 = typeof import('../lib/secret-handling-gate');
+type ScanModule10 = typeof import('@/lib/workflows/start-cloud-agent-workflow');
+type ScanModule11 = typeof import('@/lib/workflows/durable-stream-bounds');
+type ScanModule12 = typeof import('@/lib/server/rls-db');
+type ScanModule13 = typeof import('@/lib/services/cloud-agent-run-service');
+type ScanModule14 = typeof import('@/lib/services/managed-usage-request-service');
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
@@ -32,67 +47,67 @@ const db = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() };
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('../lib/auth-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/auth-gate')>()),
+  ...(await importOriginal<ScanModule1>()),
   runAuthGate: mocks.authGate,
 }));
 vi.mock('../lib/turn-slot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/turn-slot')>()),
+  ...(await importOriginal<ScanModule2>()),
   withManagedTurnSlot: mocks.turnSlot,
 }));
 vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/managed-compute-gate')>()),
+  ...(await importOriginal<ScanModule3>()),
   resolveWorkspaceControlsForRequest: mocks.workspaceControls,
   buildManagedComputeGateResponse: mocks.managedCompute,
   buildOrganizationPolicyGateResponse: mocks.orgPolicy,
   buildSpendLimitGateResponse: mocks.spendLimit,
 }));
 vi.mock('../lib/request-processor', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/request-processor')>()),
+  ...(await importOriginal<ScanModule4>()),
   processRequest: mocks.processRequest,
 }));
 vi.mock('../lib/tool-loop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/tool-loop')>()),
+  ...(await importOriginal<ScanModule5>()),
   loadMcpToolDefs: mocks.operatorTools,
 }));
 vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/user-connector-tools')>()),
+  ...(await importOriginal<ScanModule6>()),
   loadUserConnectorToolDefs: mocks.connectorTools,
 }));
 vi.mock('../lib/connector-tool-permissions', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/connector-tool-permissions')>()),
+  ...(await importOriginal<ScanModule7>()),
   loadConnectorToolPermissions: mocks.permissions,
 }));
 vi.mock('../lib/tool-approval-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/tool-approval-policy')>()),
+  ...(await importOriginal<ScanModule8>()),
   loadToolApprovalPolicy: mocks.approvalPolicy,
 }));
 vi.mock('../lib/secret-handling-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/secret-handling-gate')>()),
+  ...(await importOriginal<ScanModule9>()),
   applySecretHandlingToTexts: mocks.secretGate,
 }));
 vi.mock('@/lib/workflows/start-cloud-agent-workflow', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/workflows/start-cloud-agent-workflow')>()),
+  ...(await importOriginal<ScanModule10>()),
   runCloudAgentTurn: mocks.runTurn,
 }));
 vi.mock('@/lib/workflows/durable-stream-bounds', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/workflows/durable-stream-bounds')>()),
+  ...(await importOriginal<ScanModule11>()),
   boundDurableTurnStream: mocks.boundStream,
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule12>()),
   getUserScopedDb: vi.fn(async () => ({ db, userId: 'user-1', organizationId: null })),
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cloud-agent-run-service')>()),
+  ...(await importOriginal<ScanModule13>()),
   claimCloudAgentDeviceCheckpoint: mocks.claim,
   releaseCloudAgentDeviceCheckpoint: mocks.release,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule14>()),
   markManagedUsageProviderStarted: mocks.providerStarted,
   finalizeManagedUsageRequest: mocks.finalize,
 }));

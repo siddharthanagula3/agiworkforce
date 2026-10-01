@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { create } from 'zustand';
 import { CREDITS_PER_USD, formatCredits } from '@agiworkforce/types';
+type ScanModule0 = typeof import('../../../lib/tauri-mock');
+type ScanModule1 = typeof import('../../../services/cloudAccountAuth');
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -8,12 +10,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../lib/tauri-mock', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../lib/tauri-mock')>()),
+  ...(await importOriginal<ScanModule0>()),
   invoke: mocks.invoke,
 }));
 
 vi.mock('../../../services/cloudAccountAuth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../services/cloudAccountAuth')>()),
+  ...(await importOriginal<ScanModule1>()),
   cloudAccountAuth: { getUser: mocks.getUser },
 }));
 
@@ -124,22 +126,19 @@ describe('token budget alerts', () => {
     { tokens: 850, type: 'warning' },
     { tokens: 950, type: 'danger' },
     { tokens: 1_200, type: 'exceeded' },
-  ] as const)(
-    'states the estimated spend of a $type alert in credits',
-    ({ tokens, type }) => {
-      const store = budgetStore();
-      const costUsd = 0.25;
+  ] as const)('states the estimated spend of a $type alert in credits', ({ tokens, type }) => {
+    const store = budgetStore();
+    const costUsd = 0.25;
 
-      store.getState().addDetailedTokenUsage({
-        inputTokens: tokens - 100,
-        outputTokens: 100,
-        costUsd,
-      });
+    store.getState().addDetailedTokenUsage({
+      inputTokens: tokens - 100,
+      outputTokens: 100,
+      costUsd,
+    });
 
-      const alert = store.getState().budgetAlerts.find((candidate) => candidate.type === type);
-      expect(alert?.message).toContain(`About ${formatProviderCostCredits(costUsd)}`);
-      expect(alert?.message).toContain(formatCredits(costUsd * CREDITS_PER_USD));
-      expect(alert?.message).not.toContain('$');
-    },
-  );
+    const alert = store.getState().budgetAlerts.find((candidate) => candidate.type === type);
+    expect(alert?.message).toContain(`About ${formatProviderCostCredits(costUsd)}`);
+    expect(alert?.message).toContain(formatCredits(costUsd * CREDITS_PER_USD));
+    expect(alert?.message).not.toContain('$');
+  });
 });

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/org-entitlements');
+type ScanModule1 = typeof import('@/lib/server/neon-db');
 
 vi.mock('server-only', () => ({}));
 
@@ -12,11 +14,11 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription },
 }));
 vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveOrganizationEntitlementPlan,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule1>()),
   getNeonDb: () => ({ query: (...args: unknown[]) => mockQuery(...args) }),
 }));
 

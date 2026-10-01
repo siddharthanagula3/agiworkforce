@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/active-workspace-service');
+type ScanModule1 = typeof import('@/features/workspaces/server/workspace-service');
 
 const mocks = vi.hoisted(() => ({
   scoped: vi.fn(),
@@ -12,11 +14,11 @@ vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.scoped }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/error-handler', () => ({ withErrorHandler: (handler: unknown) => handler }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveActiveOrganizationId: mocks.selection,
 }));
 vi.mock('@/features/workspaces/server/workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/workspaces/server/workspace-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   listAccountWorkspaces: mocks.list,
 }));
 

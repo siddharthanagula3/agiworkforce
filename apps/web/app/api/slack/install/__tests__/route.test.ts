@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('@/lib/slack/slack-config');
 
 vi.mock('server-only', () => ({}));
 
@@ -49,7 +50,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/slack/slack-config', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/slack/slack-config')>()),
+  ...(await importOriginal<ScanModule0>()),
   slackAppOrigin: mocks.slackAppOrigin,
   slackAppCredentials: mocks.slackAppCredentials,
   isSlackAppConfigured: mocks.isSlackAppConfigured,

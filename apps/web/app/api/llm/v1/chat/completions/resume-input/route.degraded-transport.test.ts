@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('../lib/managed-failover');
+type ScanModule1 = typeof import('@/lib/services/cloud-agent-run-service');
+type ScanModule2 = typeof import('@/lib/services/managed-usage-request-service');
 
 /**
  * AGI-39 for the MRTR (`input_required`) resume, proved the same way its approval
@@ -61,7 +64,7 @@ vi.mock('../lib/managed-agent-stream', () => ({
   buildManagedAgentStream: transportMocks.buildStream,
 }));
 vi.mock('../lib/managed-failover', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/managed-failover')>()),
+  ...(await importOriginal<ScanModule0>()),
   createFailoverPlan: () => ({ next: () => null }),
 }));
 vi.mock('@/lib/services/managed-auto-memory-service', () => ({
@@ -82,7 +85,7 @@ const checkpointMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cloud-agent-run-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   claimCloudAgentInputCheckpoint: checkpointMocks.claim,
   releaseCloudAgentInputCheckpoint: checkpointMocks.release,
   completeCloudAgentApprovalCheckpoint: checkpointMocks.complete,
@@ -104,7 +107,7 @@ const managedUsageMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   finalizeManagedUsageRequest: managedUsageMocks.finalizeRequest,
 }));

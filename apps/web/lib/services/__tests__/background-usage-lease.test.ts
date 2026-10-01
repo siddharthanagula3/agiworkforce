@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MICROUSD_PER_CREDIT, requireProviderDefaultModel } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/free-trial-service');
+type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -12,12 +14,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/free-trial-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   beginFreeTrialRequest: mocks.begin,
   settleFreeTrialRequest: mocks.settle,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   reserveManagedUsageRequest: mocks.reserve,
   markManagedUsageProviderStarted: mocks.started,
   finalizeManagedUsageRequest: mocks.finalize,

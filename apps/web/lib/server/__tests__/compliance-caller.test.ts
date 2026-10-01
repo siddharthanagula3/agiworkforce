@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/security-audit');
 
 vi.mock('server-only', () => ({}));
 
@@ -18,7 +19,7 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: vi.fn(),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/payments/stripe-provider');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -35,7 +36,7 @@ vi.mock('@/lib/services/cogs-ledger-service', () => ({
   importStripeCogsAdjustments: vi.fn(),
 }));
 vi.mock('@/lib/server/payments/stripe-provider', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/payments/stripe-provider')>()),
+  ...(await importOriginal<ScanModule0>()),
   readStripeCostActivity: vi.fn(),
 }));
 

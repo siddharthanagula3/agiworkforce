@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderAdapter, StreamChunk } from '@agiworkforce/types';
+type ScanModule0 = typeof import('../managed-usage-request-service');
+type ScanModule1 = typeof import('../cloud-code-session-service');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -27,7 +29,7 @@ vi.mock('@/lib/services/cloud-code-agent-runner', () => ({
   createCloudCodeToolRunner: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
   reserveManagedUsageRequest: vi.fn(async () => ({ userId: 'user-1', leaseToken: 'lease-1' })),
   reserveManagedUsageProviderStep: vi.fn(async () => ({})),
@@ -35,7 +37,7 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   finalizeManagedUsageRequest: vi.fn(async () => ({})),
 }));
 vi.mock('../cloud-code-session-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../cloud-code-session-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   claimCloudCodeSessionForRun: vi.fn(async () => ({ leaseToken: 'lease-1' })),
   releaseCloudCodeSessionAfterRun: vi.fn(async () => ({ state: 'ready' })),
 }));

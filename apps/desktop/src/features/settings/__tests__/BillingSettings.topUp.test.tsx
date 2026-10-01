@@ -16,6 +16,7 @@ import {
   quoteTopUp,
   type TopUpQuote,
 } from '@agiworkforce/types';
+type ScanModule0 = typeof import('../../../utils/navigation');
 
 const authState = vi.hoisted(() => ({
   plan: 'pro' as string | null,
@@ -44,7 +45,7 @@ vi.mock('../../../lib/stripeCheckout', () => ({
 }));
 
 vi.mock('../../../utils/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../utils/navigation')>()),
+  ...(await importOriginal<ScanModule0>()),
   openExternalUrl,
 }));
 
@@ -171,7 +172,9 @@ describe('BillingSettings usage top-up', () => {
 
     const section = screen.getByRole('region', { name: 'Buy credits' });
     expect(section).toHaveTextContent('don’t expire');
-    expect(section).toHaveTextContent(`Up to ${usd(DAILY_TOP_UP_LIMIT_USD * CENTS_PER_USD)} a day.`);
+    expect(section).toHaveTextContent(
+      `Up to ${usd(DAILY_TOP_UP_LIMIT_USD * CENTS_PER_USD)} a day.`,
+    );
     expect(section).toHaveTextContent('Tax calculated at checkout.');
 
     await user.click(within(section).getByRole('button', { name: 'refund policy' }));

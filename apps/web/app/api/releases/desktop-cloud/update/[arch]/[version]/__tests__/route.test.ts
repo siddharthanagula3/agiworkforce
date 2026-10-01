@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@shared/utils/env');
+type ScanModule1 = typeof import('@/lib/releases/github-desktop-releases');
 
 vi.mock('server-only', () => ({}));
 
@@ -32,11 +34,11 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@shared/utils/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/utils/env')>()),
+  ...(await importOriginal<ScanModule0>()),
   getOptionalEnv: mocks.getOptionalEnv,
 }));
 vi.mock('@/lib/releases/github-desktop-releases', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/releases/github-desktop-releases')>()),
+  ...(await importOriginal<ScanModule1>()),
   fetchLatestDesktopRelease: mocks.fetchLatestDesktopRelease,
 }));
 vi.mock('@/lib/releases/desktop-update-hold', () => ({

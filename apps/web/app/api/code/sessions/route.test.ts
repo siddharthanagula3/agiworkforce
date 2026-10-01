@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/security-audit');
+type ScanModule1 = typeof import('@/lib/e2b/templates');
+type ScanModule2 = typeof import('@/lib/services/cloud-code-session-service');
 
 const { auditSpy } = vi.hoisted(() => ({
   auditSpy: vi.fn(async (_event: Record<string, unknown>) => undefined),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: auditSpy,
 }));
 
@@ -53,11 +56,11 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 vi.mock('@/lib/e2b/templates', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/e2b/templates')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, listCloudCodeRuntimes: vi.fn(async () => []) };
 });
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cloud-code-session-service')>();
+  const actual = await importOriginal<ScanModule2>();
   return { ...actual, createCloudCodeSession: mockCreateSession };
 });
 vi.mock('@/lib/services/provider-adapter-service', () => ({

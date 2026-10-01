@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { modelRegistry } from '@agiworkforce/model-registry';
+type ScanModule0 = typeof import('@agiworkforce/model-registry');
 
 vi.mock('server-only', () => ({}));
 
@@ -63,7 +64,7 @@ async function resolveWithFlag(enabled: boolean) {
   const { registry, modelKey, gatewayRouteId, nativeRouteId } = registryWithAdmittedGatewayRoute();
   vi.resetModules();
   vi.doMock('@agiworkforce/model-registry', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@agiworkforce/model-registry')>()),
+    ...(await importOriginal<ScanModule0>()),
     modelRegistry: registry,
   }));
   if (enabled) process.env[GATEWAY_FLAG_ENV] = GATEWAY_FLAG_ON;

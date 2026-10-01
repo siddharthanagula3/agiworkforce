@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ComparisonResponse } from '../messages/ComparisonResponse';
+type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     MarkdownContent: ({ content }: { content: string }) => (

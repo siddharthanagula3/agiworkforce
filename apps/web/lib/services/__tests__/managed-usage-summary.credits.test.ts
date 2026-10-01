@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/bonus-credit-service');
 
 const {
   mockGetBalance,
@@ -42,7 +43,7 @@ vi.mock('@/lib/services/free-trial-service', () => ({
 }));
 
 vi.mock('@/lib/services/bonus-credit-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/bonus-credit-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   getPrepaidCreditBalances: mockGetPrepaidCreditBalances,
 }));
 
@@ -96,7 +97,11 @@ describe('managed usage summary, stated in credits', () => {
 
     const summary = await getManagedUsageSummary(db, 'user-1');
 
-    expect(summary.credits?.monthly).toMatchObject({ allowance: 2_000, used: 100, remaining: 1_900 });
+    expect(summary.credits?.monthly).toMatchObject({
+      allowance: 2_000,
+      used: 100,
+      remaining: 1_900,
+    });
     expect(summary.credits?.weekly).toMatchObject({ allowance: 500, used: 60, remaining: 440 });
     expect(summary.credits?.five_hour).toMatchObject({ allowance: 50, used: 15, remaining: 35 });
     expect(summary.credits?.flagship_weekly).toMatchObject({ allowance: 150, used: 20 });

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/localized-pricing-service');
+type ScanModule1 = typeof import('@/lib/price-tier-mapping');
 
 const pricing = vi.hoisted(() => ({
   getPriceSelectionForCurrency: vi.fn(),
@@ -7,11 +9,11 @@ const pricing = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/localized-pricing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/localized-pricing-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   getPriceSelectionForCurrency: pricing.getPriceSelectionForCurrency,
 }));
 vi.mock('@/lib/price-tier-mapping', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/price-tier-mapping')>()),
+  ...(await importOriginal<ScanModule1>()),
   resolvePlanTier: pricing.resolvePlanTier,
 }));
 

@@ -5,11 +5,13 @@ import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 import { useChatStream } from '@/lib/hooks/useChatStream';
 import { toChatMessage } from '../pages/WebChatPage';
 import { MessageBubble } from '../components/messages/MessageBubble';
+type ScanModule0 = typeof import('@/lib/identity/client');
+type ScanModule1 = typeof import('@agiworkforce/unified-chat');
 
 const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 
 vi.mock('@/lib/identity/client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/identity/client')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     useSession: () => ({
@@ -27,7 +29,7 @@ vi.mock('@/lib/client/csrf', () => ({
 }));
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     MarkdownContent: ({ content }: { content: string }) => <span>{content}</span>,

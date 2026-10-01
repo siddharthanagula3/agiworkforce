@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/api-auth');
+type ScanModule1 = typeof import('@/lib/csrf');
+type ScanModule2 = typeof import('@/lib/rate-limit');
+type ScanModule3 = typeof import('@/lib/security-audit');
+type ScanModule4 = typeof import('@/lib/support/tickets/service');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -21,24 +26,24 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule0>()),
   getClerkAuthUser: async () => mocks.caller.current,
   assertAccountActive: mocks.assertAccountActive,
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule1>()),
   requireCsrfToken: mocks.requireCsrfToken,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule2>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule3>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/support/tickets/service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/support/tickets/service')>()),
+  ...(await importOriginal<ScanModule4>()),
   listStaffTickets: mocks.listStaffTickets,
   readTicketForStaff: mocks.readTicketForStaff,
   replyToTicketAsStaff: mocks.replyToTicketAsStaff,

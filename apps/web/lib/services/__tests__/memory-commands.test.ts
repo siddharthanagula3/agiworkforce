@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/managed-memory-context-service');
 
 const mocks = vi.hoisted(() => ({
   loadMemoryExclusions: vi.fn(async (..._args: unknown[]) => [] as string[]),
@@ -15,8 +16,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-memory-context-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     loadMemoryExclusions: (...args: unknown[]) => mocks.loadMemoryExclusions(...args),

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/api-auth');
 
 vi.mock('server-only', () => ({}));
 
@@ -27,7 +28,7 @@ const { mockGetClerkAuthUser } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule0>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...(args as [])),
 }));
 

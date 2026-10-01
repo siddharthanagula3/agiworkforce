@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createHmac } from 'crypto';
+type ScanModule0 = typeof import('next/server');
+type ScanModule1 = typeof import('@agiworkforce/types');
 
 vi.mock('server-only', () => ({}));
 
@@ -10,7 +12,7 @@ vi.mock('server-only', () => ({}));
 // assertions below depend on: `processReview()` is started eagerly as the
 // argument, so the work still runs.
 vi.mock('next/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/server')>()),
+  ...(await importOriginal<ScanModule0>()),
   after: (task: unknown) => {
     void task;
   },
@@ -29,7 +31,7 @@ vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 
 vi.mock('@agiworkforce/types', async () => {
-  const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  const actual = await vi.importActual<ScanModule1>('@agiworkforce/types');
   return {
     ...actual,
     getTaskModelForProvider: () => 'fixture-model',

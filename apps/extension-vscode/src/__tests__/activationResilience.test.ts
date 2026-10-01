@@ -1,9 +1,10 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
 import { activate } from '../extension';
 import { __resetSubsystemHealthForTests, getFailureCount } from '../core/subsystemHealth';
+type ScanModule0 = typeof import('../core/providerSetup');
+type ScanModule1 = typeof import('../core/chatSetup');
 
 const { providerFailure, chatFailure } = vi.hoisted(() => ({
   providerFailure: { error: undefined as Error | undefined },
@@ -11,7 +12,7 @@ const { providerFailure, chatFailure } = vi.hoisted(() => ({
 }));
 
 vi.mock('../core/providerSetup', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../core/providerSetup')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     setupProviders: (context: vscode.ExtensionContext) => {
@@ -22,7 +23,7 @@ vi.mock('../core/providerSetup', async (importOriginal) => {
 });
 
 vi.mock('../core/chatSetup', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../core/chatSetup')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     setupChat: (...args: Parameters<typeof actual.setupChat>) => {

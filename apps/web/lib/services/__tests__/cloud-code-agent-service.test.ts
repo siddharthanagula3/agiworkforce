@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/cloud-code-agent-loop');
+type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule2 = typeof import('@/lib/services/cloud-code-session-service');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
@@ -30,11 +33,11 @@ vi.mock('workflow/api', () => ({ start: vi.fn() }));
 // importOriginal, not a bare factory: the service also imports the loop's
 // constants, and a factory that only supplies the function makes those undefined.
 vi.mock('@/lib/services/cloud-code-agent-loop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cloud-code-agent-loop')>()),
+  ...(await importOriginal<ScanModule0>()),
   runCloudCodeAgentTurn: vi.fn(),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
   reserveManagedUsageRequest: vi.fn(),
   reserveManagedUsageProviderStep: vi.fn(),
@@ -42,7 +45,7 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   finalizeManagedUsageRequest: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cloud-code-session-service')>();
+  const actual = await importOriginal<ScanModule2>();
   return {
     ...actual,
     getCloudCodeSession: vi.fn(),

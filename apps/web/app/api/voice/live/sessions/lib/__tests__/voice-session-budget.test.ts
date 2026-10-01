@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRoutingSlotModel, MICROUSD_PER_CREDIT } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/server/rolling-usage');
+type ScanModule1 = typeof import('@/lib/server/spendable-credits');
+type ScanModule2 = typeof import('@/lib/services/credit-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -10,18 +13,21 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/rolling-usage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rolling-usage')>()),
+  ...(await importOriginal<ScanModule0>()),
   getRollingUsage: (...args: unknown[]) => mocks.rollingUsage(...args),
 }));
 vi.mock('@/lib/server/spendable-credits', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/spendable-credits')>()),
+  ...(await importOriginal<ScanModule1>()),
   getSpendableCredits: (...args: unknown[]) => mocks.spendable(...args),
 }));
 vi.mock('@/lib/services/credit-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/credit-service')>();
+  const actual = await importOriginal<ScanModule2>();
   return {
     ...actual,
-    CreditService: { ...actual.CreditService, getBalance: (...args: unknown[]) => mocks.balance(...args) },
+    CreditService: {
+      ...actual.CreditService,
+      getBalance: (...args: unknown[]) => mocks.balance(...args),
+    },
   };
 });
 
@@ -38,7 +44,10 @@ import {
 import { planVoiceSessionBlock, readVoiceReservation } from '../voice-session-budget';
 
 const LIVE_MODEL = getRoutingSlotModel('voice_live');
-const FULL_BLOCK_MICROUSD = liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, LIVE_MODEL) as number;
+const FULL_BLOCK_MICROUSD = liveSessionChargeMicrousd(
+  LIVE_SESSION_CEILING_SECONDS,
+  LIVE_MODEL,
+) as number;
 const FIVE_HOUR_OLDEST = '2026-09-27T10:00:00.000Z';
 const WEEKLY_OLDEST = '2026-09-24T10:00:00.000Z';
 const PERIOD_END = '2026-10-15T00:00:00.000Z';
@@ -86,7 +95,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   usage({ session: 0, weekly: 0 });
   monthly(1_000_000_000);
-  mocks.spendable.mockResolvedValue({ availableMicrousd: 0, availableCents: 0, overageEnabled: false });
+  mocks.spendable.mockResolvedValue({
+    availableMicrousd: 0,
+    availableCents: 0,
+    overageEnabled: false,
+  });
 });
 
 describe('planVoiceSessionBlock', () => {
@@ -162,9 +175,7 @@ describe('planVoiceSessionBlock', () => {
       availableCents: 8,
       overageEnabled: true,
     });
-    expect((await plan('pro')).blockSeconds).toBe(
-      liveSessionSecondsCoveredBy(80_000, LIVE_MODEL),
-    );
+    expect((await plan('pro')).blockSeconds).toBe(liveSessionSecondsCoveredBy(80_000, LIVE_MODEL));
   });
 
   it('never sizes a block past the ceiling, whatever overage is available', async () => {

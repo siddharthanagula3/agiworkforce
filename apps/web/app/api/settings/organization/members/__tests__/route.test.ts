@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import type { OrganizationRole } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('@/lib/rate-limit');
+type ScanModule2 = typeof import('@/lib/security-audit');
+type ScanModule3 = typeof import('@/lib/server/neon-db');
+type ScanModule4 = typeof import('@/lib/server/rls-db');
+type ScanModule5 = typeof import('@/lib/server/request-context-cache');
+type ScanModule6 = typeof import('@/lib/services/organization-permission-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -13,32 +20,32 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule1>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule2>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule3>()),
   getNeonDb: () => state.db,
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule4>()),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<ScanModule5>()),
   getCachedActiveOrganizationId: vi.fn(async () => undefined),
   setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-permission-service')>()),
+  ...(await importOriginal<ScanModule6>()),
   ...(await import('../../__tests__/workspace-admin-api-world')).permissionServiceMock(session),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({

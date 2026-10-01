@@ -1,4 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
+type ScanModule0 = typeof import('undici');
 
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
 vi.mock('undici', async (importOriginal) => {
@@ -7,7 +8,7 @@ vi.mock('undici', async (importOriginal) => {
   // the global fetch. These tests drive the network through vi.stubGlobal('fetch'),
   // so route undici's fetch back to the global one and leave every other export
   // (Agent, the pinning path) real.
-  const actual = await importOriginal<typeof import('undici')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     fetch: (...args: unknown[]) =>

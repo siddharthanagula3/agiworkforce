@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/connector-policy-service');
 
 const {
   resolveActiveOrganizationId,
@@ -20,7 +21,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({ resolveActiveOrganizationId }));
 vi.mock('@/lib/services/connector-policy-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/connector-policy-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   readConnectorPolicy,
 }));
 vi.mock('@/lib/connectors/connector-capability', () => ({

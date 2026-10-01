@@ -4,6 +4,7 @@ import { VISUAL_SOURCE_MESSAGE } from '@agiworkforce/types';
 
 import { VOICE_SESSION_STATUS, INITIAL_VOICE_SESSION_STATE } from '@agiworkforce/unified-chat';
 import { LIVE_SESSION_MESSAGE } from '@features/chat/lib/live-voice-session';
+type ScanModule0 = typeof import('@/lib/visual/use-visual-session');
 
 const controller = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 const visual = vi.hoisted(() => ({
@@ -17,7 +18,7 @@ vi.mock('@features/chat/hooks/use-voice-session', () => ({
   useVoiceSession: () => controller.current,
 }));
 vi.mock('@/lib/visual/use-visual-session', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/visual/use-visual-session')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     useVisualSession: (options: Parameters<typeof actual.useVisualSession>[0]) =>

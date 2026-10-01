@@ -6,6 +6,7 @@ import {
   type QuotaPool,
   type RoutingRuntimeState,
 } from '@agiworkforce/routing';
+type ScanModule0 = typeof import('./request-processor');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -35,7 +36,7 @@ vi.mock('@/lib/services/aggregator-routing', () => ({
 }));
 
 vi.mock('./request-processor', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./request-processor')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveRequestEffort: vi.fn(() => undefined),
   buildThinkingConfig: vi.fn(() => undefined),
 }));

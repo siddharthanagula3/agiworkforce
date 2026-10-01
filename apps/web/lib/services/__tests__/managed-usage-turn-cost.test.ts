@@ -4,12 +4,13 @@ import {
   chargeMicrousdForProviderCost,
   requireProviderDefaultModel,
 } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
 
 const finalizeManagedUsageRequest = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   finalizeManagedUsageRequest,
 }));
 
@@ -60,7 +61,9 @@ describe('priceServerToolUsage', () => {
     const charge = priceServerToolUsage({ provider: 'anthropic', webSearchRequests: 3 });
 
     expect(charge.providerMicrousd).toBe(3 * ANTHROPIC_SEARCH_MICROUSD);
-    expect(charge.chargeMicrousd).toBe(chargeMicrousdForProviderCost(3 * ANTHROPIC_SEARCH_MICROUSD));
+    expect(charge.chargeMicrousd).toBe(
+      chargeMicrousdForProviderCost(3 * ANTHROPIC_SEARCH_MICROUSD),
+    );
     expect(charge.chargeMicrousd / 5_000).toBe(6);
   });
 
@@ -138,7 +141,9 @@ describe('the observed cost of a turn', () => {
     );
 
     expect(usage.hostedCodeExecution).toBeUndefined();
-    expect(observedTurnCost(usage, { provider: 'anthropic', model: ANTHROPIC_MODEL }).toolMicrousd).toBe(0);
+    expect(
+      observedTurnCost(usage, { provider: 'anthropic', model: ANTHROPIC_MODEL }).toolMicrousd,
+    ).toBe(0);
   });
 
   it('puts searches, containers and tool spend beside the tokens in the turn cost', () => {

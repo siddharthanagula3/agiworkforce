@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/github-app');
+type ScanModule1 = typeof import('@/lib/e2b/templates');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
@@ -21,7 +23,7 @@ vi.mock('@/lib/e2b/session-store', () => ({
   })),
 }));
 vi.mock('@/lib/github-app', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/github-app')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     isGitHubAppConfigured: vi.fn(() => true),
@@ -39,7 +41,7 @@ vi.mock('@/lib/user-connector-tools', () => ({
   getUserGithubInstallations: vi.fn(async () => []),
 }));
 vi.mock('@/lib/e2b/templates', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/e2b/templates')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     listCloudCodeRuntimes: vi.fn(async () => [

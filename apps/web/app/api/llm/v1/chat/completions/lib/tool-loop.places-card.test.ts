@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { PLACES_SEARCH_TOOL_NAME, type PlacesSearchPayload } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/places/places-tool');
 
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
 const places = vi.hoisted(() => ({ execute: vi.fn() }));
@@ -15,9 +16,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
   pauseE2BSession: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/places/places-tool', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/places/places-tool')>(
-    '@/lib/places/places-tool',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/places/places-tool');
   return { ...actual, executePlacesSearch: places.execute };
 });
 

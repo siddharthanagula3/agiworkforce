@@ -19,6 +19,8 @@
  * provider events and the research loop is real.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/url-fetch/url-fetch-tool');
+type ScanModule1 = typeof import('./tool-loop-anthropic');
 
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -27,7 +29,7 @@ vi.mock('@/lib/logger', () => ({
 // stay real so the loop's own tool routing is exercised.
 const urlFetchMock = vi.hoisted(() => ({ execute: vi.fn() }));
 vi.mock('@/lib/url-fetch/url-fetch-tool', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/url-fetch/url-fetch-tool')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, executeUrlFetch: urlFetchMock.execute };
 });
 vi.mock('@/lib/services/credit-service', () => ({
@@ -57,7 +59,7 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 // Keep chunksToOpenAiSse REAL; replace only buildToolLoopStream (the network
 // dispatch) with the recorded-events pipeline.
 vi.mock('./tool-loop-anthropic', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./tool-loop-anthropic')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     buildToolLoopStream: vi.fn(),

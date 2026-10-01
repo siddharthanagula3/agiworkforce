@@ -9,14 +9,16 @@ import {
 } from '../utils/api';
 import { showCloudUtilityErrorActions } from '../core/cloudUtilityErrorActions';
 import { AgiInlineCompletionProvider } from '../features/inline-completions/inlineCompletionProvider';
+type ScanModule0 = typeof import('../core/cloudUtilityErrorActions');
+type ScanModule1 = typeof import('../utils/api');
 
 vi.mock('../core/cloudUtilityErrorActions', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../core/cloudUtilityErrorActions')>()),
+  ...(await importOriginal<ScanModule0>()),
   showCloudUtilityErrorActions: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../utils/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../utils/api')>()),
+  ...(await importOriginal<ScanModule1>()),
   chatCompletion: vi.fn(),
   fetchTierInfo: vi.fn(),
 }));

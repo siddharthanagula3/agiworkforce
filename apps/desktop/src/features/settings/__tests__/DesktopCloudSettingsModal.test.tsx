@@ -3,6 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SettingsDataAdapter, SettingsModal } from '@agiworkforce/ui';
+type ScanModule0 = typeof import('@agiworkforce/ui');
+type ScanModule1 = typeof import('../../../utils/navigation');
 
 const mocks = vi.hoisted(() => ({
   settingsModal: vi.fn((_props: unknown) => null),
@@ -17,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 // exactly the bug worth catching: 'safety' shipped in the real nav with no
 vi.mock('@agiworkforce/ui', async () => {
-  const actual = await vi.importActual<typeof import('@agiworkforce/ui')>('@agiworkforce/ui');
+  const actual = await vi.importActual<ScanModule0>('@agiworkforce/ui');
   return {
     ...actual,
     SettingsModal: mocks.settingsModal,
@@ -41,7 +43,7 @@ vi.mock('../../../api/cloudSkills', () => ({
 }));
 
 vi.mock('../../../utils/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../utils/navigation')>()),
+  ...(await importOriginal<ScanModule1>()),
   openExternalUrl: mocks.openExternalUrl,
 }));
 

@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../tauri-electron/bridgeContract');
+type ScanModule1 = typeof import('../tauri-mock');
 
 describe('tauri-mock Electron account bridge', () => {
   afterEach(() => {
@@ -18,7 +20,7 @@ describe('tauri-mock Electron account bridge', () => {
       isCloudWeb: true,
     }));
     vi.doMock('../tauri-electron/bridgeContract', async (importOriginal) => ({
-      ...(await importOriginal<typeof import('../tauri-electron/bridgeContract')>()),
+      ...(await importOriginal<ScanModule0>()),
       getElectronHostBridge: () => ({ handles: () => true }),
     }));
 
@@ -27,7 +29,7 @@ describe('tauri-mock Electron account bridge', () => {
     bridgeInvoke.mockReset();
     bridgeInvoke.mockResolvedValue('stored');
 
-    const { invoke } = await vi.importActual<typeof import('../tauri-mock')>('../tauri-mock');
+    const { invoke } = await vi.importActual<ScanModule1>('../tauri-mock');
 
     await expect(
       invoke('account_store_access_token', { accessToken: 'fixture-token' }),

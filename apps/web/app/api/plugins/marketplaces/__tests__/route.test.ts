@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/plugin-marketplace-service');
 
 const {
   authUserMock,
@@ -37,9 +38,7 @@ import {
 } from '@/lib/services/plugin-marketplace-service';
 
 vi.mock('@/lib/services/plugin-marketplace-service', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/services/plugin-marketplace-service')>(
-    '@/lib/services/plugin-marketplace-service',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/services/plugin-marketplace-service');
   return {
     ...actual,
     registerMarketplaceSource: registerMarketplaceSourceMock,

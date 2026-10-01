@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/container-files');
 
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('./tool-loop-anthropic', () => ({
@@ -14,7 +15,7 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
   MAX_GENERATED_FILE_BYTES: 20 * 1024 * 1024,
 }));
 vi.mock('@/lib/server/container-files', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/container-files')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, persistGeneratedFiles: vi.fn(async () => ({ files: [], failedCount: 0 })) };
 });
 

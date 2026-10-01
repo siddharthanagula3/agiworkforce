@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../cloud-agent-run-service');
 
 const { mockCreateRun, mockRequestCancellation, mockIsCancellationRequested } = vi.hoisted(() => ({
   mockCreateRun: vi.fn(),
@@ -11,7 +12,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('../cloud-agent-run-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../cloud-agent-run-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     createCloudAgentRun: mockCreateRun,

@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import { queryClient } from '../query-client';
+type ScanModule0 = typeof import('sonner');
 
 vi.mock('sonner', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('sonner')>()),
+  ...(await importOriginal<ScanModule0>()),
   toast: { error: vi.fn() },
 }));
 

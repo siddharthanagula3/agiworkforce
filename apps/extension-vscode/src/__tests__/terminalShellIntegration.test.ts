@@ -5,9 +5,10 @@ import * as vscode from 'vscode';
 import { TerminalProvider } from '../providers/terminalProvider';
 import { buildExplainTerminalPrompt } from '../features/editor-utilities';
 import { chatCompletion } from '../utils/api';
+type ScanModule0 = typeof import('../utils/api');
 
 vi.mock('../utils/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../utils/api')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, chatCompletion: vi.fn().mockResolvedValue('explanation') };
 });
 

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/neon-db');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -13,7 +14,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => mocks.getUserScopedDb(...args),
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   getNeonDb: () => ({ query: (...args: unknown[]) => mocks.privilegedQuery(...args) }),
 }));
 

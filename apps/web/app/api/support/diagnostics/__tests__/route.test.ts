@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/hosting');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -17,7 +18,7 @@ vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/server/hosting', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/hosting')>()),
+  ...(await importOriginal<ScanModule0>()),
   releaseSha: mocks.releaseSha,
   deployEnvironment: mocks.deployEnvironment,
 }));

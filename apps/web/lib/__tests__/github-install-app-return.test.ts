@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+type ScanModule0 = typeof import('@/lib/server/neon-db');
+type ScanModule1 = typeof import('@/lib/custom-connector-crypto');
+type ScanModule2 = typeof import('@/lib/github-app');
 
 const mocks = vi.hoisted(() => ({ query: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mocks.query(...args) })),
 }));
 vi.mock('@/lib/custom-connector-crypto', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/custom-connector-crypto')>()),
+  ...(await importOriginal<ScanModule1>()),
   encryptConnectorToken: (value: string, purpose: string) => `sealed(${purpose}):${value}`,
   decryptConnectorToken: (value: string, purpose: string) => {
     const prefix = `sealed(${purpose}):`;
@@ -18,7 +21,7 @@ vi.mock('@/lib/custom-connector-crypto', async (importOriginal) => ({
   },
 }));
 vi.mock('@/lib/github-app', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/github-app')>()),
+  ...(await importOriginal<ScanModule2>()),
   generateGitHubInstallState: vi.fn(() => 'a'.repeat(64)),
 }));
 

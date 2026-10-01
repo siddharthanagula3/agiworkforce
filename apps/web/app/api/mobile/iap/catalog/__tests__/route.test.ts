@@ -1,4 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/rate-limit');
+type ScanModule1 = typeof import('@/lib/logger');
+type ScanModule2 = typeof import('@/lib/server/neon-chat');
+type ScanModule3 = typeof import('@/lib/server/neon-db');
+type ScanModule4 = typeof import('@/lib/server/rls-db');
+type ScanModule5 = typeof import('@/lib/feature-flags/capability-gate');
+type ScanModule6 = typeof import('@/lib/feature-flags/flag-evaluation-service');
 
 const { mockRequireCurrentUserId, mockDb, mockKillSwitchGate } = vi.hoisted(() => ({
   mockRequireCurrentUserId: vi.fn(),
@@ -8,23 +15,23 @@ const { mockRequireCurrentUserId, mockDb, mockKillSwitchGate } = vi.hoisted(() =
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule0>()),
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-chat', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-chat')>()),
+  ...(await importOriginal<ScanModule2>()),
   requireCurrentUserId: mockRequireCurrentUserId,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule3>()),
   getNeonDb: () => mockDb.current,
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule4>()),
   getUserScopedDb: vi.fn(async () => ({
     db: mockDb.current,
     userId: 'user-1',
@@ -32,11 +39,11 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   })),
 }));
 vi.mock('@/lib/feature-flags/capability-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/capability-gate')>()),
+  ...(await importOriginal<ScanModule5>()),
   readKillSwitchGate: mockKillSwitchGate,
 }));
 vi.mock('@/lib/feature-flags/flag-evaluation-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/flag-evaluation-service')>()),
+  ...(await importOriginal<ScanModule6>()),
   buildFlagSubject: vi.fn(() => ({ userId: 'user-1' })),
 }));
 

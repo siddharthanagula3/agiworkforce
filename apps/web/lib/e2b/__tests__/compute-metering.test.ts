@@ -4,6 +4,8 @@ import {
   FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD,
   chargeMicrousdForProviderCost,
 } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/cogs-ledger-service');
+type ScanModule1 = typeof import('@agiworkforce/types');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
@@ -20,7 +22,7 @@ vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: () => quotaStore })
 
 const recordSettledProviderCost = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordSettledProviderCost,
 }));
 
@@ -567,7 +569,7 @@ describe('compute pricing is read from the rate card, not a literal', () => {
 
   it('prices every shape from the rate card rate pair', async () => {
     vi.doMock('@agiworkforce/types', async (importOriginal) => ({
-      ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+      ...(await importOriginal<ScanModule1>()),
       sandboxComputeRate: () => ({ ok: true, microusdPerSecond: 140, overrideInvalid: false }),
     }));
     const mod = await loadModule();
@@ -576,7 +578,7 @@ describe('compute pricing is read from the rate card, not a literal', () => {
 
   it('is unpriced and logs an error when the rate card declares no rate pair', async () => {
     vi.doMock('@agiworkforce/types', async (importOriginal) => ({
-      ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+      ...(await importOriginal<ScanModule1>()),
       sandboxComputeRate: () => ({ ok: false, overrideInvalid: false }),
     }));
     const mod = await loadModule();
@@ -587,7 +589,7 @@ describe('compute pricing is read from the rate card, not a literal', () => {
 
   it('settles nothing from an unpriced sandbox and says so', async () => {
     vi.doMock('@agiworkforce/types', async (importOriginal) => ({
-      ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+      ...(await importOriginal<ScanModule1>()),
       sandboxComputeRate: () => ({ ok: false, overrideInvalid: false }),
     }));
     const mod = await loadModule();

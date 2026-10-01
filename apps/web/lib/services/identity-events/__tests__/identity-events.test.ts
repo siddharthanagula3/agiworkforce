@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/session-revocation');
 
 const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock('@/lib/server/risk-signals', () => ({
   recordIdentityObservation: (...args: unknown[]) => mocks.observe(...args),
 }));
 vi.mock('@/lib/server/session-revocation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/session-revocation')>()),
+  ...(await importOriginal<ScanModule0>()),
   revokeEveryOtherSession: (...args: unknown[]) => mocks.revoke(...args),
   finishIntentRevocation: async () => true,
 }));

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/observability/metrics');
 
 const emitted = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
@@ -24,7 +25,7 @@ vi.mock('@/lib/security-audit', () => ({
   BLOCK_APPEAL_PATH: '/support',
 }));
 vi.mock('@/lib/observability/metrics', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/observability/metrics')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordToolOutcome: outcomes.record,
 }));
 

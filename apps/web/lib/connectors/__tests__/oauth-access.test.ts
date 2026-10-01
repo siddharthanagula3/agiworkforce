@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/connectors/oauth-store');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
@@ -53,7 +54,7 @@ const MockTokenError = mocks.ConnectorOAuthTokenError;
 const MockDecryptionError = mocks.ConnectorGrantDecryptionError;
 
 vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/oauth-store')>()),
+  ...(await importOriginal<ScanModule0>()),
   ConnectorGrantDecryptionError: mocks.ConnectorGrantDecryptionError,
   ConnectorGrantLockTimeoutError: mocks.ConnectorGrantLockTimeoutError,
   withLockedConnectorOAuthGrant: async (

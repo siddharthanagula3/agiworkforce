@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/desktop-sign-in');
 
 vi.mock('server-only', () => ({}));
 
@@ -60,7 +61,7 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(),
 }));
 vi.mock('@/lib/server/desktop-sign-in', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/desktop-sign-in')>()),
+  ...(await importOriginal<ScanModule0>()),
   redeemDesktopSignInGrant: mocks.redeemDesktopSignInGrant,
   mintDesktopSignInTicket: mocks.mintDesktopSignInTicket,
 }));

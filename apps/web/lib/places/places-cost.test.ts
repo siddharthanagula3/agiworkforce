@@ -5,13 +5,14 @@ import {
   RATE_CARD_PROVIDER_COGS_ENV,
   chargeMicrousdForProviderCost,
 } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/web-search/search-budget');
 
 vi.mock('server-only', () => ({}));
 
 const reserveSearchCharge = vi.hoisted(() => vi.fn());
 const settleSearchCall = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/web-search/search-budget', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/web-search/search-budget')>()),
+  ...(await importOriginal<ScanModule0>()),
   reserveSearchCharge,
   settleSearchCall,
 }));

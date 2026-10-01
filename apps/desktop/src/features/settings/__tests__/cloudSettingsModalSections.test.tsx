@@ -2,6 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SettingsModal } from '@agiworkforce/ui';
+type ScanModule0 = typeof import('@agiworkforce/ui');
+type ScanModule1 = typeof import('../../../api/cloudAccountSettings');
 
 const mocks = vi.hoisted(() => ({
   settingsModal: vi.fn((_props: unknown) => null),
@@ -25,7 +27,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agiworkforce/ui', async () => {
-  const actual = await vi.importActual<typeof import('@agiworkforce/ui')>('@agiworkforce/ui');
+  const actual = await vi.importActual<ScanModule0>('@agiworkforce/ui');
   return { ...actual, SettingsModal: mocks.settingsModal };
 });
 
@@ -45,9 +47,7 @@ vi.mock('../../../api/cloudSkills', () => ({
 }));
 
 vi.mock('../../../api/cloudAccountSettings', async () => {
-  const actual = await vi.importActual<typeof import('../../../api/cloudAccountSettings')>(
-    '../../../api/cloudAccountSettings',
-  );
+  const actual = await vi.importActual<ScanModule1>('../../../api/cloudAccountSettings');
   return {
     ...actual,
     listCloudSharedLinks: mocks.listCloudSharedLinks,

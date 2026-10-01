@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../runtimeEnvironment');
 
 const mocks = vi.hoisted(() => ({
   requestFetch: vi.fn(),
@@ -39,7 +40,7 @@ vi.mock('../../services/managedCloudBoundary', () => ({
 }));
 
 vi.mock('../runtimeEnvironment', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtimeEnvironment')>()),
+  ...(await importOriginal<ScanModule0>()),
   isTauri: false,
 }));
 

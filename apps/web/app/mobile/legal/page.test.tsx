@@ -4,6 +4,7 @@ import path from 'node:path';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AVAILABLE_NOW_LABEL, COMING_SOON_LABEL } from '@/lib/surface-status';
+type ScanModule0 = typeof import('@/lib/marketing-constants');
 
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => null }));
 vi.mock('@/features/marketing/components/MarketingFooter', () => ({
@@ -16,7 +17,7 @@ const MOBILE_DIR = path.join(__dirname, '..', '..', '..', '..', 'mobile');
 async function renderWithMobileStatus(status: string): Promise<string> {
   vi.resetModules();
   vi.doMock('@/lib/marketing-constants', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@/lib/marketing-constants')>();
+    const actual = await importOriginal<ScanModule0>();
     return {
       ...actual,
       SURFACE_STATUS: { ...actual.SURFACE_STATUS, mobile: status },

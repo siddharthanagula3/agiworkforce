@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/security/upload-scan');
+type ScanModule1 = typeof import('@/lib/services/organization-policy-gate');
 
 vi.mock('server-only', () => ({}));
 
@@ -44,9 +46,7 @@ vi.mock('@/lib/server/object-storage', () => ({
   StoredObjectTooLargeError: class extends Error {},
 }));
 vi.mock('@/lib/security/upload-scan', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/security/upload-scan')>(
-    '@/lib/security/upload-scan',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/security/upload-scan');
   return { ...actual, scanUploadBytes: mockScanUploadBytes };
 });
 vi.mock('@/lib/moderation', () => ({
@@ -66,7 +66,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-policy-gate')>()),
+  ...(await importOriginal<ScanModule1>()),
   workspacesPermitProductAnalytics: vi.fn(async () => true),
   resolveSecretHandlingPolicy: mockResolveSecretHandlingPolicy,
 }));

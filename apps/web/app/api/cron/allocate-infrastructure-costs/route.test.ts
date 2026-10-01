@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('@/lib/server/cron-auth');
+type ScanModule2 = typeof import('@/lib/services/infrastructure-allocation-service');
 
 const { mockVerifyCron, mockAllocate, mockLogger } = vi.hoisted(() => ({
   mockVerifyCron: vi.fn(),
@@ -9,15 +12,15 @@ const { mockVerifyCron, mockAllocate, mockLogger } = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: mockLogger,
 }));
 vi.mock('@/lib/server/cron-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/cron-auth')>()),
+  ...(await importOriginal<ScanModule1>()),
   verifyCronRequest: mockVerifyCron,
 }));
 vi.mock('@/lib/services/infrastructure-allocation-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/infrastructure-allocation-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   allocateInfrastructureCosts: mockAllocate,
 }));
 

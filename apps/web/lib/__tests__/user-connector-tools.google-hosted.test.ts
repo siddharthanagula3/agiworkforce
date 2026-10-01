@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/neon-db');
+type ScanModule1 = typeof import('@/lib/egress-policy');
+type ScanModule2 = typeof import('@agiworkforce/mcp');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -12,18 +15,18 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => {
     transaction: async (callback: (tx: unknown) => unknown) => callback(adapter),
   };
   return {
-    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    ...(await importOriginal<ScanModule0>()),
     getNeonDb: () => adapter,
   };
 });
 
 vi.mock('@/lib/egress-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/egress-policy')>()),
+  ...(await importOriginal<ScanModule1>()),
   assertResolvedPublicHostname: vi.fn(async () => undefined),
 }));
 
 vi.mock('@agiworkforce/mcp', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/mcp')>()),
+  ...(await importOriginal<ScanModule2>()),
   buildMcpToolCatalog: (...args: unknown[]) => mocks.buildMcpToolCatalog(...args),
 }));
 

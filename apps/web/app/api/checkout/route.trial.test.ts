@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@agiworkforce/types');
+type ScanModule1 = typeof import('@/lib/server/billing-waitlist-access');
 
 const stripeMocks = vi.hoisted(() => ({
   createCheckoutSession: vi.fn(),
@@ -24,7 +26,7 @@ const waitlistAccessMocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<ScanModule0>()),
   getPlanTrialDays: trialMocks.trialDays,
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
@@ -66,7 +68,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 vi.mock('@/lib/server/billing-waitlist-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/billing-waitlist-access')>()),
+  ...(await importOriginal<ScanModule1>()),
   hasBillingWaitlistAccess: waitlistAccessMocks.hasAccess,
 }));
 vi.mock('stripe', () => ({

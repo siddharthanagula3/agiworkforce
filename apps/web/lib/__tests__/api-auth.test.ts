@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 
 import { resetSessionStartCache, unreadableSessionStartCount } from '@/lib/auth/session-age';
+type ScanModule0 = typeof import('@agiworkforce/data-layer');
 
 vi.mock('server-only', () => ({}));
 
@@ -72,7 +73,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 vi.mock('@agiworkforce/data-layer', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/data-layer')>();
+  const actual = await importOriginal<ScanModule0>();
   const rlsCapableAdapter: unknown = {
     query: (...args: unknown[]) => mockNeonQuery(...args),
     execute: (...args: unknown[]) => mockNeonExecute(...args),

@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../../services/stripe-payments');
 
 const paymentMocks = vi.hoisted(() => ({
   previewUpgrade: vi.fn(),
@@ -8,9 +9,7 @@ const paymentMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../services/stripe-payments', async () => {
-  const actual = await vi.importActual<typeof import('../../services/stripe-payments')>(
-    '../../services/stripe-payments',
-  );
+  const actual = await vi.importActual<ScanModule0>('../../services/stripe-payments');
   return { ...actual, ...paymentMocks };
 });
 

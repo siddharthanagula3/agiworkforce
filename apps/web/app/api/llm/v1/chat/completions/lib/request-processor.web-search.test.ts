@@ -6,9 +6,11 @@ import {
   listCanonicalModels,
   requireProviderDefaultModel,
 } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/free-trial-service');
+type ScanModule1 = typeof import('@/lib/services/managed-content-safety-service');
 
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/free-trial-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     beginFreeTrialRequest: vi.fn(async ({ userId, requestId }) => ({
@@ -26,8 +28,7 @@ vi.mock('@/lib/services/free-trial-service', async (importOriginal) => {
 });
 
 vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-content-safety-service')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     enforceManagedContentSafetyPreference: vi.fn(async () => ({

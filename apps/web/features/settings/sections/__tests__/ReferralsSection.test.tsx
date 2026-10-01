@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+type ScanModule0 = typeof import('@/lib/client/csrf');
+type ScanModule1 = typeof import('@shared/utils/browser-utils');
 
 const mocks = vi.hoisted(() => ({
   addCsrfHeaders: vi.fn(),
@@ -7,11 +9,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ScanModule0>()),
   addCsrfHeaders: mocks.addCsrfHeaders,
 }));
 vi.mock('@shared/utils/browser-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/utils/browser-utils')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, safeClipboard: { ...actual.safeClipboard, writeText: mocks.writeText } };
 });
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/cogs-ledger-service');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -8,7 +9,7 @@ vi.mock('@/lib/logger', () => ({
 const countUserFeatureUnitsSince = vi.hoisted(() => vi.fn());
 const recordSettledProviderCost = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   countUserFeatureUnitsSince,
   getOrganizationMonthToDateSpendCents: vi.fn(),
   recordSettledProviderCost,

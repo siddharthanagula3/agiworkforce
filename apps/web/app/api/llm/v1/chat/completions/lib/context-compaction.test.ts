@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/types');
+type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule2 = typeof import('@agiworkforce/provider-protocol');
 
 vi.mock('server-only', () => ({}));
 
 const TEST_MODEL = 'context-compaction-test-model';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     getModelMetadataById: vi.fn((id?: string) =>
@@ -14,7 +17,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
   };
 });
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
   reserveManagedUsageRequest: vi.fn(),
   markManagedUsageProviderStarted: vi.fn(),
@@ -44,7 +47,7 @@ vi.mock('./adapter-response', () => ({
   drainToLlmResponse: vi.fn(),
 }));
 vi.mock('@agiworkforce/provider-protocol', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/provider-protocol')>();
+  const actual = await importOriginal<ScanModule2>();
   return { ...actual, openAIWireRequestToChatRequest: vi.fn((value: unknown) => value) };
 });
 

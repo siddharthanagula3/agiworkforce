@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -60,7 +61,7 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
   resolveOrganizationPermissions: vi.fn(async () => new Set()),
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveOrgMembership: mocks.resolveOrgMembership,
 }));
 vi.mock('@/lib/services/org-shared-session-service', () => ({

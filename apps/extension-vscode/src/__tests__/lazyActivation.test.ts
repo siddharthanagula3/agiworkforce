@@ -7,6 +7,8 @@ import { activate } from '../extension';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { __resetStartupWorkForTests } from '../core/startupWork';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
+type ScanModule0 = typeof import('../features/device-registry');
+type ScanModule1 = typeof import('../integrations/tierResolver');
 
 const { heartbeat, tierRefresh } = vi.hoisted(() => ({
   heartbeat: vi.fn(),
@@ -14,7 +16,7 @@ const { heartbeat, tierRefresh } = vi.hoisted(() => ({
 }));
 
 vi.mock('../features/device-registry', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../features/device-registry')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     startVscodeHeartbeat: (...args: unknown[]) => {
@@ -25,7 +27,7 @@ vi.mock('../features/device-registry', async (importOriginal) => {
 });
 
 vi.mock('../integrations/tierResolver', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../integrations/tierResolver')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     refreshAccountTierCache: (...args: unknown[]) => {

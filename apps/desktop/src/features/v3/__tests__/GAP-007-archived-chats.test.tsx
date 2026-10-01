@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/ui');
 
 const mocks = vi.hoisted(() => ({
   archiveConversation: vi.fn(),
@@ -119,7 +120,7 @@ vi.mock('../LocalCloudToggle', () => ({ LocalCloudToggle: () => null }));
 vi.mock('../../updates', () => ({ UpdatePill: () => null }));
 vi.mock('../AccountMenu', () => ({ AccountMenu: () => null }));
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<ScanModule0>()),
   AgiMark: () => null,
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));

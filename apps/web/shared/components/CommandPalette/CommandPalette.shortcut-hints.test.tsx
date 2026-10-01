@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import React from 'react';
 import { CommandPalette } from './CommandPalette';
 import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
+type ScanModule0 = typeof import('@agiworkforce/ui');
 
 const modelFixtureIds = vi.hoisted(() => ({
   primary: 'test-command-hint-model-primary',
@@ -41,7 +42,7 @@ vi.mock('@/shared/stores/model-store', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>

@@ -1,5 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../../../lib/runtimeEnvironment');
+type ScanModule1 = typeof import('@agiworkforce/ui');
 
 const mocks = vi.hoisted(() => ({
   privacyMode: 'local' as 'local' | 'byok' | 'managed',
@@ -8,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../lib/runtimeEnvironment', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../lib/runtimeEnvironment')>()),
+  ...(await importOriginal<ScanModule0>()),
   get supportsLocalAppMode() {
     return mocks.supportsLocalAppMode;
   },
@@ -84,7 +86,7 @@ vi.mock('../LocalCloudToggle', () => ({ LocalCloudToggle: () => null }));
 vi.mock('../../updates', () => ({ UpdatePill: () => null }));
 vi.mock('../AccountMenu', () => ({ AccountMenu: () => null }));
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<ScanModule1>()),
   AgiMark: () => null,
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }));

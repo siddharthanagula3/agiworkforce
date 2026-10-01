@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createError } from '@/lib/errors';
+type ScanModule0 = typeof import('@/lib/observability/metrics');
 
 const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(),
@@ -18,7 +19,7 @@ vi.mock('@/lib/server/telemetry-consent', () => ({
   readServerTelemetryConsent: mocks.readServerTelemetryConsent,
 }));
 vi.mock('@/lib/observability/metrics', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/observability/metrics')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordClientFailure: mocks.recordClientFailure,
 }));
 vi.mock('@/lib/logger', () => ({

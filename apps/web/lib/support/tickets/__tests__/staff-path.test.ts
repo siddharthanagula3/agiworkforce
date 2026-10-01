@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/support/handoff/priority');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -174,7 +175,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 const priority = vi.hoisted(() => ({ resolveSupportPriority: vi.fn() }));
 vi.mock('@/lib/support/handoff/priority', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/support/handoff/priority')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveSupportPriority: priority.resolveSupportPriority,
 }));
 

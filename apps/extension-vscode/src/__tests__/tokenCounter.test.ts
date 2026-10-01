@@ -12,13 +12,14 @@ import { MODEL_COST_RATES } from '../features/model-picker/modelConstants';
 import { fetchBilledCredits, type ManagedRequestCompletion } from '../utils/api';
 import { requireCatalogModel } from './catalogModelFixtures';
 import { ExtensionContext } from './__mocks__/vscode';
+type ScanModule0 = typeof import('../utils/api');
 
 const managedRequests = vi.hoisted(() => ({
   listeners: [] as Array<(completion: ManagedRequestCompletion) => void>,
 }));
 
 vi.mock('../utils/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../utils/api')>()),
+  ...(await importOriginal<ScanModule0>()),
   fetchBilledCredits: vi.fn(),
   onDidCompleteManagedRequest: (listener: (completion: ManagedRequestCompletion) => void) => {
     managedRequests.listeners.push(listener);
@@ -281,8 +282,7 @@ describe('TokenCounter billed credits', () => {
       'agi.vscode.chat.inline-1',
     );
     const items = vi.mocked(vscode.window.showQuickPick).mock.calls.at(-1)?.[0] as
-      | vscode.QuickPickItem[]
-      | undefined;
+      vscode.QuickPickItem[] | undefined;
     expect(items?.find((item) => item.label.includes('Billed Credits'))?.description).toBe(
       '2 credits',
     );

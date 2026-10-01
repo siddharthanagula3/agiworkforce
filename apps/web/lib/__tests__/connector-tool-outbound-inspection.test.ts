@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/security-audit');
 
 vi.mock('server-only', () => ({}));
 
@@ -40,7 +41,7 @@ vi.mock('@agiworkforce/mcp', () => ({
   connectMcpServer: (...a: unknown[]) => mocks.connectMcpServer(...a),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/services/organization-policy-gate', () => ({

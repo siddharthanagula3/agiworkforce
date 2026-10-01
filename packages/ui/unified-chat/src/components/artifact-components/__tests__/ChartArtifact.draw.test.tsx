@@ -4,12 +4,13 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { ChartArtifact } from '../ChartArtifact';
 import { chartSeriesPalette } from '../chart-spec';
 import type { Artifact } from '../../../lib/types';
+type ScanModule0 = typeof import('recharts');
 
 const CONTAINER_WIDTH = 480;
 const CONTAINER_HEIGHT = 320;
 
 vi.mock('recharts', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('recharts')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     ResponsiveContainer: ({ children }: { children: React.ReactElement }) =>

@@ -19,9 +19,10 @@ import { resolveUsageMeter } from '../data/usageMeter';
 import { buildUsageMeterPayload } from '../features/sidebar-webview/ChatStateManager';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 import { vscodeApiStub } from './vscodeApiStub';
+type ScanModule0 = typeof import('../utils/api');
 
 vi.mock('../utils/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../utils/api')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, fetchTierInfo: vi.fn() };
 });
 

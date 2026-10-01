@@ -13,6 +13,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../src/features/cloud-bridge/clerkAuth');
 
 const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -22,7 +23,7 @@ const SESSION_TOKEN_KEY = 'agi_clerk_session_token';
 const clerk = vi.hoisted(() => ({ token: null as string | null }));
 
 vi.mock('../src/features/cloud-bridge/clerkAuth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/cloud-bridge/clerkAuth')>()),
+  ...(await importOriginal<ScanModule0>()),
   getFreshClerkToken: () => Promise.resolve(clerk.token),
   getFreshClerkAuthContext: () =>
     Promise.resolve(

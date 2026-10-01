@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { listCanonicalModels, requireProviderDefaultModel } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/llm-cost-calculator');
 
 const ANTHROPIC_MODEL = requireProviderDefaultModel('anthropic');
 const OPEN_ROUTER_ANTHROPIC_ROUTE_ID = `open_router/${ANTHROPIC_MODEL}`;
@@ -8,7 +9,7 @@ const ANTHROPIC_ROUTE_ID = `anthropic/${ANTHROPIC_MODEL}`;
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
+  ...(await importOriginal<ScanModule0>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),

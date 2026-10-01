@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+type ScanModule0 = typeof import('@/lib/server/container-files');
+type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
 
 function requireCatalogModelId(predicate: (model: ModelMetadata) => boolean): string {
   const model = listCanonicalModels().find(predicate);
@@ -45,7 +47,7 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
 
 const mockPersistGeneratedFiles = vi.fn();
 vi.mock('@/lib/server/container-files', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/container-files')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     persistGeneratedFiles: (...args: unknown[]) => mockPersistGeneratedFiles(...args),
@@ -54,8 +56,7 @@ vi.mock('@/lib/server/container-files', async (importOriginal) => {
 
 const mockReserveManagedUsageProviderStep = vi.fn();
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     reserveManagedUsageProviderStep: (...args: unknown[]) =>

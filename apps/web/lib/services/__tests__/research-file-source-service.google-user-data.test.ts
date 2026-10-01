@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/retrieval-search-service');
 
 const mocks = vi.hoisted(() => ({
   createProvider: vi.fn(),
@@ -6,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/retrieval-search-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/retrieval-search-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   createPostgresSearchProvider: (scope: unknown) => {
     mocks.createProvider(scope);
     return { search: mocks.search };

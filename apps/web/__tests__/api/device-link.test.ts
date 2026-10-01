@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/security-audit');
 
 vi.mock('server-only', () => ({}));
 
@@ -58,7 +59,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: (...args: unknown[]) => mockRecordAuditEvent(...args),
 }));
 

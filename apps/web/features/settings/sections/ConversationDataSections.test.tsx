@@ -5,6 +5,8 @@ import { ArchivedChatsSection } from './ArchivedChatsSection';
 import { DeletedChatsSection } from './DeletedChatsSection';
 import { PrivacySection } from './PrivacySection';
 import { SharedLinksSection } from './SharedLinksSection';
+type ScanModule0 = typeof import('@/lib/sentry-shared');
+type ScanModule1 = typeof import('@agiworkforce/ui');
 
 const mocks = vi.hoisted(() => ({
   listArchived: vi.fn(),
@@ -65,12 +67,12 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
 }));
 
 vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/sentry-shared')>()),
+  ...(await importOriginal<ScanModule0>()),
   setTelemetryConsentCache: vi.fn(),
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<ScanModule1>()),
   Switch: ({ checked }: { checked: boolean }) => <span role="switch" aria-checked={checked} />,
   useConfirm: () => confirmStub,
 }));

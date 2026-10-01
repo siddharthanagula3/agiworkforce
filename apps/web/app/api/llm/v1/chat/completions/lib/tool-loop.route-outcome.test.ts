@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule1 = typeof import('@agiworkforce/model-registry');
 
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('./tool-loop-anthropic', () => ({
@@ -12,8 +14,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     reserveManagedUsageProviderStep: vi.fn(),
@@ -36,7 +37,7 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
 }));
 
 vi.mock('@agiworkforce/model-registry', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/model-registry')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, getRoutePricing: () => ({ cacheClass: 'gateway_prompt_cache' }) };
 });
 

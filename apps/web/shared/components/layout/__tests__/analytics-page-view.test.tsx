@@ -6,6 +6,8 @@ import {
   GA_BOOTSTRAP_SCRIPT,
   GoogleAnalytics,
 } from '@shared/components/GoogleAnalytics';
+type ScanModule0 = typeof import('next/navigation');
+type ScanModule1 = typeof import('next/script');
 
 const navigation = vi.hoisted(() => ({ pathname: '/' }));
 const scripts = vi.hoisted(() => ({ runInline: true }));
@@ -23,12 +25,12 @@ function ScriptStub({ src, children }: { src?: string; children?: string }) {
 }
 
 vi.mock('next/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/navigation')>()),
+  ...(await importOriginal<ScanModule0>()),
   usePathname: () => navigation.pathname,
 }));
 
 vi.mock('next/script', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/script')>()),
+  ...(await importOriginal<ScanModule1>()),
   default: ScriptStub,
 }));
 

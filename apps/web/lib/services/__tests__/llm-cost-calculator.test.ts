@@ -15,9 +15,10 @@ import {
   resetUnpricedModelFallbackCount,
   setRouteRegistryPricingLookup,
 } from '../llm-cost-calculator';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<ScanModule0>();
   const fixture = {
     id: 'fixture-scheduled-model',
     provider: 'anthropic',
@@ -712,7 +713,7 @@ describe('LLMCostCalculator, live registry wiring', () => {
 
   it('prices a request served by the open_router route at that route sheet, not the canonical model price', async () => {
     const { getModelMetadataById: liveGetModelMetadataById } =
-      await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+      await vi.importActual<ScanModule0>('@agiworkforce/types');
     const canonical = liveGetModelMetadataById(LIVE_MODEL_ID);
     if (!canonical) throw new Error('Live canonical model fixture is missing from the catalog');
 
@@ -747,7 +748,7 @@ describe('LLMCostCalculator, live registry wiring', () => {
 
   it('falls back to the canonical model price for an unknown route id', async () => {
     const { getModelMetadataById: liveGetModelMetadataById } =
-      await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+      await vi.importActual<ScanModule0>('@agiworkforce/types');
     const canonical = liveGetModelMetadataById(LIVE_MODEL_ID);
     if (!canonical) throw new Error('Live canonical model fixture is missing from the catalog');
 

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/terms');
+type ScanModule1 = typeof import('@/lib/server/neon-db');
+type ScanModule2 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule3 = typeof import('@/lib/services/llm-cost-calculator');
 
 const admitManagedTurnSlot = () => ({
   admitted: true,
@@ -17,14 +21,14 @@ vi.mock('@/lib/csrf', () => ({
 }));
 
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  ...(await importOriginal<ScanModule0>()),
   readTermsStanding: async () => ({ kind: 'current' }),
 }));
 
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
-    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    ...(await importOriginal<ScanModule1>()),
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
@@ -161,7 +165,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   reserveManagedUsageRequest: managedUsageMocks.reserve,
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   finalizeManagedUsageRequest: managedUsageMocks.finalize,
@@ -207,7 +211,7 @@ vi.mock('@/lib/llm-providers/factory', () => ({
 }));
 
 vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
+  ...(await importOriginal<ScanModule3>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),

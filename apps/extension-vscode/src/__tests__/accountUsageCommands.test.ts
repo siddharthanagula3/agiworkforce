@@ -22,9 +22,10 @@ import {
 import type { UsageHistory } from '../protocol/apiResponses';
 import { requireCatalogModel } from './catalogModelFixtures';
 import { ExtensionContext } from './__mocks__/vscode';
+type ScanModule0 = typeof import('../utils/api');
 
 vi.mock('../utils/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../utils/api')>()),
+  ...(await importOriginal<ScanModule0>()),
   getAccountToken: vi.fn(),
   fetchTierInfo: vi.fn(),
   fetchAccountIdentity: vi.fn(),
@@ -80,24 +81,24 @@ const HISTORY: UsageHistory = {
 
 function registerHandlers(context: ExtensionContext): Map<string, Handler> {
   const handlers = new Map<string, Handler>();
-  vi.mocked(vscode.commands.registerCommand).mockImplementation(((
-    id: string,
-    handler: Handler,
-  ) => {
+  vi.mocked(vscode.commands.registerCommand).mockImplementation(((id: string, handler: Handler) => {
     handlers.set(id, handler);
     return new vscode.Disposable(() => undefined);
   }) as never);
   const unused = new Proxy({}, { get: () => vi.fn() });
-  setupCommands(context as unknown as vscode.ExtensionContext, {
-    sidebarProvider: unused,
-    conversationTreeProvider: unused,
-    localRuntimes: unused,
-    contextPanelProvider: unused,
-    memoryTreeProvider: unused,
-    diffDecorationProvider: unused,
-    diagnosticsProvider: unused,
-    nativeChatAvailable: false,
-  } as unknown as CommandDeps);
+  setupCommands(
+    context as unknown as vscode.ExtensionContext,
+    {
+      sidebarProvider: unused,
+      conversationTreeProvider: unused,
+      localRuntimes: unused,
+      contextPanelProvider: unused,
+      memoryTreeProvider: unused,
+      diffDecorationProvider: unused,
+      diagnosticsProvider: unused,
+      nativeChatAvailable: false,
+    } as unknown as CommandDeps,
+  );
   return handlers;
 }
 
@@ -131,9 +132,7 @@ describe('account usage in the editor', () => {
     const labels = items.map((item) => item.label);
     expect(labels).toContain('Max 20x plan usage');
     expect(labels).toContain('$(pulse) Current session: Used 10 of 1,000 credits · 990 left');
-    expect(labels).toContain(
-      '$(pulse) Most capable models: Used 1,500 of 1,500 credits · 0 left',
-    );
+    expect(labels).toContain('$(pulse) Most capable models: Used 1,500 of 1,500 credits · 0 left');
     expect(labels).toContain(
       `$(credit-card) Credits: ${formatCredits(creditsFromCents(TIER_INFO.creditBalanceCents!))}`,
     );

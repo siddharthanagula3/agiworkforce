@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+type ScanModule0 = typeof import('@/lib/client/csrf');
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ScanModule0>()),
   addCsrfHeaders: async (headers: Record<string, string>) => ({
     ...headers,
     'x-csrf-token': 'csrf-token',

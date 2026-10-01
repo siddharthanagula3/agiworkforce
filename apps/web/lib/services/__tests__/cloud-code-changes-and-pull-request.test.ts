@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/github-app');
 
 const {
   mockGetE2BExecutor,
@@ -27,7 +28,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
   killE2BSession: mockKillE2BSession,
 }));
 vi.mock('@/lib/github-app', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/github-app')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     createGitHubPullRequest: mockCreatePullRequest,

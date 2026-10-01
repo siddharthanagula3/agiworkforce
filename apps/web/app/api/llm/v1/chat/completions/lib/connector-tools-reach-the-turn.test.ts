@@ -1,6 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/server/terms');
+type ScanModule1 = typeof import('@/lib/github-app');
+type ScanModule2 = typeof import('@/lib/connectors/oauth-store');
+type ScanModule3 = typeof import('@/lib/services/cloud-agent-run-service');
+type ScanModule4 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop');
+type ScanModule5 = typeof import('@/lib/user-connector-tools');
+type ScanModule6 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy');
+type ScanModule7 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop-routing');
+type ScanModule8 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule9 = typeof import('@/lib/services/provider-adapter-service');
 
 const ZHIPU_MODEL_ID = requireProviderDefaultModel('zhipu');
 const USER_ID = 'user-1';
@@ -15,7 +25,7 @@ const admitManagedTurnSlot = () => ({
 // Terms standing is the auth gate's own concern (auth-gate-terms.test.ts); these
 // turns run for an account that accepted the current version.
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  ...(await importOriginal<ScanModule0>()),
   readTermsStanding: async () => ({ kind: 'current' }),
 }));
 
@@ -88,7 +98,7 @@ const connectorData = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/github-app', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/github-app')>()),
+  ...(await importOriginal<ScanModule1>()),
   isGitHubAppConfigured: () => true,
   isGitHubInstallationLinkingAvailable: () => true,
 }));
@@ -103,7 +113,7 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: () => ({ query: vi.fn(async () => []) }),
 }));
 vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/oauth-store')>()),
+  ...(await importOriginal<ScanModule2>()),
   getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
 }));
 
@@ -135,16 +145,16 @@ vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
   startCloudAgentWorkflowExecution: workflowMocks.start,
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cloud-agent-run-service')>()),
+  ...(await importOriginal<ScanModule3>()),
   createCloudAgentRun: runServiceMocks.createRun,
   findActiveCloudAgentRunForConversation: runServiceMocks.findActive,
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop')>()),
+  ...(await importOriginal<ScanModule4>()),
   loadMcpToolDefs: workflowMocks.loadMcpTools,
 }));
 vi.mock('@/lib/user-connector-tools', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/user-connector-tools')>();
+  const actual = await importOriginal<ScanModule5>();
   return {
     ...actual,
     loadUserConnectorToolCatalog: (
@@ -156,10 +166,7 @@ vi.mock('@/lib/user-connector-tools', async (importOriginal) => {
   };
 });
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy', async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy')
-    >();
+  const actual = await importOriginal<ScanModule6>();
   return {
     ...actual,
     loadTurnToolPermissions: (...args: Parameters<typeof actual.loadTurnToolPermissions>) => {
@@ -178,10 +185,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy', async (imp
  * makes "reached the turn" observable without asserting on provider bytes.
  */
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop-routing', async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop-routing')
-    >();
+  const actual = await importOriginal<ScanModule7>();
   return {
     ...actual,
     classifyToolLoopInputs: (...args: Parameters<typeof actual.classifyToolLoopInputs>) => {
@@ -192,7 +196,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop-routing', async (import
 });
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule8>()),
   reserveManagedUsageRequest: managedUsageMocks.reserve,
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   finalizeManagedUsageRequest: managedUsageMocks.finalize,
@@ -226,7 +230,7 @@ vi.mock('@/lib/services/credit-service', () => ({
 
 const mockGetProviderFromModel = vi.fn();
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/provider-adapter-service')>();
+  const actual = await importOriginal<ScanModule9>();
   return {
     ...actual,
     resolveProviderFromModel: (...args: unknown[]) => mockGetProviderFromModel(...args),

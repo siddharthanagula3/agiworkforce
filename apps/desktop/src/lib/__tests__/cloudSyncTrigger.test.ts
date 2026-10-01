@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('../../stores/auth');
 
 const h = vi.hoisted(() => ({
   privacyMode: 'managed' as 'managed' | 'byok' | 'local',
@@ -12,8 +13,7 @@ vi.mock('../../stores/appModeStore', () => ({
   selectPrivacyMode: () => h.privacyMode,
 }));
 vi.mock('../../stores/auth', async (importOriginal) => ({
-  selectHasCloudAccountSession: (await importOriginal<typeof import('../../stores/auth')>())
-    .selectHasCloudAccountSession,
+  selectHasCloudAccountSession: (await importOriginal<ScanModule0>()).selectHasCloudAccountSession,
   useUnifiedAuthStore: {
     getState: () => ({
       user: h.userId ? { id: h.userId } : null,

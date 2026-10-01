@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+type ScanModule0 = typeof import('next/navigation');
 
 const { replace, fetchMock } = vi.hoisted(() => ({ replace: vi.fn(), fetchMock: vi.fn() }));
 
 vi.mock('next/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/navigation')>()),
+  ...(await importOriginal<ScanModule0>()),
   useParams: () => ({ token: 'AbCdEfGhIjKlMnOpQrStUvWx' }),
   useRouter: () => ({ replace, push: vi.fn(), back: vi.fn(), refresh: vi.fn() }),
 }));

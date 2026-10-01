@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/mobile-intent-tokens');
 
 const { mockRevokeEvery, mockRevokeTokens, mockAudit } = vi.hoisted(() => ({
   mockRevokeEvery: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockAudit }));
 vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/mobile-intent-tokens')>()),
+  ...(await importOriginal<ScanModule0>()),
   revokeEveryMobileIntentToken: (...args: unknown[]) => mockRevokeEvery(...args),
   revokeMobileIntentTokens: (...args: unknown[]) => mockRevokeTokens(...args),
 }));
