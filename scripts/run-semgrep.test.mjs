@@ -275,11 +275,14 @@ test('failure diagnostics identify reached boundaries without exception contents
   }
 });
 
-test('actual workflow bootstrap installs and scans with one fresh isolated interpreter', () => {
+test('actual workflow bootstrap and coverage gate use one fresh owned scanner', () => {
   const fixture = sdkFixture();
   try {
     const workflow = parse(fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
     const scan = workflow.jobs.security.steps.find((step) => step.id === 'semgrep').run;
+    const gate = workflow.jobs.security.steps.find((step) =>
+      step.name?.startsWith('Semgrep gate'),
+    ).run;
     const python = spawnSync('python3', ['-I', '-S', '-c', 'import sys; print(sys.executable)'], {
       encoding: 'utf8',
     });
@@ -289,11 +292,16 @@ test('actual workflow bootstrap installs and scans with one fresh isolated inter
     fs.mkdirSync(runner);
     fs.mkdirSync(path.join(source, 'scripts'), { recursive: true });
     const pipReceipt = path.join(fixture.directory, 'pip.json');
-    const wrapper = `#!${python.stdout.trim()}\nimport json,pathlib,shutil,subprocess,sys\nargs=sys.argv[1:]\nassert args[:3]==['-I','-m','venv'] and len(args)==4\nsubprocess.run([${JSON.stringify(python.stdout.trim())},*args],check=True)\ninterpreter=pathlib.Path(args[3])/'bin/python'\nlocation=subprocess.check_output([str(interpreter),'-I','-c','import sysconfig; print(sysconfig.get_path("purelib"))'],text=True).strip()\nshutil.copytree(${JSON.stringify(fixture.installed)},pathlib.Path(location)/'semgrep')\npip=${JSON.stringify(`import json,pathlib,sys\nassert sys.argv[1:]==['--isolated','install','--quiet','--disable-pip-version-check','semgrep==1.0.0']\npathlib.Path(${JSON.stringify(pipReceipt)}).write_text(json.dumps({'interpreter':sys.executable,'prefix':sys.prefix,'isolated':sys.flags.isolated}))\n`)}\nshutil.rmtree(pathlib.Path(location)/'pip')\n(pathlib.Path(location)/'pip.py').write_text(pip)\n`;
+    const gateReceipt = path.join(fixture.directory, 'gate.json');
+    const wrapper = `#!${python.stdout.trim()}\nimport json,pathlib,shutil,subprocess,sys\nargs=sys.argv[1:]\nassert args[:3]==['-I','-m','venv'] and len(args)==4\nsubprocess.run([${JSON.stringify(python.stdout.trim())},*args],check=True)\ninterpreter=pathlib.Path(args[3])/'bin/python'\nlocation=subprocess.check_output([str(interpreter),'-I','-c','import sysconfig; print(sysconfig.get_path("purelib"))'],text=True).strip()\nshutil.copytree(${JSON.stringify(fixture.installed)},pathlib.Path(location)/'semgrep')\nconsole=interpreter.parent/'semgrep'\nconsole.write_text('#!'+str(interpreter)+'\\nimport semgrep.console_scripts.entrypoint\\n')\nconsole.chmod(0o755)\npip=${JSON.stringify(`import json,pathlib,sys\nassert sys.argv[1:]==['--isolated','install','--quiet','--disable-pip-version-check','semgrep==1.0.0']\npathlib.Path(${JSON.stringify(pipReceipt)}).write_text(json.dumps({'interpreter':sys.executable,'prefix':sys.prefix,'isolated':sys.flags.isolated}))\n`)}\nshutil.rmtree(pathlib.Path(location)/'pip')\n(pathlib.Path(location)/'pip.py').write_text(pip)\n`;
     fs.writeFileSync(path.join(fixture.hostile, 'python3'), wrapper, { mode: 0o755 });
     fs.writeFileSync(
       path.join(source, 'scripts/run-semgrep.py'),
       `import importlib.util,sys\nspec=importlib.util.spec_from_file_location('producer',${JSON.stringify(PRODUCER)})\np=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)\ndef resolve(configs,version,destination):\n destination.write_text('{"rules":[]}')\n return {'version':version}\np.resolve_bundle=resolve\np.sources=lambda *args:[]\np.git=lambda cwd,args:(('a' if args[-1]=='HEAD' else 'b')*40).encode()\nsys.exit(p.cli())\n`,
+    );
+    fs.writeFileSync(
+      path.join(source, 'scripts/check-semgrep-findings.mjs'),
+      `import assert from 'node:assert/strict';\nimport fs from 'node:fs';\nimport process from 'node:process';\nimport { runCoverageScanner } from ${JSON.stringify(new URL('./lib/semgrep-coverage.mjs', import.meta.url).href)};\nconst argv=process.argv.slice(2);\nassert.equal(argv[argv.indexOf('--expected-version')+1],'1.0.0');\nassert.equal(argv[argv.indexOf('--rule-bundle')+1],${JSON.stringify(path.join(runner, 'semgrep-analysis/rules.json'))});\nassert.equal(argv[argv.indexOf('--source-context')+1],${JSON.stringify(path.join(runner, 'semgrep-analysis/source-context.json'))});\nconst options={cwd:process.cwd(),env:{PATH:process.env.PATH,PYTHONDONTWRITEBYTECODE:'1'},directory:${JSON.stringify(runner)}};\nconst version=await runCoverageScanner(['--version'],options);\nassert.equal(version.code,0);\nassert.equal(version.stdout.trim(),'1.0.0');\nconst report=${JSON.stringify(path.join(fixture.directory, 'coverage-report.json'))};\nconst scan=await runCoverageScanner(['scan','--output',report],options);\nassert.equal(scan.code,0);\nfs.writeFileSync(${JSON.stringify(gateReceipt)},JSON.stringify(JSON.parse(fs.readFileSync(report,'utf8')).fixtureIdentity));\n`,
     );
     const output = path.join(fixture.directory, 'github-output');
     const result = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', scan], {
@@ -320,6 +328,29 @@ test('actual workflow bootstrap installs and scans with one fresh isolated inter
     assert.equal(installed.isolated, 1);
     assert.equal(scanned.isolated, 1);
     assert.equal(fs.readFileSync(output, 'utf8'), 'count=0\n');
+    const qualified = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', gate], {
+      encoding: 'utf8',
+      cwd: source,
+      timeout: 15000,
+      env: {
+        ...process.env,
+        PATH: fixture.hostile + path.delimiter + process.env.PATH,
+        RUNNER_TEMP: runner,
+        SEMGREP_VERSION: '1.0.0',
+      },
+    });
+    assert.equal(qualified.status, 0, qualified.stdout + qualified.stderr);
+    const covered = JSON.parse(fs.readFileSync(gateReceipt, 'utf8'));
+    assert.equal(covered.interpreter, installed.interpreter);
+    assert.equal(covered.prefix, installed.prefix);
+    assert.equal(
+      covered.module,
+      path.join(
+        installed.prefix,
+        path.relative(path.join(fixture.directory, 'venv'), fixture.installed),
+        'console_scripts/entrypoint.py',
+      ),
+    );
     assert.ok(!fs.existsSync(fixture.marker));
     const reused = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', scan], {
       encoding: 'utf8',

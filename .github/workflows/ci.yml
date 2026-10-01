@@ -489,6 +489,7 @@ jobs:
       - name: Semgrep gate (unaccepted findings block the merge)
         shell: bash
         run: |
+          export PATH="$RUNNER_TEMP/semgrep-venv/bin:$PATH"
           node scripts/check-semgrep-findings.mjs semgrep-results.json scripts/semgrep-allowlist.json \
             --expected-version "$SEMGREP_VERSION" \
             --rule-bundle "$RUNNER_TEMP/semgrep-analysis/rules.json" \
