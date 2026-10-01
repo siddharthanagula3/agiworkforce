@@ -501,68 +501,98 @@ export interface ReapSummary {
 }
 
 export async function reapExpiredJobLeases(db: DatabaseAdapter): Promise<ReapSummary> {
-  let requeued = 0;
-  let deadLettered = 0;
-  for (const queue of JOB_QUEUE_NAMES) {
-    const policy = JOB_QUEUE_POLICIES[queue];
-    deadLettered += await db.execute(
-      `update public.background_jobs
+  const deadLettered = await db.execute(
+    `update public.background_jobs
           set status = 'dead',
               last_error = 'Worker lease expired before the job reported a result',
               dead_reason = 'Gave up after ' || attempts || ' attempts: the worker lease expired on the final attempt',
               retry_reason = $2,
               dead_lettered_at = now(), lease_expires_at = null, worker_id = null,
               completed_at = now(), updated_at = now()
-        where queue = $1 and status = 'running' and lease_expires_at < now()
+        where queue = any($1::text[]) and status = 'running' and lease_expires_at < now()
           and attempts >= max_attempts`,
-      [queue, JOB_RETRY_REASON.leaseExpired],
-    );
-    requeued += await db.execute(
-      `update public.background_jobs
+    [JOB_QUEUE_NAMES, JOB_RETRY_REASON.leaseExpired],
+  );
+  const requeued = await db.execute(
+    `with policy as (
+         select * from unnest($1::text[], $2::double precision[], $3::double precision[])
+           as policy(queue, backoff_base_seconds, backoff_max_seconds)
+       )
+       update public.background_jobs as job
           set status = 'queued',
               last_error = 'Worker lease expired before the job reported a result',
               retry_reason = $4,
               run_after = now() + make_interval(
-                secs => least($3::double precision, $2::double precision * power(2, greatest(attempts - 1, 0)))
+                secs => least(policy.backoff_max_seconds, policy.backoff_base_seconds * power(2, greatest(attempts - 1, 0)))
               ),
               lease_expires_at = null, worker_id = null, updated_at = now()
-        where queue = $1 and status = 'running' and lease_expires_at < now()
+         from policy
+        where job.queue = policy.queue and status = 'running' and lease_expires_at < now()
           and attempts < max_attempts`,
-      [queue, policy.backoffBaseSeconds, policy.backoffMaxSeconds, JOB_RETRY_REASON.leaseExpired],
-    );
-  }
+    [
+      JOB_QUEUE_NAMES,
+      JOB_QUEUE_NAMES.map((queue) => JOB_QUEUE_POLICIES[queue].backoffBaseSeconds),
+      JOB_QUEUE_NAMES.map((queue) => JOB_QUEUE_POLICIES[queue].backoffMaxSeconds),
+      JOB_RETRY_REASON.leaseExpired,
+    ],
+  );
   return { requeued, deadLettered };
 }
 
 export async function pruneFinishedJobs(db: DatabaseAdapter): Promise<number> {
-  let pruned = 0;
-  for (const queue of JOB_QUEUE_NAMES) {
-    pruned += await db.execute(
-      `delete from public.background_jobs
-        where id in (
-          select id from public.background_jobs
-           where queue = $1
+  const finished = await db.execute(
+    `with policy as (
+         select * from unnest($1::text[], $2::int[]) as policy(queue, retain_days)
+       )
+       delete from public.background_jobs as job
+       using policy
+        where job.queue = policy.queue
+          and job.status in ('succeeded', 'cancelled')
+          and job.completed_at < now() - make_interval(days => policy.retain_days)
+          and job.id in (
+          select candidate.id from policy
+          cross join lateral (
+            select id from public.background_jobs
+           where queue = policy.queue
              and status in ('succeeded', 'cancelled')
-             and completed_at < now() - make_interval(days => $2)
+             and completed_at < now() - make_interval(days => policy.retain_days)
            order by completed_at asc
            limit $3
+          ) as candidate
         )`,
-      [queue, JOB_QUEUE_POLICIES[queue].retainFinishedDays, MAX_PRUNE_BATCH],
-    );
-    pruned += await db.execute(
-      `delete from public.background_jobs
-        where id in (
-          select id from public.background_jobs
-           where queue = $1
+    [
+      JOB_QUEUE_NAMES,
+      JOB_QUEUE_NAMES.map((queue) => JOB_QUEUE_POLICIES[queue].retainFinishedDays),
+      MAX_PRUNE_BATCH,
+    ],
+  );
+  const dead = await db.execute(
+    `with policy as (
+         select * from unnest($1::text[], $2::int[]) as policy(queue, retain_days)
+       )
+       delete from public.background_jobs as job
+       using policy
+        where job.queue = policy.queue
+          and job.status = 'dead'
+          and job.dead_lettered_at < now() - make_interval(days => policy.retain_days)
+          and job.id in (
+          select candidate.id from policy
+          cross join lateral (
+            select id from public.background_jobs
+           where queue = policy.queue
              and status = 'dead'
-             and dead_lettered_at < now() - make_interval(days => $2)
+             and dead_lettered_at < now() - make_interval(days => policy.retain_days)
            order by dead_lettered_at asc
            limit $3
+          ) as candidate
         )`,
-      [queue, JOB_QUEUE_POLICIES[queue].retainDeadDays, MAX_PRUNE_BATCH],
-    );
-  }
-  return pruned;
+    [
+      JOB_QUEUE_NAMES,
+      JOB_QUEUE_NAMES.map((queue) => JOB_QUEUE_POLICIES[queue].retainDeadDays),
+      MAX_PRUNE_BATCH,
+    ],
+  );
+  return finished + dead;
 }
 
 export interface JobQueueStats {

@@ -5,12 +5,7 @@ vi.mock('server-only', () => ({}));
 
 import { runWithTraceContext } from '@/lib/observability/trace-context';
 
-import {
-  computeJobBackoffSeconds,
-  JOB_QUEUE_NAMES,
-  JOB_QUEUE_POLICIES,
-  type JobQueueName,
-} from '../job-queues';
+import { computeJobBackoffSeconds, JOB_QUEUE_NAMES, JOB_QUEUE_POLICIES } from '../job-queues';
 import {
   PermanentJobError,
   claimJobs,
@@ -265,16 +260,46 @@ describe('lease reaping and pruning', () => {
     );
     expect(statements.some((sql) => sql.includes('attempts >= max_attempts'))).toBe(true);
     expect(statements.some((sql) => sql.includes('attempts < max_attempts'))).toBe(true);
-    expect(summary.requeued).toBeGreaterThan(0);
-    expect(summary.deadLettered).toBeGreaterThan(0);
+    expect(summary).toEqual({ requeued: 1, deadLettered: 1 });
+    expect(execute).toHaveBeenCalledTimes(2);
+    const calls = execute.mock.calls as unknown as [string, unknown[]][];
+    expect(calls[0]?.[1]).toEqual([JOB_QUEUE_NAMES, 'lease_expired']);
+    expect(calls[1]?.[1]).toEqual([
+      JOB_QUEUE_NAMES,
+      JOB_QUEUE_NAMES.map((queue) => JOB_QUEUE_POLICIES[queue].backoffBaseSeconds),
+      JOB_QUEUE_NAMES.map((queue) => JOB_QUEUE_POLICIES[queue].backoffMaxSeconds),
+      'lease_expired',
+    ]);
+  });
+
+  it('keeps lease maintenance to two statements when every queue is empty', async () => {
+    const execute = vi.fn(async () => 0);
+    await expect(reapExpiredJobLeases(database(vi.fn(), execute))).resolves.toEqual({
+      requeued: 0,
+      deadLettered: 0,
+    });
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
   it('deletes settled jobs in bounded batches per queue', async () => {
     const execute = vi.fn(async () => 5);
-    await expect(pruneFinishedJobs(database(vi.fn(), execute))).resolves.toBeGreaterThan(0);
-    const [sql] = execute.mock.calls[0] as unknown as [string];
+    await expect(pruneFinishedJobs(database(vi.fn(), execute))).resolves.toBe(10);
+    expect(execute).toHaveBeenCalledTimes(2);
+    const [sql, params] = execute.mock.calls[0] as unknown as [string, unknown[]];
     expect(sql).toContain("status in ('succeeded', 'cancelled')");
+    expect(sql).toContain('cross join lateral');
     expect(sql).toContain('limit $3');
+    expect(params).toEqual([
+      JOB_QUEUE_NAMES,
+      JOB_QUEUE_NAMES.map((queue) => JOB_QUEUE_POLICIES[queue].retainFinishedDays),
+      500,
+    ]);
+  });
+
+  it('keeps retention maintenance to two statements when every queue is empty', async () => {
+    const execute = vi.fn(async () => 0);
+    await expect(pruneFinishedJobs(database(vi.fn(), execute))).resolves.toBe(0);
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
   it('deletes dead letters once their review window has passed, per queue', async () => {
@@ -283,14 +308,17 @@ describe('lease reaping and pruning', () => {
 
     const calls = execute.mock.calls as unknown as [string, unknown[]][];
     const dead = calls.filter(([sql]) => sql.includes("status = 'dead'"));
-    expect(dead).toHaveLength(JOB_QUEUE_NAMES.length);
+    expect(dead).toHaveLength(1);
     for (const [sql, params] of dead) {
-      expect(sql).toContain('dead_lettered_at < now() - make_interval(days => $2)');
+      expect(sql).toContain('dead_lettered_at < now() - make_interval(days => policy.retain_days)');
+      expect(sql).toContain('cross join lateral');
       expect(sql).toContain('limit $3');
-      const queue = params[0] as JobQueueName;
-      expect(params[1]).toBe(JOB_QUEUE_POLICIES[queue].retainDeadDays);
+      expect(params).toEqual([
+        JOB_QUEUE_NAMES,
+        JOB_QUEUE_NAMES.map((queue) => JOB_QUEUE_POLICIES[queue].retainDeadDays),
+        500,
+      ]);
     }
-    expect(dead.map(([, params]) => params[0]).sort()).toEqual([...JOB_QUEUE_NAMES].sort());
   });
 
   it('never keeps a dead letter longer than 30 days, since one can carry Google user data', () => {
@@ -298,6 +326,32 @@ describe('lease reaping and pruning', () => {
       const { retainDeadDays } = JOB_QUEUE_POLICIES[queue];
       expect(retainDeadDays, queue).toBeGreaterThan(0);
       expect(retainDeadDays, queue).toBeLessThanOrEqual(30);
+    }
+  });
+  it('rechecks retention eligibility on the delete target before removing selected rows', async () => {
+    const execute = vi.fn(async () => 0);
+    await pruneFinishedJobs(database(vi.fn(), execute));
+
+    const calls = execute.mock.calls as unknown as [string, unknown[]][];
+    expect(calls).toHaveLength(2);
+    for (const [sql] of calls) {
+      const parts = sql.split('and job.id in (');
+      expect(parts).toHaveLength(2);
+      const [target] = parts;
+      expect(target).toContain('delete from public.background_jobs as job');
+      expect(target).toContain('using policy');
+      expect(target).toContain('where job.queue = policy.queue');
+      if (sql.includes("status = 'dead'")) {
+        expect(target).toContain("and job.status = 'dead'");
+        expect(target).toContain(
+          'and job.dead_lettered_at < now() - make_interval(days => policy.retain_days)',
+        );
+      } else {
+        expect(target).toContain("and job.status in ('succeeded', 'cancelled')");
+        expect(target).toContain(
+          'and job.completed_at < now() - make_interval(days => policy.retain_days)',
+        );
+      }
     }
   });
 });
