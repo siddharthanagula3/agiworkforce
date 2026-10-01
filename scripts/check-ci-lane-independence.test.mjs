@@ -342,3 +342,35 @@ esac
     });
   }
 }
+
+for (const [workflowPath, jobName, consumer] of [
+  ['.github/workflows/ci.yml', 'rust-desktop-cli', 'pnpm check:trust-boundaries'],
+  ['.github/workflows/release-desktop.yml', 'validate', 'pnpm test'],
+]) {
+  test(`${workflowPath} provisions the mobile privacy parser before ${consumer}`, () => {
+    const mobile = JSON.parse(fs.readFileSync('apps/mobile/package.json', 'utf8'));
+    assert.match(mobile.scripts.test, /^pnpm run test:node(?: &&|$)/);
+    if (consumer === 'pnpm check:trust-boundaries') {
+      assert.match(
+        fs.readFileSync('scripts/check-trust-boundaries.mjs', 'utf8'),
+        /cmd: \['pnpm', \['--filter', '@agiworkforce\/mobile', 'run', 'test', 'trust-boundary.test'\]\]/,
+      );
+    } else {
+      const root = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+      assert.match(root.scripts.test, /^turbo run test(?: |$)/);
+    }
+    const workflow = parseYaml(fs.readFileSync(workflowPath, 'utf8'));
+    const steps = workflow.jobs[jobName].steps;
+    const setupCommand = 'pnpm --filter @agiworkforce/mobile setup:privacy-parser';
+    const setupIndex = steps.findIndex((step) => step.run === setupCommand);
+    const installIndex = steps.findIndex((step) => step.run === 'pnpm install --frozen-lockfile');
+    const consumerIndex = steps.findIndex((step) => step.run === consumer);
+    assert.ok(setupIndex >= 0, `${jobName} must prepare the canonical mobile privacy parser`);
+    assert.equal(steps.filter((step) => step.run === setupCommand).length, 1);
+    assert.ok(installIndex >= 0 && installIndex < setupIndex);
+    assert.ok(consumerIndex > setupIndex);
+    assert.equal(steps[setupIndex].if, undefined);
+    assert.notEqual(steps[setupIndex]['continue-on-error'], true);
+    assert.notEqual(steps[consumerIndex]['continue-on-error'], true);
+  });
+}
