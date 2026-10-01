@@ -12,6 +12,9 @@ import tempfile
 import time
 
 
+failure_stage = 'configuration'
+
+
 def require(value, message):
     if not value:
         raise RuntimeError(message)
@@ -132,6 +135,8 @@ def stop_owned(child):
 
 
 def main():
+    global failure_stage
+    failure_stage = 'configuration'
     parser = argparse.ArgumentParser()
     parser.add_argument('--expected-version', required=True)
     parser.add_argument('--config', action='append', required=True)
@@ -157,10 +162,13 @@ def main():
     output = args.output.resolve()
     require(not output.exists(), 'Scanner report must be a fresh output.')
     bundle = state/'rules.json'
+    failure_stage = 'rule-resolution'
     provenance = resolve_bundle(args.config, args.expected_version, bundle)
+    failure_stage = 'scanner-runtime'
     runtime = scanner_runtime(args.expected_version)
     child_environment = dict(os.environ)
     child_environment['PATH'] = runtime['path']
+    failure_stage = 'source-binding'
     head = git(cwd, ['rev-parse', 'HEAD']).decode().strip()
     tree = git(cwd, ['rev-parse', 'HEAD^{tree}']).decode().strip()
     before = sources(cwd, output)
@@ -169,6 +177,7 @@ def main():
         raise KeyboardInterrupt()
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
+    failure_stage = 'scanner-execution'
     try:
         with (state/'scanner.stdout.private').open('wb') as stdout, (state/'scanner.stderr.private').open('wb') as stderr:
             child = subprocess.Popen(['python', '-I', '-B', '-m', 'semgrep.console_scripts.entrypoint', 'scan', '--config', str(bundle), '--no-rewrite-rule-ids', '--metrics=off', f'--timeout={args.timeout}', f'--jobs={args.jobs}', '--time', '--json', '--output', str(output), '.'], executable=sys.executable, env=child_environment, cwd=cwd, stdout=stdout, stderr=stderr, start_new_session=True)
@@ -181,21 +190,29 @@ def main():
             require(stdout.tell() + stderr.tell() <= 64*1024*1024, 'Scanner stream limit exceeded.')
     finally:
         stop_owned(child)
+    failure_stage = 'scanner-report'
     require(code in (0, 1), 'Scanner execution failed. This is a broken scanner, not a clean scan.')
     require(output.is_file() and not output.is_symlink() and output.stat().st_size <= 192*1024*1024, 'Scanner report is missing or oversized.')
     output.chmod(0o600)
     report = json.loads(output.read_bytes())
     require(isinstance(report, dict) and report.get('version') == args.expected_version and isinstance(report.get('results'), list), 'Scanner report version or results are invalid.')
+    failure_stage = 'binding-verification'
     require(head == git(cwd, ['rev-parse', 'HEAD']).decode().strip() and tree == git(cwd, ['rev-parse', 'HEAD^{tree}']).decode().strip(), 'Source revision changed during the scan.')
     require(before == sources(cwd, output), 'Source bytes changed during the scan.')
     require(runtime == scanner_runtime(args.expected_version), 'Installed scanner binding changed during execution.')
+    failure_stage = 'coverage-context'
     write_json(state/'source-context.json', {**provenance, 'scannerBinding': runtime, 'head': head, 'tree': tree, 'sources': before, 'rulesSha256': digest(bundle.read_bytes()), 'reportSha256': digest(output.read_bytes()), 'actualScannerExit': code, 'sourceBeforeAfterEqual': True})
     print(f'Semgrep completed with {len(report["results"])} finding(s); the report and coverage gate determine acceptance.')
 
 
-if __name__ == '__main__':
+def cli():
     try:
         main()
     except BaseException:
-        sys.stderr.write('Semgrep execution or source/rule binding failed. This is a broken scanner, not a clean scan.\n')
-        sys.exit(1)
+        sys.stderr.write(f'Semgrep failed at {failure_stage}. This is a broken scanner, not a clean scan.\n')
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(cli())
