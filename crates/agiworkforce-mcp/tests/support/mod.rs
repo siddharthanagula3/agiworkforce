@@ -453,6 +453,14 @@ pub fn http_stale() -> Router {
 /// A server whose `tools/call` returns an SSE-upgrade stream with one enormous
 /// frame (no boundary), to exercise the optional frame cap.
 pub fn http_oversized(frame_bytes: usize) -> Router {
+    http_sse_frame(frame_bytes, false)
+}
+
+pub fn http_completed_frame(frame_bytes: usize) -> Router {
+    http_sse_frame(frame_bytes, true)
+}
+
+fn http_sse_frame(frame_bytes: usize, completed: bool) -> Router {
     Router::new().route(
         "/",
         post(move |_headers: HeaderMap, body: String| async move {
@@ -471,12 +479,20 @@ pub fn http_oversized(frame_bytes: usize) -> Router {
                     json_response(StatusCode::ACCEPTED, None, String::new())
                 }
                 "tools/call" => {
-                    // One giant `data:` line with no "\n\n" boundary.
                     let payload = "x".repeat(frame_bytes);
+                    let event = if completed {
+                        let value = rpc_result(
+                            &id,
+                            tools_call_result(&serde_json::json!({ "text": payload })),
+                        );
+                        format!("data: {value}\n\n")
+                    } else {
+                        format!("data: {payload}")
+                    };
                     Response::builder()
                         .status(StatusCode::OK)
                         .header("Content-Type", "text/event-stream")
-                        .body(Body::from(format!("data: {payload}")))
+                        .body(Body::from(event))
                         .unwrap()
                 }
                 _ => json_response(StatusCode::OK, None, rpc_result(&id, serde_json::json!({}))),
