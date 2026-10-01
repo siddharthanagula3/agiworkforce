@@ -2,7 +2,7 @@
 
 Status: BLOCKED
 Owner: Release engineering
-Last updated: 2026-09-20
+Last updated: 2026-10-01
 
 ## Scope
 
@@ -47,8 +47,9 @@ Recovery and rehearsal evidence:
   successfully. This validates readability, not a completed archive restore drill.
 - Fresh production clone `br-super-union-apo0em76`, named
   `codex-migration-rehearsal-20260920`, applied the same 25 files and passed
-  canonical verification. It is retained for inspection; compute auto-suspends
-  after 300 seconds. The pre-migration snapshot is retained separately.
+  canonical verification. It was deleted on 2026-10-01 with the owner's
+  explicit approval during the cleanup of 24 oldest non-production branches.
+  The pre-migration snapshot was retained separately at the 2026-09-20 checkpoint.
 - Thirteen read-only checks passed on both clone and production: ledger head,
   activation backfill and timestamps, plugin version backfill, automation event
   non-null IDs, forced RLS and unique index, three permission-based policies,

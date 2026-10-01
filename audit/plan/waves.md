@@ -26,7 +26,7 @@ ledger cells are updated.
 - [36-android-store-screenshots.md](../blockers/36-android-store-screenshots.md)
 - [37-personal-data-breach-open-gaps.md](../blockers/37-personal-data-breach-open-gaps.md)
 
-## Wave 1: finish items that were waiting on production migrations (production is at 0294 since 2026-09-27)
+## Wave 1: finish items that were waiting on production migrations
 
 0 open items.
 

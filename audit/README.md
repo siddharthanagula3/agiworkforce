@@ -71,7 +71,7 @@ generated file is stale or an emptied file was left behind.
 
 A cell is `done` only when a mounted entry point on that surface reaches a real
 handler with no stub, no flag that is off by default, and persistence only
-through migrations that production has applied (0294 since 2026-09-27; the audit assumed 0273). `partial`
+through migrations verified as applied to production. `partial`
 names what is left and which link is missing (`ui`, `handler`, `api`,
 `persistence`, `mount`, `flag-off`, `pending-migration`, `states`,
 `surface-only`). `missing` means a three-way search (screen copy, code

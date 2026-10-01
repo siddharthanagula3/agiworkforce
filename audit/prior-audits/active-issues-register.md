@@ -3896,20 +3896,6 @@ Verification: Read locks, release points, awaits, writer-lease behavior, shared 
 
 Resolution/acceptance: Keep a stopping claim until process, subagents, steering, partial-history finalization and persistence settle; scope all cleanup to the interrupted turn generation.
 
-## MCP-READ-CACHE-AGGREGATE-UNBOUNDED-01
-
-Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
-
-Modern MCP read cache retains unlimited responses and expired distinct keys. Events owns a HashMap with no entry/byte limit. store clones every complete cacheable result. cached evicts an expired entry only when that exact key is requested again; notifications clear only selected prefixes when a notification arrives. Per-frame/per-response transport bounds do not constrain aggregate cached memory. Modern dispatch reaches store for a zero-round normal response.
-
-Impact/trigger: A configured modern MCP server returns ttlMs on resources/read; a long-lived client reads many distinct resource URIs without list-change notifications, including expired keys it never requests again.
-
-Start at `crates/agiworkforce-mcp/src/cache.rs:10` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
-
-Verification: Read entire cache module and dispatch call site. Limit: No OOM/load run or live server request; prerequisite is modern protocol and server-provided TTL. TTL overflow hypothesis was separately rejected on host.
-
-Resolution/acceptance: Bound total cache bytes and entries, periodically prune expired entries, clamp TTL, and use an eviction policy before cloning/inserting.
-
 ## CLI-BACKGROUND-COMMANDS-UNBOUNDED-01
 
 Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.

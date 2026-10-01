@@ -21,7 +21,7 @@ const SURFACES = ['web', 'desktop', 'mobile', 'cli', 'vscode', 'chrome', 'api', 
 const CORE_GROUPS = new Set(['C', 'D', 'E', 'F', 'G', 'H']);
 
 const WAVE_TITLES = {
-  1: 'Wave 1: finish items that were waiting on production migrations (production is at 0294 since 2026-09-27)',
+  1: 'Wave 1: finish items that were waiting on production migrations',
   2: 'Wave 2: switch on and wire up what is already built (flag off or not mounted)',
   3: 'Wave 3: finish half-built features',
   4: 'Wave 4: build missing core product features (chat, files, research, media, tools, agents)',
