@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -44,6 +44,7 @@ function fixture(mutate, contractOverrides = {}) {
     path.join(root, WORKFLOW_DIR, relayWorkflow),
     stringify(readWorkflow(REPO_ROOT, relayWorkflow)),
   );
+  writeFileSync(path.join(root, WORKFLOW_DIR, 'deploy-staging.yml'), stringify(stagingWorkflow));
   writeFileSync(
     path.join(root, CONTRACT_PATH),
     JSON.stringify({ ...contract, ...contractOverrides }),
@@ -202,6 +203,8 @@ test('staging publishes success only after its serving-path verification succeed
   for (const outcome of ['success', 'failure', 'skipped', 'cancelled', '']) {
     const result = runStagingStep(step, {
       VERIFY_OUTCOME: outcome,
+      RECORD_OUTCOME: 'success',
+      JOB_STATUS: 'success',
       WORKFLOW_RUN_URL: 'https://github.com/fixture/repository/actions/runs/1',
     });
     assert.equal(result.status, 0);
@@ -566,4 +569,239 @@ test('literal false cannot skip a trusted security command', () => {
       document.jobs['release-gate'].steps.at(-1).if = false;
     }).length > 0,
   );
+});
+
+const stagingDatabase = 'postgresql://staging.example.invalid/staging';
+const otherDatabase = 'postgresql://other.example.invalid/other';
+
+function shellQuote(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function runStagingDeployment(preview, expected = stagingDatabase) {
+  const root = mkdtempSync(path.join(tmpdir(), 'staging-database-'));
+  roots.push(root);
+  mkdirSync(path.join(root, 'scripts'));
+  const helper = path.join(REPO_ROOT, 'scripts/verify-staging-database.mjs');
+  try {
+    writeFileSync(path.join(root, 'scripts/verify-staging-database.mjs'), readFileSync(helper));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  const callsPath = path.join(root, 'calls.jsonl');
+  writeFileSync(callsPath, '');
+  const names = new Set([
+    'Pull preview project settings',
+    'Verify the staging database binding',
+    'Apply pending migrations to the staging database',
+    'Build the staging artifact',
+    'Deploy the prebuilt artifact',
+  ]);
+  const resolveEnv = (value) => {
+    if (value === '${{ secrets.AGI_STAGING_DATABASE_URL }}') return expected;
+    if (value === '${{ secrets.VERCEL_TOKEN }}') return 'fixture-token';
+    if (value === '${{ secrets.VERCEL_ORG_ID }}') return 'fixture-org';
+    if (value === '${{ secrets.VERCEL_PROJECT_ID }}') return 'fixture-project';
+    if (value === '${{ vars.STAGING_WEB_URL }}') return 'https://staging.example.invalid';
+    throw new Error('unrecognized staging environment binding');
+  };
+  const steps = stagingWorkflow.jobs.deploy.steps.filter((step) => names.has(step.name));
+  const script = `set -euo pipefail
+record() {
+  node -e 'const fs=require("node:fs"); fs.appendFileSync(process.env.CALLS_PATH,JSON.stringify({args:process.argv.slice(1),agi:process.env.AGI_DATABASE_URL,database:process.env.DATABASE_URL})+String.fromCharCode(10))' "$@"
+}
+pnpm() { record pnpm "$@"; }
+vercel() {
+  record vercel "$@"
+  if [ "$1" = pull ]; then
+    mkdir -p .vercel
+    printf '%s' "$PREVIEW_DATABASE_ENV" > .vercel/.env.preview.local
+  fi
+  if [ "$1" = deploy ]; then printf '%s\n' https://fixture-deployment.vercel.app; fi
+}
+${steps
+  .map(
+    (step) => `(
+${Object.entries(step.env ?? {})
+  .map(([key, value]) => `export ${key}=${shellQuote(resolveEnv(value))}`)
+  .join('\n')}
+${step.run}
+)`,
+  )
+  .join('\n')}`;
+  const result = spawnSync('bash', ['-c', script], {
+    cwd: root,
+    env: {
+      PATH: process.env.PATH,
+      CALLS_PATH: callsPath,
+      PREVIEW_DATABASE_ENV: preview,
+      GITHUB_OUTPUT: path.join(root, 'outputs'),
+      ...Object.fromEntries(
+        Object.entries(stagingWorkflow.jobs.deploy.env).map(([key, value]) => [
+          key,
+          resolveEnv(value),
+        ]),
+      ),
+    },
+    encoding: 'utf8',
+    timeout: 5000,
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.signal, null);
+  return {
+    ...result,
+    fixtureRoot: root,
+    calls: readFileSync(callsPath, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line)),
+  };
+}
+
+test('staging refuses missing or conflicting preview database aliases before migration or build', () => {
+  for (const preview of [
+    '',
+    `AGI_DATABASE_URL=${otherDatabase}\n`,
+    `DATABASE_URL=${otherDatabase}\n`,
+    `AGI_DATABASE_URL=${stagingDatabase}\nDATABASE_URL=${otherDatabase}\n`,
+    `AGI_DATABASE_URL=${otherDatabase}\nDATABASE_URL=${stagingDatabase}\n`,
+    `AGI_DATABASE_URL=\nDATABASE_URL=${stagingDatabase}\n`,
+    `AGI_DATABASE_URL=${stagingDatabase}\nDATABASE_URL=\n`,
+  ]) {
+    const result = runStagingDeployment(preview);
+    assert.notEqual(result.status, 0);
+    assert.ok(result.calls.every((call) => call.args[0] === 'vercel' && call.args[1] === 'pull'));
+    assert.ok(!`${result.stdout}${result.stderr}`.includes(stagingDatabase));
+    assert.ok(!`${result.stdout}${result.stderr}`.includes(otherDatabase));
+  }
+});
+
+test('staging binds build and prebuilt runtime aliases to the verified secret', () => {
+  for (const preview of [
+    `AGI_DATABASE_URL=${stagingDatabase}\n`,
+    `DATABASE_URL=${stagingDatabase}\n`,
+    `AGI_DATABASE_URL="${stagingDatabase}"\nDATABASE_URL='${stagingDatabase}'\n`,
+  ]) {
+    const result = runStagingDeployment(preview);
+    assert.equal(result.status, 0);
+    const build = result.calls.find((call) => call.args[1] === 'build');
+    const deploy = result.calls.find((call) => call.args[1] === 'deploy');
+    for (const call of [build, deploy]) {
+      assert.ok(call);
+      assert.equal(call.agi, stagingDatabase);
+      assert.equal(call.database, stagingDatabase);
+    }
+    assert.ok(deploy.args.includes('--prebuilt'));
+    assert.ok(deploy.args.includes('--archive=tgz'));
+    assert.equal(deploy.args.filter((value) => value === '--env').length, 2);
+    for (const name of ['AGI_DATABASE_URL', 'DATABASE_URL']) {
+      assert.ok(
+        deploy.args.some((value, index) => value === '--env' && deploy.args[index + 1] === name),
+      );
+    }
+    assert.ok(!deploy.args.some((value) => value.includes(stagingDatabase)));
+  }
+});
+
+test('staging rejects a missing protected database secret without reaching mutations', () => {
+  const result = runStagingDeployment(`DATABASE_URL=${stagingDatabase}\n`, '');
+  assert.notEqual(result.status, 0);
+  assert.ok(result.calls.every((call) => call.args[1] === 'pull'));
+});
+
+test('staging parses quoted dotenv values without executing their contents', () => {
+  const expected = `${stagingDatabase}?application_name=$(touch sentinel)#staging`;
+  const result = runStagingDeployment(`DATABASE_URL="${expected}"\n`, expected);
+  assert.equal(result.status, 0);
+  assert.ok(result.calls.find((call) => call.args[1] === 'deploy'));
+  assert.equal(existsSync(path.join(result.fixtureRoot, 'sentinel')), false);
+});
+
+test('staging verdict refuses any failed migration record or failed job after serving succeeds', () => {
+  const step = stagingWorkflow.jobs.deploy.steps.find(
+    (entry) => entry.name === 'Publish the staging verdict for this commit',
+  );
+  for (const [jobStatus, recordOutcome] of [
+    ['failure', 'success'],
+    ['cancelled', 'success'],
+    ['success', 'failure'],
+    ['success', 'skipped'],
+    ['success', 'cancelled'],
+    ['success', ''],
+  ]) {
+    const result = runStagingStep(step, {
+      VERIFY_OUTCOME: 'success',
+      RECORD_OUTCOME: recordOutcome,
+      JOB_STATUS: jobStatus,
+      WORKFLOW_RUN_URL: 'https://github.com/fixture/repository/actions/runs/1',
+    });
+    assert.equal(result.status, 0);
+    assert.ok(result.apiArguments.includes('state=failure'));
+    assert.ok(!result.apiArguments.includes('state=success'));
+  }
+});
+
+function errorsAfterStaging(mutate) {
+  const root = fixture(() => {});
+  const document = clone(stagingWorkflow);
+  mutate(document);
+  writeFileSync(path.join(root, WORKFLOW_DIR, 'deploy-staging.yml'), stringify(document));
+  return checkDeployGates(root).errors;
+}
+
+test('the deployment guard rejects a missing or advisory staging database validator', () => {
+  for (const mutate of [
+    (document) => {
+      document.jobs.deploy.steps = document.jobs.deploy.steps.filter(
+        (step) => step.id !== 'database',
+      );
+    },
+    (document) => {
+      const step = document.jobs.deploy.steps.find((step) => step.id === 'database');
+      if (step) step['continue-on-error'] = true;
+    },
+    (document) => {
+      const step = document.jobs.deploy.steps.find((step) => step.id === 'database');
+      if (step) step.if = 'false';
+    },
+    (document) => {
+      const step = document.jobs.deploy.steps.find((step) => step.id === 'database');
+      if (step) step.run = `echo ${step.run}`;
+    },
+  ]) {
+    assert.ok(errorsAfterStaging(mutate).some((error) => /staging database binding/.test(error)));
+  }
+});
+
+test('the deployment guard rejects inconsistent aliases or a bypassable staging verdict', () => {
+  for (const mutate of [
+    (document) => {
+      delete document.jobs.deploy.env.DATABASE_URL;
+    },
+    (document) => {
+      document.jobs.deploy.env.AGI_DATABASE_URL = '${{ secrets.DATABASE_URL }}';
+    },
+    (document) => {
+      const step = document.jobs.deploy.steps.find((entry) => entry.id === 'deploy');
+      step.run = step.run.replace('--env DATABASE_URL', '');
+    },
+    (document) => {
+      const step = document.jobs.deploy.steps.find(
+        (entry) => entry.name === 'Publish the staging verdict for this commit',
+      );
+      delete step.env.RECORD_OUTCOME;
+    },
+    (document) => {
+      const step = document.jobs.deploy.steps.find(
+        (entry) => entry.name === 'Publish the staging verdict for this commit',
+      );
+      step.env.JOB_STATUS = 'success';
+    },
+  ]) {
+    assert.ok(
+      errorsAfterStaging(mutate).some((error) =>
+        /staging database binding|staging verdict/.test(error),
+      ),
+    );
+  }
 });

@@ -5,10 +5,11 @@
 // actually promotes something, that each declared gate is there and can fail
 // the job. Prose in a runbook is not a gate.
 
+import console from 'node:console';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 
 import { parse } from 'yaml';
 
@@ -310,6 +311,62 @@ function checkRollback({ document, contract, workflow, errors }) {
   }
 }
 
+function checkStagingGates({ repoRoot, errors }) {
+  let document;
+  try {
+    document = readWorkflow(repoRoot, 'deploy-staging.yml');
+  } catch {
+    errors.push('deploy-staging.yml: could not read the staging database binding');
+    return;
+  }
+  const job = document.jobs?.deploy;
+  const expected = '${{ secrets.AGI_STAGING_DATABASE_URL }}';
+  const aliases = ['AGI_STAGING_DATABASE_URL', 'AGI_DATABASE_URL', 'DATABASE_URL'];
+  const orderedIds = ['pull', 'database', 'migrate', 'build', 'deploy', 'verify', 'record'];
+  const declared = steps(job ?? {});
+  const selected = orderedIds.map((id) => declared.find((step) => step.id === id));
+  const database = selected[1];
+  const deployment = selected[4];
+  const order = selected.map((step) => declared.indexOf(step));
+  if (
+    !job ||
+    !stepCanFailTheJob(job) ||
+    aliases.some((name) => job.env?.[name] !== expected) ||
+    selected.some(
+      (step) =>
+        !step ||
+        !stepCanFailTheJob(step) ||
+        step.if !== undefined ||
+        aliases.some((name) => step.env?.[name] !== undefined && step.env[name] !== expected),
+    ) ||
+    order.some((position, index) => index > 0 && position <= order[index - 1]) ||
+    database?.run?.trim() !== 'node scripts/verify-staging-database.mjs' ||
+    !deployment?.run?.replace(/\s+/gu, ' ').includes('--env AGI_DATABASE_URL --env DATABASE_URL')
+  ) {
+    errors.push(
+      'deploy-staging.yml: staging database binding must gate migrations, build and runtime aliases',
+    );
+  }
+  const verdict = stepByName(job ?? {}, 'Publish the staging verdict for this commit');
+  if (
+    !verdict ||
+    !stepCanFailTheJob(verdict) ||
+    verdict.if !== '${{ always() }}' ||
+    verdict.env?.VERIFY_OUTCOME !== '${{ steps.verify.outcome }}' ||
+    verdict.env?.RECORD_OUTCOME !== '${{ steps.record.outcome }}' ||
+    verdict.env?.JOB_STATUS !== '${{ job.status }}' ||
+    !verdict.run
+      ?.replace(/\s+/gu, ' ')
+      .includes(
+        'if [ "$JOB_STATUS" = "success" ] && [ "$VERIFY_OUTCOME" = "success" ] && [ "$RECORD_OUTCOME" = "success" ]; then',
+      )
+  ) {
+    errors.push(
+      'deploy-staging.yml: staging verdict must require serving, migration record and job success',
+    );
+  }
+}
+
 export function checkDeployGates(repoRoot = REPO_ROOT) {
   const errors = [];
   const contract = loadContract(repoRoot);
@@ -329,6 +386,7 @@ export function checkDeployGates(repoRoot = REPO_ROOT) {
   checkRequiredSteps({ document, contract, workflow, errors });
   checkRelayGates({ repoRoot, contract, errors });
   checkRollback({ document, contract, workflow, errors });
+  checkStagingGates({ repoRoot, errors });
 
   return { errors, report: { deployingJobs, gates: contract.gates.length } };
 }

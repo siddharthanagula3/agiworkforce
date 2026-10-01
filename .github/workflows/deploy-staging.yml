@@ -75,6 +75,8 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       AGI_STAGING_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
+      AGI_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
       STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
     steps:
       - name: Checkout the candidate commit
@@ -115,22 +117,29 @@ jobs:
       - name: Install migration-ledger dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@58.4.0
+
+      - name: Pull preview project settings
+        id: pull
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+
+      - name: Verify the staging database binding
+        id: database
+        run: node scripts/verify-staging-database.mjs
+
       # The whole point of the tier: the migrations run here, against a database
       # that keeps its state between deploys, before the same commit is allowed
       # near production. A migration that only ever meets an empty CI Postgres
       # has not been tested against data.
       - name: Apply pending migrations to the staging database
+        id: migrate
         env:
           AGI_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
         run: pnpm db:migrate -- apply --target staging
 
-      - name: Install pinned Vercel CLI
-        run: npm install --global vercel@58.4.0
-
-      - name: Pull preview project settings
-        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
-
       - name: Build the staging artifact
+        id: build
         run: vercel build --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
       - name: Deploy the prebuilt artifact
@@ -139,7 +148,7 @@ jobs:
         run: |
           set -euo pipefail
           deployment_url="$(
-            vercel deploy --prebuilt --archive=tgz --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+            vercel deploy --prebuilt --archive=tgz --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" --env AGI_DATABASE_URL --env DATABASE_URL
           )"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Deployed $deployment_url"
@@ -171,6 +180,7 @@ jobs:
           "$STAGING_WEB_URL" "$HEAD_SHA"
 
       - name: Record the migration state staging serves
+        id: record
         env:
           AGI_DATABASE_URL: ${{ secrets.AGI_STAGING_DATABASE_URL }}
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
@@ -185,6 +195,7 @@ jobs:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
           DEPLOYMENT_SHA: ${{ steps.commit.outputs.sha }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          RECORD_OUTCOME: ${{ steps.record.outcome }}
         shell: bash
         run: |
           set -euo pipefail
@@ -194,6 +205,11 @@ jobs:
             serving_path="FAILED ($VERIFY_OUTCOME); production will not promote this commit"
             echo "::error::$serving_path"
           fi
+          if [ "$RECORD_OUTCOME" = "success" ]; then
+            migration_state="applied to the verified staging database and recorded at target staging"
+          else
+            migration_state="FAILED (${RECORD_OUTCOME:-not reached}); production will not promote this commit"
+          fi
           {
             echo "## Staging web deployment"
             echo
@@ -201,7 +217,7 @@ jobs:
             echo "- Artifact: prebuilt from $DEPLOYMENT_SHA"
             echo "- URL: $DEPLOYMENT_URL"
             echo "- Origin: $STAGING_WEB_URL"
-            echo "- Migrations: applied to the staging database and recorded at target \`staging\`"
+            echo "- Migrations: $migration_state"
             echo "- Serving path: $serving_path"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -250,15 +266,17 @@ jobs:
             ${{ steps.commit.outputs.sha || github.event.workflow_run.head_sha || github.sha }}
           REPOSITORY: ${{ github.repository }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          RECORD_OUTCOME: ${{ steps.record.outcome }}
+          JOB_STATUS: ${{ job.status }}
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$VERIFY_OUTCOME" = "success" ]; then
+          if [ "$JOB_STATUS" = "success" ] && [ "$VERIFY_OUTCOME" = "success" ] && [ "$RECORD_OUTCOME" = "success" ]; then
             state=success
             description='staging served this commit and verified it'
           else
             state=failure
-            description="staging did not verify this commit (verify: ${VERIFY_OUTCOME:-not reached})"
+            description="staging verification failed (job: ${JOB_STATUS:-not reached}, record: ${RECORD_OUTCOME:-not reached})"
           fi
           gh api --method POST "repos/$REPOSITORY/statuses/$HEAD_SHA" \
             -f "state=$state" \

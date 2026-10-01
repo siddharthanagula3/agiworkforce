@@ -202,8 +202,16 @@ The tier requires:
 - `STAGING_WEB_URL` (repository variable): the staging origin, a custom domain
   assigned to the Vercel project. Its absence blocks production promotion.
 
-The Vercel project's preview environment must point at the staging database, or
-the deployment will run its migrations against one database and serve another.
+The workflow checks the pulled preview database aliases against
+`AGI_STAGING_DATABASE_URL` before applying migrations. At least one of
+`AGI_DATABASE_URL` and `DATABASE_URL` must be present in preview settings; every
+present alias must match the protected staging secret. The build and prebuilt
+runtime receive both aliases from that secret. A mismatch fails before database
+mutation or deployment, and a failed migration record prevents a success verdict.
+
+This binding prevents configuration drift between migrations, the build and the
+runtime. Provisioning must independently establish that the staging Neon database
+is separate from production; `--target staging` does not check database identity.
 
 `.github/rulesets/environments.json` declares the protection every one of these
 environments should carry, and `.github/rulesets/README.md` holds the command
