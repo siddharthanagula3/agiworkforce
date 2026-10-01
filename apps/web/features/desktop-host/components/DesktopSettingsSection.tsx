@@ -53,9 +53,9 @@ const CLI_ACCOUNT_FAILED = 'This account could not be given to the AGI CLI on th
 
 function cliStateLine(status: DeveloperRuntimeStatus): string {
   if (!status.available) return [CLI_MISSING, status.hint].filter(Boolean).join(' ');
-  const using = `Using ${status.name} ${status.version} from ${status.path}`;
-  if (!status.accountSyncError) return using;
-  return `${using}. ${CLI_ACCOUNT_FAILED} ${status.accountSyncError}`;
+  const description = `Using ${status.name} ${status.version} from ${status.path}`;
+  if (!status.accountSyncError) return description;
+  return `${description}. ${CLI_ACCOUNT_FAILED} ${status.accountSyncError}`;
 }
 
 const SHORTCUT_ROWS: Record<HostShortcutKey, { label: string; hint: string }> = {

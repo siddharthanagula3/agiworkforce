@@ -64,7 +64,9 @@ export * from './flagship-routing';
 
 export * from './harness-protocol';
 
-export { default as modelsCatalogJson } from './models.json' with { type: 'json' };
+import modelsCatalogJson from './models.json' with { type: 'json' };
+
+export { modelsCatalogJson };
 
 export * from './runtime';
 
