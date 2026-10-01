@@ -453,6 +453,7 @@ jobs:
             --config p/owasp-top-ten \
             --metrics=off \
             --timeout=30 \
+            --jobs=1 \
             --json --output semgrep-results.json
           status=$?
           set -e
