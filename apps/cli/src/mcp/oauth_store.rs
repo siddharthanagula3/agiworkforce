@@ -178,7 +178,14 @@ impl McpServerOAuthStore {
     }
 
     fn fallback_path(&self, credential_id: &str) -> PathBuf {
-        self.base_dir.join(format!("{credential_id}.token"))
+        #[cfg(windows)]
+        let filename = format!(
+            "{}.token",
+            crate::hex::encode(&Sha256::digest(credential_id.as_bytes()))
+        );
+        #[cfg(not(windows))]
+        let filename = format!("{credential_id}.token");
+        self.base_dir.join(filename)
     }
 
     /// Save a token to the OS keyring, or to the owner-only compatibility file
@@ -415,6 +422,110 @@ mod tests {
         store.save("server-c", &updated).unwrap();
         let loaded = store.load("server-c").unwrap().unwrap();
         assert_eq!(loaded.access_token, "new-token");
+    }
+
+    #[test]
+    fn fallback_entries_preserve_server_and_credential_namespace_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = McpServerOAuthStore::with_base_dir(dir.path().to_path_buf()).unwrap();
+        let identity = "https://mcp.example.com/shared";
+        let other = "https://mcp.example.com/other";
+        let ids = [
+            McpServerOAuthStore::credential_id(identity),
+            McpServerOAuthStore::client_credential_id(identity),
+            McpServerOAuthStore::step_up_id(identity),
+            McpServerOAuthStore::credential_id(other),
+        ];
+        let paths = ids.map(|id| store.fallback_path(&id));
+        assert_eq!(
+            paths.iter().collect::<std::collections::HashSet<_>>().len(),
+            4
+        );
+        for path in &paths {
+            assert_eq!(path.parent(), Some(dir.path()));
+            #[cfg(windows)]
+            {
+                let name = path.file_name().unwrap().to_str().unwrap();
+                let digest = name.strip_suffix(".token").unwrap();
+                assert_eq!(digest.len(), 64);
+                assert!(digest
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+            }
+        }
+
+        let token = dummy_server_token();
+        let mut updated = dummy_server_token();
+        updated.access_token.push_str("-updated");
+        let registration = ClientRegistration {
+            client_id: "test-client".into(),
+            redirect_uri: "https://mcp.example.com/callback".into(),
+        };
+        let scope = "test-scope";
+        store.save(identity, &token).unwrap();
+        store.save(other, &updated).unwrap();
+        store.save_client(identity, &registration).unwrap();
+        store.save_step_up_scope(identity, scope).unwrap();
+        assert_eq!(
+            store.load(identity).unwrap().unwrap().access_token,
+            token.access_token
+        );
+        assert_eq!(
+            store.load(other).unwrap().unwrap().access_token,
+            updated.access_token
+        );
+        assert_eq!(
+            store.load_client(identity).unwrap(),
+            Some(registration.clone())
+        );
+        assert_eq!(
+            store.load_step_up_scope(identity).unwrap().as_deref(),
+            Some(scope)
+        );
+        store.delete(identity).unwrap();
+        assert!(store.load(identity).unwrap().is_none());
+        assert_eq!(
+            store.load(other).unwrap().unwrap().access_token,
+            updated.access_token
+        );
+        assert_eq!(
+            store.load_client(identity).unwrap(),
+            Some(registration.clone())
+        );
+        assert_eq!(
+            store.load_step_up_scope(identity).unwrap().as_deref(),
+            Some(scope)
+        );
+        store.delete_step_up_scope(identity).unwrap();
+        assert!(store.load_step_up_scope(identity).unwrap().is_none());
+        assert_eq!(store.load_client(identity).unwrap(), Some(registration));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn legacy_unix_fallback_paths_remain_readable_updatable_and_deletable() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = McpServerOAuthStore::with_base_dir(dir.path().to_path_buf()).unwrap();
+        let server = "https://mcp.example.com/legacy";
+        let id = McpServerOAuthStore::credential_id(server);
+        let path = dir.path().join(format!("{id}.token"));
+        let token = dummy_server_token();
+        crate::secure_store::write_owner_only(&path, &serde_json::to_vec(&token).unwrap()).unwrap();
+        assert_eq!(store.fallback_path(&id), path);
+        assert_eq!(
+            store.load(server).unwrap().unwrap().access_token,
+            token.access_token
+        );
+        let mut updated = dummy_server_token();
+        updated.access_token.push_str("-updated");
+        store.save(server, &updated).unwrap();
+        assert_eq!(
+            store.load(server).unwrap().unwrap().access_token,
+            updated.access_token
+        );
+        store.delete(server).unwrap();
+        assert!(!path.exists());
+        assert!(store.load(server).unwrap().is_none());
     }
 
     #[test]
