@@ -1,8 +1,3 @@
-//! Oversized-frame rejection (the crate's one intentional hardening over the
-//! CLI). The frame cap is OFF by default (CLI parity); when a host sets
-//! `max_frame_bytes`, an SSE-upgrade frame that grows past the cap without a
-//! boundary is rejected instead of buffered without bound.
-
 mod support;
 
 use std::collections::HashMap;
@@ -36,7 +31,10 @@ async fn sse_upgrade_frame_over_cap_is_rejected() {
 }
 
 #[tokio::test]
-async fn default_config_has_no_frame_cap() {
-    // Regression guard: the default is unbounded so CLI behavior is unchanged.
+async fn default_config_resolves_the_canonical_finite_frame_cap() {
     assert_eq!(McpTimeouts::default().max_frame_bytes, None);
+    assert_eq!(
+        McpTimeouts::default().frame_cap(),
+        agiworkforce_mcp::config::DEFAULT_MAX_FRAME_BYTES
+    );
 }

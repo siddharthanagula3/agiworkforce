@@ -5,13 +5,13 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::cache::Events;
-use crate::config::McpTimeouts;
+use crate::config::{McpTimeouts, TransportConfig};
 use crate::error::TransportFault;
 use crate::hooks::ClientHooks;
 use crate::jsonrpc::notification_frame;
@@ -71,13 +71,15 @@ pub(crate) struct StdioConn {
 impl StdioConn {
     pub(crate) fn spawn(
         server_name: &str,
-        command: &str,
-        args: &[String],
-        env: &HashMap<String, String>,
+        config: &TransportConfig,
+        timeouts: &McpTimeouts,
         stderr_buf: &Arc<StderrBuffer>,
         events: Arc<Events>,
         hooks: ClientHooks,
     ) -> Result<Self> {
+        let TransportConfig::Stdio { command, args, env } = config else {
+            return Err(anyhow!("MCP stdio transport configuration required"));
+        };
         let mut child = spawn_child(server_name, command, args, env)?;
         let stdin = child
             .stdin
@@ -110,7 +112,7 @@ impl StdioConn {
             events,
             hooks,
         };
-        let reader = tokio::spawn(read_loop(stdout, router));
+        let reader = tokio::spawn(read_loop(stdout, router, timeouts.frame_cap()));
         Ok(Self {
             server_name: server_name.to_string(),
             child,
@@ -294,22 +296,75 @@ impl Router {
     }
 }
 
-async fn read_loop(stdout: ChildStdout, router: Router) {
-    let mut reader = BufReader::new(stdout);
-    let mut line = String::new();
+fn append_stdout_frame(frame: &mut Vec<u8>, bytes: &[u8], max_frame: usize) -> Result<()> {
+    if bytes.len() > max_frame.saturating_sub(frame.len()) {
+        return Err(anyhow!("MCP stdout frame exceeded {max_frame} bytes"));
+    }
+    let needed = frame.len() + bytes.len();
+    if needed > frame.capacity() {
+        let capacity = frame
+            .capacity()
+            .saturating_mul(2)
+            .max(needed)
+            .min(max_frame);
+        frame.try_reserve_exact(capacity - frame.len())?;
+    }
+    frame.extend_from_slice(bytes);
+    Ok(())
+}
+
+async fn read_stdout_frame<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+    max_frame: usize,
+) -> Result<Option<String>> {
+    let mut frame = Vec::new();
+    let mut trailing_cr = false;
     loop {
-        line.clear();
-        match reader.read_line(&mut line).await {
-            Ok(0) | Err(_) => break,
-            Ok(_) => {}
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            return if frame.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(String::from_utf8(frame)?))
+            };
         }
+        let newline = available.iter().position(|byte| *byte == b'\n');
+        let end = newline.unwrap_or(available.len());
+        let mut bytes = &available[..end];
+        if trailing_cr && !bytes.is_empty() {
+            append_stdout_frame(&mut frame, b"\r", max_frame)?;
+        }
+        trailing_cr = bytes.last() == Some(&b'\r');
+        if trailing_cr {
+            bytes = &bytes[..bytes.len() - 1];
+        }
+        append_stdout_frame(&mut frame, bytes, max_frame)?;
+        let consumed = end + usize::from(newline.is_some());
+        reader.consume(consumed);
+        if newline.is_some() {
+            return Ok(Some(String::from_utf8(frame)?));
+        }
+    }
+}
+
+async fn read_loop(stdout: ChildStdout, router: Router, max_frame: usize) {
+    let mut reader = BufReader::new(stdout);
+    loop {
+        let line = match read_stdout_frame(&mut reader, max_frame).await {
+            Ok(Some(line)) => line,
+            Ok(None) => break,
+            Err(_) => {
+                tracing::warn!("MCP stdout frame read failed");
+                break;
+            }
+        };
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
         match serde_json::from_str::<Value>(trimmed) {
             Ok(frame) => router.route(frame),
-            Err(_) => eprintln!("[{}] Skipped non-JSON line: {trimmed}", router.server_name),
+            Err(_) => tracing::warn!("MCP stdout contained a non-JSON frame"),
         }
     }
     router.closed.store(true, Ordering::SeqCst);
@@ -602,6 +657,82 @@ fn terminate_now(child: &mut Child) {
 #[cfg(not(unix))]
 fn terminate_now(child: &mut Child) {
     let _ = child.start_kill();
+}
+
+#[cfg(test)]
+mod stdout_tests {
+    use super::*;
+
+    #[test]
+    fn frame_bytes_and_allocation_never_grow_past_the_configured_cap() {
+        let mut frame = Vec::new();
+        for _ in 0..16 {
+            append_stdout_frame(&mut frame, &[b'x'; 2], 32).unwrap();
+            assert!(frame.len() <= 32);
+            assert!(frame.capacity() <= 32);
+        }
+        let retained = frame.clone();
+        let capacity = frame.capacity();
+        assert!(append_stdout_frame(&mut frame, b"x", 32).is_err());
+        assert_eq!(frame, retained);
+        assert_eq!(frame.capacity(), capacity);
+    }
+
+    #[tokio::test]
+    async fn delimiters_do_not_count_against_exact_frame_boundaries() {
+        for input in [b"1234\n".as_slice(), b"1234\r\n", b"1234\r"] {
+            let mut reader = BufReader::with_capacity(1, input);
+            assert_eq!(
+                read_stdout_frame(&mut reader, 4).await.unwrap(),
+                Some("1234".to_string())
+            );
+            assert!(read_stdout_frame(&mut reader, 4).await.unwrap().is_none());
+        }
+        let mut reader = BufReader::with_capacity(1, &b"12\r34\n"[..]);
+        assert_eq!(
+            read_stdout_frame(&mut reader, 5).await.unwrap(),
+            Some("12\r34".to_string())
+        );
+        let mut reader = BufReader::with_capacity(1, &b"12\r34\n"[..]);
+        assert!(read_stdout_frame(&mut reader, 4).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn zero_caps_utf8_partial_eof_and_blank_frames_preserve_wire_behavior() {
+        let mut reader = BufReader::with_capacity(1, &b"\n\r\n"[..]);
+        assert_eq!(
+            read_stdout_frame(&mut reader, 0).await.unwrap(),
+            Some(String::new())
+        );
+        assert_eq!(
+            read_stdout_frame(&mut reader, 0).await.unwrap(),
+            Some(String::new())
+        );
+        assert!(read_stdout_frame(&mut reader, 0).await.unwrap().is_none());
+        let mut reader = BufReader::with_capacity(1, &b"x\n"[..]);
+        assert!(read_stdout_frame(&mut reader, 0).await.is_err());
+        let mut reader = BufReader::with_capacity(1, "λ🙂".as_bytes());
+        assert_eq!(
+            read_stdout_frame(&mut reader, 6).await.unwrap(),
+            Some("λ🙂".to_string())
+        );
+        let mut reader = BufReader::with_capacity(1, &[0xff, b'\n'][..]);
+        assert!(read_stdout_frame(&mut reader, 1).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn an_open_pipe_is_refused_before_newline_or_eof() {
+        let (mut writer, reader) = tokio::io::duplex(128);
+        writer.write_all(&[b'x'; 65]).await.unwrap();
+        let mut reader = BufReader::with_capacity(8, reader);
+        let error =
+            tokio::time::timeout(Duration::from_secs(2), read_stdout_frame(&mut reader, 64))
+                .await
+                .expect("an oversized open frame must not wait for a delimiter")
+                .expect_err("an oversized open frame must be rejected");
+        assert!(error.to_string().contains("frame exceeded 64 bytes"));
+        drop(writer);
+    }
 }
 
 #[cfg(test)]
