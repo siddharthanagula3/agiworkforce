@@ -6,9 +6,10 @@ Last updated: 2026-10-01
 
 ## Production invariant
 
-A production mutation must be downstream of a successful `CI` run for the exact
-commit being deployed. A branch name is not sufficient evidence because it can
-move between validation and deployment.
+A production mutation requires successful `CI`, `CodeQL analysis`, `Priority Level 1 tests`
+and `Security scanning` runs for the exact commit being deployed. The required
+workflow list is owned by `scripts/config/deploy-gates.json`. A branch name is
+not sufficient evidence because it can move between validation and deployment.
 
 - Web production is owned by
   `.github/workflows/deploy-production.yml`. It accepts only a successful,
@@ -128,8 +129,11 @@ deployment record says which component versions it carries.
   and deployment lanes. They do not rebuild Rust binaries by themselves.
 - Rust sources, Cargo inputs, and cross-language sync parity sources select the
   expensive Linux, macOS, and Windows Rust lanes. Desktop changes independently
-  select Desktop E2E. Workflow-only, npm wrapper, and Web changes skip Rust.
-- Documentation-only changes select no deployment or native lane.
+  select Desktop E2E. Native execution inputs, including the main CI workflow,
+  also select native lanes. Other workflow-only, npm wrapper and Web changes
+  skip Rust unless they touch one of those inputs.
+- Documentation-only changes select no production or native lane. Web staging
+  still follows every successful main CI push.
 
 `.github/workflows/codeql-analysis.yml` scans JavaScript/TypeScript, Ruby, and
 Actions on pushes and pull requests. Its Rust analysis runs for Rust or Cargo
@@ -139,43 +143,31 @@ The scope job treats an unavailable Git base as a Rust change so it never skips
 analysis when it cannot prove the diff. GitHub's default CodeQL setup must be
 disabled before this advanced workflow can upload results.
 
-CI and deploy workflows cancel superseded runs on the same branch or production
-surface. Priority test workflows run on Linux, use the pnpm cache built into
-`actions/setup-node`, and have push path filters. The standalone Desktop E2E
-schedule is weekly rather than a duplicate nightly run.
+CI and security workflows cancel superseded runs for the same branch. Production,
+staging and signaling deployment groups serialize deployments without cancelling
+the active run. All four required workflows run on every push to `main`, including
+documentation-only changes. Pull-request scope still selects applicable jobs.
+Priority tests run on Linux and use the pnpm cache built into
+`actions/setup-node`. The standalone Desktop E2E schedule is weekly.
 
-## Runner-minute projection
+## Runner usage
 
-This repository is public, and GitHub-hosted standard runners are free for
-public repositories, so the ceilings below are a wall-clock and
-concurrency budget rather than a billing one. They are written for the private
-case, which is what a fork or a visibility change would land in: GitHub's
-published GitHub Free allowance on 2026-07-30 is 2,000 Actions minutes per
-month, and the repository must not assume paid overage.
+Workflow `timeout-minutes` values are per-job safety ceilings. They are not
+measured durations or a monthly usage forecast. The previous runner-minute
+projection predates the requirement to run all release gates on every main push.
 
-The workflow timeouts are safety ceilings, not expected durations:
+| Change class                        | Required checks and additional lanes                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Documentation only                  | All four required workflows and repository guards and Web staging after green main CI; no production or native lane |
+| Web or service changes              | All four required workflows, affected JavaScript checks and applicable staging/deployment lanes                     |
+| Native Desktop, CLI or Rust changes | All four required workflows plus applicable Linux, macOS and Windows native lanes                                   |
+| Weekly standalone Desktop E2E       | The scheduled Linux E2E workflow                                                                                    |
 
-| Change class                  | Always/likely lanes                                                                                              | Maximum allocated runner time |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| Docs only                     | Repo-operability/document checks only                                                                            | 15 minutes                    |
-| Surface-local Web TypeScript  | Main CI, priority tests when matched, deploy scope, staging deploy on every green main push, Web deploy when Web | 275 Linux minutes             |
-| Signaling-only                | Main CI, signaling gate/test/build/deploy/cleanup                                                                | 210 Linux minutes             |
-| Native Desktop/CLI/Rust       | Main CI plus Desktop E2E, extended clippy, macOS smoke, and Windows smoke                                        | 495 mixed-OS minutes          |
-| Weekly standalone Desktop E2E | One Linux E2E run                                                                                                | 30 minutes/week               |
-
-The mixed-OS ceiling is intentionally exceptional; macOS and Windows have
-higher paid per-minute rates than Linux. Normal Web/service work no longer
-allocates those runners. At the Free allowance, eight worst-case Web changes or
-four worst-case native changes in a month would exceed the raw ceiling, so
-superseded commits must be cancelled and changes should land through reviewed,
-batched pull requests.
-
-GitHub's billing dashboard is the operational source for actual usage. Enable
-the 90% and 100% included-usage alerts and configure a zero-overage budget. On
-2026-07-30 the latest repository runs were ending before a runner or step was
-allocated; the available token cannot read the account billing endpoint, so an
-account owner must confirm the Actions allowance/payment/budget state before a
-live deployment demonstration.
+Use completed runs for the current commit to measure runner time, and GitHub's
+billing dashboard to check the account's allowance and budget. Visibility, runner
+class and account plan affect billing. Cancel superseded runs and batch reviewed
+changes to avoid repeated allocations. Current monthly capacity and the final
+candidate's runner duration have not been measured here.
 
 ## Required protected configuration
 

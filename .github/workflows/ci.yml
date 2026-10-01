@@ -157,21 +157,6 @@ jobs:
         continue-on-error: true
 
       - name: LLM and repo operability checks
-        # The whole chain, not a hand-picked subset. This is the same command
-        # .husky/pre-push runs, so what a developer is stopped by locally and
-        # what CI enforces are one list that cannot drift apart. It is also what
-        # makes these guards gate a deploy: deploy-production.yml waits on CI,
-        # and repo-operability.yml is a separate workflow it never waited on.
-        #
-        # Sixty-six guards. Eight steps that this job used to run on its own
-        # were removed because the chain already runs them: check:hook-fire-sites,
-        # check:module-reachability, the three no-hex ratchets, check:secrets,
-        # check:tauri-wiring and check:feature-baseline. Three more steps kept
-        # only their guard and dropped the node --test line the chain's
-        # check:script-tests already covers. Minutes are spent once.
-        #
-        # repo-operability.yml still runs this chain on its own schedule; that
-        # duplicate is cheap next to a gate that silently does not gate.
         run: pnpm check:llm-operability
 
   database:
