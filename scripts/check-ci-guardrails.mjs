@@ -686,7 +686,14 @@ requireIncludes(
 );
 requireNotIncludes('.github/workflows/build-windows-release.yml', 'WINDOWS_CERTIFICATE:');
 requireNotIncludes('.github/workflows/build-windows-release.yml', 'Import-PfxCertificate');
-requireIncludes('.github/workflows/build-windows-release.yml', 'Get-AuthenticodeSignature');
+requireIncludes(
+  '.github/workflows/build-windows-release.yml',
+  'run: . ./apps/desktop/scripts/verify-windows-release-signatures.ps1',
+);
+requireIncludes(
+  'apps/desktop/scripts/verify-windows-release-signatures.ps1',
+  'Get-AuthenticodeSignature',
+);
 requireIncludes('.github/workflows/build-windows-release.yml', 'gh release upload');
 requireIncludes('.github/workflows/build-windows-release.yml', 'PACKAGE_VERSION=');
 requireIncludes('.github/workflows/build-windows-release.yml', 'public.upsert_release');

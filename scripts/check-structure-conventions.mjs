@@ -892,7 +892,11 @@ requireIncludes('.github/workflows/ci.yml', '--filter=@agiworkforce/web');
 requireIncludes('.github/workflows/release-cli.yml', "- 'v-cli-*'");
 requireIncludes('.github/workflows/release-cli.yml', 'agiworkforce-*.${{ matrix.archive }}');
 requireIncludes('.github/workflows/release-cli.yml', 'platform: linux-arm64');
-requireIncludes('.github/workflows/release-cli.yml', 'Replace("win32-", "windows-")');
+requireIncludes(
+  '.github/workflows/release-cli.yml',
+  'run: . ./scripts/release/archive-cli-windows.ps1',
+);
+requireIncludes('scripts/release/archive-cli-windows.ps1', 'Replace("win32-", "windows-")');
 requireIncludes('apps/web/public/install.sh', 'agiworkforce-{platform}.{ext}');
 requireIncludes('scripts/update-homebrew-tap.sh', 'agiworkforce-$platform.tar.gz');
 requireIncludes('scripts/update-homebrew-tap.sh', 'SHA_LINUX_ARM64');
