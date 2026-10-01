@@ -20,8 +20,8 @@ vi.mock('@sentry/nextjs', () => ({
   init: (...args: unknown[]) => sentryInit(...args) as unknown,
   captureRequestError: vi.fn(),
   captureRouterTransitionStart: vi.fn(),
-  validateOpenTelemetrySetup: (...args: unknown[]) =>
-    validateOpenTelemetrySetup(...args) as unknown,
+  withStaticSpan: (callback: unknown) => callback,
+  openTelemetryIntegration: () => ({ name: 'OpenTelemetry' }),
 }));
 
 vi.mock('botid/client/core', () => ({
@@ -81,7 +81,7 @@ describe('register with no exporter endpoint configured', () => {
 
     expect(startOtelSdk).not.toHaveBeenCalled();
     expect(sentryInit).toHaveBeenCalledTimes(1);
-    expect(sentryOptions()['skipOpenTelemetrySetup']).toBeUndefined();
+    expect(sentryOptions()['enableOpenTelemetrySetup']).toBeUndefined();
     expect(sentryOptions()['tracesSampleRate']).toBe(DEFAULT_TRACES_SAMPLE_RATE);
   });
 });
@@ -101,16 +101,17 @@ describe('register with an exporter endpoint configured', () => {
     expect(client).toBeUndefined();
   });
 
-  it('hands the Sentry client to the SDK and stops Sentry owning the provider', async () => {
+  it('retains Sentry provider ownership and hands its client to the collector adapter', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('SENTRY_DSN', SENTRY_DSN);
     vi.stubEnv(OTEL_ENDPOINT_ENV, COLLECTOR);
 
     await runRegister();
 
-    expect(sentryOptions()['skipOpenTelemetrySetup']).toBe(true);
+    expect(sentryOptions()['enableOpenTelemetrySetup']).toBe(true);
+    expect(sentryOptions()['integrations']).toBeUndefined();
     expect(startOtelSdk.mock.calls[0]?.[1]).toEqual({});
-    expect(validateOpenTelemetrySetup).toHaveBeenCalledTimes(1);
+    expect(validateOpenTelemetrySetup).not.toHaveBeenCalled();
   });
 
   it('never head-drops on the export ratio, which would hide the errors and slow tail', async () => {
@@ -168,7 +169,7 @@ describe('client telemetry consent gate', () => {
     window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, 'true');
     await loadClientInstrumentation();
     expect(sentryInit).toHaveBeenCalledTimes(1);
-    expect(sentryOptions()['skipOpenTelemetrySetup']).toBeUndefined();
+    expect(sentryOptions()['enableOpenTelemetrySetup']).toBeUndefined();
   });
 
   it('lets a revoked document consent flag override a stale cache', async () => {

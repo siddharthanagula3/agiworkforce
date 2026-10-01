@@ -4,6 +4,7 @@ import { safeGetJSON, safeSetJSON } from '../utils/localStorage';
 import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
 
 import * as Sentry from '@sentry/react';
+import { createSentryDataCollectionOptions } from '@agiworkforce/observability';
 
 export enum ErrorSeverity {
   LOW = 'low',
@@ -53,7 +54,8 @@ class ErrorTrackingService {
         sampleRate: this.config.sampleRate,
         tracesSampleRate: this.config.tracesSampleRate,
         attachStacktrace: this.config.attachStacktrace,
-        sendDefaultPii: this.config.sendDefaultPii,
+        dataCollection: createSentryDataCollectionOptions(this.config.sendDefaultPii),
+        traceLifecycle: 'static',
         integrations: [Sentry.browserTracingIntegration()],
         beforeSendTransaction(event) {
           return isPrivateTrustBoundary() ? null : event;

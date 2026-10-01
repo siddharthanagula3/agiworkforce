@@ -49,8 +49,8 @@
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
-    "@clerk/chrome-extension": "^3.1.82",
-    "dompurify": "^3.4.15",
+    "@clerk/chrome-extension": "^3.1.87",
+    "dompurify": "^3.4.16",
     "markdown-it": "^15.0.2"
   },
   "devDependencies": {
@@ -59,7 +59,7 @@
     "jsdom": "^27.4.0",
     "terser": "^5.51.2",
     "typescript": "5.9.3",
-    "vite": "^8.3.0",
+    "vite": "^8.3.1",
     "vite-plugin-static-copy": "^3.4.0",
     "vitest": "^4.1.11"
   },

@@ -1,9 +1,17 @@
-import type { Breadcrumb, ErrorEvent, Event, EventHint, spanToJSON } from '@sentry/nextjs';
+import {
+  withStaticSpan,
+  type Breadcrumb,
+  type ErrorEvent,
+  type Event,
+  type EventHint,
+  type init,
+  type spanToStaticSpanJSON,
+} from '@sentry/nextjs';
+import { createSentryDataCollectionOptions } from '@agiworkforce/observability';
 
 import { maskSecretText, redactDeepValue } from '@/lib/observability/redact';
 
-// @sentry/nextjs re-exports these shapes only through values, not as named types.
-export type SpanJSON = ReturnType<typeof spanToJSON>;
+export type SpanJSON = ReturnType<typeof spanToStaticSpanJSON>;
 export type TransactionEvent = Event & { type: 'transaction' };
 
 type SpanAttributes = SpanJSON['data'];
@@ -354,7 +362,7 @@ export const DEFAULT_TRACES_SAMPLE_RATE = 0.1;
 export interface CommonInitOptions {
   tenantTagHook?: (event: TenantTaggedEvent) => void;
   tracesSampleRate?: number;
-  skipOpenTelemetrySetup?: boolean;
+  enableOpenTelemetrySetup?: boolean;
 }
 
 function scrubAndTagEvent(hook: (event: TenantTaggedEvent) => void) {
@@ -373,22 +381,36 @@ function scrubAndTagTransaction(hook: (event: TenantTaggedEvent) => void) {
   };
 }
 
-export function commonInitOptions(options: CommonInitOptions = {}) {
-  const { tenantTagHook, tracesSampleRate, skipOpenTelemetrySetup } = options;
+type SentryInitOptions = NonNullable<Parameters<typeof init>[0]>;
+type SharedInitOptions = Pick<
+  SentryInitOptions,
+  'dsn' | 'enabled' | 'environment' | 'release' | 'dataCollection' | 'tracesSampleRate'
+> & {
+  traceLifecycle: 'static';
+  enableOpenTelemetrySetup?: CommonInitOptions['enableOpenTelemetrySetup'];
+  beforeSend: typeof scrubEvent;
+  beforeSendTransaction: typeof scrubTransactionEvent;
+  beforeSendSpan: ReturnType<typeof withStaticSpan>;
+  beforeBreadcrumb: typeof scrubBreadcrumb;
+};
+
+export function commonInitOptions(options: CommonInitOptions = {}): SharedInitOptions {
+  const { tenantTagHook, tracesSampleRate, enableOpenTelemetrySetup } = options;
   const release = getSentryRelease();
   return {
     dsn: getSentryDsn(),
     enabled: isSentryConfigured(),
     environment: getSentryEnvironment(),
     ...(release ? { release } : {}),
-    sendDefaultPii: false,
+    dataCollection: createSentryDataCollectionOptions(),
+    traceLifecycle: 'static' as const,
     tracesSampleRate: tracesSampleRate ?? DEFAULT_TRACES_SAMPLE_RATE,
-    ...(skipOpenTelemetrySetup ? { skipOpenTelemetrySetup: true } : {}),
+    ...(enableOpenTelemetrySetup === undefined ? {} : { enableOpenTelemetrySetup }),
     beforeSend: tenantTagHook ? scrubAndTagEvent(tenantTagHook) : scrubEvent,
     beforeSendTransaction: tenantTagHook
       ? scrubAndTagTransaction(tenantTagHook)
       : scrubTransactionEvent,
-    beforeSendSpan: scrubSpan,
+    beforeSendSpan: withStaticSpan(scrubSpan),
     beforeBreadcrumb: scrubBreadcrumb,
   };
 }

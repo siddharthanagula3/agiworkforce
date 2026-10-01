@@ -10,9 +10,29 @@ export interface TraceContext {
   userId?: string;
 }
 
+export const ORGANIZATION_TRACE_ATTRIBUTE = 'organization_id';
+
 export interface TenantScope {
   organizationId?: string;
   userId?: string;
+}
+
+const eventTenants = new WeakMap<object, TenantScope>();
+
+export function captureEventTenant(
+  event: { tags?: Record<string, unknown> },
+  tenant: TenantScope,
+): void {
+  event.tags = { ...event.tags };
+  eventTenants.set(event.tags, {
+    ...(typeof tenant.organizationId === 'string' && tenant.organizationId.length > 0
+      ? { organizationId: tenant.organizationId }
+      : {}),
+  });
+}
+
+export function eventTenant(event: { tags?: Record<string, unknown> }): TenantScope {
+  return (event.tags && eventTenants.get(event.tags)) ?? getTenantScope();
 }
 
 export interface TraceStorage {
@@ -76,7 +96,7 @@ export function traceLogFields(): Record<string, string> {
   if (!context) return {};
   const fields: Record<string, string> = { trace_id: context.traceId, span_id: context.spanId };
   if (context.requestId) fields['request_id'] = context.requestId;
-  if (context.organizationId) fields['organization_id'] = context.organizationId;
+  if (context.organizationId) fields[ORGANIZATION_TRACE_ATTRIBUTE] = context.organizationId;
   if (context.userId) fields['user_id'] = context.userId;
   return fields;
 }
