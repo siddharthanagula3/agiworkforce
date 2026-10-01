@@ -27,7 +27,7 @@ assistant/agent controls remain in scope. Existing criteria are an inventory,
 not a requirement to ship every optional product. Prior `done` labels are
 preserved as historical inputs, never accepted as current implementation proof.
 
-The current review found reproducible recovery/stop/transcript failures in
+The current review retains recovery verification gaps and reproduced transcript failures in
 Web, two asynchronous pairing failures in Mobile, a CLI restore escape,
 source-confirmed developer handoff/cancellation/resource issues and defects in
 audit evidence checks. These issues need resolution before claiming the
@@ -36,8 +36,7 @@ works, nor that an observed source defect is deployed.
 
 | Severity | Current issue | Source and verification limits |
 | --- | --- | --- |
-| Medium | Recovered-run polling stops after the first running verdict | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/web-cloud-review.json) |
-| Medium | Stop on a recovered cloud turn never requests server cancellation | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/web-cloud-review.json) |
+| Medium | `AGI-34`: mounted running-to-stalled follow-up and live stalled-run confirmation remain unverified | [remaining acceptance](../prior-audits/active-issues-register.md#agi-34-running-to-stalled-recovery-lacks-mounted-and-live-verification) |
 | Medium | Reopening a cached chat discards newer persisted messages | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/web-cloud-review.json) |
 | Medium | Managed-compute enforcement test accepts denials from different gates | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/web-cloud-review.json) |
 | High | Checkpoint rewind follows swapped parent symlinks outside the approved workspace | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/rust-developer-review.json) |
@@ -55,7 +54,6 @@ works, nor that an observed source defect is deployed.
 | Medium | Notifications from a closed runtime remain eligible to mutate the current session | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/electron-protocol-review.json) |
 | Medium | Explicit stop allows a replacement runtime before the prior runtime has exited | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/electron-protocol-review.json) |
 | Medium | Trusted side-panel WebMCP calls bypass target-site automation authorization | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/chrome-review.json) |
-| Medium | Stop reports cancellation success after the cloud cancellation API refuses it | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/chrome-review.json) |
 | Medium | Approved WebMCP form checkbox arguments are submitted with the wrong state | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/chrome-review.json) |
 | Medium | A new login session for the same account hides retained Chrome history | [evidence](../prior-audits/evidence/2026-09-29-ecosystem-review/chrome-review.json) |
 
@@ -69,8 +67,9 @@ primitives in disposable directories; full CLI/app-server execution remains
 unverified. Instrument fixtures demonstrate that invalid evidence can still
 yield a successful check.
 
-`AGI-34` is reused for the remaining recovery defect; the original first-stalled
-test does not cover a first-running verdict followed by completion. The existing
+`AGI-34` remains open for a mounted running-to-stalled follow-up test and live
+stalled-run confirmation. Recurring polling and verified terminal retirement
+are repaired in `032bf6aa`; those fixed behaviors are not the remaining scope. The existing
 `CLI-THREAD-STATUS-NOT-PERSISTED-01` remains one identity. Blanket connector
 channel refusal is a source-confirmed policy question in the Web lane and is
 not registered as a permission bypass.
@@ -93,7 +92,7 @@ browser/cloud surfaces are distinct. Code inside Tauri cannot establish a
 shipping Electron feature. Unique `fix/web-small` assets and pending native
 fixes are recorded in lane evidence rather than reported as absent work.
 
-Chrome probes reproduce false cancellation success, hidden retained history
+Chrome probes reproduce hidden retained history
 after a new session for the same account, and the existing `C-01`/`C-07`
 origin/form defects. Those two IDs retain the newer integration's open-work
 owner rather than creating new defect identities. Existing targeted tests

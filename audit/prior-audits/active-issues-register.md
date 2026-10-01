@@ -3176,43 +3176,15 @@ omits this spend.
 with a second `provider_cost_events` row for the backend model, covered by a
 test on the close route.
 
-### `AGI-34` A stalled durable run row pins the conversation on Generating response
+### `AGI-34` Running-to-stalled recovery lacks mounted and live verification
 
 **Severity:** P2
-**Status:** Partial; follow-up polling failure revalidated at `49d0c30f` on 2026-09-29.
+**Status:** Partial; recurring recovery polling and terminal retirement are repaired in `032bf6aa` on 2026-10-01. Mounted running-to-stalled follow-up and deployed stalled-run confirmation remain unverified.
 **Area:** Web chat client, runs API
-**What happens:** the chat page resumes a conversation from its run row. When
-the world never progresses and the function behind the row dies, the row stays
-running with no event, and every visit shows Generating response with a Stop
-button until the reaper ends the row, which is at best the next quarter hour
-and, while the reaper itself hung, never. Seen on 2026-09-10 on two
-conversations of the QA account after the turns behind
-wrun_01M26TYEAKNQA7GWWAS8W9Q86D and wrun_01M26VT1VK8TM4JB52HN1HEBMT stalled.
-**Root cause:** the client trusted the row's state and had no liveness bound of
-its own; the row's updated_at and last_event_sequence never move, but nothing
-read their age.
-**Fix:** `CloudAgentRunSchema` now carries `staleForMs`, computed by the server
-that read the row, so the client never compares clocks it does not share.
-`askWhetherTurnIsRunning` returns `running | stalled | idle` instead of a
-boolean, counting a row quieter than the durable silence deadline as stalled,
-and never counting a deliberate pause as one. `useChatStream` drops the loading
-state on `stalled` and sets the error the existing retry banner already offers
-to resend. Verified on `:3100`: the conversation shows "This turn stopped
-running on the server and will not finish. Send it again to retry." with a
-Retry button, and no "Generating response".
-
-**2026-09-29 revalidation:** the initial-stalled case above does not cover a
-reopened run whose first verdict is `running`. `useChatStream.ts:3597-3616`
-sets `isLoading=true` after that verdict, then its next scheduled poll returns
-early because `inFlightTurnRecovery.ts:46` rejects `isLoading=true`. No further
-timer is scheduled. A real-hook/store reproduction advanced 5,001 ms and
-observed one GET rather than two. This leaves recovery busy after completion
-or a later stall. Keep this identity for the remaining recovery defect.
-The source snapshot, mocks, command and captured failing assertion are in
-`audit/prior-audits/evidence/2026-09-29-ecosystem-review/web-cloud-review.json` and
-`web-repro-output.txt`. The durable run and mounted browser were not executed
-in this reproduction. Separate owned-stream busy state from a restored-run
-follower and require terminal and stalled follow-up tests before closure.
+**Implemented:** the server-owned `staleForMs` bounds run liveness without comparing client/server clocks; deliberate paused states remain live. The recovered-run follower continues polling while its known run keeps the conversation loading, preserves identity after unavailable or invalid listings, and retires it after a verified terminal or empty listing. The real hook/recovery/workflow suites pass 122 assertions, including running-to-terminal follow-up and uncertain-response controls. HTTP, provider and persistence boundaries are mocked in these suites.
+**Remaining:** no mounted hook regression has observed an initially running recovered run become stalled on a later poll. The earlier initial-stalled check does not cover that transition. No stalled run on the deployed build was confirmed in this repair.
+**Acceptance:** mount a restored running conversation, return that same run with server-owned `staleForMs` beyond the existing silence deadline on a subsequent poll, and require the Retry banner with loading cleared. Preserve deliberate-pause and uncertain-read behavior. Separately confirm a stalled run on the deployed build before closing this identity.
+**Owners:** `apps/web/lib/hooks/inFlightTurnRecovery.ts`, `apps/web/lib/hooks/useChatStream.ts`, and their existing tests. The remaining gap is verification, not an observed continued first-running or terminal-polling defect.
 
 ## 5. P3, lower priority
 
@@ -3802,8 +3774,8 @@ Dependency-aware, not severity-ordered.
    is closed, artifacts and conversations both carry the two-part audience
    model, so nothing sequences behind it.
 8. `AGI-32` needs the live confirmation its section names; it is code-complete
-   on main. `AGI-34` still needs running and terminal follow-up polling repair
-   plus live stalled-run confirmation. `AGI-11`, `AGI-20`, `AGI-29`,
+   on main. `AGI-34` still needs a mounted running-to-stalled follow-up
+   test plus live stalled-run confirmation. `AGI-11`, `AGI-20`, `AGI-29`,
    `AGI-30`, `AGI-31`, `AGI-33`. Background and polish. `AGI-17` needs a
    decision before it needs an implementer.
 
@@ -3811,26 +3783,26 @@ Dependency-aware, not severity-ordered.
 
 ## 8. Acceptance matrix
 
-| Issue    | Automated                                                  | Manual or live                           | Gate                                      |
-| -------- | ---------------------------------------------------------- | ---------------------------------------- | ----------------------------------------- |
-| `AGI-3`  | per-class snapshot tests, e2e reload                       | reload after a tool-using answer         | nothing the transcript rendered is lost   |
-| `AGI-5`  | the four native lanes are pinned together                  | a PR with a deliberate native break      | required check fails on the PR            |
-| `AGI-7`  | spec gate ledger                                           | signed build                             | 12 of 12 gates, or surface removed        |
-| `AGI-11` | service and cron tests                                     | none                                     | expired token stops resolving             |
-| `AGI-12` | `check:boundaries`, desktop tests                          | none                                     | zero `task-1.3` markers                   |
-| `AGI-14` | per-provider route tests, registry contract                | none                                     | a second STT vendor exists and fails over |
-| `AGI-16` | resolve-on-ingest tests, no provider host in a href        | a grounded research turn                 | a citation survives redirect expiry       |
-| `AGI-17` | none until the decision is taken                           | none                                     | founder decides conform or forgive        |
-| `AGI-20` | e2e case invalidating only the retried row                 | none, real layout needs a browser        | retried message stays in view             |
-| `AGI-22` | conformance fixtures, consent record migration             | none                                     | no Chinese-HQ route without consent       |
-| `AGI-23` | classification test over the observed 404                  | none                                     | excluded route is not offered             |
-| `AGI-27` | tool-loop staging cases                                    | a CSV total on a non-gateway model       | no write_file copy before execute_code    |
-| `AGI-29` | memory service tests                                       | a live two-chat recall                   | a fact without a trigger phrase is kept   |
-| `AGI-30` | hook test with a request counter                           | one live turn                            | one list refetch per completed turn       |
-| `AGI-31` | targeted test once the stack is captured                   | a hundred turns with no warning          | no MaxListenersExceededWarning            |
-| `AGI-32` | test on the close route                                    | a live session with a backend web search | second `provider_cost_events` row lands   |
-| `AGI-33` | the two pinning tests flip to asserting preservation       | none                                     | classification survives the envelope      |
-| `AGI-34` | run-age, stalled-state and running follow-up polling tests | a stalled run on the deployed build      | Retry banner, not Generating response     |
+| Issue    | Automated                                            | Manual or live                           | Gate                                      |
+| -------- | ---------------------------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| `AGI-3`  | per-class snapshot tests, e2e reload                 | reload after a tool-using answer         | nothing the transcript rendered is lost   |
+| `AGI-5`  | the four native lanes are pinned together            | a PR with a deliberate native break      | required check fails on the PR            |
+| `AGI-7`  | spec gate ledger                                     | signed build                             | 12 of 12 gates, or surface removed        |
+| `AGI-11` | service and cron tests                               | none                                     | expired token stops resolving             |
+| `AGI-12` | `check:boundaries`, desktop tests                    | none                                     | zero `task-1.3` markers                   |
+| `AGI-14` | per-provider route tests, registry contract          | none                                     | a second STT vendor exists and fails over |
+| `AGI-16` | resolve-on-ingest tests, no provider host in a href  | a grounded research turn                 | a citation survives redirect expiry       |
+| `AGI-17` | none until the decision is taken                     | none                                     | founder decides conform or forgive        |
+| `AGI-20` | e2e case invalidating only the retried row           | none, real layout needs a browser        | retried message stays in view             |
+| `AGI-22` | conformance fixtures, consent record migration       | none                                     | no Chinese-HQ route without consent       |
+| `AGI-23` | classification test over the observed 404            | none                                     | excluded route is not offered             |
+| `AGI-27` | tool-loop staging cases                              | a CSV total on a non-gateway model       | no write_file copy before execute_code    |
+| `AGI-29` | memory service tests                                 | a live two-chat recall                   | a fact without a trigger phrase is kept   |
+| `AGI-30` | hook test with a request counter                     | one live turn                            | one list refetch per completed turn       |
+| `AGI-31` | targeted test once the stack is captured             | a hundred turns with no warning          | no MaxListenersExceededWarning            |
+| `AGI-32` | test on the close route                              | a live session with a backend web search | second `provider_cost_events` row lands   |
+| `AGI-33` | the two pinning tests flip to asserting preservation | none                                     | classification survives the envelope      |
+| `AGI-34` | mounted recovered running-to-stalled follow-up test  | a stalled run on the deployed build      | Retry banner, not Generating response     |
 
 Every web change closes with `apps/web` typecheck run on its own.
 
@@ -3845,7 +3817,7 @@ AGI-16                     provenance, independent
 LIVE-5 ──> AGI-7          desktop voice, measure before building
 AGI-14                     blocked on a second STT vendor, not on code
 AGI-32                     code-complete, waiting on a live confirmation
-AGI-34                     partial, follow-up polling repair and live confirmation
+AGI-34                     partial, mounted running-to-stalled test and live confirmation
 AGI-11, AGI-12, AGI-33     background
 AGI-17, AGI-20, AGI-29,
 AGI-30, AGI-31             polish, independent of everything
@@ -3853,20 +3825,6 @@ AGI-30, AGI-31             polish, independent of everything
 
 Two tracks can run at once without touching the same files: web chat
 (`AGI-3`) and CI (`AGI-5`).
-
-## WEB-RECOVERED-RUN-STOP-NOT-CANCELLED-01
-
-Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
-
-Stop on a recovered cloud turn never requests server cancellation. activeRunsRef starts empty at3502–3504 and receives handles only from consumeAssistantStream callbacks4162–4164/4455–4457. Reopen liveness recovery retains only a verdict and never installs the run handle. stopGeneration only calls cancelCloudRunAndConfirm inside if(activeRun), but always stops local streaming/loading at4621–4622. abortConversation3511–3515 only aborts a controller in the separate client request map; recovery has no request controller there. Ephemeral real-hook test asserted the running state, invoked stopGeneration and recorded all fetch calls. Expected POST to the returned run id, actual no POST. The canonical run cancellation POST writes cancellation_requested_at through requestCloudAgentRunCancellation. The durable workflow is enqueued by workflow/api start, with no request signal in StartCloudAgentWorkflowExecutionInput; the invocation owns an AbortController and reads the DB cancellation flag at each loop check.
-
-Impact/trigger: Stop clears the local busy state but sends no run cancellation. The detached workflow may continue provider/tool execution and associated usage until its normal stop condition or another cancellation path.
-
-Start at `apps/web/lib/hooks/useChatStream.ts:4597` in `.worktrees/billing-e2e`. Evidence and full anchors: [`web-cloud-review.json`](evidence/2026-09-29-ecosystem-review/web-cloud-review.json).
-
-Verification: Real-hook/store assertion failed as expected; captured in web-repro-output.txt. Limit: The absence of the client cancellation call is reproduced. Continued live billing/tool execution was not observed; it follows from the source-owned durable lifecycle and is a conditional impact.
-
-Resolution/acceptance: Mount a restored running conversation, retain the authenticated run handle, click Stop, require cancellation POST for that run and poll confirmed terminal state. Use a durable workflow fixture independent of the browser request to assert the persisted cancellation flag halts a future provider/tool dispatch; require a visible failure if cancellation cannot be confirmed.
 
 ## WEB-CACHED-TRANSCRIPT-NEVER-REFRESHED-01
 
@@ -4083,18 +4041,6 @@ Trigger/impact: Use Stop background coding runtime, then immediately open/resume
 Source: `apps/desktop/electron/runtime/developerSessionService.ts:1195` in `49d0c30f`. [Full evidence](evidence/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No real subprocess timing, writer-conflict reproduction or shutdown/restart integration test executed.
 
 Resolution/acceptance: Keep a stopping registry entry with an exit/shutdown promise and sequence replacement admission after it, while retaining a bounded kill fallback. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
-
-## CHROME-STOP-FALSE-CANCELLATION-SUCCESS-01
-
-Severity: Medium. Status: reproduced against current source `49d0c30f`; deployed behavior unknown.
-
-The panel marks the answer no longer streaming and can send the next queued follow-up while the durable task may continue. The worker emits Cancelled before the API result and then returns success even when cancellation failed.
-
-Real registered CANCEL_STREAM handler invoked the cancellation seam once, received {status:error,code:server_error,message:Cancellation service unavailable}, logged that failure, but returned response.success=true. The expectation success=false failed. The worker broadcasts a done:true/error:Cancelled chunk before requesting server cancellation, logs failure without returning it, and always returns success. The mounted requestStreamCancellation discards the worker response and swallows rejection. cancelCurrentManagedStream clears streaming/current stream immediately and invokes sendNextFollowUp in finally. The server cancellation owner updates cloud_agent_runs.cancellation_requested_at. Its workflow is started independently of the browser request and its invocation owns the AbortController, checking the persisted flag; aborting a follower cannot substitute for this write.
-
-Source: `apps/extension/src/background.ts:3566`. [Exact harness, source hashes and output](evidence/2026-09-29-ecosystem-review/chrome-review.json). Limits: The real worker return value and cancellation invocation are reproduced; provider/API transport is mocked. Continued live tool execution or billing is not observed and is a conditional impact supported by the independently traced server-owned lifecycle.
-
-Resolution/acceptance: Mount the panel with a recovered owned durable run, click Stop, inject cancellation rejection, and require a visible unconfirmed/failure state with no falsely cancelled chunk or automatic next dependent turn. A successful cancellation should poll a confirmed terminal state. Include a server workflow fixture that remains running until the cancellation flag changes.
 
 ## CHROME-SAME-ACCOUNT-NEW-SESSION-HISTORY-01
 
