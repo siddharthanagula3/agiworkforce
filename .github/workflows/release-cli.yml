@@ -233,11 +233,11 @@ jobs:
         # Voice ships on macOS and Windows only: cpal links libasound on Linux,
         # which would stop the binary from starting on hosts without ALSA.
         run: |
-          args=(--locked --release --target "$CLI_BUILD_TARGET" -p agiworkforce-cli)
+          args=(--release --target "$CLI_BUILD_TARGET" -p agiworkforce-cli)
           if [[ "$CLI_BUILD_VOICE" == true ]]; then
             args+=(--features voice)
           fi
-          cargo build "${args[@]}"
+          cargo build --locked "${args[@]}"
 
       - name: Stage binary
         shell: bash
