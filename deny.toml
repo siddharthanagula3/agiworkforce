@@ -113,6 +113,7 @@ unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
     "https://github.com/rust-x-bindings/rust-xcb",
+    "https://github.com/webdriverio/desktop-mobile",
 ]
 
 # No [sources.allow-org] entry: the exact allow-git URLs above already cover
