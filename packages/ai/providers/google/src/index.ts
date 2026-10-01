@@ -221,4 +221,16 @@ export const googleAdapterFactory: ProviderAdapterFactory = (config) =>
 export { GOOGLE_MODEL_CATALOG, fetchGoogleCatalog } from './catalog';
 export { translateChatRequest } from './translate';
 export { parseGeminiStream, translateGeminiStream } from './stream';
-export type * from './types';
+export type {
+  GeminiPart,
+  GeminiContent,
+  GeminiSystemInstruction,
+  GeminiTool,
+  GeminiToolConfig,
+  GeminiThinkingConfig,
+  GeminiGenerateContentRequest,
+  GeminiGroundingChunk,
+  GeminiGroundingSupport,
+  GeminiUrlContextMetadata,
+  GeminiStreamChunk,
+} from './types';
