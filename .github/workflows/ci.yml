@@ -317,6 +317,9 @@ jobs:
         # in-flight change to @agiworkforce/types' exports.
         run: pnpm --filter agi-workforce check:refs
 
+      - name: Prepare the mobile privacy parser
+        run: pnpm --filter @agiworkforce/mobile setup:privacy-parser
+
       - name: Test
         # Vitest/Jest packages already own internal worker pools. Bounding the
         # outer Turbo graph prevents scheduler starvation from turning fast,

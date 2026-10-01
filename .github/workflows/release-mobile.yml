@@ -96,6 +96,9 @@ jobs:
       - name: Require the iOS social login option
         run: node apps/mobile/scripts/release/check-ios-login-service.mjs
 
+      - name: Prepare the mobile privacy parser
+        run: pnpm --filter @agiworkforce/mobile setup:privacy-parser
+
       - name: Validate mobile source and release configuration
         run: |
           pnpm --filter @agiworkforce/mobile check:expo-deps

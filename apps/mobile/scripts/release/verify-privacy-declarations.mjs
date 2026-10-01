@@ -70,8 +70,12 @@ function validatePrivacyManifest(manifest) {
 export function parsePrivacyManifest(source) {
   try {
     const parsed = execFileSync(
-      'python3',
-      ['-I', '-S', path.join(mobileRoot, 'scripts/release/parse-privacy-manifest.py')],
+      path.join(
+        mobileRoot,
+        '.cache/privacy-parser',
+        process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python3',
+      ),
+      ['-I', path.join(mobileRoot, 'scripts/release/parse-privacy-manifest.py')],
       {
         input: source,
         encoding: 'utf8',

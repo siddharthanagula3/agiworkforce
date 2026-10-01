@@ -1,8 +1,6 @@
 import json
 import plistlib
 import sys
-import xml.etree.ElementTree as ET
-from xml.parsers.expat import ExpatError
 
 
 class UniqueKeys(dict):
@@ -34,20 +32,26 @@ def validate_xml_node(node):
 
 
 def parse_manifest(source):
-    manifest = plistlib.loads(source, dict_type=UniqueKeys)
-    if not source.startswith(b"bplist00"):
-        root = ET.fromstring(source)
-        if (
-            root.tag != "plist"
-            or root.attrib != {"version": "1.0"}
-            or len(root) != 1
-            or root[0].tag != "dict"
-            or (root.text or "").strip()
-            or (root[0].tail or "").strip()
-        ):
-            raise ValueError("invalid privacy plist root")
-        validate_xml_node(root[0])
-    return manifest
+    if source.startswith(b"bplist00"):
+        return plistlib.loads(source, fmt=plistlib.FMT_BINARY, dict_type=UniqueKeys)
+    from defusedxml import ElementTree as ET
+    from defusedxml.common import DefusedXmlException
+
+    try:
+        root = ET.fromstring(source, forbid_entities=True, forbid_external=True)
+    except (ET.ParseError, DefusedXmlException) as error:
+        raise ValueError("invalid privacy XML") from error
+    if (
+        root.tag != "plist"
+        or root.attrib != {"version": "1.0"}
+        or len(root) != 1
+        or root[0].tag != "dict"
+        or (root.text or "").strip()
+        or (root[0].tail or "").strip()
+    ):
+        raise ValueError("invalid privacy plist root")
+    validate_xml_node(root[0])
+    return plistlib.loads(source, fmt=plistlib.FMT_XML, dict_type=UniqueKeys)
 
 
 def main():
@@ -56,7 +60,7 @@ def main():
         if not source or len(source) > 4 * 1024 * 1024:
             raise ValueError("invalid privacy plist size")
         json.dump(parse_manifest(source), sys.stdout, allow_nan=False)
-    except (ValueError, TypeError, OSError, ExpatError, ET.ParseError, RecursionError):
+    except (ValueError, TypeError, OSError, ImportError, RecursionError):
         sys.stderr.write("invalid privacy plist\n")
         return 1
     return 0
