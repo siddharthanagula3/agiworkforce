@@ -1158,6 +1158,74 @@ mod tests {
     }
 
     #[test]
+    fn an_exec_policy_allow_does_not_skip_force_push_confirmation() {
+        use crate::features::exec::exec_policy::evaluate_command;
+        use agiworkforce_execpolicy::{Decision, Policy};
+        let mut policy = Policy::empty();
+        policy
+            .add_prefix_rule(&["git".to_string(), "push".to_string()], Decision::Allow)
+            .expect("allow rule");
+        for command in [
+            "git push -f origin main",
+            "git push origin main --force",
+            "git push -ofoo --force origin main",
+            "git push origin +main:main",
+            "git push - +main:main",
+            "git push --end-of-options origin +main:main",
+        ] {
+            let evaluation = evaluate_command(&policy, command);
+            assert_eq!(evaluation.decision, Decision::Allow, "{command}");
+            assert!(evaluation.every_segment_matched_rule, "{command}");
+            assert!(
+                !policy_waives_confirmation(&evaluation, command),
+                "{command}"
+            );
+        }
+        let routine = "git push origin main";
+        assert!(policy_waives_confirmation(
+            &evaluate_command(&policy, routine),
+            routine
+        ));
+    }
+
+    #[test]
+    fn a_saved_allow_does_not_skip_force_push_confirmation() {
+        let mut perms = crate::permissions::PermissionStore::default();
+        perms.allow_always("git push");
+        for command in [
+            "git push -f origin main",
+            "git push origin main --force",
+            "git push -ofoo --force origin main",
+            "git push origin +main:main",
+            "git push - +main:main",
+            "git push --end-of-options origin +main:main",
+        ] {
+            assert_eq!(
+                saved_command_decision(&perms, command, classify_command(command)),
+                None,
+                "{command}"
+            );
+        }
+        assert_eq!(
+            saved_command_decision(
+                &perms,
+                "git push origin main",
+                classify_command("git push origin main")
+            ),
+            Some(true)
+        );
+        perms.deny_always("git push");
+        assert_eq!(
+            saved_command_decision(
+                &perms,
+                "git push -f origin main",
+                classify_command("git push -f origin main")
+            ),
+            Some(false)
+        );
+    }
+
+    #[test]
     fn an_exec_policy_allow_does_not_skip_the_prompt_for_a_dangerous_command() {
         use crate::features::exec::exec_policy::evaluate_command;
         use agiworkforce_execpolicy::{Decision, Policy};
