@@ -1159,9 +1159,7 @@ export class TauriRuntime implements ChatRuntime {
     return { id: response.data.id, content: response.data.content };
   }
 
-  async getArtifactVersions(
-    current: import('@agiworkforce/unified-chat').Artifact,
-  ): Promise<import('@agiworkforce/unified-chat').Artifact[]> {
+  async getArtifactVersions(current: Artifact): Promise<Artifact[]> {
     const realId = current.id.split('::v')[0] ?? current.id;
     const response = await invoke<RawArtifactResponse<RawArtifactVersion[]>>(
       'artifact_get_versions',

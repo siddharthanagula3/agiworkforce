@@ -1,3 +1,4 @@
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useEffect, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
@@ -428,7 +429,7 @@ export default function ChatScreen() {
   const handleSend = useCallback(
     (
       text: string,
-      attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
+      attachments?: Attachment[],
       mode?: TaskChipType,
       dispatchOptions?: { awaitCompletion?: boolean },
     ): boolean | Promise<boolean> => {
@@ -1065,14 +1066,13 @@ export default function ChatScreen() {
         multiple: true,
       });
       if (!result.canceled && result.assets.length > 0) {
-        const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
-          result.assets.map((asset) => ({
-            id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            uri: asset.uri,
-            mimeType: asset.mimeType ?? 'application/octet-stream',
-            fileName: asset.name ?? 'document',
-            fileSize: asset.size,
-          }));
+        const attachments: Attachment[] = result.assets.map((asset) => ({
+          id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          uri: asset.uri,
+          mimeType: asset.mimeType ?? 'application/octet-stream',
+          fileName: asset.name ?? 'document',
+          fileSize: asset.size,
+        }));
         chatInputAttachRef.current?.addAttachments(attachments);
       }
     } catch {
@@ -1098,12 +1098,9 @@ export default function ChatScreen() {
     router.push('/(app)/skills?returnTo=composer' as Parameters<typeof router.push>[0]);
   }, [router]);
 
-  const handleAttachFromLibrary = useCallback(
-    (attachment: import('@/src/features/chat/components/AttachmentPreview').Attachment) => {
-      chatInputAttachRef.current?.addAttachments([attachment]);
-    },
-    [],
-  );
+  const handleAttachFromLibrary = useCallback((attachment: Attachment) => {
+    chatInputAttachRef.current?.addAttachments([attachment]);
+  }, []);
 
   const [refreshing, setRefreshing] = useState(false);
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);

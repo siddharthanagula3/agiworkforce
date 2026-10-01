@@ -1,3 +1,4 @@
+import type { ChatChunkMessage, WebMCPToolInfo } from './types';
 import type {
   ConnectionStatus,
   ExtensionMessage,
@@ -390,9 +391,9 @@ function broadcastManagedChatChunk(
   owner: ManagedCloudOwner,
   clientInstanceId: string,
   id: string,
-  input: Omit<import('./types').ChatChunkMessage, 'type' | 'owner' | 'clientInstanceId' | 'id'>,
+  input: Omit<ChatChunkMessage, 'type' | 'owner' | 'clientInstanceId' | 'id'>,
 ): void {
-  const chunk: import('./types').ChatChunkMessage = {
+  const chunk: ChatChunkMessage = {
     type: 'CHAT_CHUNK',
     owner,
     clientInstanceId,
@@ -408,7 +409,7 @@ function publishManagedChatChunk(
   streamKey: string,
   active: ActiveChatStream,
   id: string,
-  input: Omit<import('./types').ChatChunkMessage, 'type' | 'owner' | 'clientInstanceId' | 'id'>,
+  input: Omit<ChatChunkMessage, 'type' | 'owner' | 'clientInstanceId' | 'id'>,
 ): void {
   if (!isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), active)) return;
   broadcastManagedChatChunk(active.owner, active.clientInstanceId, id, input);
@@ -639,7 +640,7 @@ const pendingContextHandoffApprovals = new Set<string>();
 const webmcpToolsByTab = new Map<
   number,
   {
-    tools: import('./types').WebMCPToolInfo[];
+    tools: WebMCPToolInfo[];
     url: string;
     timestamp: number;
     navigationGeneration: number;
@@ -5158,11 +5159,8 @@ async function handleChatMessage(
     text: string,
     done: boolean,
     error?: string,
-    routing?: import('./types').ChatChunkMessage['routing'],
-    activity?: Pick<
-      import('./types').ChatChunkMessage,
-      'agentEvent' | 'durableReplay' | 'cloudRun'
-    >,
+    routing?: ChatChunkMessage['routing'],
+    activity?: Pick<ChatChunkMessage, 'agentEvent' | 'durableReplay' | 'cloudRun'>,
   ): void => {
     broadcastManagedChatChunk(owner, clientInstanceId, id, {
       text,

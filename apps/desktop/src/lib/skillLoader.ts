@@ -19,6 +19,7 @@
  * prefer `loadFilesystemSkills()` for layered loading.
  */
 
+import type { SkillSource, Skill, FormatSkillsOptions } from '@agiworkforce/skills';
 export interface LoadedSkill {
   id: string;
   name: string;
@@ -240,8 +241,8 @@ export function invalidateSkillCache(): void {
 }
 
 export async function loadFilesystemSkills(
-  layers: Array<{ rootDir: string; source: import('@agiworkforce/skills').SkillSource }>,
-): Promise<import('@agiworkforce/skills').Skill[]> {
+  layers: Array<{ rootDir: string; source: SkillSource }>,
+): Promise<Skill[]> {
   if (typeof window !== 'undefined' && typeof process === 'undefined') {
     return [];
   }
@@ -251,8 +252,8 @@ export async function loadFilesystemSkills(
 }
 
 export async function formatFilesystemSkills(
-  skills: import('@agiworkforce/skills').Skill[],
-  options?: import('@agiworkforce/skills').FormatSkillsOptions,
+  skills: Skill[],
+  options?: FormatSkillsOptions,
 ): Promise<string> {
   const skillsPkg = await import('@agiworkforce/skills');
   return skillsPkg.formatSkillsForPrompt(skills, options);
