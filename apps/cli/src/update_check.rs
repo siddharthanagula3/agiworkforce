@@ -603,11 +603,25 @@ mod tests {
             &release("9.9.9"),
             std::path::Path::new("/home/dev/.agi/bin/agi"),
         );
-        assert!(plan.has_work());
-        let rendered = plan.render().join("\n");
-        assert!(rendered.contains("Will download agi 9.9.9"));
-        assert!(rendered.contains("/home/dev/.agi/bin/agi"));
-        assert!(rendered.contains("release signing key built into this agi"));
+        #[cfg(windows)]
+        {
+            assert_eq!(plan.verdict, UpdateVerdict::Available);
+            assert!(!plan.has_work());
+            let refusal = plan.target.as_ref().unwrap_err();
+            let rendered = plan.render().join("\n");
+            assert!(rendered.contains(refusal));
+            assert!(rendered.contains("Git Bash or WSL"));
+            assert!(rendered.contains(&install_command()));
+            assert!(!rendered.contains("Will download"));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(plan.has_work());
+            let rendered = plan.render().join("\n");
+            assert!(rendered.contains("Will download agi 9.9.9"));
+            assert!(rendered.contains("/home/dev/.agi/bin/agi"));
+            assert!(rendered.contains("release signing key built into this agi"));
+        }
     }
 
     #[test]

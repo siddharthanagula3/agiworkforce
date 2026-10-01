@@ -1944,8 +1944,19 @@ mod tests {
         let manager =
             SandboxManager::for_agent_command(workspace.path().to_path_buf(), NetworkPolicy::Deny);
         set_sandbox_mode(previous);
-        let manager = manager.unwrap();
-        assert!(!matches!(manager.policy, SandboxPolicy::DangerFullAccess));
+        #[cfg(windows)]
+        {
+            assert_eq!(SandboxType::detect(), SandboxType::None);
+            assert_eq!(
+                manager.unwrap_err().to_string(),
+                "sandbox not available on this platform or host; pass --no-sandbox only if you accept unrestricted command execution"
+            );
+        }
+        #[cfg(not(windows))]
+        {
+            let manager = manager.unwrap();
+            assert!(!matches!(manager.policy, SandboxPolicy::DangerFullAccess));
+        }
     }
 
     #[test]

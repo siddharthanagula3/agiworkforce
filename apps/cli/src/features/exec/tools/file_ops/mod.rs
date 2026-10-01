@@ -1750,7 +1750,7 @@ mod tests {
     #[tokio::test]
     async fn patch_target_paths_rejects_copies_renames_and_quoted_instruction_paths() {
         let tmp = tempfile::tempdir_in(".").expect("tempdir");
-        let root = tmp.path().display();
+        let root = tmp.path().to_string_lossy().replace('\\', "/");
         for operation in ["copy", "rename"] {
             let patch = format!(
                 "diff --git a/{root}/notes.md b/{root}/notes.md\nsimilarity index 100%\n{operation} from {root}/notes.md\n{operation} to {root}/.agiworkforce/rules/q.md\n"
