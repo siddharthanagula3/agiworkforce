@@ -1,3 +1,4 @@
+import type * as KeyValueModule from '@agiworkforce/key-value';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   KEY_VALUE_PROVIDER_ENV,
@@ -44,7 +45,7 @@ const redisMocks = vi.hoisted(() => {
 });
 
 vi.mock('@agiworkforce/key-value', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/key-value')>();
+  const actual = await importOriginal<typeof KeyValueModule>();
   return {
     ...actual,
     resolveKeyValueRuntime(options: Parameters<typeof actual.resolveKeyValueRuntime>[0] = {}) {

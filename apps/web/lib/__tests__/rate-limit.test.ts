@@ -1,3 +1,4 @@
+import type * as KeyValueModule from '@agiworkforce/key-value';
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -69,7 +70,7 @@ const upstash = vi.hoisted(() => {
 });
 
 vi.mock('@agiworkforce/key-value', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/key-value')>();
+  const actual = await importOriginal<typeof KeyValueModule>();
   return {
     ...actual,
     resolveKeyValueRuntime(options: Parameters<typeof actual.resolveKeyValueRuntime>[0] = {}) {
