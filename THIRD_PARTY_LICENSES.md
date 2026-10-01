@@ -209,6 +209,46 @@ SOFTWARE.
 - **Imported into**: `packages/ai/routing/src/breaker-profiles.ts`
 - **Adoption**: Numeric threshold pattern only, no upstream source file copied. `DEFAULT_BREAKER_PROFILES` reproduces the shape of OmniRoute's `open-sse/config/constants.ts` `PROVIDER_PROFILES` (three credential-class breaker profiles: static API key, OAuth/session token, local runtime), read from a local read-only clone, not the npm registry. Selection logic (`resolveCredentialClass`, `credentialClassForProvider`) is freshly written against this repository's own `RoutingTrustMode` registry field rather than ported.
 
+## LobeHub Icons
+
+- **Upstream**: [lobehub/lobe-icons](https://github.com/lobehub/lobe-icons)
+- **Package**: `@lobehub/icons-static-svg`
+- **License**: MIT
+- **Imported into**: `apps/mobile/src/features/model-picker/components/ProviderLogo.tsx`
+- **Files/data derived from LobeHub Icons**:
+  - OpenAI provider mark path from `icons/openai.svg`
+  - Claude provider mark path from `icons/claude-color.svg`, used for Anthropic/Claude model rows
+  - Gemini provider mark path from `icons/gemini.svg`, used for Google/Gemini model rows
+  - Perplexity provider mark path from `icons/perplexity.svg`, used for Sonar model rows
+  - DeepSeek provider mark path from `icons/deepseek.svg`
+  - Grok provider mark path from `icons/grok.svg`, used for xAI/Grok model rows
+
+### MIT License (LobeHub Icons)
+
+```
+MIT License
+
+Copyright (c) 2023 LobeHub
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## Porting policy
 
 `scripts/check-licenses.mjs` (run via `pnpm check:licenses`) enforces this file:
