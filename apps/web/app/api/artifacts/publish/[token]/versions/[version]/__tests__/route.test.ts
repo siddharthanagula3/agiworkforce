@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/published-artifact-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -38,7 +39,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: mocks.getUserScopedDb,
 }));
 vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/published-artifact-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   readPublishedArtifactVersion: mocks.readPublishedArtifactVersion,
 }));
 

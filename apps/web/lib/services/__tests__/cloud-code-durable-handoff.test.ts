@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/cloud-code-session-service');
+type ScanModule1 = typeof import('@/lib/workflows/start-cloud-code-turn-workflow');
 
 const {
   mockGetSession,
@@ -38,7 +40,7 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
   resolveProviderFromModel: mockResolveProvider,
 }));
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cloud-code-session-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, getCloudCodeSession: mockGetSession, listCloudCodeAgentTurns: mockListTurns };
 });
 vi.mock('@/lib/services/cloud-code-durable-run', () => ({
@@ -50,8 +52,7 @@ vi.mock('@/lib/services/cloud-code-durable-run', () => ({
   CLOUD_CODE_RUN_WORK_MODE: 'agiwork',
 }));
 vi.mock('@/lib/workflows/start-cloud-code-turn-workflow', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/workflows/start-cloud-code-turn-workflow')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, startCloudCodeTurnWorkflow: mockStartWorkflow };
 });
 vi.mock('@/lib/workflows/cloud-code-turn-workflow', () => ({

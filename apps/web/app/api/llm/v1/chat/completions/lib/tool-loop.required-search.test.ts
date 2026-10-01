@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/web-search/web-search-tool');
+type ScanModule1 = typeof import('@/lib/web-search/perplexity-search-cost');
+type ScanModule2 = typeof import('@/lib/web-search/search-budget');
 
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('./tool-loop-anthropic', () => ({
@@ -15,9 +18,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 
 const mockExecuteWebSearch = vi.fn();
 vi.mock('@/lib/web-search/web-search-tool', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/web-search/web-search-tool')>(
-    '@/lib/web-search/web-search-tool',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/web-search/web-search-tool');
   return {
     ...actual,
     executeWebSearch: (...args: unknown[]) => mockExecuteWebSearch(...args),
@@ -27,16 +28,14 @@ vi.mock('@/lib/web-search/web-search-tool', async () => {
 
 const mockSettlePerplexitySearchCall = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock('@/lib/web-search/perplexity-search-cost', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/web-search/perplexity-search-cost')>()),
+  ...(await importOriginal<ScanModule1>()),
   settlePerplexitySearchCall: (...args: unknown[]) => mockSettlePerplexitySearchCall(...args),
 }));
 
 const mockResolveSearchBudget = vi.fn();
 const mockReserveSearchCharge = vi.fn();
 vi.mock('@/lib/web-search/search-budget', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/web-search/search-budget')>(
-    '@/lib/web-search/search-budget',
-  );
+  const actual = await vi.importActual<ScanModule2>('@/lib/web-search/search-budget');
   return {
     ...actual,
     resolveSearchBudget: (...args: unknown[]) => mockResolveSearchBudget(...args),

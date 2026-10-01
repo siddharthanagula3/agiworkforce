@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('node:fs');
 
 const readFileSync = vi.hoisted(() => vi.fn());
 
 vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, readFileSync };
 });
 

@@ -1,6 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/enterprise-funding-organization');
+type ScanModule1 = typeof import('@/lib/services/organization-policy-service');
+type ScanModule2 = typeof import('@/lib/services/cogs-ledger-service');
+type ScanModule3 = typeof import('@/lib/security-audit');
 
 vi.mock('server-only', () => ({}));
 
@@ -18,19 +22,19 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/services/enterprise-funding-organization', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/enterprise-funding-organization')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveEnterpriseFundingOrganizationId: mocks.fundingOrganization,
 }));
 vi.mock('@/lib/services/organization-policy-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-policy-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   readOrganizationPolicy: mocks.readOrganizationPolicy,
 }));
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   getOrganizationMonthToDateSpendCents: mocks.monthToDateSpend,
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule3>()),
   recordAuditEvent: vi.fn(async () => undefined),
 }));
 

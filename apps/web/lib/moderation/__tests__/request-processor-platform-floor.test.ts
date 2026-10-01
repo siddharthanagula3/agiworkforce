@@ -1,7 +1,8 @@
-
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getDefaultModelFor } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/managed-content-safety-service');
+type ScanModule1 = typeof import('@/lib/services/free-trial-service');
 
 const FREE_CHAT_MODEL = getDefaultModelFor('free', 'chat');
 
@@ -12,13 +13,12 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 
 vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-content-safety-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, enforceManagedContentSafetyPreference: safetyMocks.enforce };
 });
 
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/free-trial-service')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     beginFreeTrialRequest: vi.fn(async ({ userId, requestId }) => ({

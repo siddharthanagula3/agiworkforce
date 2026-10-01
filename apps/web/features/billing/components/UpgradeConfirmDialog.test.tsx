@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/ui');
 
 const paymentMocks = vi.hoisted(() => ({
   previewUpgrade: vi.fn(),
@@ -9,7 +10,7 @@ const paymentMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const { translateUiPlural } = await importOriginal<typeof import('@agiworkforce/ui')>();
+  const { translateUiPlural } = await importOriginal<ScanModule0>();
   const Passthrough = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   return {
     translateUiPlural,

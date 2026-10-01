@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/security-audit');
+type ScanModule1 = typeof import('@/lib/jobs/job-service');
 
 const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
@@ -26,7 +28,7 @@ vi.mock('@/lib/auth-guards', async (importOriginal) => ({
   requirePlatformAdmin: mocks.requirePlatformAdmin,
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
@@ -34,7 +36,7 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
   getNeonDb: () => ({ query: mocks.query, transaction: mocks.transaction }),
 }));
 vi.mock('@/lib/jobs/job-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/jobs/job-service')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     readJobQueueStats: mocks.readJobQueueStats,

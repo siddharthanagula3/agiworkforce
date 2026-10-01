@@ -16,6 +16,16 @@ import {
   jpegWithLocationBytes,
   onePixelPng,
 } from '@features/chat/lib/__tests__/picture-fixtures';
+type ScanModule0 = typeof import('next/navigation');
+type ScanModule1 = typeof import('@features/settings/components/SettingsModalProvider');
+type ScanModule2 = typeof import('@features/chat/hooks/use-skills-list');
+type ScanModule3 = typeof import('@features/chat/hooks/use-media-model-availability');
+type ScanModule4 = typeof import('@features/connectors/hooks/use-connectors');
+type ScanModule5 = typeof import('@/lib/runtime/memory-capability');
+type ScanModule6 = typeof import('./SlashCommandMenu');
+type ScanModule7 = typeof import('./SendButton');
+type ScanModule8 = typeof import('./ComposerFooter');
+type ScanModule9 = typeof import('./VoiceInputButton');
 
 const chatComposerMocks = vi.hoisted(() => ({
   skillResult: {
@@ -48,7 +58,7 @@ const chatComposerMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/navigation')>()),
+  ...(await importOriginal<ScanModule0>()),
   useRouter: () => ({
     push: chatComposerMocks.routerPush,
     replace: vi.fn(),
@@ -58,7 +68,7 @@ vi.mock('next/navigation', async (importOriginal) => ({
 }));
 
 vi.mock('@features/settings/components/SettingsModalProvider', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/settings/components/SettingsModalProvider')>()),
+  ...(await importOriginal<ScanModule1>()),
   useSettingsModal: () => ({
     isOpen: false,
     openSettings: chatComposerMocks.openSettings,
@@ -67,24 +77,24 @@ vi.mock('@features/settings/components/SettingsModalProvider', async (importOrig
 }));
 
 vi.mock('@features/chat/hooks/use-skills-list', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/chat/hooks/use-skills-list')>()),
+  ...(await importOriginal<ScanModule2>()),
   useSkillsList: () => ({
     ...chatComposerMocks.skillResult,
   }),
 }));
 
 vi.mock('@features/chat/hooks/use-media-model-availability', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/chat/hooks/use-media-model-availability')>()),
+  ...(await importOriginal<ScanModule3>()),
   useMediaModelAvailability: () => chatComposerMocks.mediaAvailability,
 }));
 
 vi.mock('@features/connectors/hooks/use-connectors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/connectors/hooks/use-connectors')>()),
+  ...(await importOriginal<ScanModule4>()),
   useConnectors: () => chatComposerMocks.connectors,
 }));
 
 vi.mock('@/lib/runtime/memory-capability', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/runtime/memory-capability')>()),
+  ...(await importOriginal<ScanModule5>()),
   isMemoryCapabilityEnabled: () => Promise.resolve(chatComposerMocks.memoryCapabilityEnabled),
   subscribeMemoryCapability: (listener: () => void) => {
     chatComposerMocks.memoryCapabilityListeners.add(listener);
@@ -95,12 +105,12 @@ vi.mock('@/lib/runtime/memory-capability', async (importOriginal) => ({
 }));
 
 vi.mock('./SlashCommandMenu', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./SlashCommandMenu')>()),
+  ...(await importOriginal<ScanModule6>()),
   SlashCommandMenu: () => null,
 }));
 
 vi.mock('./SendButton', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./SendButton')>()),
+  ...(await importOriginal<ScanModule7>()),
   SendButton: ({
     onClick,
     disabled,
@@ -117,12 +127,12 @@ vi.mock('./SendButton', async (importOriginal) => ({
 }));
 
 vi.mock('./ComposerFooter', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./ComposerFooter')>()),
+  ...(await importOriginal<ScanModule8>()),
   ComposerFooter: () => <div data-testid="composer-footer" />,
 }));
 
 vi.mock('./VoiceInputButton', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./VoiceInputButton')>()),
+  ...(await importOriginal<ScanModule9>()),
   VoiceInputButton: ({ disabled }: { disabled?: boolean }) => (
     <button type="button" aria-label="Voice input" disabled={disabled}>
       Voice

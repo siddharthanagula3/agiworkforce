@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { directoryEntry, SHA } from './fixtures';
+type ScanModule0 = typeof import('@/lib/services/plugin-submission-service');
 
 const mocks = vi.hoisted(() => ({
   findRecord: vi.fn(),
@@ -13,7 +14,7 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: async () => null,
 }));
 vi.mock('@/lib/services/plugin-submission-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/plugin-submission-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   listInstalledCommunityPlugins: async () => [],
   listCommunitySkillFiles: async () => [],
 }));

@@ -24,9 +24,10 @@ import { signInToAgiCloud } from '../features/account-auth/deviceAuth';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { manageMcpServers } from '../features/surfaces/capabilityManagement';
 import type { McpServerDetailsProvider } from '../features/surfaces/mcpServerDetails';
+type ScanModule0 = typeof import('../features/account-auth/deviceAuth');
 
 vi.mock('../features/account-auth/deviceAuth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../features/account-auth/deviceAuth')>()),
+  ...(await importOriginal<ScanModule0>()),
   signInToAgiCloud: vi.fn(async () => false),
 }));
 

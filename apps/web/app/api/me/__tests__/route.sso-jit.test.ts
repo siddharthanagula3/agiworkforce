@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/identity');
+type ScanModule1 = typeof import('@/lib/server/user-identity');
 
 vi.mock('server-only', () => ({}));
 
@@ -30,11 +32,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockGetClerkAuthUser }));
 vi.mock('@/lib/server/identity', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/identity')>()),
+  ...(await importOriginal<ScanModule0>()),
   getIdentityUser: mockGetIdentityUser,
 }));
 vi.mock('@/lib/server/user-identity', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/user-identity')>()),
+  ...(await importOriginal<ScanModule1>()),
   backfillProfileFromUpstream: mockBackfill,
 }));
 vi.mock('@/lib/server/sso/jit-provisioning', () => ({ provisionEnterpriseSignIn: mockProvision }));

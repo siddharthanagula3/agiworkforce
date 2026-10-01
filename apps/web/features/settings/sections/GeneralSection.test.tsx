@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { saveDisplayName, savePreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { GeneralSection } from './GeneralSection';
 import { ACCENT_COLORS } from '@shared/stores/web-settings-store';
+type ScanModule0 = typeof import('@shared/stores/web-settings-store');
 
 const mocks = vi.hoisted(() => ({
   fetchPreferences: vi.fn(),
@@ -61,7 +62,7 @@ vi.mock('@shared/stores/thinking-store', () => ({
 }));
 
 vi.mock('@shared/stores/web-settings-store', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/stores/web-settings-store')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ACCENT_COLORS: actual.ACCENT_COLORS,
     useSettingsStore: (selector: (state: unknown) => unknown) =>

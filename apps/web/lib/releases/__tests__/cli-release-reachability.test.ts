@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../github-desktop-releases');
 
 vi.mock('../github-desktop-releases', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../github-desktop-releases')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, fetchLatestDesktopRelease: vi.fn() };
 });
 

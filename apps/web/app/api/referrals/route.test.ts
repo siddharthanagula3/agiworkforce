@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import type { ReferralOverview } from '@/lib/services/referral-service';
+type ScanModule0 = typeof import('@/lib/server/rls-db');
+type ScanModule1 = typeof import('@/lib/rate-limit');
+type ScanModule2 = typeof import('@/lib/services/referral-service');
 
 const mocks = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
@@ -11,15 +14,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule1>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/services/referral-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/referral-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   getReferralOverview: mocks.getReferralOverview,
   recordReferrerNetwork: mocks.recordReferrerNetwork,
 }));

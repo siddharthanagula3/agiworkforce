@@ -2,6 +2,10 @@ import { NotificationTypeV2, Subtype } from '@apple/app-store-server-library';
 import { MOBILE_IAP_PRODUCT_DEFINITIONS } from '@agiworkforce/types';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/neon-db');
+type ScanModule1 = typeof import('@/lib/server/mobile-iap-store-verification');
+type ScanModule2 = typeof import('@/lib/server/mobile-iap-catalog');
+type ScanModule3 = typeof import('@/lib/services/mobile-iap-notification-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -19,19 +23,19 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   getNeonDb: () => ({ query: vi.fn(async () => []) }),
 }));
 vi.mock('@/lib/server/mobile-iap-store-verification', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/mobile-iap-store-verification')>()),
+  ...(await importOriginal<ScanModule1>()),
   verifyAppleStoreNotification: mocks.verify,
 }));
 vi.mock('@/lib/server/mobile-iap-catalog', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/mobile-iap-catalog')>()),
+  ...(await importOriginal<ScanModule2>()),
   resolveMobileIapProduct: mocks.product,
 }));
 vi.mock('@/lib/services/mobile-iap-notification-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/mobile-iap-notification-service')>()),
+  ...(await importOriginal<ScanModule3>()),
   processMobileIapLifecycleEvent: mocks.process,
 }));
 

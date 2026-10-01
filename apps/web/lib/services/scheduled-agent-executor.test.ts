@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/routing');
+type ScanModule1 = typeof import('@agiworkforce/types');
+type ScanModule2 = typeof import('@/lib/services/llm-cost-calculator');
+type ScanModule3 = typeof import('@agiworkforce/provider-protocol');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/routing')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     classifyTaskLocally: vi.fn(() => ({ type: 'general', confidence: 0.8 })),
@@ -10,7 +14,7 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => {
   };
 });
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     getSlotForModel: vi.fn(() => 'general_balanced_pro'),
@@ -41,7 +45,7 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   resolveManagedQuotaRecovery: vi.fn(),
 }));
 vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
+  ...(await importOriginal<ScanModule2>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),
@@ -65,7 +69,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: vi.fn(),
 }));
 vi.mock('@agiworkforce/provider-protocol', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/provider-protocol')>();
+  const actual = await importOriginal<ScanModule3>();
   return {
     ...actual,
     openAIWireRequestToChatRequest: vi.fn((value) => value),

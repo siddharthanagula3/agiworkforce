@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../runtimeEnvironment');
+type ScanModule1 = typeof import('../tauri-electron/bridgeContract');
 
 async function supportWhen(host: { isTauri: boolean; bridgeCarriesVerify: boolean }) {
   vi.resetModules();
   vi.doMock('../runtimeEnvironment', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('../runtimeEnvironment')>()),
+    ...(await importOriginal<ScanModule0>()),
     isTauri: host.isTauri,
   }));
   vi.doMock('../tauri-electron/bridgeContract', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('../tauri-electron/bridgeContract')>()),
+    ...(await importOriginal<ScanModule1>()),
     isElectronBridgeCommand: (command: string) =>
       host.bridgeCarriesVerify && command === 'dispatch_hmac_verify',
   }));

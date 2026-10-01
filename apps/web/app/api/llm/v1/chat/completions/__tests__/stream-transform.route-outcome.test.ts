@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule1 = typeof import('@agiworkforce/model-registry');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -9,7 +11,7 @@ vi.mock('@/lib/cors', () => ({
   getSecurityHeaders: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   finalizeManagedUsageRequest: vi.fn(() => Promise.resolve()),
   markManagedUsageClientDelivered: vi.fn(() => Promise.resolve()),
 }));
@@ -63,7 +65,7 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
 }));
 
 vi.mock('@agiworkforce/model-registry', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/model-registry')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, getRoutePricing: () => ({ cacheClass: 'gateway_prompt_cache' }) };
 });
 

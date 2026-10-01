@@ -1,8 +1,9 @@
 import { getDefaultModelFor, getModelMetadataById } from '@agiworkforce/types';
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/logger');
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
 

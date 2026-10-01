@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/types');
+type ScanModule1 = typeof import('@/features/chat/hooks/use-fast-mode-availability');
+type ScanModule2 = typeof import('@shared/config/llm');
+type ScanModule3 = typeof import('@agiworkforce/routing');
+type ScanModule4 = typeof import('@agiworkforce/ui');
+type ScanModule5 = typeof import('zustand/middleware');
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => undefined, replace: () => undefined }),
@@ -141,7 +147,7 @@ const REASONING_BY_MODEL = vi.hoisted(
 );
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  const actual = await importOriginal<ScanModule0>();
   const fastModel = actual.listCanonicalModels().find((model) => model.fastTier);
   if (!fastModel) throw new Error('The catalogue must declare a fast model');
   return {
@@ -152,7 +158,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
 });
 
 vi.mock('@/features/chat/hooks/use-fast-mode-availability', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/chat/hooks/use-fast-mode-availability')>()),
+  ...(await importOriginal<ScanModule1>()),
   useFastModeAvailability: () => ({ allowed: true, reason: null }),
 }));
 
@@ -189,7 +195,7 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 vi.mock('@shared/config/llm', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/config/llm')>();
+  const actual = await importOriginal<ScanModule2>();
   return {
     ...actual,
     getModelReasoning: (modelId: string) =>
@@ -274,12 +280,12 @@ vi.mock('@shared/stores/web-chat-store', () => ({
     selector({ activeConversationId: null, conversations: [], messages: [] }),
 }));
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/routing')>()),
+  ...(await importOriginal<ScanModule3>()),
   assessModelSwitchCache: () => ({ warn: false, resetsCache: false }),
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<ScanModule4>()),
   useConfirmAction: () => ({ confirm: () => undefined, dialog: null }),
   useMenuKeyboard: () => undefined,
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -338,7 +344,7 @@ vi.mock('@shared/components/ProviderMark', () => ({
 }));
 vi.mock('@shared/components/agi/AgiMark', () => ({ AgiMark: () => null }));
 vi.mock('zustand/middleware', async () => {
-  const actual = await vi.importActual<typeof import('zustand/middleware')>('zustand/middleware');
+  const actual = await vi.importActual<ScanModule5>('zustand/middleware');
   return { ...actual, persist: (config: (set: unknown) => unknown) => config };
 });
 

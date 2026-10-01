@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/identity-events');
+type ScanModule1 = typeof import('@/lib/server/session-revocation');
 
 vi.mock('server-only', () => ({}));
 
@@ -83,7 +85,7 @@ vi.mock('@/lib/server/identity', () => ({
   }),
 }));
 vi.mock('@/lib/services/identity-events', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/identity-events')>()),
+  ...(await importOriginal<ScanModule0>()),
   emitIdentitySecurityEvent: mocks.emitIdentitySecurityEvent,
 }));
 vi.mock('@/lib/support/tickets/service', () => ({
@@ -141,7 +143,7 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: mocks.query }),
 }));
 vi.mock('@/lib/server/session-revocation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/session-revocation')>()),
+  ...(await importOriginal<ScanModule1>()),
   revokeEveryOtherSession: mocks.revokeEveryOtherSession,
   finishIntentRevocation: mocks.finishIntentRevocation,
 }));

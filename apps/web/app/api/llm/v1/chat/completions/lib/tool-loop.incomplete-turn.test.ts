@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('./tool-loop-anthropic');
+type ScanModule1 = typeof import('@/lib/e2b/runtime');
 
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
 vi.mock('./tool-loop-anthropic', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./tool-loop-anthropic')>()),
+  ...(await importOriginal<ScanModule0>()),
   buildToolLoopStream: provider.stream,
   buildServingRouteId: (...args: unknown[]) => args.join(':'),
 }));
 vi.mock('@/lib/e2b/runtime', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/e2b/runtime')>()),
+  ...(await importOriginal<ScanModule1>()),
   getE2BExecutor: vi.fn().mockResolvedValue(null),
   pauseE2BSession: vi.fn().mockResolvedValue(undefined),
 }));

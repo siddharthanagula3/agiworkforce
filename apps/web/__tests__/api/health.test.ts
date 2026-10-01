@@ -5,6 +5,8 @@ import { NextRequest } from 'next/server';
 
 import { PRODUCTION_DEPENDENCIES } from '@/lib/config/dependency-readiness';
 import { recordConfigurationState } from '@/lib/observability/metrics';
+type ScanModule0 = typeof import('@agiworkforce/types');
+type ScanModule1 = typeof import('@/lib/server/key-value');
 
 const stripeMocks = vi.hoisted(() => ({
   retrievePrice: vi.fn(),
@@ -42,7 +44,7 @@ vi.mock('stripe', () => ({
 
 const mockNeonQuery = vi.fn().mockResolvedValue([{ '?column?': 1 }]);
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<ScanModule0>()),
   getDefaultModelFor: () => 'model-under-test',
   getModelMetadataById: () => ({ id: 'model-under-test' }),
   isModelLive: () => true,
@@ -65,7 +67,7 @@ vi.mock('@/lib/server/key-value', async (importOriginal) => {
   const { createMemoryKeyValueStore } = await import('@agiworkforce/key-value');
   const store = createMemoryKeyValueStore();
   return {
-    ...(await importOriginal<typeof import('@/lib/server/key-value')>()),
+    ...(await importOriginal<ScanModule1>()),
     getKeyValueStore: () => store,
   };
 });

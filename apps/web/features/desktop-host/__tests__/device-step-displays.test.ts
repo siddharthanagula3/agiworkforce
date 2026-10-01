@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/local-runtime-contract');
 
 const invokeRuntime = vi.fn();
 
 vi.mock('@agiworkforce/local-runtime-contract', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/local-runtime-contract')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, getHostBridge: () => ({ invokeRuntime }) };
 });
 

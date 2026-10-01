@@ -3,6 +3,38 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sessionRowActionFailureMessage } from '@shared/components/layout/sidebar-session-actions';
+type ScanModule0 = typeof import('sonner');
+type ScanModule1 = typeof import('next/navigation');
+type ScanModule2 = typeof import('react-i18next');
+type ScanModule3 = typeof import('@/app/settings/_lib/preferences-client');
+type ScanModule4 = typeof import('@/lib/hooks/useConversations');
+type ScanModule5 = typeof import('@/lib/hooks/useManagedUsageSummary');
+type ScanModule6 = typeof import('@/lib/hooks/useMediaGeneration');
+type ScanModule7 = typeof import('../../components/Composer/ChatComposerNew');
+type ScanModule8 = typeof import('../../components/messages/ChatMessageList');
+type ScanModule9 = typeof import('../../components/GreetingBanner/GreetingBanner');
+type ScanModule10 = typeof import('../../components/ChatStreamRuntimeProvider');
+type ScanModule11 = typeof import('../../hooks/use-artifact-cloud-sync');
+type ScanModule12 = typeof import('../../hooks/use-share-conversation');
+type ScanModule13 = typeof import('../../hooks/use-conversation-branches');
+type ScanModule14 = typeof import('../../hooks/use-keyboard-shortcuts');
+type ScanModule15 = typeof import('@shared/utils/browser-utils');
+type ScanModule16 = typeof import('@/features/settings/components/SettingsModalProvider');
+type ScanModule17 = typeof import('@/features/connectors/stores/tool-permissions-store');
+type ScanModule18 = typeof import('@features/projects');
+type ScanModule19 = typeof import('@features/projects/services/managed-cloud-projects');
+type ScanModule20 = typeof import('@agiworkforce/ui');
+type ScanModule21 = typeof import('@agiworkforce/unified-chat');
+type ScanModule22 = typeof import('../../components/dialogs/GlobalSearchDialog');
+type ScanModule23 = typeof import('../../components/dialogs/KeyboardShortcutsDialog');
+type ScanModule24 = typeof import('../../components/dialogs/CreateProjectDialog');
+type ScanModule25 = typeof import('../../components/dialogs/UpgradePlanDialog');
+type ScanModule26 = typeof import('@features/billing/components/UpgradeConfirmDialog');
+type ScanModule27 = typeof import('@/features/time-focus/TimeFocusReminder');
+type ScanModule28 = typeof import('../../components/approvals/ApprovalInbox');
+type ScanModule29 = typeof import('../../components/work-session/WorkSessionPanel');
+type ScanModule30 = typeof import('../../components/artifacts/ArtifactsPanel');
+type ScanModule31 = typeof import('@shared/components/agi/SidebarWordmark');
 
 const mocks = vi.hoisted(() => ({
   useKeyboardShortcuts: vi.fn(),
@@ -14,12 +46,12 @@ const CONVERSATION_ID = '00000000-0000-4000-8000-000000000931';
 
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('sonner', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('sonner')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, toast: Object.assign(vi.fn(), actual.toast, { error: toastError }) };
 });
 
 vi.mock('next/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/navigation')>()),
+  ...(await importOriginal<ScanModule1>()),
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
   useParams: () => ({ sessionId: CONVERSATION_ID }),
   useSearchParams: () => new URLSearchParams(),
@@ -38,7 +70,7 @@ vi.mock('@clerk/nextjs', async (importOriginal) => ({
 }));
 
 vi.mock('react-i18next', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-i18next')>();
+  const actual = await importOriginal<ScanModule2>();
   return {
     ...actual,
     useTranslation: () => ({
@@ -53,7 +85,7 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await importOriginal<ScanModule3>()),
   fetchPreferenceNamespace: async () => ({ browserReplyReady: true }),
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
 }));
@@ -61,7 +93,7 @@ vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
 vi.mock('@/lib/hooks/useConversations', async (importOriginal) => {
   const { useChatStore } = await import('@shared/stores/web-chat-store');
   return {
-    ...(await importOriginal<typeof import('@/lib/hooks/useConversations')>()),
+    ...(await importOriginal<ScanModule4>()),
     useConversations: () => ({
       conversations: useChatStore((state) => state.conversations),
       isLoading: false,
@@ -75,14 +107,14 @@ vi.mock('@/lib/hooks/useConversations', async (importOriginal) => {
 });
 
 vi.mock('@/lib/hooks/useManagedUsageSummary', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/hooks/useManagedUsageSummary')>()),
+  ...(await importOriginal<ScanModule5>()),
   getWorstUsagePercent: () => 0,
   readManagedUsageBuckets: () => [],
   useManagedUsageSummary: () => ({ usage: null }),
 }));
 
 vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/hooks/useMediaGeneration')>();
+  const actual = await importOriginal<ScanModule6>();
   return {
     ...actual,
     useMediaGeneration: () => ({
@@ -95,20 +127,20 @@ vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
 });
 
 vi.mock('../../components/Composer/ChatComposerNew', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/Composer/ChatComposerNew')>()),
+  ...(await importOriginal<ScanModule7>()),
   ChatComposerNew: () => null,
   SEND_GUARD_BLOCKED: 'fixture-send-guard-blocked',
 }));
 vi.mock('../../components/messages/ChatMessageList', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/messages/ChatMessageList')>()),
+  ...(await importOriginal<ScanModule8>()),
   ChatMessageList: () => <div data-testid="message-list" />,
 }));
 vi.mock('../../components/GreetingBanner/GreetingBanner', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/GreetingBanner/GreetingBanner')>()),
+  ...(await importOriginal<ScanModule9>()),
   GreetingBanner: () => null,
 }));
 vi.mock('../../components/ChatStreamRuntimeProvider', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/ChatStreamRuntimeProvider')>()),
+  ...(await importOriginal<ScanModule10>()),
   useChatStreamRuntime: () => ({
     sendMessage: vi.fn(),
     stopGeneration: vi.fn(),
@@ -117,15 +149,15 @@ vi.mock('../../components/ChatStreamRuntimeProvider', async (importOriginal) => 
   }),
 }));
 vi.mock('../../hooks/use-artifact-cloud-sync', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../hooks/use-artifact-cloud-sync')>()),
+  ...(await importOriginal<ScanModule11>()),
   useArtifactCloudSync: vi.fn(),
 }));
 vi.mock('../../hooks/use-share-conversation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../hooks/use-share-conversation')>()),
+  ...(await importOriginal<ScanModule12>()),
   useShareConversation: () => ({ share: vi.fn(), isSharing: false }),
 }));
 vi.mock('../../hooks/use-conversation-branches', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../hooks/use-conversation-branches')>()),
+  ...(await importOriginal<ScanModule13>()),
   useConversationBranches: () => ({
     groupsByMessageId: {},
     branchingMessageId: null,
@@ -134,26 +166,22 @@ vi.mock('../../hooks/use-conversation-branches', async (importOriginal) => ({
   }),
 }));
 vi.mock('../../hooks/use-keyboard-shortcuts', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../hooks/use-keyboard-shortcuts')>();
+  const actual = await importOriginal<ScanModule14>();
   return { ...actual, useKeyboardShortcuts: mocks.useKeyboardShortcuts };
 });
 vi.mock('@shared/utils/browser-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/utils/browser-utils')>();
+  const actual = await importOriginal<ScanModule15>();
   return { ...actual, safeClipboard: { ...actual.safeClipboard, writeText: mocks.writeText } };
 });
 
 vi.mock('@/features/settings/components/SettingsModalProvider', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/features/settings/components/SettingsModalProvider')
-  >()),
+  ...(await importOriginal<ScanModule16>()),
   useSettingsModal: () => ({ openSettings: vi.fn() }),
 }));
 vi.mock('@/features/connectors/stores/tool-permissions-store', async (importOriginal) => {
   const state = { hydrateFromServer: vi.fn() };
   return {
-    ...(await importOriginal<
-      typeof import('@/features/connectors/stores/tool-permissions-store')
-    >()),
+    ...(await importOriginal<ScanModule17>()),
     useToolPermissionsStore: Object.assign(
       (selector: (value: typeof state) => unknown) => selector(state),
       { getState: () => state },
@@ -171,14 +199,14 @@ vi.mock('@features/projects', async (importOriginal) => {
     setProjects: vi.fn(),
   };
   return {
-    ...(await importOriginal<typeof import('@features/projects')>()),
+    ...(await importOriginal<ScanModule18>()),
     useManagedCloudProjects: () => ({ projects: [], isReady: true }),
     useProjectStore: (selector: (value: typeof projectState) => unknown) => selector(projectState),
     ProjectSettingsDialog: () => null,
   };
 });
 vi.mock('@features/projects/services/managed-cloud-projects', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/projects/services/managed-cloud-projects')>()),
+  ...(await importOriginal<ScanModule19>()),
   webManagedCloudProjects: {
     updateProject: vi.fn(),
     deleteProject: vi.fn(),
@@ -187,11 +215,11 @@ vi.mock('@features/projects/services/managed-cloud-projects', async (importOrigi
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  const actual = await importOriginal<ScanModule20>();
   return { ...actual, Sidebar: () => <nav data-testid="chat-sidebar" /> };
 });
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<ScanModule21>();
   return {
     ...actual,
     LocalByokHandoffDialog: () => null,
@@ -200,41 +228,41 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
 });
 
 vi.mock('../../components/dialogs/GlobalSearchDialog', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/dialogs/GlobalSearchDialog')>()),
+  ...(await importOriginal<ScanModule22>()),
   GlobalSearchDialog: () => null,
 }));
 vi.mock('../../components/dialogs/KeyboardShortcutsDialog', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/dialogs/KeyboardShortcutsDialog')>()),
+  ...(await importOriginal<ScanModule23>()),
   KeyboardShortcutsDialog: () => null,
 }));
 vi.mock('../../components/dialogs/CreateProjectDialog', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/dialogs/CreateProjectDialog')>()),
+  ...(await importOriginal<ScanModule24>()),
   CreateProjectDialog: () => null,
 }));
 vi.mock('../../components/dialogs/UpgradePlanDialog', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/dialogs/UpgradePlanDialog')>()),
+  ...(await importOriginal<ScanModule25>()),
   UpgradePlanDialog: () => null,
 }));
 vi.mock('@features/billing/components/UpgradeConfirmDialog', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/billing/components/UpgradeConfirmDialog')>()),
+  ...(await importOriginal<ScanModule26>()),
   UpgradeConfirmDialog: () => null,
 }));
 vi.mock('@/features/time-focus/TimeFocusReminder', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/time-focus/TimeFocusReminder')>()),
+  ...(await importOriginal<ScanModule27>()),
   TimeFocusReminder: () => null,
 }));
 vi.mock('../../components/approvals/ApprovalInbox', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/approvals/ApprovalInbox')>()),
+  ...(await importOriginal<ScanModule28>()),
   ApprovalInbox: () => null,
 }));
 vi.mock('../../components/work-session/WorkSessionPanel', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/work-session/WorkSessionPanel')>()),
+  ...(await importOriginal<ScanModule29>()),
   hasWorkSession: () => false,
   WorkSessionPanel: () => null,
   WorkSessionToggleButton: () => null,
 }));
 vi.mock('../../components/artifacts/ArtifactsPanel', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/artifacts/ArtifactsPanel')>()),
+  ...(await importOriginal<ScanModule30>()),
   ArtifactsPanel: () => <aside data-testid="artifacts-panel" />,
   ArtifactsToggleButton: () => null,
 }));
@@ -246,7 +274,7 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
   ResearchToggleButton: () => null,
 }));
 vi.mock('@shared/components/agi/SidebarWordmark', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/components/agi/SidebarWordmark')>()),
+  ...(await importOriginal<ScanModule31>()),
   SidebarWordmark: () => null,
 }));
 

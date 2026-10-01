@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/security-audit');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/server/rls-db', () => ({

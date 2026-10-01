@@ -4,11 +4,20 @@
 // managed turn in production takes.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('@/lib/feature-flags/flag-evaluation-service');
+type ScanModule2 = typeof import('@/lib/feature-flags/flag-store');
+type ScanModule3 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-schema-loader');
+type ScanModule4 = typeof import('../questions/connector-tool-shortlist');
+type ScanModule5 = typeof import('../questions/memory-relevance');
+type ScanModule6 = typeof import('../questions/memory-worth-extracting');
+type ScanModule7 = typeof import('../questions/turn-signals');
+type ScanModule8 = typeof import('../trace-service');
 
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -25,23 +34,19 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/feature-flags/flag-evaluation-service', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/lib/feature-flags/flag-evaluation-service')
-  >('@/lib/feature-flags/flag-evaluation-service');
+  const actual = await vi.importActual<ScanModule1>('@/lib/feature-flags/flag-evaluation-service');
   return { ...actual, evaluateFlagsForSubject: () => mocks.evaluateFlagsForSubject() };
 });
 
 vi.mock('@/lib/feature-flags/flag-store', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/feature-flags/flag-store')>(
-    '@/lib/feature-flags/flag-store',
-  );
+  const actual = await vi.importActual<ScanModule2>('@/lib/feature-flags/flag-store');
   return { ...actual, getActiveFlagDefinitions: () => mocks.getActiveFlagDefinitions() };
 });
 
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-schema-loader', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/app/api/llm/v1/chat/completions/lib/tool-schema-loader')
-  >('@/app/api/llm/v1/chat/completions/lib/tool-schema-loader');
+  const actual = await vi.importActual<ScanModule3>(
+    '@/app/api/llm/v1/chat/completions/lib/tool-schema-loader',
+  );
   return {
     ...actual,
     selectToolSchemas: (input: unknown) =>
@@ -51,23 +56,17 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-schema-loader', async () => 
 });
 
 vi.mock('../questions/connector-tool-shortlist', async () => {
-  const actual = await vi.importActual<typeof import('../questions/connector-tool-shortlist')>(
-    '../questions/connector-tool-shortlist',
-  );
+  const actual = await vi.importActual<ScanModule4>('../questions/connector-tool-shortlist');
   return { ...actual, buildToolShortlistRequest: () => mocks.buildToolShortlistRequest() };
 });
 
 vi.mock('../questions/memory-relevance', async () => {
-  const actual = await vi.importActual<typeof import('../questions/memory-relevance')>(
-    '../questions/memory-relevance',
-  );
+  const actual = await vi.importActual<ScanModule5>('../questions/memory-relevance');
   return { ...actual, buildMemoryRelevanceRequest: () => mocks.buildMemoryRelevanceRequest() };
 });
 
 vi.mock('../questions/memory-worth-extracting', async () => {
-  const actual = await vi.importActual<typeof import('../questions/memory-worth-extracting')>(
-    '../questions/memory-worth-extracting',
-  );
+  const actual = await vi.importActual<ScanModule6>('../questions/memory-worth-extracting');
   return {
     ...actual,
     buildMemoryWorthExtractingRequest: () => mocks.buildMemoryWorthExtractingRequest(),
@@ -75,14 +74,12 @@ vi.mock('../questions/memory-worth-extracting', async () => {
 });
 
 vi.mock('../questions/turn-signals', async () => {
-  const actual = await vi.importActual<typeof import('../questions/turn-signals')>(
-    '../questions/turn-signals',
-  );
+  const actual = await vi.importActual<ScanModule7>('../questions/turn-signals');
   return { ...actual, buildTurnSignalsRequest: () => mocks.buildTurnSignalsRequest() };
 });
 
 vi.mock('../trace-service', async () => {
-  const actual = await vi.importActual<typeof import('../trace-service')>('../trace-service');
+  const actual = await vi.importActual<ScanModule8>('../trace-service');
   return {
     ...actual,
     persistSemanticDecisionTraces: (traces: unknown) => mocks.persistSemanticDecisionTraces(traces),

@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/active-workspace-service');
+type ScanModule1 = typeof import('@/lib/connectors/mcp-directory-targets');
+type ScanModule2 = typeof import('@/lib/connectors/mcp-custom-connections');
 
 const mocks = vi.hoisted(() => ({
   target: null as Record<string, unknown> | null,
@@ -33,7 +36,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveActiveOrganizationId: (...args: unknown[]) => mocks.activeOrganization(...args),
 }));
 vi.mock('@/lib/security-audit', () => ({
@@ -60,14 +63,14 @@ vi.mock('@/lib/user-connector-tools', () => ({
   findUserCustomConnectorByUrl: (...args: unknown[]) => mocks.customByUrl(...args),
 }));
 vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/mcp-directory-targets')>()),
+  ...(await importOriginal<ScanModule1>()),
   resolveDirectoryTarget: async () => mocks.target,
 }));
 vi.mock('@/lib/connectors/mcp-credential-spec', () => ({
   resolveConnectorCredentialSpec: (...args: unknown[]) => mocks.spec(...args),
 }));
 vi.mock('@/lib/connectors/mcp-custom-connections', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/mcp-custom-connections')>()),
+  ...(await importOriginal<ScanModule2>()),
   probeMcpServer: (...args: unknown[]) => mocks.probe(...args),
   insertCustomConnector: (...args: unknown[]) => mocks.insertCustom(...args),
   updateCustomConnectorCredential: (...args: unknown[]) => mocks.updateCredential(...args),

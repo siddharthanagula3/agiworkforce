@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ObjectStore } from '@agiworkforce/object-storage';
+type ScanModule0 = typeof import('./object-storage-runtime');
 
 const headMock = vi.hoisted(() => vi.fn());
 const getStreamMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./object-storage-runtime', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./object-storage-runtime')>();
+  const actual = await importOriginal<ScanModule0>();
   const store: Pick<ObjectStore, 'head' | 'getStream'> = {
     head: headMock,
     getStream: getStreamMock,

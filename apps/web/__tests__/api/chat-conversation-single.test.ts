@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/server/neon-chat');
 
 const CHAT_MODEL = requireProviderDefaultModel('openai');
 
@@ -36,7 +37,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/server/neon-chat', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-chat')>()),
+  ...(await importOriginal<ScanModule0>()),
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 

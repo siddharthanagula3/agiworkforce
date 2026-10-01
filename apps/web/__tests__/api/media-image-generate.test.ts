@@ -1,6 +1,16 @@
 import { createHash } from 'node:crypto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/media-storage');
+type ScanModule1 = typeof import('@agiworkforce/types');
+type ScanModule2 = typeof import('@/lib/errors');
+type ScanModule3 = typeof import('@/lib/error-handler');
+type ScanModule4 = typeof import('@/lib/server/media-assets');
+type ScanModule5 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule6 = typeof import('@/lib/services/cogs-ledger-service');
+type ScanModule7 = typeof import('next/server');
+type ScanModule8 = typeof import('@/lib/server/image-generation-jobs');
+type ScanModule9 = typeof import('@/lib/jobs/job-service');
 
 const imageRouteFixtures = vi.hoisted(() => ({
   liveGeminiModelId: '',
@@ -27,14 +37,14 @@ const mediaPersistenceMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/media-storage')>()),
+  ...(await importOriginal<ScanModule0>()),
   isImageStorageConfigured: mediaPersistenceMocks.storageConfigured,
   storeMedia: mediaPersistenceMocks.storeMedia,
   deleteStoredMedia: mediaPersistenceMocks.deleteStoredMedia,
 }));
 
 vi.mock('@agiworkforce/types', async () => {
-  const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  const actual = await vi.importActual<ScanModule1>('@agiworkforce/types');
   const liveGeminiImageModel = actual
     .getModels({ modelTypes: ['image'], requireCapabilities: { imageGen: true } })
     .find(
@@ -176,7 +186,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 vi.mock('@/lib/errors', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
+  const actual = await vi.importActual<ScanModule2>('@/lib/errors');
   return {
     createError: actual.createError,
     AppError: actual.AppError,
@@ -185,7 +195,7 @@ vi.mock('@/lib/errors', async () => {
 });
 
 vi.mock('@/lib/error-handler', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/error-handler')>('@/lib/error-handler');
+  const actual = await vi.importActual<ScanModule3>('@/lib/error-handler');
   return { withErrorHandler: actual.withErrorHandler, handleError: actual.handleError };
 });
 
@@ -231,12 +241,12 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => rlsMocks.getUserScopedDb(...args),
 }));
 vi.mock('@/lib/server/media-assets', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/media-assets')>()),
+  ...(await importOriginal<ScanModule4>()),
   isMediaAssetStoreReady: mediaAssetReadinessMocks.ready,
   insertMediaAssetsAtomically: mediaAssetReadinessMocks.insertAtomically,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule5>()),
   reserveManagedUsageRequest: managedUsageMocks.reserve,
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   finalizeManagedUsageRequest: managedUsageMocks.finalize,
@@ -245,13 +255,13 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 
 const cogsMocks = vi.hoisted(() => ({ recordSettledProviderCost: vi.fn(async () => undefined) }));
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>()),
+  ...(await importOriginal<ScanModule6>()),
   recordSettledProviderCost: cogsMocks.recordSettledProviderCost,
 }));
 
 const afterCallbacks = vi.hoisted(() => [] as Array<() => unknown>);
 vi.mock('next/server', async () => {
-  const actual = await vi.importActual<typeof import('next/server')>('next/server');
+  const actual = await vi.importActual<ScanModule7>('next/server');
   return {
     ...actual,
     after: (callback: () => unknown) => {
@@ -272,7 +282,7 @@ const imageJobMocks = vi.hoisted(() => ({
   fail: vi.fn(),
 }));
 vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/image-generation-jobs')>()),
+  ...(await importOriginal<ScanModule8>()),
   isImageJobStoreReady: (...args: unknown[]) => imageJobMocks.storeReady(...args),
   createImageGenerationJob: (...args: unknown[]) => imageJobMocks.create(...args),
   claimImageGenerationJobAttempt: (...args: unknown[]) => imageJobMocks.claim(...args),
@@ -282,7 +292,7 @@ vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => ({
 
 const jobQueueMocks = vi.hoisted(() => ({ enqueue: vi.fn() }));
 vi.mock('@/lib/jobs/job-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/jobs/job-service')>()),
+  ...(await importOriginal<ScanModule9>()),
   enqueueJob: (...args: unknown[]) => jobQueueMocks.enqueue(...args),
 }));
 

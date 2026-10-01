@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../../../api/voice');
 
 const voiceApiMock = vi.hoisted(() => ({
   voiceTtsSpeakWithBargeIn: vi.fn(async () => undefined),
@@ -7,7 +8,7 @@ const voiceApiMock = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../api/voice', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../api/voice')>()),
+  ...(await importOriginal<ScanModule0>()),
   ...voiceApiMock,
 }));
 

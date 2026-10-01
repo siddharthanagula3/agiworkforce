@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/security-audit');
 
 vi.mock('server-only', () => ({}));
 
@@ -16,7 +17,7 @@ vi.mock('@/lib/services/organization-policy-gate', () => ({
   resolveIpAllowListPolicy: mocks.resolveIpAllowListPolicy,
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/security-audit')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, recordAuditEvent: mocks.recordAuditEvent };
 });
 

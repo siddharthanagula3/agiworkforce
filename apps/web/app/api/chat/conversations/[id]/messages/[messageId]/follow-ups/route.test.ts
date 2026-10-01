@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('../../lib/generate-follow-ups');
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const MESSAGE_ID = '22222222-2222-4222-8222-222222222222';
@@ -30,7 +31,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
 }));
 vi.mock('../../lib/generate-follow-ups', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../lib/generate-follow-ups')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     generateFollowUpSuggestions: (...args: unknown[]) => mocks.generate(...(args as [])),

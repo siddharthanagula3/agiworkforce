@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/cloud-code-turn-reaper');
 
 const { mockVerifyCron, mockGetNeonDb, mockReap } = vi.hoisted(() => ({
   mockVerifyCron: vi.fn(),
@@ -14,7 +15,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mockVerifyCron }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mockGetNeonDb }));
 vi.mock('@/lib/services/cloud-code-turn-reaper', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cloud-code-turn-reaper')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, reapStuckCloudCodeTurns: mockReap };
 });
 

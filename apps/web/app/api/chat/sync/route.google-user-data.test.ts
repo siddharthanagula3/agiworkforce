@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/rls-db');
+type ScanModule1 = typeof import('@/lib/csrf');
+type ScanModule2 = typeof import('@/lib/rate-limit');
+type ScanModule3 = typeof import('@/app/api/chat/conversations/[id]/messages/lib/index-artifacts');
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const MESSAGE_ID = '33333333-3333-4333-8333-333333333333';
@@ -27,23 +31,21 @@ const db = {
 };
 
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   getUserScopedDb: vi.fn(async () => ({ db, userId: USER_ID, organizationId: null })),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule1>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule2>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock(
   '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts',
   async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import('@/app/api/chat/conversations/[id]/messages/lib/index-artifacts')
-    >()),
+    ...(await importOriginal<ScanModule3>()),
     scheduleArtifactIndexing: vi.fn(),
   }),
 );

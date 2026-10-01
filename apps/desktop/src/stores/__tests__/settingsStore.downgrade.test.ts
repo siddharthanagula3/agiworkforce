@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { settingsBackupKey, useSettingsStore } from '../settingsStore';
+type ScanModule0 = typeof import('../../lib/tauri-mock');
 
 vi.mock('../../lib/tauri-mock', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/tauri-mock')>()),
+  ...(await importOriginal<ScanModule0>()),
   invoke: vi.fn().mockResolvedValue(undefined),
   isTauriContext: vi.fn(() => false),
 }));

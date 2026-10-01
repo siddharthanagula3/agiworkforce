@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getDefaultModelFor } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/server/rls-db');
+type ScanModule1 = typeof import('@/lib/services/managed-content-safety-service');
+type ScanModule2 = typeof import('./chat-attachment-hydration');
+type ScanModule3 = typeof import('@/lib/services/managed-memory-context-service');
+type ScanModule4 = typeof import('@/lib/server/user-identity');
+type ScanModule5 = typeof import('@/app/api/chat/conversations/[id]/messages/lib/persist-message');
+type ScanModule6 = typeof import('@/lib/services/free-trial-service');
 
 const FREE_CHAT_MODEL = getDefaultModelFor('free', 'chat');
 
@@ -18,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   getUserScopedDb: vi.fn(async () => ({
     db: { query: mocks.scopedQuery },
     userId: 'user-free',
@@ -26,37 +33,35 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-content-safety-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   enforceManagedContentSafetyPreference: mocks.enforceSafety,
 }));
 
 vi.mock('./chat-attachment-hydration', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./chat-attachment-hydration')>()),
+  ...(await importOriginal<ScanModule2>()),
   hydrateChatAttachments: mocks.hydrate,
 }));
 
 vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-memory-context-service')>()),
+  ...(await importOriginal<ScanModule3>()),
   loadManagedMemoryPolicy: mocks.loadPolicy,
 }));
 
 vi.mock('@/lib/server/user-identity', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/user-identity')>()),
+  ...(await importOriginal<ScanModule4>()),
   buildCustomInstructionsPreamble: mocks.customInstructions,
 }));
 
 vi.mock(
   '@/app/api/chat/conversations/[id]/messages/lib/persist-message',
   async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import('@/app/api/chat/conversations/[id]/messages/lib/persist-message')
-    >()),
+    ...(await importOriginal<ScanModule5>()),
     persistConversationMessage: mocks.persistMessage,
   }),
 );
 
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/free-trial-service')>()),
+  ...(await importOriginal<ScanModule6>()),
   beginFreeTrialRequest: mocks.beginFree,
   applyFreeTrialProviderBudget: mocks.fitFree,
   settleFreeTrialRequest: mocks.settleFree,

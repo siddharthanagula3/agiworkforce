@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@shared/utils/env');
 
 vi.mock('server-only', () => ({}));
 
@@ -20,7 +21,7 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'team-owner' })),
 }));
 vi.mock('@shared/utils/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/utils/env')>()),
+  ...(await importOriginal<ScanModule0>()),
   requireEnv: vi.fn(() => 'sk_test_dummy'),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({

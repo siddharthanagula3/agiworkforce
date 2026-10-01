@@ -1,10 +1,11 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+type ScanModule0 = typeof import('../../lib/tauri-mock');
 
 const { listenMock } = vi.hoisted(() => ({ listenMock: vi.fn() }));
 
 vi.mock('../../lib/tauri-mock', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../lib/tauri-mock')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, listen: listenMock };
 });
 

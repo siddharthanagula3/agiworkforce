@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/security-audit');
+type ScanModule1 = typeof import('@/lib/services/organization-permission-service');
+type ScanModule2 = typeof import('@/lib/connectors/mcp-custom-connections');
 
 vi.mock('server-only', () => ({}));
 
@@ -24,15 +27,14 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({ query: mocks.query })) }));
 vi.mock('@/lib/security-audit', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/security-audit')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, recordAuditEvent: mocks.recordAuditEvent };
 });
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: vi.fn(async () => ({ plan: 'team', canManageTeam: true })),
 }));
 vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/organization-permission-service')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     resolveOrganizationAccess: vi.fn(async () => ({
@@ -46,7 +48,7 @@ vi.mock('@/lib/services/connector-policy-service', () => ({
   readConnectorPolicy: mocks.readConnectorPolicy,
 }));
 vi.mock('@/lib/connectors/mcp-custom-connections', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/connectors/mcp-custom-connections')>();
+  const actual = await importOriginal<ScanModule2>();
   return { ...actual, probeMcpServer: mocks.probe };
 });
 

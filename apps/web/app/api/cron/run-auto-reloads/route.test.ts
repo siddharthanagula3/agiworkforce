@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/auto-reload-service');
 
 const mocks = vi.hoisted(() => ({
   sweepAutoReloads: vi.fn(),
@@ -7,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/auto-reload-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/auto-reload-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   sweepAutoReloads: mocks.sweepAutoReloads,
 }));
 

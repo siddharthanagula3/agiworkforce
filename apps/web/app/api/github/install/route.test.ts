@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('next/headers');
+type ScanModule1 = typeof import('@/lib/rate-limit');
+type ScanModule2 = typeof import('@/lib/api-auth');
+type ScanModule3 = typeof import('@/lib/server/neon-db');
+type ScanModule4 = typeof import('@/lib/logger');
+type ScanModule5 = typeof import('@/lib/github-app');
+type ScanModule6 = typeof import('@/lib/github-install-app-return');
 
 const mocks = vi.hoisted(() => ({
   execute: vi.fn(async (..._args: unknown[]) => undefined),
@@ -19,29 +26,29 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('next/headers', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/headers')>()),
+  ...(await importOriginal<ScanModule0>()),
   cookies: vi.fn(async () => ({
     get: (name: string) => mocks.cookieGet(name),
     set: (options: unknown) => mocks.cookieSet(options),
   })),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule1>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule2>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'attacker-user' })),
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule3>()),
   getNeonDb: vi.fn(() => ({
     execute: (...args: unknown[]) => mocks.execute(...args),
   })),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule4>()),
   logger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -50,7 +57,7 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
   },
 }));
 vi.mock('@/lib/github-app', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/github-app')>()),
+  ...(await importOriginal<ScanModule5>()),
   generateGitHubInstallState: () => mocks.generateState(),
   getGitHubUserAuthorizationUrl: (state: string, redirectUri: string, challenge?: string) =>
     challenge === undefined
@@ -60,7 +67,7 @@ vi.mock('@/lib/github-app', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/github-install-app-return', async (importActual) => ({
-  ...(await importActual<typeof import('@/lib/github-install-app-return')>()),
+  ...(await importActual<ScanModule6>()),
   recordAppInstallation: (...args: unknown[]) => mocks.recordAppInstallation(...args),
 }));
 

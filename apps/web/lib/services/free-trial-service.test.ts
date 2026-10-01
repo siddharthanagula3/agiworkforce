@@ -4,6 +4,7 @@ import {
   listCanonicalModels,
   MICROUSD_PER_CREDIT,
 } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/cogs-ledger-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -34,7 +35,7 @@ vi.mock('@/lib/logger', () => ({ logger }));
 
 const recordSettledProviderCost = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordSettledProviderCost,
 }));
 

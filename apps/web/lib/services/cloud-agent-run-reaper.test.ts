@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('./cloud-agent-run-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -7,9 +8,7 @@ import { listCanonicalModels } from '@agiworkforce/types';
 import { WORKFLOW_WORLD_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
 const appendEvents = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock('./cloud-agent-run-service', async () => {
-  const actual = await vi.importActual<typeof import('./cloud-agent-run-service')>(
-    './cloud-agent-run-service',
-  );
+  const actual = await vi.importActual<ScanModule0>('./cloud-agent-run-service');
   return {
     EXECUTOR_HELD_TASK_STATES: actual.EXECUTOR_HELD_TASK_STATES,
     HUMAN_HELD_TASK_STATES: actual.HUMAN_HELD_TASK_STATES,

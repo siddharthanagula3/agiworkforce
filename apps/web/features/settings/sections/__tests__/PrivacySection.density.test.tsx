@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PRODUCT_ANALYTICS_CONSENT_PATH } from '@agiworkforce/types';
 import React from 'react';
+type ScanModule0 = typeof import('@agiworkforce/ui');
+type ScanModule1 = typeof import('@/lib/sentry-shared');
 
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
@@ -13,7 +15,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<ScanModule0>()),
   Switch: ({
     checked,
     onCheckedChange,
@@ -48,7 +50,7 @@ vi.mock('@shared/stores/web-chat-store', () => ({
 }));
 
 vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/sentry-shared')>()),
+  ...(await importOriginal<ScanModule1>()),
   setTelemetryConsentCache: vi.fn(),
 }));
 

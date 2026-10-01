@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SecurityOperationsPanel from './SecurityOperationsPanel';
+type ScanModule0 = typeof import('@agiworkforce/ui');
+type ScanModule1 = typeof import('../services/admin-security-client');
 
 const mocks = vi.hoisted(() => ({
   getToken: vi.fn(),
@@ -14,7 +16,7 @@ const confirmStub = vi.hoisted(() => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<ScanModule0>()),
   useConfirm: () => confirmStub,
 }));
 
@@ -23,7 +25,7 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 
 vi.mock('../services/admin-security-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../services/admin-security-client')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     fetchAdminSecurityOperations: mocks.fetchOperations,

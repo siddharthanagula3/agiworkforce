@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../composerFocus');
+type ScanModule1 = typeof import('../quickAsk');
+type ScanModule2 = typeof import('../garnishCore');
 
 type ClipboardEntry = { kind: 'text'; value: string } | { kind: 'image' } | { kind: 'cleared' };
 
@@ -51,16 +54,16 @@ vi.mock('electron', () => ({
 }));
 
 vi.mock('../composerFocus', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../composerFocus')>()),
+  ...(await importOriginal<ScanModule0>()),
   focusPageComposer: composerFocused,
 }));
 vi.mock('../quickAsk', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../quickAsk')>()),
+  ...(await importOriginal<ScanModule1>()),
   hideQuickAsk: vi.fn(),
   isQuickAskVisible: () => false,
 }));
 vi.mock('../garnishCore', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../garnishCore')>()),
+  ...(await importOriginal<ScanModule2>()),
   pickSourceForDisplay: (sources: unknown[]) => sources[0] ?? null,
 }));
 

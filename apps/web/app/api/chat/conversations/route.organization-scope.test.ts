@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 
 const PERSONAL_CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const ORG_CONVERSATION_ID = '22222222-2222-4222-8222-222222222222';
@@ -35,7 +36,7 @@ const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
   mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
 }));
 vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
 }));
 

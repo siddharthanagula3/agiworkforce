@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+type ScanModule0 = typeof import('@shared/components/layout/Header');
+type ScanModule1 = typeof import('@/features/marketing/components/MarketingFooter');
+type ScanModule2 = typeof import('@/lib/github-app');
+type ScanModule3 = typeof import('@/lib/github-install-app-return');
 
 const mocks = vi.hoisted(() => ({
   requester: vi.fn(async (..._args: unknown[]): Promise<string | null> => 'm***@example.com'),
@@ -8,20 +12,20 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@shared/components/layout/Header', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/components/layout/Header')>()),
+  ...(await importOriginal<ScanModule0>()),
   Header: () => null,
 }));
 vi.mock('@/features/marketing/components/MarketingFooter', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/marketing/components/MarketingFooter')>()),
+  ...(await importOriginal<ScanModule1>()),
   MarketingFooter: () => null,
 }));
 vi.mock('@/lib/github-app', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/github-app')>()),
+  ...(await importOriginal<ScanModule2>()),
   isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
   getGitHubAppInstallUrl: () => 'https://github.com/apps/agi-workforce/installations/new',
 }));
 vi.mock('@/lib/github-install-app-return', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/github-install-app-return')>()),
+  ...(await importOriginal<ScanModule3>()),
   appInstallRequester: (...args: unknown[]) => mocks.requester(...args),
 }));
 

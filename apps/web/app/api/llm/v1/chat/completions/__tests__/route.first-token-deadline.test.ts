@@ -1,12 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { listCanonicalModels } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/deadline-policy');
+type ScanModule1 = typeof import('@/lib/server/terms');
+type ScanModule2 = typeof import('@/lib/server/neon-db');
+type ScanModule3 = typeof import('@agiworkforce/routing');
+type ScanModule4 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule5 = typeof import('@/lib/services/skill-catalog-service');
+type ScanModule6 = typeof import('@/lib/services/provider-adapter-service');
 
 const budget = vi.hoisted(() => ({ attemptMs: 40, turnMs: 90 }));
 const HANG_MS = 5_000;
 
 vi.mock('@/lib/deadline-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/deadline-policy')>()),
+  ...(await importOriginal<ScanModule0>()),
   PROVIDER_FIRST_TOKEN_DEADLINE_MS: budget.attemptMs,
   TURN_FIRST_TOKEN_BUDGET_MS: budget.turnMs,
 }));
@@ -25,14 +32,14 @@ vi.mock('@/lib/model-tiers', () => ({ canAccessModel: vi.fn(() => true) }));
 // Terms standing is the auth gate's own concern (auth-gate-terms.test.ts); these
 // turns run for an account that accepted the current version.
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  ...(await importOriginal<ScanModule1>()),
   readTermsStanding: async () => ({ kind: 'current' }),
 }));
 
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
-    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    ...(await importOriginal<ScanModule2>()),
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
@@ -66,7 +73,7 @@ vi.mock('@shared/utils/env', () => ({
 
 const routingMocks = vi.hoisted(() => ({ resolveAutoRoute: vi.fn() }));
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/routing')>()),
+  ...(await importOriginal<ScanModule3>()),
   resolveAutoRoute: (...args: unknown[]) => routingMocks.resolveAutoRoute(...args),
 }));
 
@@ -159,7 +166,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getVerifiedBearerUserScopedDb: rlsMocks.getUserScopedDb,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule4>()),
   reserveManagedUsageRequest: managedUsageMocks.reserve,
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   finalizeManagedUsageRequest: managedUsageMocks.finalize,
@@ -193,7 +200,7 @@ vi.mock('@/lib/services/credit-service', () => ({
 }));
 
 vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/skill-catalog-service')>()),
+  ...(await importOriginal<ScanModule5>()),
   loadSelectableSkillCatalog: vi.fn(async () => []),
 }));
 vi.mock('@/lib/services/skill-install-service', () => ({
@@ -204,7 +211,7 @@ vi.mock('@/lib/services/plugin-installation-service', () => ({
 }));
 
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/provider-adapter-service')>();
+  const actual = await importOriginal<ScanModule6>();
   return { ...actual, resolveProviderFromModel: vi.fn(() => 'openrouter') };
 });
 vi.mock('@/lib/services/llm-cost-calculator', () => ({

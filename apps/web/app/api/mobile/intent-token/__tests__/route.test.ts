@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/security-audit');
+type ScanModule1 = typeof import('@/lib/server/mobile-intent-tokens');
 
 const { mockQuery, mockIssue, mockRevoke, mockRevokeById } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
@@ -10,7 +12,7 @@ const { mockQuery, mockIssue, mockRevoke, mockRevokeById } = vi.hoisted(() => ({
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   logRateLimitExceeded: vi.fn().mockResolvedValue(undefined),
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
@@ -30,7 +32,7 @@ vi.mock('@/app/api/settings/sessions/session-principal', () => ({
   })),
 }));
 vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/mobile-intent-tokens')>()),
+  ...(await importOriginal<ScanModule1>()),
   issueMobileIntentToken: (...args: unknown[]) => mockIssue(...args),
   revokeMobileIntentTokens: (...args: unknown[]) => mockRevoke(...args),
   revokeMobileIntentTokenById: (...args: unknown[]) => mockRevokeById(...args),

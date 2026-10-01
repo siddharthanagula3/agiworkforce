@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+type ScanModule0 = typeof import('@/lib/device-steps/device-registry');
+type ScanModule1 = typeof import('../job-service');
 
 const mocks = vi.hoisted(() => ({
   loadSchedulePreferences: vi.fn(),
@@ -16,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/device-steps/device-registry', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/device-steps/device-registry')>()),
+  ...(await importOriginal<ScanModule0>()),
   sendRelayRevocation: mocks.sendRelayRevocation,
 }));
 
@@ -48,7 +50,7 @@ vi.mock('@/lib/services/research-report-service', () => ({
 }));
 vi.mock('@/lib/triggers/trigger-fire', () => ({ fireEventTriggerJob: mocks.fireEventTriggerJob }));
 vi.mock('../job-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../job-service')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, enqueueJob: mocks.enqueueJob };
 });
 

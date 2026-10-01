@@ -2,24 +2,30 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew, resetSendPendingFlagForTests } from './ChatComposerNew';
+type ScanModule0 = typeof import('next/navigation');
+type ScanModule1 = typeof import('@features/settings/components/SettingsModalProvider');
+type ScanModule2 = typeof import('@features/chat/hooks/use-skills-list');
+type ScanModule3 = typeof import('@features/chat/hooks/use-media-model-availability');
+type ScanModule4 = typeof import('@agiworkforce/unified-chat');
+type ScanModule5 = typeof import('@features/connectors/hooks/use-connectors');
 
 vi.mock('next/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/navigation')>()),
+  ...(await importOriginal<ScanModule0>()),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
 }));
 
 vi.mock('@features/settings/components/SettingsModalProvider', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/settings/components/SettingsModalProvider')>()),
+  ...(await importOriginal<ScanModule1>()),
   useSettingsModal: () => ({ isOpen: false, openSettings: vi.fn(), closeSettings: vi.fn() }),
 }));
 
 vi.mock('@features/chat/hooks/use-skills-list', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/chat/hooks/use-skills-list')>()),
+  ...(await importOriginal<ScanModule2>()),
   useSkillsList: () => ({ skills: [], loading: false, error: null }),
 }));
 
 vi.mock('@features/chat/hooks/use-media-model-availability', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/chat/hooks/use-media-model-availability')>()),
+  ...(await importOriginal<ScanModule3>()),
   useMediaModelAvailability: () => ({
     status: 'ready',
     error: null,
@@ -29,12 +35,12 @@ vi.mock('@features/chat/hooks/use-media-model-availability', async (importOrigin
 }));
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/unified-chat')>()),
+  ...(await importOriginal<ScanModule4>()),
   useCapability: (capability: string) => capability === 'canTakeScreenshot',
 }));
 
 vi.mock('@features/connectors/hooks/use-connectors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/connectors/hooks/use-connectors')>()),
+  ...(await importOriginal<ScanModule5>()),
   useConnectors: () => ({
     connectedIds: new Set<string>(),
     sources: {} as Record<string, string>,

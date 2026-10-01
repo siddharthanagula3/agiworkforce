@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GatewayRoute, ProviderAdapter } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('server-only', () => ({}));
 
@@ -26,7 +27,7 @@ vi.mock('@agiworkforce/providers-factory', () => ({
 }));
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<ScanModule0>()),
   listGatewayRoutes: () => gatewayRoutes,
 }));
 

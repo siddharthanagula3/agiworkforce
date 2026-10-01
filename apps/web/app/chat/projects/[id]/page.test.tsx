@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/features/projects');
 
 const push = vi.fn();
 const schedulePageProps = vi.fn();
@@ -45,7 +46,7 @@ vi.mock('@shared/components/layout/WebAppShell', () => ({
 }));
 
 vi.mock('@/features/projects', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/features/projects')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     useManagedCloudProjects: () => ({

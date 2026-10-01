@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 const { canonicalVoiceModel } = vi.hoisted(() => ({
   canonicalVoiceModel: 'catalog-voice-transcription-model',
 }));
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<ScanModule0>()),
   getRoutingSlotModel: () => canonicalVoiceModel,
 }));
 

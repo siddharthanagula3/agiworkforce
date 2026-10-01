@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+type ScanModule0 = typeof import('@modelcontextprotocol/client');
 
 beforeEach(() => {
   vi.resetModules();
   vi.doMock('../transport', () => ({
-    resolveMcpTransport: vi.fn(() => ({
-      /* fake transport */
-    })),
+    resolveMcpTransport: vi.fn(() => ({/* fake transport */})),
   }));
 });
 
@@ -35,9 +34,7 @@ interface ClientStubState {
 
 function installClientMock(state: ClientStubState): void {
   vi.doMock('@modelcontextprotocol/client', async () => {
-    const actual = await vi.importActual<typeof import('@modelcontextprotocol/client')>(
-      '@modelcontextprotocol/client',
-    );
+    const actual = await vi.importActual<ScanModule0>('@modelcontextprotocol/client');
     class FakeClient {
       constructor(public info: { name: string; version: string }) {}
       async connect(_t: unknown): Promise<void> {
@@ -144,9 +141,7 @@ describe('connectMcpServer, happy path lifecycle', () => {
 
   it('discovers tools, resources, templates, prompts, and MCP Apps from advertised capabilities', async () => {
     vi.doMock('@modelcontextprotocol/client', async () => {
-      const actual = await vi.importActual<typeof import('@modelcontextprotocol/client')>(
-        '@modelcontextprotocol/client',
-      );
+      const actual = await vi.importActual<ScanModule0>('@modelcontextprotocol/client');
       class FakeClient {
         async connect(): Promise<void> {}
         async close(): Promise<void> {}

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -30,7 +31,7 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveOrgMembership: mocks.resolveOrgMembership,
   shareProject: mocks.shareProject,
   unshareProject: mocks.unshareProject,

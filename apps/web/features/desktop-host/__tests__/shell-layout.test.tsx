@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HostBridge } from '@agiworkforce/local-runtime-contract';
 import { useChatUIStore } from '@agiworkforce/unified-chat';
 import { useUIStore } from '@shared/stores/layout-store';
+type ScanModule0 = typeof import('../lib/runtime-client');
 
 const runtime = vi.hoisted(() => ({
   readShellLayout: vi.fn(),
@@ -10,7 +11,7 @@ const runtime = vi.hoisted(() => ({
 }));
 
 vi.mock('../lib/runtime-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/runtime-client')>()),
+  ...(await importOriginal<ScanModule0>()),
   readShellLayout: (...args: unknown[]) => runtime.readShellLayout(...args),
   writeShellLayout: (...args: unknown[]) => runtime.writeShellLayout(...args),
 }));

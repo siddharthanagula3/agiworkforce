@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/neon-db');
+type ScanModule1 = typeof import('@/lib/services/subscription-service');
+type ScanModule2 = typeof import('@/lib/services/effective-subscription-service');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -9,15 +12,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   getNeonDb: () => ({ query: mocks.query, execute: vi.fn() }),
 }));
 vi.mock('@/lib/services/subscription-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/subscription-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   SubscriptionService: { allocateCreditsForPeriod: mocks.allocateCreditsForPeriod },
 }));
 vi.mock('@/lib/services/effective-subscription-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/effective-subscription-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   provisionSeatMemberCreditAccounts: mocks.provisionSeatMemberCreditAccounts,
 }));
 

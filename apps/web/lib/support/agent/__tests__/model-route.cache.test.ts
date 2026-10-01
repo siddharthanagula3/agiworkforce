@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/routing');
 
 vi.mock('@/lib/server/side-call-training-policy', () => ({
   sideCallRoutingRequest: async (_db: unknown, _userId: string, request: unknown) => request,
@@ -29,7 +30,7 @@ const SELECTED_ROUTE = {
 };
 
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/routing')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, resolveAutoRoute: () => SELECTED_ROUTE };
 });
 

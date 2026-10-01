@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@shared/config/llm');
+type ScanModule1 = typeof import('zustand/middleware');
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => undefined, replace: () => undefined }),
@@ -112,7 +114,7 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 vi.mock('@shared/config/llm', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/config/llm')>()),
+  ...(await importOriginal<ScanModule0>()),
   isModelAllowedForTier: () => true,
 }));
 
@@ -141,7 +143,7 @@ vi.mock('@features/chat/lib/use-model-favourites', () => ({
 vi.mock('./StyleSelector', () => ({ StyleSelector: () => <div /> }));
 
 vi.mock('zustand/middleware', async () => {
-  const actual = await vi.importActual<typeof import('zustand/middleware')>('zustand/middleware');
+  const actual = await vi.importActual<ScanModule1>('zustand/middleware');
   return { ...actual, persist: (config: (set: unknown) => unknown) => config };
 });
 

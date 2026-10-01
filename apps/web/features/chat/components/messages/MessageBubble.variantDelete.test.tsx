@@ -3,9 +3,10 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MessageBubble } from './MessageBubble';
 import type { VariantInfo } from '@/features/chat/lib/messageThread';
+type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     MarkdownContent: ({ content }: { content: string }) => (

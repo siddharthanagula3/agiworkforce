@@ -2,6 +2,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { getRoutingSlotModel } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/server/provider-training-opt-out');
+type ScanModule1 = typeof import('@/lib/csrf');
+type ScanModule2 = typeof import('@/lib/rate-limit');
+type ScanModule3 = typeof import('@/lib/cors');
+type ScanModule4 = typeof import('@/lib/logger');
+type ScanModule5 = typeof import('@/lib/api-auth');
+type ScanModule6 = typeof import('@/lib/server/rls-db');
+type ScanModule7 = typeof import('@/lib/services/entitlement-resolution');
+type ScanModule8 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule9 = typeof import('@/lib/services/tier-unit-quota-service');
+type ScanModule10 = typeof import('../../lib/voice-session-budget');
+type ScanModule11 = typeof import('../../lib/voice-session-store');
 
 const mocks = vi.hoisted(() => ({
   csrf: vi.fn(),
@@ -19,7 +31,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/provider-training-opt-out', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/provider-training-opt-out')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     modelKeepsInputsOutOfTraining: (modelId: string) =>
@@ -29,50 +41,50 @@ vi.mock('@/lib/server/provider-training-opt-out', async (importOriginal) => {
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule1>()),
   requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule2>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/cors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/cors')>()),
+  ...(await importOriginal<ScanModule3>()),
   handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule4>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule5>()),
   getClerkAuthUser: (...args: unknown[]) => mocks.auth(...args),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule6>()),
   getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<ScanModule7>()),
   resolveEntitlementBundle: (...args: unknown[]) => mocks.entitlement(...args),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule8>()),
   reserveManagedUsageProviderStep: (...args: unknown[]) => mocks.reserveStep(...args),
 }));
 vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  ...(await importOriginal<ScanModule9>()),
   assertTierUnitAllowance: (...args: unknown[]) => mocks.assertAllowance(...args),
 }));
 vi.mock('../../lib/voice-session-budget', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/voice-session-budget')>()),
+  ...(await importOriginal<ScanModule10>()),
   planVoiceSessionBlock: (...args: unknown[]) => mocks.planBlock(...args),
   readVoiceReservation: (...args: unknown[]) => mocks.readReservation(...args),
 }));
 vi.mock('../../lib/voice-session-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/voice-session-store')>()),
+  ...(await importOriginal<ScanModule11>()),
   isVoiceSessionStoreReady: (...args: unknown[]) => mocks.storeReady(...args),
   getVoiceSessionByProviderId: (...args: unknown[]) => mocks.getSession(...args),
   touchVoiceSession: (...args: unknown[]) => mocks.touchSession(...args),

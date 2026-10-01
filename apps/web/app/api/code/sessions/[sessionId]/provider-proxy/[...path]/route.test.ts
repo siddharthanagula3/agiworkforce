@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('next/server');
 
 process.env['CSRF_SECRET'] ||= 'a'.repeat(40);
 process.env['NEXT_PUBLIC_APP_URL'] ||= 'https://app.agiworkforce.test';
@@ -79,7 +80,7 @@ const {
 }));
 
 vi.mock('next/server', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('next/server')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, after: mockAfter };
 });
 vi.mock('@/lib/logger', () => ({

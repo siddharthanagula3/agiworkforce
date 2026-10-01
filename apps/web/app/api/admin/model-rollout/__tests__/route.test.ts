@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@agiworkforce/routing');
 
 vi.mock('server-only', () => ({}));
 
@@ -47,7 +48,7 @@ vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/routing')>()),
+  ...(await importOriginal<ScanModule0>()),
   observedHealthRankingEnabled: () => true,
   canaryRoutingEnabled: () => false,
   shadowMirroringEnabled: () => true,

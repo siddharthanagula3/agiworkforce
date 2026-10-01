@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { listCanonicalModels } from '@agiworkforce/types';
+type ScanModule0 = typeof import('./request-processor');
 
 /**
  * The OpenRouter route-retry versus the workspace model policy.
@@ -35,7 +36,7 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 }));
 
 vi.mock('./request-processor', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./request-processor')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveRequestEffort: vi.fn(() => undefined),
   buildThinkingConfig: vi.fn(() => undefined),
 }));

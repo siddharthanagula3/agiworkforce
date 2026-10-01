@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { AUTO_RELOAD_CONSENT_VERSION, type AutoReloadSettings } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/server/rls-db');
+type ScanModule1 = typeof import('@/lib/csrf');
+type ScanModule2 = typeof import('@/lib/rate-limit');
+type ScanModule3 = typeof import('@/lib/security-audit');
+type ScanModule4 = typeof import('@/lib/services/auto-reload-service');
 
 const mocks = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
@@ -14,23 +19,23 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule1>()),
   requireCsrfToken: mocks.requireCsrfToken,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule2>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule3>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/services/auto-reload-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/auto-reload-service')>()),
+  ...(await importOriginal<ScanModule4>()),
   readAutoReloadSettings: mocks.readAutoReloadSettings,
   saveAutoReloadSettings: mocks.saveAutoReloadSettings,
   maybeTriggerAutoReload: mocks.maybeTriggerAutoReload,

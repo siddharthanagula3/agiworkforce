@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/web-search/web-search-tool');
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const MESSAGE_ID = '55555555-5555-4555-8555-555555555555';
@@ -48,7 +49,7 @@ vi.mock('./lib/index-artifacts', () => ({ scheduleArtifactIndexing: vi.fn() }));
 // network call at all, and a fixture host would make that decision here rather
 // than in the code under test. Only the hop itself is stubbed.
 vi.mock('@/lib/web-search/web-search-tool', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/web-search/web-search-tool')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveRoutingRedirectUrls: (results: unknown, overrides: unknown) =>
     mocks.resolveRoutingRedirectUrls(results, overrides),
 }));

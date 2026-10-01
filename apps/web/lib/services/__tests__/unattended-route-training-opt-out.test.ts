@@ -1,4 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/routing');
+type ScanModule1 = typeof import('@/lib/services/provider-adapter-service');
+type ScanModule2 = typeof import('@/lib/auth/account-lifecycle');
+type ScanModule3 = typeof import('@/lib/server/terms');
+type ScanModule4 = typeof import('@/lib/feature-flags/capability-gate');
+type ScanModule5 = typeof import('@/lib/feature-flags/flag-evaluation-service');
+type ScanModule6 = typeof import('@/lib/services/entitlement-resolution');
+type ScanModule7 = typeof import('@/lib/services/managed-compute-access');
+type ScanModule8 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule9 = typeof import('@/lib/server/claimed-user-scope-db');
 
 const state = vi.hoisted(() => ({
   optOut: 'off' as 'on' | 'off' | 'unreadable',
@@ -10,45 +20,45 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/routing')>()),
+  ...(await importOriginal<ScanModule0>()),
   classifyTaskLocally: vi.fn(() => ({ type: 'general', confidence: 0.8 })),
   resolveAutoRoute: vi.fn(),
 }));
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/provider-adapter-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   listAvailableManagedProviderIds: vi.fn(),
 }));
 vi.mock('@/lib/auth/account-lifecycle', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/auth/account-lifecycle')>()),
+  ...(await importOriginal<ScanModule2>()),
   readAccountStatus: vi.fn(async () => 'active'),
 }));
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  ...(await importOriginal<ScanModule3>()),
   mustAcceptTerms: vi.fn(async () => false),
 }));
 vi.mock('@/lib/feature-flags/capability-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/capability-gate')>()),
+  ...(await importOriginal<ScanModule4>()),
   assertCapabilityAvailable: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/feature-flags/flag-evaluation-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/flag-evaluation-service')>()),
+  ...(await importOriginal<ScanModule5>()),
   buildFlagSubject: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<ScanModule6>()),
   resolveEntitlementBundle: vi.fn(async () => ({ plan: 'pro', subscription: null })),
 }));
 vi.mock('@/lib/services/managed-compute-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-compute-access')>()),
+  ...(await importOriginal<ScanModule7>()),
   evaluateManagedComputeAccess: vi.fn(async () => ({ allowed: true })),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule8>()),
   reserveManagedUsageRequest: state.reserve,
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
 vi.mock('@/lib/server/claimed-user-scope-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/claimed-user-scope-db')>()),
+  ...(await importOriginal<ScanModule9>()),
   createClaimedUserScopedDb: () => optOutDb(),
 }));
 

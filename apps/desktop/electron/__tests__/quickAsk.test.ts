@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../config');
+type ScanModule1 = typeof import('../windowPolicy');
 
 const windows: MockBrowserWindow[] = [];
 
@@ -31,13 +33,13 @@ vi.mock('electron', () => ({
   },
 }));
 vi.mock('../config', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../config')>()),
+  ...(await importOriginal<ScanModule0>()),
   CLOUD_APP_ORIGIN: 'http://localhost:3100',
   REMOTE_SESSION_PARTITION: 'persist:test',
   RENDERER_MODE: 'remote',
 }));
 vi.mock('../windowPolicy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../windowPolicy')>()),
+  ...(await importOriginal<ScanModule1>()),
   applyRemoteWindowPolicy: vi.fn(),
 }));
 

@@ -6,31 +6,37 @@ import { MICROPHONE_NOTICE_STORAGE_KEY } from '@features/chat/lib/microphone-not
 import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { MicrophonePrivacyNotice } from '../MicrophonePrivacyNotice';
 import { ChatComposerNew } from './ChatComposerNew';
+type ScanModule0 = typeof import('next/navigation');
+type ScanModule1 = typeof import('next/link');
+type ScanModule2 = typeof import('@features/settings/components/SettingsModalProvider');
+type ScanModule3 = typeof import('@features/chat/hooks/use-skills-list');
+type ScanModule4 = typeof import('@features/chat/hooks/use-media-model-availability');
+type ScanModule5 = typeof import('@features/connectors/hooks/use-connectors');
 
 vi.mock('next/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/navigation')>()),
+  ...(await importOriginal<ScanModule0>()),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
 }));
 
 vi.mock('next/link', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/link')>()),
+  ...(await importOriginal<ScanModule1>()),
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
   ),
 }));
 
 vi.mock('@features/settings/components/SettingsModalProvider', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/settings/components/SettingsModalProvider')>()),
+  ...(await importOriginal<ScanModule2>()),
   useSettingsModal: () => ({ isOpen: false, openSettings: vi.fn(), closeSettings: vi.fn() }),
 }));
 
 vi.mock('@features/chat/hooks/use-skills-list', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/chat/hooks/use-skills-list')>()),
+  ...(await importOriginal<ScanModule3>()),
   useSkillsList: () => ({ skills: [], loading: false, error: null }),
 }));
 
 vi.mock('@features/chat/hooks/use-media-model-availability', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/chat/hooks/use-media-model-availability')>()),
+  ...(await importOriginal<ScanModule4>()),
   useMediaModelAvailability: () => ({
     status: 'ready',
     error: null,
@@ -40,7 +46,7 @@ vi.mock('@features/chat/hooks/use-media-model-availability', async (importOrigin
 }));
 
 vi.mock('@features/connectors/hooks/use-connectors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/connectors/hooks/use-connectors')>()),
+  ...(await importOriginal<ScanModule5>()),
   useConnectors: () => ({
     connectedIds: new Set<string>(),
     sources: {} as Record<string, string>,

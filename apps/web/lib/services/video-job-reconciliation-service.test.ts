@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VideoGenerationJob } from '@/lib/server/video-generation-jobs';
+type ScanModule0 = typeof import('@/lib/services/video-provider-output-service');
+type ScanModule1 = typeof import('@/lib/observability/media-telemetry');
 
 vi.mock('server-only', () => ({}));
 
@@ -52,8 +54,7 @@ vi.mock('@/lib/server/video-generation-jobs', () => ({
   recordVideoProviderCancellationAttempt: (...args: unknown[]) => mocks.recordCancellation(...args),
 }));
 vi.mock('@/lib/services/video-provider-output-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/video-provider-output-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     pollVideoProvider: (...args: unknown[]) => mocks.poll(...args),
@@ -74,7 +75,7 @@ vi.mock('@/lib/server/media-assets', () => ({
   upsertVideoMediaAsset: (...args: unknown[]) => mocks.upsertAsset(...args),
 }));
 vi.mock('@/lib/observability/media-telemetry', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/observability/media-telemetry')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     recordMediaSafety: (...args: unknown[]) => mocks.safety(...args),

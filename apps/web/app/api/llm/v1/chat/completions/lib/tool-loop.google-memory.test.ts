@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/claimed-user-scope-db');
+type ScanModule1 = typeof import('@/lib/server/tools/memory-tools');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -6,12 +8,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/claimed-user-scope-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/claimed-user-scope-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   createClaimedUserScopedDb: () => ({ query: mocks.query }),
 }));
 
 vi.mock('@/lib/server/tools/memory-tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/tools/memory-tools')>()),
+  ...(await importOriginal<ScanModule1>()),
   executeMemoryTool: mocks.executeMemoryTool,
 }));
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -12,7 +13,7 @@ vi.mock('@/lib/secure-random', () => ({
   secureToken: vi.fn(() => 'FIXEDTOKEN'),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   finalizeManagedUsageRequest: vi.fn(() => Promise.resolve()),
   markManagedUsageClientDelivered: vi.fn(() => Promise.resolve()),
 }));

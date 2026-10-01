@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { listCanonicalModels } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/server/neon-db');
 
 const TRANSCRIPTION_MODEL = (() => {
   const model = listCanonicalModels().find(
@@ -32,7 +33,7 @@ vi.mock('@/lib/error-handler', () => ({
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
-    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    ...(await importOriginal<ScanModule0>()),
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });

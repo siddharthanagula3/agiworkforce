@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProtocolRoute, ProviderAdapter } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('server-only', () => ({}));
 
@@ -31,7 +32,7 @@ const buildProtocolRouteAdapter = vi.fn(
 );
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<ScanModule0>()),
   listProtocolRoutes: () => protocolRoutes,
 }));
 

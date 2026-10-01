@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/org-entitlements');
 
 vi.mock('server-only', () => ({}));
 
@@ -8,7 +9,7 @@ const { mockEntitlements, mockNeonQuery } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
+  ...(await importOriginal<ScanModule0>()),
   getOrganizationEntitlements: mockEntitlements,
 }));
 

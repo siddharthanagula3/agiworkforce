@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/org-entitlements');
 
 vi.mock('server-only', () => ({}));
 
@@ -27,7 +28,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
+  ...(await importOriginal<ScanModule0>()),
   getOrganizationEntitlements: vi.fn(async (organizationId: string) => ({
     organizationId,
     plan: 'team' as const,

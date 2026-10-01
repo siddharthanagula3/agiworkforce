@@ -5,6 +5,7 @@ import {
   getRegistryRoute,
 } from '@agiworkforce/types';
 import { RETRIEVAL_EMBEDDING_DIMENSIONS } from '@agiworkforce/data-layer/search';
+type ScanModule0 = typeof import('@/lib/server/side-call-training-policy');
 
 const mocks = vi.hoisted(() => ({
   reserve: vi.fn(),
@@ -40,7 +41,7 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
   resolveServerProviderCredentials: vi.fn(() => ({ apiKey: 'gateway-key' })),
 }));
 vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/side-call-training-policy')>();
+  const actual = await importOriginal<ScanModule0>();
   mocks.trainingOptOut.mockImplementation(actual.sideCallTrainingOptOut);
   mocks.noTrainingProviderIds.mockImplementation(actual.noTrainingProviderIds);
   return {

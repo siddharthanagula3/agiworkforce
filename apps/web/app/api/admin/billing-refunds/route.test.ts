@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('@/lib/csrf');
+type ScanModule1 = typeof import('@/lib/rate-limit');
+type ScanModule2 = typeof import('@/lib/auth-guards');
+type ScanModule3 = typeof import('@/lib/security-audit');
+type ScanModule4 = typeof import('@/lib/server/neon-db');
+type ScanModule5 = typeof import('@/lib/server/payments/stripe-provider');
+type ScanModule6 = typeof import('@/lib/services/billing-refund-service');
 
 const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(),
@@ -16,31 +23,31 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule0>()),
   requireCsrfToken: mocks.requireCsrfToken,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule1>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/auth-guards', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/auth-guards')>()),
+  ...(await importOriginal<ScanModule2>()),
   requirePlatformAdmin: mocks.requirePlatformAdmin,
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule3>()),
   logSecurityEvent: mocks.logSecurityEvent,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule4>()),
   getNeonDb: mocks.getNeonDb,
 }));
 vi.mock('@/lib/server/payments/stripe-provider', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/payments/stripe-provider')>()),
+  ...(await importOriginal<ScanModule5>()),
   isStripeConfigured: mocks.isStripeConfigured,
 }));
 vi.mock('@/lib/services/billing-refund-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/billing-refund-service')>()),
+  ...(await importOriginal<ScanModule6>()),
   declineRefundRequest: mocks.declineRefundRequest,
   issueOperatorRefund: mocks.issueOperatorRefund,
   listPendingRefundRequests: mocks.listPendingRefundRequests,

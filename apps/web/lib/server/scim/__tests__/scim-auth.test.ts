@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/org-entitlements');
 
 vi.mock('server-only', () => ({}));
 
@@ -37,7 +38,7 @@ vi.mock('../scim-provisioning-service', () => ({
 }));
 
 vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveOrganizationEntitlementPlan: (...args: unknown[]) => organizationPlanMock(...args),
 }));
 

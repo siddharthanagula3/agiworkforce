@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/feature-flags/flag-store');
 
 vi.mock('server-only', () => ({}));
 
@@ -26,7 +27,7 @@ vi.mock('@/lib/workspace-audit', () => ({
 }));
 
 vi.mock('@/lib/feature-flags/flag-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/flag-store')>()),
+  ...(await importOriginal<ScanModule0>()),
   getActiveFlagDefinitions: async () => [],
   getSubjectOverrides: async () => [],
 }));

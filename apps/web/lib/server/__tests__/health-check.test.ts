@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('server-only', () => ({}));
 
@@ -22,7 +23,7 @@ vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueSt
 vi.mock('@/lib/server/stripe-client', () => ({ getStripeClientOrNull: vi.fn(() => null) }));
 vi.mock('@/lib/price-tier-mapping', () => ({ getConfiguredStripePriceIds: vi.fn(() => []) }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<ScanModule0>()),
   getDefaultModelFor: mocks.getDefaultModelFor,
   getModelMetadataById: mocks.getModelMetadataById,
   isModelLive: mocks.isModelLive,

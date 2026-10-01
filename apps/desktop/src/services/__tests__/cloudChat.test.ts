@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../../stores/auth');
 
 const createConversation = vi.fn();
 const listConversations = vi.fn();
@@ -26,7 +27,7 @@ vi.mock('../../stores/appModeStore', () => ({
 }));
 
 vi.mock('../../stores/auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../stores/auth')>();
+  const actual = await importOriginal<ScanModule0>();
   const state = {
     isAuthenticated: true,
     accessToken: 'desktop-cloud-token',

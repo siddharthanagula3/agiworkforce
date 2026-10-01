@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('./assistant-turn-persistence');
 
 vi.mock('server-only', () => ({}));
 
@@ -7,7 +8,7 @@ const persistence = vi.hoisted(() => ({
 }));
 
 vi.mock('./assistant-turn-persistence', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./assistant-turn-persistence')>()),
+  ...(await importOriginal<ScanModule0>()),
   persistAssistantTurn: persistence.persistAssistantTurn,
 }));
 

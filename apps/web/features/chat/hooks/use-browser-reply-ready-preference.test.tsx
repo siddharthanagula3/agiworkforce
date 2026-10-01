@@ -2,11 +2,12 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PREFERENCE_NAMESPACE_SAVED_EVENT } from '@/app/settings/_lib/preferences-client';
 import { useBrowserReplyReadyPreference } from './use-browser-reply-ready-preference';
+type ScanModule0 = typeof import('@/app/settings/_lib/preferences-client');
 
 const fetchPreferenceNamespace = vi.hoisted(() => vi.fn());
 
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, fetchPreferenceNamespace };
 });
 

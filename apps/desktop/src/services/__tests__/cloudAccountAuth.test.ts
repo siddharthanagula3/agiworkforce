@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../../lib/runtimeEnvironment');
 
 const authorizeDesktopDeviceMock = vi.hoisted(() => vi.fn());
 const openDesktopCloudSignInWindowMock = vi.hoisted(() => vi.fn());
@@ -10,7 +11,7 @@ vi.mock('../desktopCloudSignInWindow', () => ({
   openDesktopCloudSignInWindow: openDesktopCloudSignInWindowMock,
 }));
 vi.mock('../../lib/runtimeEnvironment', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/runtimeEnvironment')>()),
+  ...(await importOriginal<ScanModule0>()),
   isTauri: true,
   supportsLocalAppMode: true,
   isCloudWeb: false,

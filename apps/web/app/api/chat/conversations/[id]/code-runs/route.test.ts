@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/security-audit');
 
 const { auditSpy } = vi.hoisted(() => ({
   auditSpy: vi.fn(async (_event: Record<string, unknown>) => undefined),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: auditSpy,
 }));
 import { ChatCodeRunResponseSchema } from '@agiworkforce/cloud-contracts';

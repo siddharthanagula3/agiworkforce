@@ -1,11 +1,14 @@
 // @vitest-environment node
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/logger');
+type ScanModule1 = typeof import('@/lib/services/cogs-ledger-service');
+type ScanModule2 = typeof import('@/lib/observability/metrics');
 
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule0>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -15,9 +18,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/cogs-ledger-service', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/services/cogs-ledger-service')>(
-    '@/lib/services/cogs-ledger-service',
-  );
+  const actual = await vi.importActual<ScanModule1>('@/lib/services/cogs-ledger-service');
   return {
     ...actual,
     recordProviderCostEvent: (event: unknown) => mocks.recordProviderCostEvent(event),
@@ -25,9 +26,7 @@ vi.mock('@/lib/services/cogs-ledger-service', async () => {
 });
 
 vi.mock('@/lib/observability/metrics', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/observability/metrics')>(
-    '@/lib/observability/metrics',
-  );
+  const actual = await vi.importActual<ScanModule2>('@/lib/observability/metrics');
   return {
     ...actual,
     recordSemanticDecision: (input: unknown) => mocks.recordSemanticDecision(input),

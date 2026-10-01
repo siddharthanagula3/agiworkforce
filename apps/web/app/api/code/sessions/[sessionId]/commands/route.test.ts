@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/managed-compute-access');
+type ScanModule1 = typeof import('@/lib/services/cloud-code-session-service');
 
 const {
   mockGetUserScopedDb,
@@ -40,11 +42,11 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: mockGetSubscription },
 }));
 vi.mock('@/lib/services/managed-compute-access', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/managed-compute-access')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, evaluateManagedComputeAccess: mockEvaluateAccess };
 });
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cloud-code-session-service')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, runCloudCodeCommand: mockRunCommand };
 });
 

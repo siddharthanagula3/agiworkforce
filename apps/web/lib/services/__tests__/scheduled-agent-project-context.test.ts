@@ -1,4 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/project-context-service');
+type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule2 = typeof import('@/lib/services/provider-adapter-service');
+type ScanModule3 = typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-response');
+type ScanModule4 = typeof import('@/lib/services/subscription-service');
+type ScanModule5 = typeof import('@/lib/services/managed-compute-access');
+type ScanModule6 = typeof import('@agiworkforce/context-engine');
+type ScanModule7 = typeof import('@/lib/services/managed-memory-context-service');
+type ScanModule8 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop-routing');
+type ScanModule9 = typeof import('@agiworkforce/routing');
 
 vi.mock('server-only', () => ({}));
 
@@ -16,31 +26,29 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/project-context-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/project-context-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   loadProjectContext: mocks.loadProjectContext,
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   reserveManagedUsageRequest: mocks.reserveManagedUsageRequest,
   finalizeManagedUsageRequest: mocks.finalizeManagedUsageRequest,
   markManagedUsageProviderStarted: mocks.markManagedUsageProviderStarted,
 }));
 
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/provider-adapter-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   buildServerProviderAdapter: mocks.buildServerProviderAdapter,
 }));
 
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-response')
-  >()),
+  ...(await importOriginal<ScanModule3>()),
   drainToLlmResponse: mocks.drainToLlmResponse,
 }));
 
 vi.mock('@/lib/services/subscription-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/subscription-service')>();
+  const actual = await importOriginal<ScanModule4>();
   return {
     ...actual,
     SubscriptionService: { ...actual.SubscriptionService, getSubscription: mocks.getSubscription },
@@ -48,18 +56,18 @@ vi.mock('@/lib/services/subscription-service', async (importOriginal) => {
 });
 
 vi.mock('@/lib/services/managed-compute-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-compute-access')>()),
+  ...(await importOriginal<ScanModule5>()),
   evaluateManagedComputeAccess: mocks.evaluateManagedComputeAccess,
 }));
 
 vi.mock('@agiworkforce/context-engine', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/context-engine')>()),
+  ...(await importOriginal<ScanModule6>()),
   createPostgresContextManifestStore: () => ({}),
   resolveContext: mocks.resolveContext,
 }));
 
 vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-memory-context-service')>()),
+  ...(await importOriginal<ScanModule7>()),
   formatManagedMemorySystemPrompt: () => null,
   loadManagedMemoryPolicy: async () => ({ enabled: false }),
   loadOrganizationContextPolicy: async () => ({}),
@@ -74,14 +82,12 @@ vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) 
 // The project gate sits before either provider path; the single-shot completion
 // is the cheaper of the two to drive here.
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop-routing', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop-routing')
-  >()),
+  ...(await importOriginal<ScanModule8>()),
   classifyToolLoopInputs: () => ({ shouldRun: false }),
 }));
 
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/routing')>()),
+  ...(await importOriginal<ScanModule9>()),
   resolveAutoRoute: mocks.resolveAutoRoute,
 }));
 

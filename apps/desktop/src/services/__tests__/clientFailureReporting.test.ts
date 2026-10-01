@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { reportClientFailure } from '@agiworkforce/unified-chat';
+type ScanModule0 = typeof import('../../api/cloudApi');
+type ScanModule1 = typeof import('../../stores/privacyBoundary');
 
 const cloudFetch = vi.fn();
 const getAuthHeaders = vi.fn();
 let privateBoundary = false;
 
 vi.mock('../../api/cloudApi', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../api/cloudApi')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     CLOUD_API_BASE_URL: 'https://cloud.example',
@@ -16,7 +18,7 @@ vi.mock('../../api/cloudApi', async (importOriginal) => {
 });
 
 vi.mock('../../stores/privacyBoundary', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../stores/privacyBoundary')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, isPrivateTrustBoundary: () => privateBoundary };
 });
 

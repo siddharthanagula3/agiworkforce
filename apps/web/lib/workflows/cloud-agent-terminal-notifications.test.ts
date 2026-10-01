@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
 
 /**
  * Ordering test for the terminal agent notification.
@@ -51,7 +52,7 @@ vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
   observedTurnCost: vi.fn(() => ({ tokenMicrousd: 0, toolMicrousd: 0 })),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   usageCreditsEnabled: vi.fn(async () => false),
   estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
     source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,

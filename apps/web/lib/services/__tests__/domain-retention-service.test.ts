@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/object-storage');
 
 vi.mock('server-only', () => ({}));
 
@@ -14,7 +15,7 @@ vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   deleteProjectKnowledgeObject: mockDeleteKnowledgeObject,
 }));
 vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/object-storage')>()),
+  ...(await importOriginal<ScanModule0>()),
   objectKeyFromStorageUri: (uri: string) => (uri.startsWith('s3://') ? uri.slice(5) : null),
 }));
 

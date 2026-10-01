@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/billing-waitlist-access');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -58,7 +59,7 @@ vi.mock('stripe', () => ({
   },
 }));
 vi.mock('@/lib/server/billing-waitlist-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/billing-waitlist-access')>()),
+  ...(await importOriginal<ScanModule0>()),
   hasBillingWaitlistAccess: waitlistAccessMocks.hasAccess,
 }));
 

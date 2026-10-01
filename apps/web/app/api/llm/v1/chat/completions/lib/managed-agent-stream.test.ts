@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/managed-usage-accounting-service');
+type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -52,12 +54,12 @@ const recordCloudAgentRunSettledUsage = vi.fn(async (_db: unknown, _input: unkno
 });
 
 vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-accounting-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   finalizeObservedManagedUsage: (input: unknown) => finalize(input),
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   usageCreditsEnabled: vi.fn(async () => false),
   estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
     source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,

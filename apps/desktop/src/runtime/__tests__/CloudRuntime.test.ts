@@ -7,6 +7,7 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import { CloudRuntime } from '../CloudRuntime';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+type ScanModule0 = typeof import('../../stores/auth');
 
 const FIXTURE_MODEL_ID = 'fixture-model';
 const FIXTURE_IMAGE_MODEL_ID = 'fixture-image-model';
@@ -63,7 +64,7 @@ vi.mock('../../stores/appModeStore', () => ({
 }));
 
 vi.mock('../../stores/auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../stores/auth')>();
+  const actual = await importOriginal<ScanModule0>();
   const state = {
     isAuthenticated: true,
     accessToken: 'desktop-cloud-token',

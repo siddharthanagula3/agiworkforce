@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+type ScanModule0 = typeof import('next/navigation');
+type ScanModule1 = typeof import('@shared/stores/authentication-store');
+type ScanModule2 = typeof import('../../../services/global-search-service');
 
 const service = vi.hoisted(() => ({
   search: vi.fn(),
@@ -11,15 +14,15 @@ const service = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/navigation')>()),
+  ...(await importOriginal<ScanModule0>()),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
 }));
 vi.mock('@shared/stores/authentication-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/stores/authentication-store')>()),
+  ...(await importOriginal<ScanModule1>()),
   useAuthStore: () => ({ user: { id: 'fixture-user' } }),
 }));
 vi.mock('../../../services/global-search-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../services/global-search-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   globalSearchService: service,
 }));
 

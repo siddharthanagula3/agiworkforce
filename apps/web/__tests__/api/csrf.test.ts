@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/neon-chat');
 
 vi.mock('server-only', () => ({}));
 
@@ -68,7 +69,7 @@ const mockNeonExecute = vi.fn();
 const mockRequireCurrentUserId = vi.fn();
 
 vi.mock('@/lib/server/neon-chat', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-chat')>()),
+  ...(await importOriginal<ScanModule0>()),
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 

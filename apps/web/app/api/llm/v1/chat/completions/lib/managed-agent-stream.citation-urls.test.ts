@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule1 = typeof import('@/lib/web-search/web-search-tool');
 
 const CONVERSATION_ID = '0190a000-0000-7000-8000-00000000aaa1';
 const MESSAGE_ID = '0190a000-0000-7000-8000-00000000aaa2';
@@ -27,7 +29,7 @@ vi.mock('@/lib/server/neon-db', () => {
   return { getNeonDb: () => pool };
 });
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   usageCreditsEnabled: vi.fn(async () => false),
   markManagedUsageClientDelivered: vi.fn(),
   estimateMicrousdOf: vi.fn(() => 0),
@@ -75,7 +77,7 @@ vi.mock('@/app/api/chat/conversations/[id]/messages/lib/index-artifacts', () => 
 // The host check stays real, so this test still fails if the routing hosts stop
 // matching what a grounded turn actually emits. Only the hop is stubbed.
 vi.mock('@/lib/web-search/web-search-tool', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/web-search/web-search-tool')>()),
+  ...(await importOriginal<ScanModule1>()),
   resolveRoutingRedirectUrls: (results: unknown, overrides: unknown) =>
     persistenceMocks.resolveRoutingRedirectUrls(results, overrides),
 }));

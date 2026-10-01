@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/skill-catalog-service');
 
 const {
   mockAuthUser,
@@ -39,7 +40,7 @@ vi.mock('@/lib/services/plugin-installation-service', () => ({
   listEnabledPluginIds: mockListEnabledPluginIds,
 }));
 vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/skill-catalog-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   getManagedSkillDirectoryForPlugins: mockDirectory,
   findManagedDirectorySkillByName: vi.fn(),
   invalidateManagedSkillCatalogCache: mockInvalidateCache,

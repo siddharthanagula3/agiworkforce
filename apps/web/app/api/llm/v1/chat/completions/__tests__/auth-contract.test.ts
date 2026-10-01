@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/terms');
+type ScanModule1 = typeof import('@/lib/server/neon-db');
 
 const admitManagedTurnSlot = () => ({
   admitted: true,
@@ -19,14 +21,14 @@ vi.mock('@/lib/csrf', () => ({
 // Terms standing is the auth gate's own concern (auth-gate-terms.test.ts); these
 // turns run for an account that accepted the current version.
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  ...(await importOriginal<ScanModule0>()),
   readTermsStanding: async () => ({ kind: 'current' }),
 }));
 
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
-    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    ...(await importOriginal<ScanModule1>()),
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });

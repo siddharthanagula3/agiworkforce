@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/organization-encryption-keys');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
@@ -30,7 +31,7 @@ const key = vi.hoisted(() => ({ lastRotatedAt: null as string | null }));
  * stays as it ships.
  */
 vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/organization-encryption-keys')>()),
+  ...(await importOriginal<ScanModule0>()),
   readOrganizationKeyStatus: vi.fn(async () => ({
     availability: {
       state: 'customer_managed' as const,

@@ -10,6 +10,7 @@ import {
   type Skill,
   type SkillToolFileAccess,
 } from '@agiworkforce/skills';
+type ScanModule0 = typeof import('@/lib/services/user-skill-service');
 
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
 vi.mock('./tool-loop-anthropic', () => ({
@@ -39,7 +40,7 @@ const userSkillService = vi.hoisted(() => ({
   ),
 }));
 vi.mock('@/lib/services/user-skill-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/user-skill-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   findUserSkillWithFiles: userSkillService.findUserSkillWithFiles,
 }));
 

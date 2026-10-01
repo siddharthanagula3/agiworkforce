@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('@/lib/csrf');
+type ScanModule1 = typeof import('@/lib/rate-limit');
+type ScanModule2 = typeof import('@/lib/api-auth');
+type ScanModule3 = typeof import('@/lib/server/rls-db');
+type ScanModule4 = typeof import('@/lib/services/artifact-runtime-service');
 
 const mocks = vi.hoisted(() => ({
   readRunnableArtifact: vi.fn(),
@@ -10,23 +15,23 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule0>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule1>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule2>()),
   assertAccountActive: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule3>()),
   getUserScopedDb: vi.fn(async () => ({ db: {}, userId: 'user-1', organizationId: null })),
 }));
 vi.mock('@/lib/services/artifact-runtime-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/artifact-runtime-service')>()),
+  ...(await importOriginal<ScanModule4>()),
   readRunnableArtifact: mocks.readRunnableArtifact,
   describeArtifactConnectors: mocks.describeArtifactConnectors,
 }));

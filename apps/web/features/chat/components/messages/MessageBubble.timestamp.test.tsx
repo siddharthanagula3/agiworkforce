@@ -4,9 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { getManagedModelPresentationLabel } from '@agiworkforce/unified-chat';
 import { getModels, isModelLive } from '@agiworkforce/types';
 import { MessageBubble } from './MessageBubble';
+type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     MarkdownContent: ({ content }: { content: string }) => (

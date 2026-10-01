@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/account-erasure');
 
 vi.mock('server-only', () => ({}));
 
@@ -58,7 +59,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 vi.mock('@/lib/server/account-erasure', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/account-erasure')>()),
+  ...(await importOriginal<ScanModule0>()),
   eraseUserAccountData: (...args: unknown[]) => mockEraseUserAccountData(...args),
 }));
 

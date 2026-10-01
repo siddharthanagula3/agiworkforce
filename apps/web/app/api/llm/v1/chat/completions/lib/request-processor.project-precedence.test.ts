@@ -9,6 +9,14 @@ import {
   type InstructionLayer,
 } from '@/lib/prompts/instruction-precedence';
 import type { LoadedProjectContext } from '@/lib/services/project-context-service';
+type ScanModule0 = typeof import('@/lib/services/managed-content-safety-service');
+type ScanModule1 = typeof import('./chat-attachment-hydration');
+type ScanModule2 = typeof import('@/lib/services/managed-memory-context-service');
+type ScanModule3 = typeof import('@/lib/server/user-identity');
+type ScanModule4 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule5 = typeof import('@/lib/services/skill-catalog-service');
+type ScanModule6 = typeof import('@/lib/services/plugin-installation-service');
+type ScanModule7 = typeof import('@/lib/services/project-context-service');
 
 const PRO_CHAT_MODEL = getDefaultModelFor('pro', 'chat');
 
@@ -32,35 +40,32 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 
 vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-content-safety-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, enforceManagedContentSafetyPreference: mocks.enforceSafety };
 });
 
 vi.mock('./chat-attachment-hydration', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./chat-attachment-hydration')>();
+  const actual = await importOriginal<ScanModule1>();
   return { ...actual, hydrateChatAttachments: mocks.hydrate };
 });
 
 vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-memory-context-service')>();
+  const actual = await importOriginal<ScanModule2>();
   return { ...actual, loadManagedMemoryPolicy: mocks.loadPolicy };
 });
 
 vi.mock('@/lib/server/user-identity', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/user-identity')>();
+  const actual = await importOriginal<ScanModule3>();
   return { ...actual, buildCustomInstructionsPreamble: mocks.customInstructions };
 });
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>();
+  const actual = await importOriginal<ScanModule4>();
   return { ...actual, reserveManagedUsageRequest: mocks.reserveManagedUsage };
 });
 
 vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/skill-catalog-service')>();
+  const actual = await importOriginal<ScanModule5>();
   return {
     ...actual,
     getManagedSkillCatalog: mocks.managedSkillCatalog,
@@ -77,15 +82,14 @@ vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => {
 });
 
 vi.mock('@/lib/services/plugin-installation-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/plugin-installation-service')>();
+  const actual = await importOriginal<ScanModule6>();
   return { ...actual, listEnabledPluginIds: mocks.enabledPluginIds };
 });
 
 // Only the database read is replaced. renderProjectContext and applyProjectContext
 // are the real ones, which is what makes the assembled order below real.
 vi.mock('@/lib/services/project-context-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/project-context-service')>();
+  const actual = await importOriginal<ScanModule7>();
   return { ...actual, loadProjectContext: mocks.loadProject };
 });
 

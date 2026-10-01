@@ -1,11 +1,12 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../../lib/runtimeEnvironment');
 
 const onOpenUrlMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tauri-apps/plugin-deep-link', () => ({ onOpenUrl: onOpenUrlMock }));
 vi.mock('../../lib/runtimeEnvironment', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/runtimeEnvironment')>()),
+  ...(await importOriginal<ScanModule0>()),
   isTauri: false,
   isElectronHost: true,
 }));

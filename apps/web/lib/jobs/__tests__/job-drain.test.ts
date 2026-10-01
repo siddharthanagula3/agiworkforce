@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+type ScanModule0 = typeof import('../job-service');
+type ScanModule1 = typeof import('../cancellation');
 
 const mocks = vi.hoisted(() => ({
   claimJobs: vi.fn(),
@@ -36,7 +38,7 @@ vi.mock('@/lib/server/incident/dispatch', () => ({
   clearIncident: mocks.clearIncident,
 }));
 vi.mock('../job-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../job-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     claimJobs: mocks.claimJobs,
@@ -49,7 +51,7 @@ vi.mock('../job-service', async (importOriginal) => {
 });
 
 vi.mock('../cancellation', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../cancellation')>();
+  const actual = await importOriginal<ScanModule1>();
   return {
     ...actual,
     watchJobCancellation: () => ({ stop: () => undefined }),

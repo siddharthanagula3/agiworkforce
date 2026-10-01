@@ -15,6 +15,7 @@ import {
 import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 import { ChatComposerNew } from './ChatComposerNew';
+type ScanModule0 = typeof import('@features/chat/hooks/use-dictation');
 
 /**
  * The editor arm is exercised against a double rather than against TipTap: what
@@ -116,7 +117,7 @@ vi.mock('./VoiceInputButton', () => ({
 }));
 
 vi.mock('@features/chat/hooks/use-dictation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/chat/hooks/use-dictation')>()),
+  ...(await importOriginal<ScanModule0>()),
   useDictation: ({ onInsert }: { onInsert: (text: string) => void }) => ({
     status: 'idle',
     isActive: false,

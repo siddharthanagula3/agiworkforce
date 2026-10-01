@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/cloud-agent-run-service');
+type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule2 = typeof import('@/lib/services/managed-usage-accounting-service');
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
@@ -68,7 +71,7 @@ const checkpointMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cloud-agent-run-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   claimCloudAgentApprovalCheckpoint: checkpointMocks.claim,
   saveCloudAgentApprovalCheckpoint: checkpointMocks.save,
   completeCloudAgentApprovalCheckpoint: checkpointMocks.complete,
@@ -96,14 +99,14 @@ const managedUsageMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   markManagedUsageClientDelivered: managedUsageMocks.delivered,
   finalizeManagedUsageRequest: managedUsageMocks.finalizeRequest,
 }));
 
 vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-accounting-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   finalizeObservedManagedUsage: managedUsageMocks.finalizeObserved,
 }));
 

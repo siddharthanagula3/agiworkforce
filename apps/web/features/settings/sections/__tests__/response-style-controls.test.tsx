@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@shared/stores/web-settings-store');
 
 const mocks = vi.hoisted(() => ({
   fetchPreferences: vi.fn(),
@@ -45,7 +46,7 @@ vi.mock('@shared/config/llm', async (importOriginal) => ({
   splitEffortsByEntitlement: () => ({ allowed: [], gated: [] }),
 }));
 vi.mock('@shared/stores/web-settings-store', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/stores/web-settings-store')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ACCENT_COLORS: actual.ACCENT_COLORS,
     useSettingsStore: (s: (v: unknown) => unknown) =>

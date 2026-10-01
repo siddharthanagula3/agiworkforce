@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/neon-db');
+type ScanModule1 = typeof import('@/lib/services/organization-policy-gate');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -34,7 +36,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
-    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    ...(await importOriginal<ScanModule0>()),
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
@@ -51,7 +53,7 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-policy-gate')>()),
+  ...(await importOriginal<ScanModule1>()),
   resolveSecretHandlingPolicy: (...a: unknown[]) => mocks.secretMode(...a),
 }));
 

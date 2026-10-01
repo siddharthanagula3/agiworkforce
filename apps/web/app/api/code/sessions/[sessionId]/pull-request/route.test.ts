@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/cloud-code-session-service');
 
 const {
   mockGetUserScopedDb,
@@ -33,7 +34,7 @@ vi.mock('@/lib/managed-compute-gate', () => ({
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cloud-code-session-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, openCloudCodeSessionPullRequest: mockOpenPullRequest };
 });
 

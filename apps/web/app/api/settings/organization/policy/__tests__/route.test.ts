@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/security-audit');
 
 vi.mock('server-only', () => ({}));
 
@@ -26,7 +27,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
 vi.mock('@/lib/security-audit', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/security-audit')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, recordAuditEvent: mockRecordAuditEvent };
 });
 vi.mock('@/lib/mfa-policy-gate', () => ({ resolveMfaEnrolled: mockResolveMfaEnrolled }));

@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { listCanonicalModels } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/server/neon-db');
+type ScanModule1 = typeof import('@/lib/server/rls-db');
+type ScanModule2 = typeof import('@/lib/services/managed-content-safety-service');
+type ScanModule3 = typeof import('./chat-attachment-hydration');
+type ScanModule4 = typeof import('@/lib/services/managed-memory-context-service');
+type ScanModule5 = typeof import('@/lib/server/user-identity');
+type ScanModule6 = typeof import('@/lib/services/managed-usage-request-service');
 
 const mocks = vi.hoisted(() => ({
   flagQuery: vi.fn(),
@@ -13,11 +20,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule0>()),
   getNeonDb: () => ({ query: mocks.flagQuery }),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule1>()),
   getUserScopedDb: async () => ({
     db: { query: mocks.scopedQuery },
     userId: 'fast-gate-user',
@@ -25,23 +32,23 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   }),
 }));
 vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-content-safety-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   enforceManagedContentSafetyPreference: mocks.enforceSafety,
 }));
 vi.mock('./chat-attachment-hydration', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./chat-attachment-hydration')>()),
+  ...(await importOriginal<ScanModule3>()),
   hydrateChatAttachments: mocks.hydrate,
 }));
 vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-memory-context-service')>()),
+  ...(await importOriginal<ScanModule4>()),
   loadManagedMemoryPolicy: mocks.loadPolicy,
 }));
 vi.mock('@/lib/server/user-identity', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/user-identity')>()),
+  ...(await importOriginal<ScanModule5>()),
   buildCustomInstructionsPreamble: mocks.customInstructions,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule6>()),
   reserveManagedUsageRequest: mocks.reserveManagedUsage,
 }));
 

@@ -2,6 +2,9 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { FileTextContent, WorkingTreeChanges } from '@agiworkforce/local-runtime-contract';
+type ScanModule0 = typeof import('@/features/desktop-host');
+type ScanModule1 = typeof import('./LocalPullRequest');
+type ScanModule2 = typeof import('./LocalTerminal');
 
 const readDeveloperSessionChanges = vi.fn();
 const discardDeveloperSessionChanges = vi.fn();
@@ -9,18 +12,18 @@ const readWorkspaceText = vi.fn();
 const writeWorkspaceText = vi.fn();
 
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/desktop-host')>()),
+  ...(await importOriginal<ScanModule0>()),
   discardDeveloperSessionChanges,
   readDeveloperSessionChanges,
   readWorkspaceText,
   writeWorkspaceText,
 }));
 vi.mock('./LocalPullRequest', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./LocalPullRequest')>()),
+  ...(await importOriginal<ScanModule1>()),
   LocalPullRequest: () => null,
 }));
 vi.mock('./LocalTerminal', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./LocalTerminal')>()),
+  ...(await importOriginal<ScanModule2>()),
   LocalTerminal: ({ onCommandFinished }: { onCommandFinished: () => void }) => (
     <button type="button" onClick={onCommandFinished}>
       Run the formatter

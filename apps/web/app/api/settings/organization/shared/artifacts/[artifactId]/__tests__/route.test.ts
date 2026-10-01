@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
+type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -69,7 +70,7 @@ vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveOrgMembership: mocks.resolveOrgMembership,
 }));
 vi.mock('@/lib/services/org-shared-artifact-service', () => ({

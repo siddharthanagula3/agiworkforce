@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/server/terms');
+type ScanModule1 = typeof import('@/lib/observability/metrics');
 
 vi.mock('server-only', () => ({}));
 
@@ -57,12 +59,12 @@ vi.mock('@/lib/developer-api/project-spend', () => ({
 }));
 
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  ...(await importOriginal<ScanModule0>()),
   readTermsStanding: (...args: unknown[]) => mocks.readTermsStanding(...args),
 }));
 
 vi.mock('@/lib/observability/metrics', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/observability/metrics')>()),
+  ...(await importOriginal<ScanModule1>()),
   recordFailure: (...args: unknown[]) => mocks.recordFailure(...args),
 }));
 

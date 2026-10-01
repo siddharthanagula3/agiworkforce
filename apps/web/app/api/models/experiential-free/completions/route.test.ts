@@ -2,6 +2,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getProviderOfferings } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/csrf');
+type ScanModule1 = typeof import('@/lib/api-auth');
+type ScanModule2 = typeof import('@/lib/rate-limit');
+type ScanModule3 = typeof import('@/lib/server/rls-db');
+type ScanModule4 = typeof import('@/lib/services/entitlement-resolution');
+type ScanModule5 = typeof import('@/lib/server/free-quota-catalogue');
+type ScanModule6 = typeof import('@/lib/server/experiential-free');
+type ScanModule7 = typeof import('@/lib/moderation');
+type ScanModule8 = typeof import('@/lib/services/managed-content-safety-service');
+type ScanModule9 = typeof import('@/lib/managed-compute-gate');
+type ScanModule10 = typeof import('@/lib/services/organization-policy-gate');
+type ScanModule11 = typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -15,19 +27,19 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule0>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule1>()),
   assertAccountActive: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule2>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule3>()),
   getUserScopedDb: vi.fn(async () => ({
     userId: 'fixture-user',
     organizationId: null,
@@ -35,16 +47,16 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   })),
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<ScanModule4>()),
   resolveEntitledPlanTier: mocks.plan,
 }));
 vi.mock('@/lib/server/free-quota-catalogue', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/free-quota-catalogue')>()),
+  ...(await importOriginal<ScanModule5>()),
   freeQuotaPlanAllows: (plan: string) => plan === 'free',
   loadFreeQuotaPolicy: () => ({ chatMaxOutputTokens: 1024, chatRequestTimeoutMs: 30_000 }),
 }));
 vi.mock('@/lib/server/experiential-free', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/experiential-free')>()),
+  ...(await importOriginal<ScanModule6>()),
   experientialFreeConfiguration: () => ({
     baseUrl: 'https://api.experientiallabs.ai/v1',
     apiKey: 'fixture-key',
@@ -52,27 +64,25 @@ vi.mock('@/lib/server/experiential-free', async (importOriginal) => ({
   loadExperientialFreeOfferings: mocks.offerings,
 }));
 vi.mock('@/lib/moderation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/moderation')>()),
+  ...(await importOriginal<ScanModule7>()),
   moderateManagedPrompt: () => ({ allowed: true }),
 }));
 vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-content-safety-service')>()),
+  ...(await importOriginal<ScanModule8>()),
   enforceManagedContentSafetyPreference: vi.fn(async () => ({ allowed: true })),
 }));
 vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/managed-compute-gate')>()),
+  ...(await importOriginal<ScanModule9>()),
   buildModelPolicyGateResponse: vi.fn(async () => null),
   buildProviderEgressGateResponse: mocks.egress,
 }));
 vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-policy-gate')>()),
+  ...(await importOriginal<ScanModule10>()),
   evaluateActiveWorkspacePolicy: mocks.privacy,
   resolveZeroDataRetentionPolicy: mocks.retention,
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate')
-  >()),
+  ...(await importOriginal<ScanModule11>()),
   applySecretHandlingToTexts: vi.fn(async (_user: string, texts: string[]) => ({
     action: 'clean',
     texts,

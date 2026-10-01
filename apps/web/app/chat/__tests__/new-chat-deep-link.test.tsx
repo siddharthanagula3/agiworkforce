@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('next/headers');
 
 const { requestedPath } = vi.hoisted(() => ({ requestedPath: { value: null as string | null } }));
 
 vi.mock('next/headers', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/headers')>()),
+  ...(await importOriginal<ScanModule0>()),
   headers: async () =>
     new Headers(requestedPath.value === null ? {} : { 'x-agi-pathname': requestedPath.value }),
 }));

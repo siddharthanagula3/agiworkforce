@@ -2,6 +2,13 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { listCanonicalModels, requireProviderDefaultModel } from '@agiworkforce/types';
 import { resolveWebCloudModelRoute } from '../lib/request-processor';
+type ScanModule0 = typeof import('@/lib/server/terms');
+type ScanModule1 = typeof import('@/lib/server/neon-db');
+type ScanModule2 = typeof import('@/lib/services/free-trial-service');
+type ScanModule3 = typeof import('@/lib/services/cloud-agent-run-service');
+type ScanModule4 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop');
+type ScanModule5 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule6 = typeof import('@/lib/services/provider-adapter-service');
 
 const COMPAT_PROVIDER_CASES = [
   { provider: 'zhipu', content: 'Zhipu says hi.' },
@@ -62,14 +69,14 @@ vi.mock('@/lib/model-tiers', () => ({
 // Terms standing is the auth gate's own concern (auth-gate-terms.test.ts); these
 // turns run for an account that accepted the current version.
 vi.mock('@/lib/server/terms', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/terms')>()),
+  ...(await importOriginal<ScanModule0>()),
   readTermsStanding: async () => ({ kind: 'current' }),
 }));
 
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
   return {
-    ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+    ...(await importOriginal<ScanModule1>()),
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
@@ -233,7 +240,7 @@ const freeTrialMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/free-trial-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   isFreeTrialRequest: freeTrialMocks.isFreeTrial,
   beginFreeTrialRequest: freeTrialMocks.begin,
   applyFreeTrialProviderBudget: freeTrialMocks.applyBudget,
@@ -245,7 +252,7 @@ vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
 }));
 
 vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cloud-agent-run-service')>()),
+  ...(await importOriginal<ScanModule3>()),
   createCloudAgentRun: workflowRouteMocks.createRun,
   findActiveCloudAgentRunForConversation: workflowRouteMocks.findActive,
 }));
@@ -258,12 +265,12 @@ vi.mock('@/lib/user-connector-tools', () => ({
 }));
 
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop')>()),
+  ...(await importOriginal<ScanModule4>()),
   loadMcpToolDefs: workflowRouteMocks.loadMcpTools,
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule5>()),
   reserveManagedUsageRequest: managedUsageMocks.reserve,
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   finalizeManagedUsageRequest: managedUsageMocks.finalize,
@@ -297,7 +304,7 @@ vi.mock('@/lib/services/credit-service', () => ({
 
 const mockGetProviderFromModel = vi.fn();
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/provider-adapter-service')>();
+  const actual = await importOriginal<ScanModule6>();
   return {
     ...actual,
     resolveProviderFromModel: (...args: unknown[]) => mockGetProviderFromModel(...args),

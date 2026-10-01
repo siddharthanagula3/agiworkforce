@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/app/api/chat/conversations/[id]/messages/lib/message-thread');
 
 vi.mock('server-only', () => ({}));
 
@@ -69,9 +70,7 @@ vi.mock('@/app/api/chat/conversations/[id]/messages/lib/index-artifacts', () => 
 vi.mock(
   '@/app/api/chat/conversations/[id]/messages/lib/message-thread',
   async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import('@/app/api/chat/conversations/[id]/messages/lib/message-thread')
-    >()),
+    ...(await importOriginal<ScanModule0>()),
     setActiveLeaf: mocks.setActiveLeaf,
   }),
 );

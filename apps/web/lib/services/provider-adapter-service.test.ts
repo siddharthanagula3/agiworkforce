@@ -3,6 +3,7 @@ import { getProviderDefaultModel, requireProviderDefaultModel } from '@agiworkfo
 import type { ProtocolRoute } from '@agiworkforce/types';
 
 import { modelRegistry } from '@agiworkforce/model-registry';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 const MANAGED_ONLY_EXPERIMENTAL_PROVIDER = 'cheaperinference_anthropic';
 
@@ -35,7 +36,7 @@ function protocolRouteFixture(overrides: Partial<ProtocolRoute>): ProtocolRoute 
 const { protocolRoutes } = vi.hoisted(() => ({ protocolRoutes: [] as ProtocolRoute[] }));
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<ScanModule0>()),
   listProtocolRoutes: () => protocolRoutes,
 }));
 

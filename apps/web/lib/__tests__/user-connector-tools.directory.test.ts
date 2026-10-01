@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/connectors/oauth-store');
+type ScanModule1 = typeof import('@/lib/connectors/mcp-directory-targets');
 
 vi.mock('server-only', () => ({}));
 
@@ -60,7 +62,7 @@ vi.mock('@/lib/connectors/oauth-access', () => ({
 
 const mockGrantSummaries = vi.fn();
 vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/oauth-store')>()),
+  ...(await importOriginal<ScanModule0>()),
   upsertConnectorOAuthGrant: vi.fn(async () => undefined),
   getUserConnectorOAuthGrantSummaries: (...a: unknown[]) => mockGrantSummaries(...a),
   ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
@@ -114,7 +116,7 @@ const targets: Record<string, Record<string, unknown>> = {
 };
 
 vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/mcp-directory-targets')>()),
+  ...(await importOriginal<ScanModule1>()),
   resolveDirectoryTarget: async (ref: string) =>
     Object.values(targets).find(
       (target) => target['connectorId'] === ref || target['serverId'] === ref,

@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('../../../lib/request-processor');
+type ScanModule1 = typeof import('../../../lib/tool-loop');
+type ScanModule2 = typeof import('@/lib/user-connector-tools');
+type ScanModule3 = typeof import('../../../lib/connector-tool-permissions');
+type ScanModule4 = typeof import('../../../lib/tool-approval-policy');
+type ScanModule5 = typeof import('@/lib/services/cloud-agent-run-service');
+type ScanModule6 = typeof import('@/lib/services/managed-usage-request-service');
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
@@ -30,23 +37,23 @@ vi.mock('@/lib/managed-compute-gate', () => ({
 
 const mockProcessRequest = vi.fn();
 vi.mock('../../../lib/request-processor', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../lib/request-processor')>()),
+  ...(await importOriginal<ScanModule0>()),
   processRequest: (...args: unknown[]) => mockProcessRequest(...args),
 }));
 
 vi.mock('../../../lib/tool-loop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../lib/tool-loop')>()),
+  ...(await importOriginal<ScanModule1>()),
   loadMcpToolDefs: vi.fn(async () => []),
 }));
 
 vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/user-connector-tools')>()),
+  ...(await importOriginal<ScanModule2>()),
   loadUserConnectorToolDefs: vi.fn(async () => []),
   makeUserConnectorExecutor: vi.fn(),
 }));
 
 vi.mock('../../../lib/connector-tool-permissions', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../lib/connector-tool-permissions')>()),
+  ...(await importOriginal<ScanModule3>()),
   loadConnectorToolPermissions: vi.fn(async () => ({
     isDenied: () => false,
     isConnectorToolDenied: () => false,
@@ -54,7 +61,7 @@ vi.mock('../../../lib/connector-tool-permissions', async (importOriginal) => ({
 }));
 
 vi.mock('../../../lib/tool-approval-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../../lib/tool-approval-policy')>()),
+  ...(await importOriginal<ScanModule4>()),
   loadToolApprovalPolicy: vi.fn(async () => 'ask'),
 }));
 
@@ -81,14 +88,14 @@ const runMocks = vi.hoisted(() => ({
   release: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/cloud-agent-run-service')>()),
+  ...(await importOriginal<ScanModule5>()),
   withdrawCloudAgentRunPauseRequest: runMocks.withdraw,
   claimCloudAgentPauseCheckpoint: runMocks.claim,
   releaseCloudAgentPauseCheckpoint: runMocks.release,
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule6>()),
   markManagedUsageProviderStarted: vi.fn(async () => undefined),
   finalizeManagedUsageRequest: vi.fn(async () => ({ actualCostCents: 0 })),
 }));

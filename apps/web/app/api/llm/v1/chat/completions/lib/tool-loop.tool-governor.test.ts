@@ -1,8 +1,9 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
+type ScanModule0 = typeof import('undici');
 
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
 vi.mock('undici', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('undici')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     fetch: (...args: unknown[]) =>

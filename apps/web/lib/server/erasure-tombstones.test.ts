@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('./object-backup');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -6,7 +7,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 const requeueReplicasAfterRestore = vi.hoisted(() => vi.fn(async () => 3));
 vi.mock('./object-backup', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./object-backup')>()),
+  ...(await importOriginal<ScanModule0>()),
   resolveObjectBackupTarget: () => null,
   requeueReplicasAfterRestore,
 }));

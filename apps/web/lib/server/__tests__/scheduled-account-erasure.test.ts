@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../request-context-cache');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock('../identity', () => ({
   getIdentityProvider: () => ({ deleteUser: (...args: unknown[]) => mocks.deleteUser(...args) }),
 }));
 vi.mock('../request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../request-context-cache')>()),
+  ...(await importOriginal<ScanModule0>()),
   invalidateAccountStatusCache: (...args: unknown[]) => mocks.invalidateAccountStatusCache(...args),
 }));
 vi.mock('../account-erasure', () => ({

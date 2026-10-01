@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { evaluateModelEnvironment } from '@agiworkforce/types';
 import { environmentAvailability } from '../features/model-picker/modelConstants';
 import { requireCatalogModel } from './catalogModelFixtures';
+type ScanModule0 = typeof import('@agiworkforce/types');
 
 const CATALOG_BASE_MODEL_ID = requireCatalogModel().id;
 
@@ -88,7 +89,7 @@ describe('buildGroupedQuickPickItems, e2b-flagged synthetic model is filtered ou
     const SYNTH_ID = '__test_synth_e2b_model__';
 
     vi.doMock('@agiworkforce/types', async (importOriginal) => {
-      const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+      const actual = await importOriginal<ScanModule0>();
       const baseMeta = actual.getModelMetadataById(CATALOG_BASE_MODEL_ID);
       if (!baseMeta) throw new Error('Catalog fixture metadata is required');
 
@@ -128,7 +129,7 @@ describe('buildGroupedQuickPickItems, e2b-flagged synthetic model is filtered ou
     const SYNTH_ID = '__test_synth_no_env_model__';
 
     vi.doMock('@agiworkforce/types', async (importOriginal) => {
-      const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+      const actual = await importOriginal<ScanModule0>();
       const baseMeta = actual.getModelMetadataById(CATALOG_BASE_MODEL_ID);
       if (!baseMeta) throw new Error('Catalog fixture metadata is required');
 

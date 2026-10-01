@@ -10,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { startAutomationAttempt } from '@agiworkforce/types';
+type ScanModule0 = typeof import('../src/features/cloud-bridge/freeTrialClient');
 
 const storage = vi.hoisted(() => {
   const local: Record<string, unknown> = {};
@@ -43,7 +44,7 @@ vi.stubGlobal('chrome', {
 const authToken = vi.hoisted(() => ({ value: 'bearer-for-this-test' as string | null }));
 
 vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/cloud-bridge/freeTrialClient')>()),
+  ...(await importOriginal<ScanModule0>()),
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.example',
   getAuthToken: () => Promise.resolve(authToken.value),
 }));

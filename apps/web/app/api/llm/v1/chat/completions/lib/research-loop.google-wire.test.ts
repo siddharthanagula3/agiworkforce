@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('./tool-loop-anthropic');
 
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -28,7 +29,7 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
     typeof provider === 'string' ? provider.toLowerCase() : null,
 }));
 vi.mock('./tool-loop-anthropic', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./tool-loop-anthropic')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     buildToolLoopStream: vi.fn(),

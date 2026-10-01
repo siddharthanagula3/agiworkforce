@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@agiworkforce/ui');
 
 const mocks = vi.hoisted(() => ({
   privacyMode: 'managed' as 'local' | 'byok' | 'managed',
@@ -96,7 +97,7 @@ vi.mock('../LocalCloudToggle', () => ({ LocalCloudToggle: () => null }));
 vi.mock('../../updates', () => ({ UpdatePill: () => null }));
 vi.mock('../AccountMenu', () => ({ AccountMenu: () => null }));
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<ScanModule0>()),
   AgiMark: () => null,
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }));

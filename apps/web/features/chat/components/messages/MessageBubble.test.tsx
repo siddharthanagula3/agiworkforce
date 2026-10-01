@@ -16,6 +16,7 @@ import {
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
 const IMAGE_MODEL_ID = getModels({
   modelTypes: ['image'],
@@ -33,7 +34,7 @@ if (!IMAGE_MODEL_ID || !CHAT_MODEL_ID) {
 // depend on next/dynamic async resolution. importOriginal preserves every
 // other @agiworkforce/unified-chat export this file's import graph needs.
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     MarkdownContent: ({

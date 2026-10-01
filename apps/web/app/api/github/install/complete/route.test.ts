@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/security-audit');
+type ScanModule1 = typeof import('@/lib/rate-limit');
+type ScanModule2 = typeof import('@/lib/api-auth');
+type ScanModule3 = typeof import('@/lib/csrf');
+type ScanModule4 = typeof import('@/lib/logger');
+type ScanModule5 = typeof import('@/lib/github-app');
+type ScanModule6 = typeof import('@/lib/github-install-app-return');
 
 const { auditSpy } = vi.hoisted(() => ({
   auditSpy: vi.fn(async (_event: Record<string, unknown>) => undefined),
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: auditSpy,
 }));
 import { createHash } from 'node:crypto';
@@ -28,28 +35,28 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule1>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule2>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: mocks.userId })),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule3>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ScanModule4>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/github-app', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/github-app')>()),
+  ...(await importOriginal<ScanModule5>()),
   exchangeGitHubOAuthCode: (...args: unknown[]) => mocks.exchangeCode(...args),
   findGitHubInstallationForUser: (...args: unknown[]) => mocks.findInstallation(...args),
 }));
 vi.mock('@/lib/github-install-app-return', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/github-install-app-return')>()),
+  ...(await importOriginal<ScanModule6>()),
   consumeAppInstall: (...args: unknown[]) => mocks.consume(...args),
   linkVerifiedGitHubInstallation: (...args: unknown[]) => mocks.link(...args),
 }));

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+type ScanModule0 = typeof import('@/lib/services/skill-catalog-service');
 
 const authState = { isSignedIn: false, isLoaded: true };
 
@@ -23,7 +24,7 @@ const { mockGetManagedSkillCatalog } = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/skill-catalog-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   getManagedSkillCatalog: mockGetManagedSkillCatalog,
 }));
 

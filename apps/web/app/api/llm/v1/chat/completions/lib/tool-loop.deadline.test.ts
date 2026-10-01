@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
 
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('./tool-loop-anthropic', () => ({
@@ -12,8 +13,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     reserveManagedUsageProviderStep: vi.fn(),

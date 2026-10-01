@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
+type ScanModule0 = typeof import('node:child_process');
 
 const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }));
 
@@ -13,7 +14,7 @@ const { execFile } = vi.hoisted(() => ({
 }));
 
 vi.mock('node:child_process', async (importOriginal) => {
-  const original = await importOriginal<typeof import('node:child_process')>();
+  const original = await importOriginal<ScanModule0>();
   return { ...original, spawn, execFile, default: { ...original, spawn, execFile } };
 });
 

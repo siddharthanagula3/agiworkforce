@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/services/cloud-code-agent-service');
 
 const { mockGetUserScopedDb, mockRateLimit, mockCsrf, mockRequestCancellation } = vi.hoisted(
   () => ({
@@ -18,7 +19,7 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/services/cloud-code-agent-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cloud-code-agent-service')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, requestCloudCodeTurnCancellation: mockRequestCancellation };
 });
 

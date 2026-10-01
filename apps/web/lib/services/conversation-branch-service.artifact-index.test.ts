@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -9,7 +10,7 @@ vi.mock('@/app/api/chat/conversations/[id]/messages/lib/index-artifacts', () => 
 }));
 
 vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   assertFreeDailyAllowance: vi.fn(),
 }));
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRoot } from 'react-dom/client';
 import { act, type ReactElement } from 'react';
+type ScanModule0 = typeof import('../shikiHighlighter');
 
 const hoisted = vi.hoisted(() => ({
   mermaidRender: vi.fn<(id: string, source: string) => Promise<{ svg: string }>>(),
@@ -18,7 +19,7 @@ vi.mock('mermaid', () => ({
 // moment no assertion here can pin down. Every call is recorded instead, which
 // is also what the streaming budget below is asserted against.
 vi.mock('../shikiHighlighter', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../shikiHighlighter')>()),
+  ...(await importOriginal<ScanModule0>()),
   readHighlightCache: () => null,
   highlightToLines: (code: string, language: string) => hoisted.highlightToLines(code, language),
 }));

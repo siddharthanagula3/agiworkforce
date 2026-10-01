@@ -3,9 +3,10 @@ import {
   PRODUCT_ANALYTICS_INGEST_PATH,
   PRODUCT_ANALYTICS_NOTICE_VERSION,
 } from '@agiworkforce/types';
+type ScanModule0 = typeof import('../src/features/cloud-bridge/freeTrialClient');
 
 vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/cloud-bridge/freeTrialClient')>()),
+  ...(await importOriginal<ScanModule0>()),
   FREE_TRIAL_GATEWAY: 'https://gateway.test',
   getAuthToken: async () => 'token',
 }));

@@ -12,6 +12,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
+type ScanModule0 = typeof import('@agiworkforce/ui');
+type ScanModule1 = typeof import('@/lib/sentry-shared');
 
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
@@ -22,7 +24,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<ScanModule0>()),
   Switch: ({ checked }: { checked?: boolean }) =>
     React.createElement('button', { role: 'switch', 'aria-checked': Boolean(checked) }),
   useConfirm: () => ({ confirm: vi.fn(async () => true), dialog: null }),
@@ -48,7 +50,7 @@ vi.mock('@shared/stores/web-chat-store', () => ({
 }));
 
 vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/sentry-shared')>()),
+  ...(await importOriginal<ScanModule1>()),
   setTelemetryConsentCache: vi.fn(),
 }));
 

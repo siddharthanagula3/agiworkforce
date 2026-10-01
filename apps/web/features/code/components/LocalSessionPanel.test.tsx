@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LocalDeveloperSession } from '@agiworkforce/local-runtime-contract';
 import { IME_PROCESSING_KEY_CODE } from '@agiworkforce/unified-chat/ime-composition';
+type ScanModule0 = typeof import('@/features/desktop-host');
 
 const host = vi.hoisted(() => ({
   readDeveloperSession: vi.fn(),
@@ -10,7 +11,7 @@ const host = vi.hoisted(() => ({
 }));
 
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/desktop-host')>()),
+  ...(await importOriginal<ScanModule0>()),
   readDeveloperSession: host.readDeveloperSession,
   startDeveloperTurn: host.startDeveloperTurn,
   onDeveloperSessionEvent: () => () => undefined,

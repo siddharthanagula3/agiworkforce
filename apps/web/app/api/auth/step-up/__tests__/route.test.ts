@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/step-up/session-proof');
 
 vi.mock('server-only', () => ({}));
 
@@ -24,7 +25,7 @@ vi.mock('@/lib/security-audit', () => ({
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb }));
 vi.mock('@/lib/server/step-up/second-factor', () => ({ stepUpLevelFor }));
 vi.mock('@/lib/server/step-up/session-proof', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/step-up/session-proof')>()),
+  ...(await importOriginal<ScanModule0>()),
   readSessionFactorAge,
 }));
 

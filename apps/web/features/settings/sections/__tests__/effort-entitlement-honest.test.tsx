@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@shared/stores/web-settings-store');
 
 const mocks = vi.hoisted(() => ({
   tier: 'free' as string | null,
@@ -56,7 +57,7 @@ vi.mock('@shared/config/llm', async (importOriginal) => ({
   }),
 }));
 vi.mock('@shared/stores/web-settings-store', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/stores/web-settings-store')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ACCENT_COLORS: actual.ACCENT_COLORS,
     useSettingsStore: (selector: (s: unknown) => unknown) =>

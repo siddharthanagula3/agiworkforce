@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/connectors/mcp-directory-targets');
 
 const mocks = vi.hoisted(() => ({
   authUser: vi.fn(),
@@ -35,7 +36,7 @@ vi.mock('@/lib/connectors/mcp-discovery', () => ({
   beginMcpAuthorization: (...a: unknown[]) => mocks.begin(...a),
 }));
 vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/mcp-directory-targets')>()),
+  ...(await importOriginal<ScanModule0>()),
   findDirectoryTargetByRemoteUrl: vi.fn(async () => null),
   isDirectoryServerId: vi.fn(() => false),
   normalizeRemoteUrl: vi.fn((url: string) => url),

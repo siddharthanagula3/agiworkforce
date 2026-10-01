@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+type ScanModule0 = typeof import('@/lib/services/managed-usage-request-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -132,7 +133,7 @@ vi.mock('@/lib/server/side-call-training-policy', () => ({
   sideCallProviderAllowed: mocks.sideCallProviderAllowed,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   reserveManagedUsageRequest: mocks.reserve,
   finalizeManagedUsageRequest: mocks.finalize,
   markManagedUsageProviderStarted: mocks.providerStarted,

@@ -4,6 +4,8 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { SKILL_AUDIENCES, SKILL_MANIFEST_FILE_NAME, type Skill } from '@agiworkforce/skills';
+type ScanModule0 = typeof import('@/features/plugins/server/directory/installed-skills');
+type ScanModule1 = typeof import('@/lib/services/user-skill-service');
 
 vi.mock('server-only', () => ({}));
 const directorySkills = vi.hoisted(() => ({
@@ -13,13 +15,11 @@ const userSkills = vi.hoisted(() => ({
   listUserSkillsAsManagedSkills: vi.fn(async () => []),
 }));
 vi.mock('@/features/plugins/server/directory/installed-skills', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/features/plugins/server/directory/installed-skills')
-  >()),
+  ...(await importOriginal<ScanModule0>()),
   ...directorySkills,
 }));
 vi.mock('@/lib/services/user-skill-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/user-skill-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   ...userSkills,
 }));
 vi.mock('@/lib/logger', () => ({

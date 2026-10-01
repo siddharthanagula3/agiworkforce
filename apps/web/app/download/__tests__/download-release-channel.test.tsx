@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+type ScanModule0 = typeof import('@/lib/rate-limit');
 
 const { fetchMock, withRateLimitMock } = vi.hoisted(() => ({
   fetchMock: vi.fn(),
@@ -8,7 +9,7 @@ const { fetchMock, withRateLimitMock } = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule0>()),
   withRateLimit: withRateLimitMock,
 }));
 

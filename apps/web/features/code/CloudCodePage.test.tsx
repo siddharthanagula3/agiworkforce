@@ -27,6 +27,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { IME_PROCESSING_KEY_CODE } from '@agiworkforce/unified-chat/ime-composition';
+type ScanModule0 = typeof import('@/features/desktop-host');
 
 const push = vi.fn();
 const replace = vi.fn();
@@ -114,7 +115,7 @@ const listDeveloperModels = vi.fn(async () => ({
 }));
 
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/desktop-host')>()),
+  ...(await importOriginal<ScanModule0>()),
   readDeveloperSessionChanges: vi.fn(async () => ({
     files: [{ path: 'src/edit.ts', state: 'modified', originalPath: null }],
     diff: '',

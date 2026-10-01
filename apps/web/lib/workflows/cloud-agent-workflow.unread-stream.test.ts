@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/deadline-policy');
 
 const order: string[] = [];
 
@@ -20,7 +21,7 @@ const db = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() };
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/deadline-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/deadline-policy')>()),
+  ...(await importOriginal<ScanModule0>()),
   DURABLE_STREAM_WRITE_DEADLINE_MS: 25,
 }));
 vi.mock('@/lib/logger', () => ({

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getPlanMaxSandboxes, getPlanSandboxTtlMs } from '@agiworkforce/types';
+type ScanModule0 = typeof import('../templates');
 
 process.env['CSRF_SECRET'] ||= 'a'.repeat(40);
 process.env['NEXT_PUBLIC_APP_URL'] ||= 'https://app.agiworkforce.test';
@@ -15,7 +16,7 @@ const templateComputeShape = vi.fn(async (_templateId: unknown) => ({
   memoryGib: null as number | null,
 }));
 vi.mock('../templates', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../templates')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     templateComputeShape: (templateId: unknown) => templateComputeShape(templateId),

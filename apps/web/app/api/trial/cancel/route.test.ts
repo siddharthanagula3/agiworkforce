@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+type ScanModule0 = typeof import('@/lib/rate-limit');
+type ScanModule1 = typeof import('@/lib/security-audit');
+type ScanModule2 = typeof import('@/lib/server/neon-db');
+type ScanModule3 = typeof import('@/lib/server/stripe-client');
+type ScanModule4 = typeof import('@/lib/services/trial-reminder-service');
 
 const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
@@ -11,23 +16,23 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule0>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule1>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<ScanModule2>()),
   getNeonDb: mocks.getNeonDb,
 }));
 vi.mock('@/lib/server/stripe-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/stripe-client')>()),
+  ...(await importOriginal<ScanModule3>()),
   getStripeClientOrNull: mocks.getStripeClientOrNull,
 }));
 vi.mock('@/lib/services/trial-reminder-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/trial-reminder-service')>()),
+  ...(await importOriginal<ScanModule4>()),
   cancelTrialFromLink: mocks.cancelTrialFromLink,
 }));
 

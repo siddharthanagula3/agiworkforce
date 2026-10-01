@@ -4,6 +4,12 @@ import {
   connectorIdsWithMcpEndpoint,
   isSelfServiceConnector,
 } from '@/lib/connectors/mcp-endpoints';
+type ScanModule0 = typeof import('@/lib/services/connector-policy-gate');
+type ScanModule1 = typeof import('@/lib/services/active-workspace-service');
+type ScanModule2 = typeof import('@/lib/services/connector-policy-service');
+type ScanModule3 = typeof import('@/lib/connectors/connector-capability');
+type ScanModule4 = typeof import('@/lib/services/entitlement-resolution');
+type ScanModule5 = typeof import('@/lib/connectors/mcp-custom-connections');
 
 interface DirectoryTargetFixture {
   connectorId: string;
@@ -54,23 +60,23 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/connector-policy-gate')>()),
+  ...(await importOriginal<ScanModule0>()),
   evaluateConnectorPolicyForUser: (...args: unknown[]) => mocks.connectorPolicy(...args),
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ScanModule1>()),
   resolveActiveOrganizationId: (...args: unknown[]) => mocks.activeOrganization(...args),
 }));
 vi.mock('@/lib/services/connector-policy-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/connector-policy-service')>()),
+  ...(await importOriginal<ScanModule2>()),
   readConnectorPolicy: (...args: unknown[]) => mocks.workspacePolicy(...args),
 }));
 vi.mock('@/lib/connectors/connector-capability', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/connector-capability')>()),
+  ...(await importOriginal<ScanModule3>()),
   connectorsAllowedWithoutRequest: vi.fn(async () => true),
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<ScanModule4>()),
   resolveEntitledPlanTier: vi.fn(async () => 'pro'),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
@@ -110,7 +116,7 @@ vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
   resolveDirectoryConnectAuthMode: (...args: unknown[]) => mocks.directoryAuthMode(...args),
 }));
 vi.mock('@/lib/connectors/mcp-custom-connections', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/mcp-custom-connections')>()),
+  ...(await importOriginal<ScanModule5>()),
   probeMcpServer: (...args: unknown[]) => mocks.probe(...args),
   insertCustomConnector: (...args: unknown[]) => mocks.insertCustom(...args),
   deleteCustomConnectorRows: (...args: unknown[]) => mocks.deleteCustom(...args),
@@ -979,9 +985,7 @@ function savedConnectorRow(sql: unknown): unknown[] {
 describe('POST /api/connectors for a member of a governed workspace', () => {
   beforeEach(async () => {
     resetMocks();
-    const gate = await vi.importActual<typeof import('@/lib/services/connector-policy-gate')>(
-      '@/lib/services/connector-policy-gate',
-    );
+    const gate = await vi.importActual<ScanModule0>('@/lib/services/connector-policy-gate');
     mocks.connectorPolicy.mockImplementation((...args: unknown[]) =>
       gate.evaluateConnectorPolicyForUser(
         args[0] as Parameters<typeof gate.evaluateConnectorPolicyForUser>[0],

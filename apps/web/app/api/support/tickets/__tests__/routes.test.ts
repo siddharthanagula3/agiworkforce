@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/support/tickets/service');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -24,9 +25,7 @@ vi.mock('@/lib/support/diagnostics/schema', () => ({
   normalizeDiagnostics: mocks.normalizeDiagnostics,
 }));
 vi.mock('@/lib/support/tickets/service', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/support/tickets/service')>(
-    '@/lib/support/tickets/service',
-  );
+  const actual = await vi.importActual<ScanModule0>('@/lib/support/tickets/service');
   return {
     ...actual,
     openTicket: mocks.openTicket,

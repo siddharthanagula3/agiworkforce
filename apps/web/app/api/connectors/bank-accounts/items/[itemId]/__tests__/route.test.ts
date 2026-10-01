@@ -1,18 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/security-audit');
+type ScanModule1 = typeof import('@/lib/connectors/bank-accounts');
 
 const { mockRemove, mockSet } = vi.hoisted(() => ({ mockRemove: vi.fn(), mockSet: vi.fn() }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({ db: {}, userId: 'user-1', organizationId: null })),
 }));
 vi.mock('@/lib/connectors/bank-accounts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/bank-accounts')>()),
+  ...(await importOriginal<ScanModule1>()),
   removeBankItem: (...args: unknown[]) => mockRemove(...args),
   setBankItemExcludedAccounts: (...args: unknown[]) => mockSet(...args),
 }));

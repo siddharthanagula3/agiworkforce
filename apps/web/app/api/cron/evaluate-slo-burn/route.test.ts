@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/server/slo/anomaly');
 
 const mocks = vi.hoisted(() => ({
   verifyCronRequest: vi.fn(),
@@ -13,7 +14,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
 vi.mock('@/lib/server/slo/attainment', () => ({ evaluateBurnRates: mocks.evaluateBurnRates }));
 vi.mock('@/lib/server/slo/anomaly', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/slo/anomaly')>()),
+  ...(await importOriginal<ScanModule0>()),
   evaluateAnomalies: mocks.evaluateAnomalies,
 }));
 vi.mock('@/lib/server/incident/dispatch', () => ({ notifyIncident: mocks.notifyIncident }));

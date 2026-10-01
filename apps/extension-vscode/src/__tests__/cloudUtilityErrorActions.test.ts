@@ -23,9 +23,10 @@ import {
   getModelPickerOptionsForTier,
   modelDisplayLabel,
 } from '../features/model-picker/modelConstants';
+type ScanModule0 = typeof import('../utils/api');
 
 vi.mock('../utils/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../utils/api')>()),
+  ...(await importOriginal<ScanModule0>()),
   fetchTierInfo: vi.fn(),
 }));
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/egress-policy');
 
 vi.mock('server-only', () => ({}));
 
@@ -51,7 +52,7 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mocks.requireTeamAdminAccess,
 }));
 vi.mock('@/lib/egress-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/egress-policy')>()),
+  ...(await importOriginal<ScanModule0>()),
   assertResolvedPublicHostname: mocks.assertResolvedPublicHostname,
 }));
 

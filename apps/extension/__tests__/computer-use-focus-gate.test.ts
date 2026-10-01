@@ -8,6 +8,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../src/features/computer-use/cdpDriver');
 
 const focus = vi.hoisted(() => ({
   signature: null as string | null,
@@ -16,7 +17,7 @@ const focus = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/features/computer-use/cdpDriver', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/computer-use/cdpDriver')>()),
+  ...(await importOriginal<ScanModule0>()),
   getFocusedFieldSignature: vi.fn(() => {
     focus.reads += 1;
     if (focus.fail) return Promise.reject(new Error('the tab is gone'));

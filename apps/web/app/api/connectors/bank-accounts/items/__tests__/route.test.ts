@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/connectors/bank-accounts');
 
 const { mockList, mockUnavailable } = vi.hoisted(() => ({
   mockList: vi.fn(),
@@ -10,7 +11,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({ db: {}, userId: 'user-1', organizationId: null })),
 }));
 vi.mock('@/lib/connectors/bank-accounts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/bank-accounts')>()),
+  ...(await importOriginal<ScanModule0>()),
   listBankItems: (...args: unknown[]) => mockList(...args),
   bankAccountsUnavailableReason: () => mockUnavailable(),
 }));

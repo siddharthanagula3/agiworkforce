@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('../durable-initial-turns');
 
 const { mockStart, mockDurableInitialTurnsEnabled } = vi.hoisted(() => ({
   mockStart: vi.fn(),
@@ -11,7 +12,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('workflow/api', () => ({ start: mockStart }));
 vi.mock('../durable-initial-turns', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../durable-initial-turns')>();
+  const actual = await importOriginal<ScanModule0>();
   return { ...actual, areDurableInitialTurnsEnabled: mockDurableInitialTurnsEnabled };
 });
 

@@ -12,6 +12,23 @@ import {
 } from '@/lib/free-quota-authorization';
 import { loadFreePools } from '@/lib/server/free-pools';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
+type ScanModule0 = typeof import('@/lib/csrf');
+type ScanModule1 = typeof import('@/lib/api-auth');
+type ScanModule2 = typeof import('@/lib/rate-limit');
+type ScanModule3 = typeof import('@/lib/server/rls-db');
+type ScanModule4 = typeof import('@/lib/server/key-value');
+type ScanModule5 = typeof import('@/lib/services/entitlement-resolution');
+type ScanModule6 = typeof import('@/lib/managed-compute-gate');
+type ScanModule7 = typeof import('@/lib/services/organization-policy-gate');
+type ScanModule8 = typeof import('@/lib/services/managed-content-safety-service');
+type ScanModule9 = typeof import('@/lib/moderation');
+type ScanModule10 = typeof import('@/lib/server/media-storage');
+type ScanModule11 = typeof import('@/lib/server/generated-file-persist');
+type ScanModule12 =
+  typeof import('@/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration');
+type ScanModule13 = typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate');
+type ScanModule14 = typeof import('@/lib/services/free-trial-service');
+type ScanModule15 = typeof import('@/lib/server/free-pools');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
@@ -34,19 +51,19 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule0>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule1>()),
   assertAccountActive: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule2>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule3>()),
   getUserScopedDb: vi.fn(async () => ({
     userId: 'fixture-user',
     organizationId: null,
@@ -54,47 +71,45 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   })),
 }));
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/key-value')>()),
+  ...(await importOriginal<ScanModule4>()),
   getKeyValueStore: () => mocks.store,
   getKeyValueProvider: () => 'upstash',
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  ...(await importOriginal<ScanModule5>()),
   resolveEntitledPlanTier: mocks.plan,
 }));
 vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/managed-compute-gate')>()),
+  ...(await importOriginal<ScanModule6>()),
   buildModelPolicyGateResponse: vi.fn(async () => null),
   buildProviderEgressGateResponse: mocks.egress,
 }));
 vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-policy-gate')>()),
+  ...(await importOriginal<ScanModule7>()),
   evaluateActiveWorkspacePolicy: mocks.privacy,
   resolveZeroDataRetentionPolicy: mocks.retention,
 }));
 vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-content-safety-service')>()),
+  ...(await importOriginal<ScanModule8>()),
   enforceManagedContentSafetyPreference: vi.fn(async () => ({ enabled: false, allowed: true })),
 }));
 vi.mock('@/lib/moderation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/moderation')>()),
+  ...(await importOriginal<ScanModule9>()),
   moderateGeneratedMedia: mocks.moderateMedia,
 }));
 vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/media-storage')>()),
+  ...(await importOriginal<ScanModule10>()),
   bytesFromUrl: mocks.download,
   isGeneratedMediaStorageConfigured: () => true,
 }));
 vi.mock('@/lib/server/generated-file-persist', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/generated-file-persist')>()),
+  ...(await importOriginal<ScanModule11>()),
   persistGeneratedFileBytes: mocks.persist,
 }));
 vi.mock(
   '@/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration',
   async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import('@/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration')
-    >()),
+    ...(await importOriginal<ScanModule12>()),
     hydrateChatAttachments: mocks.hydrate,
   }),
 );
@@ -102,21 +117,19 @@ vi.mock('@/app/api/chat/conversations/[id]/messages/lib/persist-message', () => 
   persistConversationMessage: mocks.persistUser,
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate')
-  >()),
+  ...(await importOriginal<ScanModule13>()),
   applySecretHandlingToTexts: vi.fn(async (_user: string, texts: string[]) => ({
     action: 'clean',
     texts,
   })),
 }));
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/free-trial-service')>()),
+  ...(await importOriginal<ScanModule14>()),
   beginFreeTrialRequest: mocks.begin,
   settleFreeTrialRequest: mocks.settle,
 }));
 vi.mock('@/lib/server/free-pools', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/free-pools')>();
+  const actual = await importOriginal<ScanModule15>();
   return {
     ...actual,
     loadFreePools: () => {

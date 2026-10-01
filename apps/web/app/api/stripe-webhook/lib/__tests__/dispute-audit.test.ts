@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/services/notification-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -17,7 +18,7 @@ vi.mock('@/lib/security-audit', () => ({
 }));
 
 vi.mock('@/lib/services/notification-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/notification-service')>()),
+  ...(await importOriginal<ScanModule0>()),
   recordNotification: vi.fn().mockResolvedValue({ recorded: true }),
 }));
 

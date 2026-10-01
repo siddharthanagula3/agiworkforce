@@ -8,12 +8,13 @@ import {
   type FileTextWrite,
 } from '@agiworkforce/local-runtime-contract';
 import type { LocalFileEditorProps } from './LocalFileEditor';
+type ScanModule0 = typeof import('@/features/desktop-host');
 
 const readWorkspaceText = vi.fn();
 const writeWorkspaceText = vi.fn();
 
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/desktop-host')>()),
+  ...(await importOriginal<ScanModule0>()),
   readWorkspaceText,
   writeWorkspaceText,
 }));

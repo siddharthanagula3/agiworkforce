@@ -3,6 +3,11 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/rate-limit');
+type ScanModule1 = typeof import('@/lib/csrf');
+type ScanModule2 = typeof import('@/lib/server/rls-db');
+type ScanModule3 = typeof import('@/lib/server/object-storage');
+type ScanModule4 = typeof import('@/lib/server/object-storage-runtime');
 
 vi.mock('server-only', () => ({}));
 
@@ -20,15 +25,15 @@ const uploads = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ScanModule0>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ScanModule1>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ScanModule2>()),
   getUserScopedDb: vi.fn(async () => ({
     db: { query: vi.fn(async () => [{ id: PROJECT_ID }]) },
     userId: USER_ID,
@@ -36,14 +41,14 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   })),
 }));
 vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/object-storage')>()),
+  ...(await importOriginal<ScanModule3>()),
   isObjectStorageConfigured: () => true,
   isPrivateObjectStorageConfigured: () => true,
   getPresignedUploadUrl: uploads.publicBucket,
   getPresignedPrivateUploadUrl: uploads.privateBucket,
 }));
 vi.mock('@/lib/server/object-storage-runtime', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@/lib/server/object-storage-runtime')>();
+  const original = await importOriginal<ScanModule4>();
   return {
     ...original,
     objectStorageConfig: () => ({

@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+type ScanModule0 = typeof import('@/lib/jobs/job-service');
+type ScanModule1 = typeof import('@/lib/server/image-generation-jobs');
 
 vi.mock('server-only', () => ({}));
 
@@ -16,8 +18,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/jobs/job-service', async () => {
-  const actual =
-    await vi.importActual<typeof import('@/lib/jobs/job-service')>('@/lib/jobs/job-service');
+  const actual = await vi.importActual<ScanModule0>('@/lib/jobs/job-service');
   return { PermanentJobError: actual.PermanentJobError, enqueueJob: mocks.enqueue };
 });
 
@@ -26,9 +27,7 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
 }));
 
 vi.mock('@/lib/server/image-generation-jobs', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/server/image-generation-jobs')>(
-    '@/lib/server/image-generation-jobs',
-  );
+  const actual = await vi.importActual<ScanModule1>('@/lib/server/image-generation-jobs');
   return { ...actual, getImageGenerationJob: (...args: unknown[]) => mocks.getJob(...args) };
 });
 

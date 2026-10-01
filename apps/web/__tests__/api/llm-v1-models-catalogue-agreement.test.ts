@@ -5,6 +5,7 @@ import {
   listManagedRoutesForModel,
 } from '@agiworkforce/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+type ScanModule0 = typeof import('@/lib/api-auth');
 
 const mockConfiguredProviders = vi.fn();
 const mockAvailability = vi.fn();
@@ -22,7 +23,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: () => Promise.reject(new Error('anonymous')),
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ScanModule0>()),
   getClerkAuthUser: () => Promise.reject(new Error('anonymous')),
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));

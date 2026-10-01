@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('@/lib/github-app');
 
 const {
   mockGetUserScopedDb,
@@ -28,7 +29,7 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/user-connector-tools', () => ({ getUserGithubInstallations: mockInstallations }));
 vi.mock('@/lib/github-app', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/github-app')>();
+  const actual = await importOriginal<ScanModule0>();
   return {
     ...actual,
     getInstallationAccessToken: mockInstallationToken,

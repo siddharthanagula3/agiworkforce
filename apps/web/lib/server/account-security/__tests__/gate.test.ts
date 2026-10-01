@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+type ScanModule0 = typeof import('../webauthn');
+type ScanModule1 = typeof import('@agiworkforce/data-layer');
 
 const ACCOUNT = 'user_advanced_security';
 const SESSION = 'sess_signed_in_with_password';
@@ -82,7 +84,7 @@ vi.mock('@/lib/server/session-sightings', () => ({
   noteSessionSighting: (...args: unknown[]) => state.noteSessionSighting(...args),
 }));
 vi.mock('@/lib/server/account-security/webauthn', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../webauthn')>()),
+  ...(await importOriginal<ScanModule0>()),
   verifyAssertion: async ({ credentials }: { credentials: { id: string }[] }) =>
     state.attackerPasskeys && credentials[0] ? { credential: credentials[0], signCount: 1 } : null,
 }));
@@ -216,7 +218,7 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => answeringDb(),
 }));
 vi.mock('@agiworkforce/data-layer', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/data-layer')>()),
+  ...(await importOriginal<ScanModule1>()),
   createDatabaseClient: () => answeringDb(),
 }));
 
