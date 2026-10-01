@@ -1,16 +1,6 @@
-// `ProvidesStaticType` is an unsafe trait. The `starlark` crate's
-// derive macro emits `unsafe impl ProvidesStaticType for PolicyBuilder { … }`,
-// which trips the workspace-wide `-D unsafe-code` clippy gate even though
-// the unsafe code lives inside a vetted upstream macro and not in our
-// hand-written code. Scope this allow to the parser module rather than
-// the whole crate so any net-new unsafe code we write here would still
-// get caught.
-#![allow(unsafe_code)]
-
 use agiworkforce_utils_absolute_path::AbsolutePathBuf;
 use multimap::MultiMap;
 use shlex;
-use starlark::any::ProvidesStaticType;
 use starlark::codemap::FileSpan;
 use starlark::environment::GlobalsBuilder;
 use starlark::environment::Module;
@@ -27,6 +17,8 @@ use std::cell::RefMut;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+
+use builder::PolicyBuilder;
 
 use crate::decision::Decision;
 use crate::error::Error;
@@ -92,16 +84,20 @@ impl PolicyParser {
     }
 }
 
-// See module-level `#![allow(unsafe_code)]` above. The derive expands to
-// `unsafe impl ProvidesStaticType for PolicyBuilder` which trips the
-// workspace clippy gate; the lint is intentionally allowed for this
-// module only.
-#[derive(Debug, ProvidesStaticType)]
-struct PolicyBuilder {
-    rules_by_program: MultiMap<String, RuleRef>,
-    network_rules: Vec<NetworkRule>,
-    host_executables_by_name: HashMap<String, Arc<[AbsolutePathBuf]>>,
-    pending_example_validations: Vec<PendingExampleValidation>,
+#[allow(unsafe_code)]
+mod builder {
+    use super::{
+        AbsolutePathBuf, Arc, HashMap, MultiMap, NetworkRule, PendingExampleValidation, RuleRef,
+    };
+    use starlark::any::ProvidesStaticType;
+
+    #[derive(Debug, ProvidesStaticType)]
+    pub(super) struct PolicyBuilder {
+        pub(super) rules_by_program: MultiMap<String, RuleRef>,
+        pub(super) network_rules: Vec<NetworkRule>,
+        pub(super) host_executables_by_name: HashMap<String, Arc<[AbsolutePathBuf]>>,
+        pub(super) pending_example_validations: Vec<PendingExampleValidation>,
+    }
 }
 
 impl PolicyBuilder {
