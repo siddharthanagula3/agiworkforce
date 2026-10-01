@@ -16,12 +16,6 @@ export {
   verifySignature,
 } from '@/lib/services/audit-streaming-proxy';
 
-/**
- * Membership marks which organisations currently have an enabled destination,
- * so the drain cron can check membership and skip Postgres entirely when the
- * set is empty. Best-effort: a write here never blocks the destination save,
- * and a miss just means the next drain falls through to querying Postgres.
- */
 export const AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY = 'agi-audit-stream:active-organizations';
 
 const NO_ACTIVE_DESTINATIONS = 0;
@@ -51,7 +45,7 @@ export async function hasActiveAuditStreamDestinations(): Promise<boolean | null
     const store = getKeyValueStore();
     if (!store) return null;
     const count = await store.setSize(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY);
-    return count > NO_ACTIVE_DESTINATIONS;
+    return count > NO_ACTIVE_DESTINATIONS ? true : null;
   } catch (error) {
     logger.error({ error }, 'Audit stream active-org membership check failed');
     return null;
