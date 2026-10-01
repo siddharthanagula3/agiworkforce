@@ -3,6 +3,9 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import process from 'node:process';
+import { Buffer } from 'node:buffer';
+import { setTimeout, clearTimeout } from 'node:timers';
+import { performance } from 'node:perf_hooks';
 import { spawn, execFileSync } from 'node:child_process';
 
 const MAX_REPORT_BYTES = 192 * 1024 * 1024;
@@ -71,7 +74,7 @@ export function validateCoverageEnvelope(report) {
   );
 }
 
-export function warningIdentity(warning, selected) {
+function warningDiagnostic(warning, selected) {
   requireValue(
     record(warning) && warning.error_type === 'Fixpoint timeout',
     'Unrecognized internal analysis diagnostic.',
@@ -91,10 +94,63 @@ export function warningIdentity(warning, selected) {
   );
   const match = /\[rules: ([1-9][0-9]*), first: ([A-Za-z0-9_.:-]+)\]$/.exec(warning.message);
   requireValue(
-    match && match[1] === '1',
+    match && Number.isSafeInteger(Number(match[1])),
+    'Internal diagnostic has an invalid affected rule count.',
+  );
+  return {
+    path: location.path,
+    line: location.start.line,
+    rule: match[2],
+    count: Number(match[1]),
+  };
+}
+
+export function warningIdentity(warning, selected) {
+  const diagnostic = warningDiagnostic(warning, selected);
+  requireValue(
+    diagnostic.count === 1,
     'Internal diagnostic must identify exactly one affected rule.',
   );
-  return { path: location.path, line: location.start.line, rule: match[2] };
+  const { path, line, rule } = diagnostic;
+  return { path, line, rule };
+}
+
+function replayTaintRules(rules, diagnostic) {
+  requireValue(
+    ['.ts', '.tsx', '.mts', '.cts'].includes(path.extname(diagnostic.path)),
+    'Aggregate diagnostic source language is unsupported.',
+  );
+  const languages = ['js', 'ts', 'javascript', 'typescript'];
+  const applicable = [];
+  for (const rule of rules.values()) {
+    requireValue(
+      Array.isArray(rule.languages) && rule.languages.length > 0,
+      'Original rule languages are invalid.',
+    );
+    if (!rule.languages.some((value) => [...languages, 'generic', 'regex'].includes(value)))
+      continue;
+    requireValue(
+      rule.mode === undefined || rule.mode === 'search' || rule.mode === 'taint',
+      'Aggregate diagnostic rule mode is unsupported.',
+    );
+    if (rule.mode !== 'taint') {
+      requireValue(
+        rule['pattern-sources'] === undefined && rule['pattern-sinks'] === undefined,
+        'Aggregate diagnostic taint mode is missing.',
+      );
+      continue;
+    }
+    requireValue(
+      rule.languages.length > 0 && rule.languages.every((value) => languages.includes(value)),
+      'Aggregate diagnostic taint language is unsupported.',
+    );
+    applicable.push(rule);
+  }
+  requireValue(
+    applicable.length >= diagnostic.count && applicable.some((rule) => rule.id === diagnostic.rule),
+    'Aggregate diagnostic is not bound to the complete applicable taint rule set.',
+  );
+  return applicable;
 }
 
 function formula(value) {
@@ -168,7 +224,11 @@ async function stopGroup(pid) {
   requireValue(!alive(), 'Owned scanner process group remains active.');
 }
 
-export async function runCoverageScanner(argv, { cwd, env, directory }) {
+export async function runCoverageScanner(argv, { cwd, env, directory, timeoutMs = 120_000 }) {
+  requireValue(
+    Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 120_000,
+    'Coverage scanner deadline is invalid.',
+  );
   const stderr = fs.openSync(path.join(directory, 'scanner.stderr.private'), 'a', 0o600);
   let child;
   try {
@@ -188,7 +248,7 @@ export async function runCoverageScanner(argv, { cwd, env, directory }) {
   let abort = () => {};
   const timer = setTimeout(
     () => abort(new CoverageError('Structural scanner deadline exceeded.')),
-    120_000,
+    timeoutMs,
   );
   const interrupted = () => abort(new CoverageError('Structural scanner was interrupted.'));
   process.on('SIGTERM', interrupted);
@@ -305,8 +365,9 @@ export async function qualifyInternalCoverage({
   const root = fs.realpathSync(cwd);
   const selected = new Set(report.paths.scanned);
   const pairs = new Map();
+  const aggregateFiles = new Map();
   for (const warning of report.time.fixpoint_timeouts) {
-    const identity = warningIdentity(warning, selected);
+    const identity = warningDiagnostic(warning, selected);
     requireValue(
       rules.has(identity.rule) && sources.has(identity.path),
       'Internal diagnostic is not bound to original rules and sources.',
@@ -324,7 +385,16 @@ export async function qualifyInternalCoverage({
       identity.line <= fs.readFileSync(file, 'utf8').split('\n').length,
       'Internal diagnostic position exceeds its source file.',
     );
-    pairs.set(`${identity.rule}\0${identity.path}`, { ...identity, file });
+    if (identity.count === 1) {
+      pairs.set(`${identity.rule}\0${identity.path}`, { ...identity, file });
+    } else {
+      requireValue(
+        report.engine_requested === 'OSS',
+        'Aggregate diagnostic engine is unsupported.',
+      );
+      const applicable = replayTaintRules(rules, identity);
+      aggregateFiles.set(identity.path, { ...identity, file, applicable });
+    }
   }
   requireValue(
     /^[a-f0-9]{40}$/.test(context.head) && /^[a-f0-9]{40}$/.test(context.tree),
@@ -374,7 +444,8 @@ export async function qualifyInternalCoverage({
     'Original source revision changed after the scan.',
   );
   verifySources();
-  if (pairs.size === 0) return { nativeWarnings: 0, structurallyQualifiedPairs: 0 };
+  if (pairs.size === 0 && aggregateFiles.size === 0)
+    return { nativeWarnings: 0, structurallyQualifiedPairs: 0 };
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'semgrep-coverage-'));
   const state = path.join(directory, 'state');
   fs.mkdirSync(state, { mode: 0o700 });
@@ -394,12 +465,84 @@ export async function qualifyInternalCoverage({
     PYTHONDONTWRITEBYTECODE: '1',
   };
   if (process.env.SSL_CERT_FILE) env.SSL_CERT_FILE = process.env.SSL_CERT_FILE;
+  const deadline = aggregateFiles.size > 0 ? performance.now() + 120_000 : undefined;
+  const scanCoverage = async (argv) => {
+    const timeoutMs = deadline === undefined ? 120_000 : Math.ceil(deadline - performance.now());
+    requireValue(timeoutMs > 0, 'Aggregate coverage deadline exceeded.');
+    const result = await execute(argv, { cwd: root, env, directory, timeoutMs });
+    requireValue(
+      deadline === undefined || performance.now() < deadline,
+      'Aggregate coverage deadline exceeded.',
+    );
+    return result;
+  };
   try {
-    const version = await execute(['--version'], { cwd: root, env, directory });
+    const version = await scanCoverage(['--version']);
     requireValue(
       version.code === 0 && version.stdout.trim() === expectedVersion,
       'Structural scanner version differs from the original scan.',
     );
+    for (const target of aggregateFiles.values()) {
+      for (const rule of target.applicable) {
+        const rulesPath = path.join(directory, 'taint-rule.json');
+        const outputPath = path.join(directory, 'taint-report.json');
+        fs.writeFileSync(rulesPath, JSON.stringify({ rules: [rule] }), { mode: 0o600 });
+        fs.rmSync(outputPath, { force: true });
+        const scan = await scanCoverage([
+          'scan',
+          '--config',
+          rulesPath,
+          '--no-rewrite-rule-ids',
+          '--metrics=off',
+          '--timeout=30',
+          '--jobs=1',
+          '--time',
+          '--json',
+          '--output',
+          outputPath,
+          target.file,
+        ]);
+        const replay = jsonFile(outputPath);
+        validateCoverageEnvelope(replay);
+        requireValue(
+          scan.code === 0 &&
+            replay.version === report.version &&
+            replay.engine_requested === 'OSS' &&
+            Array.isArray(replay.errors) &&
+            replay.errors.length === 0 &&
+            Array.isArray(replay.results) &&
+            replay.results.length === 0 &&
+            Array.isArray(replay.time.rules) &&
+            replay.time.rules.length === 1 &&
+            replay.time.rules[0] === rule.id,
+          'Singleton taint analysis is incomplete or has a finding.',
+        );
+        requireValue(
+          record(replay.paths) &&
+            Array.isArray(replay.paths.scanned) &&
+            replay.paths.scanned.length === 1 &&
+            typeof replay.paths.scanned[0] === 'string' &&
+            fs.realpathSync(path.resolve(root, replay.paths.scanned[0])) ===
+              fs.realpathSync(target.file),
+          'Singleton taint analysis did not select exactly the whole source.',
+        );
+        for (const warning of replay.time.fixpoint_timeouts) {
+          const identity = warningIdentity(warning, new Set(replay.paths.scanned));
+          requireValue(
+            identity.rule === rule.id &&
+              fs.realpathSync(path.resolve(root, identity.path)) === fs.realpathSync(target.file) &&
+              identity.line <= fs.readFileSync(target.file, 'utf8').split('\n').length,
+            'Singleton diagnostic is not bound to its exact rule and source.',
+          );
+          structuralSinkRules(rule);
+          pairs.set(`${identity.rule}\0${target.path}`, {
+            ...identity,
+            path: target.path,
+            file: target.file,
+          });
+        }
+      }
+    }
     for (const [identifier, rule] of rules) {
       const targets = [...pairs.values()].filter((pair) => pair.rule === identifier);
       if (targets.length === 0) continue;
@@ -410,24 +553,21 @@ export async function qualifyInternalCoverage({
       fs.writeFileSync(controlsPath, CONTROLS, { mode: 0o600 });
       fs.writeFileSync(rulesPath, JSON.stringify({ rules: derived }), { mode: 0o600 });
       fs.rmSync(outputPath, { force: true });
-      const scan = await execute(
-        [
-          'scan',
-          '--config',
-          rulesPath,
-          '--no-rewrite-rule-ids',
-          '--disable-nosem',
-          '--metrics=off',
-          '--timeout=30',
-          '--jobs=1',
-          '--json',
-          '--output',
-          outputPath,
-          ...targets.map((pair) => pair.file),
-          controlsPath,
-        ],
-        { cwd: root, env, directory },
-      );
+      const scan = await scanCoverage([
+        'scan',
+        '--config',
+        rulesPath,
+        '--no-rewrite-rule-ids',
+        '--disable-nosem',
+        '--metrics=off',
+        '--timeout=30',
+        '--jobs=1',
+        '--json',
+        '--output',
+        outputPath,
+        ...targets.map((pair) => pair.file),
+        controlsPath,
+      ]);
       const structural = jsonFile(outputPath);
       requireValue(
         scan.code === 0 &&
