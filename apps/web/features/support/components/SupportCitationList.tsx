@@ -28,7 +28,12 @@ export function SupportCitationList({
                 {...(internal ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
               >
                 {citation.title}
-                {internal ? null : <span className="sr-only"> (opens in a new tab)</span>}
+                {internal ? null : (
+                  <>
+                    {' '}
+                    <span className="sr-only">(opens in a new tab)</span>
+                  </>
+                )}
               </a>
             </li>
           );

@@ -612,8 +612,8 @@ export default function RouteEconomicsPanel() {
                             onClick={() => toggleExpanded(row.routeId)}
                             className={GHOST_BUTTON_CLASS}
                           >
-                            {expanded === row.routeId ? 'Hide' : 'Show'}
-                            <span className="sr-only"> details for {row.modelName}</span>
+                            {expanded === row.routeId ? 'Hide' : 'Show'}{' '}
+                            <span className="sr-only">details for {row.modelName}</span>
                           </button>
                         </td>
                       </tr>

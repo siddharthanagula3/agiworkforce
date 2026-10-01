@@ -53,12 +53,12 @@ function WorkspaceRow({
       className="gap-2"
     >
       {icon}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>{' '}
       {detail ? (
         <Badge variant="outline" className="shrink-0 capitalize">
           {detail}
         </Badge>
-      ) : null}
+      ) : null}{' '}
       {selected ? <Check className="h-4 w-4 shrink-0" aria-label="Selected" /> : null}
     </DropdownMenuItem>
   );

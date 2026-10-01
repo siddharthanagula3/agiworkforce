@@ -74,7 +74,7 @@ function ChangedFile({
 
   const label = (
     <>
-      <span className={styles['fileStatus']}>{state}</span>
+      <span className={styles['fileStatus']}>{state}</span>{' '}
       <span className={styles['fileName']}>{path}</span>
     </>
   );

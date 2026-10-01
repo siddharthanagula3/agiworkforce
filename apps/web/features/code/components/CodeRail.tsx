@@ -320,7 +320,7 @@ export function CodeRail({
                   <Archive size={RAIL_GLYPH_SIZE} aria-hidden="true" />
                 )}
               </span>
-              <span className={styles['railRowLabel']}>{session.title}</span>
+              <span className={styles['railRowLabel']}>{session.title}</span>{' '}
               {session.state === 'failed' && (
                 <span className={styles['railRowState']}>
                   {CLOUD_CODE_SESSION_STATE_LABELS[session.state]}

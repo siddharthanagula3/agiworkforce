@@ -161,7 +161,8 @@ describe('/auth/device page', () => {
     const card = screen.getByRole('heading', { name: 'Connect a device.' }).closest('section');
 
     expect(card).not.toHaveClass('agi-section');
-    expect(card).toHaveStyle({ maxWidth: '30rem', width: '100%', marginInline: 'auto' });
+    expect(card?.style.maxWidth).toBe('30rem');
+    expect(card).toHaveStyle({ width: '100%', marginInline: 'auto' });
   });
 
   it('uses focused chrome so navigation does not compete with device approval', () => {

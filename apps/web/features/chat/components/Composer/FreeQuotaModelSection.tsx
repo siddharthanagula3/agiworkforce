@@ -134,7 +134,7 @@ export function FreeQuotaModelSection({
                   <span className="min-w-0 flex-1">
                     <span className="block break-words text-xs font-medium text-foreground">
                       {model.displayName}
-                    </span>
+                    </span>{' '}
                     <span className="block text-xs text-muted-foreground">
                       {model.status === 'ready'
                         ? 'Free promotion · text chat · provider quota applies'
@@ -198,7 +198,7 @@ export function FreeQuotaModelSection({
                           className={`block break-words text-xs font-medium ${selectable ? 'text-foreground' : 'text-muted-foreground'}`}
                         >
                           {model.displayName}
-                        </span>
+                        </span>{' '}
                         <span className="block text-xs text-muted-foreground">
                           {selectable
                             ? `Free quota · ${getProviderOffering(model.key)?.quotaChatImageInput ? 'image chat' : FREE_QUOTA_CATEGORIES[model.category].toLowerCase()} · ${model.expiresOn ? `expires ${model.expiresOn}` : 'limited allocation'}`

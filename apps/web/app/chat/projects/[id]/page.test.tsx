@@ -205,13 +205,13 @@ describe('project detail page header', () => {
     render(<ProjectDetailPage />);
 
     const chatsTab = screen.getByTestId('project-detail-tab-chats');
-    expect(chatsTab).toHaveStyle({ borderBottom: '2px solid hsl(var(--primary))' });
+    expect(chatsTab.style.borderBottom).toBe('2px solid var(--color-primary)');
 
     await user.click(screen.getByTestId('project-detail-tab-scheduled'));
-    expect(screen.getByTestId('project-detail-tab-scheduled')).toHaveStyle({
-      borderBottom: '2px solid hsl(var(--primary))',
-    });
-    expect(chatsTab).toHaveStyle({ borderBottom: '2px solid transparent' });
+    expect(screen.getByTestId('project-detail-tab-scheduled').style.borderBottom).toBe(
+      '2px solid var(--color-primary)',
+    );
+    expect(chatsTab.style.borderBottom).toBe('2px solid transparent');
   });
 });
 

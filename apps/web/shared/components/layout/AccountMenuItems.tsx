@@ -96,7 +96,7 @@ export function AccountMenuItems({
       </DropdownMenuItem>
       <DropdownMenuItem onClick={onOpenKeyboardShortcuts}>
         <Keyboard className="me-2 h-4 w-4" />
-        {t('common:navKeyboardShortcuts')}
+        {t('common:navKeyboardShortcuts')}{' '}
         <span className="ms-auto text-caption text-muted-foreground">{shortcutLabel('/')}</span>
       </DropdownMenuItem>
       <DropdownMenuSeparator />

@@ -147,13 +147,13 @@ export function TopUpPanel({ tier, canBuy }: { tier: string; canBuy: boolean }) 
                   className="h-4 w-4 accent-[var(--chat-accent-primary)]"
                 />
                 <span className="font-medium">{formatCredits(pack.credits)}</span>
-              </span>
+              </span>{' '}
               <span className="flex items-center gap-2 tabular-nums">
                 {pack.discountPercent > 0 ? (
                   <span className="text-xs text-muted-foreground">
                     Save {pack.discountPercent}%
                   </span>
-                ) : null}
+                ) : null}{' '}
                 <span>{formatPrice(pack)}</span>
               </span>
             </label>
