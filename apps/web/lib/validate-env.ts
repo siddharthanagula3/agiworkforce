@@ -21,6 +21,7 @@ import {
   validateOptionalFeatureConfig,
 } from './config/optional-features';
 import { recordConfigurationState } from './observability/metrics';
+import { DEFAULT_OTEL_SERVICE_NAME } from './observability/otel-config';
 import { getAllRegisteredPriceIds, isGrandfatheredPriceId } from './price-tier-mapping';
 import { STRIPE_PRICE_IDS } from './pricing';
 import { totpKeysourceValidationError } from './crypto/totp-keysource';
@@ -832,10 +833,10 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     validate: isUrl,
     description: 'where a browser exception is reported, which the bundle carries by design',
   }),
-  published('OTEL_SERVICE_NAME', {
+  published('AGI_OTEL_SERVICE_NAME', {
     type: 'string',
     owner: 'observability',
-    defaultValue: 'agiworkforce-web',
+    defaultValue: DEFAULT_OTEL_SERVICE_NAME,
     requiredIn: [],
     description: 'the service name every span, metric and log line is attributed to',
   }),

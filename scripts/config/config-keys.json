@@ -44,6 +44,10 @@
       "reason": "read by packages/platform/observability, which owns the exporter"
     },
     {
+      "key": "AGI_OTEL_SERVICE_NAME",
+      "reason": "read through OTEL_SERVICE_NAME_ENV by apps/web/lib/observability/otel-config.ts and apps/web/lib/logger.ts, which the guard's literal process.env pattern does not see"
+    },
+    {
       "key": "TYPESAFE_API_KEY",
       "reason": "read dynamically from the injected environment map by apps/web/lib/services/semantic-decisions/config.ts"
     },

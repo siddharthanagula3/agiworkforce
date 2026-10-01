@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
+import console from 'node:console';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import process from 'node:process';
+import { URL, fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -103,7 +105,6 @@ export const contracts = {
       'AGI_OTEL_SERVICE_NAME',
       'AGI_OTEL_HEADERS',
       'AGI_OTEL_SAMPLE_RATIO',
-      'OTEL_SERVICE_NAME',
     ],
     urlKeys: ['NEXT_PUBLIC_APP_URL', 'NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_SANDBOX_ORIGIN'],
   },
