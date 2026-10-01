@@ -1,0 +1,504 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import crypto from 'node:crypto';
+import process from 'node:process';
+import { spawn, execFileSync } from 'node:child_process';
+
+const MAX_REPORT_BYTES = 192 * 1024 * 1024;
+const MAX_STREAM_BYTES = 64 * 1024 * 1024;
+export class CoverageError extends Error {}
+const CONTROLS = `function positiveDocument(value) {
+  document.write(value);
+  document.writeln(value);
+  this.window.document.write('p', value);
+  window.document.writeln('p', value);
+  document.writeText(value);
+}
+function positiveAdjacent(value) {
+  panel.insertAdjacentHTML('beforeend', value);
+}
+function negativeReceivers(value) {
+  navigator.clipboard.writeText(value);
+  handler.write(value);
+  panel.append(value);
+}
+`;
+
+function requireValue(value, message) {
+  if (!value) throw new CoverageError(message);
+}
+
+function record(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hash(bytes) {
+  return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+function jsonFile(file) {
+  const stat = fs.lstatSync(file);
+  requireValue(
+    stat.isFile() && stat.size <= MAX_REPORT_BYTES,
+    'Coverage input is not a bounded regular file.',
+  );
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function inside(root, file) {
+  const relative = path.relative(root, file);
+  return (
+    relative !== '' &&
+    !path.isAbsolute(relative) &&
+    relative !== '..' &&
+    !relative.startsWith(`..${path.sep}`)
+  );
+}
+
+export function validateCoverageEnvelope(report) {
+  requireValue(
+    Array.isArray(report.skipped_rules),
+    'Semgrep report skipped_rules must be an array.',
+  );
+  requireValue(
+    report.skipped_rules.length === 0,
+    'Semgrep report contains skipped rules. The scan is incomplete.',
+  );
+  requireValue(
+    record(report.time) && Array.isArray(report.time.fixpoint_timeouts),
+    'Semgrep report time.fixpoint_timeouts must be an explicit array.',
+  );
+}
+
+export function warningIdentity(warning, selected) {
+  requireValue(
+    record(warning) && warning.error_type === 'Fixpoint timeout',
+    'Unrecognized internal analysis diagnostic.',
+  );
+  const location = warning.location;
+  requireValue(
+    record(location) && typeof location.path === 'string' && selected.has(location.path),
+    'Internal diagnostic must name a selected source file.',
+  );
+  requireValue(
+    record(location.start) && Number.isSafeInteger(location.start.line) && location.start.line > 0,
+    'Internal diagnostic has an invalid source position.',
+  );
+  requireValue(
+    typeof warning.message === 'string' && warning.message.length <= 4096,
+    'Internal diagnostic has an invalid rule identity.',
+  );
+  const match = /\[rules: ([1-9][0-9]*), first: ([A-Za-z0-9_.:-]+)\]$/.exec(warning.message);
+  requireValue(
+    match && match[1] === '1',
+    'Internal diagnostic must identify exactly one affected rule.',
+  );
+  return { path: location.path, line: location.start.line, rule: match[2] };
+}
+
+function formula(value) {
+  if (!record(value) || Object.keys(value).length !== 1) return false;
+  if (typeof value.pattern === 'string' && value.pattern.length > 0) return true;
+  for (const key of ['patterns', 'pattern-either']) {
+    if (Array.isArray(value[key])) return value[key].length > 0 && value[key].every(formula);
+  }
+  if (record(value['metavariable-regex'])) {
+    const item = value['metavariable-regex'];
+    return (
+      Object.keys(item).sort().join(',') === 'metavariable,regex' &&
+      typeof item.metavariable === 'string' &&
+      typeof item.regex === 'string'
+    );
+  }
+  return typeof value['focus-metavariable'] === 'string';
+}
+
+export function structuralSinkRules(rule) {
+  requireValue(
+    record(rule) &&
+      rule.mode === 'taint' &&
+      Array.isArray(rule.languages) &&
+      rule.languages.length > 0 &&
+      rule.languages.every((value) => ['js', 'ts', 'javascript', 'typescript'].includes(value)),
+    'Affected rule is not a supported structural sink boundary.',
+  );
+  requireValue(
+    rule.options === undefined &&
+      rule['pattern-propagators'] === undefined &&
+      Array.isArray(rule['pattern-sinks']) &&
+      rule['pattern-sinks'].length === 2 &&
+      rule['pattern-sinks'].every(formula),
+    'Affected rule has unsupported sink semantics.',
+  );
+  return rule['pattern-sinks'].map((sink, index) => ({
+    id: `coverage-sink-${index}`,
+    languages: rule.languages,
+    message: 'Structural sink coverage',
+    severity: 'WARNING',
+    ...sink,
+  }));
+}
+
+async function stopGroup(pid) {
+  const target = process.platform === 'win32' ? pid : -pid;
+  const alive = () => {
+    try {
+      process.kill(target, 0);
+      return true;
+    } catch (error) {
+      if (error.code === 'ESRCH') return false;
+      if (error.code === 'EPERM') return true;
+      throw new CoverageError('Owned scanner cleanup could not be confirmed.');
+    }
+  };
+  if (!alive()) return;
+  try {
+    process.kill(target, 'SIGTERM');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw new CoverageError('Owned scanner cleanup failed.');
+  }
+  for (let attempt = 0; attempt < 10 && alive(); attempt += 1)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  if (alive()) {
+    process.kill(target, 'SIGKILL');
+    for (let attempt = 0; attempt < 20 && alive(); attempt += 1)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  requireValue(!alive(), 'Owned scanner process group remains active.');
+}
+
+export async function runCoverageScanner(argv, { cwd, env, directory }) {
+  const stderr = fs.openSync(path.join(directory, 'scanner.stderr.private'), 'a', 0o600);
+  let child;
+  try {
+    child = spawn('semgrep', argv, {
+      cwd,
+      env,
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch {
+    fs.closeSync(stderr);
+    throw new CoverageError('Structural scanner could not start.');
+  }
+  const chunks = [];
+  let failure;
+  let outputBytes = 0;
+  let abort = () => {};
+  const timer = setTimeout(
+    () => abort(new CoverageError('Structural scanner deadline exceeded.')),
+    120_000,
+  );
+  const interrupted = () => abort(new CoverageError('Structural scanner was interrupted.'));
+  process.on('SIGTERM', interrupted);
+  process.on('SIGINT', interrupted);
+  const receive = (bytes, store) => {
+    outputBytes += bytes.length;
+    if (failure) return;
+    if (outputBytes > MAX_STREAM_BYTES) {
+      failure = new CoverageError('Structural scanner output bound exceeded.');
+      abort(failure);
+      return;
+    }
+    try {
+      if (store) chunks.push(bytes);
+      else fs.writeSync(stderr, bytes);
+    } catch {
+      failure = new CoverageError('Structural scanner output could not be captured.');
+      abort(failure);
+    }
+  };
+  child.stdout.on('data', (bytes) => receive(bytes, true));
+  child.stderr.on('data', (bytes) => receive(bytes, false));
+  try {
+    const code = await new Promise((resolve, reject) => {
+      abort = reject;
+      child.once('error', () => reject(new CoverageError('Structural scanner could not start.')));
+      child.once('close', resolve);
+    });
+    if (failure) throw failure;
+    return { code, stdout: Buffer.concat(chunks).toString('utf8') };
+  } finally {
+    clearTimeout(timer);
+    try {
+      if (child.pid) await stopGroup(child.pid);
+    } finally {
+      process.off('SIGTERM', interrupted);
+      process.off('SIGINT', interrupted);
+      fs.closeSync(stderr);
+    }
+  }
+}
+
+export async function qualifyInternalCoverage({
+  report,
+  reportPath,
+  bundlePath,
+  contextPath,
+  expectedVersion,
+  cwd = process.cwd(),
+  execute = runCoverageScanner,
+}) {
+  validateCoverageEnvelope(report);
+  if (expectedVersion !== undefined)
+    requireValue(
+      report.version === expectedVersion,
+      'Semgrep report version differs from the configured engine.',
+    );
+  if (
+    report.time.fixpoint_timeouts.length === 0 &&
+    bundlePath === undefined &&
+    contextPath === undefined &&
+    expectedVersion === undefined
+  )
+    return { nativeWarnings: 0, structurallyQualifiedPairs: 0 };
+  requireValue(
+    typeof bundlePath === 'string' &&
+      typeof contextPath === 'string' &&
+      typeof expectedVersion === 'string',
+    'Internal diagnostics require the original rule bundle, source context and configured engine.',
+  );
+  const bundle = jsonFile(bundlePath);
+  const context = jsonFile(contextPath);
+  const provenance = [reportPath, bundlePath, contextPath].map((file) => [
+    file,
+    hash(fs.readFileSync(file)),
+  ]);
+  requireValue(
+    context.version === report.version &&
+      context.sourceBeforeAfterEqual === true &&
+      [0, 1].includes(context.actualScannerExit) &&
+      context.reportSha256 === hash(fs.readFileSync(reportPath)) &&
+      context.rulesSha256 === hash(fs.readFileSync(bundlePath)),
+    'Original scan report and rule provenance do not match.',
+  );
+  requireValue(
+    Array.isArray(context.sources) && Array.isArray(bundle.rules) && bundle.rules.length > 0,
+    'Original scan source or rule provenance is invalid.',
+  );
+  const rules = new Map();
+  for (const rule of bundle.rules) {
+    requireValue(
+      record(rule) &&
+        typeof rule.id === 'string' &&
+        /^[A-Za-z0-9_.:-]+$/.test(rule.id) &&
+        !rules.has(rule.id),
+      'Original rule bundle has an invalid or duplicate identity.',
+    );
+    rules.set(rule.id, rule);
+  }
+  const sources = new Map();
+  for (const source of context.sources) {
+    requireValue(
+      record(source) &&
+        typeof source.path === 'string' &&
+        /^[a-f0-9]{64}$/.test(source.sha256) &&
+        Number.isSafeInteger(source.bytes) &&
+        source.bytes >= 0 &&
+        typeof source.symlink === 'boolean' &&
+        !sources.has(source.path),
+      'Original source provenance is invalid.',
+    );
+    sources.set(source.path, source);
+  }
+  const root = fs.realpathSync(cwd);
+  const selected = new Set(report.paths.scanned);
+  const pairs = new Map();
+  for (const warning of report.time.fixpoint_timeouts) {
+    const identity = warningIdentity(warning, selected);
+    requireValue(
+      rules.has(identity.rule) && sources.has(identity.path),
+      'Internal diagnostic is not bound to original rules and sources.',
+    );
+    const file = path.resolve(root, identity.path);
+    requireValue(
+      inside(root, file) && fs.lstatSync(file).isFile() && inside(root, fs.realpathSync(file)),
+      'Internal diagnostic source escapes the checkout.',
+    );
+    requireValue(
+      hash(fs.readFileSync(file)) === sources.get(identity.path).sha256,
+      'Internal diagnostic source changed after the original scan.',
+    );
+    requireValue(
+      identity.line <= fs.readFileSync(file, 'utf8').split('\n').length,
+      'Internal diagnostic position exceeds its source file.',
+    );
+    pairs.set(`${identity.rule}\0${identity.path}`, { ...identity, file });
+  }
+  requireValue(
+    /^[a-f0-9]{40}$/.test(context.head) && /^[a-f0-9]{40}$/.test(context.tree),
+    'Original Git source identity is invalid.',
+  );
+  const git = (args) =>
+    execFileSync('git', args, {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+      env: { PATH: process.env.PATH, GIT_OPTIONAL_LOCKS: '0' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  const verifySources = () => {
+    const actual = new Set(
+      git(['ls-files', '-co', '--exclude-standard', '-z'])
+        .split('\0')
+        .filter((name) => name && path.resolve(root, name) !== path.resolve(reportPath)),
+    );
+    requireValue(
+      actual.size === sources.size && [...actual].every((name) => sources.has(name)),
+      'Original source inventory changed after the scan.',
+    );
+    for (const [name, source] of sources) {
+      const file = path.resolve(root, name);
+      requireValue(inside(root, file), 'Original source inventory escapes the checkout.');
+      const stat = fs.lstatSync(file);
+      requireValue(
+        stat.isSymbolicLink() === source.symlink && (stat.isFile() || stat.isSymbolicLink()),
+        'Original source type changed after the scan.',
+      );
+      if (!source.symlink)
+        requireValue(
+          inside(root, fs.realpathSync(file)),
+          'Original source inventory escapes the checkout.',
+        );
+      const bytes = source.symlink ? Buffer.from(fs.readlinkSync(file)) : fs.readFileSync(file);
+      requireValue(
+        bytes.length === source.bytes && hash(bytes) === source.sha256,
+        'Original source bytes changed after the scan.',
+      );
+    }
+  };
+  requireValue(
+    git(['rev-parse', 'HEAD']).trim() === context.head &&
+      git(['rev-parse', 'HEAD^{tree}']).trim() === context.tree,
+    'Original source revision changed after the scan.',
+  );
+  verifySources();
+  if (pairs.size === 0) return { nativeWarnings: 0, structurallyQualifiedPairs: 0 };
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'semgrep-coverage-'));
+  const state = path.join(directory, 'state');
+  fs.mkdirSync(state, { mode: 0o700 });
+  const env = {
+    PATH: process.env.PATH,
+    HOME: state,
+    XDG_CONFIG_HOME: state,
+    XDG_CACHE_HOME: state,
+    XDG_DATA_HOME: state,
+    TMPDIR: state,
+    SEMGREP_SETTINGS_FILE: path.join(state, 'settings.yml'),
+    SEMGREP_LOG_FILE: path.join(state, 'semgrep.log'),
+    SEMGREP_VERSION_CACHE_PATH: path.join(state, 'version-cache'),
+    SEMGREP_SEND_METRICS: 'off',
+    SEMGREP_ENABLE_VERSION_CHECK: '0',
+    SEMGREP_OTEL_METRICS: '0',
+    PYTHONDONTWRITEBYTECODE: '1',
+  };
+  if (process.env.SSL_CERT_FILE) env.SSL_CERT_FILE = process.env.SSL_CERT_FILE;
+  try {
+    const version = await execute(['--version'], { cwd: root, env, directory });
+    requireValue(
+      version.code === 0 && version.stdout.trim() === expectedVersion,
+      'Structural scanner version differs from the original scan.',
+    );
+    for (const [identifier, rule] of rules) {
+      const targets = [...pairs.values()].filter((pair) => pair.rule === identifier);
+      if (targets.length === 0) continue;
+      const derived = structuralSinkRules(rule);
+      const controlsPath = path.join(directory, 'controls.ts');
+      const rulesPath = path.join(directory, 'sink-rules.json');
+      const outputPath = path.join(directory, 'sink-report.json');
+      fs.writeFileSync(controlsPath, CONTROLS, { mode: 0o600 });
+      fs.writeFileSync(rulesPath, JSON.stringify({ rules: derived }), { mode: 0o600 });
+      fs.rmSync(outputPath, { force: true });
+      const scan = await execute(
+        [
+          'scan',
+          '--config',
+          rulesPath,
+          '--no-rewrite-rule-ids',
+          '--disable-nosem',
+          '--metrics=off',
+          '--timeout=30',
+          '--jobs=1',
+          '--json',
+          '--output',
+          outputPath,
+          ...targets.map((pair) => pair.file),
+          controlsPath,
+        ],
+        { cwd: root, env, directory },
+      );
+      const structural = jsonFile(outputPath);
+      requireValue(
+        scan.code === 0 &&
+          structural.version === report.version &&
+          Array.isArray(structural.errors) &&
+          structural.errors.length === 0 &&
+          Array.isArray(structural.skipped_rules) &&
+          structural.skipped_rules.length === 0 &&
+          Array.isArray(structural.results),
+        'Structural sink analysis is incomplete.',
+      );
+      requireValue(
+        record(structural.paths) && Array.isArray(structural.paths.scanned),
+        'Structural selected targets are missing.',
+      );
+      const actualPaths = structural.paths.scanned
+        .map((file) => fs.realpathSync(path.resolve(root, file)))
+        .sort();
+      const wantedPaths = [
+        ...targets.map((pair) => fs.realpathSync(pair.file)),
+        fs.realpathSync(controlsPath),
+      ].sort();
+      requireValue(
+        JSON.stringify(actualPaths) === JSON.stringify(wantedPaths),
+        'Structural analysis did not select every whole source and control.',
+      );
+      const controlMatches = [];
+      for (const match of structural.results) {
+        requireValue(
+          record(match) &&
+            typeof match.path === 'string' &&
+            typeof match.check_id === 'string' &&
+            record(match.start) &&
+            Number.isSafeInteger(match.start.line),
+          'Structural finding is malformed.',
+        );
+        requireValue(
+          fs.realpathSync(path.resolve(root, match.path)) === fs.realpathSync(controlsPath),
+          'Internal warning has a potential sink and remains unresolved.',
+        );
+        controlMatches.push(`${match.check_id}:${match.start.line}`);
+      }
+      const wanted = [
+        'coverage-sink-0:2',
+        'coverage-sink-0:3',
+        'coverage-sink-0:4',
+        'coverage-sink-0:5',
+        'coverage-sink-0:6',
+        'coverage-sink-1:9',
+      ];
+      requireValue(
+        JSON.stringify(controlMatches.sort()) === JSON.stringify(wanted.sort()),
+        'Structural sink calibration failed.',
+      );
+    }
+    verifySources();
+    for (const [file, expected] of provenance)
+      requireValue(
+        hash(fs.readFileSync(file)) === expected,
+        'Original coverage provenance changed during reanalysis.',
+      );
+    requireValue(
+      git(['rev-parse', 'HEAD']).trim() === context.head &&
+        git(['rev-parse', 'HEAD^{tree}']).trim() === context.tree,
+      'Source revision changed during structural coverage analysis.',
+    );
+    return {
+      nativeWarnings: report.time.fixpoint_timeouts.length,
+      structurallyQualifiedPairs: pairs.size,
+    };
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}

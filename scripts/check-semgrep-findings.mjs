@@ -2,17 +2,60 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import {
+  CoverageError,
+  qualifyInternalCoverage,
+  validateCoverageEnvelope,
+} from './lib/semgrep-coverage.mjs';
 
 const args = process.argv.slice(2);
-const allowlistOnly = args.includes('--allowlist-only');
-const positional = args.filter((value) => !value.startsWith('--'));
+const errors = [];
+const options = new Map();
+const positional = [];
+for (let index = 0; index < args.length; index += 1) {
+  const argument = args[index];
+  if (argument === '--allowlist-only') {
+    if (options.has(argument)) errors.push('Semgrep gate has a duplicate option.');
+    options.set(argument, true);
+  } else if (['--rule-bundle', '--source-context', '--expected-version'].includes(argument)) {
+    const value = args[index + 1];
+    if (options.has(argument) || !value || value.startsWith('--')) {
+      errors.push('Semgrep gate has a missing or duplicate coverage option.');
+    } else {
+      options.set(argument, value);
+      index += 1;
+    }
+  } else if (argument.startsWith('--')) {
+    errors.push('Semgrep gate has an unrecognized option.');
+  } else {
+    positional.push(argument);
+  }
+}
+if (positional.length > 2) errors.push('Semgrep gate has unexpected positional inputs.');
+const allowlistOnly = options.has('--allowlist-only');
+const coverageOptions = ['--rule-bundle', '--source-context', '--expected-version'];
+if (
+  coverageOptions.some((name) => options.has(name)) &&
+  !coverageOptions.every((name) => options.has(name))
+) {
+  errors.push('Semgrep coverage requires rule, source and engine provenance together.');
+}
+if (
+  options.has('--expected-version') &&
+  !/^\d+\.\d+\.\d+$/.test(options.get('--expected-version'))
+) {
+  errors.push('Semgrep configured engine version is invalid.');
+}
+if (allowlistOnly && coverageOptions.some((name) => options.has(name))) {
+  errors.push('Semgrep allowlist-only mode does not qualify report coverage.');
+}
 const resultsPath = path.resolve(process.cwd(), positional[0] ?? 'semgrep-results.json');
 const allowlistPath = path.resolve(
   process.cwd(),
   positional[1] ?? 'scripts/semgrep-allowlist.json',
 );
 
-const errors = [];
+const option = (name) => options.get(name);
 
 function fail(message) {
   errors.push(message);
@@ -121,6 +164,16 @@ function parseReport(report) {
     );
     return null;
   }
+  try {
+    validateCoverageEnvelope(report);
+  } catch (error) {
+    fail(
+      error instanceof CoverageError
+        ? error.message
+        : 'Semgrep internal coverage validation failed.',
+    );
+    return null;
+  }
   if (
     !isRecord(report.paths) ||
     !Array.isArray(report.paths.scanned) ||
@@ -167,8 +220,31 @@ function parseReport(report) {
 const allowlist = parseAllowlist(readJson(allowlistPath, 'Semgrep allowlist'));
 
 if (!allowlistOnly) {
-  const findings = parseReport(readJson(resultsPath, 'Semgrep report'));
-  if (findings !== null) {
+  const report = readJson(resultsPath, 'Semgrep report');
+  const findings = parseReport(report);
+  if (findings !== null && errors.length === 0) {
+    try {
+      const coverage = await qualifyInternalCoverage({
+        report,
+        reportPath: resultsPath,
+        bundlePath: option('--rule-bundle'),
+        contextPath: option('--source-context'),
+        expectedVersion: option('--expected-version'),
+      });
+      if (coverage.nativeWarnings > 0) {
+        console.log(
+          `Semgrep coverage qualified ${coverage.structurallyQualifiedPairs} exact rule/file pair(s) with no possible sink; ${coverage.nativeWarnings} native non-convergence diagnostic(s) retained.`,
+        );
+      }
+    } catch (error) {
+      fail(
+        error instanceof CoverageError
+          ? error.message
+          : 'Semgrep internal coverage validation failed.',
+      );
+    }
+  }
+  if (findings !== null && errors.length === 0) {
     const blocking = [];
 
     for (const finding of findings) {
