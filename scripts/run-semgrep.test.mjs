@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import process from 'node:process';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { parse } from 'yaml';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -13,6 +15,107 @@ function validate(body) {
   const code = `import importlib.util,sys\nsys.dont_write_bytecode=True\nspec=importlib.util.spec_from_file_location('producer',${JSON.stringify(PRODUCER)})\np=importlib.util.module_from_spec(spec)\nspec.loader.exec_module(p)\n${body}\n`;
   return spawnSync('python3', ['-I', '-S', '-B', '-c', code], { encoding: 'utf8', cwd: ROOT });
 }
+
+function sdkFixture() {
+  const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'semgrep-sdk-owner-')));
+  const interpreter = path.join(directory, 'venv', 'bin', 'python');
+  const created = spawnSync(
+    'python3',
+    ['-I', '-S', '-m', 'venv', '--without-pip', path.join(directory, 'venv')],
+    { encoding: 'utf8', timeout: 10000 },
+  );
+  assert.equal(created.status, 0, created.stdout + created.stderr);
+  const location = spawnSync(
+    interpreter,
+    ['-I', '-B', '-c', 'import sysconfig; print(sysconfig.get_path("purelib"))'],
+    { encoding: 'utf8' },
+  );
+  assert.equal(location.status, 0, location.stdout + location.stderr);
+  const installed = path.join(location.stdout.trim(), 'semgrep');
+  fs.mkdirSync(path.join(installed, 'console_scripts'), { recursive: true });
+  fs.mkdirSync(path.join(installed, 'bin'));
+  fs.writeFileSync(path.join(installed, '__init__.py'), '__VERSION__="1.0.0"\n');
+  fs.writeFileSync(path.join(installed, 'console_scripts', '__init__.py'), '');
+  fs.writeFileSync(path.join(installed, 'bin', 'semgrep-core'), '#!/bin/sh\nexit 0\n', {
+    mode: 0o755,
+  });
+  fs.writeFileSync(
+    path.join(installed, 'console_scripts', 'entrypoint.py'),
+    `import json,pathlib,sys\nimport semgrep\nargs=sys.argv[1:]\nif args==['--version']:\n print(semgrep.__VERSION__)\nelse:\n assert args[0]=='scan'\n output=pathlib.Path(args[args.index('--output')+1])\n output.write_text(json.dumps({'version':semgrep.__VERSION__,'results':[],'fixtureIdentity':{'prefix':sys.prefix,'interpreter':sys.executable,'module':__file__,'isolated':sys.flags.isolated}}))\n`,
+  );
+  const cwd = path.join(directory, 'source');
+  const hostile = path.join(directory, 'hostile');
+  fs.mkdirSync(cwd);
+  fs.mkdirSync(hostile);
+  const marker = path.join(directory, 'hostile-executed');
+  const hostileCode = `#!${interpreter}\nimport json,pathlib,sys\npathlib.Path(${JSON.stringify(marker)}).write_text('executed')\nargs=sys.argv[1:]\nif '--output' in args: pathlib.Path(args[args.index('--output')+1]).write_text(json.dumps({'version':'1.0.0','results':[]}))\n`;
+  for (const name of ['semgrep', 'python'])
+    fs.writeFileSync(path.join(hostile, name), hostileCode, { mode: 0o755 });
+  const state = path.join(directory, 'state');
+  const output = path.join(directory, 'report.json');
+  function run(extra = '') {
+    const body = `import importlib.util,sys,json,pathlib\nsys.dont_write_bytecode=True\nspec=importlib.util.spec_from_file_location('producer',${JSON.stringify(PRODUCER)})\np=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)\ndef resolve(configs,version,destination):\n destination.write_text('{"rules":[]}')\n return {'version':version}\np.resolve_bundle=resolve\np.sources=lambda *args: []\np.git=lambda cwd,args: (('a' if args[-1]=='HEAD' else 'b')*40).encode()\n${extra}\nsys.argv=['producer','--expected-version','1.0.0','--config','fixture','--timeout','1','--jobs','1','--state-dir',${JSON.stringify(state)},'--output',${JSON.stringify(output)}]\np.main()\n`;
+    return spawnSync(interpreter, ['-I', '-B', '-c', body], {
+      cwd,
+      encoding: 'utf8',
+      timeout: 15000,
+      env: { ...process.env, PATH: hostile + path.delimiter + process.env.PATH, PYTHONPATH: cwd },
+    });
+  }
+  return { directory, interpreter, installed, cwd, hostile, marker, state, output, run };
+}
+
+test('producer uses the installed interpreter and SDK despite hostile command lookup', () => {
+  const fixture = sdkFixture();
+  try {
+    const result = fixture.run();
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.ok(!fs.existsSync(fixture.marker), 'PATH-selected shadow scanner executed');
+    const identity = JSON.parse(fs.readFileSync(fixture.output, 'utf8')).fixtureIdentity;
+    assert.equal(fs.realpathSync(identity.prefix), path.join(fixture.directory, 'venv'));
+    assert.equal(identity.interpreter, fixture.interpreter);
+    assert.equal(identity.module, path.join(fixture.installed, 'console_scripts', 'entrypoint.py'));
+    assert.equal(identity.isolated, 1);
+  } finally {
+    fs.rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test('producer ignores source and Python path module shadows', () => {
+  const fixture = sdkFixture();
+  try {
+    const shadow = path.join(fixture.cwd, 'semgrep', 'console_scripts');
+    fs.mkdirSync(shadow, { recursive: true });
+    fs.writeFileSync(path.join(fixture.cwd, 'semgrep', '__init__.py'), '__VERSION__="1.0.0"\n');
+    fs.writeFileSync(path.join(shadow, '__init__.py'), '');
+    fs.writeFileSync(
+      path.join(shadow, 'entrypoint.py'),
+      `import pathlib\npathlib.Path(${JSON.stringify(fixture.marker)}).write_text('executed')\n`,
+    );
+    const result = fixture.run();
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.ok(!fs.existsSync(fixture.marker), 'untrusted module shadow executed');
+    assert.equal(
+      JSON.parse(fs.readFileSync(fixture.output, 'utf8')).fixtureIdentity.module,
+      path.join(fixture.installed, 'console_scripts', 'entrypoint.py'),
+    );
+  } finally {
+    fs.rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test('producer refuses a missing packaged native engine before execution', () => {
+  const fixture = sdkFixture();
+  try {
+    fs.rmSync(path.join(fixture.installed, 'bin', 'semgrep-core'));
+    const result = fixture.run();
+    assert.notEqual(result.status, 0);
+    assert.ok(!fs.existsSync(fixture.marker), 'fallback PATH scanner executed');
+    assert.ok(!fs.existsSync(fixture.output));
+  } finally {
+    fs.rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
 
 test('canonical resolver refuses errors, empty rules and duplicate identities', () => {
   const result = validate(`
