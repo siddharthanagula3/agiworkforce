@@ -86,3 +86,4 @@ opt-level = 0
 # migration but has not published a new xcb release yet. Pin the reviewed
 # upstream commit until a crates.io release contains the same fix.
 xcb = { git = "https://github.com/rust-x-bindings/rust-xcb", rev = "ae3b2cd080e78173223038ccbebdc644eaf4a9ad" }
+tauri-plugin-wdio-webdriver = { git = "https://github.com/webdriverio/desktop-mobile", rev = "fb4a544bcc49605f6c6fb34f04b292abf428a72a" }
