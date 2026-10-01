@@ -1,3 +1,4 @@
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import {
   View,
@@ -344,7 +345,7 @@ export default function ChatTabScreen() {
   const handleSend = useCallback(
     async (
       text: string,
-      attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
+      attachments?: Attachment[],
       mode?: TaskChipType,
       dispatchOptions?: { awaitCompletion?: boolean },
     ): Promise<boolean> => {
@@ -557,10 +558,7 @@ export default function ChatTabScreen() {
     [setMediaMode],
   );
   const handleComposerSend = useCallback(
-    async (
-      text: string,
-      attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
-    ): Promise<boolean> => {
+    async (text: string, attachments?: Attachment[]): Promise<boolean> => {
       const accepted = await handleSend(text, attachments, activeTaskChip ?? undefined);
       if (accepted) setActiveTaskChip(null);
       return accepted;
@@ -732,14 +730,13 @@ export default function ChatTabScreen() {
         multiple: true,
       });
       if (!result.canceled && result.assets.length > 0) {
-        const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
-          result.assets.map((asset) => ({
-            id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            uri: asset.uri,
-            mimeType: asset.mimeType ?? 'application/octet-stream',
-            fileName: asset.name ?? 'document',
-            fileSize: asset.size,
-          }));
+        const attachments: Attachment[] = result.assets.map((asset) => ({
+          id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          uri: asset.uri,
+          mimeType: asset.mimeType ?? 'application/octet-stream',
+          fileName: asset.name ?? 'document',
+          fileSize: asset.size,
+        }));
         chatInputAttachRef.current?.addAttachments(attachments);
       }
     } catch {
@@ -751,12 +748,9 @@ export default function ChatTabScreen() {
     router.push('/(app)/skills?returnTo=composer' as Parameters<typeof router.push>[0]);
   }, [router]);
 
-  const handleAttachFromLibrary = useCallback(
-    (attachment: import('@/src/features/chat/components/AttachmentPreview').Attachment) => {
-      chatInputAttachRef.current?.addAttachments([attachment]);
-    },
-    [],
-  );
+  const handleAttachFromLibrary = useCallback((attachment: Attachment) => {
+    chatInputAttachRef.current?.addAttachments([attachment]);
+  }, []);
 
   const voiceOnboardingMode: VoiceOnboardingMode = useMemo(
     () =>

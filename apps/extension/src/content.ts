@@ -1,3 +1,4 @@
+import type { WebMCPToolInfo } from './webmcp';
 import type {
   ExtensionMessage,
   ExtensionResponse,
@@ -1779,7 +1780,7 @@ async function checkConnectionStatus(): Promise<void> {
   }
 }
 
-function sendWebMCPTools(tools: import('./webmcp').WebMCPToolInfo[], url: string): void {
+function sendWebMCPTools(tools: WebMCPToolInfo[], url: string): void {
   chrome.runtime
     .sendMessage({
       type: 'WEBMCP_TOOLS_CHANGED',
@@ -1794,7 +1795,7 @@ function sendWebMCPTools(tools: import('./webmcp').WebMCPToolInfo[], url: string
 
 function initWebMCP(): void {
   setTimeout(() => {
-    let discoveredTools: import('./webmcp').WebMCPToolInfo[] = [];
+    let discoveredTools: WebMCPToolInfo[] = [];
     try {
       const discovery = discoverAllTools();
       discoveredTools = discovery.tools;

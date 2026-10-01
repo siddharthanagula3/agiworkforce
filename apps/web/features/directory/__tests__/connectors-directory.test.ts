@@ -1,3 +1,4 @@
+import type { SettingsConnector } from '@agiworkforce/ui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SETTINGS_CONNECTORS } from '@features/settings/components/WebSettingsModal';
@@ -77,7 +78,7 @@ function request(patch: Partial<ConnectorDirectoryRequest> = {}): ConnectorDirec
 function section(
   records: DirectoryRecord[],
   connected: ReadonlySet<string>,
-  curated: import('@agiworkforce/ui').SettingsConnector[] = [],
+  curated: SettingsConnector[] = [],
   patch: Partial<Parameters<typeof toConnectorSection>[0]> = {},
 ) {
   return toConnectorSection({
@@ -410,7 +411,7 @@ describe('toConnectorSection', () => {
   });
 });
 
-function curated(patch: Partial<import('@agiworkforce/ui').SettingsConnector> = {}) {
+function curated(patch: Partial<SettingsConnector> = {}) {
   return {
     id: 'gmail',
     name: 'Gmail',
@@ -423,7 +424,7 @@ function curated(patch: Partial<import('@agiworkforce/ui').SettingsConnector> = 
     iconText: 'GM',
     canConnect: true,
     ...patch,
-  } as import('@agiworkforce/ui').SettingsConnector;
+  } as SettingsConnector;
 }
 
 describe('curated first party connectors', () => {
