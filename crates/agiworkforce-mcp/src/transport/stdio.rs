@@ -1,16 +1,17 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError, TryLockError};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::cache::Events;
+use crate::config::McpTimeouts;
 use crate::error::TransportFault;
 use crate::hooks::ClientHooks;
 use crate::jsonrpc::notification_frame;
@@ -64,6 +65,7 @@ pub(crate) struct StdioConn {
     closed: Arc<AtomicBool>,
     answers_server_requests: Arc<AtomicBool>,
     reader: JoinHandle<()>,
+    stderr_reader: Option<JoinHandle<()>>,
 }
 
 impl StdioConn {
@@ -72,12 +74,11 @@ impl StdioConn {
         command: &str,
         args: &[String],
         env: &HashMap<String, String>,
-        stderr_buf: &Arc<Mutex<Vec<String>>>,
+        stderr_buf: &Arc<StderrBuffer>,
         events: Arc<Events>,
         hooks: ClientHooks,
     ) -> Result<Self> {
         let mut child = spawn_child(server_name, command, args, env)?;
-        drain_stderr(&mut child, stderr_buf, server_name);
         let stdin = child
             .stdin
             .take()
@@ -86,6 +87,16 @@ impl StdioConn {
             .stdout
             .take()
             .with_context(|| format!("[{server_name}] MCP server stdout not available"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .with_context(|| format!("[{server_name}] MCP server stderr not available"))?;
+        let stderr_reader = tokio::spawn(read_stderr(
+            stderr,
+            Arc::clone(stderr_buf),
+            server_name.to_string(),
+            std::env::var("AGIWORKFORCE_MCP_DEBUG").is_ok(),
+        ));
         let writer: Writer = Arc::new(tokio::sync::Mutex::new(Some(stdin)));
         let pending: Pending = Arc::default();
         let closed = Arc::new(AtomicBool::new(false));
@@ -108,6 +119,7 @@ impl StdioConn {
             closed,
             answers_server_requests,
             reader,
+            stderr_reader: Some(stderr_reader),
         })
     }
 
@@ -182,6 +194,16 @@ impl StdioConn {
             terminate(&mut self.child).await;
         }
         self.reader.abort();
+        if let Some(stderr_reader) = self.stderr_reader.as_mut() {
+            if tokio::time::timeout(EXIT_GRACE, &mut *stderr_reader)
+                .await
+                .is_err()
+            {
+                stderr_reader.abort();
+                let _ = stderr_reader.await;
+            }
+        }
+        self.stderr_reader.take();
     }
 
     fn forget(&self, id: &Value) {
@@ -201,6 +223,9 @@ impl StdioConn {
 impl Drop for StdioConn {
     fn drop(&mut self) {
         self.reader.abort();
+        if let Some(stderr_reader) = self.stderr_reader.take() {
+            stderr_reader.abort();
+        }
         terminate_now(&mut self.child);
     }
 }
@@ -337,33 +362,203 @@ fn spawn_child(
     })
 }
 
-fn drain_stderr(child: &mut Child, stderr_buf: &Arc<Mutex<Vec<String>>>, name: &str) {
-    let stderr_debug = std::env::var("AGIWORKFORCE_MCP_DEBUG").is_ok();
-    if let Some(raw_stderr) = child.stderr.take() {
-        let buf = Arc::clone(stderr_buf);
-        let server = name.to_string();
-        tokio::spawn(async move {
-            let mut reader = BufReader::new(raw_stderr);
-            let mut line = String::new();
-            loop {
-                line.clear();
-                match reader.read_line(&mut line).await {
-                    Ok(0) | Err(_) => break,
-                    Ok(_) => {
-                        let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
-                        if !trimmed.is_empty() {
-                            if stderr_debug {
-                                eprintln!("[{server}] stderr: {trimmed}");
-                            }
-                            if let Ok(mut locked) = buf.lock() {
-                                locked.push(trimmed.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-        });
+const STDERR_TRUNCATED: &str = " [stderr truncated]";
+const STDERR_OMITTED: &str = "[stderr omitted]";
+const STDERR_READ_FAILED: &str = "[stderr read failed]";
+
+#[derive(Default)]
+struct StderrLines {
+    lines: VecDeque<String>,
+    bytes: usize,
+    omitted: bool,
+}
+
+pub(crate) struct StderrBuffer {
+    lines: Mutex<StderrLines>,
+    omitted: AtomicBool,
+    line_cap: usize,
+    byte_cap: usize,
+    entry_cap: usize,
+}
+
+impl StderrBuffer {
+    pub(crate) fn new(timeouts: &McpTimeouts) -> Self {
+        Self {
+            lines: Mutex::new(StderrLines::default()),
+            omitted: AtomicBool::new(false),
+            line_cap: timeouts.stderr_line_cap().min(timeouts.stderr_buffer_cap()),
+            byte_cap: timeouts.stderr_buffer_cap(),
+            entry_cap: timeouts.stderr_lines_cap(),
+        }
     }
+
+    fn push(&self, line: String) {
+        let line = if line.len() > self.line_cap {
+            bounded_text(&line, self.line_cap, true)
+        } else {
+            line
+        };
+        if line.is_empty() || self.entry_cap == 0 {
+            return;
+        }
+        let mut locked = match self.lines.try_lock() {
+            Ok(locked) => locked,
+            Err(TryLockError::Poisoned(error)) => error.into_inner(),
+            Err(TryLockError::WouldBlock) => {
+                self.omitted.store(true, Ordering::SeqCst);
+                return;
+            }
+        };
+        self.make_room(&mut locked, line.len());
+        locked.bytes += line.len();
+        locked.lines.push_back(line);
+    }
+
+    fn make_room(&self, locked: &mut StderrLines, incoming_bytes: usize) {
+        while locked.lines.len() >= self.entry_cap
+            || incoming_bytes > self.byte_cap.saturating_sub(locked.bytes)
+        {
+            let Some(oldest) = locked.lines.pop_front() else {
+                break;
+            };
+            locked.bytes -= oldest.len();
+            locked.omitted = true;
+        }
+    }
+
+    fn add_omission(&self, locked: &mut StderrLines) {
+        let omitted = self.omitted.swap(false, Ordering::SeqCst) || locked.omitted;
+        locked.omitted = false;
+        if omitted && self.entry_cap > 0 {
+            let marker = bounded_text(STDERR_OMITTED, self.line_cap, false);
+            let latest_bytes = locked.lines.back().map_or(0, String::len);
+            let retains_latest = locked.lines.is_empty()
+                || (self.entry_cap > 1
+                    && marker.len() <= self.byte_cap.saturating_sub(latest_bytes));
+            if !marker.is_empty() && retains_latest {
+                self.make_room(locked, marker.len());
+                locked.bytes += marker.len();
+                locked.lines.push_front(marker);
+                locked.omitted = false;
+            }
+        }
+    }
+
+    pub(crate) fn drain(&self) -> Vec<String> {
+        let mut locked = self.lines.lock().unwrap_or_else(PoisonError::into_inner);
+        self.add_omission(&mut locked);
+        locked.bytes = 0;
+        locked.lines.drain(..).collect()
+    }
+
+    pub(crate) fn snapshot(&self) -> Vec<String> {
+        let mut locked = self.lines.lock().unwrap_or_else(PoisonError::into_inner);
+        self.add_omission(&mut locked);
+        locked.lines.iter().cloned().collect()
+    }
+}
+
+fn bounded_text(text: &str, cap: usize, truncated: bool) -> String {
+    let truncated = truncated || text.len() > cap;
+    let suffix = if truncated && cap >= STDERR_TRUNCATED.len() {
+        STDERR_TRUNCATED
+    } else {
+        ""
+    };
+    let mut end = text.len().min(cap - suffix.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut bounded = String::with_capacity(end + suffix.len());
+    bounded.push_str(&text[..end]);
+    bounded.push_str(suffix);
+    bounded
+}
+
+struct StderrLine {
+    bytes: Vec<u8>,
+    truncated: bool,
+    cap: usize,
+}
+
+impl StderrLine {
+    fn new(cap: usize) -> Self {
+        Self {
+            bytes: Vec::with_capacity(cap),
+            truncated: false,
+            cap,
+        }
+    }
+
+    fn append(&mut self, bytes: &[u8]) {
+        let count = bytes.len().min(self.cap.saturating_sub(self.bytes.len()));
+        self.bytes.extend_from_slice(&bytes[..count]);
+        self.truncated |= count < bytes.len();
+    }
+
+    fn finish(&mut self) -> String {
+        if !self.truncated {
+            while self.bytes.last() == Some(&b'\r') {
+                self.bytes.pop();
+            }
+        }
+        let line = bounded_text(
+            &String::from_utf8_lossy(&self.bytes),
+            self.cap,
+            self.truncated,
+        );
+        self.bytes.clear();
+        self.truncated = false;
+        line
+    }
+}
+
+async fn read_stderr<R: AsyncRead + Unpin>(
+    mut stderr: R,
+    buf: Arc<StderrBuffer>,
+    server: String,
+    debug: bool,
+) {
+    let mut chunk = [0; 8192];
+    let mut line = StderrLine::new(buf.line_cap);
+    loop {
+        let count = match stderr.read(&mut chunk).await {
+            Ok(0) => {
+                emit_stderr(&buf, line.finish(), &server, debug);
+                return;
+            }
+            Ok(count) => count,
+            Err(_) => {
+                tracing::warn!("MCP stderr read failed");
+                emit_stderr(&buf, line.finish(), &server, debug);
+                emit_stderr(
+                    &buf,
+                    bounded_text(STDERR_READ_FAILED, buf.line_cap, false),
+                    &server,
+                    debug,
+                );
+                return;
+            }
+        };
+        let mut remaining = &chunk[..count];
+        while let Some(end) = remaining.iter().position(|byte| *byte == b'\n') {
+            line.append(&remaining[..end]);
+            emit_stderr(&buf, line.finish(), &server, debug);
+            remaining = &remaining[end + 1..];
+        }
+        line.append(remaining);
+        tokio::task::yield_now().await;
+    }
+}
+
+fn emit_stderr(buf: &StderrBuffer, line: String, server: &str, debug: bool) {
+    if line.is_empty() {
+        return;
+    }
+    if debug {
+        eprintln!("[{server}] stderr: {line}");
+    }
+    buf.push(line);
 }
 
 #[cfg(unix)]
@@ -407,4 +602,228 @@ fn terminate_now(child: &mut Child) {
 #[cfg(not(unix))]
 fn terminate_now(child: &mut Child) {
     let _ = child.start_kill();
+}
+
+#[cfg(test)]
+mod stderr_tests {
+    use super::*;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+    use tokio::io::ReadBuf;
+
+    fn buffer(line: usize, bytes: usize, entries: usize) -> Arc<StderrBuffer> {
+        Arc::new(StderrBuffer::new(&McpTimeouts {
+            max_stderr_line_bytes: Some(line),
+            max_stderr_buffer_bytes: Some(bytes),
+            max_stderr_lines: Some(entries),
+            ..McpTimeouts::default()
+        }))
+    }
+
+    #[test]
+    fn accumulation_and_decoded_utf8_fit_the_same_line_budget() {
+        let mut line = StderrLine::new(32);
+        for _ in 0..1000 {
+            line.append(&[0xff; 8192]);
+            assert!(line.bytes.len() <= 32);
+            assert!(line.bytes.capacity() <= 32);
+        }
+        let decoded = line.finish();
+        assert!(decoded.len() <= 32);
+        assert!(decoded.ends_with(STDERR_TRUNCATED));
+        assert!(decoded.contains('\u{fffd}'));
+        assert!(line.finish().is_empty());
+    }
+
+    #[tokio::test]
+    async fn split_utf8_crlf_empty_and_partial_eof_are_deterministic() {
+        let buf = buffer(64, 1024, 10);
+        let (mut write, read) = tokio::io::duplex(1);
+        let writer = tokio::spawn(async move {
+            write
+                .write_all("λ🙂\r\n\n\r\nend".as_bytes())
+                .await
+                .unwrap();
+            write.write_all(&[0xff]).await.unwrap();
+        });
+        read_stderr(read, Arc::clone(&buf), "unit".to_string(), false).await;
+        writer.await.unwrap();
+        assert_eq!(buf.drain(), vec!["λ🙂", "end\u{fffd}"]);
+        assert!(buf.drain().is_empty());
+    }
+
+    #[test]
+    fn queue_bytes_and_entries_preserve_newest_lines_and_bounded_markers() {
+        let buf = buffer(32, 80, 3);
+        for n in 0..100 {
+            buf.push(format!("row {n:03} {}", "x".repeat(22)));
+            let locked = buf.lines.lock().unwrap();
+            assert!(locked.lines.len() <= 3);
+            assert!(locked.bytes <= 80);
+            assert_eq!(
+                locked.bytes,
+                locked.lines.iter().map(String::len).sum::<usize>()
+            );
+        }
+        let lines = buf.drain();
+        assert!(lines.len() <= 3);
+        assert!(lines.iter().map(String::len).sum::<usize>() <= 80);
+        assert_eq!(lines.first().map(String::as_str), Some(STDERR_OMITTED));
+        assert!(lines.last().unwrap().starts_with("row 099 "));
+        buf.push("fresh".to_string());
+        assert_eq!(buf.drain(), vec!["fresh"]);
+    }
+
+    #[test]
+    fn omission_marker_never_displaces_the_latest_diagnostic() {
+        for (bytes, entries) in [(64, 1), (32, 3)] {
+            let buf = buffer(32, bytes, entries);
+            buf.push("older".to_string());
+            let recent = "r".repeat(32);
+            buf.push(recent.clone());
+            assert_eq!(buf.drain(), vec![recent]);
+            assert!(buf.drain().is_empty());
+        }
+    }
+
+    #[test]
+    fn contended_queue_drops_without_waiting_and_records_omission() {
+        let buf = buffer(32, 80, 3);
+        let locked = buf.lines.lock().unwrap();
+        buf.push("contended".to_string());
+        drop(locked);
+        buf.push("recent".to_string());
+        assert_eq!(buf.drain(), vec![STDERR_OMITTED, "recent"]);
+    }
+
+    #[test]
+    fn poisoned_queue_recovers_owned_diagnostics() {
+        let buf = buffer(32, 80, 3);
+        let owned = Arc::clone(&buf);
+        assert!(
+            std::panic::catch_unwind(move || {
+                let _locked = owned.lines.lock().unwrap();
+                panic!("synthetic poisoning");
+            })
+            .is_err()
+        );
+        buf.push("recent".to_string());
+        assert_eq!(buf.snapshot(), vec!["recent"]);
+        assert_eq!(buf.drain(), vec!["recent"]);
+    }
+
+    #[tokio::test]
+    async fn zero_budgets_and_tiny_multibyte_limits_remain_bounded() {
+        for (line, bytes, entries) in [(0, 80, 3), (32, 0, 3), (32, 80, 0)] {
+            let buf = buffer(line, bytes, entries);
+            read_stderr(
+                &b"diagnostic\n"[..],
+                Arc::clone(&buf),
+                "unit".to_string(),
+                false,
+            )
+            .await;
+            assert!(buf.drain().is_empty());
+        }
+        let buf = buffer(2, 2, 1);
+        read_stderr(
+            "🙂\nλ\n".as_bytes(),
+            Arc::clone(&buf),
+            "unit".to_string(),
+            false,
+        )
+        .await;
+        let lines = buf.drain();
+        assert_eq!(lines, vec!["λ"]);
+        assert!(lines.iter().map(String::len).sum::<usize>() <= 2);
+    }
+
+    struct DropWitness(Arc<AtomicBool>);
+
+    impl Drop for DropWitness {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    #[tokio::test]
+    async fn cancelled_shutdown_keeps_stderr_task_owned_until_connection_drop() {
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .arg("--list")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), child.wait())
+            .await
+            .unwrap()
+            .unwrap();
+        let dropped = Arc::new(AtomicBool::new(false));
+        let witnessed = Arc::clone(&dropped);
+        let (started_tx, started_rx) = oneshot::channel();
+        let stderr_reader = tokio::spawn(async move {
+            let _witness = DropWitness(witnessed);
+            started_tx.send(()).unwrap();
+            std::future::pending::<()>().await;
+        });
+        started_rx.await.unwrap();
+        let mut conn = StdioConn {
+            server_name: "unit".to_string(),
+            child,
+            writer: Arc::new(tokio::sync::Mutex::new(None)),
+            pending: Arc::default(),
+            closed: Arc::new(AtomicBool::new(false)),
+            answers_server_requests: Arc::new(AtomicBool::new(false)),
+            reader: tokio::spawn(std::future::pending()),
+            stderr_reader: Some(stderr_reader),
+        };
+        let mut shutdown = Box::pin(conn.shutdown());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), shutdown.as_mut())
+                .await
+                .is_err()
+        );
+        drop(shutdown);
+        assert!(!dropped.load(Ordering::SeqCst));
+        drop(conn);
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !dropped.load(Ordering::SeqCst) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("stderr task must be aborted when the connection drops");
+    }
+
+    struct ReadFailure(bool);
+
+    impl AsyncRead for ReadFailure {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            let state = self.get_mut();
+            if !state.0 {
+                state.0 = true;
+                buf.put_slice(b"partial");
+                Poll::Ready(Ok(()))
+            } else {
+                Poll::Ready(Err(std::io::Error::other("private exception detail")))
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn read_error_retains_partial_context_and_fixed_safe_diagnostic() {
+        let buf = buffer(64, 128, 3);
+        read_stderr(
+            ReadFailure(false),
+            Arc::clone(&buf),
+            "unit".to_string(),
+            false,
+        )
+        .await;
+        assert_eq!(buf.drain(), vec!["partial", STDERR_READ_FAILED]);
+    }
 }

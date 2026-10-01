@@ -247,3 +247,81 @@ write_frame({"jsonrpc": "2.0", "id": tools["id"], "result": {"tools": []}})
     assert!(tools.is_empty());
     let _ = client.shutdown().await;
 }
+
+async fn bounded_stderr(mode: &str) -> Vec<String> {
+    let mut client = McpClient::connect(
+        mode,
+        stdio_cfg(mode),
+        McpTimeouts::default(),
+        support::decline_hooks(),
+    )
+    .await
+    .expect("connect after all stderr writes finish");
+    assert_eq!(client.list_tools().await.expect("live child").len(), 1);
+    client
+        .shutdown()
+        .await
+        .expect("shutdown drains final stderr");
+    let mut lines = Vec::new();
+    for _ in 0..100 {
+        lines.extend(client.drain_stderr());
+        if lines.last().is_some_and(|line| line == "stderr complete") {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(lines.last().map(String::as_str), Some("stderr complete"));
+    assert!(client.drain_stderr().is_empty());
+    lines
+}
+
+#[tokio::test]
+async fn stdio_stderr_queue_keeps_recent_diagnostics_within_limits() {
+    use agiworkforce_mcp::config::{DEFAULT_MAX_STDERR_BUFFER_BYTES, DEFAULT_MAX_STDERR_LINES};
+
+    let lines = bounded_stderr("stderr-lines").await;
+    assert_eq!(lines.last().map(String::as_str), Some("stderr complete"));
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.starts_with("diagnostic 4999 "))
+    );
+    assert!(lines.len() <= DEFAULT_MAX_STDERR_LINES);
+    assert!(lines.iter().map(String::len).sum::<usize>() <= DEFAULT_MAX_STDERR_BUFFER_BYTES);
+    assert_eq!(lines.first().map(String::as_str), Some("[stderr omitted]"));
+}
+
+#[tokio::test]
+async fn stdio_stderr_long_line_is_bounded_and_pipe_keeps_draining() {
+    use agiworkforce_mcp::config::DEFAULT_MAX_STDERR_LINE_BYTES;
+
+    let lines = bounded_stderr("stderr-long-line").await;
+    assert_eq!(lines.last().map(String::as_str), Some("stderr complete"));
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].len() <= DEFAULT_MAX_STDERR_LINE_BYTES);
+    assert!(lines[0].ends_with(" [stderr truncated]"));
+}
+
+#[tokio::test]
+async fn stdio_configured_stderr_limits_apply_to_real_child_output() {
+    let timeouts = McpTimeouts {
+        max_stderr_line_bytes: Some(64),
+        max_stderr_buffer_bytes: Some(128),
+        max_stderr_lines: Some(3),
+        ..McpTimeouts::default()
+    };
+    let mut client = McpClient::connect(
+        "custom-stderr",
+        stdio_cfg("stderr-lines"),
+        timeouts,
+        support::decline_hooks(),
+    )
+    .await
+    .expect("connect after stderr burst");
+    client.shutdown().await.expect("shutdown");
+    let lines = client.drain_stderr();
+    assert_eq!(lines.last().map(String::as_str), Some("stderr complete"));
+    assert!(lines.len() <= 3);
+    assert!(lines.iter().all(|line| line.len() <= 64));
+    assert!(lines.iter().map(String::len).sum::<usize>() <= 128);
+}
