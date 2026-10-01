@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-VERSION="${1:?usage: $0 <version>}"
+VERSION="${1:?"usage: $0 <version>"}"
 TAP_DIR="${HOMEBREW_TAP_DIR:-$HOME/code/homebrew-tap}"
 GITHUB_REPO="siddharthanagula3/agiworkforce"
 RELEASE_TAG="v-cli-$VERSION"

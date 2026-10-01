@@ -257,13 +257,15 @@ jobs:
           railway up --service signaling-server --detach
 
       - name: Verify deployment health
+        env:
+          RAILWAY_PUBLIC_URL: ${{ vars.RAILWAY_PUBLIC_URL }}
         run: |
           echo "Waiting for deployment to stabilize..."
           sleep 30
 
           # Health check with retries
           for i in {1..5}; do
-            if curl -sf "${{ vars.RAILWAY_PUBLIC_URL }}/health" > /dev/null; then
+            if curl -sf "${RAILWAY_PUBLIC_URL}/health" > /dev/null; then
               echo "Health check passed!"
               exit 0
             fi

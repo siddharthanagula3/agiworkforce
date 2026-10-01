@@ -110,8 +110,8 @@ echo "  Surface verification summary"
 echo "═══════════════════════════════════════════════════════════════"
 fail_count=0
 for entry in "${RESULTS[@]}"; do
-  name="${entry%|*}"
-  status="${entry##*|}"
+  name="${entry%"|"*}"
+  status="${entry##*"|"}"
   if [[ "$status" == "PASS" ]]; then
     printf "  \033[32m✓\033[0m  %s\n" "$name"
   else
