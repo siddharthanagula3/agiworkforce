@@ -839,7 +839,7 @@ fn fold_chunk(acc: &mut Value, c: &Value) {
 /// `message_stop` echo with no other payload)?
 fn is_bare_done(v: &Value) -> bool {
     v["done"] == json!(true)
-        && v["content"].as_str().unwrap_or("") == ""
+        && v["content"].as_str().unwrap_or("").is_empty()
         && v["finish_reason"].is_null()
         && v["usage"].is_null()
         && v["credits"].is_null()
@@ -856,7 +856,7 @@ fn is_bare_done(v: &Value) -> bool {
 /// REAL divergence carries a non-empty payload on one side and fails this test.
 fn is_bare_empty(v: &Value) -> bool {
     v["done"] != json!(true)
-        && v["content"].as_str().unwrap_or("") == ""
+        && v["content"].as_str().unwrap_or("").is_empty()
         && v["finish_reason"].is_null()
         && v["usage"].is_null()
         && v["credits"].is_null()
@@ -868,7 +868,7 @@ fn is_bare_empty(v: &Value) -> bool {
 /// Is this a new-side synthesized End chunk (`done` + optional finish only)?
 fn is_end_shape(v: &Value) -> bool {
     v["done"] == json!(true)
-        && v["content"].as_str().unwrap_or("") == ""
+        && v["content"].as_str().unwrap_or("").is_empty()
         && v["usage"].is_null()
         && v["credits"].is_null()
         && v["tool_calls"].is_null()

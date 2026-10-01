@@ -296,9 +296,11 @@ mod tests {
     /// invariant.
     #[test]
     fn limit_constants_are_protective() {
-        assert!(MAX_RESULT_LIMIT > 0);
-        assert!(MAX_RESULT_LIMIT <= 10_000);
-        assert!(MAX_ENTRIES_VISITED >= MAX_RESULT_LIMIT);
+        const {
+            assert!(MAX_RESULT_LIMIT > 0);
+            assert!(MAX_RESULT_LIMIT <= 10_000);
+            assert!(MAX_ENTRIES_VISITED >= MAX_RESULT_LIMIT);
+        }
         let clamped = usize::MAX.min(MAX_RESULT_LIMIT);
         assert_eq!(clamped, MAX_RESULT_LIMIT);
     }

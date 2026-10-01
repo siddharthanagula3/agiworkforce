@@ -136,7 +136,9 @@ mod tests {
 
     #[test]
     fn the_sidecar_and_runtime_carry_versions_of_their_own() {
-        assert!(SIDECAR_DAEMON_VERSION >= 1);
-        assert!(LOCAL_RUNTIME_VERSION >= MIN_COMPATIBLE_RUNTIME_VERSION);
+        const {
+            assert!(SIDECAR_DAEMON_VERSION >= 1);
+            assert!(LOCAL_RUNTIME_VERSION >= MIN_COMPATIBLE_RUNTIME_VERSION);
+        }
     }
 }

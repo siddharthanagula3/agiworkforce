@@ -371,7 +371,7 @@ fn test_browser_wait_timeout_alias_normalizes_to_timeout_ms() {
     ToolExecutor::normalize_tool_arguments("browser_wait_for_selector", &mut args);
 
     assert_eq!(args.get("timeout_ms"), Some(&json!(1234)));
-    assert!(args.get("timeout").is_none());
+    assert!(!args.contains_key("timeout"));
 }
 
 #[test]
@@ -384,7 +384,7 @@ fn test_alias_normalization_removes_alias_when_canonical_present() {
     ToolExecutor::normalize_tool_arguments("browser_wait_for_selector", &mut args);
 
     assert_eq!(args.get("timeout_ms"), Some(&json!(5000)));
-    assert!(args.get("timeout").is_none());
+    assert!(!args.contains_key("timeout"));
 }
 
 #[test]
@@ -434,7 +434,7 @@ async fn test_terminal_execute_caps_returned_output() {
     let stdout = result.data["stdout"].as_str().unwrap_or_default();
     assert!(stdout.contains("stdout truncated after 2048 bytes"));
     assert!(
-        stdout.as_bytes().len() < 2_300,
+        stdout.len() < 2_300,
         "returned stdout should be capped plus a short marker"
     );
 }

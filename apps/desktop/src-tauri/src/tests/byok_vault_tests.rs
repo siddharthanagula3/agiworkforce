@@ -8,7 +8,7 @@
 /// Trust boundary: only BYOK keys are stored here; these tests never touch
 /// any cloud or managed-cloud path.
 #[cfg(test)]
-mod byok_vault_tests {
+mod tests {
     use tauri_plugin_stronghold::{kdf::KeyDerivation, stronghold::Stronghold};
     use tempfile::TempDir;
 

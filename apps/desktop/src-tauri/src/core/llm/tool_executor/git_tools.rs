@@ -20,166 +20,6 @@ fn parse_git_diff_max_bytes(args: &HashMap<String, Value>) -> Result<usize> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::core::agi::tools::ToolRegistry;
-    use std::sync::Arc;
-    use tempfile::TempDir;
-
-    fn init_repo_with_commit() -> Result<TempDir> {
-        let dir = tempfile::tempdir()?;
-        let repo = git2::Repository::init(dir.path())?;
-        std::fs::write(dir.path().join("README.md"), "hello\n")?;
-
-        let mut index = repo.index()?;
-        index.add_path(Path::new("README.md"))?;
-        index.write()?;
-        let tree_id = index.write_tree()?;
-        let tree = repo.find_tree(tree_id)?;
-        let signature = git2::Signature::now("AGI Test", "agi@example.com")?;
-        repo.commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])?;
-
-        drop(tree);
-        drop(repo);
-        Ok(dir)
-    }
-
-    fn commit_file(
-        repo_dir: &TempDir,
-        relative_path: &str,
-        content: &str,
-        message: &str,
-    ) -> Result<()> {
-        std::fs::write(repo_dir.path().join(relative_path), content)?;
-        let repo = git2::Repository::open(repo_dir.path())?;
-        let mut index = repo.index()?;
-        index.add_path(Path::new(relative_path))?;
-        index.write()?;
-        let tree_id = index.write_tree()?;
-        let tree = repo.find_tree(tree_id)?;
-        let signature = git2::Signature::now("AGI Test", "agi@example.com")?;
-        let parent = repo.head()?.peel_to_commit()?;
-        repo.commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            message,
-            &tree,
-            &[&parent],
-        )?;
-        Ok(())
-    }
-
-    #[test]
-    fn git_diff_truncation_preserves_utf8_boundaries() {
-        let (content, truncated) = truncate_utf8("aéz", 2);
-        assert_eq!(content, "a");
-        assert!(truncated);
-    }
-
-    #[tokio::test]
-    async fn git_diff_returns_tracked_changes_with_truncation_metadata() {
-        let repo_dir = init_repo_with_commit().expect("repo");
-        std::fs::write(repo_dir.path().join("README.md"), "hello\nchanged\n").expect("modify file");
-
-        let mut executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
-        executor.set_project_folder(Some(repo_dir.path().to_string_lossy().to_string()));
-        let result = executor
-            .execute_git_diff_tool(&HashMap::from([
-                (
-                    "path".to_string(),
-                    json!(repo_dir.path().to_string_lossy().to_string()),
-                ),
-                ("max_bytes".to_string(), json!(32)),
-            ]))
-            .await
-            .expect("git diff");
-
-        assert!(result.success);
-        assert_eq!(result.data["success"], json!(true));
-        assert_eq!(result.data["includes_untracked_file_content"], json!(false));
-        assert_eq!(result.data["truncated"], json!(true));
-        assert_eq!(result.data["file_count"], json!(1));
-        assert_eq!(result.data["total_additions"], json!(1));
-        assert_eq!(result.data["total_deletions"], json!(0));
-        assert_eq!(result.data["returned_bytes"], json!(32));
-
-        let diffs = result.data["diffs"].as_array().expect("diffs array");
-        assert_eq!(diffs[0]["file_path"], json!("README.md"));
-        assert_eq!(diffs[0]["truncated"], json!(true));
-    }
-
-    #[tokio::test]
-    async fn git_diff_rejects_invalid_max_bytes() {
-        let executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
-        let error = executor
-            .execute_git_diff_tool(&HashMap::from([("max_bytes".to_string(), json!(0))]))
-            .await
-            .expect_err("zero max_bytes should fail");
-        assert!(error.to_string().contains("greater than zero"));
-    }
-
-    #[tokio::test]
-    async fn git_log_returns_bounded_commits_from_project_folder() {
-        let repo_dir = init_repo_with_commit().expect("repo");
-        commit_file(&repo_dir, "README.md", "hello\nsecond\n", "second").expect("second commit");
-
-        let mut executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
-        executor.set_project_folder(Some(repo_dir.path().to_string_lossy().to_string()));
-        let result = executor
-            .execute_git_log_tool(&HashMap::from([("limit".to_string(), json!(1))]))
-            .await
-            .expect("git log");
-
-        assert!(result.success);
-        assert_eq!(result.data["success"], json!(true));
-        assert_eq!(result.data["limit"], json!(1));
-        assert_eq!(result.data["commit_count"], json!(1));
-        let commits = result.data["commits"].as_array().expect("commits array");
-        assert_eq!(commits[0]["message"], json!("second"));
-    }
-
-    #[tokio::test]
-    async fn git_log_rejects_invalid_limit() {
-        let executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
-        let error = executor
-            .execute_git_log_tool(&HashMap::from([("limit".to_string(), json!(0))]))
-            .await
-            .expect_err("zero limit should fail");
-        assert!(error.to_string().contains("greater than zero"));
-    }
-
-    #[tokio::test]
-    async fn git_list_branches_returns_local_branch_metadata() {
-        let repo_dir = init_repo_with_commit().expect("repo");
-        {
-            let repo = git2::Repository::open(repo_dir.path()).expect("open repo");
-            let head = repo.head().expect("head").peel_to_commit().expect("commit");
-            repo.branch("feature/demo", &head, false)
-                .expect("create branch");
-        }
-
-        let mut executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
-        executor.set_project_folder(Some(repo_dir.path().to_string_lossy().to_string()));
-        let result = executor
-            .execute_git_list_branches_tool(&HashMap::new())
-            .await
-            .expect("git list branches");
-
-        assert!(result.success);
-        assert_eq!(result.data["success"], json!(true));
-        assert_eq!(result.data["branch_count"], json!(2));
-        let branches = result.data["branches"].as_array().expect("branches array");
-        assert!(branches
-            .iter()
-            .any(|branch| branch["name"] == json!("feature/demo")));
-        assert!(branches
-            .iter()
-            .any(|branch| branch["is_current"] == json!(true)));
-    }
-}
-
 fn parse_git_log_limit(args: &HashMap<String, Value>) -> Result<usize> {
     match args.get("limit") {
         None => Ok(DEFAULT_GIT_LOG_LIMIT),
@@ -793,5 +633,165 @@ impl ToolExecutor {
                 ("private".to_string(), json!(private)),
             ]),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::agi::tools::ToolRegistry;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    fn init_repo_with_commit() -> Result<TempDir> {
+        let dir = tempfile::tempdir()?;
+        let repo = git2::Repository::init(dir.path())?;
+        std::fs::write(dir.path().join("README.md"), "hello\n")?;
+
+        let mut index = repo.index()?;
+        index.add_path(Path::new("README.md"))?;
+        index.write()?;
+        let tree_id = index.write_tree()?;
+        let tree = repo.find_tree(tree_id)?;
+        let signature = git2::Signature::now("AGI Test", "agi@example.com")?;
+        repo.commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])?;
+
+        drop(tree);
+        drop(repo);
+        Ok(dir)
+    }
+
+    fn commit_file(
+        repo_dir: &TempDir,
+        relative_path: &str,
+        content: &str,
+        message: &str,
+    ) -> Result<()> {
+        std::fs::write(repo_dir.path().join(relative_path), content)?;
+        let repo = git2::Repository::open(repo_dir.path())?;
+        let mut index = repo.index()?;
+        index.add_path(Path::new(relative_path))?;
+        index.write()?;
+        let tree_id = index.write_tree()?;
+        let tree = repo.find_tree(tree_id)?;
+        let signature = git2::Signature::now("AGI Test", "agi@example.com")?;
+        let parent = repo.head()?.peel_to_commit()?;
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            message,
+            &tree,
+            &[&parent],
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn git_diff_truncation_preserves_utf8_boundaries() {
+        let (content, truncated) = truncate_utf8("aéz", 2);
+        assert_eq!(content, "a");
+        assert!(truncated);
+    }
+
+    #[tokio::test]
+    async fn git_diff_returns_tracked_changes_with_truncation_metadata() {
+        let repo_dir = init_repo_with_commit().expect("repo");
+        std::fs::write(repo_dir.path().join("README.md"), "hello\nchanged\n").expect("modify file");
+
+        let mut executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
+        executor.set_project_folder(Some(repo_dir.path().to_string_lossy().to_string()));
+        let result = executor
+            .execute_git_diff_tool(&HashMap::from([
+                (
+                    "path".to_string(),
+                    json!(repo_dir.path().to_string_lossy().to_string()),
+                ),
+                ("max_bytes".to_string(), json!(32)),
+            ]))
+            .await
+            .expect("git diff");
+
+        assert!(result.success);
+        assert_eq!(result.data["success"], json!(true));
+        assert_eq!(result.data["includes_untracked_file_content"], json!(false));
+        assert_eq!(result.data["truncated"], json!(true));
+        assert_eq!(result.data["file_count"], json!(1));
+        assert_eq!(result.data["total_additions"], json!(1));
+        assert_eq!(result.data["total_deletions"], json!(0));
+        assert_eq!(result.data["returned_bytes"], json!(32));
+
+        let diffs = result.data["diffs"].as_array().expect("diffs array");
+        assert_eq!(diffs[0]["file_path"], json!("README.md"));
+        assert_eq!(diffs[0]["truncated"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn git_diff_rejects_invalid_max_bytes() {
+        let executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
+        let error = executor
+            .execute_git_diff_tool(&HashMap::from([("max_bytes".to_string(), json!(0))]))
+            .await
+            .expect_err("zero max_bytes should fail");
+        assert!(error.to_string().contains("greater than zero"));
+    }
+
+    #[tokio::test]
+    async fn git_log_returns_bounded_commits_from_project_folder() {
+        let repo_dir = init_repo_with_commit().expect("repo");
+        commit_file(&repo_dir, "README.md", "hello\nsecond\n", "second").expect("second commit");
+
+        let mut executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
+        executor.set_project_folder(Some(repo_dir.path().to_string_lossy().to_string()));
+        let result = executor
+            .execute_git_log_tool(&HashMap::from([("limit".to_string(), json!(1))]))
+            .await
+            .expect("git log");
+
+        assert!(result.success);
+        assert_eq!(result.data["success"], json!(true));
+        assert_eq!(result.data["limit"], json!(1));
+        assert_eq!(result.data["commit_count"], json!(1));
+        let commits = result.data["commits"].as_array().expect("commits array");
+        assert_eq!(commits[0]["message"], json!("second"));
+    }
+
+    #[tokio::test]
+    async fn git_log_rejects_invalid_limit() {
+        let executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
+        let error = executor
+            .execute_git_log_tool(&HashMap::from([("limit".to_string(), json!(0))]))
+            .await
+            .expect_err("zero limit should fail");
+        assert!(error.to_string().contains("greater than zero"));
+    }
+
+    #[tokio::test]
+    async fn git_list_branches_returns_local_branch_metadata() {
+        let repo_dir = init_repo_with_commit().expect("repo");
+        {
+            let repo = git2::Repository::open(repo_dir.path()).expect("open repo");
+            let head = repo.head().expect("head").peel_to_commit().expect("commit");
+            repo.branch("feature/demo", &head, false)
+                .expect("create branch");
+        }
+
+        let mut executor = ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")));
+        executor.set_project_folder(Some(repo_dir.path().to_string_lossy().to_string()));
+        let result = executor
+            .execute_git_list_branches_tool(&HashMap::new())
+            .await
+            .expect("git list branches");
+
+        assert!(result.success);
+        assert_eq!(result.data["success"], json!(true));
+        assert_eq!(result.data["branch_count"], json!(2));
+        let branches = result.data["branches"].as_array().expect("branches array");
+        assert!(branches
+            .iter()
+            .any(|branch| branch["name"] == json!("feature/demo")));
+        assert!(branches
+            .iter()
+            .any(|branch| branch["is_current"] == json!(true)));
     }
 }

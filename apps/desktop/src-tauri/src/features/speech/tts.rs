@@ -797,11 +797,13 @@ mod tests {
     /// spawning `say` into a test run.
     #[test]
     fn system_tts_platform_support_matches_the_implemented_speak_arm() {
-        if SystemTts::platform_supported() {
+        const {
             assert!(
-                cfg!(target_os = "macos"),
+                !SystemTts::platform_supported() || cfg!(target_os = "macos"),
                 "only macOS implements speak_sync"
             );
+        }
+        if SystemTts::platform_supported() {
             return;
         }
 
@@ -883,8 +885,7 @@ mod tests {
         let err = player
             .speak("hello")
             .await
-            .err()
-            .expect("a provider that cannot synthesize must not report playback");
+            .expect_err("a provider that cannot synthesize must not report playback");
         assert!(err.to_string().contains("not implemented"), "got: {err}");
         assert!(!player.is_playing(), "failed playback must clear its state");
         assert!(player.current_text().is_none());
