@@ -52,6 +52,7 @@ async function fixture(change = () => {}, behavior = 'complete') {
     const bundle = { rules: [rule()] };
     const report = {
       version: VERSION,
+      engine_requested: 'OSS',
       results: [],
       errors: [],
       skipped_rules: [],
@@ -123,7 +124,12 @@ async function fixture(change = () => {}, behavior = 'complete') {
           paths: { scanned: targets },
           time: { rules: [replayed.id], fixpoint_timeouts: [] },
         };
-        if (behavior === 'replay-warning' && replayed.id === RULE)
+        if (
+          replayed.id === RULE &&
+          (behavior === 'replay-warning' ||
+            (report.time.fixpoint_timeouts[0]?.message.startsWith('[rules: 1,') &&
+              !behavior.startsWith('replay-')))
+        )
           replay.time.fixpoint_timeouts.push({
             error_type: 'Fixpoint timeout',
             message: `[rules: 1, first: ${RULE}]`,
@@ -234,7 +240,50 @@ async function fixture(change = () => {}, behavior = 'complete') {
 }
 
 test('a source-bound single-rule warning requires all whole sources and six calibrated sink matches', async () => {
-  assert.deepEqual(await fixture(), { nativeWarnings: 1, structurallyQualifiedPairs: 1 });
+  assert.deepEqual(await fixture(), {
+    nativeWarnings: 1,
+    structurallyQualifiedPairs: 1,
+    convergedReplayPairs: 0,
+  });
+});
+
+function complexSingleton({ bundle }) {
+  const original = bundle.rules[0];
+  original.options = { taint_unify_mvars: true };
+  original['pattern-sinks'] = [
+    {
+      patterns: [
+        { pattern: 'html($VALUE)' },
+        {
+          'metavariable-pattern': {
+            metavariable: '$VALUE',
+            language: 'generic',
+            pattern: '<$TAG ...',
+          },
+        },
+      ],
+      requires: 'SOURCE and not CLEAN',
+    },
+  ];
+  original['pattern-sources'] = [{ pattern: 'source(...)', label: 'SOURCE' }];
+  original['pattern-sanitizers'] = [{ pattern: 'sanitize(...)' }];
+}
+
+test('a direct warning replays the complete original rule with options and labeled sinks unchanged', async () => {
+  assert.deepEqual(await fixture(complexSingleton, 'replay-complete'), {
+    nativeWarnings: 1,
+    structurallyQualifiedPairs: 0,
+    convergedReplayPairs: 1,
+  });
+});
+
+test('a remaining unsupported singleton warning names only its rule and source and fails closed', async () => {
+  await assert.rejects(
+    fixture(complexSingleton, 'replay-warning'),
+    (error) =>
+      error.message ===
+      `Affected rule has unsupported sink semantics. Rule ${JSON.stringify(RULE)}, source ${JSON.stringify(SOURCE)}.`,
+  );
 });
 
 function aggregate({ bundle, report }) {
@@ -253,13 +302,18 @@ function aggregate({ bundle, report }) {
 }
 
 test('an aggregate warning replays every original applicable taint object unchanged', async () => {
-  assert.deepEqual(await fixture(aggregate), { nativeWarnings: 1, structurallyQualifiedPairs: 0 });
+  assert.deepEqual(await fixture(aggregate), {
+    nativeWarnings: 1,
+    structurallyQualifiedPairs: 0,
+    convergedReplayPairs: 2,
+  });
 });
 
 test('a replay retains its exact native warning and requires the existing calibrated no-sink predicate', async () => {
   assert.deepEqual(await fixture(aggregate, 'replay-warning'), {
     nativeWarnings: 1,
     structurallyQualifiedPairs: 1,
+    convergedReplayPairs: 1,
   });
 });
 
@@ -288,6 +342,9 @@ for (const behavior of [
 ]) {
   test(`${behavior} refuses aggregate coverage`, async () => {
     await assert.rejects(fixture(aggregate, behavior));
+  });
+  test(`${behavior} refuses direct singleton coverage`, async () => {
+    await assert.rejects(fixture(complexSingleton, behavior));
   });
 }
 
@@ -532,7 +589,7 @@ test('zero warnings still require valid original provenance when it is supplied'
     await fixture(({ report }) => {
       report.time.fixpoint_timeouts = [];
     }),
-    { nativeWarnings: 0, structurallyQualifiedPairs: 0 },
+    { nativeWarnings: 0, structurallyQualifiedPairs: 0, convergedReplayPairs: 0 },
   );
 });
 

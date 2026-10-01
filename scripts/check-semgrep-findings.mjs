@@ -233,7 +233,7 @@ if (!allowlistOnly) {
       });
       if (coverage.nativeWarnings > 0) {
         console.log(
-          `Semgrep coverage qualified ${coverage.structurallyQualifiedPairs} exact rule/file pair(s) with no possible sink; ${coverage.nativeWarnings} native non-convergence diagnostic(s) retained.`,
+          `Semgrep coverage qualified ${coverage.convergedReplayPairs} exact rule/file pair(s) by complete native singleton replay and ${coverage.structurallyQualifiedPairs} by calibrated no-sink analysis; ${coverage.nativeWarnings} original non-convergence diagnostic(s) retained.`,
         );
       }
     } catch (error) {
