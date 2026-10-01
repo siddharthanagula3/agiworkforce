@@ -3,12 +3,38 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { NextRequest } from 'next/server';
 import { getPlanMaxConcurrentTurns } from '@agiworkforce/types';
-import { KEY_VALUE_PROVIDER_ENV } from '@agiworkforce/key-value';
+import {
+  KEY_VALUE_PROVIDER_ENV,
+  readUpstashCredentials,
+  UPSTASH_REST_URL_ENV_NAMES,
+  UPSTASH_REST_TOKEN_ENV_NAMES,
+  type UpstashRedisLike,
+} from '@agiworkforce/key-value';
+
+beforeEach(() => {
+  for (const name of [...UPSTASH_REST_URL_ENV_NAMES, ...UPSTASH_REST_TOKEN_ENV_NAMES]) {
+    vi.stubEnv(name, undefined);
+  }
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const NO_SHARED_STORE = 'none';
 
 const upstash = vi.hoisted(() => {
+  const unexpectedCommand = () => {
+    throw new Error('unexpected Redis command');
+  };
   const pipeline = {
+    get: vi.fn(unexpectedCommand),
+    set: vi.fn(unexpectedCommand),
+    incrby: vi.fn(unexpectedCommand),
+    pexpire: vi.fn(unexpectedCommand),
+    pexpireat: vi.fn(unexpectedCommand),
+    hset: vi.fn(unexpectedCommand),
+    hgetall: vi.fn(unexpectedCommand),
     zremrangebyscore: vi.fn(),
     zadd: vi.fn(),
     expire: vi.fn(),
@@ -18,27 +44,45 @@ const upstash = vi.hoisted(() => {
   for (const name of ['zremrangebyscore', 'zadd', 'expire', 'zrange'] as const) {
     pipeline[name].mockImplementation(() => pipeline);
   }
-  return {
-    pipeline,
-    client: {
-      zremrangebyscore: vi.fn(async () => 0),
-      zcard: vi.fn(async () => 0),
-      zadd: vi.fn(async () => 1),
-      zrem: vi.fn(async () => 1),
-      expire: vi.fn(async () => 1),
-      evalsha: vi.fn(async () => [1, 0]),
-      eval: vi.fn(async () => [1, 0]),
-      scriptLoad: vi.fn(async () => 'sha'),
-      pipeline: vi.fn(() => pipeline),
-    },
+  const client = {
+    get: vi.fn(unexpectedCommand),
+    set: vi.fn(unexpectedCommand),
+    del: vi.fn(unexpectedCommand),
+    incrby: vi.fn(unexpectedCommand),
+    hset: vi.fn(unexpectedCommand),
+    hgetall: vi.fn(unexpectedCommand),
+    sadd: vi.fn(unexpectedCommand),
+    srem: vi.fn(unexpectedCommand),
+    scard: vi.fn(unexpectedCommand),
+    scan: vi.fn(unexpectedCommand),
+    zremrangebyscore: vi.fn(async () => 0),
+    zcard: vi.fn(async () => 0),
+    zadd: vi.fn(async () => 1),
+    zrem: vi.fn(async () => 1),
+    expire: vi.fn(async () => 1),
+    evalsha: vi.fn(async () => [1, 0]),
+    eval: vi.fn(async () => [1, 0]),
+    scriptLoad: vi.fn(async () => 'sha'),
+    pipeline: vi.fn(() => pipeline),
   };
+  return { pipeline, client: client satisfies UpstashRedisLike };
 });
 
-vi.mock('@upstash/redis', () => ({
-  Redis: function RedisMock() {
-    return upstash.client;
-  },
-}));
+vi.mock('@agiworkforce/key-value', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/key-value')>();
+  return {
+    ...actual,
+    resolveKeyValueRuntime(options: Parameters<typeof actual.resolveKeyValueRuntime>[0] = {}) {
+      const injectClient =
+        actual.selectKeyValueProvider(options) === 'upstash' &&
+        !options.upstashClient &&
+        actual.readUpstashCredentials() !== null;
+      return actual.resolveKeyValueRuntime(
+        injectClient ? { ...options, upstashClient: upstash.client } : options,
+      );
+    },
+  } satisfies typeof actual;
+});
 
 vi.mock('server-only', () => ({}));
 
@@ -251,6 +295,11 @@ describe('managed concurrent-turn ceiling', () => {
   });
 
   it('admits and records a turn while Redis answers', async () => {
+    expect(readUpstashCredentials()).toEqual({
+      url: 'https://redis.invalid',
+      token: 'token',
+    });
+
     const { acquireManagedTurnSlot } = await import('../rate-limit');
 
     const result = await acquireManagedTurnSlot({

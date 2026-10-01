@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { URL } from 'node:url';
 import { runCoverage } from './run-coverage.mjs';
 import { parse } from 'yaml';
 
@@ -162,4 +163,27 @@ test('coverage provisions Chromium before running browser-backed tests', () => {
   assert.ok(browserIndex >= 0 && browserIndex < coverageIndex);
   assert.equal(steps[browserIndex].run, 'pnpm exec playwright install --with-deps chromium');
   assert.notEqual(steps[browserIndex]['continue-on-error'], true);
+});
+
+test('L1 provisions the mobile privacy parser before Node tests and coverage', () => {
+  const workflow = parse(
+    fs.readFileSync(new URL('../.github/workflows/test-l1.yml', import.meta.url), 'utf8'),
+  );
+  const mobile = JSON.parse(
+    fs.readFileSync(new URL('../apps/mobile/package.json', import.meta.url), 'utf8'),
+  );
+  assert.match(mobile.scripts.test, /^pnpm run test:node(?: &&|$)/);
+  const steps = workflow.jobs['test-l1'].steps;
+  const setupCommand = 'pnpm --filter @agiworkforce/mobile setup:privacy-parser';
+  const setupIndex = steps.findIndex((step) => step.run === setupCommand);
+  assert.ok(setupIndex >= 0, 'L1 must prepare the canonical mobile privacy parser');
+  assert.equal(steps.filter((step) => step.run === setupCommand).length, 1);
+  assert.equal(steps[setupIndex].if, undefined);
+  assert.notEqual(steps[setupIndex]['continue-on-error'], true);
+  const installIndex = steps.findIndex((step) => step.run === 'pnpm install --frozen-lockfile');
+  assert.ok(installIndex >= 0 && installIndex < setupIndex);
+  for (const command of ['pnpm test:l1', 'pnpm test:coverage']) {
+    const consumerIndex = steps.findIndex((step) => step.run === command);
+    assert.ok(consumerIndex > setupIndex, `${command} must run after parser setup`);
+  }
 });

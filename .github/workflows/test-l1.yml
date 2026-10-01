@@ -72,6 +72,9 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Prepare the mobile privacy parser
+        run: pnpm --filter @agiworkforce/mobile setup:privacy-parser
+
       - name: Run Priority Level 1 tests
         run: pnpm test:l1
         continue-on-error: false

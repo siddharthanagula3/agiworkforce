@@ -1,29 +1,63 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { KEY_VALUE_PROVIDER_ENV } from '@agiworkforce/key-value';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  KEY_VALUE_PROVIDER_ENV,
+  readUpstashCredentials,
+  UPSTASH_REST_URL_ENV_NAMES,
+  UPSTASH_REST_TOKEN_ENV_NAMES,
+  type UpstashRedisLike,
+} from '@agiworkforce/key-value';
+
+beforeEach(() => {
+  for (const name of [...UPSTASH_REST_URL_ENV_NAMES, ...UPSTASH_REST_TOKEN_ENV_NAMES]) {
+    vi.stubEnv(name, undefined);
+  }
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 vi.mock('server-only', () => ({}));
 
-const redisMocks = vi.hoisted(() => ({
-  get: vi.fn(),
-  set: vi.fn(),
-  del: vi.fn(),
-}));
+const redisMocks = vi.hoisted(() => {
+  const unexpectedCommand = () => {
+    throw new Error('unexpected Redis command');
+  };
+  return {
+    get: vi.fn(async () => null),
+    set: vi.fn(async () => 'OK'),
+    del: vi.fn(async () => 1),
+    incrby: vi.fn(unexpectedCommand),
+    expire: vi.fn(unexpectedCommand),
+    hset: vi.fn(unexpectedCommand),
+    hgetall: vi.fn(unexpectedCommand),
+    sadd: vi.fn(unexpectedCommand),
+    srem: vi.fn(unexpectedCommand),
+    scard: vi.fn(unexpectedCommand),
+    zadd: vi.fn(unexpectedCommand),
+    zrem: vi.fn(unexpectedCommand),
+    zremrangebyscore: vi.fn(unexpectedCommand),
+    zcard: vi.fn(unexpectedCommand),
+    scan: vi.fn(unexpectedCommand),
+    pipeline: vi.fn(unexpectedCommand),
+  } satisfies UpstashRedisLike;
+});
 
-vi.mock('@upstash/redis', () => ({
-  Redis: class MockRedis {
-    get(...args: unknown[]) {
-      return redisMocks.get(...args);
-    }
-
-    set(...args: unknown[]) {
-      return redisMocks.set(...args);
-    }
-
-    del(...args: unknown[]) {
-      return redisMocks.del(...args);
-    }
-  },
-}));
+vi.mock('@agiworkforce/key-value', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/key-value')>();
+  return {
+    ...actual,
+    resolveKeyValueRuntime(options: Parameters<typeof actual.resolveKeyValueRuntime>[0] = {}) {
+      const injectClient =
+        actual.selectKeyValueProvider(options) === 'upstash' &&
+        !options.upstashClient &&
+        actual.readUpstashCredentials() !== null;
+      return actual.resolveKeyValueRuntime(
+        injectClient ? { ...options, upstashClient: redisMocks } : options,
+      );
+    },
+  } satisfies typeof actual;
+});
 
 vi.mock('@/lib/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -42,6 +76,11 @@ describe('E2B session-store tenant isolation', () => {
   });
 
   it('uses distinct tenant + user + conversation keys even when conversation ids collide', async () => {
+    expect(readUpstashCredentials()).toEqual({
+      url: 'https://redis.example.test',
+      token: 'test-token',
+    });
+
     const { getE2BSession } = await import('../session-store');
     const userA = {
       tenantId: 'managed:cloud',
