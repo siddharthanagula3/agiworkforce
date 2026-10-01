@@ -35,10 +35,10 @@ if ! valid_components "$minimum_major" "$minimum_minor" "$minimum_patch" "$maxim
     exit 1
 fi
 if [[ "$major_only" == true ]]; then
-    maximum_major=$((10#$minimum_major + 1))
+    maximum_major=$(($minimum_major + 1))
 fi
 
-if (( 10#$maximum_major <= 10#$minimum_major )); then
+if (( $maximum_major <= $minimum_major )); then
     echo "Unsupported engines.node range: $range" >&2
     exit 1
 fi
@@ -55,9 +55,9 @@ if ! valid_components "$major" "$minor" "$patch"; then
     echo "Cannot verify Node.js version: $current" >&2
     exit 1
 fi
-if (( 10#$major < 10#$minimum_major || 10#$major >= 10#$maximum_major ||
-      (10#$major == 10#$minimum_major && 10#$minor < 10#$minimum_minor) ||
-      (10#$major == 10#$minimum_major && 10#$minor == 10#$minimum_minor && 10#$patch < 10#$minimum_patch) )); then
+if (( $major < $minimum_major || $major >= $maximum_major ||
+      ($major == $minimum_major && $minor < $minimum_minor) ||
+      ($major == $minimum_major && $minor == $minimum_minor && $patch < $minimum_patch) )); then
     echo "This project requires Node.js $range; current version is $current. Update Node.js before installing dependencies." >&2
     exit 1
 fi

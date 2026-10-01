@@ -84,3 +84,11 @@ test('missing Node reports an actionable failure', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Node\.js is not installed/);
 });
+
+test('noncanonical or unsafe numeric runtime components fail before arithmetic', () => {
+  for (const version of ['v024.15.0', 'v24.015.0', 'v24.15.00', 'v18446744073709551640.15.0']) {
+    const result = check(version);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Cannot verify Node\.js version/);
+  }
+});
