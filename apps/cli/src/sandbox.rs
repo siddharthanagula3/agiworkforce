@@ -2155,6 +2155,59 @@ mod tests {
         );
     }
 
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_deny_policy_child_must_launch_before_isolation_is_qualified() {
+        use crate::native_process_test_fixture::{Input, NativeProcessFixture};
+
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        NativeProcessFixture::require_backend();
+        let fixture = NativeProcessFixture::new();
+        fixture
+            .scope(async {
+                let workspace = tempfile::tempdir().expect("workspace");
+                let root = workspace.path().canonicalize().expect("workspace path");
+                let manager = SandboxManager::for_agent_command(root.clone(), NetworkPolicy::Deny)
+                    .expect("Deny-policy manager");
+                assert_eq!(manager.sandbox_type, SandboxType::LinuxBubblewrap);
+                assert_eq!(manager.network_policy, NetworkPolicy::Deny);
+                let args = vec![
+                    "-c".to_string(),
+                    "printf native-deny-child-reached".to_string(),
+                ];
+                let command = background_command(
+                    Some(&manager),
+                    Invocation::Program {
+                        program: "/bin/sh",
+                        args: &args,
+                    },
+                    &root,
+                    None,
+                )
+                .expect("canonical Deny-policy child command");
+                assert_eq!(command.get_program(), std::ffi::OsStr::new("bwrap"));
+                assert!(command
+                    .get_args()
+                    .any(|arg| arg == std::ffi::OsStr::new("--unshare-net")));
+                let output = crate::process_tree::output(
+                    tokio::process::Command::from(command),
+                    None,
+                    Some(std::time::Duration::from_secs(30)),
+                )
+                .await
+                .expect("Deny-policy child launch");
+                assert!(
+                    output.status.success(),
+                    "Deny-policy child did not reach its sentinel: status={:?} stderr={}",
+                    output.status.code(),
+                    crate::native_process_test_fixture::stderr_metadata(&output.stderr)
+                );
+                assert_eq!(output.stdout, b"native-deny-child-reached");
+            })
+            .await;
+        fixture.assert_inputs(&[Input::DeviceIdentity, Input::ManagedSettings]);
+    }
+
     #[test]
     fn bwrap_allow_args_exclude_unshare_net() {
         let workspace = tempfile::tempdir().expect("workspace");

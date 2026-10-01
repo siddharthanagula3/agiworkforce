@@ -168,8 +168,28 @@ impl LspClient {
             // This client never reads stderr. Inheriting a pipe lets a noisy
             // server fill it and deadlock the turn.
             .stderr(std::process::Stdio::null());
+        #[cfg(all(test, target_os = "linux"))]
+        let observe_stderr = crate::native_process_test_fixture::synthetic_lsp_stderr_requested(
+            server_cmd,
+            &server_args,
+            &workspace,
+        );
+        #[cfg(all(test, target_os = "linux"))]
+        if observe_stderr {
+            cmd.stderr(std::process::Stdio::piped());
+        }
         let mut child = crate::process_tree::ProcessTreeChild::spawn(cmd)
             .with_context(|| format!("spawn {server_cmd}"))?;
+        #[cfg(all(test, target_os = "linux"))]
+        if observe_stderr {
+            let process_id = child.child_mut().id();
+            let stderr = child
+                .child_mut()
+                .stderr
+                .take()
+                .expect("synthetic LSP stderr pipe");
+            crate::native_process_test_fixture::start_synthetic_lsp_stderr(stderr, process_id);
+        }
         let stdin = child.child_mut().stdin.take().context("stdin")?;
         let stdout = child.child_mut().stdout.take().context("stdout")?;
         let mut client = Self {
@@ -339,6 +359,8 @@ impl LspClient {
 mod tests {
     #[cfg(windows)]
     use super::LSP_REQUEST_TIMEOUT;
+    #[cfg(target_os = "linux")]
+    use super::LSP_SHUTDOWN_GRACE;
     use super::{path_to_file_uri, response_for, LspClient};
     use serde_json::json;
     use std::path::Path;
@@ -452,6 +474,24 @@ while True:
 "#;
 
     #[cfg(not(windows))]
+    async fn spawn_synthetic_lsp(
+        _fixture: &crate::native_process_test_fixture::NativeProcessFixture,
+        args: &[&str],
+        workspace: &Path,
+    ) -> anyhow::Result<LspClient> {
+        #[cfg(target_os = "linux")]
+        _fixture.observe_synthetic_lsp(args, workspace);
+        let result = LspClient::spawn("python3", args, workspace).await;
+        #[cfg(target_os = "linux")]
+        if result.is_err() {
+            _fixture
+                .finish_synthetic_lsp(true, LSP_SHUTDOWN_GRACE)
+                .await;
+        }
+        result
+    }
+
+    #[cfg(not(windows))]
     fn python3_available() -> bool {
         std::process::Command::new("python3")
             .arg("-I")
@@ -519,10 +559,12 @@ while True:
                 let script = format!(
                     "from pathlib import Path\ntry:\n Path({marker_literal}).write_text('controlled fixture')\nexcept OSError:\n pass\n{FAKE_SERVER}"
                 );
-                let client = LspClient::spawn("python3", &["-I", "-S", "-u", "-c", &script, "ok"], workspace.path())
+                let client = spawn_synthetic_lsp(&fixture, &["-I", "-S", "-u", "-c", &script, "ok"], workspace.path())
                     .await
                     .unwrap();
                 client.shutdown().await.unwrap();
+                #[cfg(target_os = "linux")]
+                fixture.finish_synthetic_lsp(false, LSP_SHUTDOWN_GRACE).await;
                 assert!(
                     !marker.exists(),
                     "language server wrote outside its workspace"
@@ -553,8 +595,8 @@ while True:
             fixture
                 .scope(async {
                     let root = tempfile::tempdir().expect("workspace");
-                    let mut client = LspClient::spawn(
-                        "python3",
+                    let mut client = spawn_synthetic_lsp(
+                        &fixture,
                         &["-I", "-S", "-u", "-c", FAKE_SERVER, "ok"],
                         root.path(),
                     )
@@ -582,6 +624,10 @@ while True:
                     assert_eq!(answer["opened"], json!("file:///workspace/main.rs"));
                     assert_eq!(answer["declined"], json!(-32601));
                     client.shutdown().await.expect("shutdown");
+                    #[cfg(target_os = "linux")]
+                    fixture
+                        .finish_synthetic_lsp(false, LSP_SHUTDOWN_GRACE)
+                        .await;
                 })
                 .await;
             fixture.assert_inputs(&[Input::DeviceIdentity, Input::ManagedSettings]);
@@ -608,8 +654,8 @@ while True:
             fixture
                 .scope(async {
                     let root = tempfile::tempdir().expect("workspace");
-                    let mut client = LspClient::spawn(
-                        "python3",
+                    let mut client = spawn_synthetic_lsp(
+                        &fixture,
                         &["-I", "-S", "-u", "-c", FAKE_SERVER, "error"],
                         root.path(),
                     )
@@ -623,6 +669,10 @@ while True:
 
                     assert!(error.to_string().contains("-32601"), "{error}");
                     client.shutdown().await.expect("shutdown");
+                    #[cfg(target_os = "linux")]
+                    fixture
+                        .finish_synthetic_lsp(false, LSP_SHUTDOWN_GRACE)
+                        .await;
                 })
                 .await;
             fixture.assert_inputs(&[Input::DeviceIdentity, Input::ManagedSettings]);

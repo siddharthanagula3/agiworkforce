@@ -42,6 +42,8 @@ struct FileInputs {
     device_id: String,
     counts: Mutex<[ReadCounts; 3]>,
     sandbox_settings: OnceLock<SandboxSettings>,
+    #[cfg(target_os = "linux")]
+    lsp_stderr: Mutex<Option<SyntheticLspStderr>>,
 }
 
 impl FileInputs {
@@ -106,6 +108,8 @@ impl NativeProcessFixture {
                 device_id,
                 counts: Mutex::new([ReadCounts::default(); 3]),
                 sandbox_settings: OnceLock::new(),
+                #[cfg(target_os = "linux")]
+                lsp_stderr: Mutex::new(None),
             }),
         }
     }
@@ -149,6 +153,188 @@ impl NativeProcessFixture {
             }
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+const STDERR_PREFIX_LIMIT: usize = 4096;
+
+#[cfg(target_os = "linux")]
+struct SyntheticLspStderr {
+    args: Vec<String>,
+    workspace: PathBuf,
+    process_id: Option<u32>,
+    drain: Option<StderrDrain>,
+}
+
+#[cfg(target_os = "linux")]
+struct StderrDrain(tokio::task::JoinHandle<StderrReceipt>);
+
+#[cfg(target_os = "linux")]
+impl Drop for StderrDrain {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Default)]
+struct StderrReceipt {
+    bytes: usize,
+    prefix: Vec<u8>,
+    eof: bool,
+    read_error: bool,
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn stderr_metadata(bytes: &[u8]) -> serde_json::Value {
+    let prefix = &bytes[..bytes.len().min(STDERR_PREFIX_LIMIT)];
+    let contains = |needle: &[u8]| prefix.windows(needle.len()).any(|part| part == needle);
+    serde_json::json!({
+        "bytes": bytes.len(),
+        "retainedPrefixBytes": prefix.len(),
+        "truncated": bytes.len() > prefix.len(),
+        "loopbackSetupMarker": contains(b"loopback: Failed RTM_NEWADDR"),
+        "operationNotPermittedMarker": contains(b"Operation not permitted"),
+        "pythonExceptionMarker": contains(b"Traceback (most recent call last):"),
+        "pythonImportErrorMarker": contains(b"ModuleNotFoundError") || contains(b"ImportError"),
+        "noSuchFileMarker": contains(b"No such file or directory"),
+    })
+}
+
+#[cfg(target_os = "linux")]
+impl NativeProcessFixture {
+    pub(crate) fn observe_synthetic_lsp(&self, args: &[&str], workspace: &Path) {
+        assert!(
+            args.len() >= 5 && args[..4] == ["-I", "-S", "-u", "-c"],
+            "synthetic LSP observation requires the isolated Python fixture"
+        );
+        let mut capture = self.inputs.lsp_stderr.lock().expect("LSP stderr owner");
+        assert!(
+            capture.is_none(),
+            "synthetic LSP observation already registered"
+        );
+        *capture = Some(SyntheticLspStderr {
+            args: args.iter().map(|arg| (*arg).to_string()).collect(),
+            workspace: workspace.canonicalize().expect("synthetic LSP workspace"),
+            process_id: None,
+            drain: None,
+        });
+    }
+
+    pub(crate) async fn finish_synthetic_lsp(
+        &self,
+        failed: bool,
+        deadline: std::time::Duration,
+    ) -> serde_json::Value {
+        let capture = self
+            .inputs
+            .lsp_stderr
+            .lock()
+            .expect("LSP stderr owner")
+            .take()
+            .expect("registered synthetic LSP observation");
+        let mut complete = false;
+        let mut metadata = serde_json::json!({"captureState": "not-started"});
+        if let Some(mut drain) = capture.drain {
+            metadata = match tokio::time::timeout(deadline, &mut drain.0).await {
+                Ok(Ok(receipt)) => {
+                    complete = receipt.eof && !receipt.read_error;
+                    let mut metadata = stderr_metadata(&receipt.prefix);
+                    metadata["bytes"] = receipt.bytes.into();
+                    metadata["truncated"] = (receipt.bytes > receipt.prefix.len()).into();
+                    metadata["eof"] = receipt.eof.into();
+                    metadata["readError"] = receipt.read_error.into();
+                    metadata["captureState"] = "completed".into();
+                    metadata
+                }
+                Ok(Err(_)) => serde_json::json!({"captureState": "task-failed"}),
+                Err(_) => {
+                    drain.0.abort();
+                    let _ = (&mut drain.0).await;
+                    serde_json::json!({"captureState": "drain-timeout"})
+                }
+            };
+        }
+        metadata["processId"] = serde_json::json!(capture.process_id);
+        if failed {
+            eprintln!("synthetic-lsp-startup-observation {metadata}");
+        } else {
+            assert!(
+                complete,
+                "synthetic LSP stderr observation did not reach EOF"
+            );
+        }
+        metadata
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn synthetic_lsp_stderr_requested(
+    program: &str,
+    args: &[String],
+    workspace: &Path,
+) -> bool {
+    let Some(owner) = inputs() else {
+        return false;
+    };
+    let guard = owner.lsp_stderr.lock().expect("LSP stderr owner");
+    let Some(capture) = guard.as_ref() else {
+        return false;
+    };
+    let matched = program == "python3" && args == capture.args && workspace == capture.workspace;
+    let available = capture.drain.is_none();
+    drop(guard);
+    assert!(
+        matched,
+        "LSP child differs from the registered synthetic observation"
+    );
+    assert!(available, "synthetic LSP child already observed");
+    true
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn start_synthetic_lsp_stderr(
+    stderr: impl tokio::io::AsyncRead + Unpin + Send + 'static,
+    process_id: Option<u32>,
+) {
+    use tokio::io::AsyncReadExt;
+
+    let owner = inputs().expect("synthetic LSP fixture scope");
+    let mut capture = owner.lsp_stderr.lock().expect("LSP stderr owner");
+    let capture = capture
+        .as_mut()
+        .expect("registered synthetic LSP observation");
+    assert!(
+        process_id.is_some(),
+        "synthetic LSP child has no process ID"
+    );
+    assert!(
+        capture.drain.is_none(),
+        "synthetic LSP child already observed"
+    );
+    capture.process_id = process_id;
+    capture.drain = Some(StderrDrain(tokio::spawn(async move {
+        let mut stderr = stderr;
+        let mut receipt = StderrReceipt::default();
+        let mut chunk = [0u8; 1024];
+        loop {
+            match stderr.read(&mut chunk).await {
+                Ok(0) => {
+                    receipt.eof = true;
+                    return receipt;
+                }
+                Ok(read) => {
+                    receipt.bytes = receipt.bytes.saturating_add(read);
+                    let retained = read.min(STDERR_PREFIX_LIMIT - receipt.prefix.len());
+                    receipt.prefix.extend_from_slice(&chunk[..retained]);
+                }
+                Err(_) => {
+                    receipt.read_error = true;
+                    return receipt;
+                }
+            }
+        }
+    })));
 }
 
 fn inputs() -> Option<Arc<FileInputs>> {
@@ -501,5 +687,104 @@ mod tests {
         assert!(child.await.unwrap_err().is_cancelled());
         fixture.assert_inputs(&[Input::DeviceIdentity]);
         assert!(inputs().is_none());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn unregistered_children_do_not_select_stderr_observation() {
+        let fixture = NativeProcessFixture::new();
+        let args = vec!["unregistered".to_string()];
+        fixture.sync_scope(|| {
+            assert!(!synthetic_lsp_stderr_requested(
+                "real-server",
+                &args,
+                Path::new("/")
+            ));
+        });
+        assert!(!synthetic_lsp_stderr_requested(
+            "real-server",
+            &args,
+            Path::new("/")
+        ));
+        fixture.assert_inputs(&[]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_registered_child_refuses_different_inputs_before_capture() {
+        let fixture = NativeProcessFixture::new();
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let args = ["-I", "-S", "-u", "-c", "pass"];
+        fixture.observe_synthetic_lsp(&args, &root);
+        let owned_args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+        fixture.sync_scope(|| {
+            assert!(synthetic_lsp_stderr_requested(
+                "python3",
+                &owned_args,
+                &root
+            ));
+        });
+        for (program, args, workspace) in [
+            ("real-server", owned_args.clone(), root.clone()),
+            ("python3", vec!["different".to_string()], root.clone()),
+            ("python3", owned_args, root.join("different")),
+        ] {
+            let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                fixture.sync_scope(|| synthetic_lsp_stderr_requested(program, &args, &workspace))
+            }));
+            assert!(refused.is_err());
+            let capture = fixture.inputs.lsp_stderr.lock().unwrap();
+            assert!(capture.as_ref().unwrap().drain.is_none());
+            assert!(capture.as_ref().unwrap().process_id.is_none());
+        }
+        fixture.assert_inputs(&[]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn stderr_metadata_never_contains_the_observed_text() {
+        let receipt = stderr_metadata(
+            b"loopback: Failed RTM_NEWADDR: Operation not permitted\nprivate-fixture-text",
+        );
+        assert_eq!(receipt["loopbackSetupMarker"], true);
+        assert_eq!(receipt["operationNotPermittedMarker"], true);
+        assert_eq!(receipt["pythonExceptionMarker"], false);
+        assert!(!receipt.to_string().contains("private-fixture-text"));
+        let unrelated = stderr_metadata(b"private-fixture-text");
+        assert_eq!(unrelated["loopbackSetupMarker"], false);
+        assert_eq!(unrelated["operationNotPermittedMarker"], false);
+        assert!(!unrelated.to_string().contains("private-fixture-text"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn stderr_observation_is_bounded_and_drains_to_eof() {
+        use tokio::io::AsyncWriteExt;
+
+        let fixture = NativeProcessFixture::new();
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let args = ["-I", "-S", "-u", "-c", "pass"];
+        fixture.observe_synthetic_lsp(&args, &root);
+        fixture
+            .scope(async {
+                let (reader, mut writer) = tokio::io::duplex(1024);
+                start_synthetic_lsp_stderr(reader, Some(1));
+                let write = tokio::spawn(async move {
+                    writer.write_all(&[b'x'; 8192]).await.unwrap();
+                });
+                let receipt = fixture
+                    .finish_synthetic_lsp(false, std::time::Duration::from_secs(2))
+                    .await;
+                write.await.unwrap();
+                assert_eq!(receipt["bytes"], 8192);
+                assert_eq!(receipt["retainedPrefixBytes"], STDERR_PREFIX_LIMIT);
+                assert_eq!(receipt["truncated"], true);
+                assert_eq!(receipt["eof"], true);
+                assert_eq!(receipt["readError"], false);
+            })
+            .await;
+        fixture.assert_inputs(&[]);
     }
 }
