@@ -88,6 +88,13 @@
       "owner": "@siddhartha",
       "expires": "2026-11-30",
       "reason": "Same supply-chain hardening track, Python side. tools/skill-vetting resolves with uv and needs the same cooldown as the npm ecosystems."
+    },
+    {
+      "rule": "javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag",
+      "paths": ["apps/web/features/desktop-host/__tests__/dispatch-task-reply.test.ts"],
+      "owner": "@siddhartha",
+      "expires": "2027-02-28",
+      "reason": "Negative privacy test fixture only. The script-shaped invalid room choice is passed to the real answerReplies validator with mocked runtime reporting, rejected as not_an_option before resolveToolInput, and asserted absent from the serialized report. It is never executed or rendered as HTML. The same rule finding in any other path must fail."
     }
   ]
 }
