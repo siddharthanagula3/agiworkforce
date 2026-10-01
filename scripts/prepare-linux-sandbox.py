@@ -164,7 +164,7 @@ def packaged_profile():
     require(len(data) <= 16384, 'Bounded packaged profile required')
     checksums = Path('/var/lib/dpkg/info/apparmor-profiles.md5sums').read_text().splitlines()
     expected = [line.split()[0] for line in checksums if line.split()[1:] == [str(PROFILE).lstrip('/')]]
-    require(len(expected) == 1 and hashlib.md5(data).hexdigest() == expected[0], 'Authenticated installed package profile checksum required')
+    require(len(expected) == 1 and hashlib.md5(data, usedforsecurity=False).hexdigest() == expected[0], 'Installed package profile checksum required')
     version = command(['/usr/bin/dpkg-query', '-W', '-f=${Version}', 'apparmor-profiles'])
     require(version.returncode == 0 and re.fullmatch(rb'[0-9A-Za-z.+:~\-]+', version.stdout), 'Installed package version required')
     policy_blocks(data.decode())
