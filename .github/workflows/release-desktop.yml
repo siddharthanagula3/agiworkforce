@@ -335,6 +335,9 @@ jobs:
           node --test scripts/verify-desktop-upgrade.test.mjs
           node scripts/verify-desktop-upgrade.mjs runtime
 
+      - name: Prepare the mobile privacy parser
+        run: pnpm --filter @agiworkforce/mobile setup:privacy-parser
+
       - name: Test
         run: pnpm test
 

@@ -1947,8 +1947,12 @@ mod tests {
         #[cfg(windows)]
         {
             assert_eq!(SandboxType::detect(), SandboxType::None);
+            let error = match manager {
+                Ok(_) => panic!("an unavailable sandbox must return an error"),
+                Err(error) => error,
+            };
             assert_eq!(
-                manager.unwrap_err().to_string(),
+                error.to_string(),
                 "sandbox not available on this platform or host; pass --no-sandbox only if you accept unrestricted command execution"
             );
         }

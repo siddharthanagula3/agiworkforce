@@ -718,6 +718,9 @@ jobs:
           cargo test --locked --workspace --lib --exclude agiworkforce-desktop --exclude agiworkforce-cli
           cargo test --locked -p agiworkforce-app-server -p agiworkforce-protocol
 
+      - name: Prepare the mobile privacy parser
+        run: pnpm --filter @agiworkforce/mobile setup:privacy-parser
+
       - name: Trust boundaries (blocking)
         # The only other place this runs is the Guardian lane, which is
         # `mode: shadow` in .agi-guardian.yml and returns neutral for every
