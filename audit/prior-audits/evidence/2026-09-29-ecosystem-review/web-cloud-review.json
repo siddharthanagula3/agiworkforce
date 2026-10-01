@@ -957,7 +957,7 @@
       {
         "known_id": "RISK-X03",
         "commit": "00b1f77172",
-        "status": "commit/changed paths inventoried; source logic not revalidated in this lane"
+        "status": "verified fixed at acd09aa50d: original source had one literal NUL; current source has none and is byte-identical to the 00b1f77172 escape-only fix. The current independent SHA-256 digest regression is also byte-identical to that commit. This is source defect closure; the regression does not claim a failing digest behavior before the source spelling change."
       },
       {
         "known_id": "WEB-003",

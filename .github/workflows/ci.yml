@@ -452,7 +452,7 @@ jobs:
             --config p/typescript \
             --config p/owasp-top-ten \
             --metrics=off \
-            --timeout=10 \
+            --timeout=30 \
             --json --output semgrep-results.json
           status=$?
           set -e
