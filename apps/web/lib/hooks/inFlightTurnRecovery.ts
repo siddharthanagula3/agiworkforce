@@ -1,4 +1,10 @@
 import type { Message } from '@shared/stores/web-chat-store';
+import {
+  CloudAgentRunSchema,
+  MANAGED_CLOUD_AGENT_RUNS_BASE_PATH,
+  type CloudAgentRun,
+} from '@agiworkforce/cloud-contracts';
+import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { DURABLE_STREAM_SILENCE_DEADLINE_MS } from '@/lib/deadline-policy';
 
 export const IN_FLIGHT_TURN_RECHECK_MS = 5_000;
@@ -12,8 +18,6 @@ export const IN_FLIGHT_TURN_RECHECK_MS = 5_000;
  * "Generating response" with a Stop button for as long as the row survived.
  */
 export const IN_FLIGHT_TURN_STALL_DEADLINE_MS = DURABLE_STREAM_SILENCE_DEADLINE_MS;
-
-const RUNS_PATH = '/api/llm/v1/chat/completions/runs';
 
 export interface InFlightTurnQuestion {
   conversationId: string | null;
@@ -29,6 +33,12 @@ export interface InFlightTurnQuestion {
  * `idle`, no active run, which is also what an unreadable answer degrades to.
  */
 export type InFlightTurnVerdict = 'running' | 'stalled' | 'idle';
+
+export interface InFlightTurnRecovery {
+  verdict: InFlightTurnVerdict;
+  verified: boolean;
+  runId?: CloudAgentRun['id'];
+}
 
 export interface InFlightRunLiveness {
   state: string;
@@ -73,16 +83,16 @@ export function readInFlightTurnVerdict(
 export async function askWhetherTurnIsRunning(
   conversationId: string,
   signal: AbortSignal,
-): Promise<InFlightTurnVerdict> {
+): Promise<InFlightTurnRecovery> {
   const response = await fetch(
-    `${RUNS_PATH}?conversationId=${encodeURIComponent(conversationId)}`,
+    `${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}?conversationId=${encodeURIComponent(conversationId)}`,
     {
       signal,
     },
   );
-  if (!response.ok) return 'idle';
+  if (!response.ok) return { verdict: 'idle', verified: false };
   const payload = (await response.json()) as { runs?: unknown[] };
-  if (!Array.isArray(payload.runs)) return 'idle';
+  if (!Array.isArray(payload?.runs)) return { verdict: 'idle', verified: false };
   const runs = payload.runs.filter(
     (run): run is InFlightRunLiveness =>
       typeof run === 'object' &&
@@ -92,6 +102,34 @@ export async function askWhetherTurnIsRunning(
   // Rows this client cannot read at all are a contract mismatch, not an idle
   // conversation; keep waiting rather than invent an error the server never
   // reported.
-  if (runs.length === 0) return payload.runs.length > 0 ? 'running' : 'idle';
-  return readInFlightTurnVerdict(runs);
+  if (runs.length === 0)
+    return {
+      verdict: payload.runs.length > 0 ? 'running' : 'idle',
+      verified: payload.runs.length === 0,
+    };
+  const verdict = readInFlightTurnVerdict(runs);
+  const parsedRuns = payload.runs.map((run) => CloudAgentRunSchema.safeParse(run));
+  const verified = parsedRuns.every(
+    (parsed) => parsed.success && parsed.data.conversationId === conversationId,
+  );
+  if (
+    verified &&
+    parsedRuns.every(
+      (parsed) => parsed.success && TERMINAL_AGENT_TASK_STATES.has(parsed.data.state),
+    )
+  )
+    return { verdict: 'idle', verified: true };
+  if (verdict !== 'running' || payload.runs.length !== 1) return { verdict, verified };
+  const parsed = parsedRuns[0];
+  if (
+    !parsed ||
+    !parsed.success ||
+    parsed.data.conversationId !== conversationId ||
+    parsed.data.cancellationRequestedAt !== null ||
+    parsed.data.completedAt !== null ||
+    TERMINAL_AGENT_TASK_STATES.has(parsed.data.state)
+  ) {
+    return { verdict, verified };
+  }
+  return { verdict, verified, runId: parsed.data.id };
 }

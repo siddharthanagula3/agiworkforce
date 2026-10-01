@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { listCanonicalModels } from '@agiworkforce/types';
+import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
 import type { Message } from '@shared/stores/web-chat-store';
 import {
   IN_FLIGHT_TURN_STALL_DEADLINE_MS,
@@ -8,6 +10,29 @@ import {
 } from './inFlightTurnRecovery';
 
 const CONVERSATION_ID = '8f2d3f5a-1c4e-4c3a-9f2b-6b0f9d3c1a77';
+const RUN_ID = '11111111-1111-4111-8111-111111111111';
+
+function run(overrides: Partial<CloudAgentRun> = {}): CloudAgentRun {
+  const model = listCanonicalModels()[0];
+  if (!model) throw new Error('Canonical model fixture is missing');
+  return {
+    id: RUN_ID,
+    userId: 'user-1',
+    requestId: 'request-1',
+    conversationId: CONVERSATION_ID,
+    originSurface: 'web',
+    workMode: 'agiwork',
+    state: 'running',
+    provider: model.provider,
+    model: model.id,
+    lastEventSequence: -1,
+    cancellationRequestedAt: null,
+    completedAt: null,
+    createdAt: '2026-09-08T03:43:15.000Z',
+    updatedAt: '2026-09-08T03:43:15.000Z',
+    ...overrides,
+  };
+}
 
 function message(overrides: Partial<Message>): Message {
   return {
@@ -86,17 +111,14 @@ describe('asking the server', () => {
 
   it('reports a turn in flight when the server has a fresh one', async () => {
     vi.mocked(fetch).mockResolvedValue(
-      new Response(
-        JSON.stringify({ runs: [{ id: 'run-1', state: 'running', staleForMs: 1_200 }] }),
-        {
-          status: 200,
-        },
-      ),
+      new Response(JSON.stringify({ runs: [run({ staleForMs: 1_200 })] }), {
+        status: 200,
+      }),
     );
 
     await expect(
       askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
-    ).resolves.toBe('running');
+    ).resolves.toEqual({ verdict: 'running', verified: true, runId: RUN_ID });
   });
 
   it('reports a stall when the only run has sat past the silence deadline', async () => {
@@ -113,7 +135,7 @@ describe('asking the server', () => {
 
     await expect(
       askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
-    ).resolves.toBe('stalled');
+    ).resolves.toEqual({ verdict: 'stalled', verified: false });
   });
 
   it('reports none when the server has none', async () => {
@@ -121,7 +143,7 @@ describe('asking the server', () => {
 
     await expect(
       askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
-    ).resolves.toBe('idle');
+    ).resolves.toEqual({ verdict: 'idle', verified: true });
   });
 
   it('claims nothing when the server will not answer', async () => {
@@ -129,7 +151,7 @@ describe('asking the server', () => {
 
     await expect(
       askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
-    ).resolves.toBe('idle');
+    ).resolves.toEqual({ verdict: 'idle', verified: false });
   });
 
   it('keeps waiting when the server predates staleForMs', async () => {
@@ -139,17 +161,78 @@ describe('asking the server', () => {
 
     await expect(
       askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
-    ).resolves.toBe('running');
+    ).resolves.toEqual({ verdict: 'running', verified: false });
   });
 
   it('keeps waiting rather than inventing a stall when the rows are unreadable', async () => {
     vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ runs: [{ id: 'run-1', state: 'running' }] }), { status: 200 }),
+      new Response(JSON.stringify({ runs: [{ unexpected: true }] }), { status: 200 }),
     );
 
     await expect(
       askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
-    ).resolves.toBe('running');
+    ).resolves.toEqual({ verdict: 'running', verified: false });
+  });
+
+  it('retains a valid run identity when its transport durability and age are unknown', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ runs: [run()] })));
+
+    await expect(
+      askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
+    ).resolves.toEqual({ verdict: 'running', verified: true, runId: RUN_ID });
+  });
+
+  it.each([
+    ['invalid id', { id: 'not-a-run-id' }, false, 'running'],
+    [
+      'another conversation',
+      { conversationId: '22222222-2222-4222-8222-222222222222' },
+      false,
+      'running',
+    ],
+    [
+      'cancellation requested',
+      { cancellationRequestedAt: '2026-09-08T03:43:15.000Z' },
+      true,
+      'running',
+    ],
+    ['completed row', { completedAt: '2026-09-08T03:43:15.000Z' }, true, 'running'],
+    ['terminal state', { state: 'cancelled' }, true, 'idle'],
+  ] as const)(
+    'does not authorize cancellation from a %s',
+    async (_name, overrides, verified, verdict) => {
+      vi.mocked(fetch).mockResolvedValue(
+        new Response(JSON.stringify({ runs: [{ ...run(), ...overrides }] })),
+      );
+
+      await expect(
+        askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
+      ).resolves.toEqual({ verdict, verified });
+    },
+  );
+
+  it('does not choose a cancellation target from ambiguous rows', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ runs: [run(), run({ id: '22222222-2222-4222-8222-222222222222' })] }),
+      ),
+    );
+
+    await expect(
+      askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
+    ).resolves.toEqual({ verdict: 'running', verified: true });
+  });
+
+  it('does not retain an identity for a stalled run', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ runs: [run({ staleForMs: IN_FLIGHT_TURN_STALL_DEADLINE_MS + 1 })] }),
+      ),
+    );
+
+    await expect(
+      askWhetherTurnIsRunning(CONVERSATION_ID, new AbortController().signal),
+    ).resolves.toEqual({ verdict: 'stalled', verified: true });
   });
 });
 

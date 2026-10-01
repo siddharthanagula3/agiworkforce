@@ -127,7 +127,7 @@ import {
   IN_FLIGHT_TURN_RECHECK_MS,
   askWhetherTurnIsRunning,
   shouldAskWhetherTurnIsRunning,
-  type InFlightTurnVerdict,
+  type InFlightTurnRecovery,
 } from './inFlightTurnRecovery';
 import {
   startTurnStartTicker,
@@ -3497,11 +3497,20 @@ export function useChatStream(
   options: { followActiveConversation?: boolean } = {},
 ): UseChatStreamReturn {
   const followActiveConversation = options.followActiveConversation !== false;
-  const { getToken } = useSession();
+  const { getToken, userId, isSignedIn } = useSession();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeRunsRef = useRef<
-    Map<string, ManagedCloudAgentRunHandle & { assistantMessageId: string }>
+    Map<string, Pick<ManagedCloudAgentRunHandle, 'runId'> & { assistantMessageId?: string }>
   >(new Map());
+  const recoveryVersionsRef = useRef<Map<string, number>>(new Map());
+  const cancellationsRef = useRef<Map<string, 'pending' | 'unconfirmed'>>(new Map());
+  const ownerVersionRef = useRef(0);
+
+  const invalidateRecovery = useCallback((conversationId: string): number => {
+    const version = (recoveryVersionsRef.current.get(conversationId) ?? 0) + 1;
+    recoveryVersionsRef.current.set(conversationId, version);
+    return version;
+  }, []);
 
   // streamingConversationIds only flips after the auth-token await below, so it
   // cannot stop a second click that arrives inside that gap. Claim the
@@ -3517,12 +3526,18 @@ export function useChatStream(
 
   const beginConversationRequest = useCallback(
     (conversationId: string): AbortController => {
+      invalidateRecovery(conversationId);
+      const activeRun = activeRunsRef.current.get(conversationId);
+      activeRunsRef.current.delete(conversationId);
+      if (activeRun) {
+        cancellationsRef.current.delete(activeRun.runId);
+      }
       abortConversation(conversationId);
       const controller = new AbortController();
       abortControllersRef.current.set(conversationId, controller);
       return controller;
     },
-    [abortConversation],
+    [abortConversation, invalidateRecovery],
   );
 
   const endConversationRequest = useCallback(
@@ -3539,16 +3554,34 @@ export function useChatStream(
   const updateMessage = useChatStore((state) => state.updateMessage);
   const startStreaming = useChatStore((state) => state.startStreaming);
   const stopStreaming = useChatStore((state) => state.stopStreaming);
-  const setLoading = useChatStore((state) => state.setLoading);
+  const writeLoading = useChatStore((state) => state.setLoading);
+  const setLoading = useCallback(
+    (loading: boolean, conversationId?: string): void => {
+      const targetId = conversationId ?? useChatStore.getState().activeConversationId;
+      const activeRun = targetId ? activeRunsRef.current.get(targetId) : undefined;
+      writeLoading(
+        loading || Boolean(activeRun && cancellationsRef.current.has(activeRun.runId)),
+        conversationId,
+      );
+    },
+    [writeLoading],
+  );
   const setError = useChatStore((state) => state.setError);
   const selectedModel = useChatStore((state) => state.selectedModel);
   const isStreaming = useChatStore(selectIsActiveConversationStreaming);
 
   useEffect(() => {
+    const activeRuns = activeRunsRef.current;
+    const cancellations = cancellationsRef.current;
+    const recoveryVersions = recoveryVersionsRef.current;
+    ownerVersionRef.current += 1;
     return () => {
-      // intentionally empty: preserve controller across unmount
+      ownerVersionRef.current += 1;
+      activeRuns.clear();
+      cancellations.clear();
+      recoveryVersions.clear();
     };
-  }, []);
+  }, [userId, isSignedIn]);
 
   useEffect(() => {
     if (!followActiveConversation) return undefined;
@@ -3593,24 +3626,51 @@ export function useChatStream(
       if (stopped) return;
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
+      const activeRun = conversationId ? activeRunsRef.current.get(conversationId) : undefined;
+      if (activeRun && cancellationsRef.current.has(activeRun.runId)) return;
       if (
         !shouldAskWhetherTurnIsRunning({
           conversationId,
           messages: readConversationMessages(conversationId ?? ''),
-          isLoading: store.isLoading,
+          isLoading:
+            store.isLoading &&
+            (!activeRun ||
+              Boolean(activeRun.assistantMessageId) ||
+              abortControllersRef.current.has(conversationId as string)),
           isTemporaryConversation:
             store.conversations.find((entry) => entry.id === conversationId)?.isTemporary ?? false,
         })
       ) {
         return;
       }
-      let verdict: InFlightTurnVerdict;
+      const version = recoveryVersionsRef.current.get(conversationId as string) ?? 0;
+      let recovery: InFlightTurnRecovery;
       try {
-        verdict = await askWhetherTurnIsRunning(conversationId as string, controller.signal);
+        recovery = await askWhetherTurnIsRunning(conversationId as string, controller.signal);
       } catch {
+        recovery = { verdict: 'idle', verified: false };
+      }
+      if (
+        stopped ||
+        useChatStore.getState().activeConversationId !== conversationId ||
+        (recoveryVersionsRef.current.get(conversationId as string) ?? 0) !== version ||
+        abortControllersRef.current.has(conversationId as string)
+      ) {
         return;
       }
-      if (stopped) return;
+      const { verdict, runId } = recovery;
+      if (
+        activeRun &&
+        !activeRun.assistantMessageId &&
+        (!recovery.verified || (verdict === 'running' && !runId))
+      ) {
+        timer = setTimeout(() => void ask(), IN_FLIGHT_TURN_RECHECK_MS);
+        return;
+      }
+      if (runId) activeRunsRef.current.set(conversationId as string, { runId });
+      else if (!activeRunsRef.current.get(conversationId as string)?.assistantMessageId) {
+        activeRunsRef.current.delete(conversationId as string);
+      }
       useChatStore.getState().setLoading(verdict === 'running', conversationId as string);
       if (verdict === 'running') {
         timer = setTimeout(() => void ask(), IN_FLIGHT_TURN_RECHECK_MS);
@@ -3634,7 +3694,7 @@ export function useChatStream(
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [activeConversationId, followActiveConversation]);
+  }, [activeConversationId, followActiveConversation, userId, isSignedIn]);
 
   const resolveToolApproval = useResolveToolApproval(abortControllersRef);
   const resolveToolInput = useResolveToolInput(abortControllersRef, resolveToolApproval);
@@ -4307,7 +4367,11 @@ export function useChatStream(
         });
       } finally {
         connectingTicker.stop();
-        if (activeRunsRef.current.get(conversationId)?.assistantMessageId === assistantMessageId) {
+        const activeRun = activeRunsRef.current.get(conversationId);
+        if (
+          activeRun?.assistantMessageId === assistantMessageId &&
+          !cancellationsRef.current.has(activeRun.runId)
+        ) {
           activeRunsRef.current.delete(conversationId);
         }
         endConversationRequest(conversationId, abortController);
@@ -4524,8 +4588,10 @@ export function useChatStream(
           stopStreaming(conversationId);
           setLoading(false, conversationId);
         } finally {
+          const activeRun = activeRunsRef.current.get(conversationId);
           if (
-            activeRunsRef.current.get(conversationId)?.assistantMessageId === assistantMessageId
+            activeRun?.assistantMessageId === assistantMessageId &&
+            !cancellationsRef.current.has(activeRun.runId)
           ) {
             activeRunsRef.current.delete(conversationId);
           }
@@ -4595,18 +4661,38 @@ export function useChatStream(
       if (!targetConversationId) return;
 
       const activeRun = activeRunsRef.current.get(targetConversationId);
-      activeRunsRef.current.delete(targetConversationId);
+      if (activeRun && cancellationsRef.current.get(activeRun.runId) === 'pending') return;
+      const version = invalidateRecovery(targetConversationId);
+      const ownerVersion = ownerVersionRef.current;
       abortConversation(targetConversationId);
       trackProductEvent('generation_stopped');
+      stopStreaming(targetConversationId);
 
       if (activeRun) {
+        cancellationsRef.current.set(activeRun.runId, 'pending');
         const client = createManagedCloudAgentRunClient({
           getAuthToken: getToken,
           decorateMutationHeaders: addCsrfHeaders,
         });
-        beginStreamPhase(activeRun.assistantMessageId, 'stopping');
+        setLoading(true, targetConversationId);
+        if (activeRun.assistantMessageId)
+          beginStreamPhase(activeRun.assistantMessageId, 'stopping');
+        const ownsCancellation = (): boolean =>
+          ownerVersionRef.current === ownerVersion &&
+          recoveryVersionsRef.current.get(targetConversationId) === version;
+        const isCurrentRun = (): boolean =>
+          ownsCancellation() &&
+          activeRunsRef.current.get(targetConversationId)?.runId === activeRun.runId;
         void cancelCloudRunAndConfirm(client, activeRun.runId)
           .then((stopped) => {
+            if (!isCurrentRun()) return;
+            if (stopped) {
+              activeRunsRef.current.delete(targetConversationId);
+              cancellationsRef.current.delete(activeRun.runId);
+            } else {
+              cancellationsRef.current.set(activeRun.runId, 'unconfirmed');
+            }
+            setLoading(!stopped, targetConversationId);
             if (!stopped) {
               toast.error(
                 'The Cloud task has not confirmed it stopped. Check its activity before retrying.',
@@ -4614,14 +4700,24 @@ export function useChatStream(
             }
           })
           .catch(() => {
+            if (!isCurrentRun()) return;
+            cancellationsRef.current.set(activeRun.runId, 'unconfirmed');
+            setLoading(true, targetConversationId);
             toast.error('Could not stop the Cloud task. Check its activity before retrying.');
           })
-          .finally(() => endStreamPhase(activeRun.assistantMessageId, 'stopping'));
+          .finally(() => {
+            if (ownsCancellation() && cancellationsRef.current.get(activeRun.runId) === 'pending') {
+              cancellationsRef.current.delete(activeRun.runId);
+            }
+            if (ownsCancellation() && activeRun.assistantMessageId) {
+              endStreamPhase(activeRun.assistantMessageId, 'stopping');
+            }
+          });
+        return;
       }
-      stopStreaming(targetConversationId);
       setLoading(false, targetConversationId);
     },
-    [getToken, stopStreaming, setLoading, abortConversation],
+    [getToken, stopStreaming, setLoading, abortConversation, invalidateRecovery],
   );
 
   const steerActiveTurn = useCallback(

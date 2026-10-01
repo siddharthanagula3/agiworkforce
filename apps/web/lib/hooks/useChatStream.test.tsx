@@ -1,7 +1,13 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
+import {
+  managedCloudAgentRunPath,
+  MANAGED_CLOUD_AGENT_RUNS_BASE_PATH,
+} from '@agiworkforce/cloud-contracts';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { useStreamPhaseStore } from '@/features/chat/stores/stream-phase-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import {
   listCanonicalModels,
@@ -10,6 +16,7 @@ import {
 } from '@agiworkforce/types';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { useChatStream, saveMessageToDb } from './useChatStream';
+import { IN_FLIGHT_TURN_RECHECK_MS } from './inFlightTurnRecovery';
 
 const NON_REASONING_CHAT_MODEL = (() => {
   const model = listCanonicalModels().find(
@@ -30,11 +37,16 @@ const MINIMAL_EFFORT_CHAT_MODEL = (() => {
 
 const authMocks = vi.hoisted(() => ({
   getToken: vi.fn(),
+  userId: 'user-1',
+  isSignedIn: true,
 }));
 
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => ({
     getToken: authMocks.getToken,
+    userId: authMocks.userId,
+    isSignedIn: authMocks.isSignedIn,
+    isLoaded: true,
   }),
 }));
 
@@ -94,6 +106,43 @@ function managedRunSnapshot(
   };
 }
 
+const RECOVERED_CONVERSATION_ID = '8f2d3f5a-1c4e-4c3a-9f2b-6b0f9d3c1a77';
+const NEXT_RUN_ID = '22222222-2222-4222-8222-222222222222';
+const RECOVERY_PATH = `${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}?conversationId=${RECOVERED_CONVERSATION_ID}`;
+
+function restoreRecoveredConversation(conversationId = RECOVERED_CONVERSATION_ID): void {
+  useChatStore.setState({
+    conversations: [{ ...TEMP_CONVERSATION, id: conversationId, isTemporary: false }],
+  });
+  useChatStore.getState().setActiveConversationWithMessages(conversationId, [
+    {
+      id: 'recovered-user',
+      role: 'user',
+      content: 'Still working?',
+      createdAt: TEMP_CONVERSATION.createdAt,
+    },
+  ]);
+}
+
+function recoveredRunSnapshot(
+  state: Parameters<typeof managedRunSnapshot>[0] = 'running',
+  runId = MANAGED_RUN_ID,
+) {
+  const snapshot = managedRunSnapshot(state, [], -1);
+  return {
+    ...snapshot,
+    run: { ...snapshot.run, id: runId, conversationId: RECOVERED_CONVERSATION_ID, staleForMs: 0 },
+  };
+}
+
+function deferredResponse() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((resolveResponse) => {
+    resolve = resolveResponse;
+  });
+  return { promise, resolve };
+}
+
 function mockLlmErrorResponse(body: unknown, status = 503) {
   vi.mocked(fetch).mockResolvedValueOnce(
     new Response(JSON.stringify(body), {
@@ -128,6 +177,8 @@ describe('useChatStream', () => {
       conversations: [TEMP_CONVERSATION],
     });
     authMocks.getToken.mockResolvedValue('session-token');
+    authMocks.userId = 'user-1';
+    authMocks.isSignedIn = true;
     vi.stubGlobal('fetch', vi.fn());
   });
 
@@ -956,6 +1007,12 @@ describe('useChatStream', () => {
         lastSequence: 0,
         detachable: false,
       });
+      expect(useChatStore.getState().isLoading).toBe(false);
+      const requests = vi.mocked(fetch).mock.calls.length;
+      act(() => result.current.stopGeneration());
+      await act(async () => {});
+      expect(fetch).toHaveBeenCalledTimes(requests);
+      expect(useChatStore.getState().isLoading).toBe(false);
     });
 
     it('replays only missing journal events when the initial SSE connection drops', async () => {
@@ -1199,6 +1256,722 @@ describe('useChatStream', () => {
         'x-csrf-token': 'csrf-token',
       });
       expect(streamController).toBeDefined();
+    });
+  });
+
+  describe('Stop after recovering a cloud turn', () => {
+    beforeEach(() => {
+      restoreRecoveredConversation();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('cancels the recovered server run with auth and csrf without a browser stream', async () => {
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        if (String(input) === RECOVERY_PATH) {
+          return new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }));
+        }
+        if (String(input) === MANAGED_RUN_PATH && init?.method === 'POST') {
+          return new Response(JSON.stringify({ run: recoveredRunSnapshot('cancelled').run }), {
+            status: 202,
+          });
+        }
+        throw new Error(`Unexpected request: ${String(input)}`);
+      });
+      const { result } = renderHook(() => useChatStream());
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      expect(useChatStore.getState().messages.map((message) => message.role)).toEqual(['user']);
+
+      act(() => result.current.stopGeneration());
+
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(false));
+      const cancellationCalls = vi
+        .mocked(fetch)
+        .mock.calls.filter(
+          ([input, init]) => String(input) === MANAGED_RUN_PATH && init?.method === 'POST',
+        );
+      expect(cancellationCalls).toHaveLength(1);
+      expect(cancellationCalls[0]?.[1]?.headers).toEqual({
+        Authorization: 'Bearer session-token',
+        'x-csrf-token': 'csrf-token',
+      });
+      expect(useChatStore.getState().messages[0]?.turnDetachable).toBeUndefined();
+    });
+
+    it('claims one cancellation while repeated Stop waits for a terminal server response', async () => {
+      const cancellation = deferredResponse();
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        if (String(input) === RECOVERY_PATH) {
+          return new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }));
+        }
+        if (String(input) === MANAGED_RUN_PATH && init?.method === 'POST')
+          return cancellation.promise;
+        throw new Error(`Unexpected request: ${String(input)}`);
+      });
+      const { result } = renderHook(() => useChatStream());
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      act(() => {
+        result.current.stopGeneration();
+        result.current.stopGeneration();
+      });
+      await vi.waitFor(() =>
+        expect(
+          vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST'),
+        ).toHaveLength(1),
+      );
+      expect(useChatStore.getState().isLoading).toBe(true);
+
+      await act(async () =>
+        cancellation.resolve(
+          new Response(JSON.stringify({ run: recoveredRunSnapshot('cancelled').run })),
+        ),
+      );
+
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(false));
+    });
+
+    it('retires a recovered run that completes naturally before Stop', async () => {
+      vi.useFakeTimers();
+      let probes = 0;
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        if (String(input) !== RECOVERY_PATH)
+          throw new Error(`Unexpected request: ${String(input)}`);
+        return new Response(
+          JSON.stringify({ runs: probes++ === 0 ? [recoveredRunSnapshot().run] : [] }),
+        );
+      });
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {});
+      expect(useChatStore.getState().isLoading).toBe(true);
+
+      await act(async () => vi.advanceTimersByTimeAsync(IN_FLIGHT_TURN_RECHECK_MS));
+
+      expect(probes).toBe(2);
+      expect(useChatStore.getState().isLoading).toBe(false);
+      act(() => result.current.stopGeneration());
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(['http failure', 'invalid listing', 'invalid json', 'network failure'] as const)(
+      'keeps a recovered run uncertain after a %s until a verified terminal listing',
+      async (failure) => {
+        vi.useFakeTimers();
+        let probes = 0;
+        vi.mocked(fetch).mockImplementation(async (input) => {
+          if (String(input) !== RECOVERY_PATH)
+            throw new Error(`Unexpected request: ${String(input)}`);
+          probes += 1;
+          if (probes === 1)
+            return new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }));
+          if (probes === 2) {
+            if (failure === 'network failure') throw new TypeError('Network request failed');
+            if (failure === 'http failure') return new Response('unavailable', { status: 503 });
+            if (failure === 'invalid json') return new Response('{');
+            return new Response(JSON.stringify({ runs: { state: 'completed' } }));
+          }
+          return new Response(JSON.stringify({ runs: [recoveredRunSnapshot('completed').run] }));
+        });
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {});
+        expect(useChatStore.getState().isLoading).toBe(true);
+
+        await act(async () => vi.advanceTimersByTimeAsync(IN_FLIGHT_TURN_RECHECK_MS));
+
+        expect(probes).toBe(2);
+        expect(useChatStore.getState().isLoading).toBe(true);
+        expect(useChatStore.getState().error).toBeNull();
+        await act(async () => vi.advanceTimersByTimeAsync(IN_FLIGHT_TURN_RECHECK_MS));
+        expect(probes).toBe(3);
+        expect(useChatStore.getState().isLoading).toBe(false);
+        act(() => result.current.stopGeneration());
+        expect(fetch).toHaveBeenCalledTimes(3);
+      },
+    );
+
+    it('can cancel the verified recovered handle after a failed recheck', async () => {
+      vi.useFakeTimers();
+      let probes = 0;
+      let cancellations = 0;
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        if (String(input) === RECOVERY_PATH)
+          return probes++ === 0
+            ? new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }))
+            : new Response('unavailable', { status: 503 });
+        if (String(input) === MANAGED_RUN_PATH && init?.method === 'POST') {
+          cancellations += 1;
+          return new Response(JSON.stringify({ run: recoveredRunSnapshot('cancelled').run }));
+        }
+        throw new Error(`Unexpected request: ${String(input)}`);
+      });
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {});
+      await act(async () => vi.advanceTimersByTimeAsync(IN_FLIGHT_TURN_RECHECK_MS));
+
+      await act(async () => result.current.stopGeneration());
+
+      expect(probes).toBe(2);
+      expect(cancellations).toBe(1);
+      expect(useChatStore.getState().isLoading).toBe(false);
+    });
+
+    it('keeps a failed cancellation retryable and reports the failure', async () => {
+      const error = vi.spyOn(toast, 'error').mockReturnValue('stop-error');
+      let attempts = 0;
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        if (String(input) === RECOVERY_PATH) {
+          return new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }));
+        }
+        if (String(input) === MANAGED_RUN_PATH && init?.method === 'POST') {
+          attempts += 1;
+          return attempts === 1
+            ? new Response('not stopped', { status: 503 })
+            : new Response(JSON.stringify({ run: recoveredRunSnapshot('cancelled').run }));
+        }
+        throw new Error(`Unexpected request: ${String(input)}`);
+      });
+      const { result } = renderHook(() => useChatStream());
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      await act(async () => result.current.stopGeneration());
+      await vi.waitFor(() =>
+        expect(error).toHaveBeenCalledWith(
+          'Could not stop the Cloud task. Check its activity before retrying.',
+        ),
+      );
+      expect(useChatStore.getState().isLoading).toBe(true);
+
+      await act(async () => result.current.stopGeneration());
+
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(false));
+      expect(attempts).toBe(2);
+    });
+
+    it.each(['terminal', 'failed read', 'not confirmed'] as const)(
+      'preserves the server confirmation boundary for a %s poll',
+      async (outcome) => {
+        vi.useFakeTimers();
+        const error = vi.spyOn(toast, 'error').mockReturnValue('stop-error');
+        let reads = 0;
+        let cancellations = 0;
+        vi.mocked(fetch).mockImplementation(async (input, init) => {
+          if (String(input) === RECOVERY_PATH) {
+            return new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }));
+          }
+          if (String(input) === MANAGED_RUN_PATH && init?.method === 'POST') {
+            cancellations += 1;
+            return new Response(
+              JSON.stringify({
+                run: recoveredRunSnapshot(cancellations > 1 ? 'cancelled' : 'running').run,
+              }),
+            );
+          }
+          if (String(input).startsWith(`${MANAGED_RUN_PATH}?`)) {
+            reads += 1;
+            return outcome === 'failed read'
+              ? new Response('no confirmation', { status: 503 })
+              : new Response(
+                  JSON.stringify(
+                    recoveredRunSnapshot(outcome === 'terminal' ? 'cancelled' : 'running'),
+                  ),
+                );
+          }
+          throw new Error(`Unexpected request: ${String(input)}`);
+        });
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {});
+        expect(useChatStore.getState().isLoading).toBe(true);
+        await act(async () => result.current.stopGeneration());
+        expect(useChatStore.getState().isLoading).toBe(true);
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(outcome === 'not confirmed' ? 30_000 : 1_000);
+        });
+
+        expect(reads).toBe(outcome === 'not confirmed' ? 30 : 1);
+        expect(useChatStore.getState().isLoading).toBe(outcome !== 'terminal');
+        if (outcome === 'terminal') expect(error).not.toHaveBeenCalled();
+        else
+          expect(error).toHaveBeenCalledWith(
+            outcome === 'failed read'
+              ? 'Could not stop the Cloud task. Check its activity before retrying.'
+              : 'The Cloud task has not confirmed it stopped. Check its activity before retrying.',
+          );
+        if (outcome !== 'terminal') {
+          await act(async () => result.current.stopGeneration());
+          expect(cancellations).toBe(2);
+          expect(useChatStore.getState().isLoading).toBe(false);
+        }
+      },
+    );
+
+    it('does not restore a recovered run after Stop invalidates an unanswered probe', async () => {
+      const recovery = deferredResponse();
+      vi.mocked(fetch).mockReturnValue(recovery.promise);
+      const { result } = renderHook(() => useChatStream());
+      expect(fetch).toHaveBeenCalledTimes(1);
+      act(() => result.current.stopGeneration());
+
+      await act(async () =>
+        recovery.resolve(new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }))),
+      );
+
+      expect(useChatStore.getState().isLoading).toBe(false);
+      act(() => result.current.stopGeneration());
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears an idle recovered handle when returning to the conversation', async () => {
+      let probes = 0;
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        if (String(input) === RECOVERY_PATH && probes++ === 0) {
+          return new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }));
+        }
+        return new Response(JSON.stringify({ runs: [] }));
+      });
+      const { result } = renderHook(() => useChatStream());
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      act(() => restoreRecoveredConversation('33333333-3333-4333-8333-333333333333'));
+      act(() => {
+        useChatStore.getState().setLoading(false, RECOVERED_CONVERSATION_ID);
+        restoreRecoveredConversation();
+      });
+      await vi.waitFor(() => expect(probes).toBe(2));
+      await act(async () => {});
+
+      act(() => result.current.stopGeneration());
+
+      expect(
+        vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST'),
+      ).toHaveLength(0);
+      expect(useChatStore.getState().isLoading).toBe(false);
+    });
+
+    it('discards a cancellation failure when the same account signs out in place', async () => {
+      const cancellation = deferredResponse();
+      const error = vi.spyOn(toast, 'error').mockReturnValue('stop-error');
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        if (String(input) === RECOVERY_PATH)
+          return new Response(
+            JSON.stringify({ runs: authMocks.isSignedIn ? [recoveredRunSnapshot().run] : [] }),
+          );
+        if (String(input) === MANAGED_RUN_PATH && init?.method === 'POST')
+          return cancellation.promise;
+        throw new Error(`Unexpected request: ${String(input)}`);
+      });
+      const { result, rerender } = renderHook(() => useChatStream());
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      act(() => result.current.stopGeneration());
+      await vi.waitFor(() =>
+        expect(
+          vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST'),
+        ).toHaveLength(1),
+      );
+      act(() => {
+        authMocks.isSignedIn = false;
+        useChatStore.getState().setLoading(false, RECOVERED_CONVERSATION_ID);
+        rerender();
+      });
+
+      await act(async () => cancellation.resolve(new Response('not stopped', { status: 503 })));
+
+      expect(useChatStore.getState().isLoading).toBe(false);
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    it('does not let a former account cancellation affect a new account run', async () => {
+      const oldCancellation = deferredResponse();
+      const newCancellation = deferredResponse();
+      const error = vi.spyOn(toast, 'error').mockReturnValue('stop-error');
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url === RECOVERY_PATH) {
+          const run = recoveredRunSnapshot(
+            'running',
+            authMocks.userId === 'user-1' ? MANAGED_RUN_ID : NEXT_RUN_ID,
+          ).run;
+          return new Response(JSON.stringify({ runs: [{ ...run, userId: authMocks.userId }] }));
+        }
+        if (url === MANAGED_RUN_PATH && init?.method === 'POST') return oldCancellation.promise;
+        if (url === managedCloudAgentRunPath(NEXT_RUN_ID) && init?.method === 'POST')
+          return newCancellation.promise;
+        throw new Error(`Unexpected request: ${url}`);
+      });
+      const { result, rerender } = renderHook(() => useChatStream());
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      act(() => result.current.stopGeneration());
+      await vi.waitFor(() =>
+        expect(
+          vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST'),
+        ).toHaveLength(1),
+      );
+      act(() => {
+        authMocks.userId = 'user-2';
+        authMocks.getToken.mockResolvedValue('next-session-token');
+        useChatStore.getState().setLoading(false, RECOVERED_CONVERSATION_ID);
+        rerender();
+      });
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      act(() => result.current.stopGeneration());
+      await vi.waitFor(() =>
+        expect(
+          vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST'),
+        ).toHaveLength(2),
+      );
+
+      await act(async () => oldCancellation.resolve(new Response('not stopped', { status: 503 })));
+
+      expect(useChatStore.getState().isLoading).toBe(true);
+      expect(error).not.toHaveBeenCalled();
+      await act(async () =>
+        newCancellation.resolve(
+          new Response(
+            JSON.stringify({
+              run: { ...recoveredRunSnapshot('cancelled', NEXT_RUN_ID).run, userId: 'user-2' },
+            }),
+          ),
+        ),
+      );
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(false));
+      expect(
+        vi
+          .mocked(fetch)
+          .mock.calls.find(
+            ([input, init]) =>
+              String(input) === managedCloudAgentRunPath(NEXT_RUN_ID) && init?.method === 'POST',
+          )?.[1]?.headers,
+      ).toEqual({ Authorization: 'Bearer next-session-token', 'x-csrf-token': 'csrf-token' });
+    });
+
+    it('keeps the same recovered run cancellation claimed after an old owner settles', async () => {
+      const oldCancellation = deferredResponse();
+      const newCancellation = deferredResponse();
+      const error = vi.spyOn(toast, 'error').mockReturnValue('stop-error');
+      let attempts = 0;
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        if (String(input) === RECOVERY_PATH)
+          return new Response(
+            JSON.stringify({
+              runs: [{ ...recoveredRunSnapshot().run, userId: authMocks.userId }],
+            }),
+          );
+        if (String(input) === MANAGED_RUN_PATH && init?.method === 'POST') {
+          attempts += 1;
+          return attempts === 1 ? oldCancellation.promise : newCancellation.promise;
+        }
+        throw new Error(`Unexpected request: ${String(input)}`);
+      });
+      const { result, rerender } = renderHook(() => useChatStream());
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      act(() => result.current.stopGeneration());
+      await vi.waitFor(() => expect(attempts).toBe(1));
+      act(() => {
+        authMocks.userId = 'user-2';
+        authMocks.getToken.mockResolvedValue('next-session-token');
+        useChatStore.getState().setLoading(false, RECOVERED_CONVERSATION_ID);
+        rerender();
+      });
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      act(() => result.current.stopGeneration());
+      await vi.waitFor(() => expect(attempts).toBe(2));
+
+      await act(async () => oldCancellation.resolve(new Response('not stopped', { status: 503 })));
+      act(() => result.current.stopGeneration());
+      await act(async () => {});
+
+      expect(attempts).toBe(2);
+      expect(useChatStore.getState().isLoading).toBe(true);
+      expect(error).not.toHaveBeenCalled();
+      await act(async () =>
+        newCancellation.resolve(
+          new Response(
+            JSON.stringify({
+              run: { ...recoveredRunSnapshot('cancelled').run, userId: 'user-2' },
+            }),
+          ),
+        ),
+      );
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(false));
+    });
+
+    it.each(['switch', 'unmount'] as const)('discards a late recovery after %s', async (action) => {
+      const recovery = deferredResponse();
+      vi.mocked(fetch).mockImplementation(async (input) =>
+        String(input) === RECOVERY_PATH
+          ? recovery.promise
+          : new Response(JSON.stringify({ runs: [] })),
+      );
+      const { result, unmount } = renderHook(() => useChatStream());
+      if (action === 'switch')
+        act(() => restoreRecoveredConversation('33333333-3333-4333-8333-333333333333'));
+      else unmount();
+
+      await act(async () =>
+        recovery.resolve(new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }))),
+      );
+
+      expect(useChatStore.getState().loadingConversationIds).not.toContain(
+        RECOVERED_CONVERSATION_ID,
+      );
+      if (action === 'switch') act(() => result.current.stopGeneration());
+      expect(
+        vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'POST'),
+      ).toHaveLength(0);
+    });
+
+    it.each(['terminal', 'failure'] as const)(
+      'does not let an unmounted cancellation %s change the new owner',
+      async (outcome) => {
+        const oldCancellation = deferredResponse();
+        const newCancellation = deferredResponse();
+        const error = vi.spyOn(toast, 'error').mockReturnValue('stop-error');
+        const assistantMessageId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        const encoder = new TextEncoder();
+        let generations = 0;
+        vi.mocked(fetch).mockImplementation(async (input, init) => {
+          const url = String(input);
+          if (url === '/api/llm/v1/chat/completions') {
+            const runId = generations++ === 0 ? MANAGED_RUN_ID : NEXT_RUN_ID;
+            return new Response(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({ choices: [{ delta: { content: 'Working' } }] })}\n\n`,
+                    ),
+                  );
+                  init?.signal?.addEventListener(
+                    'abort',
+                    () => controller.error(new DOMException('Stopped', 'AbortError')),
+                    { once: true },
+                  );
+                },
+              }),
+              {
+                headers: {
+                  'X-AGI-Agent-Run-Id': runId,
+                  'X-AGI-Agent-Run-URL': managedCloudAgentRunPath(runId),
+                },
+              },
+            );
+          }
+          if (url === MANAGED_RUN_PATH && init?.method === 'POST') return oldCancellation.promise;
+          if (url === managedCloudAgentRunPath(NEXT_RUN_ID) && init?.method === 'POST')
+            return newCancellation.promise;
+          if (url.endsWith('/messages') && init?.method === 'POST') return new Response('{}');
+          throw new Error(`Unexpected request: ${url}`);
+        });
+        const oldOwner = renderHook(() => useChatStream({ followActiveConversation: false }));
+        let oldSend: Promise<boolean> | undefined;
+        act(() => {
+          oldSend = oldOwner.result.current.sendMessage('Original turn', {
+            conversationId: RECOVERED_CONVERSATION_ID,
+            assistantMessageId,
+            workMode: 'agiwork',
+          });
+        });
+        await vi.waitFor(() =>
+          expect(
+            useChatStore.getState().messages.find((message) => message.id === assistantMessageId)
+              ?.metadata?.cloudAgentRun?.runId,
+          ).toBe(MANAGED_RUN_ID),
+        );
+        act(() => oldOwner.result.current.stopGeneration());
+        await oldSend;
+        oldOwner.unmount();
+        act(() => {
+          restoreRecoveredConversation();
+          useChatStore.getState().setLoading(false, RECOVERED_CONVERSATION_ID);
+        });
+        const newOwner = renderHook(() => useChatStream({ followActiveConversation: false }));
+        let newSend: Promise<boolean> | undefined;
+        act(() => {
+          newSend = newOwner.result.current.sendMessage('Restored owner turn', {
+            conversationId: RECOVERED_CONVERSATION_ID,
+            assistantMessageId,
+            workMode: 'agiwork',
+          });
+        });
+        await vi.waitFor(() =>
+          expect(
+            useChatStore.getState().messages.find((message) => message.id === assistantMessageId)
+              ?.metadata?.cloudAgentRun?.runId,
+          ).toBe(NEXT_RUN_ID),
+        );
+        act(() => newOwner.result.current.stopGeneration());
+        await newSend;
+        expect(useChatStore.getState().isLoading).toBe(true);
+        expect(useStreamPhaseStore.getState().phases[assistantMessageId]).toBe('stopping');
+
+        await act(async () =>
+          oldCancellation.resolve(
+            outcome === 'failure'
+              ? new Response('not stopped', { status: 503 })
+              : new Response(JSON.stringify({ run: recoveredRunSnapshot('cancelled').run })),
+          ),
+        );
+
+        expect(useChatStore.getState().isLoading).toBe(true);
+        expect(useChatStore.getState().error).toBeNull();
+        expect(error).not.toHaveBeenCalled();
+        expect(useStreamPhaseStore.getState().phases[assistantMessageId]).toBe('stopping');
+        await act(async () =>
+          newCancellation.resolve(
+            new Response(
+              JSON.stringify({ run: recoveredRunSnapshot('cancelled', NEXT_RUN_ID).run }),
+            ),
+          ),
+        );
+        await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(false));
+        expect(useStreamPhaseStore.getState().phases[assistantMessageId]).toBeUndefined();
+      },
+    );
+
+    it('does not overwrite a fresh run with the old recovery response', async () => {
+      const recovery = deferredResponse();
+      const encoder = new TextEncoder();
+      const nextPath = managedCloudAgentRunPath(NEXT_RUN_ID);
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url === RECOVERY_PATH) return recovery.promise;
+        if (url === '/api/llm/v1/chat/completions') {
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ choices: [{ delta: { content: 'New turn' } }] })}\n\n`,
+                  ),
+                );
+                init?.signal?.addEventListener(
+                  'abort',
+                  () => controller.error(new DOMException('Stopped', 'AbortError')),
+                  { once: true },
+                );
+              },
+            }),
+            { headers: { 'X-AGI-Agent-Run-Id': NEXT_RUN_ID, 'X-AGI-Agent-Run-URL': nextPath } },
+          );
+        }
+        if (url === nextPath && init?.method === 'POST') {
+          return new Response(
+            JSON.stringify({ run: recoveredRunSnapshot('cancelled', NEXT_RUN_ID).run }),
+          );
+        }
+        if (url.endsWith('/messages') && init?.method === 'POST') return new Response('{}');
+        throw new Error(`Unexpected request: ${url}`);
+      });
+      const { result } = renderHook(() => useChatStream());
+      let send: Promise<boolean> | undefined;
+      act(() => {
+        send = result.current.sendMessage('Start another turn', {
+          conversationId: RECOVERED_CONVERSATION_ID,
+          workMode: 'agiwork',
+        });
+      });
+      await vi.waitFor(() =>
+        expect(
+          useChatStore
+            .getState()
+            .messages.some((message) => message.metadata?.cloudAgentRun?.runId === NEXT_RUN_ID),
+        ).toBe(true),
+      );
+      await act(async () =>
+        recovery.resolve(new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }))),
+      );
+
+      act(() => result.current.stopGeneration());
+      await send;
+
+      await vi.waitFor(() =>
+        expect(
+          vi
+            .mocked(fetch)
+            .mock.calls.filter(
+              ([input, init]) => String(input) === nextPath && init?.method === 'POST',
+            ),
+        ).toHaveLength(1),
+      );
+      expect(
+        vi
+          .mocked(fetch)
+          .mock.calls.filter(
+            ([input, init]) => String(input) === MANAGED_RUN_PATH && init?.method === 'POST',
+          ),
+      ).toHaveLength(0);
+    });
+
+    it('does not let a retired cancellation clear a new browser run', async () => {
+      const oldCancellation = deferredResponse();
+      const newCancellation = deferredResponse();
+      const error = vi.spyOn(toast, 'error').mockReturnValue('stop-error');
+      const assistantMessageId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      const nextPath = managedCloudAgentRunPath(NEXT_RUN_ID);
+      const encoder = new TextEncoder();
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url === RECOVERY_PATH)
+          return new Response(JSON.stringify({ runs: [recoveredRunSnapshot().run] }));
+        if (url === MANAGED_RUN_PATH && init?.method === 'POST') return oldCancellation.promise;
+        if (url === nextPath && init?.method === 'POST') return newCancellation.promise;
+        if (url === '/api/llm/v1/chat/completions')
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ choices: [{ delta: { content: 'New turn' } }] })}\n\n`,
+                  ),
+                );
+                init?.signal?.addEventListener(
+                  'abort',
+                  () => controller.error(new DOMException('Stopped', 'AbortError')),
+                  { once: true },
+                );
+              },
+            }),
+            { headers: { 'X-AGI-Agent-Run-Id': NEXT_RUN_ID, 'X-AGI-Agent-Run-URL': nextPath } },
+          );
+        if (url.endsWith('/messages') && init?.method === 'POST') return new Response('{}');
+        throw new Error(`Unexpected request: ${url}`);
+      });
+      const { result } = renderHook(() => useChatStream());
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      act(() => result.current.stopGeneration());
+      await vi.waitFor(() =>
+        expect(
+          vi.mocked(fetch).mock.calls.filter(([input]) => String(input) === MANAGED_RUN_PATH),
+        ).toHaveLength(1),
+      );
+      let send: Promise<boolean> | undefined;
+      act(() => {
+        send = result.current.sendMessage('Start a new turn', {
+          conversationId: RECOVERED_CONVERSATION_ID,
+          assistantMessageId,
+          workMode: 'agiwork',
+        });
+      });
+      await vi.waitFor(() =>
+        expect(
+          useChatStore.getState().messages.find((message) => message.id === assistantMessageId)
+            ?.metadata?.cloudAgentRun?.runId,
+        ).toBe(NEXT_RUN_ID),
+      );
+      act(() => result.current.stopGeneration());
+      await send;
+
+      await act(async () => oldCancellation.resolve(new Response('not stopped', { status: 503 })));
+
+      expect(useChatStore.getState().isLoading).toBe(true);
+      expect(error).not.toHaveBeenCalled();
+      expect(useStreamPhaseStore.getState().phases[assistantMessageId]).toBe('stopping');
+      await act(async () =>
+        newCancellation.resolve(
+          new Response(JSON.stringify({ run: recoveredRunSnapshot('cancelled', NEXT_RUN_ID).run })),
+        ),
+      );
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(false));
+      expect(useStreamPhaseStore.getState().phases[assistantMessageId]).toBeUndefined();
     });
   });
 
