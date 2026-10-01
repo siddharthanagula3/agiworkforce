@@ -326,12 +326,31 @@ describe('audit stream active-org redis marker', () => {
     await expect(hasActiveAuditStreamDestinations()).resolves.toBe(true);
   });
 
-  it('reports false when the active set is empty', async () => {
+  it('reports unknown when the active set is empty or missing', async () => {
     const redis = redisMock();
     redis.scard.mockResolvedValue(0);
     mockGetKeyValueStore.mockReturnValue(asKeyValueStore(redis));
 
-    await expect(hasActiveAuditStreamDestinations()).resolves.toBe(false);
+    await expect(hasActiveAuditStreamDestinations()).resolves.toBeNull();
+  });
+
+  it('keeps an enabled destination discoverable after the redis marker write fails', async () => {
+    const redis = redisMock();
+    redis.sadd.mockRejectedValue(new Error('marker unavailable'));
+    redis.scard.mockResolvedValue(0);
+    mockGetKeyValueStore.mockReturnValue(asKeyValueStore(redis));
+    const h = upsertHarness();
+
+    const saved = await upsertAuditDestination(h.db, ORG, {
+      endpointUrl: 'https://siem.example.test/hook',
+      enabled: true,
+      createdByUserId: 'user-1',
+    });
+
+    expect(saved.destination.enabled).toBe(true);
+    expect(h.query).toHaveBeenCalledTimes(1);
+    expect(redis.sadd).toHaveBeenCalledWith(AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY, ORG);
+    await expect(hasActiveAuditStreamDestinations()).resolves.toBeNull();
   });
 
   it('reports null when redis is unavailable, so the caller falls through to Postgres', async () => {

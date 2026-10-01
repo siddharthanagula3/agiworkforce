@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryKeyValueStore, type KeyValueStore } from '@agiworkforce/key-value';
 
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
   verifyCronRequest: vi.fn(),
   getNeonDb: vi.fn(),
+  getKeyValueStore: vi.fn(() => null as KeyValueStore | null),
   listStreamingOrganizations: vi.fn(),
   drainAuditDestination: vi.fn(),
   hasActiveAuditStreamDestinations: vi.fn(),
@@ -13,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.getNeonDb }));
+vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueStore }));
 vi.mock('@/lib/services/audit-streaming-service', () => ({
   listStreamingOrganizations: mocks.listStreamingOrganizations,
   drainAuditDestination: mocks.drainAuditDestination,
@@ -33,6 +36,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.verifyCronRequest.mockReturnValue(true);
   mocks.getNeonDb.mockReturnValue({});
+  mocks.getKeyValueStore.mockReturnValue(null);
   mocks.listStreamingOrganizations.mockResolvedValue([]);
   mocks.enqueueJob.mockResolvedValue({ id: 'job-1', status: 'queued', created: true });
 });
@@ -47,18 +51,60 @@ describe('GET /api/cron/drain-audit-streams', () => {
     expect(mocks.hasActiveAuditStreamDestinations).not.toHaveBeenCalled();
   });
 
-  it('skips Postgres entirely when the redis flag reports no active destinations', async () => {
-    mocks.hasActiveAuditStreamDestinations.mockResolvedValue(false);
+  it('queues an enabled destination after the real redis membership read returns empty', async () => {
+    const service = await vi.importActual<typeof import('@/lib/services/audit-streaming-service')>(
+      '@/lib/services/audit-streaming-service',
+    );
+    const store = createMemoryKeyValueStore();
+    const markerRead = vi.spyOn(store, 'setSize');
+    const query = vi.fn(async () => [{ organization_id: 'org-1' }]);
+    mocks.getKeyValueStore.mockReturnValue(store);
+    mocks.hasActiveAuditStreamDestinations.mockImplementation(
+      service.hasActiveAuditStreamDestinations,
+    );
+    mocks.getNeonDb.mockReturnValue({ query });
+    mocks.listStreamingOrganizations.mockImplementation(service.listStreamingOrganizations);
 
     const response = await GET(req());
 
+    expect(markerRead).toHaveBeenCalledWith(service.AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY);
     expect(response.status).toBe(200);
+    expect(mocks.enqueueJob).toHaveBeenCalledTimes(1);
     await expect(response.json()).resolves.toMatchObject({
-      destinationsConsidered: 0,
-      skippedDatabase: true,
+      destinationsConsidered: 1,
+      destinationsQueued: 1,
     });
-    expect(mocks.getNeonDb).not.toHaveBeenCalled();
-    expect(mocks.listStreamingOrganizations).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('where enabled = true'), [
+      service.AUDIT_STREAM_FAILURE_CEILING,
+    ]);
+    expect(mocks.enqueueJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ organizationId: 'org-1', kind: 'webhooks.audit-stream-delivery' }),
+    );
+  });
+
+  it('reports a database failure after the real redis membership read returns empty', async () => {
+    const service = await vi.importActual<typeof import('@/lib/services/audit-streaming-service')>(
+      '@/lib/services/audit-streaming-service',
+    );
+    const store = createMemoryKeyValueStore();
+    const markerRead = vi.spyOn(store, 'setSize');
+    const query = vi.fn(async () => {
+      throw new Error('database unavailable');
+    });
+    mocks.getKeyValueStore.mockReturnValue(store);
+    mocks.hasActiveAuditStreamDestinations.mockImplementation(
+      service.hasActiveAuditStreamDestinations,
+    );
+    mocks.getNeonDb.mockReturnValue({ query });
+    mocks.listStreamingOrganizations.mockImplementation(service.listStreamingOrganizations);
+
+    const response = await GET(req());
+
+    expect(markerRead).toHaveBeenCalledWith(service.AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY);
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: 'Audit streaming unavailable' });
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
   });
 
   it('queues one delivery job per destination instead of delivering inline', async () => {
