@@ -38,7 +38,7 @@ const EXEMPT_LINE_RE = [
   /^\s*\/\//,
   /^\s*\*/,
   /^\s*\/\*/,
-  /<!--/,
+  /\x3c!--/,
   /theme-color/,
   /color-scheme/,
   /\b(?:theme_color|background_color)\b/,

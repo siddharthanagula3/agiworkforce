@@ -118,7 +118,7 @@ export function fingerprintFinding(finding: ReviewFinding): string {
     .slice(0, 16);
 }
 
-const FINGERPRINT_MARKER = /<!--\s*agi-review:([0-9a-f]{16})\s*-->/g;
+const FINGERPRINT_MARKER = /\x3c!--\s*agi-review:([0-9a-f]{16})\s*-->/g;
 
 /** The marker carried in a posted comment, which is what makes dedup possible. */
 export function fingerprintMarker(fingerprint: string): string {

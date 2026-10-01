@@ -155,7 +155,7 @@ describe('Article50Marker, wrapTextExportWithMarker + hasAiGeneratedMarker', () 
       model: FIXTURE_TEXT_MODEL_ID,
       generatedAt: '2026-05-17T00:00:00.000Z',
     });
-    const sidecar = wrapped.match(/<!-- agi:ai-generated:c2pa-claim (.*?) -->/)?.[1];
+    const sidecar = wrapped.match(/\x3c!-- agi:ai-generated:c2pa-claim (.*?) -->/)?.[1];
     expect(sidecar).toBeDefined();
     const parsed = JSON.parse(sidecar as string) as {
       assertions: Array<{ action?: string }>;

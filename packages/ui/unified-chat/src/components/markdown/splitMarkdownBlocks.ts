@@ -30,7 +30,7 @@ const VOID_HTML_TAGS: ReadonlySet<string> = new Set([
   'wbr',
 ]);
 
-const HTML_COMMENT_PATTERN = /<!--[\s\S]*?-->/;
+const HTML_COMMENT_PATTERN = /\x3c!--[\s\S]*?-->/;
 const HTML_BOGUS_COMMENT_PATTERN = /<!(?!--)[^>]*>/;
 const HTML_TAG_PATTERN = /<(\/)?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(\/)?>/;
 const HTML_TOKEN_PATTERN = new RegExp(

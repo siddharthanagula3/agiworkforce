@@ -24,7 +24,7 @@ const conf = JSON.parse(readFileSync(resolve(SRC_TAURI, 'tauri.conf.json'), 'utf
 const entitlements = readFileSync(
   resolve(SRC_TAURI, conf.bundle.macOS.entitlements),
   'utf8',
-).replace(/<!--[\s\S]*?-->/g, '');
+).replace(/\x3c!--[\s\S]*?-->/g, '');
 
 /**
  * tauri-plugin-updater 2.10.0 resolves the URL placeholders from two separate

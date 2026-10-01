@@ -18,7 +18,7 @@ const configuredCollected = (
 ).map((entry) => entry);
 
 const lockedManifest = readFileSync(join(storeListingDir, 'ios', 'PrivacyInfo.xcprivacy'), 'utf8');
-const lockedManifestBody = lockedManifest.replace(/<!--[\s\S]*?-->/g, '');
+const lockedManifestBody = lockedManifest.replace(/\x3c!--[\s\S]*?-->/g, '');
 
 const listingIos = JSON.parse(
   readFileSync(join(storeListingDir, 'LISTING-METADATA-IOS.json'), 'utf8'),

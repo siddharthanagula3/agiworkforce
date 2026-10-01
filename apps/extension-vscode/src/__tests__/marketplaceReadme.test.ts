@@ -6,7 +6,7 @@ import manifest from '../../package.json';
 const extensionRoot = path.resolve(__dirname, '../..');
 const readme = fs.readFileSync(path.join(extensionRoot, 'README.md'), 'utf8');
 
-const rendered = readme.replace(/<!--[\s\S]*?-->/gu, '');
+const rendered = readme.replace(/\x3c!--[\s\S]*?-->/gu, '');
 
 describe('Marketplace README', () => {
   it('does not render internal doc-template metadata', () => {
@@ -32,8 +32,7 @@ describe('Marketplace README', () => {
 
   it('only documents settings the extension actually contributes', () => {
     const configuration = manifest.contributes.configuration as unknown as
-      | { properties: Record<string, unknown> }
-      | Array<{ properties: Record<string, unknown> }>;
+      { properties: Record<string, unknown> } | Array<{ properties: Record<string, unknown> }>;
     const contributed = new Set(
       (Array.isArray(configuration) ? configuration : [configuration]).flatMap((section) =>
         Object.keys(section.properties),

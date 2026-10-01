@@ -49,7 +49,7 @@ const HEALTH_INTEGRATION =
 
 const declaresHealth = (text: string) => HEALTH_DECLARATION.test(text);
 
-const stripXmlComments = (xml: string) => xml.replace(/<!--[\s\S]*?-->/g, '');
+const stripXmlComments = (xml: string) => xml.replace(/\x3c!--[\s\S]*?-->/g, '');
 
 const SOURCE_ROOTS = [
   'app',
