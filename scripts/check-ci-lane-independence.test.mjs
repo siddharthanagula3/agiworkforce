@@ -374,3 +374,110 @@ for (const [workflowPath, jobName, consumer] of [
     assert.notEqual(steps[consumerIndex]['continue-on-error'], true);
   });
 }
+
+test('CI executes the full MCP package with its integration targets', () => {
+  const workflow = parseYaml(fs.readFileSync(WORKFLOW, 'utf8'));
+  const step = workflow.jobs['rust-desktop-cli'].steps.find((entry) =>
+    entry.run?.includes('cargo test --locked -p agiworkforce-desktop --lib'),
+  );
+  assert.ok(step?.run);
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-mcp-command-'));
+  const calls = path.join(directory, 'calls');
+  try {
+    const result = spawnSync(
+      '/bin/bash',
+      [
+        '-e',
+        '-o',
+        'pipefail',
+        '-c',
+        `
+cargo() { printf '%s\\0' "$*" >> "$CI_CARGO_CALLS"; }
+xvfb-run() { shift; "$@"; }
+${step.run}`,
+      ],
+      {
+        cwd: process.cwd(),
+        env: { PATH: '/usr/bin:/bin', CI_CARGO_CALLS: calls },
+        encoding: 'utf8',
+        timeout: 10000,
+      },
+    );
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(
+      fs
+        .readFileSync(calls, 'utf8')
+        .split('\0')
+        .filter((call) => call.includes('agiworkforce-mcp')),
+      ['test --locked -p agiworkforce-mcp'],
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('security scans cover source and canonical container inputs on pull requests', () => {
+  const workflow = parseYaml(fs.readFileSync('.github/workflows/security-scanning.yml', 'utf8'));
+  for (const source of [
+    'apps/web/**',
+    'services/signaling-server/**',
+    'packages/**',
+    'infrastructure/**',
+    'patches/**',
+    '**/Dockerfile*',
+    '**/*.tf',
+    'package.json',
+    'pnpm-lock.yaml',
+    '.github/zap-baseline-rules.tsv',
+    '.dockerignore',
+  ]) {
+    assert.ok(
+      workflow.on.pull_request.paths.includes(source),
+      `scanner input ${source} is omitted`,
+    );
+  }
+});
+
+test('the signaling image scanner builds the canonical Dockerfile from the repository context', () => {
+  const workflow = parseYaml(fs.readFileSync('.github/workflows/security-scanning.yml', 'utf8'));
+  const step = workflow.jobs['signaling-server-image-scan'].steps.find(
+    (entry) => entry.name === 'Build the signaling server image',
+  );
+  assert.ok(step?.run);
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-signaling-context-'));
+  const calls = path.join(directory, 'calls');
+  try {
+    const result = spawnSync(
+      '/bin/bash',
+      [
+        '-e',
+        '-o',
+        'pipefail',
+        '-c',
+        `
+docker() { printf '%s\\0' "$PWD" "$@" > "$CI_DOCKER_CALLS"; }
+${step.run}`,
+      ],
+      {
+        cwd: path.resolve(process.cwd(), step['working-directory'] ?? '.'),
+        env: { PATH: '/usr/bin:/bin', CI_DOCKER_CALLS: calls },
+        encoding: 'utf8',
+        timeout: 5000,
+      },
+    );
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(fs.readFileSync(calls, 'utf8').split('\0').slice(0, -1), [
+      process.cwd(),
+      'build',
+      '--file',
+      'services/signaling-server/Dockerfile',
+      '--tag',
+      'agiworkforce-signaling-scan',
+      '.',
+    ]);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

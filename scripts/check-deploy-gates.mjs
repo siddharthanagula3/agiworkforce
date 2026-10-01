@@ -371,6 +371,38 @@ function checkStagingGates({ repoRoot, errors }) {
   }
 }
 
+function checkReleaseWorkflowTriggers({ repoRoot, contract, errors }) {
+  const workflows = contract.releaseReadiness?.workflows;
+  if (
+    !Array.isArray(workflows) ||
+    workflows.length === 0 ||
+    new Set(workflows).size !== workflows.length ||
+    workflows.some((file) => typeof file !== 'string' || !/^[a-z0-9-]+\.ya?ml$/.test(file))
+  ) {
+    errors.push(`${CONTRACT_PATH}: candidate release workflows must be unique workflow files.`);
+    return;
+  }
+  for (const file of workflows) {
+    let document;
+    try {
+      document = readWorkflow(repoRoot, file);
+    } catch {
+      errors.push(`${file}: candidate release workflow could not be read.`);
+      continue;
+    }
+    const push = document?.on?.push;
+    if (
+      !push ||
+      !Array.isArray(push.branches) ||
+      !push.branches.includes('main') ||
+      push.branches.some((branch) => typeof branch !== 'string' || branch.startsWith('!')) ||
+      ['paths', 'paths-ignore', 'branches-ignore'].some((filter) => Object.hasOwn(push, filter))
+    ) {
+      errors.push(`${file}: candidate release evidence must run on every main push.`);
+    }
+  }
+}
+
 export function checkDeployGates(repoRoot = REPO_ROOT) {
   const errors = [];
   const contract = loadContract(repoRoot);
@@ -391,6 +423,7 @@ export function checkDeployGates(repoRoot = REPO_ROOT) {
   checkRelayGates({ repoRoot, contract, errors });
   checkRollback({ document, contract, workflow, errors });
   checkStagingGates({ repoRoot, errors });
+  checkReleaseWorkflowTriggers({ repoRoot, contract, errors });
 
   return { errors, report: { deployingJobs, gates: contract.gates.length } };
 }

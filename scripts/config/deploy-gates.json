@@ -135,7 +135,7 @@
     "step": "Roll back to the last verified production deployment"
   },
   "releaseReadiness": {
-    "workflows": ["ci.yml", "codeql-analysis.yml"],
+    "workflows": ["ci.yml", "codeql-analysis.yml", "test-l1.yml", "security-scanning.yml"],
     "relay": {
       "context": "production-relay",
       "workflow": "deploy-signaling-server.yml",

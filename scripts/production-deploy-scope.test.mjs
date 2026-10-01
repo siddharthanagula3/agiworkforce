@@ -617,7 +617,10 @@ function boundedReleaseOptions(api, extra = {}) {
 test('release admission reads candidate CI, processed scanning, open alerts and the actual relay receipt', async () => {
   const api = releaseApi();
   await requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api, { requireRelay: true }));
-  assert.equal(api.calls.filter((call) => call.url.pathname.includes('/workflows/')).length, 2);
+  assert.equal(
+    api.calls.filter((call) => call.url.pathname.includes('/workflows/')).length,
+    RELEASE_READINESS.workflows.length,
+  );
   assert.equal(
     api.calls.filter((call) => call.url.pathname.endsWith('/code-scanning/alerts')).length,
     2,
@@ -921,3 +924,29 @@ test('a genuine successful deploy of another candidate cannot serve as this cand
     false,
   );
 });
+
+for (const workflow of ['test-l1.yml', 'security-scanning.yml']) {
+  test(`release admission rejects failed, cancelled or absent ${workflow} candidate evidence`, async () => {
+    for (const verdict of ['failure', 'cancelled', 'in_progress', 'absent']) {
+      const api = releaseApi((url, body) => {
+        if (!url.pathname.includes(`/workflows/${workflow}/`)) return;
+        if (verdict === 'absent') body.workflow_runs = [];
+        else if (verdict === 'in_progress') {
+          body.workflow_runs[0].status = 'in_progress';
+          body.workflow_runs[0].conclusion = null;
+        } else body.workflow_runs[0].conclusion = verdict;
+      });
+      await assert.rejects(
+        requireReleaseReady(releaseEnvironment, boundedReleaseOptions(api, { noWait: true })),
+        /did not accept the candidate|did not become release ready/,
+      );
+      assert.ok(
+        api.calls.some((call) => call.url.pathname.includes(`/workflows/${workflow}/runs`)),
+      );
+      assert.equal(
+        api.calls.some((call) => call.url.pathname.endsWith('/code-scanning/alerts')),
+        false,
+      );
+    }
+  });
+}
