@@ -22,10 +22,12 @@ import {
   type ToolInputResponseWire,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 
 const MAX_VISIBLE_TEXT_CHARACTERS = 512_000;
+export const MANAGED_RUN_CANCELLATION_TIMEOUT_MS = 15_000;
 const RUN_LIST_PAGE_SIZE = 25;
 const RUN_JOURNAL_PAGE_SIZE = 500;
 const RUN_JOURNAL_MAX_PAGES = 8;
@@ -442,6 +444,44 @@ export async function cancelChromeManagedRun(
         .cancelRun(run.runId, signal ? { signal } : {}),
     };
   } catch (error) {
+    return errorResult(error, signal);
+  }
+}
+
+export async function cancelAndConfirmChromeManagedRun(
+  value: ManagedCloudAgentRunReference,
+  dependencies: Partial<ChromeManagedRunDependencies> = {},
+  signal?: AbortSignal,
+): Promise<ChromeManagedRunCancellationResult> {
+  const cancellation = await cancelChromeManagedRun(value, dependencies, signal);
+  if (cancellation.status === 'error') return cancellation;
+  if (TERMINAL_AGENT_TASK_STATES.has(cancellation.run.state)) return cancellation;
+  const resolvedDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const token = await resolvedDependencies.getAuthToken();
+  if (!token) {
+    return { status: 'error', code: 'auth_required', message: 'Sign in to confirm cancellation.' };
+  }
+  try {
+    const followed = await resolvedDependencies.createClient(token).followRun(value.runId, {
+      afterSequence: value.lastSequence,
+      ...(signal ? { signal } : {}),
+    });
+    if (TERMINAL_AGENT_TASK_STATES.has(followed.run.state)) {
+      return { status: 'success', run: followed.run };
+    }
+    return {
+      status: 'error',
+      code: 'server_error',
+      message: 'Cancellation has not been confirmed. The run may still be working.',
+    };
+  } catch (error) {
+    if (signal?.aborted) {
+      return {
+        status: 'error',
+        code: 'server_error',
+        message: 'Cancellation has not been confirmed. The run may still be working.',
+      };
+    }
     return errorResult(error, signal);
   }
 }

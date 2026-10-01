@@ -167,7 +167,9 @@ import {
 } from './features/native-bridge/desktopCommands';
 import {
   cancelChromeManagedRun,
+  cancelAndConfirmChromeManagedRun,
   findChromeManagedRunByRequestId,
+  MANAGED_RUN_CANCELLATION_TIMEOUT_MS,
   resumeChromeManagedRun,
 } from './features/cloud-bridge/managedRunControl';
 import {
@@ -254,6 +256,7 @@ interface ActiveChatStream {
   controller: AbortController;
   cancelRequested: boolean;
   cancelNotified: boolean;
+  cancellation?: Promise<ExtensionResponse>;
   requestId?: string;
   cloudRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference;
 }
@@ -392,7 +395,7 @@ function broadcastManagedChatChunk(
   clientInstanceId: string,
   id: string,
   input: Omit<ChatChunkMessage, 'type' | 'owner' | 'clientInstanceId' | 'id'>,
-): void {
+): Promise<void> {
   const chunk: ChatChunkMessage = {
     type: 'CHAT_CHUNK',
     owner,
@@ -400,9 +403,12 @@ function broadcastManagedChatChunk(
     id,
     ...input,
   };
-  chrome.runtime.sendMessage(chunk).catch(() => {
-    // The extension view may have closed while the server-owned run continues.
-  });
+  return chrome.runtime
+    .sendMessage(chunk)
+    .then(() => undefined)
+    .catch(() => {
+      // The extension view may have closed while the server-owned run continues.
+    });
 }
 
 function publishManagedChatChunk(
@@ -419,12 +425,17 @@ async function cancelManagedCloudRunWithCapturedCredential(
   active: Pick<ActiveChatStream, 'token' | 'cloudRun'>,
 ): Promise<boolean> {
   if (!active.cloudRun) return true;
+  const controller = new AbortController();
   try {
     const cancellation = await withTimeout(
-      cancelChromeManagedRun(active.cloudRun, {
-        getAuthToken: async () => active.token,
-      }),
-      15_000,
+      cancelChromeManagedRun(
+        active.cloudRun,
+        {
+          getAuthToken: async () => active.token,
+        },
+        controller.signal,
+      ),
+      MANAGED_RUN_CANCELLATION_TIMEOUT_MS,
     );
     if (cancellation.status === 'success') return true;
     logger.warn('Managed Cloud run cancellation failed', {
@@ -438,6 +449,8 @@ async function cancelManagedCloudRunWithCapturedCredential(
       error,
     });
     return false;
+  } finally {
+    controller.abort();
   }
 }
 
@@ -3541,40 +3554,76 @@ async function handleMessageAsync(
       if (!active && !cloudRun) {
         return { success: false, error: 'No active stream for id' } as ExtensionResponse;
       }
-      if (active) {
-        active.cancelRequested = true;
-        active.controller.abort();
+      if (active?.cancellation) return active.cancellation;
+      if (!cloudRun) {
+        return {
+          success: false,
+          error: 'Cancellation could not be confirmed before the cloud run was saved.',
+        };
       }
-      if (!active?.cancelNotified) {
-        if (active) active.cancelNotified = true;
-        broadcastManagedChatChunk(owner, cancelMsg.clientInstanceId, cancelMsg.id, {
-          text: '',
-          done: true,
-          error: 'Cancelled.',
-          ...(cloudRun ? { cloudRun } : {}),
-        });
+      const currentCredential = active ? null : await getManagedCloudAuthContext();
+      const credential = selectManagedCloudCancellationCredential(
+        owner,
+        active ? { token: active.token, owner: active.owner } : null,
+        currentCredential,
+      );
+      if (!credential || isRetiredManagedCloudOwner(owner)) {
+        return { success: false, error: 'Managed Cloud stream owner changed' };
       }
-      if (cloudRun) {
-        const currentCredential = active ? null : await getManagedCloudAuthContext();
-        const credential = selectManagedCloudCancellationCredential(
-          owner,
-          active ? { token: active.token, owner: active.owner } : null,
-          currentCredential,
-        );
-        if (!credential) {
-          return { success: false, error: 'Managed Cloud stream owner changed' };
-        }
-        const cancellation = await cancelChromeManagedRun(cloudRun, {
-          getAuthToken: async () => credential.token,
-        });
-        if (cancellation.status === 'error') {
-          logger.warn('Managed Cloud run cancellation failed', {
-            runId: cloudRun.runId,
-            error: cancellation.message,
+      const cancellationAttempt = (async (): Promise<ExtensionResponse> => {
+        const controller = new AbortController();
+        try {
+          const cancellation = await withTimeout(
+            cancelAndConfirmChromeManagedRun(
+              cloudRun,
+              {
+                getAuthToken: async () => credential.token,
+              },
+              controller.signal,
+            ),
+            MANAGED_RUN_CANCELLATION_TIMEOUT_MS,
+          );
+          if (cancellation.status === 'error') {
+            return { success: false, error: cancellation.message };
+          }
+          const current = activeChatStreams.get(streamKey);
+          if (isRetiredManagedCloudOwner(owner) || (current !== undefined && current !== active)) {
+            return { success: false, error: 'Managed Cloud stream owner changed' };
+          }
+          if (active) {
+            active.cancelRequested = true;
+            active.cancelNotified = true;
+            active.controller.abort();
+          }
+          await broadcastManagedChatChunk(owner, cancelMsg.clientInstanceId, cancelMsg.id, {
+            text: '',
+            done: true,
+            ...(cancellation.run.state === 'cancelled'
+              ? { error: 'Cancelled.', errorCode: 'cancelled' }
+              : {}),
+            cloudRun: {
+              ...cloudRun,
+              state: cancellation.run.state,
+              cancellationRequestedAt: cancellation.run.cancellationRequestedAt,
+              lastSequence: Math.max(cloudRun.lastSequence, cancellation.run.lastEventSequence),
+            },
           });
+          return { success: true };
+        } catch {
+          return {
+            success: false,
+            error: 'Cancellation has not been confirmed. The run may still be working.',
+          };
+        } finally {
+          controller.abort();
         }
+      })();
+      if (active) active.cancellation = cancellationAttempt;
+      try {
+        return await cancellationAttempt;
+      } finally {
+        if (active?.cancellation === cancellationAttempt) active.cancellation = undefined;
       }
-      return { success: true } as ExtensionResponse;
     }
 
     case 'OPEN_SIDE_PANEL': {

@@ -2077,6 +2077,10 @@
     "message": "Stopping…",
     "description": "Status while a stopped answer waits for the stop to take effect"
   },
+  "spCancellationUnconfirmed": {
+    "message": "Cancellation could not be confirmed. The task may still be running. Try Stop again.",
+    "description": "Shown when the server has not confirmed that a stopped task has ended"
+  },
   "spReconnecting": {
     "message": "Reconnecting…",
     "description": "Status while the panel reattaches to an answer after the connection dropped"

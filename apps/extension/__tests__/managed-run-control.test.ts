@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ManagedCloudAgentRunHttpError,
   AGENT_EVENT_SCHEMA_VERSION,
+  createManagedCloudAgentRunClient,
 } from '@agiworkforce/cloud-contracts';
 import type {
   ManagedCloudAgentRunClient,
@@ -10,6 +11,7 @@ import type {
 import {
   ALL_MANAGED_RUN_STATES,
   cancelChromeManagedRun,
+  cancelAndConfirmChromeManagedRun,
   findChromeManagedRunByRequestId,
   resumeChromeManagedRun,
   type ChromeManagedRunDependencies,
@@ -258,5 +260,80 @@ describe('Chrome managed run control', () => {
       'Invalid Managed Cloud request identity',
     );
     expect(deps.getAuthToken).not.toHaveBeenCalled();
+  });
+});
+
+describe('Chrome Stop authoritative terminal confirmation', () => {
+  function json(value: unknown): Response {
+    return new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } });
+  }
+  it('follows an accepted running cancellation to the authoritative terminal snapshot', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json({ run: { ...completedRun(), state: 'running', completedAt: null } }),
+      )
+      .mockResolvedValueOnce(
+        json({ run: { ...completedRun(), state: 'cancelled' }, events: [], nextAfterSequence: 3 }),
+      );
+    const client = createManagedCloudAgentRunClient({ fetchImpl });
+    await expect(
+      cancelAndConfirmChromeManagedRun(reference, dependencies(client)),
+    ).resolves.toMatchObject({ status: 'success', run: { state: 'cancelled' } });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[0]![0]).toBe(reference.runPath);
+    expect(fetchImpl.mock.calls[0]![1]?.method).toBe('POST');
+    expect(fetchImpl.mock.calls[1]![0]).toContain(RUN_ID);
+    expect(fetchImpl.mock.calls[1]![1]?.method).not.toBe('POST');
+  });
+  it('refuses a nonterminal paused follow boundary', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json({ run: { ...completedRun(), state: 'running', completedAt: null } }),
+      )
+      .mockResolvedValueOnce(
+        json({
+          run: { ...completedRun(), state: 'paused', completedAt: null },
+          events: [],
+          nextAfterSequence: 3,
+        }),
+      );
+    await expect(
+      cancelAndConfirmChromeManagedRun(
+        reference,
+        dependencies(createManagedCloudAgentRunClient({ fetchImpl })),
+      ),
+    ).resolves.toMatchObject({ status: 'error', code: 'server_error' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+  it('aborts the real confirmation read without inventing a terminal result', async () => {
+    const controller = new AbortController();
+    let readSignal: AbortSignal | null | undefined;
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json({ run: { ...completedRun(), state: 'running', completedAt: null } }),
+      )
+      .mockImplementationOnce((_url: string, options?: RequestInit) => {
+        readSignal = options?.signal;
+        return new Promise((_resolve, reject) =>
+          readSignal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('Aborted', 'AbortError')),
+            { once: true },
+          ),
+        );
+      });
+    const result = cancelAndConfirmChromeManagedRun(
+      reference,
+      dependencies(createManagedCloudAgentRunClient({ fetchImpl })),
+      controller.signal,
+    );
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledTimes(2));
+    expect(readSignal).toBe(controller.signal);
+    controller.abort();
+    await expect(result).resolves.toMatchObject({ status: 'error', code: 'server_error' });
+    expect(readSignal?.aborted).toBe(true);
   });
 });
