@@ -1,12 +1,13 @@
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
-import shutil
 import signal
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import time
 
@@ -83,6 +84,26 @@ def resolve_bundle(configs, expected_version, destination):
     return {'version': __VERSION__, 'configs': configs, 'availableRules': len(document['rules']), 'reportedUnavailableProRulesSummedAcrossConfigs': config.missed_rule_count, 'uniqueUnavailableProRuleCountUnknown': True, 'localRoundtripEqual': True}
 
 
+def scanner_runtime(expected_version):
+    import semgrep
+
+    require(semgrep.__VERSION__ == expected_version, 'Installed scanner version differs from the configured engine.')
+    package = Path(semgrep.__file__).resolve().parent
+    owners = {Path(sysconfig.get_path(name)).resolve() / 'semgrep' for name in ('purelib', 'platlib')}
+    require(package in owners, 'Scanner package is not owned by the installed interpreter.')
+    module = importlib.util.find_spec('semgrep.console_scripts.entrypoint')
+    entrypoint = package / 'console_scripts' / 'entrypoint.py'
+    require(module is not None and module.origin is not None and Path(module.origin).resolve() == entrypoint, 'Installed scanner entrypoint is missing or foreign.')
+    core = package / 'bin' / ('semgrep-core.exe' if os.name == 'nt' else 'semgrep-core')
+    require(core.is_file() and not core.is_symlink() and os.access(core, os.X_OK), 'Packaged native scanner is missing or invalid.')
+    interpreter = Path(sys.executable)
+    require(interpreter.is_file() and os.access(interpreter, os.X_OK), 'Installed interpreter is missing or invalid.')
+    files = [package / '__init__.py', entrypoint, core, interpreter]
+    return {'version': semgrep.__VERSION__, 'interpreter': sys.executable,
+            'path': sysconfig.get_path('scripts') + os.pathsep + os.defpath,
+            'files': [{'path': str(path), 'resolved': str(path.resolve()), 'sha256': digest(path.read_bytes())} for path in files]}
+
+
 def stop_owned(child):
     if child is None:
         return
@@ -133,12 +154,13 @@ def main():
     for name, value in {'HOME': state, 'XDG_CONFIG_HOME': state, 'XDG_CACHE_HOME': state, 'XDG_DATA_HOME': state, 'TMPDIR': state, 'SEMGREP_SETTINGS_FILE': state/'settings.yml', 'SEMGREP_LOG_FILE': state/'semgrep.log', 'SEMGREP_VERSION_CACHE_PATH': state/'version-cache', 'SEMGREP_SEND_METRICS': 'off', 'SEMGREP_ENABLE_VERSION_CHECK': '0', 'SEMGREP_OTEL_METRICS': '0', 'PYTHONDONTWRITEBYTECODE': '1'}.items():
         os.environ[name] = str(value)
     tempfile.tempdir = str(state)
-    scanner = shutil.which('semgrep')
-    require(scanner is not None, 'Installed scanner executable is missing.')
     output = args.output.resolve()
     require(not output.exists(), 'Scanner report must be a fresh output.')
     bundle = state/'rules.json'
     provenance = resolve_bundle(args.config, args.expected_version, bundle)
+    runtime = scanner_runtime(args.expected_version)
+    child_environment = dict(os.environ)
+    child_environment['PATH'] = runtime['path']
     head = git(cwd, ['rev-parse', 'HEAD']).decode().strip()
     tree = git(cwd, ['rev-parse', 'HEAD^{tree}']).decode().strip()
     before = sources(cwd, output)
@@ -149,7 +171,7 @@ def main():
     signal.signal(signal.SIGINT, interrupted)
     try:
         with (state/'scanner.stdout.private').open('wb') as stdout, (state/'scanner.stderr.private').open('wb') as stderr:
-            child = subprocess.Popen([scanner, 'scan', '--config', str(bundle), '--no-rewrite-rule-ids', '--metrics=off', f'--timeout={args.timeout}', f'--jobs={args.jobs}', '--time', '--json', '--output', str(output), '.'], cwd=cwd, stdout=stdout, stderr=stderr, start_new_session=True)
+            child = subprocess.Popen(['python', '-I', '-B', '-m', 'semgrep.console_scripts.entrypoint', 'scan', '--config', str(bundle), '--no-rewrite-rule-ids', '--metrics=off', f'--timeout={args.timeout}', f'--jobs={args.jobs}', '--time', '--json', '--output', str(output), '.'], executable=sys.executable, env=child_environment, cwd=cwd, stdout=stdout, stderr=stderr, start_new_session=True)
             deadline = time.monotonic() + 1800
             while child.poll() is None:
                 require(time.monotonic() < deadline, 'Scanner execution deadline exceeded.')
@@ -166,7 +188,8 @@ def main():
     require(isinstance(report, dict) and report.get('version') == args.expected_version and isinstance(report.get('results'), list), 'Scanner report version or results are invalid.')
     require(head == git(cwd, ['rev-parse', 'HEAD']).decode().strip() and tree == git(cwd, ['rev-parse', 'HEAD^{tree}']).decode().strip(), 'Source revision changed during the scan.')
     require(before == sources(cwd, output), 'Source bytes changed during the scan.')
-    write_json(state/'source-context.json', {**provenance, 'head': head, 'tree': tree, 'sources': before, 'rulesSha256': digest(bundle.read_bytes()), 'reportSha256': digest(output.read_bytes()), 'actualScannerExit': code, 'sourceBeforeAfterEqual': True})
+    require(runtime == scanner_runtime(args.expected_version), 'Installed scanner binding changed during execution.')
+    write_json(state/'source-context.json', {**provenance, 'scannerBinding': runtime, 'head': head, 'tree': tree, 'sources': before, 'rulesSha256': digest(bundle.read_bytes()), 'reportSha256': digest(output.read_bytes()), 'actualScannerExit': code, 'sourceBeforeAfterEqual': True})
     print(f'Semgrep completed with {len(report["results"])} finding(s); the report and coverage gate determine acceptance.')
 
 
