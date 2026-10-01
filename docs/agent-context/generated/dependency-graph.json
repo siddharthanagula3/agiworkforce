@@ -163,6 +163,10 @@
       },
       {
         "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/observability"
+      },
+      {
+        "from": "@agiworkforce/desktop",
         "to": "@agiworkforce/providers-lmstudio"
       },
       {
