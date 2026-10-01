@@ -47,7 +47,7 @@
     "@tiptap/suggestion": "^3.31.3",
     "clsx": "^2.1.1",
     "immer": "^11.1.18",
-    "katex": "^0.18.7",
+    "katex": "^0.18.9",
     "mermaid": "^11.17.2",
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.1",
@@ -59,7 +59,7 @@
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
     "shiki": "~4.4.3",
-    "simple-icons": "^16.30.0",
+    "simple-icons": "^16.33.0",
     "tailwind-merge": "^3.5.0",
     "unified": "^11.0.5",
     "zustand": "^5.0.12"
