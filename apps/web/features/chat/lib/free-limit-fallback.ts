@@ -12,11 +12,12 @@ import { promotionalChatToolConflict } from './free-quota-selection';
 const FREE_USAGE_LIMIT_CODE: FreeTrialErrorCode = 'free_trial_token_budget_reached';
 
 export const FREE_LIMIT_FALLBACK_REASON = 'free_limit_reached';
+export const FREE_CAPACITY_FALLBACK_REASON = 'free_capacity_unavailable';
 export const FREE_USAGE_LIMIT_FALLBACK_REASON = 'free_usage_limit_reached';
 
 const FALLBACK_REASON_BY_CODE: Readonly<Record<string, string>> = {
   [FREE_ALLOWANCE_EXHAUSTED_CODE]: FREE_LIMIT_FALLBACK_REASON,
-  [FREE_CAPACITY_UNAVAILABLE_CODE]: FREE_LIMIT_FALLBACK_REASON,
+  [FREE_CAPACITY_UNAVAILABLE_CODE]: FREE_CAPACITY_FALLBACK_REASON,
   [FREE_USAGE_LIMIT_CODE]: FREE_USAGE_LIMIT_FALLBACK_REASON,
 };
 

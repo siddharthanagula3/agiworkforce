@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FreeQuotaCatalogue, FreeQuotaModel } from '@agiworkforce/cloud-contracts';
 import { getProviderOfferings, getRoutingSlotModel } from '@agiworkforce/types';
 import {
+  FREE_CAPACITY_FALLBACK_REASON,
   FREE_LIMIT_FALLBACK_REASON,
   FREE_USAGE_LIMIT_FALLBACK_REASON,
   freeLimitFallbackReason,
@@ -62,7 +63,7 @@ function turn(patch: Partial<FreeLimitFallbackTurn> = {}): FreeLimitFallbackTurn
 describe('when Free Auto falls back to another free model', () => {
   it.each([
     ['free_allowance_exhausted', FREE_LIMIT_FALLBACK_REASON],
-    ['free_capacity_unavailable', FREE_LIMIT_FALLBACK_REASON],
+    ['free_capacity_unavailable', FREE_CAPACITY_FALLBACK_REASON],
     ['free_trial_token_budget_reached', FREE_USAGE_LIMIT_FALLBACK_REASON],
   ])('falls back on %s and says why', (code, reason) => {
     expect(freeLimitFallbackReason(turn({ code }))).toBe(reason);
