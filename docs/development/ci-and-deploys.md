@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform/release
-Last updated: 2026-10-01
+Last updated: 2026-10-02
 
 ## Production invariant
 
@@ -208,6 +208,26 @@ success verdict.
 This binding prevents configuration drift between migrations, the build and the
 runtime. Provisioning must independently establish that the staging Neon database
 is separate from production; `--target staging` does not check database identity.
+
+Vercel's Preview environment is the staging runtime, and it shares no Stripe,
+Clerk, Redis or OpenRouter credential with Production. `validate-env.ts` fails
+the boot without Clerk keys, Stripe keys, the five required `STRIPE_PRICE_*` ids
+and `NEXT_PUBLIC_APP_URL`, and refuses live Stripe keys in Preview, so Preview
+carries its own:
+
+- Clerk development-instance keys and Stripe test-mode keys, with test-mode
+  prices behind the `STRIPE_PRICE_*` ids;
+- `STRIPE_WEBHOOK_SECRET` and `TOTP_ENCRYPTION_KEY`, generated for Preview;
+- the Upstash Redis store `agiworkforce-staging-redis`, connected for Preview
+  only, which supplies the `KV_*` and `REDIS_URL` variables;
+- `NEXT_PUBLIC_APP_URL`, `https://agiworkforce-staging.vercel.app`. Connector
+  OAuth callbacks follow it because `CONNECTOR_OAUTH_REDIRECT_BASE_URL` is unset
+  for Preview. The workflow does not alias deployments onto that origin, so it
+  serves only a deployment someone aliased there by hand.
+
+`OPENROUTER_API_KEY` is Production only. A `NEXT_PUBLIC_*` value the build
+inlines must not be marked Sensitive, because `vercel pull` cannot read a
+Sensitive value back.
 
 `.github/rulesets/environments.json` declares the protection every one of these
 environments should carry, and `.github/rulesets/README.md` holds the command
