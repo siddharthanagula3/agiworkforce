@@ -5,9 +5,11 @@ import { z } from 'zod';
 import {
   FREE_ALLOWANCE_EXHAUSTED_CODE,
   FREE_QUOTA_FALLBACK_REQUEST_KEY,
+  FreeLimitSchema,
   FreeOfferingRequestSchema,
   IDEMPOTENCY_KEY_HEADER,
   normalizePromotionalChatHistory,
+  type FreeLimit,
 } from '@agiworkforce/cloud-contracts';
 import { getRoutingSlotModel } from '@agiworkforce/types';
 import {
@@ -63,14 +65,42 @@ export function freeQuotaFallbackReplay(
   return !principal.viaApiKey && freeQuotaPlanAllows(principal.planTier) ? request.clone() : null;
 }
 
-async function refusalFallbackReason(refusal: Response): Promise<FallbackReasonCode | null> {
+interface FreeAutoRefusal {
+  reason: FallbackReasonCode;
+  body: { error: Record<string, unknown> };
+  freeLimit: FreeLimit | null;
+}
+
+async function readFreeAutoRefusal(refusal: Response): Promise<FreeAutoRefusal | null> {
   if (refusal.ok) return null;
   const body = (await refusal
     .clone()
     .json()
-    .catch(() => null)) as { error?: { code?: unknown } } | null;
-  const code = body?.error?.code;
-  return typeof code === 'string' ? (FALLBACK_REASON_BY_REFUSAL[code] ?? null) : null;
+    .catch(() => null)) as { error?: unknown } | null;
+  const error =
+    body?.error && typeof body.error === 'object' ? (body.error as Record<string, unknown>) : null;
+  const code = error?.['code'];
+  const reason = typeof code === 'string' ? FALLBACK_REASON_BY_REFUSAL[code] : undefined;
+  if (!body || !error || !reason) return null;
+  const freeLimit = FreeLimitSchema.safeParse(error['free_limit']);
+  return {
+    reason,
+    body: { ...body, error },
+    freeLimit: freeLimit.success ? freeLimit.data : null,
+  };
+}
+
+function withFreeLimit(
+  refusal: Response,
+  body: FreeAutoRefusal['body'],
+  freeLimit: FreeLimit,
+): Response {
+  const headers = new Headers(refusal.headers);
+  headers.delete('content-length');
+  return Response.json(
+    { ...body, error: { ...body.error, free_limit: freeLimit } },
+    { status: refusal.status, headers },
+  );
 }
 
 function freeAutoTurn(
@@ -106,33 +136,47 @@ export async function serveFreeQuotaFallback(input: {
   userId: string;
   scopedDb: () => Promise<UserScopedDb>;
 }): Promise<Response | null> {
-  const reason = await refusalFallbackReason(input.refusal);
+  const refused = await readFreeAutoRefusal(input.refusal);
   const inventory = loadFreePools().inventory;
   const ranking = inventory?.freeAutoFallback;
   if (
-    !reason ||
+    !refused ||
     !inventory ||
     !ranking ||
-    (reason === 'free_capacity_unavailable' && !ranking.spendOnCapacityShortage)
+    (refused.reason === 'free_capacity_unavailable' && !ranking.spendOnCapacityShortage)
   ) {
     return null;
   }
+  const { reason } = refused;
   const replayed = freeAutoTurn(await input.replay.json().catch(() => null));
   const requestId = input.request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim();
   if (!replayed || !requestId) return null;
   const { turn, assistantParentId } = replayed;
+  const context = freeQuotaContextFor({ url: input.request.url, userId: input.userId });
+  const choice = {
+    inventory,
+    category: 'chat',
+    protocol: 'chat',
+    needsImageInput: readsImages(turn),
+  } as const;
+  const decline = async (triedModel?: string): Promise<Response | null> => {
+    const { freeLimit } = refused;
+    if (!freeLimit) return null;
+    const alternative = await resolveReadyFreeQuotaOffering(context, {
+      ...choice,
+      ...(triedModel ? { excludeKey: triedModel } : {}),
+      ranking: [...ranking.offeringKeys, ...inventory.entries.map((entry) => entry.offeringKey)],
+    });
+    return alternative
+      ? withFreeLimit(input.refusal, refused.body, { ...freeLimit, alternative_model: alternative })
+      : null;
+  };
   try {
-    const model = await resolveReadyFreeQuotaOffering(
-      freeQuotaContextFor({ url: input.request.url, userId: input.userId }),
-      {
-        inventory,
-        category: 'chat',
-        protocol: 'chat',
-        needsImageInput: readsImages(turn),
-        ranking: ranking.offeringKeys,
-      },
-    );
-    if (!model) return null;
+    const model = await resolveReadyFreeQuotaOffering(context, {
+      ...choice,
+      ranking: ranking.offeringKeys,
+    });
+    if (!model) return await decline();
     const served = await serveFreeQuotaTurn(
       input.request,
       await input.scopedDb(),
@@ -144,7 +188,7 @@ export async function serveFreeQuotaFallback(input: {
         ...(assistantParentId ? { assistantParentId } : {}),
       },
     );
-    if (!served.ok) return null;
+    if (!served.ok) return await decline(model);
     served.headers.set(FALLBACK_REASON_HEADER, reason);
     logger.info(
       { userId: input.userId, reason, model },

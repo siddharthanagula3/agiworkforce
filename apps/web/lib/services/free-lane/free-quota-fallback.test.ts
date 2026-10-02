@@ -2,7 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
-import { FREE_QUOTA_FALLBACK_REQUEST_KEY } from '@agiworkforce/cloud-contracts';
+import {
+  FREE_ALLOWANCE_EXHAUSTED_CODE,
+  FREE_QUOTA_FALLBACK_REQUEST_KEY,
+  FreeLimitSchema,
+} from '@agiworkforce/cloud-contracts';
 import { getProviderOfferings, getRoutingSlotModel } from '@agiworkforce/types';
 import {
   credentialSha256,
@@ -154,9 +158,31 @@ const textOnlyKeys = servableChat
   .map(({ key }) => key);
 const ranking = inventory.freeAutoFallback?.offeringKeys ?? [];
 const rankedReady = ranking.filter((key) => servableChat.some((entry) => entry.key === key));
+const unrankedReady = servableChat.map(({ key }) => key).filter((key) => !ranking.includes(key));
 
 function refusal(code: string, status = 429): Response {
-  return Response.json({ error: { code, message: 'Free Auto could not answer.' } }, { status });
+  return Response.json(
+    {
+      error: {
+        code,
+        message: 'Free Auto could not answer.',
+        ...(code === FREE_ALLOWANCE_EXHAUSTED_CODE
+          ? { free_limit: { model: FREE_AUTO, reason: 'shared_pool_used' } }
+          : {}),
+      },
+    },
+    { status, headers: { 'X-Request-Id': 'fixture-request' } },
+  );
+}
+
+async function offeredSwitch(declined: Response | null) {
+  expect(declined?.status).toBe(429);
+  expect(declined?.headers.get('X-Request-Id')).toBe('fixture-request');
+  const { error } = await declined!.json();
+  expect(error.code).toBe(FREE_ALLOWANCE_EXHAUSTED_CODE);
+  const freeLimit = FreeLimitSchema.parse(error.free_limit);
+  expect(freeLimit).toMatchObject({ model: FREE_AUTO, reason: 'shared_pool_used' });
+  return freeLimit.alternative_model;
 }
 
 const QUESTION = { role: 'user', content: 'Explain photosynthesis in two sentences.' };
@@ -317,8 +343,9 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
     expect(served?.headers.get('X-AGI-Resolved-Model')).toBe(rankedReady[1]);
   });
 
-  it('keeps the refusal once every ranked model is spent, without spending one left out', async () => {
+  it('offers a ready model left out of the ranking once every ranked one is spent, without spending it', async () => {
     expect(ranking.length).toBeGreaterThan(0);
+    expect(unrankedReady.length).toBeGreaterThan(0);
     for (const offeringKey of ranking) {
       await recordFreeQuotaHold(mocks.store, {
         apiKey: API_KEY,
@@ -328,7 +355,9 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
       });
     }
 
-    expect(await fallBack(refusal('free_allowance_exhausted'))).toBeNull();
+    const declined = await fallBack(refusal('free_allowance_exhausted'));
+
+    expect(await offeredSwitch(declined)).toBe(unrankedReady[0]);
     expect(mocks.stream).not.toHaveBeenCalled();
   });
 
@@ -573,18 +602,72 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
     expect(mocks.stream).not.toHaveBeenCalled();
   });
 
-  it('keeps the Free Auto refusal when the free model refuses too, and records its limit', async () => {
+  it('keeps the Free Auto refusal when the free model refuses too, records its limit and offers the next ready model', async () => {
     mocks.stream.mockResolvedValue(
       Response.json({ error: { code: 'AllocationQuota.FreeTierOnly' } }, { status: 403 }),
     );
-    expect(await fallBack(refusal('free_allowance_exhausted'))).toBeNull();
+
+    const declined = await fallBack(refusal('free_allowance_exhausted'));
+
     const [tried] = mocks.stream.mock.calls[0]!;
+    expect(tried).toBe(rankedReady[0]);
+    expect(await offeredSwitch(declined)).toBe(rankedReady[1]);
+    expect(mocks.stream).toHaveBeenCalledTimes(1);
     const state = await readFreeQuotaState(mocks.store, {
       apiKey: API_KEY,
       observedOn: inventory.observedOn,
       offeringKeys: [tried],
     });
     expect(state.holds.get(tried)).toBe('exhausted');
+  });
+
+  it('offers another model only when it is not the one that just refused', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        { error: { code: 'Throttling.RateQuota', message: 'Requests rate limit exceeded.' } },
+        { status: 429 },
+      ),
+    );
+
+    const offered = await offeredSwitch(await fallBack(refusal('free_allowance_exhausted')));
+
+    expect(offered).toBe(rankedReady[1]);
+  });
+
+  it('offers a model that reads images for an image turn the free model could not answer', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json({ error: { code: 'AllocationQuota.FreeTierOnly' } }, { status: 403 }),
+    );
+
+    const declined = await fallBack(
+      refusal('free_allowance_exhausted'),
+      freeAutoBody({
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'What is in this photo?' },
+              { type: 'file', file: { asset_id: ASSET_ID } },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const [tried] = mocks.stream.mock.calls[0]!;
+    const offered = await offeredSwitch(declined);
+    expect(offered).toBeDefined();
+    expect(offered).not.toBe(tried);
+    expect(getProviderOfferings()[offered!]!.quotaChatImageInput).toBe(true);
+  });
+
+  it('adds no switch to a refusal that states no free limit', async () => {
+    mocks.spendOnCapacityShortage = true;
+    mocks.stream.mockResolvedValue(
+      Response.json({ error: { code: 'AllocationQuota.FreeTierOnly' } }, { status: 403 }),
+    );
+
+    expect(await fallBack(refusal('free_capacity_unavailable'))).toBeNull();
   });
 
   it('replays only Free plan requests made in the product', () => {
