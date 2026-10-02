@@ -196,3 +196,60 @@ describe('PATCH /api/share/[token], workspace audience', () => {
     expect((await call('organization')).status).toBe(403);
   });
 });
+
+describe('PATCH /api/share/[token], public sharing turned off by the workspace', () => {
+  beforeEach(() => {
+    const defaultQuery = mocks.privilegedQuery.getMockImplementation()!;
+    mocks.privilegedQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from public.user_settings')) return [{ organization_id: ORG }];
+      if (sql.includes('from public.organization_admin_policies')) {
+        return [
+          {
+            organization_id: ORG,
+            default_privacy_mode: 'byok',
+            allowed_privacy_modes: ['local', 'byok'],
+            allow_managed_compute: false,
+            require_local_to_byok_preview: true,
+            chat_sync_surfaces: ['web'],
+            allow_cli_cloud_sync: false,
+            allow_vscode_cloud_sync: false,
+            allow_chrome_cloud_sync: false,
+            audit_export_enabled: true,
+            retention_days: 365,
+            retention_enforced: false,
+            external_sharing_enabled: false,
+            allow_memory: true,
+            metadata: {},
+            updated_at: '2026-09-16T00:00:00.000Z',
+          },
+        ];
+      }
+      return defaultQuery(sql);
+    });
+  });
+
+  it('keeps a workspace-only link closed instead of reopening it to anyone with the link', async () => {
+    const response = await call('public');
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe('external_sharing_disabled');
+    expect(
+      scopedStatements().some((sql) =>
+        sql.includes('delete from public.organization_shared_sessions'),
+      ),
+    ).toBe(false);
+    expect(scopedStatements().some((sql) => sql.includes('set visibility'))).toBe(false);
+    expect(auditSpy).not.toHaveBeenCalled();
+  });
+
+  it('still lets a public link narrow to the workspace', async () => {
+    const response = await call('organization');
+
+    expect(response.status).toBe(200);
+    expect(
+      scopedStatements().some((sql) =>
+        sql.includes('insert into public.organization_shared_sessions'),
+      ),
+    ).toBe(true);
+  });
+});

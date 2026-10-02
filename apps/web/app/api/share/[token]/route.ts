@@ -20,6 +20,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 
 import { shareRef } from '@/lib/share-ref';
 import {
@@ -203,6 +204,11 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
 
   const { db, userId } = await getUserScopedDb(request);
   const visibility = parsed.data.visibility;
+
+  if (visibility === 'public') {
+    const sharingGateResponse = await buildExternalSharingGateResponse(userId, request);
+    if (sharingGateResponse) return sharingGateResponse;
+  }
 
   try {
     const target = await resolveSessionShareTarget(db, { userId, token });
