@@ -172,7 +172,8 @@ dialog names what the record asserts; confirm it.
   an hour of the check and never later than the server clock.
 - The record is bound to the hash of the current `QWEN_API_KEY`. Rotating the
   key turns every free model off until a check is recorded for the new key.
-- A record newer than an account billing signal clears that signal.
+- A record newer than an account billing signal clears that signal, unless the
+  signal's record cannot be read (see Billing signal).
 - Each record writes an `admin_policy_changed` audit event for
   `free_quota_attestation` under the admin who made it.
 
@@ -181,6 +182,37 @@ dialog names what the record asserts; confirm it.
 A check counts for 30 days (`quotaExperimentPolicy.attestationMaxAgeMs`).
 Renewing is the same check again; the panel starts from the models the current
 record covers. Record it before the countdown on the panel reaches zero.
+
+## Billing signal
+
+When the provider refuses a free model with an error code that means the account
+carries charges or arrears (`classifyFreeQuotaRefusal` in
+`apps/web/lib/free-quota-authorization.ts`), the completions route records a
+billing signal for the current key, and every free quota model is withdrawn. A
+console check recorded after the signal clears it: check the account's billing
+and that Free quota only is on, then record a new check.
+
+### When its record cannot be read
+
+A billing signal record that no longer parses counts as a signal at an unknown
+time. No console check can be newer, so none clears it. The panel shows
+"Recorded, but its record cannot be read", and a critical reminder repeats daily
+until the record is gone:
+
+1. Check the account's billing in the provider console: no overdue bill, no
+   pay-as-you-go charges for free models, and Free quota only on.
+2. Work out the record's key, `agi-fquota:suspended:<scope>`, where `<scope>` is
+   the first 16 hexadecimal characters of the SHA-256 of the deployment's
+   `QWEN_API_KEY`. With the key in your shell's environment, this prints the
+   scope, never the key:
+
+   ```sh
+   printf %s "$QWEN_API_KEY" | shasum -a 256 | cut -c1-16
+   ```
+
+3. Delete that one key from the production shared store, for example in the
+   Data Browser of the production database in the Upstash console.
+4. Record a new console check.
 
 ## Reminders
 
@@ -197,12 +229,14 @@ admins:
 | no console check is recorded while the review is current | once a day until a check is recorded                  | critical |
 | the key changed after the console check                  | the first run after the rotation                      | critical |
 | the provider reported an account billing code            | the first run after the signal                        | critical |
+| a billing signal record cannot be read                   | once a day until the record is removed                | critical |
 
 A missing console check covers both the launch, before the first check is
 recorded, and a recorded check that was lost or no longer parses, for example
 after the shared store was flushed. Either way every free model is off, so it
-repeats daily. Every other reason is sent once per deadline (or per billing
-signal), so a renewal that moves a deadline gets its own reminders.
+repeats daily, as does an unreadable billing signal. Every other reason is sent
+once per deadline (or per billing signal), so a renewal that moves a deadline
+gets its own reminders.
 
 A reminder is emailed to the verified address of each platform admin, or to
 `AGI_SUPPORT_FALLBACK_EMAIL` when none resolves, which needs `RESEND_API_KEY`

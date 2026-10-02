@@ -4,7 +4,11 @@ import { NextRequest } from 'next/server';
 import { FreeQuotaAttestationStatusSchema } from '@agiworkforce/cloud-contracts';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
 import { createError } from '@/lib/errors';
-import { credentialSha256, readFreeQuotaState } from '@/lib/free-quota-authorization';
+import {
+  credentialSha256,
+  readFreeQuotaState,
+  recordFreeQuotaSuspension,
+} from '@/lib/free-quota-authorization';
 import { loadFreePools, type FreeQuotaTermsReview } from '@/lib/server/free-pools';
 type ScanModule0 = typeof import('@/lib/auth-guards');
 type ScanModule1 = typeof import('@/lib/csrf');
@@ -288,6 +292,34 @@ it('reports a check made for another key as bound to a different key', async () 
   expect(after.attestation.standing).toBe('other_credential');
   expect(after.attestation.record?.boundToCurrentKey).toBe(false);
   expect(JSON.stringify(after)).not.toContain(credentialSha256(API_KEY));
+});
+
+it('reports a billing signal with the time it was recorded', async () => {
+  const signalAtMs = Date.now() - 60_000;
+  await recordFreeQuotaSuspension(mocks.store, {
+    apiKey: API_KEY,
+    signal: 'Arrearage',
+    nowMs: signalAtMs,
+  });
+
+  const body = await configuredStatus();
+
+  expect(body.attestation.standing).toBe('billing_signal');
+  expect(body.billingSignalAtMs).toBe(signalAtMs);
+  expect(body.billingSignalUnreadable).toBe(false);
+});
+
+it('reports a billing signal record it cannot read as unreadable, never as a time', async () => {
+  await mocks.store.set(`agi-fquota:suspended:${credentialSha256(API_KEY).slice(0, 16)}`, {
+    unreadable: true,
+  });
+  expect((await attest({ checkedAtMs: 'now', quotaOnlyOfferings: 'all' })).status).toBe(200);
+
+  const body = await configuredStatus();
+
+  expect(body.attestation.standing).toBe('billing_signal');
+  expect(body.billingSignalAtMs).toBeNull();
+  expect(body.billingSignalUnreadable).toBe(true);
 });
 
 it('is closed to anyone who is not a platform operator', async () => {

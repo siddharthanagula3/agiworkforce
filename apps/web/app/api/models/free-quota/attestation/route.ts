@@ -21,6 +21,7 @@ import {
 } from '@/lib/server/free-pools';
 import {
   QuotaAttestationSchema,
+  UNREADABLE_SUSPENSION_AT_MS,
   attestationFreshUntilMs,
   attestationStanding,
   credentialSha256,
@@ -172,6 +173,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     }),
   ]);
   const { attestation } = state;
+  const billingSignalUnreadable = state.suspendedAtMs === UNREADABLE_SUSPENSION_AT_MS;
   return statusResponse({
     configured: true,
     nowMs,
@@ -193,7 +195,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
           }
         : null,
     },
-    billingSignalAtMs: state.suspendedAtMs,
+    billingSignalAtMs: billingSignalUnreadable ? null : state.suspendedAtMs,
+    billingSignalUnreadable,
     withdrawn: [...state.holds].map(([key, cause]) => ({
       key,
       displayName: getProviderOffering(key)?.displayName ?? key,

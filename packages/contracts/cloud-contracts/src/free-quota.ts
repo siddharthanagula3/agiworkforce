@@ -168,6 +168,7 @@ export const FreeQuotaAttestationStatusSchema = z.discriminatedUnion('configured
     termsReview: FreeQuotaTermsReviewStatusSchema,
     attestation: FreeQuotaAttestationStandingStatusSchema,
     billingSignalAtMs: z.number().int().positive().nullable(),
+    billingSignalUnreadable: z.boolean(),
     withdrawn: z.array(
       z.object({
         key: z.string().min(1),

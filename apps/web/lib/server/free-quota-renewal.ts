@@ -6,6 +6,7 @@ import {
   parsePlatformAdminIds,
 } from '@/features/admin/lib/platform-admin-access';
 import {
+  UNREADABLE_SUSPENSION_AT_MS,
   attestationStanding,
   readFreeQuotaState,
   type AttestationStanding,
@@ -42,7 +43,7 @@ export type FreeQuotaRenewalAlert =
       checkedAtMs: number;
       freshUntilMs: number;
     }
-  | { reason: 'console_check_missing'; day: string }
+  | { reason: 'console_check_missing' | 'billing_signal_unreadable'; day: string }
   | { reason: 'billing_signal'; signalAtMs: number };
 
 export type FreeQuotaRenewalReason = FreeQuotaRenewalAlert['reason'];
@@ -79,7 +80,11 @@ export function freeQuotaRenewalAlerts(input: {
   }
   switch (attestation.standing) {
     case 'billing_signal':
-      alerts.push({ reason: 'billing_signal', signalAtMs: attestation.signalAtMs });
+      alerts.push(
+        attestation.signalAtMs === UNREADABLE_SUSPENSION_AT_MS
+          ? { reason: 'billing_signal_unreadable', day: utcDay(nowMs) }
+          : { reason: 'billing_signal', signalAtMs: attestation.signalAtMs },
+      );
       break;
     case 'expiring':
     case 'other_credential':
@@ -126,6 +131,7 @@ function reminderAnchor(alert: FreeQuotaRenewalAlert): string | number {
     case 'console_check_other_key':
       return alert.freshUntilMs;
     case 'console_check_missing':
+    case 'billing_signal_unreadable':
       return alert.day;
     case 'billing_signal':
       return alert.signalAtMs;
@@ -212,6 +218,15 @@ function renewalNotice(alert: FreeQuotaRenewalAlert): {
         body: [
           `At ${at(alert.signalAtMs)} the provider answered a free model with an account billing code, so every free quota model was withdrawn.`,
           "Check the account's billing and that Free quota only is on, then record a new check in the operator console.",
+        ],
+      };
+    case 'billing_signal_unreadable':
+      return {
+        severity: 'critical',
+        detail: 'a billing signal record cannot be read, free models are off',
+        body: [
+          "A billing signal record exists for this deployment's provider key but cannot be read, so every free quota model is off and no console check can clear it.",
+          "Check the account's billing in the provider console. Once it is clear, delete the record as the runbook describes under Billing signal, then record a new console check. This reminder repeats each day until the record is gone.",
         ],
       };
   }

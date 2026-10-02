@@ -190,9 +190,21 @@ function attestationNotice(status: ConfiguredStatus, nowMs: number): Notice {
     case 'billing_signal':
       return {
         tone: 'danger',
-        text: "The provider answered a request with an account billing code after the last console check, so every free model is withdrawn. Check the account's billing and that Free quota only is on, then record a new check.",
+        text: status.billingSignalUnreadable
+          ? `A billing signal record for this key cannot be read, so every free model is withdrawn and a new console check cannot clear it. Check the account's billing, then remove the record as ${RUNBOOK_FILE} describes under Billing signal, and record a new check.`
+          : "The provider answered a request with an account billing code after the last console check, so every free model is withdrawn. Check the account's billing and that Free quota only is on, then record a new check.",
       };
   }
+}
+
+function billingSignalText(status: ConfiguredStatus): string {
+  if (status.billingSignalUnreadable) return 'Recorded, but its record cannot be read';
+  if (status.billingSignalAtMs === null) return 'None seen';
+  const followed =
+    status.attestation.standing === 'billing_signal'
+      ? 'not yet followed by a console check'
+      : 'followed by a newer console check';
+  return `${formatEpochMs(status.billingSignalAtMs)}, ${followed}`;
 }
 
 function servingNotice(status: ConfiguredStatus): Notice {
@@ -745,15 +757,7 @@ function ConsoleCheckGate({ status, nowMs }: { status: ConfiguredStatus; nowMs: 
           {record ? record.attestedBy : 'None recorded'}
         </dd>
         <dt className="text-muted-foreground">Billing signal</dt>
-        <dd>
-          {status.billingSignalAtMs === null
-            ? 'None seen'
-            : `${formatEpochMs(status.billingSignalAtMs)}, ${
-                status.attestation.standing === 'billing_signal'
-                  ? 'not yet followed by a console check'
-                  : 'followed by a newer console check'
-              }`}
-        </dd>
+        <dd>{billingSignalText(status)}</dd>
         <dt className="text-muted-foreground">Withdrawn models</dt>
         <dd>
           {status.withdrawn.length === 0 ? (

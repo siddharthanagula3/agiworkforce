@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IdentityUser } from '@agiworkforce/identity';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
 import {
+  UNREADABLE_SUSPENSION_AT_MS,
   attestationStanding,
   credentialSha256,
   recordFreeQuotaSuspension,
@@ -242,6 +243,12 @@ describe('which free quota gates need a reminder', () => {
     ]);
   });
 
+  it('tells once a day that a billing signal record cannot be read', () => {
+    expect(alerts({ suspendedAtMs: UNREADABLE_SUSPENSION_AT_MS })).toEqual([
+      { reason: 'billing_signal_unreadable', day: '2026-10-02' },
+    ]);
+  });
+
   it('tells, once a day, that no console check is recorded while the terms review serves', () => {
     expect(alerts({ attestation: null })).toEqual([
       { reason: 'console_check_missing', day: '2026-10-02' },
@@ -297,6 +304,11 @@ describe('what a reminder says', () => {
       { reason: 'console_check_missing', day: '2026-10-02' },
       'critical',
       /no console check is recorded/,
+    ],
+    [
+      { reason: 'billing_signal_unreadable', day: '2026-10-02' },
+      'critical',
+      /billing signal record cannot be read/,
     ],
   ];
 
@@ -418,17 +430,29 @@ describe('sending the reminders', () => {
     expect(mocks.email).toHaveBeenCalledTimes(2);
   });
 
-  it('still tells admins about a billing signal whose record cannot be read', async () => {
+  it('tells admins each day to remove a billing signal record no console check can clear', async () => {
     await mocks.store.set(`agi-fquota:suspended:${credentialSha256(API_KEY).slice(0, 16)}`, {
       unreadable: true,
     });
+    await writeQuotaAttestation(mocks.store, attestation({ checkedAtMs: NOW - HOUR_MS }));
 
     expect(await remindFreeQuotaRenewals(NOW)).toEqual({
       checked: true,
-      reminders: [{ reason: 'billing_signal', outcome: 'sent' }],
+      reminders: [{ reason: 'billing_signal_unreadable', outcome: 'sent' }],
     });
-    expect(mocks.email.mock.calls[0]![0]).toMatchObject({
-      text: expect.stringContaining('At an unrecorded time the provider answered'),
+    const message = mocks.email.mock.calls[0]![0] as { subject: string; text: string };
+    expect(message.subject).toMatch(/^\[AGI CRITICAL\] .*billing signal record cannot be read/);
+    expect(message.text).toContain('no console check can clear it');
+    expect(message.text).toContain('delete the record');
+    expect(message.text).not.toContain('unrecorded time');
+
+    expect(await remindFreeQuotaRenewals(NOW + HOUR_MS)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'billing_signal_unreadable', outcome: 'already_sent' }],
+    });
+    expect(await remindFreeQuotaRenewals(NOW + DAY_MS)).toEqual({
+      checked: true,
+      reminders: [{ reason: 'billing_signal_unreadable', outcome: 'sent' }],
     });
   });
 

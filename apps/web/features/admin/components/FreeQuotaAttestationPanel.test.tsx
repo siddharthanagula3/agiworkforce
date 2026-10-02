@@ -88,6 +88,7 @@ function configured(overrides: Partial<ConfiguredStatus> = {}): ConfiguredStatus
     termsReview: { standing: 'current', review: review() },
     attestation: { standing: 'current', record: record() },
     billingSignalAtMs: null,
+    billingSignalUnreadable: false,
     withdrawn: [],
     offerings: OFFERINGS,
     serving: {
@@ -419,6 +420,32 @@ describe('FreeQuotaAttestationPanel, the console check gate', () => {
     render(<FreeQuotaAttestationPanel />);
 
     expect(await screen.findByText(text)).toHaveAttribute('data-tone', 'danger');
+  });
+
+  it('says a billing signal record it cannot read needs removing, not a new check', async () => {
+    serve([
+      configured({
+        attestation: {
+          standing: 'billing_signal',
+          record: record({
+            checkedAtMs: SERVER_NOW - 60_000,
+            freshUntilMs: SERVER_NOW + 30 * DAY_MS,
+          }),
+        },
+        billingSignalAtMs: null,
+        billingSignalUnreadable: true,
+        serving: NOTHING_SERVING,
+      }),
+    ]);
+    render(<FreeQuotaAttestationPanel />);
+
+    const check = await screen.findByRole('group', { name: 'Console check' });
+    const notice = within(check).getByText(/billing signal record for this key cannot be read/);
+    expect(notice).toHaveAttribute('data-tone', 'danger');
+    expect(notice).toHaveTextContent('a new console check cannot clear it');
+    expect(notice).toHaveTextContent('remove the record');
+    expect(within(check).getByText('Recorded, but its record cannot be read')).toBeInTheDocument();
+    expect(within(check).queryByText(/not recorded/)).toBeNull();
   });
 
   it('lists withdrawn models with the reason the provider gave', async () => {

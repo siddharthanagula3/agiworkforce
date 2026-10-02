@@ -139,6 +139,8 @@ const SuspensionSchema = z.object({
   signal: z.string().min(1).max(64),
 });
 
+export const UNREADABLE_SUSPENSION_AT_MS = Number.MAX_SAFE_INTEGER;
+
 export type FreeQuotaHoldCause = z.infer<typeof HoldSchema>['cause'];
 
 function decoded(value: unknown): unknown {
@@ -189,7 +191,7 @@ export async function readFreeQuotaState(
         ? null
         : parsedSuspension.success
           ? parsedSuspension.data.atMs
-          : Number.MAX_SAFE_INTEGER,
+          : UNREADABLE_SUSPENSION_AT_MS,
     holds: holdEntries,
     used: usedEntries,
   };
