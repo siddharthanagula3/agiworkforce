@@ -116,6 +116,7 @@ export interface AssistantTurnSnapshot {
   inputTokens: number;
   outputTokens: number;
   truncated: boolean;
+  fallbackReason?: string;
   /**
    * The pages this turn cited. Written under the same `searchResults` key the
    * client uses, so a reload after a failed client save renders the source
@@ -290,6 +291,7 @@ export async function persistAssistantTurn(params: {
     movedFromModel: processed.movedFromModel ?? null,
     movedReason: processed.movedFromModel ? (processed.movedReason ?? null) : null,
     ...buildAssistantTurnAttribution(processed, snapshot),
+    ...(snapshot.fallbackReason ? { fallbackReason: snapshot.fallbackReason } : {}),
     ...(snapshot.runReference ? { cloudAgentRun: snapshot.runReference } : {}),
     // The on-conflict set-list merges with `||`, so a client save that lands
     // later overwrites this key with its own richer copy. This is the floor,

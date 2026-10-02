@@ -386,6 +386,7 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
       inputTokens: 12,
       outputTokens: 3,
       truncated: false,
+      fallbackReason: 'free_limit_reached',
     });
   });
 

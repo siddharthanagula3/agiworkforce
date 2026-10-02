@@ -933,6 +933,7 @@ export async function serveFreeQuotaTurn(
                 inputTokens: usage?.promptTokens ?? 0,
                 outputTokens: usage?.completionTokens ?? 0,
                 truncated: !complete,
+                fallbackReason: fallbackFor.reason,
               },
             }),
           )
