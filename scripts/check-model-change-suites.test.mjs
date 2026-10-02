@@ -164,6 +164,7 @@ test('an evals workflow that stops watching the adapters fails', () => {
 test('a CI filter that skips the routing policy fails', () => {
   const errors = errorsFor({
     ci: (doc) => {
+      doc.on.push['paths-ignore'] ??= [];
       doc.on.push['paths-ignore'].push('packages/ai/model-registry/**');
     },
   });
