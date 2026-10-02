@@ -17,6 +17,10 @@ import { addAttachmentTruncationHeader } from '@agiworkforce/cloud-contracts';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import {
+  freeQuotaFallbackReplay,
+  serveFreeQuotaFallback,
+} from '@/lib/services/free-lane/free-quota-fallback';
+import {
   observeFreeLaneAttemptFailure,
   recordCredentialCooldownOutcome,
   recordCredentialOutcome,
@@ -1439,11 +1443,24 @@ async function admitAndDispatchTurn(request: NextRequest): Promise<NextResponse 
   const authResult = await timePhase(CHAT_TURN_PHASE.authGate, () => runAuthGate(request));
   if (!authResult.ok) return authResult.response;
 
+  const { userId, token } = authResult;
+  const replay = freeQuotaFallbackReplay(request, {
+    planTier: authResult.subscription.plan_tier,
+    viaApiKey: Boolean(authResult.apiKeyId),
+  });
   const response = await timePhase(CHAT_TURN_PHASE.turnSlot, () =>
-    withManagedTurnSlot(
-      { userId: authResult.userId, planTier: authResult.subscription.plan_tier },
-      () => dispatchChatCompletions(request, authResult),
-    ),
+    withManagedTurnSlot({ userId, planTier: authResult.subscription.plan_tier }, async () => {
+      const dispatched = await dispatchChatCompletions(request, authResult);
+      if (!replay) return dispatched;
+      const fallback = await serveFreeQuotaFallback({
+        request,
+        replay,
+        refusal: dispatched,
+        userId,
+        scopedDb: () => getVerifiedBearerUserScopedDb(request, { userId, token }),
+      });
+      return fallback ?? dispatched;
+    }),
   );
   if (authResult.termsNotice) attachHeaders(response, authResult.termsNotice);
   return response;

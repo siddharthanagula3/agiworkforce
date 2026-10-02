@@ -3,10 +3,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { persistConversationMessage } from '@/app/api/chat/conversations/[id]/messages/lib/persist-message';
-import {
-  freeOfferingContentText,
-  type FreeOfferingMessage,
-} from '@/features/models/lib/free-offering-request';
+import { freeOfferingContentText, type FreeOfferingMessage } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 
 export async function persistFreeOfferingUser(input: {

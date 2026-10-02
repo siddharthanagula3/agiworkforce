@@ -3,12 +3,6 @@
 import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
 import type { FreeLimit } from '@agiworkforce/cloud-contracts';
 import { readFreeLimit } from '@/features/chat/lib/freeLimitRecovery';
-import {
-  freeLimitFallbackReason,
-  loadFreeQuotaCatalogue,
-  pickFreeLimitFallback,
-  type FreeLimitFallbackTurn,
-} from '@/features/chat/lib/free-limit-fallback';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import {
   chatCompletionEndpoint,
@@ -1395,7 +1389,6 @@ interface ConsumeStreamContext {
    */
   assistantParentId?: string;
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void;
-  fallbackReason?: string;
 }
 
 /**
@@ -1721,8 +1714,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const runHandle = readManagedCloudAgentRunHandle(response);
   ctx.onRunHandle?.(runHandle);
   const updateMessage = store.updateMessage;
-  const streamFallbackReason =
-    response.headers.get(FALLBACK_REASON_HEADER)?.trim() || ctx.fallbackReason;
+  const streamFallbackReason = response.headers.get(FALLBACK_REASON_HEADER)?.trim();
   // D-2026-09-05-06. Persisted rather than per-turn, unlike the substitution
   // code above: a continuity receipt the transcript forgets on reload would
   // leave the move unexplained the next time the conversation is opened.
@@ -3743,7 +3735,7 @@ export function useChatStream(
       // route, the managed ledger, or the conversation's cloud rows. The id
       // decides it, which is why a regenerate of a local answer stays local.
       const selectedLocalModel = readSelectedLocalModel();
-      let model = options.model || selectedLocalModel?.id || selectedModel;
+      const model = options.model || selectedLocalModel?.id || selectedModel;
       const localModel = resolveLocalModel(model, selectedLocalModel);
 
       if (localModel && options.attachments?.length) {
@@ -3971,11 +3963,6 @@ export function useChatStream(
       });
 
       let retriedEmptyTurn = false;
-      let pendingFallback: {
-        reason: string;
-        requestedModel: string;
-        failure: ChatApiError;
-      } | null = null;
       try {
         if (localModel) {
           connectingTicker.stop();
@@ -4214,55 +4201,14 @@ export function useChatStream(
           connectingTicker.stop();
 
           if (!response.ok) {
-            if (pendingFallback) throw pendingFallback.failure;
-            const failure = await chatApiErrorFromResponse(
-              response,
-              `Request failed: ${response.status}`,
-            );
-            const fallbackTurn: FreeLimitFallbackTurn = {
-              requestedModel: model,
-              code: failure.code,
-              draft: content,
-              attachments: options.attachments ?? [],
-              needsWebAccess: Boolean(
-                options.webSearch ||
-                options.research ||
-                options.webFetch ||
-                options.searchRequested,
-              ),
-              needsCodeExecution: Boolean(options.codeExecution),
-              needsTools: Boolean(
-                options.officeCreation ||
-                options.skillName ||
-                options.mcpContext ||
-                options.workMode === 'agiwork',
-              ),
-            };
-            const reason = freeLimitFallbackReason(fallbackTurn);
-            const fallbackModel = reason
-              ? pickFreeLimitFallback(
-                  await loadFreeQuotaCatalogue(abortController.signal).catch((catalogueError) => {
-                    if (abortController.signal.aborted) throw catalogueError;
-                    return null;
-                  }),
-                  fallbackTurn,
-                )
-              : null;
-            if (reason && fallbackModel) {
-              pendingFallback = { reason, requestedModel: model, failure };
-              model = fallbackModel;
-              continue;
-            }
-            throw failure;
+            throw await chatApiErrorFromResponse(response, `Request failed: ${response.status}`);
           }
-          const fallbackReason = pendingFallback?.reason;
-          pendingFallback = null;
 
           if (!isTemporaryConversation && !regenerateParentId) reportTurnCommitted();
 
           surfaceTermsNotice(response);
           const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
-          if (fallbackReason || resolvedModel !== model) {
+          if (resolvedModel !== model) {
             updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
           }
           const truncatedAttachments = readAttachmentTruncationHeader(
@@ -4281,7 +4227,6 @@ export function useChatStream(
             getAuthToken,
             ...(latencyTrace ? { latencyTrace } : {}),
             ...(assistantParentId ? { assistantParentId } : {}),
-            ...(fallbackReason ? { fallbackReason } : {}),
             onRunHandle: (handle) => {
               if (handle) {
                 activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
@@ -4383,7 +4328,6 @@ export function useChatStream(
         }
       } catch (error) {
         latencyTrace?.cancel();
-        if (pendingFallback) model = pendingFallback.requestedModel;
         // CAP-040: a turn interrupted by an expired session was unrecoverable.
         // The composer clears on send, so by the time the 401 came back the
         // user's text survived only as a failed turn in the transcript, sign

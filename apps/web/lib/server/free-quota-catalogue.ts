@@ -182,22 +182,41 @@ export async function resolveFreeQuotaDecisions(
   };
 }
 
+export async function resolveReadyFreeQuotaOffering(
+  context: FreeQuotaContext,
+  input: {
+    inventory: FreeQuotaInventory;
+    category: ProviderOfferingCategory;
+    protocol: ProviderOffering['quotaProbeProtocol'];
+    needsImageInput: boolean;
+    excludeKey?: string;
+  },
+): Promise<string | null> {
+  const decisions = await resolveFreeQuotaDecisions(context, { inventory: input.inventory });
+  const ready = decisions?.offerings.find(
+    ({ entry, offering, decision }) =>
+      entry.offeringKey !== input.excludeKey &&
+      decision.status === 'ready' &&
+      offering.category === input.category &&
+      offering.quotaProbeProtocol === input.protocol &&
+      (!input.needsImageInput || offering.quotaChatImageInput === true),
+  );
+  return ready?.entry.offeringKey ?? null;
+}
+
 export async function resolveFreeQuotaAlternative(
   context: FreeQuotaContext,
   input: { inventory: FreeQuotaInventory; refusedKey: string; needsImageInput: boolean },
 ): Promise<string | null> {
   const refused = getProviderOffering(input.refusedKey);
   if (!refused) return null;
-  const decisions = await resolveFreeQuotaDecisions(context, { inventory: input.inventory });
-  const alternative = decisions?.offerings.find(
-    ({ entry, offering, decision }) =>
-      entry.offeringKey !== input.refusedKey &&
-      decision.status === 'ready' &&
-      offering.category === refused.category &&
-      offering.quotaProbeProtocol === refused.quotaProbeProtocol &&
-      (!input.needsImageInput || offering.quotaChatImageInput === true),
-  );
-  return alternative?.entry.offeringKey ?? null;
+  return resolveReadyFreeQuotaOffering(context, {
+    inventory: input.inventory,
+    category: refused.category,
+    protocol: refused.quotaProbeProtocol,
+    needsImageInput: input.needsImageInput,
+    excludeKey: input.refusedKey,
+  });
 }
 
 export function buildFreeQuotaCatalogue(decisions: FreeQuotaDecisions): FreeQuotaCatalogue {

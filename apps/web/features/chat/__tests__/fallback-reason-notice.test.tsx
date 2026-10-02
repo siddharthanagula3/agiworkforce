@@ -176,56 +176,19 @@ describe('provider-outage / credit-downgrade fallback reason reaches the streami
     );
   });
 
-  it('claims no free model answered when the fallback model refuses the turn too', async () => {
+  it('claims no free model answered when the server could not fall back for Free Auto', async () => {
     const freeRouter = getRoutingSlotModel('router_zero_cost');
-    const [fallbackKey, fallback] = Object.entries(getProviderOfferings()).find(
-      ([, candidate]) => candidate.provider === 'qwen' && candidate.quotaProbeProtocol === 'chat',
-    )!;
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        Response.json(
-          {
-            error: {
-              code: 'free_allowance_exhausted',
-              message: 'The free model has used up the allowance everyone on the Free plan shares.',
-            },
+    vi.mocked(fetch).mockResolvedValueOnce(
+      Response.json(
+        {
+          error: {
+            code: 'free_allowance_exhausted',
+            message: 'The free model has used up the allowance everyone on the Free plan shares.',
           },
-          { status: 429 },
-        ),
-      )
-      .mockResolvedValueOnce(
-        Response.json({
-          issuer: 'Fixture Cloud',
-          observedOn: '2026-09-19',
-          evidenceUrl: 'https://provider.example/free-quota',
-          reportedEligible: 1,
-          reportedUnavailable: 0,
-          models: [
-            {
-              key: fallbackKey,
-              displayName: fallback.displayName,
-              providerModelId: fallback.providerModelId,
-              category: 'chat',
-              limit: 1_000_000,
-              unit: 'tokens',
-              consumedApproximate: 0,
-              expiresOn: '2099-01-01',
-              status: 'ready',
-            },
-          ],
-        }),
-      )
-      .mockResolvedValueOnce(
-        Response.json(
-          {
-            error: {
-              code: 'context_length_exceeded',
-              message: `This conversation is too long for ${fallback.displayName}. Start a new chat, or choose another free model.`,
-            },
-          },
-          { status: 400 },
-        ),
-      );
+        },
+        { status: 429 },
+      ),
+    );
     const { result } = renderHook(() => useChatStream());
 
     await act(async () => {
@@ -235,7 +198,7 @@ describe('provider-outage / credit-downgrade fallback reason reaches the streami
       });
     });
 
-    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[2]?.[1]?.body)).model).toBe(fallbackKey);
+    expect(fetch).toHaveBeenCalledTimes(1);
     const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant')!;
     expect(assistant.fallbackReason).toBeUndefined();
     expect(assistant.model).toBe(freeRouter);

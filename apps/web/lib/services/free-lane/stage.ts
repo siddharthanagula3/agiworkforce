@@ -61,7 +61,7 @@ export function freeLanePreferredSlots(
   return [...slots];
 }
 
-const FREE_CAPACITY_UNAVAILABLE_CODE = 'free_capacity_unavailable';
+export const FREE_CAPACITY_UNAVAILABLE_CODE = 'free_capacity_unavailable';
 const FREE_CAPACITY_UNAVAILABLE_STATUS = 429;
 const FREE_CAPACITY_UNAVAILABLE_TYPE = 'insufficient_quota';
 const FREE_CAPACITY_UNAVAILABLE_MESSAGE =
