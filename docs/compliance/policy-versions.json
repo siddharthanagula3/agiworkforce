@@ -36,7 +36,7 @@
           "date": "2026-09-21",
           "digest": "8a047905eaa64a87",
           "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date.",
-          "summary": "Adds how dictation and Voice Mode audio is handled: it goes to OpenAI and we keep none of it. Adds a security incidents section on the breach procedure, its 72-hour clock for notifying a regulator and how a notice would reach you, and says that some models are reached through an inference gateway, each named on the subprocessors page."
+          "summary": "Adds how dictation and Voice Mode audio is handled: it goes to OpenAI and we keep none of it. Adds that a picture you attach has its location, camera and time details removed before it leaves your device, and is not sent if that cannot be done. Adds a security incidents section on the breach procedure, its 72-hour clock for notifying a regulator and how a notice would reach you, and says that some models are reached through an inference gateway, each named on the subprocessors page."
         },
         {
           "date": "2026-09-22",
