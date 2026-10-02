@@ -205,6 +205,63 @@ describe('conversation branch service', () => {
     ]);
   });
 
+  it('files no branch of a temporary chat under a project', async () => {
+    const { db, query, execute } = adapter();
+    const targetConversation = {
+      ...sourceConversation,
+      id: '0190a000-0000-7000-8000-0000000000dd',
+      title: 'Source chat (branch)',
+      is_temporary: true,
+    };
+    query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { ...sourceConversation, is_temporary: true, project_id: 'project-1' },
+      ])
+      .mockResolvedValueOnce([{ id: '0190a000-0000-7000-8000-0000000000bb' }])
+      .mockResolvedValueOnce([{ sibling_count: 0, group_count: 0 }])
+      .mockResolvedValueOnce([targetConversation])
+      .mockResolvedValueOnce([]);
+    execute.mockResolvedValue(1);
+
+    await forkConversation(db, 'user-1', {
+      sourceConversationId: sourceConversation.id,
+      messageId: '0190a000-0000-7000-8000-0000000000bb',
+      requestId: targetConversation.id,
+    });
+
+    const [insertSql, insertParams] = query.mock.calls[4]!;
+    expect(insertSql).toContain('insert into public.web_conversations');
+    expect(insertParams[4]).toBeNull();
+    expect(insertParams[5]).toBe(true);
+  });
+
+  it('keeps a saved chat branch in the project of its source', async () => {
+    const { db, query, execute } = adapter();
+    const targetConversation = {
+      ...sourceConversation,
+      id: '0190a000-0000-7000-8000-0000000000dd',
+      title: 'Source chat (branch)',
+      project_id: 'project-1',
+    };
+    query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ ...sourceConversation, project_id: 'project-1' }])
+      .mockResolvedValueOnce([{ id: '0190a000-0000-7000-8000-0000000000bb' }])
+      .mockResolvedValueOnce([{ sibling_count: 0, group_count: 0 }])
+      .mockResolvedValueOnce([targetConversation])
+      .mockResolvedValueOnce([]);
+    execute.mockResolvedValue(1);
+
+    await forkConversation(db, 'user-1', {
+      sourceConversationId: sourceConversation.id,
+      messageId: '0190a000-0000-7000-8000-0000000000bb',
+      requestId: targetConversation.id,
+    });
+
+    expect(query.mock.calls[4]![1]![4]).toBe('project-1');
+  });
+
   it('returns the first target for an idempotent retry without writing again', async () => {
     const { db, query, execute } = adapter();
     const targetConversation = {

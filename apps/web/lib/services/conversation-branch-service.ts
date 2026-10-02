@@ -301,7 +301,7 @@ export async function forkConversation(
         userId,
         branchTitle(source.title),
         source.model,
-        source.project_id,
+        source.is_temporary ? null : source.project_id,
         source.is_temporary,
         source.google_user_data_at ?? null,
       ],
