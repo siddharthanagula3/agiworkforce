@@ -83,7 +83,11 @@ describe('cron routes and vercel.json schedules agree', () => {
   //     kind of check: it compares each canary and shadow cohort with the
   //     promoted model it may replace and pages on a quality, latency or cost
   //     regression, so a daily page would leave a worse model answering real
-  //     traffic for up to a day before anyone was told. These are capped at
+  //     traffic for up to a day before anyone was told.
+  //     remind-free-quota-renewal tells platform admins when a free quota
+  //     gate lapses, the moment every free model stops serving free users,
+  //     so a daily check would leave free chat off for up to a day before
+  //     anyone was told. These are capped at
   //     MONITORING_MIN_INTERVAL_MINUTES rather than left unbounded, so a
   //     future "every minute" change still fails this test.
   //
@@ -108,6 +112,7 @@ describe('cron routes and vercel.json schedules agree', () => {
     '/api/cron/page-security-anomalies',
     '/api/cron/evaluate-model-rollout',
     '/api/cron/evaluate-slo-burn',
+    '/api/cron/remind-free-quota-renewal',
   ]);
   const MONITORING_MIN_INTERVAL_MINUTES = 10;
 

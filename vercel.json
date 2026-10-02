@@ -167,6 +167,10 @@
       "schedule": "5 * * * *"
     },
     {
+      "path": "/api/cron/remind-free-quota-renewal",
+      "schedule": "22 * * * *"
+    },
+    {
       "path": "/api/cron/roll-up-product-metrics",
       "schedule": "40 2 * * *"
     },

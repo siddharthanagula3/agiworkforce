@@ -47,7 +47,7 @@
     },
     "observability": {
       "role": "observability",
-      "note": "The health probe, the SLO burn evaluator and the security anomaly pager. health-probe is the health endpoint this deployable is measured by."
+      "note": "The health probe, the SLO burn evaluator, the security anomaly pager and the free quota renewal reminder. health-probe is the health endpoint this deployable is measured by."
     }
   },
   "components": [
@@ -674,6 +674,24 @@
           "version": "1.0.0",
           "date": "2026-09-17",
           "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "remind-free-quota-renewal",
+      "role": "observability",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; each reminder is claimed in the key-value store under its gate and the record it is about before it is sent, and a claim that reached nobody is released for the next run.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-02",
+          "change": "Added: tells platform admins three days before the free quota terms review or console check runs out, and again when either lapses, the provider key changes or the provider reports a billing state."
         }
       ]
     },

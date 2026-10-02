@@ -1,0 +1,315 @@
+import 'server-only';
+
+import type { KeyValueStore } from '@agiworkforce/key-value';
+import {
+  PLATFORM_ADMIN_ENV_VAR,
+  parsePlatformAdminIds,
+} from '@/features/admin/lib/platform-admin-access';
+import {
+  attestationStanding,
+  readFreeQuotaState,
+  type AttestationStanding,
+  type FreeQuotaPolicy,
+} from '@/lib/free-quota-authorization';
+import { logger } from '@/lib/logger';
+import { SITE_URL } from '@/lib/seo/site';
+import {
+  alertHtml,
+  pageOnCall,
+  type AlertSeverity,
+  type PageOutcome,
+} from '@/lib/server/incident/pager';
+import { getIdentityUser } from '@/lib/server/identity';
+import { getHandoffConfig } from '@/lib/support/handoff/config';
+import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
+import { loadFreePools, termsReviewStanding, type FreeQuotaTermsReview } from './free-pools';
+import { loadFreeQuotaPolicy, sharedFreeQuotaStore } from './free-quota-catalogue';
+
+const REMINDER_PREFIX = 'agi-fquota-renewal';
+const REMINDER_RETENTION_SECONDS = 120 * 24 * 60 * 60;
+const PAGER_SOURCE = 'free-quota-renewal';
+const OPERATOR_QUOTA_PATH = '/operator#quota';
+const FREE_POOLS_FILE = 'apps/web/config/free-pools.json';
+const RUNBOOK_FILE = 'docs/runbooks/free-quota-models.md';
+const USER_IMPACT =
+  'While a gate is lapsed, every free quota model shows "Not available right now" in the model picker, and a message sent to one is refused before it reaches the provider.';
+
+export type FreeQuotaRenewalAlert =
+  | { reason: 'terms_review_expiring' | 'terms_review_expired'; review: FreeQuotaTermsReview }
+  | {
+      reason: 'console_check_expiring' | 'console_check_expired' | 'console_check_other_key';
+      checkedAtMs: number;
+      freshUntilMs: number;
+    }
+  | { reason: 'billing_signal'; signalAtMs: number };
+
+export type FreeQuotaRenewalReason = FreeQuotaRenewalAlert['reason'];
+
+export interface FreeQuotaRenewalMessage {
+  severity: AlertSeverity;
+  subject: string;
+  text: string;
+}
+
+export type FreeQuotaRenewalRun =
+  | { checked: false; missing: Array<'shared_state' | 'credential' | 'inventory'> }
+  | {
+      checked: true;
+      reminders: Array<{
+        reason: FreeQuotaRenewalReason;
+        outcome: 'sent' | 'already_sent' | 'undelivered';
+      }>;
+    };
+
+export function freeQuotaRenewalAlerts(input: {
+  termsReview: FreeQuotaTermsReview | null;
+  attestation: AttestationStanding;
+  policy: FreeQuotaPolicy;
+  nowMs: number;
+}): FreeQuotaRenewalAlert[] {
+  const { termsReview, attestation, policy, nowMs } = input;
+  const alerts: FreeQuotaRenewalAlert[] = [];
+  const terms = termsReviewStanding(termsReview, nowMs, policy.renewalReminderLeadMs);
+  if (termsReview && (terms === 'expiring' || terms === 'expired')) {
+    alerts.push({
+      reason: terms === 'expiring' ? 'terms_review_expiring' : 'terms_review_expired',
+      review: termsReview,
+    });
+  }
+  switch (attestation.standing) {
+    case 'billing_signal':
+      alerts.push({ reason: 'billing_signal', signalAtMs: attestation.signalAtMs });
+      break;
+    case 'expiring':
+    case 'other_credential':
+      alerts.push({
+        reason:
+          attestation.standing === 'expiring'
+            ? 'console_check_expiring'
+            : 'console_check_other_key',
+        checkedAtMs: attestation.attestation.checkedAtMs,
+        freshUntilMs: attestation.freshUntilMs,
+      });
+      break;
+    case 'stale':
+      if (nowMs >= attestation.freshUntilMs) {
+        alerts.push({
+          reason: 'console_check_expired',
+          checkedAtMs: attestation.attestation.checkedAtMs,
+          freshUntilMs: attestation.freshUntilMs,
+        });
+      }
+      break;
+    case 'current':
+    case 'missing':
+      break;
+  }
+  return alerts;
+}
+
+function anchorMs(alert: FreeQuotaRenewalAlert): number {
+  if ('review' in alert) return alert.review.verifiedAtMs;
+  if ('signalAtMs' in alert) return alert.signalAtMs;
+  return alert.checkedAtMs;
+}
+
+function at(ms: number): string {
+  return new Date(ms).toISOString();
+}
+
+function subjectLine(severity: AlertSeverity, environment: string, detail: string): string {
+  return `[AGI ${severity === 'critical' ? 'CRITICAL' : 'WARNING'}] ${environment} free quota models · ${detail}`;
+}
+
+function renewalNotice(alert: FreeQuotaRenewalAlert): {
+  severity: AlertSeverity;
+  detail: string;
+  body: string[];
+} {
+  switch (alert.reason) {
+    case 'terms_review_expiring':
+      return {
+        severity: 'warning',
+        detail: `renew the terms review by ${at(alert.review.expiresAtMs)}`,
+        body: [
+          `The terms review in ${FREE_POOLS_FILE} runs out at ${at(alert.review.expiresAtMs)}. When it does, every free quota model stops serving.`,
+          'Renewing it is a reviewed code change plus a deploy, so start now.',
+        ],
+      };
+    case 'terms_review_expired':
+      return {
+        severity: 'critical',
+        detail: 'the terms review ran out, free models are off',
+        body: [
+          `The terms review in ${FREE_POOLS_FILE} ran out at ${at(alert.review.expiresAtMs)}, so every free quota model is off.`,
+          'They serve again once a renewed review is merged and deployed.',
+        ],
+      };
+    case 'console_check_expiring':
+      return {
+        severity: 'warning',
+        detail: `renew the console check by ${at(alert.freshUntilMs)}`,
+        body: [
+          `The Free quota only console check recorded at ${at(alert.checkedAtMs)} stops counting at ${at(alert.freshUntilMs)}. When it does, every free quota model stops serving.`,
+          'Check the provider console and record a new check in the operator console.',
+        ],
+      };
+    case 'console_check_expired':
+      return {
+        severity: 'critical',
+        detail: 'the console check ran out, free models are off',
+        body: [
+          `The Free quota only console check recorded at ${at(alert.checkedAtMs)} stopped counting at ${at(alert.freshUntilMs)}, so every free quota model is off.`,
+          'Check the provider console and record a new check in the operator console.',
+        ],
+      };
+    case 'console_check_other_key':
+      return {
+        severity: 'critical',
+        detail: 'the provider key changed, free models are off',
+        body: [
+          `The console check recorded at ${at(alert.checkedAtMs)} was made for a different provider key than this deployment now uses, so every free quota model is off.`,
+          'Check the provider console for the current key and record a new check in the operator console.',
+        ],
+      };
+    case 'billing_signal':
+      return {
+        severity: 'critical',
+        detail: 'the provider reported a billing state, free models are off',
+        body: [
+          `At ${at(alert.signalAtMs)} the provider answered a free model with an account billing code, so every free quota model was withdrawn.`,
+          "Check the account's billing and that Free quota only is on, then record a new check in the operator console.",
+        ],
+      };
+  }
+}
+
+export function describeFreeQuotaRenewal(
+  alert: FreeQuotaRenewalAlert,
+  environment: string,
+): FreeQuotaRenewalMessage {
+  const { severity, detail, body } = renewalNotice(alert);
+  const text = [
+    `Environment: ${environment}`,
+    '',
+    ...body,
+    '',
+    USER_IMPACT,
+    '',
+    `Operator console: ${SITE_URL}${OPERATOR_QUOTA_PATH}`,
+    `Runbook: ${RUNBOOK_FILE}`,
+  ].join('\n');
+  return { severity, subject: subjectLine(severity, environment, detail), text };
+}
+
+function environmentLabel(): string {
+  return process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
+}
+
+async function platformAdminAddresses(): Promise<string[]> {
+  const ids = parsePlatformAdminIds(process.env[PLATFORM_ADMIN_ENV_VAR]);
+  const users = await Promise.all(
+    ids.map((id) =>
+      getIdentityUser(id).catch((error: unknown) => {
+        logger.warn(
+          { event: 'free_quota_renewal_admin_unresolved', error },
+          '[free-quota] a platform admin could not be resolved for the renewal reminder',
+        );
+        return null;
+      }),
+    ),
+  );
+  const addresses = users.flatMap((user) =>
+    user?.primaryEmail && user.primaryEmailVerification === 'verified' ? [user.primaryEmail] : [],
+  );
+  return addresses.length > 0 ? [...new Set(addresses)] : [getHandoffConfig().fallbackEmail];
+}
+
+async function deliver(
+  message: FreeQuotaRenewalMessage,
+  recipients: readonly string[],
+): Promise<{ paged: PageOutcome; emailed: number }> {
+  const html = alertHtml(message.text);
+  const [paged, sent] = await Promise.all([
+    pageOnCall(message.severity, message.subject, message.text, undefined, PAGER_SOURCE),
+    Promise.all(
+      recipients.map((to) =>
+        sendSupportEmail({ to, subject: message.subject, text: message.text, html }),
+      ),
+    ),
+  ]);
+  return { paged, emailed: sent.filter((result) => result.delivered).length };
+}
+
+async function remindOnce(
+  store: KeyValueStore,
+  alert: FreeQuotaRenewalAlert,
+  recipients: readonly string[],
+  nowMs: number,
+): Promise<{ reason: FreeQuotaRenewalReason; outcome: 'sent' | 'already_sent' | 'undelivered' }> {
+  const dedupeKey = `${REMINDER_PREFIX}:${alert.reason}:${anchorMs(alert)}`;
+  const claimed = await store.set(
+    dedupeKey,
+    { atMs: nowMs },
+    { onlyIfAbsent: true, ttlSeconds: REMINDER_RETENTION_SECONDS },
+  );
+  if (!claimed) return { reason: alert.reason, outcome: 'already_sent' };
+
+  const message = describeFreeQuotaRenewal(alert, environmentLabel());
+  const { paged, emailed } = await deliver(message, recipients);
+  if (emailed === 0 && paged !== 'paged') {
+    await store.delete(dedupeKey);
+    logger.error(
+      { event: 'free_quota_renewal_reminder_undeliverable', reason: alert.reason, paged },
+      '[free-quota] renewal reminder reached nobody; the next run tries again',
+    );
+    return { reason: alert.reason, outcome: 'undelivered' };
+  }
+  const fields = {
+    event: 'free_quota_renewal_reminder_sent',
+    reason: alert.reason,
+    severity: message.severity,
+    emailed,
+    paged,
+  };
+  if (message.severity === 'critical') {
+    logger.error(fields, '[free-quota] free quota models are off; platform admins were told');
+  } else {
+    logger.warn(fields, '[free-quota] a free quota gate runs out soon; platform admins were told');
+  }
+  return { reason: alert.reason, outcome: 'sent' };
+}
+
+export async function remindFreeQuotaRenewals(nowMs: number): Promise<FreeQuotaRenewalRun> {
+  const inventory = loadFreePools().inventory;
+  const store = sharedFreeQuotaStore(process.env.NODE_ENV);
+  const apiKey = process.env['QWEN_API_KEY'] ?? '';
+  if (!inventory || !store || !apiKey) {
+    return {
+      checked: false,
+      missing: [
+        ...(store ? [] : (['shared_state'] as const)),
+        ...(apiKey ? [] : (['credential'] as const)),
+        ...(inventory ? [] : (['inventory'] as const)),
+      ],
+    };
+  }
+  const policy = loadFreeQuotaPolicy();
+  const state = await readFreeQuotaState(store, {
+    apiKey,
+    observedOn: inventory.observedOn,
+    offeringKeys: [],
+  });
+  const alerts = freeQuotaRenewalAlerts({
+    termsReview: inventory.termsReview,
+    attestation: attestationStanding({ state, apiKey, policy, nowMs }),
+    policy,
+    nowMs,
+  });
+  if (alerts.length === 0) return { checked: true, reminders: [] };
+  const recipients = await platformAdminAddresses();
+  const reminders = await Promise.all(
+    alerts.map((alert) => remindOnce(store, alert, recipients, nowMs)),
+  );
+  return { checked: true, reminders };
+}
