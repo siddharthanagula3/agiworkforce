@@ -123,3 +123,35 @@ export function olderArchivedVersion(history: PolicyHistory, date: string): stri
     .find((version) => version.status === 'archived');
   return older?.date ?? null;
 }
+
+export interface PolicyChange {
+  history: PolicyHistory;
+  date: string;
+  summary: string;
+  href: string;
+}
+
+function versionHref(history: PolicyHistory, version: PolicyVersionEntry): string {
+  if (version.status === 'current') return history.route;
+  if (version.status === 'archived') return archivedVersionHref(history, version.date);
+  return policyHistoryHref(history);
+}
+
+const CHANGES: readonly PolicyChange[] = HISTORIES.flatMap((history) =>
+  history.versions.slice(0, -1).flatMap((version) =>
+    version.summary
+      ? [
+          {
+            history,
+            date: version.date,
+            summary: version.summary,
+            href: versionHref(history, version),
+          },
+        ]
+      : [],
+  ),
+).sort((left, right) => right.date.localeCompare(left.date));
+
+export function policyChanges(): readonly PolicyChange[] {
+  return CHANGES;
+}
