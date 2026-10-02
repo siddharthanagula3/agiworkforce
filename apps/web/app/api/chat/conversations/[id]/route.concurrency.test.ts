@@ -174,6 +174,24 @@ describe('conversation optimistic concurrency', () => {
     expect(updateCall()?.[1]).toContain(expectedDraftRevision);
   });
 
+  it('answers a save of the text already stored from the row, without a conflict', async () => {
+    const storedRevision = '2026-08-02T00:00:01.000Z';
+    mocks.query.mockImplementation(async (sql: string) =>
+      /update web_conversations/.test(sql)
+        ? []
+        : [{ id: CONVERSATION_ID, draft: 'same words', draft_updated_at: storedRevision }],
+    );
+
+    const response = await PUT(
+      put({ draft: 'same words', draftUpdatedAt: '2026-08-02T00:00:00.000Z' }),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ saved: true, draftUpdatedAt: storedRevision });
+    expect(updateCall()?.[0]).toMatch(/draft is distinct from \$3::text/);
+  });
+
   it('returns the next draft revision without changing the conversation version', async () => {
     const nextDraftRevision = '2026-08-02T00:00:01.000Z';
     mocks.query.mockResolvedValue([{ id: CONVERSATION_ID, draft_updated_at: nextDraftRevision }]);

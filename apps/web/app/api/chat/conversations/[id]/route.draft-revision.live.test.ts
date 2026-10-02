@@ -59,9 +59,18 @@ afterAll(async () => {
   await database?.dispose();
 });
 
+interface StoredRow {
+  draft: string | null;
+  revision: string | null;
+  serverVersion: string;
+}
+
 async function inConversation(
   stored: { draft: string | null; revision: string | null },
-  run: (send: (body: unknown) => Promise<Response>) => Promise<void>,
+  run: (
+    send: (body: unknown) => Promise<Response>,
+    readRow: () => Promise<StoredRow | undefined>,
+  ) => Promise<void>,
 ): Promise<void> {
   const conversationId = randomUUID();
   scope.userId = `qa-draft-revision-${randomUUID()}`;
@@ -73,15 +82,27 @@ async function inConversation(
         [conversationId, scope.userId, stored.draft, stored.revision],
       );
       scope.db = tx;
-      await run((body) =>
-        PUT(
-          new NextRequest(`https://agiworkforce.com/api/chat/conversations/${conversationId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          }),
-          { params: Promise.resolve({ id: conversationId }) },
-        ),
+      await run(
+        (body) =>
+          PUT(
+            new NextRequest(`https://agiworkforce.com/api/chat/conversations/${conversationId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            }),
+            { params: Promise.resolve({ id: conversationId }) },
+          ),
+        async () =>
+          (
+            await tx.query<StoredRow>(
+              `select draft,
+                      draft_updated_at::text as "revision",
+                      server_version::text as "serverVersion"
+                 from public.web_conversations
+                where id = $1`,
+              [conversationId],
+            )
+          )[0],
       );
       throw new RollBack();
     })
@@ -122,19 +143,45 @@ describe.runIf(live)('draft revisions against Postgres timestamps', () => {
     });
   });
 
-  it('stamps no revision for an empty draft that stays empty', async () => {
-    await inConversation({ draft: null, revision: null }, async (send) => {
+  it('stamps no revision and writes nothing for an empty draft that stays empty', async () => {
+    await inConversation({ draft: null, revision: null }, async (send, readRow) => {
+      const before = await readRow();
+
       const response = await send({ draft: '', draftUpdatedAt: null });
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ saved: true, draftUpdatedAt: null });
+      expect(await readRow()).toEqual(before);
     });
   });
 
-  it('keeps the revision when another device already saved the same text', async () => {
+  it('leaves the row and its sync version alone when the text did not change', async () => {
     await inConversation(
       { draft: 'same words', revision: STORED_MICROSECOND_REVISION },
-      async (send) => {
+      async (send, readRow) => {
+        const before = await readRow();
+
+        const response = await send({
+          draft: 'same words',
+          draftUpdatedAt: REVISION_THE_CLIENT_WAS_SHOWN,
+        });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          saved: true,
+          draftUpdatedAt: REVISION_THE_CLIENT_WAS_SHOWN,
+        });
+        expect(await readRow()).toEqual(before);
+      },
+    );
+  });
+
+  it('answers a stale save of the text already stored with its revision, writing nothing', async () => {
+    await inConversation(
+      { draft: 'same words', revision: STORED_MICROSECOND_REVISION },
+      async (send, readRow) => {
+        const before = await readRow();
+
         const response = await send({ draft: 'same words', draftUpdatedAt: null });
 
         expect(response.status).toBe(200);
@@ -142,6 +189,7 @@ describe.runIf(live)('draft revisions against Postgres timestamps', () => {
           saved: true,
           draftUpdatedAt: REVISION_THE_CLIENT_WAS_SHOWN,
         });
+        expect(await readRow()).toEqual(before);
       },
     );
   });
