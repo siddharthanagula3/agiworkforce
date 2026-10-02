@@ -99,19 +99,27 @@ function ShareConversationDialogImpl({
           : 'Anyone with the link can open this now',
       );
     };
+    const several = activeShare.linkCount > 1;
     confirm(
       next === 'organization'
         ? {
-            title: 'Limit this to your workspace?',
-            description: `The link stops opening, so anyone outside your workspace who already has it loses access. Your ${memberLabel} can open it instead. You can switch back, and the link stays the same.`,
+            title: several
+              ? `Limit all ${activeShare.linkCount} links to your workspace?`
+              : 'Limit this to your workspace?',
+            description: several
+              ? `All ${activeShare.linkCount} links stop opening, so anyone outside your workspace who already has one loses access. Your ${memberLabel} can open them instead. You can switch back, and the links stay the same.`
+              : `The link stops opening, so anyone outside your workspace who already has it loses access. Your ${memberLabel} can open it instead. You can switch back, and the link stays the same.`,
             confirmLabel: 'Share with workspace',
             onConfirm: apply,
           }
         : {
-            title: 'Make this readable by anyone with the link?',
-            description:
-              'Anyone holding the link can read the transcript without signing in, including people outside your workspace and anyone they forward it to. Sharing it back cannot un-share a copy somebody has already taken.',
-            confirmLabel: 'Open the link',
+            title: several
+              ? `Make all ${activeShare.linkCount} links readable by anyone who has one?`
+              : 'Make this readable by anyone with the link?',
+            description: several
+              ? `Anyone holding one of the ${activeShare.linkCount} links can read the transcript without signing in, including people outside your workspace and anyone they forward it to. Sharing them back cannot un-share a copy somebody has already taken.`
+              : 'Anyone holding the link can read the transcript without signing in, including people outside your workspace and anyone they forward it to. Sharing it back cannot un-share a copy somebody has already taken.',
+            confirmLabel: several ? 'Open all links' : 'Open the link',
             onConfirm: apply,
           },
     );

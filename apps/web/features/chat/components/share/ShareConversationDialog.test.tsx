@@ -673,6 +673,60 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
     expect(patched).toEqual(['/api/share/newest-token', '/api/share/older-token']);
   });
 
+  it('names every link a workspace limit closes before it closes them', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          shares: [liveShare('newest-token'), liveShare('older-token')],
+          workspace: { memberCount: 3 },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    renderSavedChat();
+
+    fireEvent.change(await screen.findByLabelText('Who can open this'), {
+      target: { value: 'organization' },
+    });
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(confirmation).toHaveTextContent('Limit all 2 links to your workspace?');
+    expect(confirmation).toHaveTextContent(
+      'All 2 links stop opening, so anyone outside your workspace who already has one loses access.',
+    );
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('names every link that opening to anyone would publish', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          shares: [
+            liveShare('newest-token', { visibility: 'organization' }),
+            liveShare('older-token', { visibility: 'organization' }),
+          ],
+          workspace: { memberCount: 3 },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    renderSavedChat();
+
+    fireEvent.change(await screen.findByLabelText('Who can open this'), {
+      target: { value: 'public' },
+    });
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(confirmation).toHaveTextContent('Make all 2 links readable by anyone who has one?');
+    expect(confirmation).toHaveTextContent(
+      'Anyone holding one of the 2 links can read the transcript without signing in',
+    );
+    expect(within(confirmation).getByRole('button', { name: 'Open all links' })).toBeEnabled();
+  });
+
   it('waits for the check made on reopening before offering a link again', async () => {
     const fetchMock = vi
       .spyOn(global, 'fetch')
