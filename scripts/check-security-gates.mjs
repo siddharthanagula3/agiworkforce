@@ -4,6 +4,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { parse } from 'yaml';
 
+import { isCalendarDate } from './lib/calendar-date.mjs';
+
 const POLICY_PATH = '.github/security-gate-policy.json';
 const DENY_PATH = 'deny.toml';
 const MANIFEST_PATH = 'package.json';
@@ -37,12 +39,6 @@ export function parseDenyAdvisoryIgnores(denyToml) {
     }
   }
   return ignores;
-}
-
-function isCalendarDate(value) {
-  if (typeof value !== 'string') return false;
-  const parsed = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function isRecord(value) {

@@ -100,6 +100,21 @@ test('an allowlist entry missing an owner, a reason or an expiry is rejected', (
   }
 });
 
+test('an acceptance whose expiry is not a real calendar date is rejected', () => {
+  for (const expires of ['2026-13-99', '2026-02-30', '2026-31-10']) {
+    const { errors, fail } = collector();
+    const allowlist = parseAllowlist(
+      { entries: [entry({ expires })] },
+      { allowlistPath: ALLOWLIST_PATH, today: '2026-12-31', fail },
+    );
+
+    assert.equal(allowlist.length, 0, expires);
+    assert.deepEqual(errors, [
+      `${ALLOWLIST_PATH} entries[0] (CVE-2026-0001) must set "expires" to a real calendar date in YYYY-MM-DD form.`,
+    ]);
+  }
+});
+
 test('an expired acceptance fails even though the finding still matches', () => {
   const { errors, fail } = collector();
   const allowlist = parseAllowlist(

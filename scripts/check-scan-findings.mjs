@@ -9,9 +9,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-export const SEVERITY_ORDER = ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+import { isCalendarDate } from './lib/calendar-date.mjs';
 
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+export const SEVERITY_ORDER = ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 const ZAP_RISK_SEVERITY = new Map([
   ['0', 'UNKNOWN'],
@@ -108,8 +108,8 @@ export function parseAllowlist(document, { allowlistPath, today, fail }) {
       fail(`${label} (${entry.id}) must set "reason" to why the finding is accepted.`);
       return;
     }
-    if (typeof entry.expires !== 'string' || !DATE_PATTERN.test(entry.expires)) {
-      fail(`${label} (${entry.id}) must set "expires" to a YYYY-MM-DD date.`);
+    if (!isCalendarDate(entry.expires)) {
+      fail(`${label} (${entry.id}) must set "expires" to a real calendar date in YYYY-MM-DD form.`);
       return;
     }
     if (entry.expires < today) {
