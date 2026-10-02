@@ -595,6 +595,12 @@
       "table": "web_messages",
       "class": "write-path",
       "why": "The Free daily cap counts the conversations and messages created today. A row deleted or archived after it was written still counts, or deleting would reset the cap."
+    },
+    {
+      "file": "apps/web/lib/services/org-shared-session-service.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "Resolves the workspace that stores a shared chat so that workspace's external sharing policy applies to the link. A soft-deleted chat keeps its workspace, so including it keeps the stricter policy; this probe returns only the organization id, never conversation content."
     }
   ],
   "hardDeleteStores": {
