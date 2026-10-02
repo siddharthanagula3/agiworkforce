@@ -786,6 +786,52 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
     expect(within(check).getByText('2 models, 1 listed model not covered')).toBeInTheDocument();
   });
 
+  it('unticks the check once the record window has passed since it was ticked', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const user = userEvent.setup();
+    serve([configured({ attestation: { standing: 'missing', record: null } })]);
+    render(<FreeQuotaAttestationPanel />);
+
+    await user.click(await screen.findByRole('radio', { name: /Every model/ }));
+    await user.click(screen.getByRole('checkbox', { name: /I checked just now/ }));
+    const button = screen.getByRole('button', { name: 'Record console check' });
+    expect(button).toBeEnabled();
+
+    vi.mocked(Date.now).mockReturnValue(SERVER_NOW + CLIENT_AHEAD_MS + 59 * 60_000);
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(screen.getByRole('checkbox', { name: /I checked just now/ })).toBeChecked();
+    expect(button).toBeEnabled();
+
+    vi.mocked(Date.now).mockReturnValue(SERVER_NOW + CLIENT_AHEAD_MS + 60 * 60_000);
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(screen.getByRole('checkbox', { name: /I checked just now/ })).not.toBeChecked();
+    expect(button).toBeDisabled();
+    expect(screen.getByText(/more than 1 h ago/)).toHaveAttribute('data-tone', 'warn');
+    expect(network.posts).toHaveLength(0);
+  });
+
+  it('records nothing when the dialog is confirmed after the record window has passed', async () => {
+    const user = userEvent.setup();
+    serve([configured({ attestation: { standing: 'missing', record: null } })]);
+    render(<FreeQuotaAttestationPanel />);
+
+    await user.click(await screen.findByRole('radio', { name: /Every model/ }));
+    await user.click(screen.getByRole('checkbox', { name: /I checked just now/ }));
+    await user.click(screen.getByRole('button', { name: 'Record console check' }));
+    const dialog = await screen.findByRole('alertdialog');
+    vi.mocked(Date.now).mockReturnValue(SERVER_NOW + CLIENT_AHEAD_MS + 2 * 60 * 60_000);
+    await user.click(within(dialog).getByRole('button', { name: 'Record check' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('more than 1 h ago');
+    expect(network.posts).toHaveLength(0);
+    expect(screen.getByRole('checkbox', { name: /I checked just now/ })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Record console check' })).toBeDisabled();
+  });
+
   it('keeps the success message when reading the gates again fails after recording', async () => {
     const user = userEvent.setup();
     serve([configured({ attestation: { standing: 'missing', record: null } }), { failWith: 503 }]);

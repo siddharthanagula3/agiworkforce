@@ -264,6 +264,10 @@ record leaves out.
 - The server stamps the record with its own clock: the panel sends `"now"`,
   never the browser's time. An API caller may send `checkedAtMs` instead, within
   an hour of the check and never later than the server clock.
+- The panel holds the record to the same hour: the confirmation tick lapses an
+  hour after it was ticked, by the server's clock. A lapsed tick unticks itself
+  and says why, and a dialog confirmed after the hour records nothing. Look at
+  the consoles again and tick it anew.
 - The record is bound to the hash of the current `QWEN_API_KEY`. Rotating the
   key turns every free model off until a check is recorded for the new key.
 - A record newer than an account billing signal clears that signal, unless the

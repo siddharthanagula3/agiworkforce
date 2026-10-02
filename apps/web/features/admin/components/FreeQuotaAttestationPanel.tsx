@@ -248,6 +248,10 @@ function receiptCoverage(offerings: FreeQuotaAttestationReceipt['offerings']): s
   return offerings === 'all' ? 'every inventory model' : modelCount(offerings);
 }
 
+function tickLapsed(tickedAtMs: number | null, nowMs: number, windowMs: number): boolean {
+  return tickedAtMs !== null && nowMs - tickedAtMs >= windowMs;
+}
+
 async function readJsonResponse(response: Response): Promise<unknown> {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
@@ -286,7 +290,7 @@ export default function FreeQuotaAttestationPanel() {
   const [clockMs, setClockMs] = useState(() => Date.now());
   const [coverage, setCoverage] = useState<Coverage | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [confirmed, setConfirmed] = useState(false);
+  const [tickedAtMs, setTickedAtMs] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Notice | null>(null);
   const { confirm, dialog } = useConfirmAction();
@@ -349,7 +353,19 @@ export default function FreeQuotaAttestationPanel() {
     });
   }
 
-  async function record(quotaOnlyOfferings: FreeQuotaAttestationRequest['quotaOnlyOfferings']) {
+  async function record(
+    quotaOnlyOfferings: FreeQuotaAttestationRequest['quotaOnlyOfferings'],
+    tickedAt: number,
+    windowMs: number,
+  ) {
+    if (tickLapsed(tickedAt, Date.now() + offsetMs, windowMs)) {
+      setTickedAtMs(null);
+      setOutcome({
+        tone: 'danger',
+        text: `Nothing was recorded: you ticked the check more than ${formatDurationMs(windowMs)} ago. Check the consoles again, then tick it.`,
+      });
+      return;
+    }
     setBusy(true);
     setOutcome(null);
     try {
@@ -364,7 +380,7 @@ export default function FreeQuotaAttestationPanel() {
         tone: 'ok',
         text: `Console check recorded at ${formatEpochMs(receipt.checkedAtMs)}. It covers ${receiptCoverage(receipt.offerings)} and counts until ${formatEpochMs(receipt.freshUntilMs)}.`,
       });
-      setConfirmed(false);
+      setTickedAtMs(null);
       await loadAndSeedForm();
     } catch (error) {
       setOutcome({ tone: 'danger', text: toUserMessage(error, RECORD_FAILED) });
@@ -374,7 +390,7 @@ export default function FreeQuotaAttestationPanel() {
   }
 
   function requestRecord(current: ConfiguredStatus) {
-    if (coverage === null) return;
+    if (coverage === null || tickedAtMs === null) return;
     const offerings =
       coverage === 'all' ? current.offerings.map((offering) => offering.key) : [...selected];
     if (offerings.length === 0) return;
@@ -387,7 +403,7 @@ export default function FreeQuotaAttestationPanel() {
       description: `This records that Free quota only is on for ${covered}. A model added to the inventory later is not covered until a new check names it. The server stamps the record with its own clock when you confirm, and it counts for ${formatDurationMs(current.validForMs)}, until about ${formatEpochMs(nowMs + current.validForMs)}. If the switch is off for any of them, usage past that model's free quota bills the provider account at pay-as-you-go prices. The record replaces the current one, cannot be withdrawn here, and is written to the audit log under your account.`,
       confirmLabel: 'Record check',
       destructive: false,
-      onConfirm: () => record(offerings),
+      onConfirm: () => record(offerings, tickedAtMs, current.recordWindowMs),
     });
   }
 
@@ -451,12 +467,12 @@ export default function FreeQuotaAttestationPanel() {
           nowMs={nowMs}
           coverage={coverage}
           selected={selected}
-          confirmed={confirmed}
+          tickedAtMs={tickedAtMs}
           busy={busy}
           outcome={outcome}
           onCoverage={(next) => chooseCoverage(next, status.offerings)}
           onToggle={toggleOffering}
-          onConfirmed={setConfirmed}
+          onConfirmed={(on) => setTickedAtMs(on ? Date.now() + offsetMs : null)}
           onRecord={() => requestRecord(status)}
         />
       )}
@@ -469,7 +485,7 @@ interface ConfiguredViewProps {
   nowMs: number;
   coverage: Coverage | null;
   selected: ReadonlySet<string>;
-  confirmed: boolean;
+  tickedAtMs: number | null;
   busy: boolean;
   outcome: Notice | null;
   onCoverage: (coverage: Coverage) => void;
@@ -483,7 +499,7 @@ function ConfiguredView({
   nowMs,
   coverage,
   selected,
-  confirmed,
+  tickedAtMs,
   busy,
   outcome,
   onCoverage,
@@ -492,6 +508,8 @@ function ConfiguredView({
   onRecord,
 }: ConfiguredViewProps) {
   const everyListed = coverage === 'all';
+  const staleTick = tickLapsed(tickedAtMs, nowMs, status.recordWindowMs);
+  const confirmed = tickedAtMs !== null && !staleTick;
   const canRecord =
     confirmed &&
     !busy &&
@@ -665,6 +683,15 @@ function ConfiguredView({
             Free Quota tab.
           </span>
         </label>
+        {staleTick ? (
+          <NoticeLine
+            role="status"
+            notice={{
+              tone: 'warn',
+              text: `You ticked this more than ${formatDurationMs(status.recordWindowMs)} ago, so it no longer counts. Check the consoles again, then tick it.`,
+            }}
+          />
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" className={ACTION_CLASS} disabled={!canRecord} onClick={onRecord}>
