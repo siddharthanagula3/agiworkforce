@@ -25,7 +25,9 @@ any research report and the log that lets an interrupted reply resume, and any
 file you attach, are held for up to 30 days and then removed, which is what
 keeps an in-flight chat working and an attachment readable while you are still
 in it. A legal hold placed on your workspace keeps that material past the 30
-days until the hold is released.
+days until the hold is released. A rating you give in a temporary chat, with
+any reason or comment, is kept with your account after the chat is removed; it
+carries the chat and response IDs, never the response text.
 
 ## Turning it on
 

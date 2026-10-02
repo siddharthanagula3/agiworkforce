@@ -614,6 +614,46 @@
       ]
     },
     {
+      "id": "temporary-rating-outlives-the-chat",
+      "doc": "temporary-chats",
+      "section": "What a temporary chat does",
+      "kind": "prose",
+      "sentence": "A rating you give in a temporary chat, with any reason or comment, is kept with your account after the chat is removed; it carries the chat and response IDs, never the response text.",
+      "implementation": [
+        "apps/web/features/chat/components/messages/MessageBubble.tsx",
+        "apps/web/app/api/feedback/route.ts#storedMessage",
+        "apps/web/app/api/feedback/response-rating-contract.ts#WEB_RESPONSE_RATING_MESSAGE",
+        "apps/web/lib/server/account-erasure.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/messages/__tests__/MessageBubble.rating.test.tsx",
+          "name": "names everything the rating is stored with, in the note under the form"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/messages/__tests__/MessageBubble.rating.test.tsx",
+          "name": "does not send the answer text with a rating"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/feedback/route.test.ts",
+          "name": "stores its own note for a web rating without a comment, never the text the page sent"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/feedback/route.test.ts",
+          "name": "completes the rating with the reason and the comment"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-erasure.ts",
+          "text": "{ table: 'feedback', column: 'user_id' }"
+        }
+      ]
+    },
+    {
       "id": "temporary-by-default-switch-exists",
       "doc": "temporary-chats",
       "section": "Turning it on",
