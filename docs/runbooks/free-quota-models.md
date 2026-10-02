@@ -210,11 +210,10 @@ Who warns about a spent quota: QwenCloud states "Currently, there is no
 notification mechanism" for a used-up quota, while Model Studio's free quota
 page (cited below) states "When your remaining quota drops to 20% or is fully
 exhausted, the system sends notifications through internal messages and email."
-Our reminders (see
-Reminders) cover only our own records, the terms review and the console check,
-and a billing code the provider returns; they say nothing about how much free
-quota is left. The quota each model has left, and the date it ends, are on the
-consoles' free quota pages.
+Our reminders (see Reminders) cover only our own records, the terms review and
+the console check, and a billing code the provider returns; they say nothing
+about how much free quota is left. The quota each model has left, and the date
+it ends, are on the consoles' free quota pages.
 
 ### Then the same switch in Alibaba Cloud Model Studio
 
