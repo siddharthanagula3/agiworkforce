@@ -12,6 +12,52 @@ const MAX_REPORT_BYTES = 192 * 1024 * 1024;
 const MAX_STREAM_BYTES = 64 * 1024 * 1024;
 const SCANNER_DEADLINE_MS = 120_000;
 const COVERAGE_BUDGET_MS = 600_000;
+const TAINT_LANGUAGES = ['js', 'ts', 'javascript', 'typescript'];
+const DEFAULT_LABEL = '__SOURCE__';
+const FORMULA_KEYS = ['pattern', 'patterns', 'pattern-either', 'pattern-regex'];
+const SPEC_KEYS = {
+  source: ['label', 'requires', 'by-side-effect', 'exact', 'control'],
+  sink: ['requires', 'exact', 'at-exit'],
+};
+const CANARY = {
+  languages: ['js', 'ts'],
+  message: 'Structural coverage canary',
+  severity: 'WARNING',
+};
+const CANARIES = [
+  {
+    ...CANARY,
+    id: 'coverage-canary-0',
+    patterns: [
+      {
+        'pattern-either': [
+          { pattern: "this.window.document. ... .$HTML('...',$SINK)" },
+          { pattern: "window.document. ... .$HTML('...',$SINK)" },
+          { pattern: 'document.$HTML($SINK)' },
+        ],
+      },
+      { 'metavariable-regex': { metavariable: '$HTML', regex: '(writeln|write)' } },
+      { 'focus-metavariable': '$SINK' },
+    ],
+  },
+  {
+    ...CANARY,
+    id: 'coverage-canary-1',
+    patterns: [
+      { pattern: "$PROP. ... .$HTML('...',$SINK)" },
+      { 'metavariable-regex': { metavariable: '$HTML', regex: '(insertAdjacentHTML)' } },
+      { 'focus-metavariable': '$SINK' },
+    ],
+  },
+];
+const CALIBRATION = [
+  'coverage-canary-0:2',
+  'coverage-canary-0:3',
+  'coverage-canary-0:4',
+  'coverage-canary-0:5',
+  'coverage-canary-0:6',
+  'coverage-canary-1:9',
+];
 export class CoverageError extends Error {}
 const CONTROLS = `function positiveDocument(value) {
   document.write(value);
@@ -155,47 +201,110 @@ function replayTaintRules(rules, diagnostic) {
   return applicable;
 }
 
-function formula(value) {
-  if (!record(value) || Object.keys(value).length !== 1) return false;
-  if (typeof value.pattern === 'string' && value.pattern.length > 0) return true;
-  for (const key of ['patterns', 'pattern-either']) {
-    if (Array.isArray(value[key])) return value[key].length > 0 && value[key].every(formula);
-  }
-  if (record(value['metavariable-regex'])) {
-    const item = value['metavariable-regex'];
-    return (
-      Object.keys(item).sort().join(',') === 'metavariable,regex' &&
-      typeof item.metavariable === 'string' &&
-      typeof item.regex === 'string'
-    );
-  }
-  return typeof value['focus-metavariable'] === 'string';
+function specFormula(spec, kind) {
+  const keys = record(spec)
+    ? Object.keys(spec).filter((key) => !SPEC_KEYS[kind].includes(key))
+    : [];
+  requireValue(
+    keys.length === 1 &&
+      FORMULA_KEYS.includes(keys[0]) &&
+      (spec.label === undefined || typeof spec.label === 'string') &&
+      (spec.requires === undefined ||
+        typeof spec.requires === 'string' ||
+        Array.isArray(spec.requires)),
+    `Affected rule has unsupported ${kind} semantics.`,
+  );
+  return { [keys[0]]: spec[keys[0]] };
 }
 
-export function structuralSinkRules(rule) {
+export function structuralRules(rule) {
   requireValue(
     record(rule) &&
       rule.mode === 'taint' &&
       Array.isArray(rule.languages) &&
       rule.languages.length > 0 &&
-      rule.languages.every((value) => ['js', 'ts', 'javascript', 'typescript'].includes(value)),
-    'Affected rule is not a supported structural sink boundary.',
+      rule.languages.every((value) => TAINT_LANGUAGES.includes(value)),
+    'Affected rule is not a supported structural taint boundary.',
   );
   requireValue(
-    rule.options === undefined &&
-      rule['pattern-propagators'] === undefined &&
-      Array.isArray(rule['pattern-sinks']) &&
-      rule['pattern-sinks'].length === 2 &&
-      rule['pattern-sinks'].every(formula),
-    'Affected rule has unsupported sink semantics.',
+    (rule.options === undefined || record(rule.options)) &&
+      (rule['pattern-propagators'] === undefined ||
+        (Array.isArray(rule['pattern-propagators']) &&
+          rule['pattern-propagators'].every(
+            (propagator) =>
+              record(propagator) &&
+              (propagator.label === undefined || typeof propagator.label === 'string'),
+          ))) &&
+      [rule['pattern-sources'], rule['pattern-sinks']].every(
+        (specs) => Array.isArray(specs) && specs.length > 0,
+      ),
+    'Affected rule has unsupported taint semantics.',
   );
-  return rule['pattern-sinks'].map((sink, index) => ({
-    id: `coverage-sink-${index}`,
-    languages: rule.languages,
-    message: 'Structural sink coverage',
-    severity: 'WARNING',
-    ...sink,
-  }));
+  return ['source', 'sink'].flatMap((kind) =>
+    rule[`pattern-${kind}s`].map((spec, index) => ({
+      id: `coverage-${kind}-${index}`,
+      languages: rule.languages,
+      message: 'Structural taint coverage',
+      severity: 'WARNING',
+      ...(rule.options === undefined ? {} : { options: rule.options }),
+      ...specFormula(spec, kind),
+    })),
+  );
+}
+
+function requirement(expression) {
+  const tokens = expression.match(/[()]|[^\s()]+/g) ?? [];
+  const labels = new Set();
+  let position = 0;
+  function operand() {
+    const token = tokens[position++];
+    if (token === 'not') {
+      const negated = operand();
+      return (present) => !negated(present);
+    }
+    if (token === '(') {
+      const inner = disjunction();
+      requireValue(tokens[position++] === ')', 'Taint label requirement is malformed.');
+      return inner;
+    }
+    if (token === 'True' || token === 'False') return () => token === 'True';
+    requireValue(
+      /^[A-Za-z_][A-Za-z0-9_]*$/.test(token ?? '') && !['and', 'or'].includes(token),
+      'Taint label requirement is malformed.',
+    );
+    labels.add(token);
+    return (present) => present.has(token);
+  }
+  function series(keyword, next) {
+    const terms = [next()];
+    while (tokens[position] === keyword) {
+      position += 1;
+      terms.push(next());
+    }
+    return keyword === 'and'
+      ? (present) => terms.every((term) => term(present))
+      : (present) => terms.some((term) => term(present));
+  }
+  function conjunction() {
+    return series('and', operand);
+  }
+  function disjunction() {
+    return series('or', conjunction);
+  }
+  const evaluate = disjunction();
+  requireValue(position === tokens.length, 'Taint label requirement is malformed.');
+  return { evaluate, labels };
+}
+
+function reachable(requires, present) {
+  if (Array.isArray(requires)) return true;
+  const { evaluate, labels } = requirement(requires ?? DEFAULT_LABEL);
+  const available = [...labels].filter((label) => present.has(label));
+  requireValue(available.length <= 16, 'Taint label requirement is too large to qualify.');
+  for (let mask = 0; mask < 2 ** available.length; mask += 1) {
+    if (evaluate(new Set(available.filter((_, bit) => mask & (1 << bit))))) return true;
+  }
+  return false;
 }
 
 async function stopGroup(pid) {
@@ -573,91 +682,106 @@ export async function qualifyInternalCoverage({
     for (const [identifier, rule] of rules) {
       const targets = [...pairs.values()].filter((pair) => pair.rule === identifier);
       if (targets.length === 0) continue;
-      let derived;
+      let subject = targets[0].path;
       try {
-        derived = structuralSinkRules(rule);
+        const derived = [...structuralRules(rule), ...CANARIES];
+        const identifiers = derived.map((item) => item.id);
+        const controlsPath = path.join(directory, 'controls.ts');
+        const rulesPath = path.join(directory, 'structural-rules.json');
+        const outputPath = path.join(directory, 'structural-report.json');
+        fs.writeFileSync(controlsPath, CONTROLS, { mode: 0o600 });
+        fs.writeFileSync(rulesPath, JSON.stringify({ rules: derived }), { mode: 0o600 });
+        fs.rmSync(outputPath, { force: true });
+        const scan = await scanCoverage([
+          'scan',
+          '--config',
+          rulesPath,
+          '--no-rewrite-rule-ids',
+          '--disable-nosem',
+          '--metrics=off',
+          '--timeout=30',
+          '--jobs=1',
+          '--time',
+          '--json',
+          '--output',
+          outputPath,
+          ...targets.map((pair) => pair.file),
+          controlsPath,
+        ]);
+        const structural = jsonFile(outputPath);
+        validateCoverageEnvelope(structural);
+        requireValue(
+          scan.code === 0 &&
+            structural.version === report.version &&
+            Array.isArray(structural.errors) &&
+            structural.errors.length === 0 &&
+            Array.isArray(structural.results) &&
+            structural.time.fixpoint_timeouts.length === 0 &&
+            Array.isArray(structural.time.rules) &&
+            JSON.stringify([...structural.time.rules].sort()) ===
+              JSON.stringify([...identifiers].sort()),
+          'Structural taint analysis is incomplete.',
+        );
+        requireValue(
+          record(structural.paths) && Array.isArray(structural.paths.scanned),
+          'Structural selected targets are missing.',
+        );
+        const controls = fs.realpathSync(controlsPath);
+        const matched = new Map(targets.map((pair) => [fs.realpathSync(pair.file), new Set()]));
+        const actualPaths = structural.paths.scanned
+          .map((file) => fs.realpathSync(path.resolve(root, file)))
+          .sort();
+        requireValue(
+          JSON.stringify(actualPaths) === JSON.stringify([...matched.keys(), controls].sort()),
+          'Structural analysis did not select every whole source and control.',
+        );
+        const calibration = [];
+        for (const match of structural.results) {
+          requireValue(
+            record(match) &&
+              typeof match.path === 'string' &&
+              identifiers.includes(match.check_id) &&
+              record(match.start) &&
+              Number.isSafeInteger(match.start.line),
+            'Structural finding is malformed.',
+          );
+          const file = fs.realpathSync(path.resolve(root, match.path));
+          const canary = match.check_id.startsWith('coverage-canary-');
+          requireValue(file === controls || matched.has(file), 'Structural finding is malformed.');
+          if (file === controls && canary)
+            calibration.push(`${match.check_id}:${match.start.line}`);
+          if (file !== controls && !canary) matched.get(file).add(match.check_id);
+        }
+        requireValue(
+          JSON.stringify(calibration.sort()) === JSON.stringify(CALIBRATION),
+          'Structural sink calibration failed.',
+        );
+        for (const target of targets) {
+          subject = target.path;
+          const found = matched.get(fs.realpathSync(target.file));
+          const indices = (kind) =>
+            rule[`pattern-${kind}s`].flatMap((_, index) =>
+              found.has(`coverage-${kind}-${index}`) ? [index] : [],
+            );
+          const sources = indices('source');
+          const sinks = indices('sink');
+          if (sources.length === 0 || sinks.length === 0) continue;
+          const present = new Set([
+            ...sources.map((index) => rule['pattern-sources'][index].label ?? DEFAULT_LABEL),
+            ...(rule['pattern-propagators'] ?? []).flatMap((propagator) => propagator.label ?? []),
+          ]);
+          requireValue(
+            sinks.every((index) => !reachable(rule['pattern-sinks'][index].requires, present)),
+            'Internal warning has a potential sink and remains unresolved.',
+          );
+        }
       } catch (error) {
         if (error instanceof CoverageError)
           throw new CoverageError(
-            `${error.message} Rule ${JSON.stringify(identifier)}, source ${JSON.stringify(targets[0].path)}.`,
+            `${error.message} Rule ${JSON.stringify(identifier)}, source ${JSON.stringify(subject)}.`,
           );
         throw error;
       }
-      const controlsPath = path.join(directory, 'controls.ts');
-      const rulesPath = path.join(directory, 'sink-rules.json');
-      const outputPath = path.join(directory, 'sink-report.json');
-      fs.writeFileSync(controlsPath, CONTROLS, { mode: 0o600 });
-      fs.writeFileSync(rulesPath, JSON.stringify({ rules: derived }), { mode: 0o600 });
-      fs.rmSync(outputPath, { force: true });
-      const scan = await scanCoverage([
-        'scan',
-        '--config',
-        rulesPath,
-        '--no-rewrite-rule-ids',
-        '--disable-nosem',
-        '--metrics=off',
-        '--timeout=30',
-        '--jobs=1',
-        '--json',
-        '--output',
-        outputPath,
-        ...targets.map((pair) => pair.file),
-        controlsPath,
-      ]);
-      const structural = jsonFile(outputPath);
-      requireValue(
-        scan.code === 0 &&
-          structural.version === report.version &&
-          Array.isArray(structural.errors) &&
-          structural.errors.length === 0 &&
-          Array.isArray(structural.skipped_rules) &&
-          structural.skipped_rules.length === 0 &&
-          Array.isArray(structural.results),
-        'Structural sink analysis is incomplete.',
-      );
-      requireValue(
-        record(structural.paths) && Array.isArray(structural.paths.scanned),
-        'Structural selected targets are missing.',
-      );
-      const actualPaths = structural.paths.scanned
-        .map((file) => fs.realpathSync(path.resolve(root, file)))
-        .sort();
-      const wantedPaths = [
-        ...targets.map((pair) => fs.realpathSync(pair.file)),
-        fs.realpathSync(controlsPath),
-      ].sort();
-      requireValue(
-        JSON.stringify(actualPaths) === JSON.stringify(wantedPaths),
-        'Structural analysis did not select every whole source and control.',
-      );
-      const controlMatches = [];
-      for (const match of structural.results) {
-        requireValue(
-          record(match) &&
-            typeof match.path === 'string' &&
-            typeof match.check_id === 'string' &&
-            record(match.start) &&
-            Number.isSafeInteger(match.start.line),
-          'Structural finding is malformed.',
-        );
-        requireValue(
-          fs.realpathSync(path.resolve(root, match.path)) === fs.realpathSync(controlsPath),
-          'Internal warning has a potential sink and remains unresolved.',
-        );
-        controlMatches.push(`${match.check_id}:${match.start.line}`);
-      }
-      const wanted = [
-        'coverage-sink-0:2',
-        'coverage-sink-0:3',
-        'coverage-sink-0:4',
-        'coverage-sink-0:5',
-        'coverage-sink-0:6',
-        'coverage-sink-1:9',
-      ];
-      requireValue(
-        JSON.stringify(controlMatches.sort()) === JSON.stringify(wanted.sort()),
-        'Structural sink calibration failed.',
-      );
     }
     verifySources();
     for (const [file, expected] of provenance)
