@@ -342,6 +342,11 @@
           "date": "2026-08-14",
           "digest": "bf9205838861af4d",
           "note": "The erasure table count is now read from the erasure list when the page is built instead of being typed, so it cannot fall behind the list; no security commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "1cf0237723370bac",
+          "note": "The audit-log and deletion job clock times now read from the registered cron configuration, correcting the old times after the low-power scheduling change. The daily and hourly cadences, retention periods and deletion commitments are unchanged, so the date stays."
         }
       ]
     },

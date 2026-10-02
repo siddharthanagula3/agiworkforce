@@ -74,12 +74,14 @@ transfer (5 GB a month, every byte Postgres sends to Vercel, CI or a script) and
 compute hours (a compute that never idles for five minutes never suspends).
 
 - **Transfer.** The connector directory snapshot lives in `mcp_response_cache`
-  under two keys. `v2` holds it brotli-compressed (`br64:` prefix) and is the
-  only one this build reads; `v1` keeps the plain JSON an older build reads, and
-  every sync rewrites both, so a rollback still serves the full directory (writes
-  cost no transfer). A build that finds only `v1` copies it to `v2` once, with an
-  insert that never replaces an existing row. An ingest refuses to merge onto a
-  row it cannot decode. The icon route reads the small
+  under two keys. `v2` holds it brotli-compressed (`br64:` prefix); `v1` keeps
+  the plain JSON an older build reads. A snapshot write refreshes both rows, so
+  a rollback still serves the full directory. This build reads `v2` when no
+  legacy row exists or its stamp is newer than `v1`, otherwise it reads the
+  legacy row, including changes an older build made during a rollback. It then
+  refreshes `v2` with an insert if absent or a replacement conditional on the
+  stamp it read, avoiding replacement of a concurrently refreshed `v2` row.
+  An ingest refuses to merge onto a row it cannot decode. The icon route reads the small
   `connectors.directory.icon-index` row instead of the snapshot. Icons and the
   public directory listing carry `Vercel-CDN-Cache-Control` with `Vary: Origin`,
   so repeat visits are served by the CDN, not the database.

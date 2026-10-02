@@ -1,11 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+
 const mocks = vi.hoisted(() => ({ dynamic: vi.fn(), rlsDb: vi.fn(), query: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getCurrentUserRlsDb: () => mocks.rlsDb(),
 }));
 vi.mock('next/dynamic', () => ({

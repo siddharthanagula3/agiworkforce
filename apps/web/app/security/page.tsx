@@ -22,6 +22,7 @@ import {
 import { BYOK_SURFACES, CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 import { ERASED_TABLE_COUNT } from '@/lib/legal/published-counts';
+import { PUBLISHED_RETENTION_CRON_TIMES } from '@/lib/legal/published-cron-schedules';
 
 export const metadata = buildMetadata({
   title: 'Security: three boundaries, three different answers',
@@ -291,8 +292,7 @@ const LOGGING: { label: string; value: string }[] = [
   },
   {
     label: 'Who can read it',
-    value:
-      'Security event records are readable by the account they belong to, through user-scoped settings routes; org-wide admin views are not built yet. The table is append-only: update and delete are revoked from the application role, and a trigger refuses both for every role except the table owner, which is what lets the retention routine run at all. Retention is 90 days and it is scheduled: a cron-authenticated job at 02:30 UTC calls that routine, then measures the oldest row still present and records the purge as a security event of its own, so a window that did not hold is visible rather than silent.',
+    value: `Security event records are readable by the account they belong to, through user-scoped settings routes; org-wide admin views are not built yet. The table is append-only: update and delete are revoked from the application role, and a trigger refuses both for every role except the table owner, which is what lets the retention routine run at all. Retention is 90 days and it is scheduled: a cron-authenticated job at ${PUBLISHED_RETENTION_CRON_TIMES.securityAuditLogs} calls that routine, then measures the oldest row still present and records the purge as a security event of its own, so a window that did not hold is visible rather than silent.`,
   },
 ];
 
@@ -318,8 +318,7 @@ const DELETION: { label: string; value: string }[] = [
   },
   {
     label: 'It actually runs',
-    value:
-      'A cron-authenticated job runs daily at 04:30 UTC and claims up to 100 pending accounts per run, stopping early enough in the invocation to finish the account it is on. Separate scheduled jobs purge deleted media at 04:00 UTC and temporary chats at 03:00 UTC, and sandboxes are reclaimed at 45 minutes past every hour rather than once a day. This is the mechanism behind the 24-hour deletion window in the privacy policy.',
+    value: `A cron-authenticated job runs daily at ${PUBLISHED_RETENTION_CRON_TIMES.deletedAccounts} and claims up to 100 pending accounts per run, stopping early enough in the invocation to finish the account it is on. Separate scheduled jobs purge deleted media at ${PUBLISHED_RETENTION_CRON_TIMES.deletedMedia} and temporary chats at ${PUBLISHED_RETENTION_CRON_TIMES.temporaryChats}, and sandboxes are reclaimed at ${PUBLISHED_RETENTION_CRON_TIMES.sandboxMinute} minutes past every hour rather than once a day. This is the mechanism behind the 24-hour deletion window in the privacy policy.`,
   },
   {
     label: 'Export first, if you want it',

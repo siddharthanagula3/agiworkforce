@@ -4,6 +4,7 @@ import { directoryRecord } from './fixtures';
 type ScanModule0 = typeof import('@/lib/connectors/directory/registry-client');
 type ScanModule1 = typeof import('@/lib/connectors/directory/snapshot-view');
 type ScanModule2 = typeof import('./fixtures');
+type SnapshotCacheModule = typeof import('@/lib/connectors/directory/snapshot-cache');
 
 const mocks = vi.hoisted(() => ({
   fetchRegistryPage: vi.fn(),
@@ -27,9 +28,9 @@ vi.mock('@/lib/connectors/directory/registry-client', async () => {
   const actual = await vi.importActual<ScanModule0>('@/lib/connectors/directory/registry-client');
   return { ...actual, fetchRegistryPage: (...args: unknown[]) => mocks.fetchRegistryPage(...args) };
 });
-vi.mock('@/lib/connectors/directory/snapshot-cache', () => ({
+vi.mock('@/lib/connectors/directory/snapshot-cache', async () => ({
+  ...(await vi.importActual<SnapshotCacheModule>('@/lib/connectors/directory/snapshot-cache')),
   readSnapshotRecordsForIngest: () => mocks.readSnapshotRecords(),
-  DirectorySnapshotUnreadableError: class extends Error {},
   writeSnapshotRecords: (...args: unknown[]) => mocks.writeSnapshotRecords(...args),
   readSyncState: () => mocks.readSyncState(),
   writeSyncState: (...args: unknown[]) => mocks.writeSyncState(...args),
@@ -253,7 +254,9 @@ describe('ingestConnectorDirectory', () => {
       await import('@/lib/connectors/directory/snapshot-cache');
     mocks.readSyncState.mockResolvedValueOnce(syncState({ bootstrapComplete: true }));
     mocks.fetchRegistryPage.mockResolvedValueOnce(page([activeEntry('one')]));
-    mocks.readSnapshotRecords.mockRejectedValueOnce(new DirectorySnapshotUnreadableError('v2'));
+    mocks.readSnapshotRecords.mockRejectedValueOnce(
+      new DirectorySnapshotUnreadableError('v2', new Error('invalid stored snapshot')),
+    );
 
     await run({ rebuild: true });
 
