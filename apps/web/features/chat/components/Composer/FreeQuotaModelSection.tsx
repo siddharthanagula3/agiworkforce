@@ -4,6 +4,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, ChevronRight } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 import { getProviderOffering } from '@agiworkforce/types';
+import { freeModelFamilyName } from '@/features/models/lib/free-model-label';
 import {
   FREE_QUOTA_CATEGORIES,
   FREE_QUOTA_STATUS_LABELS,
@@ -24,6 +25,16 @@ const NAME_CLASS = 'block truncate text-sm leading-5';
 const GUIDANCE_CLASS = 'block truncate text-xs leading-4 text-muted-foreground';
 const SUBHEADING_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';
 const NOTE_CLASS = 'px-3 py-2 text-xs leading-5 text-muted-foreground';
+
+function familyRuns(entries: readonly FreeModelEntry[]): FreeModelEntry[][] {
+  const runs: FreeModelEntry[][] = [];
+  for (const entry of entries) {
+    const run = runs[runs.length - 1];
+    if (run?.[0]?.label.family === entry.label.family) run.push(entry);
+    else runs.push([entry]);
+  }
+  return runs;
+}
 
 function joinIssuers(issuers: readonly string[]): string {
   return issuers.length > 1
@@ -340,12 +351,16 @@ export function FreeQuotaModelSection({
                       className="h-9 w-full rounded-md border border-[var(--chat-border)] bg-transparent px-2 text-sm text-foreground"
                     />
                   </div>
-                  {more.map((group) => (
-                    <div key={group.issuer}>
-                      {groupedByIssuer && <p className={SUBHEADING_CLASS}>{group.issuer}</p>}
-                      {group.entries.map(renderEntry)}
-                    </div>
-                  ))}
+                  {more.flatMap((group) =>
+                    familyRuns(group.entries).map((family) => (
+                      <div key={`${group.issuer}:${family[0]!.label.family}`}>
+                        <p className={SUBHEADING_CLASS}>
+                          {freeModelFamilyName(family[0]!.label.family)}
+                        </p>
+                        {family.map(renderEntry)}
+                      </div>
+                    )),
+                  )}
                   {more.length === 0 && <p className={NOTE_CLASS}>No free models match.</p>}
                 </div>
               )}

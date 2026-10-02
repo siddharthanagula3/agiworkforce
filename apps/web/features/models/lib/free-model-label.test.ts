@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getProviderOfferings, modelsCatalog } from '@agiworkforce/types';
 import { findSelectableModel } from '@shared/stores/model-store';
-import { freeModelDisplayName, freeModelLabel } from './free-model-label';
+import { freeModelDisplayName, freeModelFamilyName, freeModelLabel } from './free-model-label';
 
 const DATED_ID = /^(.+)-(\d{4}-\d{2}-\d{2}|\d{8}|\d{4})$/;
 const offerings = Object.entries(getProviderOfferings());
@@ -81,6 +81,20 @@ describe('free model labels', () => {
       expect(snapshot.family).toBe(base.family);
       expect(snapshot.generation).toEqual(base.generation);
       expect(snapshot.name).toBe(base.name);
+    }
+  });
+
+  it('names a family the way the registry spells it', () => {
+    const families = new Set(
+      offerings.flatMap(([key]) => {
+        const label = freeModelLabel(key);
+        return label ? [label.family] : [];
+      }),
+    );
+    for (const family of families) {
+      const name = freeModelFamilyName(family);
+      expect(name.toLowerCase()).toBe(family);
+      expect(name).not.toBe(family);
     }
   });
 

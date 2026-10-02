@@ -103,3 +103,7 @@ export function freeModelLabel(key: string): FreeModelLabel | null {
 export function freeModelDisplayName(key: string): string | null {
   return freeModelLabel(key)?.displayName ?? null;
 }
+
+export function freeModelFamilyName(family: string): string {
+  return humanizeWord(family);
+}

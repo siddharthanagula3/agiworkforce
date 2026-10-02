@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { getProviderOfferings } from '@agiworkforce/types';
-import { freeModelLabel } from '@/features/models/lib/free-model-label';
+import { freeModelFamilyName, freeModelLabel } from '@/features/models/lib/free-model-label';
 import type {
   FreeQuotaCatalogue,
   FreeQuotaModel,
@@ -122,6 +122,11 @@ describe('Free section in the composer', () => {
     fireEvent.click(more);
     const expanded = screen.getByRole('group', { name: 'More free models' });
     expect(within(expanded).getAllByRole('button')).toHaveLength(models.length - 2);
+    for (const family of [familyA, familyB]) {
+      expect(
+        within(expanded).getByText(freeModelFamilyName(freeModelLabel(family[0]!)!.family)),
+      ).toBeInTheDocument();
+    }
 
     const [first] = within(expanded).getAllByRole('button');
     fireEvent.click(first!);
