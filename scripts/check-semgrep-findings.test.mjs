@@ -116,6 +116,25 @@ test('an expired allowlist entry stops covering its finding', () => {
   assert.match(result.stderr, /@siddhartha/);
 });
 
+test('an allowlist entry whose expiry is not a real calendar date is rejected', () => {
+  for (const expires of ['2099-13-99', '2099-02-30', '2099-31-10']) {
+    const result = runGate({
+      results: [finding()],
+      allowlist: { entries: [{ ...ACCEPTED.entries[0], expires }] },
+    });
+    assert.equal(
+      result.status,
+      1,
+      `${expires} should fail, got:\n${result.stdout}${result.stderr}`,
+    );
+    assert.match(
+      result.stderr,
+      /must set "expires" to a real calendar date in YYYY-MM-DD form/,
+      expires,
+    );
+  }
+});
+
 test('an allowlist entry without an owner or an expiry is rejected', () => {
   const noOwner = runGate({
     results: [],

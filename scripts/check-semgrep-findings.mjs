@@ -7,6 +7,7 @@ import {
   qualifyInternalCoverage,
   validateCoverageEnvelope,
 } from './lib/semgrep-coverage.mjs';
+import { isCalendarDate } from './lib/calendar-date.mjs';
 
 const args = process.argv.slice(2);
 const errors = [];
@@ -74,8 +75,6 @@ function readJson(filePath, label) {
   }
 }
 
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
 function parseAllowlist(document) {
   if (!document || !Array.isArray(document.entries)) {
     fail(`${allowlistPath} must be an object with an "entries" array.`);
@@ -99,8 +98,10 @@ function parseAllowlist(document) {
       fail(`${label} (${entry.rule}) must set "reason" to why the finding is accepted.`);
       return;
     }
-    if (typeof entry.expires !== 'string' || !DATE_PATTERN.test(entry.expires)) {
-      fail(`${label} (${entry.rule}) must set "expires" to a YYYY-MM-DD date.`);
+    if (!isCalendarDate(entry.expires)) {
+      fail(
+        `${label} (${entry.rule}) must set "expires" to a real calendar date in YYYY-MM-DD form.`,
+      );
       return;
     }
     if (entry.expires < today) {
