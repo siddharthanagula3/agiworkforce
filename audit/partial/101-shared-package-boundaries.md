@@ -158,4 +158,4 @@ Code: `packages/contracts/types/src/product-analytics.ts:7-15`, `apps/extension-
 | --- | --- | --- | --- |
 | platform | partial | Validation covers only the web server (validate-env.ts plus the config-keys guard over apps/web); mobile, Chrome, VS Code, Electron and CLI validate config ad hoc. | surface-only |
 
-Code: `scripts/check-config-keys.mjs:19-20`
+Code: `scripts/check-config-keys.mjs:19-20`, `apps/web/lib/validate-env.ts:342-343`, `apps/web/lib/__tests__/validate-env.test.ts:335-338`, `apps/web/lib/__tests__/validate-env.test.ts:349`

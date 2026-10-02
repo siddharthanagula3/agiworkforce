@@ -103,15 +103,14 @@ ${step.run}`,
   assert.equal(result.signal, null);
   return {
     ...result,
-    apiArguments: readFileSync(argumentsFile, 'utf8').split('\0').slice(0, -1),
+    apiArguments: existsSync(argumentsFile)
+      ? readFileSync(argumentsFile, 'utf8').split('\0').slice(0, -1)
+      : [],
   };
 }
 
-test('unconfigured staging reports both eligible triggers on their actual candidate', () => {
-  const job = stagingWorkflow.jobs.unprovisioned;
-  const step = job.steps.find(
-    (entry) => entry.name === 'Report no staging verification for this commit',
-  );
+test('staging accepts both eligible triggers without a persistent URL and rejects untrusted runs', () => {
+  const job = stagingWorkflow.jobs.deploy;
   const completedRun = {
     conclusion: 'success',
     event: 'push',
@@ -119,24 +118,17 @@ test('unconfigured staging reports both eligible triggers on their actual candid
     head_sha: 'a'.repeat(40),
     head_repository: { full_name: 'fixture/repository' },
   };
-  for (const [eventName, stagingUrl, run, expected] of [
-    ['workflow_dispatch', '', {}, true],
-    ['workflow_run', '', completedRun, true],
-    ['workflow_dispatch', 'https://staging.example.invalid', {}, false],
-    ['workflow_run', 'https://staging.example.invalid', completedRun, false],
-    ['workflow_run', '', { ...completedRun, conclusion: 'failure' }, false],
-    ['workflow_run', '', { ...completedRun, conclusion: 'cancelled' }, false],
-    ['workflow_run', '', { ...completedRun, event: 'pull_request' }, false],
-    ['workflow_run', '', { ...completedRun, head_branch: 'feature' }, false],
-    [
-      'workflow_run',
-      '',
-      { ...completedRun, head_repository: { full_name: 'attacker/fork' } },
-      false,
-    ],
+  for (const [eventName, run, expected] of [
+    ['workflow_dispatch', {}, true],
+    ['workflow_run', completedRun, true],
+    ['workflow_run', { ...completedRun, conclusion: 'failure' }, false],
+    ['workflow_run', { ...completedRun, conclusion: 'cancelled' }, false],
+    ['workflow_run', { ...completedRun, event: 'pull_request' }, false],
+    ['workflow_run', { ...completedRun, head_branch: 'feature' }, false],
+    ['workflow_run', { ...completedRun, head_repository: { full_name: 'attacker/fork' } }, false],
   ]) {
     const context = {
-      vars: { STAGING_WEB_URL: stagingUrl },
+      vars: {},
       github: {
         event_name: eventName,
         sha: 'b'.repeat(40),
@@ -145,28 +137,29 @@ test('unconfigured staging reports both eligible triggers on their actual candid
       },
     };
     assert.equal(runInNewContext(job.if, context, { timeout: 1000 }), expected);
-    if (!expected) continue;
-    const shaExpression = step.env.HEAD_SHA.replace(/^\$\{\{\s*|\s*\}\}$/g, '');
-    const candidate = runInNewContext(shaExpression, context, { timeout: 1000 });
-    assert.equal(candidate, eventName === 'workflow_dispatch' ? 'b'.repeat(40) : 'a'.repeat(40));
-    const result = runStagingStep(step, { HEAD_SHA: candidate });
-    assert.equal(result.status, 1);
-    assert.ok(result.apiArguments.includes(`repos/fixture/repository/statuses/${candidate}`));
-    assert.ok(result.apiArguments.includes('state=error'));
   }
+  assert.equal(job.environment.url, '${{ steps.deploy.outputs.url }}');
+  assert.ok(!job.steps.some((step) => /vercel alias/.test(step.run ?? '')));
 });
 
-test('unconfigured staging posts an error for the exact candidate and fails', () => {
-  const step = stagingWorkflow.jobs.unprovisioned.steps.find(
-    (entry) => entry.name === 'Report no staging verification for this commit',
+test('protected staging requires the bypass secret before migrations or deployment', () => {
+  const step = stagingWorkflow.jobs.deploy.steps.find(
+    (entry) => entry.name === 'Require the protected staging deployment contract',
   );
-  const result = runStagingStep(step);
-  assert.equal(result.status, 1);
-  assert.ok(result.apiArguments.includes(`repos/fixture/repository/statuses/${'a'.repeat(40)}`));
-  assert.ok(result.apiArguments.includes('state=error'));
-  assert.ok(result.apiArguments.includes('context=staging-web'));
-  assert.ok(!result.apiArguments.includes('state=success'));
-  assert.match(result.stdout, /::error::.*staging verification is required/);
+  const configured = {
+    VERCEL_TOKEN: 'fixture-token',
+    VERCEL_ORG_ID: 'fixture-org',
+    VERCEL_PROJECT_ID: 'fixture-project',
+    AGI_STAGING_DATABASE_URL: 'fixture-database',
+    VERCEL_AUTOMATION_BYPASS_SECRET: 'fixture-bypass',
+    STAGING_WEB_URL: 'https://old-staging.fixture.invalid',
+  };
+  for (const name of Object.keys(configured).filter((name) => name !== 'STAGING_WEB_URL')) {
+    const result = runStagingStep(step, { ...configured, [name]: '' });
+    assert.equal(result.status, 1, `${name} must be required`);
+    assert.match(result.stdout, new RegExp(`${name} is required`));
+  }
+  assert.equal(runStagingStep(step, { ...configured, STAGING_WEB_URL: '' }).status, 0);
 });
 
 test('production rejects an unverified legacy staging success', () => {
@@ -218,9 +211,9 @@ test('staging publishes success only after its serving-path verification succeed
   }
 });
 
-test('an unconfigured staging status cannot pass when its API call fails', () => {
-  const step = stagingWorkflow.jobs.unprovisioned.steps.find(
-    (entry) => entry.name === 'Report no staging verification for this commit',
+test('a staging verdict cannot pass when its API call fails', () => {
+  const step = stagingWorkflow.jobs.deploy.steps.find(
+    (entry) => entry.name === 'Publish the staging verdict for this commit',
   );
   assert.equal(runStagingStep(step, { GH_API_EXIT: '1' }).status, 1);
 });
@@ -605,7 +598,6 @@ function runStagingDeployment(preview, expected = stagingDatabase, environment =
     if (value === '${{ secrets.VERCEL_TOKEN }}') return 'fixture-token';
     if (value === '${{ secrets.VERCEL_ORG_ID }}') return 'fixture-org';
     if (value === '${{ secrets.VERCEL_PROJECT_ID }}') return 'fixture-project';
-    if (value === '${{ vars.STAGING_WEB_URL }}') return 'https://staging.example.invalid';
     throw new Error('unrecognized staging environment binding');
   };
   const steps = stagingWorkflow.jobs.deploy.steps.filter((step) => names.has(step.name));
@@ -896,5 +888,30 @@ test('the deployment guard rejects missing or filtered candidate release workflo
     const root = fixture(() => {});
     rmSync(path.join(root, WORKFLOW_DIR, file));
     assert.ok(checkDeployGates(root).errors.some((error) => error.startsWith(`${file}:`)));
+  }
+});
+
+test('staging preview verification cannot substitute a persistent origin, candidate or bypass binding', () => {
+  for (const mutate of [
+    (step) => {
+      step.env.DEPLOYMENT_URL = '${{ vars.STAGING_WEB_URL }}';
+    },
+    (step) => {
+      step.env.HEAD_SHA = '${{ github.sha }}';
+    },
+    (step) => {
+      delete step.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+    },
+    (step) => {
+      step.run = 'node scripts/verify-deployment.mjs "$DEPLOYMENT_URL" "$HEAD_SHA"';
+    },
+  ]) {
+    const root = fixture(() => {});
+    const document = readWorkflow(root, 'deploy-staging.yml');
+    mutate(document.jobs.deploy.steps.find((step) => step.id === 'verify'));
+    writeFileSync(path.join(root, WORKFLOW_DIR, 'deploy-staging.yml'), stringify(document));
+    assert.ok(
+      checkDeployGates(root).errors.some((error) => /protected preview verifier/.test(error)),
+    );
   }
 });

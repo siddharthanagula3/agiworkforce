@@ -328,6 +328,7 @@ function checkStagingGates({ repoRoot, errors }) {
   const database = selected[1];
   const build = selected[3];
   const deployment = selected[4];
+  const verification = selected[5];
   const order = selected.map((step) => declared.indexOf(step));
   if (
     !job ||
@@ -349,6 +350,18 @@ function checkStagingGates({ repoRoot, errors }) {
   ) {
     errors.push(
       'deploy-staging.yml: staging database binding must gate migrations, build and runtime aliases',
+    );
+  }
+  if (
+    verification?.env?.DEPLOYMENT_URL !== '${{ steps.deploy.outputs.url }}' ||
+    verification?.env?.HEAD_SHA !== '${{ steps.commit.outputs.sha }}' ||
+    verification?.env?.VERCEL_AUTOMATION_BYPASS_SECRET !==
+      '${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}' ||
+    verification?.run?.replace(/\s+/gu, ' ').trim() !==
+      'node scripts/verify-deployment.mjs --vercel-preview "$DEPLOYMENT_URL" "$HEAD_SHA"'
+  ) {
+    errors.push(
+      'deploy-staging.yml: the protected preview verifier must use the fresh deployment and candidate',
     );
   }
   const verdict = stepByName(job ?? {}, 'Publish the staging verdict for this commit');

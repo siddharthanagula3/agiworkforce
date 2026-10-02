@@ -12,7 +12,7 @@ delete this file when it is empty. An entry marked "same fix as" closes with its
 primary. Codex's raw report stays outside the repository, in its read-only
 worktree `.worktrees/codex-reaudit/audit/codex-reaudit-2026-09-30/`.
 
-Open now: 439 entries (154 defects, 285 half-built).
+Open now: 438 entries (153 defects, 285 half-built).
 
 ## Signaling relay
 
@@ -48,7 +48,6 @@ Open now: 439 entries (154 defects, 285 half-built).
 - **06/2122** (defect, security): Add a catalog-wide rls-probe assertion that every public table with a user_id/owner column is ENABLE+FORCE RLS or listed in a reasoned service-only exemption list, and close or exempt the gaps it finds. Files: `apps/web/scripts/rls-probe.mjs`, `apps/web/db/neon/`, `scripts/lib/db-isolation-tables.mjs`.
 - **06/2127** (defect, security): Add a migration indexing unindexed hot-parent FK columns (work_plans.conversation_id, file_lineage.conversation_id, web_artifacts.message_id, retrieval_documents source FKs) and a check-neon-migrations guard that fails on a new FK without a leading-column... Files: `apps/web/db/neon/`, `scripts/check-neon-migrations.mjs`.
 - **06/2132** (defect): Add FOR UPDATE SKIP LOCKED to the inner select of both reaper updates (and a state predicate on the outer update) so concurrent invocations never double-reap or double-explain a run. Files: `apps/web/lib/services/cloud-agent-run-reaper.ts`, `apps/web/lib/services/cloud-code-turn-reaper.ts`.
-- **06/2154** (defect, security): Fail validate-env when a live-mode Stripe secret or publishable key is present with VERCEL_ENV preview or development (and add a case to its test). Files: `apps/web/lib/validate-env.ts`, `apps/web/lib/validate-env.test.ts`.
 - **06/2409** (defect): Reconcile SECURITY.md with the public /security page (contact route, one acknowledgement statement, safe-harbour text, and a supported-versions line stating that only the latest release of each surface is supported). Files: `SECURITY.md`, `apps/web/app/security/page.tsx`, `apps/web/app/.well-known/security.txt/route.ts`.
 - **F-DESK-006** (defect, medium): Ignore Enter while an IME composition is active in every Code-surface composer. Files: `apps/web/features/code/components/CodeComposer.tsx`, `apps/web/features/code/components/LocalSessionPanel.tsx`, `apps/web/features/code/CloudCodePage.tsx`.
 - **F-DESK-016** (defect, medium): Add changed-on-disk warning, per-line diff comments and submit-all to the local Code changes panel. Files: `apps/web/features/code/code-diff.ts`, `apps/web/features/code/code-diff.test.ts`, `apps/web/features/code/review-comments.ts`.

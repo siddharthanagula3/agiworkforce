@@ -75,21 +75,20 @@ What the run does, in order:
    production. CI's `database` job proves the same migrations apply to an empty
    Postgres; it cannot prove they apply to data.
 2. Builds and deploys the prebuilt artifact with the same pinned Vercel CLI.
-3. Aliases the deployment onto the staging origin. The deployment's own
-   `*.vercel.app` URL sits behind Deployment Protection and answers 401 to an
-   unauthenticated probe, so the smoke check has to run against the custom
-   domain.
-4. Runs `scripts/verify-deployment.mjs` against that origin and asserts it
-   serves this commit, the same verifier and the same serving path the
-   production gate uses.
+3. Confirms the fresh deployment URL belongs to the configured Vercel project
+   and owner and is a ready preview.
+4. Runs `scripts/verify-deployment.mjs --vercel-preview` against that protected
+   HTTPS origin, using the project's automation bypass secret only in an HTTP
+   header. Redirects are not followed. The serving-path and commit checks are
+   the same ones the production gate uses.
 5. Records the deployment at target `staging` in the migration ledger and posts
    a staging deployment summary to the run.
 
 `deploy-production.yml`'s `staging-gate` job then waits for that run's verdict
 before `deploy-web` starts. A staging run that fails, is cancelled, or never
-completes within 25 minutes stops the promotion. When the repository variable
-`STAGING_WEB_URL` is unset, eligible automatic and manual runs publish an error
-for their exact commit and fail. Production also rejects legacy success
+completes within 25 minutes stops the promotion. Eligible automatic and manual
+runs fail when the protected staging credentials are missing and publish a
+failed verdict for their exact commit. Production also rejects legacy success
 statuses whose description says staging was not provisioned. Provisioning and
 successful verification are required before promotion.
 
@@ -181,9 +180,8 @@ Vercel owns the application runtime values pulled by `vercel pull`. Railway and
 Fly secrets stay in their existing protected production environments. No
 workflow prints secret values.
 
-The `staging-web` GitHub environment owns the staging secrets. The repository
-variable `STAGING_WEB_URL` enables the job before environment values are loaded.
-The tier requires:
+The `staging-web` GitHub environment owns the staging secrets. No persistent
+staging origin or custom domain is required. The tier requires:
 
 - `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`: the same Vercel project
   as production. Staging deploys a preview build; production builds its own
@@ -191,8 +189,10 @@ The tier requires:
 - `AGI_STAGING_DATABASE_URL`: the persistent staging database. It is a separate
   Neon database, never a branch of production, because the migrations applied to
   it are the ones not yet applied to production.
-- `STAGING_WEB_URL` (repository variable): the staging origin, a custom domain
-  assigned to the Vercel project. Its absence blocks production promotion.
+- `VERCEL_AUTOMATION_BYPASS_SECRET`: an existing project automation bypass
+  secret. The verifier authenticates the fresh deployment lookup before sending
+  this secret to that exact HTTPS origin. Missing or invalid credentials block
+  staging verification and production promotion.
 
 The workflow requires both process database aliases to equal the protected
 `AGI_STAGING_DATABASE_URL` before applying migrations. At least one of

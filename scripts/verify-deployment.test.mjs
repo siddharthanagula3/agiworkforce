@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import process from 'node:process';
+import * as deploymentVerifier from './verify-deployment.mjs';
 import { createServer } from 'node:http';
 import test from 'node:test';
 import {
@@ -474,4 +477,307 @@ test('relay verification waits for the candidate and refuses redirects, invalid 
       readRelayRelease('https://relay.fixture.invalid', { expectedTarget: 'fly', fetchImpl }),
     );
   }
+});
+
+const PREVIEW_URL = 'https://fixture-deployment.vercel.app';
+const PREVIEW_OPTIONS = {
+  token: 'fixture-vercel-token',
+  orgId: 'team_fixture',
+  projectId: 'prj_fixture',
+  bypassSecret: 'fixture-automation-bypass',
+  attempts: 1,
+};
+const PREVIEW_IDENTITY = {
+  url: new URL(PREVIEW_URL).hostname,
+  ownerId: PREVIEW_OPTIONS.orgId,
+  projectId: PREVIEW_OPTIONS.projectId,
+  readyState: 'READY',
+  target: null,
+};
+
+function previewFetch(calls, mutate = () => {}) {
+  return async (input, options) => {
+    const url = new URL(input);
+    calls.push({ url, options });
+    assert.equal(options.redirect, 'manual');
+    if (url.origin === 'https://api.vercel.com') {
+      assert.equal(options.headers.authorization, `Bearer ${PREVIEW_OPTIONS.token}`);
+      assert.equal(options.headers['x-vercel-protection-bypass'], undefined);
+      assert.equal(url.pathname, `/v13/deployments/${new URL(PREVIEW_URL).hostname}`);
+      assert.equal(url.searchParams.get('teamId'), PREVIEW_OPTIONS.orgId);
+      const identity = { ...PREVIEW_IDENTITY };
+      mutate(identity);
+      return Response.json(identity);
+    }
+    assert.equal(url.origin, PREVIEW_URL);
+    assert.equal(options.headers.authorization, undefined);
+    if (options.headers['x-vercel-protection-bypass'] !== PREVIEW_OPTIONS.bypassSecret) {
+      return new Response('<html>Vercel Authentication</html>', { status: 401 });
+    }
+    if (url.pathname === '/api/health') return Response.json(HEALTHY_BODY);
+    if (url.pathname === '/api/version') return Response.json({ commit: HEAD_SHA });
+    return Response.json(UNAUTHORIZED_BODY, { status: 401 });
+  };
+}
+
+function runPreviewCli(environment = {}, protectedResponses = true) {
+  const preload = `
+const originalTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (callback, delay, ...args) => originalTimeout(callback, Math.min(delay, 1), ...args);
+globalThis.fetch = async (input, options) => {
+  const url = new URL(input);
+  if (url.origin === 'https://api.vercel.com') return Response.json(${JSON.stringify(PREVIEW_IDENTITY)});
+  if (url.origin !== ${JSON.stringify(PREVIEW_URL)}) throw new Error('Unexpected fixture host');
+  if (${protectedResponses} && options.headers['x-vercel-protection-bypass'] !== ${JSON.stringify(PREVIEW_OPTIONS.bypassSecret)}) {
+    return new Response('<html>Vercel Authentication</html>', { status: 401 });
+  }
+  if (url.pathname === '/api/health') return Response.json(${JSON.stringify(HEALTHY_BODY)});
+  if (url.pathname === '/api/version') return Response.json({commit: ${JSON.stringify(HEAD_SHA)}});
+  return Response.json(${JSON.stringify(UNAUTHORIZED_BODY)}, {status:401});
+};`;
+  return spawnSync(
+    process.execPath,
+    [
+      '--import',
+      `data:text/javascript,${encodeURIComponent(preload)}`,
+      new URL('./verify-deployment.mjs', import.meta.url).pathname,
+      '--vercel-preview',
+      PREVIEW_URL,
+      HEAD_SHA,
+    ],
+    {
+      env: {
+        VERCEL_TOKEN: PREVIEW_OPTIONS.token,
+        VERCEL_ORG_ID: PREVIEW_OPTIONS.orgId,
+        VERCEL_PROJECT_ID: PREVIEW_OPTIONS.projectId,
+        VERCEL_AUTOMATION_BYPASS_SECRET: PREVIEW_OPTIONS.bypassSecret,
+        ...environment,
+      },
+      encoding: 'utf8',
+      timeout: 3000,
+    },
+  );
+}
+
+test('staging preview CLI verifies the protected fresh deployment without a persistent origin', () => {
+  const result = runPreviewCli();
+  assert.equal(result.error, undefined);
+  assert.equal(result.signal, null);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Preview serving path and commit verified/);
+  assert.ok(!`${result.stdout}${result.stderr}`.includes(PREVIEW_OPTIONS.bypassSecret));
+});
+
+test('staging preview CLI fails closed without a bypass even when an origin answers publicly', () => {
+  const result = runPreviewCli({ VERCEL_AUTOMATION_BYPASS_SECRET: '' }, false);
+  assert.equal(result.error, undefined);
+  assert.equal(result.signal, null);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /requires valid Vercel credentials and an automation bypass secret/);
+});
+
+test('protected preview probes authenticate ownership before all serving and full commit checks', async () => {
+  const calls = [];
+  const result = await deploymentVerifier.verifyVercelPreview(PREVIEW_URL, HEAD_SHA, {
+    ...PREVIEW_OPTIONS,
+    fetchImpl: previewFetch(calls),
+  });
+  assert.equal(result.deployedCommit, HEAD_SHA);
+  assert.deepEqual(
+    calls.map(({ url }) => url.pathname),
+    [
+      `/v13/deployments/${new URL(PREVIEW_URL).hostname}`,
+      '/api/health',
+      '/api/me',
+      '/api/usage',
+      '/api/version',
+    ],
+  );
+  assert.ok(
+    calls
+      .slice(1)
+      .every(
+        ({ options }) =>
+          options.headers['x-vercel-protection-bypass'] === PREVIEW_OPTIONS.bypassSecret,
+      ),
+  );
+});
+
+test('a foreign project, owner, URL, production target or unready deployment never receives the bypass', async () => {
+  for (const delta of [
+    { projectId: 'prj_foreign' },
+    { ownerId: 'team_foreign' },
+    { url: 'foreign-deployment.vercel.app' },
+    { target: 'production' },
+    { readyState: 'BUILDING' },
+    { target: undefined },
+    { projectId: undefined },
+  ]) {
+    const calls = [];
+    await assert.rejects(
+      deploymentVerifier.verifyVercelPreview(PREVIEW_URL, HEAD_SHA, {
+        ...PREVIEW_OPTIONS,
+        fetchImpl: previewFetch(calls, (identity) => Object.assign(identity, delta)),
+      }),
+      /did not confirm a ready preview/,
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].options.headers['x-vercel-protection-bypass'], undefined);
+  }
+});
+
+test('protected preview rejects foreign and malformed origins before sending either credential', async () => {
+  for (const url of [
+    'https://attacker.example',
+    'https://vercel.app',
+    'https://fixture.vercel.app.attacker.example',
+    'https://fixture.attacker.vercel.app',
+    'http://fixture-deployment.vercel.app',
+    'https://user:pass@fixture-deployment.vercel.app',
+    `${PREVIEW_URL}/path`,
+    `${PREVIEW_URL}?token=hidden`,
+    `${PREVIEW_URL}#hidden`,
+    `${PREVIEW_URL}:8443`,
+    `${PREVIEW_URL}:443`,
+    `${PREVIEW_URL}\n`,
+    'not a URL',
+  ]) {
+    let calls = 0;
+    await assert.rejects(
+      deploymentVerifier.verifyVercelPreview(url, HEAD_SHA, {
+        ...PREVIEW_OPTIONS,
+        fetchImpl: async () => {
+          calls += 1;
+          throw new Error('Unexpected fetch');
+        },
+      }),
+      /must be an HTTPS Vercel origin/,
+    );
+    assert.equal(calls, 0);
+  }
+});
+
+test('missing credentials, header controls and an abbreviated candidate fail before any fetch without leaking values', async () => {
+  for (const delta of [
+    { bypassSecret: '' },
+    { bypassSecret: 'hidden\r\nheader' },
+    { bypassSecret: 'hidden\0token' },
+    { bypassSecret: 'hidden token' },
+    { token: 'hidden\r\ntoken' },
+    { token: '' },
+    { orgId: '' },
+    { projectId: '' },
+  ]) {
+    let calls = 0;
+    await assert.rejects(
+      deploymentVerifier.verifyVercelPreview(PREVIEW_URL, HEAD_SHA, {
+        ...PREVIEW_OPTIONS,
+        ...delta,
+        fetchImpl: async () => {
+          calls += 1;
+          throw new Error('Unexpected fetch');
+        },
+      }),
+      (error) =>
+        /requires valid Vercel credentials/.test(error.message) &&
+        !error.message.includes('hidden'),
+    );
+    assert.equal(calls, 0);
+  }
+  await assert.rejects(
+    deploymentVerifier.verifyVercelPreview(PREVIEW_URL, HEAD_SHA.slice(0, 9), PREVIEW_OPTIONS),
+    /must be a full commit/,
+  );
+});
+
+test('preview lookup errors and redirects never send the automation secret to a deployment', async () => {
+  for (const response of [
+    new Response('', { status: 302, headers: { location: 'https://attacker.example' } }),
+    new Response('', { status: 403 }),
+    new Response('private invalid response'),
+  ]) {
+    let calls = 0;
+    await assert.rejects(
+      deploymentVerifier.verifyVercelPreview(PREVIEW_URL, HEAD_SHA, {
+        ...PREVIEW_OPTIONS,
+        fetchImpl: async (url, options) => {
+          calls += 1;
+          assert.equal(new URL(url).origin, 'https://api.vercel.com');
+          assert.equal(options.redirect, 'manual');
+          assert.equal(options.headers['x-vercel-protection-bypass'], undefined);
+          return response;
+        },
+      }),
+      /preview lookup returned/,
+    );
+    assert.equal(calls, 1);
+  }
+});
+
+test('preview serving and version redirects remain manual and cannot forward the bypass', async () => {
+  for (const redirectedPath of ['/api/health', '/api/me', '/api/version']) {
+    const calls = [];
+    const servingFetch = previewFetch(calls);
+    await assert.rejects(
+      deploymentVerifier.verifyVercelPreview(PREVIEW_URL, HEAD_SHA, {
+        ...PREVIEW_OPTIONS,
+        fetchImpl: async (url, options) => {
+          assert.equal(options.redirect, 'manual');
+          assert.ok(['https://api.vercel.com', PREVIEW_URL].includes(new URL(url).origin));
+          if (new URL(url).pathname === redirectedPath) {
+            calls.push({ url: new URL(url), options });
+            return new Response('', {
+              status: 307,
+              headers: { location: 'https://attacker.example' },
+            });
+          }
+          return servingFetch(url, options);
+        },
+      }),
+      /returned 307/,
+    );
+    assert.ok(calls.every(({ url }) => url.origin !== 'https://attacker.example'));
+  }
+});
+
+test('a protected preview still rejects old commits, bad health and anonymous authenticated responses', async () => {
+  for (const [path, body, status, expected] of [
+    ['/api/version', { commit: OLDER_SHA }, 200, /serving commit/],
+    ['/api/health', { ok: true }, 200, /not this app/],
+    ['/api/usage', { percentUsed: 0 }, 200, /expected 401/],
+    ['/api/me', { error: { code: 'WRONG' } }, 401, /UNAUTHORIZED envelope/],
+  ]) {
+    const calls = [];
+    const servingFetch = previewFetch(calls);
+    await assert.rejects(
+      deploymentVerifier.verifyVercelPreview(PREVIEW_URL, HEAD_SHA, {
+        ...PREVIEW_OPTIONS,
+        fetchImpl: (url, options) =>
+          new URL(url).pathname === path
+            ? Promise.resolve(Response.json(body, { status }))
+            : servingFetch(url, options),
+      }),
+      expected,
+    );
+  }
+});
+
+test('public production probes do not acquire an implicit bypass from options or the environment', async () => {
+  const calls = [];
+  const fetchImpl = async (input, options) => {
+    const url = new URL(input);
+    calls.push(options);
+    if (url.pathname === '/api/health') return Response.json(HEALTHY_BODY);
+    if (url.pathname === '/api/version') return Response.json({ commit: HEAD_SHA });
+    return Response.json(UNAUTHORIZED_BODY, { status: 401 });
+  };
+  await verifyDeployment('https://production.fixture.invalid', {
+    fetchImpl,
+    bypassSecret: PREVIEW_OPTIONS.bypassSecret,
+  });
+  await verifyDeployedCommit('https://production.fixture.invalid', HEAD_SHA, {
+    fetchImpl,
+    bypassSecret: PREVIEW_OPTIONS.bypassSecret,
+  });
+  assert.ok(calls.every((options) => options.headers['x-vercel-protection-bypass'] === undefined));
 });
