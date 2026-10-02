@@ -1,6 +1,8 @@
 import 'server-only';
 
+import type { Metadata } from 'next';
 import { z } from 'zod';
+import { conversationDocumentTitle } from '@/features/chat/lib/conversation-document-title';
 import { logger } from '@/lib/logger';
 import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
 
@@ -25,4 +27,15 @@ export async function readOwnConversationTitle(conversationId: string): Promise<
     logger.warn({ error, conversationId }, 'Could not read the conversation title for its tab');
     return null;
   }
+}
+
+export async function conversationMetadata(
+  params: Promise<{ sessionId: string }>,
+): Promise<Metadata> {
+  const { sessionId } = await params;
+  return {
+    title: {
+      absolute: conversationDocumentTitle(await readOwnConversationTitle(sessionId), true),
+    },
+  };
 }

@@ -1,13 +1,10 @@
-import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { WebChatRoot } from '@/features/chat/components/WebChatRoot';
-import { conversationDocumentTitle } from '@/features/chat/lib/conversation-document-title';
+import { NEW_CHAT_METADATA } from '@/features/chat/lib/conversation-document-title';
 
 const AGI_WORK_PATH = '/agi-work';
 
-export const metadata: Metadata = {
-  title: { absolute: conversationDocumentTitle(null, false) },
-};
+export const metadata = NEW_CHAT_METADATA;
 
 export default async function Page() {
   const requestHeaders = await headers();

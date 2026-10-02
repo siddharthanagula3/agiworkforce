@@ -27,6 +27,10 @@ vi.mock('@/features/chat/components/ChatStreamRuntimeProvider', () => ({
   useChatStreamRuntime: vi.fn(),
   ChatStreamRuntimeProvider: ({ children }: PropsWithChildren) => <>{children}</>,
 }));
+vi.mock('@/lib/server/conversation-title', () => ({
+  conversationMetadata: vi.fn(),
+  readOwnConversationTitle: vi.fn(),
+}));
 vi.mock('@/features/chat/components/WebChatRoot', () => ({
   WebChatRoot: (props: { compact?: boolean }) => {
     mocks.webChatRoot(props);
@@ -35,7 +39,7 @@ vi.mock('@/features/chat/components/WebChatRoot', () => ({
 }));
 
 import QuickAskLayout from './layout';
-import QuickAskPage from './page';
+import QuickAskPage, { metadata } from './page';
 import QuickAskConversationPage from './[sessionId]/page';
 
 describe('/quick-ask route', () => {
@@ -53,6 +57,10 @@ describe('/quick-ask route', () => {
 
     rerender(<QuickAskConversationPage />);
     expect(mocks.webChatRoot).toHaveBeenLastCalledWith({ compact: true });
+  });
+
+  it('names a new Quick Ask tab after the product, not the marketing tagline', () => {
+    expect(metadata.title).toEqual({ absolute: 'AGI' });
   });
 
   it('enforces current terms against the exact Quick Ask URL', async () => {
