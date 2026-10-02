@@ -20,11 +20,11 @@
     },
     {
       "path": "/api/cron/reconcile-credits",
-      "schedule": "30 0 * * *"
+      "schedule": "7 0 * * *"
     },
     {
       "path": "/api/cron/expire-bonus-credits",
-      "schedule": "50 0 * * *"
+      "schedule": "12 0 * * *"
     },
     {
       "path": "/api/cron/grant-referral-rewards",
@@ -32,7 +32,7 @@
     },
     {
       "path": "/api/cron/expire-purchased-credits",
-      "schedule": "25 1 * * *"
+      "schedule": "6 1 * * *"
     },
     {
       "path": "/api/cron/remind-trials",
@@ -44,7 +44,7 @@
     },
     {
       "path": "/api/cron/reclaim-sandboxes",
-      "schedule": "45 * * * *"
+      "schedule": "11 * * * *"
     },
     {
       "path": "/api/cron/reap-code-turns",
@@ -76,11 +76,11 @@
     },
     {
       "path": "/api/cron/purge-deleted-accounts",
-      "schedule": "30 4 * * *"
+      "schedule": "7 4 * * *"
     },
     {
       "path": "/api/cron/purge-deleted-organizations",
-      "schedule": "40 4 * * *"
+      "schedule": "12 4 * * *"
     },
     {
       "path": "/api/cron/expire-support-handoffs",
@@ -88,7 +88,7 @@
     },
     {
       "path": "/api/cron/expire-memories",
-      "schedule": "20 3 * * *"
+      "schedule": "5 3 * * *"
     },
     {
       "path": "/api/cron/health-probe",
@@ -100,7 +100,7 @@
     },
     {
       "path": "/api/cron/replicate-object-backups",
-      "schedule": "25 * * * *"
+      "schedule": "6 * * * *"
     },
     {
       "path": "/api/cron/expire-organization-invitations",
@@ -108,11 +108,11 @@
     },
     {
       "path": "/api/cron/expire-code-trials",
-      "schedule": "25 * * * *"
+      "schedule": "6 * * * *"
     },
     {
       "path": "/api/cron/purge-security-audit-logs",
-      "schedule": "30 2 * * *"
+      "schedule": "7 2 * * *"
     },
     {
       "path": "/api/cron/enforce-billing-retention",
@@ -120,11 +120,11 @@
     },
     {
       "path": "/api/cron/enforce-workspace-retention",
-      "schedule": "20 4 * * *"
+      "schedule": "5 4 * * *"
     },
     {
       "path": "/api/cron/enforce-domain-retention",
-      "schedule": "40 4 * * *"
+      "schedule": "14 4 * * *"
     },
     {
       "path": "/api/cron/drain-audit-streams",
@@ -140,11 +140,11 @@
     },
     {
       "path": "/api/cron/refresh-plugin-directory",
-      "schedule": "35 6 * * *"
+      "schedule": "8 6 * * *"
     },
     {
       "path": "/api/cron/refresh-connector-directory",
-      "schedule": "15 6 * * *"
+      "schedule": "3 6 * * *"
     },
     {
       "path": "/api/cron/report-enterprise-usage",
@@ -152,15 +152,15 @@
     },
     {
       "path": "/api/cron/reconcile-provider-costs",
-      "schedule": "15 1 * * *"
+      "schedule": "3 1 * * *"
     },
     {
       "path": "/api/cron/reconcile-billed-plans",
-      "schedule": "45 1 * * *"
+      "schedule": "11 1 * * *"
     },
     {
       "path": "/api/cron/enforce-billing-collection",
-      "schedule": "20 5 * * *"
+      "schedule": "5 5 * * *"
     },
     {
       "path": "/api/cron/evaluate-model-rollout",
@@ -168,11 +168,11 @@
     },
     {
       "path": "/api/cron/remind-free-quota-renewal",
-      "schedule": "22 * * * *"
+      "schedule": "5 * * * *"
     },
     {
       "path": "/api/cron/roll-up-product-metrics",
-      "schedule": "40 2 * * *"
+      "schedule": "10 2 * * *"
     },
     {
       "path": "/api/cron/allocate-infrastructure-costs",
@@ -180,7 +180,7 @@
     },
     {
       "path": "/api/cron/renew-gmail-watches",
-      "schedule": "52 6 * * *"
+      "schedule": "13 6 * * *"
     }
   ]
 }

@@ -25,6 +25,7 @@ import {
   isAutoModeModelId,
   microusdFromCredits,
 } from '@agiworkforce/types';
+import { dbLowPowerEnabled } from '@/lib/server/cron-low-power';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   createClaimedUserScopedDb,
@@ -75,7 +76,11 @@ const SCHEDULE_WORKER_NAME = 'scheduled-task';
 const APPROVAL_EXPIRED_MESSAGE = `Nobody approved or denied the step this run was waiting on within ${APPROVAL_CHECKPOINT_TTL_HOURS} hours, so the run stopped. Resume the schedule to run it again.`;
 
 export { UNATTENDED_RUN_DENIED_STATUSES } from '@/lib/auth/account-lifecycle';
-const MISSED_EXECUTION_GRACE_MS = 2 * SWEEP_INTERVAL_MS;
+const LOW_POWER_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+
+export function missedExecutionGraceMs(): number {
+  return 2 * (dbLowPowerEnabled() ? LOW_POWER_SWEEP_INTERVAL_MS : SWEEP_INTERVAL_MS);
+}
 const MAX_RETRY_ATTEMPTS = 5;
 const MIN_RETRY_BACKOFF_SECONDS = 60;
 const MAX_RETRY_BACKOFF_SECONDS = 86_400;
@@ -2008,7 +2013,7 @@ export function detectMissedExecution(
   const dueAt = new Date(claim.dueAt ?? claim.scheduledFor);
   if (!Number.isFinite(dueAt.getTime())) return null;
   const lateByMs = now.getTime() - dueAt.getTime();
-  if (lateByMs <= MISSED_EXECUTION_GRACE_MS) return null;
+  if (lateByMs <= missedExecutionGraceMs()) return null;
   return {
     policy: claim.task.missedExecutionPolicy ?? 'run_once',
     scheduledFor: dueAt.toISOString(),

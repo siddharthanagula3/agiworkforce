@@ -28,7 +28,8 @@ vi.mock('@/lib/connectors/directory/registry-client', async () => {
   return { ...actual, fetchRegistryPage: (...args: unknown[]) => mocks.fetchRegistryPage(...args) };
 });
 vi.mock('@/lib/connectors/directory/snapshot-cache', () => ({
-  readSnapshotRecords: () => mocks.readSnapshotRecords(),
+  readSnapshotRecordsForIngest: () => mocks.readSnapshotRecords(),
+  DirectorySnapshotUnreadableError: class extends Error {},
   writeSnapshotRecords: (...args: unknown[]) => mocks.writeSnapshotRecords(...args),
   readSyncState: () => mocks.readSyncState(),
   writeSyncState: (...args: unknown[]) => mocks.writeSyncState(...args),
@@ -245,6 +246,30 @@ describe('ingestConnectorDirectory', () => {
     mocks.internalRecords.mockReturnValue([]);
     mocks.readSnapshotRecords.mockResolvedValue([]);
     mocks.readIngestLease.mockResolvedValue(null);
+  });
+
+  it('lets a rebuild start from nothing when the stored snapshot cannot be read', async () => {
+    const { DirectorySnapshotUnreadableError } =
+      await import('@/lib/connectors/directory/snapshot-cache');
+    mocks.readSyncState.mockResolvedValueOnce(syncState({ bootstrapComplete: true }));
+    mocks.fetchRegistryPage.mockResolvedValueOnce(page([activeEntry('one')]));
+    mocks.readSnapshotRecords.mockRejectedValueOnce(new DirectorySnapshotUnreadableError('v2'));
+
+    await run({ rebuild: true });
+
+    expect(mocks.writeSnapshotRecords).toHaveBeenCalled();
+  });
+
+  it('stops without writing when the stored snapshot exists but cannot be read', async () => {
+    mocks.readSyncState.mockResolvedValueOnce(
+      syncState({ bootstrapComplete: true, lastSyncAt: '2026-09-01T00:00:00.000Z' }),
+    );
+    mocks.fetchRegistryPage.mockResolvedValueOnce(page([activeEntry('one')]));
+    mocks.readSnapshotRecords.mockRejectedValueOnce(new Error('snapshot v2 could not be decoded'));
+
+    await expect(run()).rejects.toThrow('could not be decoded');
+
+    expect(mocks.writeSnapshotRecords).not.toHaveBeenCalled();
   });
 
   it('rebuilds from the first page when asked, even after a completed bootstrap', async () => {

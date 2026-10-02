@@ -1,6 +1,8 @@
 import 'server-only';
 
 import {
+  readIconIndex,
+  readIconIndexStamp,
   readSnapshotRecords,
   readSnapshotStamp,
   readSyncState,
@@ -25,6 +27,13 @@ const EMPTY_SNAPSHOT: Omit<CachedSnapshot, 'stamp'> = {
 };
 
 let cached: CachedSnapshot | null = null;
+
+interface CachedIconIndex {
+  readonly stamp: number;
+  readonly index: Readonly<Record<string, string>>;
+}
+
+let cachedIconIndex: CachedIconIndex | null = null;
 
 async function loadSnapshot(): Promise<Omit<CachedSnapshot, 'stamp'>> {
   const stamp = await readSnapshotStamp();
@@ -61,6 +70,24 @@ export async function getSnapshotView(): Promise<DirectorySnapshotView> {
   };
 }
 
+export async function getDirectoryIconUrl(connectorId: string): Promise<string | null> {
+  const stamp = await readIconIndexStamp();
+  if (stamp !== null) {
+    if (cachedIconIndex?.stamp !== stamp) {
+      const index = await readIconIndex();
+      cachedIconIndex = index ? { stamp, index } : null;
+    }
+    if (cachedIconIndex) {
+      return Object.hasOwn(cachedIconIndex.index, connectorId)
+        ? (cachedIconIndex.index[connectorId] ?? null)
+        : null;
+    }
+  }
+  const records = await getSnapshotRecords();
+  return records.find((entry) => entry.id === connectorId)?.iconUrl ?? null;
+}
+
 export function __resetSnapshotMemoryCacheForTests(): void {
   cached = null;
+  cachedIconIndex = null;
 }

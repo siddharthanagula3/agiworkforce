@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import {
   runHealthChecks,
   type CapabilityCheck,
@@ -192,6 +193,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     logger.warn('Unauthorized health probe cron request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const lowPower = lowPowerCronSkip();
+  if (lowPower) return lowPower;
 
   let result: HealthCheckResult;
   try {

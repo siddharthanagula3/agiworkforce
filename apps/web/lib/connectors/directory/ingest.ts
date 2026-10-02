@@ -29,7 +29,8 @@ import {
   clearIngestLease,
   DEFAULT_SYNC_STATE,
   readIngestLease,
-  readSnapshotRecords,
+  DirectorySnapshotUnreadableError,
+  readSnapshotRecordsForIngest,
   readSyncState,
   type DirectoryIngestLease,
   writeIngestLease,
@@ -335,6 +336,15 @@ async function acquireIngestLease(
   return lease;
 }
 
+async function existingRecordsForIngest(rebuild: boolean): Promise<readonly DirectoryRecord[]> {
+  try {
+    return (await readSnapshotRecordsForIngest()) ?? [];
+  } catch (error) {
+    if (rebuild && error instanceof DirectorySnapshotUnreadableError) return [];
+    throw error;
+  }
+}
+
 export async function ingestConnectorDirectory(options: IngestOptions): Promise<IngestSummary> {
   const now = options.now ?? Date.now;
   const startedAtMs = now();
@@ -374,7 +384,7 @@ async function runIngest(
   );
   const crawlEndedAtMs = now();
 
-  const existing = (await readSnapshotRecords()) ?? [];
+  const existing = await existingRecordsForIngest(options.rebuild === true);
   const existingRegistry = existing.filter((record) => record.sourceRegistry === REGISTRY_SOURCE);
   const removedIds = new Set(crawl.removedIds);
   const plan = planAuthProbes(

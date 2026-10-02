@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { drainBackgroundJobs } from '@/lib/jobs/job-drain';
 import { BACKGROUND_JOB_HANDLERS } from '@/lib/jobs/job-handlers';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 export const runtime = 'nodejs';
@@ -19,6 +20,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     logger.warn('Unauthorized background job drain request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const lowPower = lowPowerCronSkip();
+  if (lowPower) return lowPower;
 
   try {
     const summary = await drainBackgroundJobs({

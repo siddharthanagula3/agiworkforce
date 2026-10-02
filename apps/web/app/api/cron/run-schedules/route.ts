@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PLATFORM_SCHEDULE_RUNS_PER_SWEEP } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import { processDueScheduleRuns } from '@/lib/services/schedule-service';
 import type { ScheduleBatchSummary } from '@/lib/services/schedule-service';
 
@@ -23,6 +24,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     logger.warn('Unauthorized scheduled-task cron request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const lowPower = lowPowerCronSkip();
+  if (lowPower) return lowPower;
 
   const startedAt = Date.now();
   const totals: ScheduleBatchSummary = {

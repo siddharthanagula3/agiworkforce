@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { enqueueJob } from '@/lib/jobs/job-service';
 import {
@@ -35,6 +36,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     logger.warn('Unauthorized audit stream drain request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const lowPower = lowPowerCronSkip();
+  if (lowPower) return lowPower;
 
   const hasActiveDestinations = await hasActiveAuditStreamDestinations();
   if (hasActiveDestinations === false) {

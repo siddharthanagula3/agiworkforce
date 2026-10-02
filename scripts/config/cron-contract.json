@@ -18,13 +18,7 @@
       "reason": "it walks PROVIDER_COST_REPORT_CLIENTS, a constant list of provider adapters"
     }
   ],
-  "allowedCollisions": [
-    {
-      "id": "enforce-domain-retention + purge-deleted-organizations",
-      "reason": "both are scheduled at 40 4 every day and both sweep organization-scoped rows; the schedules live in vercel.json, which only a reviewed deploy change may edit",
-      "fix": "in vercel.json move /api/cron/enforce-domain-retention from \"40 4 * * *\" to \"50 4 * * *\", the next free slot in the nightly retention block"
-    }
-  ],
+  "allowedCollisions": [],
   "overlapSafe": [
     {
       "id": "drain-background-jobs",

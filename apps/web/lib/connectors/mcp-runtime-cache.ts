@@ -114,6 +114,60 @@ export class NeonMcpResponseCacheStore implements ResponseCacheStore {
     }
   }
 
+  async insertIfAbsent(
+    key: CacheKey,
+    entry: { value: string; expiresAt?: number; scope?: 'public' | 'private' },
+  ): Promise<number | null> {
+    const db = getNeonDb();
+    try {
+      const rows = await db.query<{ stamp: string | number }>(
+        `insert into public.mcp_response_cache
+           (method, params_key, partition_key, value, expires_at_ms, scope)
+         values ($1, $2, $3, $4, $5, $6)
+         on conflict (method, params_key, partition_key) do nothing
+         returning stamp`,
+        [...normalizedKey(key), entry.value, entry.expiresAt ?? null, entry.scope ?? null],
+      );
+      const row = rows[0];
+      return row ? Number(row.stamp) : null;
+    } catch (error) {
+      if (isCacheSchemaUnavailable(error)) return null;
+      throw error;
+    }
+  }
+
+  async replaceIfStamp(
+    key: CacheKey,
+    entry: { value: string; expiresAt?: number; scope?: 'public' | 'private' },
+    expectedStamp: number,
+  ): Promise<number | null> {
+    const db = getNeonDb();
+    try {
+      const rows = await db.query<{ stamp: string | number }>(
+        `update public.mcp_response_cache set
+           value = $4,
+           expires_at_ms = $5,
+           scope = $6,
+           stamp = nextval('public.mcp_response_cache_stamp_seq'),
+           updated_at = now()
+         where method = $1 and params_key = $2 and partition_key = $3 and stamp = $7
+         returning stamp`,
+        [
+          ...normalizedKey(key),
+          entry.value,
+          entry.expiresAt ?? null,
+          entry.scope ?? null,
+          expectedStamp,
+        ],
+      );
+      const row = rows[0];
+      return row ? Number(row.stamp) : null;
+    } catch (error) {
+      if (isCacheSchemaUnavailable(error)) return null;
+      throw error;
+    }
+  }
+
   async delete(key: CacheKey): Promise<void> {
     try {
       await getNeonDb().execute(

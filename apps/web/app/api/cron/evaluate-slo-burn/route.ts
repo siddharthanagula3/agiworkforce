@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import { notifyIncident } from '@/lib/server/incident/dispatch';
 import type { AlertSeverity } from '@/lib/server/incident/pager';
 import { describeAnomaly, evaluateAnomalies, type AnomalyAlert } from '@/lib/server/slo/anomaly';
@@ -131,6 +132,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     logger.warn('Unauthorized SLO burn-rate cron request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const lowPower = lowPowerCronSkip();
+  if (lowPower) return lowPower;
 
   let alerts: BurnRateAlert[];
   try {

@@ -16,6 +16,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 import {
   DEFAULT_SYNC_STATE,
   clearIngestLease,
+  encodeStoredJson,
   readIngestLease,
   readSnapshotRecords,
   readSnapshotStamp,
@@ -44,15 +45,27 @@ function leaseRow(expiresAtMs: number) {
 describe('readSnapshotStamp', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('reads only the stamp column, never the value', async () => {
-    mocks.query.mockResolvedValueOnce([{ stamp: '9' }]);
+  it('reads only the stamp columns, never the value', async () => {
+    mocks.query.mockResolvedValueOnce([{ stamp: '9' }]).mockResolvedValueOnce([]);
 
     await expect(readSnapshotStamp()).resolves.toBe(9);
-    expect(String(mocks.query.mock.calls[0]?.[0])).not.toContain('value');
+    for (const call of mocks.query.mock.calls) {
+      expect(String(call[0])).not.toContain('value');
+    }
+  });
+
+  it('falls back to the legacy row before the first compressed write', async () => {
+    mocks.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ stamp: '3' }]);
+    await expect(readSnapshotStamp()).resolves.toBe(3);
+  });
+
+  it('follows whichever row was written last', async () => {
+    mocks.query.mockResolvedValueOnce([{ stamp: '5' }]).mockResolvedValueOnce([{ stamp: '8' }]);
+    await expect(readSnapshotStamp()).resolves.toBe(8);
   });
 
   it('returns null when nothing has ever been ingested', async () => {
-    mocks.query.mockResolvedValueOnce([]);
+    mocks.query.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
     await expect(readSnapshotStamp()).resolves.toBeNull();
   });
 });
@@ -60,29 +73,94 @@ describe('readSnapshotStamp', () => {
 describe('readSnapshotRecords and writeSnapshotRecords', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('round-trips a records array through json', async () => {
-    mocks.query.mockResolvedValueOnce([
-      {
-        value: JSON.stringify([{ id: 'notion' }]),
-        stamp: '1',
-        expires_at_ms: null,
-        scope: 'public',
-      },
-    ]);
+  const legacyRow = (stamp: string) => ({
+    value: JSON.stringify([{ id: 'notion' }]),
+    stamp,
+    expires_at_ms: null,
+    scope: 'public',
+  });
+
+  it('reads a legacy json row and copies it to the compressed row only if none exists yet', async () => {
+    mocks.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ stamp: '1' }])
+      .mockResolvedValueOnce([legacyRow('1')])
+      .mockResolvedValueOnce([{ stamp: '7' }])
+      .mockResolvedValueOnce([{ stamp: '8' }]);
 
     await expect(readSnapshotRecords()).resolves.toEqual([{ id: 'notion' }]);
+
+    const insert = mocks.query.mock.calls[3];
+    expect(String(insert?.[0])).toContain('do nothing');
+    expect((insert?.[1] as unknown[])[1]).toBe('v2');
+    expect(String((insert?.[1] as unknown[])[3]).startsWith('br64:')).toBe(true);
+    expect((mocks.query.mock.calls[4]?.[1] as unknown[])[0]).toBe(
+      'connectors.directory.icon-index',
+    );
+  });
+
+  it('leaves a compressed row written meanwhile untouched and skips the icon index', async () => {
+    mocks.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ stamp: '1' }])
+      .mockResolvedValueOnce([legacyRow('1')])
+      .mockResolvedValueOnce([]);
+
+    await expect(readSnapshotRecords()).resolves.toEqual([{ id: 'notion' }]);
+    expect(mocks.query).toHaveBeenCalledTimes(4);
+  });
+
+  it('serves the compressed row while it is newer than the legacy row', async () => {
+    mocks.query
+      .mockResolvedValueOnce([{ stamp: '9' }])
+      .mockResolvedValueOnce([{ stamp: '4' }])
+      .mockResolvedValueOnce([
+        {
+          value: await encodeStoredJson([{ id: 'slack' }]),
+          stamp: '9',
+          expires_at_ms: null,
+          scope: 'public',
+        },
+      ]);
+
+    await expect(readSnapshotRecords()).resolves.toEqual([{ id: 'slack' }]);
+    expect((mocks.query.mock.calls[2]?.[1] as unknown[])[1]).toBe('v2');
+  });
+
+  it('prefers a legacy row an older build wrote after a rollback, replacing the compressed row only if unchanged', async () => {
+    mocks.query
+      .mockResolvedValueOnce([{ stamp: '5' }])
+      .mockResolvedValueOnce([{ stamp: '8' }])
+      .mockResolvedValueOnce([legacyRow('8')])
+      .mockResolvedValueOnce([{ stamp: '9' }])
+      .mockResolvedValueOnce([{ stamp: '10' }]);
+
+    await expect(readSnapshotRecords()).resolves.toEqual([{ id: 'notion' }]);
+
+    const replace = mocks.query.mock.calls[3];
+    expect(String(replace?.[0])).toContain('and stamp = $7');
+    expect((replace?.[1] as unknown[])[6]).toBe(5);
   });
 
   it('returns null for an empty snapshot', async () => {
-    mocks.query.mockResolvedValueOnce([]);
+    mocks.query.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
     await expect(readSnapshotRecords()).resolves.toBeNull();
   });
 
-  it('writes the records as a single json blob and returns the new stamp', async () => {
-    mocks.query.mockResolvedValueOnce([{ stamp: '5' }]);
+  it('writes the icon index, then the legacy json row an older build reads, then the compressed row', async () => {
+    mocks.query
+      .mockResolvedValueOnce([{ stamp: '4' }])
+      .mockResolvedValueOnce([{ stamp: '5' }])
+      .mockResolvedValueOnce([{ stamp: '6' }]);
 
-    await expect(writeSnapshotRecords([{ id: 'notion' } as never])).resolves.toBe(5);
-    expect(mocks.query.mock.calls[0]?.[1]?.[3]).toBe(JSON.stringify([{ id: 'notion' }]));
+    await expect(writeSnapshotRecords([{ id: 'notion' } as never])).resolves.toBe(6);
+
+    const [index, legacy, compressed] = mocks.query.mock.calls.map((call) => call[1] as unknown[]);
+    expect(index?.[0]).toBe('connectors.directory.icon-index');
+    expect(legacy?.[1]).toBe('v1');
+    expect(legacy?.[3]).toBe(JSON.stringify([{ id: 'notion' }]));
+    expect(compressed?.[1]).toBe('v2');
+    expect(String(compressed?.[3]).startsWith('br64:')).toBe(true);
   });
 });
 
