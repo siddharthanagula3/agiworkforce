@@ -3,7 +3,7 @@
   "route": "/privacy",
   "date": "2026-09-22",
   "replacedOn": "2026-09-27",
-  "commit": "f4493a62fd1ef77ba9044a2298ddf8f40f4908e4",
+  "commit": "773e09da46168cf30e54e18f06c3723fb7c92d57",
   "committedAt": "2026-09-27T08:59:50-05:00",
   "title": "Privacy policy.",
   "blocks": [

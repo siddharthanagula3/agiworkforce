@@ -12,6 +12,7 @@ export interface BuildMetadataOptions {
   ogType?: 'website' | 'article';
   imageAlt?: string;
   robots?: Metadata['robots'];
+  feeds?: NonNullable<Metadata['alternates']>['types'];
 }
 
 /**
@@ -37,6 +38,7 @@ export function buildMetadata(options: BuildMetadataOptions): Metadata {
     ogType = 'website',
     imageAlt,
     robots,
+    feeds,
   } = options;
 
   const canonical = absoluteUrl(path);
@@ -53,7 +55,7 @@ export function buildMetadata(options: BuildMetadataOptions): Metadata {
     title,
     description,
     ...(keywords && keywords.length > 0 ? { keywords } : {}),
-    alternates: { canonical },
+    alternates: feeds ? { canonical, types: feeds } : { canonical },
     openGraph: {
       type: ogType,
       locale: 'en_US',

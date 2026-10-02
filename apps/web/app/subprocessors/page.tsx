@@ -14,11 +14,14 @@ import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
+import { CHANGELOG_FEED_LINKS } from '../release-notes/changelog-feed';
+
 export const metadata = buildMetadata({
   title: 'Subprocessors',
   description:
     'Third parties that process customer data on AGI’s behalf, with their purpose and region.',
   path: '/subprocessors',
+  feeds: CHANGELOG_FEED_LINKS,
 });
 
 interface Subprocessor {
@@ -320,10 +323,9 @@ export default function SubprocessorsPage() {
                 Corrections, most recent first.
               </h2>
               <Prose>
-                Three reviews of what actually leaves this product, on 14 August, 12 September and{' '}
-                {POLICY_LAST_UPDATED.subprocessors}, found this page had been wrong in both
-                directions, and we would rather publish the correction than quietly reissue the
-                list.
+                Three reviews of what actually leaves this product, on 14 August, 12 September and
+                21 September, found this page had been wrong in both directions, and we would rather
+                publish the correction than quietly reissue the list.
               </Prose>
             </div>
             <NoteList items={CORRECTIONS} />

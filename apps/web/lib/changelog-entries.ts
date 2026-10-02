@@ -83,9 +83,9 @@ export const RELEASES: readonly Release[] = [
   },
   {
     date: '2026-05-03',
-    headline: 'CLI v1.0 · live',
+    headline: 'CLI v1.0',
     body: [
-      'Pure Rust binary on five platforms, published as five archives on the GitHub Release. Neither install route works against that release yet: the Homebrew tap repository is private, and install.sh refuses to install without the signed checksum manifest the release does not carry.',
+      'Pure Rust binary on five platforms, published as five archives on a GitHub release this repository no longer holds. Neither install route worked against it: the Homebrew tap repository is private, and install.sh refused to install without the signed checksum manifest that release did not carry.',
       'Cleanup pass: removed ~70 codex-rs port crates and a large net of dead code. Audit closed most P0/P1 items.',
     ],
   },
@@ -93,8 +93,8 @@ export const RELEASES: readonly Release[] = [
     date: '2026-02 to 2026-05',
     headline: 'Desktop · early releases',
     body: [
-      'Tauri + React desktop, with the release signing and installer publishing pipeline aligned to the public release path. No signed installer has been published from it yet: the newest desktop release carries .AppImage, .deb and .rpm assets and no signature.',
-      'Public download links open only after verified GitHub release assets or configured signed-asset URLs are available.',
+      'Tauri + React desktop, with the release signing and installer publishing pipeline aligned to the public release path. No signed installer was published from it: its newest release carried .AppImage, .deb and .rpm assets and no signature.',
+      'Public download links were gated on verified GitHub release assets or configured signed-asset URLs.',
     ],
   },
 ];

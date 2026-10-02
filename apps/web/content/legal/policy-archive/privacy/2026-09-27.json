@@ -3,8 +3,8 @@
   "route": "/privacy",
   "date": "2026-09-27",
   "replacedOn": "2026-09-29",
-  "commit": "731020bf3884716abbe35c81d81ed221d4d899f0",
-  "committedAt": "2026-09-29T02:23:20-05:00",
+  "commit": "464119961a9531471b7668d9ac1cc2bea0f87999",
+  "committedAt": "2026-09-29T05:12:28-05:00",
   "title": "Privacy policy.",
   "blocks": [
     {
@@ -1665,7 +1665,7 @@
       "type": "paragraph",
       "content": [
         {
-          "text": "“Delete my account” erases an enumerated list of 114 user-scoped tables and your stored files. A short list of things is kept on purpose, and you should know what before you decide, not after."
+          "text": "“Delete my account” erases an enumerated list of 115 user-scoped tables and your stored files. A short list of things is kept on purpose, and you should know what before you decide, not after."
         }
       ]
     },

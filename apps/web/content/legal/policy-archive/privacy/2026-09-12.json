@@ -1,10 +1,10 @@
 {
   "key": "privacy",
   "route": "/privacy",
-  "date": "2026-09-21",
-  "replacedOn": "2026-09-22",
-  "commit": "a5547e3800b8dec09cde1a60b1bb9d3c429c1f2f",
-  "committedAt": "2026-09-21T18:15:37-05:00",
+  "date": "2026-09-12",
+  "replacedOn": "2026-09-21",
+  "commit": "9633cf72ade7c60699e4b8b52fe9bfd98b983663",
+  "committedAt": "2026-09-21T08:04:57-05:00",
   "title": "Privacy policy.",
   "blocks": [
     {
@@ -32,11 +32,11 @@
           "text": "What we collect, what we do not, and how that changes depending on which mode you run. "
         },
         {
-          "text": "AGI does not use customer conversation content to train AGI-owned models. We do not sell your data. Website users can use AGI managed cloud. The Free plan runs on the free models providers give away, and paid plans with more capacity are opening in stages, so an upgrade needs an access code or a place on the upgrade waitlist. The released CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed cloud is open by default, not invite-only.",
+          "text": "AGI does not use customer conversation content to train AGI-owned models. We do not sell your data. Website users can use AGI managed cloud, with a small free Auto Economy cap and higher-capacity paid plans rolling out. The released CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed cloud is open by default, not invite-only.",
           "strong": true
         },
         {
-          "text": " Last updated: 2026-09-21. Managed Cloud is in public alpha."
+          "text": " Last updated: 2026-09-12. Managed Cloud is in public alpha."
         }
       ]
     },
@@ -387,56 +387,6 @@
             },
             {
               "text": " stored in Cloudflare R2 and catalogued in Neon. The product gives clients an authenticated same-origin file route that requires both the owning account and its active Personal or organisation workspace to match. Missing, deleted, foreign, and inactive-workspace files all return the same not-found response, and those responses are private and not stored by browser caches. Generated videos use a separate private bucket. Images and other non-video files remain in a public R2 bucket: normal product responses do not expose its raw URLs, but anyone who obtains an underlying storage URL can access that object without signing in."
-            },
-            {
-              "text": "\n"
-            },
-            {
-              "text": "Location and camera details in pictures:",
-              "strong": true
-            },
-            {
-              "text": " before a picture you attach in the AGI web, desktop or mobile app leaves your device, AGI removes the location, camera and time details stored inside it, keeping only what is needed to show it the right way up and in the right colours. A picture that cannot be read well enough to do this is not sent. The file name is kept as you gave it."
-            }
-          ]
-        },
-        {
-          "label": [
-            {
-              "text": "Voice and audio"
-            }
-          ],
-          "value": [
-            {
-              "text": "Examples:",
-              "strong": true
-            },
-            {
-              "text": " microphone audio, captured only while you are dictating into the composer or holding a Voice Mode conversation, and the text that comes back from it."
-            },
-            {
-              "text": "\n"
-            },
-            {
-              "text": "Why, and how it is protected:",
-              "strong": true
-            },
-            {
-              "text": " turning speech into text, and holding a spoken conversation. Nothing is captured until you start one of the two. Dictation sends the recording to OpenAI’s transcription endpoint; Voice Mode opens a realtime session with OpenAI and your microphone audio streams from your browser to that session for as long as it runs. "
-            },
-            {
-              "text": "We do not store the audio.",
-              "strong": true
-            },
-            {
-              "text": " The dictation route passes the bytes on and keeps none, and a voice session record holds that session’s settings and a pointer into the transcript, with no audio in it. The text transcript is kept as ordinary conversation content and follows the conversation rows above. There is no voiceprint, speaker identification or other biometric identifier anywhere in this product, and nothing here infers who is speaking. What OpenAI does with audio it receives is its own published practice, named on "
-            },
-            {
-              "text": "/subprocessors",
-              "href": "/subprocessors"
-            },
-            {
-              "text": ", not a promise we can make for it."
             }
           ]
         },
@@ -720,7 +670,7 @@
       "type": "paragraph",
       "content": [
         {
-          "text": "Why this table grew on 2026-09-21.",
+          "text": "Why this table grew on 2026-09-12.",
           "strong": true
         },
         {
@@ -851,14 +801,7 @@
       "type": "paragraph",
       "content": [
         {
-          "text": "AGI does not train AGI-owned models on customer prompts, responses, or files. In Managed Cloud, we send prompts and attached content to the provider serving the model you select and receive its response; some models are reached through OpenRouter or through an inference gateway instead of directly, and "
-        },
-        {
-          "text": "/subprocessors",
-          "href": "/subprocessors"
-        },
-        {
-          "text": " names each of those and the condition under which it carries a request. Those third parties handle that content under their applicable terms and data-use policies; this statement about AGI-owned models is not a promise on their behalf. In BYOK mode, provider handling is governed by your own provider account and terms."
+          "text": "AGI does not train AGI-owned models on customer prompts, responses, or files. In Managed Cloud, we send prompts and attached content to the provider serving the model you select and receive its response; for routed models, the request passes through OpenRouter. Those third parties handle that content under their applicable terms and data-use policies; this statement about AGI-owned models is not a promise on their behalf. In BYOK mode, provider handling is governed by your own provider account and terms."
         }
       ]
     },
@@ -1692,57 +1635,6 @@
               "text": " and we will remove them."
             }
           ]
-        }
-      ]
-    },
-    {
-      "type": "heading",
-      "level": 2,
-      "anchor": "s-incidents",
-      "content": [
-        {
-          "text": "Security incidents"
-        }
-      ]
-    },
-    {
-      "type": "paragraph",
-      "content": [
-        {
-          "text": "We keep a written procedure for a personal data breach: who declares one, what goes into a notification to a regulator, and what an affected person is told. It runs against a 72-hour clock for notifying a regulator where a law requires one, which is the same commitment the "
-        },
-        {
-          "text": "terms",
-          "href": "/terms"
-        },
-        {
-          "text": " make. The safeguards the procedure sits on top of are at "
-        },
-        {
-          "text": "/security",
-          "href": "/security"
-        },
-        {
-          "text": ", including the parts of that posture we have not built."
-        }
-      ]
-    },
-    {
-      "type": "paragraph",
-      "content": [
-        {
-          "text": "How a notice would actually reach you.",
-          "strong": true
-        },
-        {
-          "text": " There is no account-lifecycle mail in this product. The only email it can send is support escalation, scheduled-task notification, and operational alerts to us, and none of those can reach a list of affected customers. So a notice to you would arrive as an in-product message and at a dated public address rather than by email, with direct email only where we hold your address and a person sends it by hand. Neither that in-product notice nor that public page exists as a built feature today; they would be put up during the incident. The same statement is in section 10 of the "
-        },
-        {
-          "text": "India notice",
-          "href": "/privacy/india"
-        },
-        {
-          "text": "."
         }
       ]
     },

@@ -47,17 +47,17 @@ export const RELEASE_NOTES: readonly ReleaseNote[] = RELEASES.map((release) => {
 
 export const RELEASE_STATE_DATES: readonly string[] = Object.keys(RELEASE_STATE);
 
-export const FORTHCOMING: readonly { item: string; detail: string; quarter: string }[] = [
-  { item: 'Mobile', detail: 'App Store + Play Store listings.', quarter: LAUNCH.shortLabel },
+export const FORTHCOMING: readonly { item: string; detail: string; target: string }[] = [
+  { item: 'Mobile', detail: 'App Store + Play Store listings.', target: LAUNCH.shortLabel },
   {
     item: 'Chrome extension',
     detail: 'CWS submission once visual review clears.',
-    quarter: LAUNCH.shortLabel,
+    target: LAUNCH.shortLabel,
   },
   {
     item: 'VS Code extension',
     detail: 'Marketplace listing planned for public launch.',
-    quarter: LAUNCH.shortLabel,
+    target: LAUNCH.shortLabel,
   },
 ];
 

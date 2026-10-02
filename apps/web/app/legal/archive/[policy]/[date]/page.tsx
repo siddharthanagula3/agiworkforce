@@ -13,6 +13,7 @@ import {
   policyHistories,
   policyHistoryBySlug,
   policyHistoryHref,
+  versionStanding,
 } from '@/lib/legal/policy-archive';
 import { buildMetadata } from '@/lib/seo/metadata';
 
@@ -41,7 +42,7 @@ export async function generateMetadata({ params }: { params: Params }) {
   const { history, text } = version;
   return buildMetadata({
     title: `${history.label}, version dated ${text.date}`,
-    description: `The ${history.label.toLowerCase()} as last published under the date ${text.date}. It no longer applies.`,
+    description: `The ${history.label.toLowerCase()} dated ${text.date}. ${versionStanding(history, text.date)}`,
     path: `/legal/archive/${history.slug}/${text.date}`,
     robots: { index: false, follow: true },
   });
@@ -63,11 +64,7 @@ export default async function ArchivedPolicyPage({ params }: { params: Params })
           title={text.title}
           lede={
             <>
-              <strong>This version no longer applies.</strong> It is the text last published under
-              the date {text.date}
-              {text.replacedOn
-                ? `, before the version dated ${text.replacedOn} replaced it`
-                : ''}.{' '}
+              <strong>{versionStanding(history, text.date)}</strong>{' '}
               <Link href={history.route} className="agi-ds-link">
                 Read the current version
               </Link>{' '}

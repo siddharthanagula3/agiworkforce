@@ -1,5 +1,14 @@
 {
-  "note": "The dated version history of every canonical policy page in apps/web/lib/legal-constants.ts. The last version of each must match the text the page publishes and the date it prints; scripts/check-policy-versions.mjs fails when either moves alone. A change that leaves the date where it is appends a version with a note saying why it is editorial. The workflow is in docs/compliance/README.md.",
+  "note": "The dated version history of every canonical policy page in apps/web/lib/legal-constants.ts. The last version of each must match the text the page publishes and the date it prints; scripts/check-policy-versions.mjs fails when either moves alone. A change that leaves the date where it is appends a version with a note saying why it is editorial. recordedSince is the day these histories began: a policy whose first version is dated after it is listed on /changelog with that version's summary. Each record in publications names a day production was checked, a commit on main that prints the dates production served then, and as main the commit carrying the replacement at that moment, main's head or the commit on a branch that moves a date, so a replaced version says whether it applied on this site or was replaced before it was published here. The workflow is in docs/compliance/README.md.",
+  "recordedSince": "2026-09-21",
+  "publications": [
+    {
+      "checkedOn": "2026-10-02",
+      "served": "9633cf72ade7c60699e4b8b52fe9bfd98b983663",
+      "main": "7460f331a2e0a5229dd997805af2de66667614b5",
+      "note": "Vercel's newest production deployment on 2 October 2026 was built on 21 September 2026 from e353673cce, whose tree main holds as 9633cf72ad, and the live policy pages printed the dates POLICY_LAST_UPDATED gives at that commit, checked page by page that day. Main was at 7460f331a2 when this was checked, so a version main had replaced by then was never published on this site."
+    }
+  ],
   "documents": {
     "terms": {
       "page": "apps/web/app/terms/page.tsx",
@@ -10,10 +19,15 @@
           "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; this date is also the terms version every acceptance records, so moving it asks every account to accept again, which is the founder’s decision, reported 2026-09-21."
         },
         {
+          "date": "2026-08-11",
+          "digest": "5fc156baedda5d6b",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it; under the earlier extractor that text's fingerprint is the one above. This entry changes no published wording or effective date."
+        },
+        {
           "date": "2026-09-22",
           "digest": "1000ae1c69856cfa",
           "note": "Discloses the founder-approved Experiential Labs promotional route, its Free-plan content capture and potential provider use, with a new terms acceptance version.",
-          "summary": "Discloses the Experiential Labs promotional route for Free-plan chats, what it captures and how its provider may use that content. Accounts were asked to accept the terms again.",
+          "summary": "Discloses the Experiential Labs promotional route for Free-plan chats, on which Experiential Labs captures prompts and responses by default, keeps them for up to 30 days and may use them to develop, evaluate and improve its services and hosted models.",
           "archive": "not-retained"
         },
         {
@@ -33,15 +47,26 @@
       "page": "apps/web/app/privacy/page.tsx",
       "versions": [
         {
+          "date": "2026-09-12",
+          "digest": "5382189b6748c203",
+          "note": "The version this site was serving on 2 October 2026, as the first record in publications shows: the production deployment printed this date and this text. Recorded that day so the text that applied stays readable once a deploy replaces it."
+        },
+        {
           "date": "2026-09-21",
           "digest": "8a047905eaa64a87",
-          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date."
+          "note": "Recorded 2026-09-21 from the text main held that day, which printed this date. This site was still serving the version dated 2026-09-12 on 2 October 2026, so this version was replaced before it was published here.",
+          "summary": "Adds how dictation and Voice Mode audio is handled: it goes to OpenAI and we keep none of it. Adds that a picture you attach has its location, camera and time details removed before it leaves your device, and is not sent if that cannot be done. Adds a security incidents section on the breach procedure, its 72-hour clock for notifying a regulator and how a notice would reach you, and says that some models are reached through an inference gateway, each named on the subprocessors page."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "993bfeba73ec3848",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it; under the earlier extractor that text's fingerprint is the one above. This entry changes no published wording or effective date."
         },
         {
           "date": "2026-09-22",
           "digest": "8a047905eaa64a87",
           "note": "Adds Experiential Labs Free-plan capture and potential provider use to the privacy notice. The copy-digest instrument does not detect the new JSX text, so this explicit version records the substantive change.",
-          "summary": "Adds how Free-plan chats on the Experiential Labs promotional route are captured and how its provider may use them."
+          "summary": "Adds that on the Experiential Labs promotional route for Free-plan chats, Experiential Labs keeps prompts and responses for up to 30 days and may use them to develop, evaluate and improve its services and hosted models, and that its no-training setting does not stop this capture."
         },
         {
           "date": "2026-09-22",
@@ -52,7 +77,7 @@
           "date": "2026-09-27",
           "digest": "364b3259e3db9d72",
           "note": "Adds the referral program checks and their lawful basis, and states the erasure list at 100 user-scoped tables.",
-          "summary": "Adds the checks the referral program runs and their lawful basis, and states how many user-scoped tables account erasure covers."
+          "summary": "Adds the checks the referral program runs against self-referral, on the basis of legitimate interests: a one-way hash of the network you signed up from, and a comparison of your app installations, your card's Stripe fingerprint and your email address with those of the person who referred you. Updates the number of user-scoped tables account erasure covers."
         },
         {
           "date": "2026-09-27",
@@ -83,7 +108,7 @@
           "date": "2026-09-29",
           "digest": "85f1c06b4c989919",
           "note": "Adds a Google user data section stating how the Gmail, Calendar, Drive and Contacts connectors access, use, store and share Google data, and that this follows the Google API Services User Data Policy including Limited Use. It describes existing practice and narrows no right.",
-          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements. Product analytics now also covers usage events from the AGI apps recorded against your account, so a consent given under an earlier version covers page views only."
+          "summary": "Adds how the Google connectors access, use, store and share Google user data, and states compliance with the Google API Services User Data Policy, including the Limited Use requirements. Product analytics now also covers usage events from the AGI apps recorded against your account, never your messages or files, so a consent given under an earlier version covers page views only, and a workspace administrator can turn analytics off for every member. Adds that a deleted conversation can be restored for 30 days before a daily job permanently deletes it, and that background jobs are kept for up to 30 days."
         },
         {
           "date": "2026-09-29",
@@ -121,10 +146,15 @@
           "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
         },
         {
+          "date": "2026-08-05",
+          "digest": "7c115383388d0917",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it; under the earlier extractor that text's fingerprint is the one above. This entry changes no published wording or effective date."
+        },
+        {
           "date": "2026-09-22",
           "digest": "021c9f2af163b821",
           "note": "Discloses the founder-requested website Skip approvals default and the approval boundaries that still require review.",
-          "summary": "Describes the website's Skip approvals default and the actions that still need your review."
+          "summary": "The website now starts on Skip approvals instead of asking before every tool action, and the policy describes the actions that still need your review."
         },
         {
           "date": "2026-09-22",
@@ -163,10 +193,15 @@
           "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; this date is part of the cookie notice version, so moving it asks every visitor to choose again, which is the founder’s decision, reported 2026-09-21."
         },
         {
+          "date": "2026-09-12",
+          "digest": "717832b6478ab4a8",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it. The fingerprint above reproduces from no commit under either extractor; this one is of the main-line text archived for this date. This entry changes no published wording or effective date."
+        },
+        {
           "date": "2026-09-23",
           "digest": "5d2ea7656cc0eada",
           "note": "Corrects the identity-provider source and removes an obsolete browser storage claim; includes the semicolon-bearing JSX fingerprint migration. The founder approved a new notice version and re-prompting visitors on 2026-09-23.",
-          "summary": "Corrects where the identity provider's cookies come from and removes a browser storage entry the product no longer writes. Visitors were asked to choose again."
+          "summary": "States that we now honour Global Privacy Control, which the policy said we did not read: a browser that sends it is treated as refusing analytics and the product-update list, over any choice stored earlier. Corrects where the identity provider's cookies come from, removes two browser storage entries the product no longer writes, and adds two it does: the account that dismissed the Free plan notice, and a momentary check that local storage works. A visitor who chose under an earlier version is asked to choose again."
         },
         {
           "date": "2026-09-23",
@@ -179,15 +214,26 @@
       "page": "apps/web/app/subprocessors/page.tsx",
       "versions": [
         {
+          "date": "2026-09-12",
+          "digest": "377ab8e76824394e",
+          "note": "The version this site was serving on 2 October 2026, as the first record in publications shows: the production deployment printed this date and this text. Recorded that day so the text that applied stays readable once a deploy replaces it."
+        },
+        {
           "date": "2026-09-21",
           "digest": "c1b0cefecd9999c0",
-          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date."
+          "note": "Recorded 2026-09-21 from the text main held that day, which printed this date. This site was still serving the version dated 2026-09-12 on 2 October 2026, so this version was replaced before it was published here.",
+          "summary": "Adds five recipients: the Cheaper Inference and Experiential Labs inference gateways, Cloudflare Workers AI, Vercel AI Gateway, and OpenAI for dictation and Voice Mode. Removes MiniMax, which was listed but received no Managed Cloud traffic, and corrects when Qwen and Zhipu requests pass through OpenRouter."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "889305c347f68610",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it; under the earlier extractor that text's fingerprint is the one above. This entry changes no published wording or effective date."
         },
         {
           "date": "2026-09-22",
           "digest": "31cc4fe511514a62",
           "note": "Corrects the Experiential Labs processor row against its current platform privacy and data-controls documents and records the founder-approved Free promotional route.",
-          "summary": "Corrects the Experiential Labs entry against its current privacy and data-controls documents and records the Free-plan promotional route."
+          "summary": "Corrects the Experiential Labs entry against its current privacy and data-controls documents and adds its Free-plan promotional route, on which Experiential Labs captures prompts and responses by default, keeps them for up to 30 days and may use them to develop, evaluate and improve its services and hosted models."
         },
         {
           "date": "2026-09-22",
@@ -198,7 +244,54 @@
           "date": "2026-09-28",
           "digest": "16428e0e9e0b5ee1",
           "note": "Adds the upload malware scanner to Fly.io's row: services/upload-scanner runs on Fly.io, every uploaded file passes through it, and it holds a file in memory only while it scans it.",
-          "summary": "Fly.io now also runs our malware scanner, which every uploaded file passes through and which keeps no copy."
+          "summary": "Fly.io now also runs our malware scanner, which every uploaded file passes through and which keeps no copy.",
+          "subprocessorNames": [
+            "Cheaper Inference (operated by Keak)",
+            "Clerk",
+            "Cloudflare",
+            "E2B",
+            "Experiential Labs (operated by Resolute Labs AI, Inc.)",
+            "Expo",
+            "Fly.io",
+            "GitHub",
+            "Google (Places API)",
+            "Google (Play Android Publisher)",
+            "Google Analytics",
+            "Model providers (Managed Cloud)",
+            "Neon",
+            "OpenAI (dictation and Voice Mode)",
+            "OpenRouter",
+            "OpenStreetMap Foundation (Nominatim)",
+            "Perplexity",
+            "Qwen (Alibaba) and Zhipu",
+            "Resend",
+            "Runway",
+            "Sentry",
+            "Stripe",
+            "Upstash",
+            "Vercel"
+          ],
+          "subprocessorProviders": [
+            "anthropic",
+            "cheaperinference",
+            "deepseek",
+            "experientiallabs",
+            "google",
+            "moonshot",
+            "open_router",
+            "openai",
+            "perplexity",
+            "qwen",
+            "vercel_gateway",
+            "workers_ai",
+            "xai",
+            "zhipu"
+          ]
+        },
+        {
+          "date": "2026-09-28",
+          "digest": "f657044742de19f9",
+          "note": "The corrections lede dates the third review of the list to 21 September, the day it found the five missing inference recipients, instead of printing the page's last revision date, which had moved it to 22 and then 28 September although no review happened on either day. No recipient or commitment changed, so the date stays."
         }
       ]
     },
@@ -289,7 +382,7 @@
           "date": "2026-09-27",
           "digest": "16e8983458c38814",
           "note": "Adds the signed-in refund request, the 14-day withdrawal for the EU, EEA and UK, the 7-day unused refund once per account, and the dispute hold, and corrects plan upgrades, which start a new billing period on the day of the upgrade while added seats keep the renewal date. Checkout now asks every customer to confirm, in wording version 2026-09-27: 'I ask for immediate access. I understand that if I withdraw within 14 days, my refund is reduced in proportion to the credits I have used.' A withdrawal is prorated by the credits used, as Claude does (support.claude.com/en/articles/12386328), only when that confirmation is recorded on the subscription or payment, and is refunded in full otherwise.",
-          "summary": "Adds the signed-in refund request, the 14-day withdrawal in the EU, EEA and UK, a once-per-account refund within 7 days when no credits were used, and the hold during a payment dispute, and corrects how plan upgrades are billed."
+          "summary": "Adds the signed-in refund request; a refund, once per account, of an unused plan payment or of unspent top-up credits asked for within 7 days; the 14-day withdrawal in the EU, EEA and UK, prorated by the credits used when you asked at checkout for immediate access; and the hold on your plan and credits while a payment dispute is open. Corrects how plan upgrades are billed: an upgrade starts a new billing period on the day you upgrade."
         }
       ]
     },
@@ -299,7 +392,8 @@
         {
           "date": "2026-09-27",
           "digest": "5e63ba8ad8126ac1",
-          "note": "First published version of the referral program terms, adapted from Perplexity’s Refer-a-Friend terms and Anthropic’s credit terms; listed for a lawyer’s review."
+          "note": "First published version of the referral program terms, adapted from Perplexity’s Refer-a-Friend terms and Anthropic’s credit terms; listed for a lawyer’s review.",
+          "summary": "The first version of these terms: who can take part in the referral program, the friend's free trial, the bonus credits each of you can earn and when they expire, and the fair use checks against self-referral."
         }
       ]
     },
@@ -328,9 +422,15 @@
       "page": "apps/web/app/trust/page.tsx",
       "versions": [
         {
+          "date": "2026-09-12",
+          "digest": "e1fb49f0572d8803",
+          "note": "The version this site was serving on 2 October 2026, as the first record in publications shows: the production deployment printed this date and this text. Recorded that day so the text that applied stays readable once a deploy replaces it."
+        },
+        {
           "date": "2026-09-21",
           "digest": "b91459df778d4e39",
-          "note": "Every row re-checked against its evidence on 2026-09-21 and recorded in docs/compliance/trust-claims.json."
+          "note": "Every row re-checked against its evidence on 2026-09-21 and recorded in docs/compliance/trust-claims.json.",
+          "summary": "Corrects three rows against the code: release signing covers the macOS desktop app only, as there is no Windows build; business continuity says the host-neutral restore drill runs every week and only the production database has no scheduled restore test; and security event logging adds the log of each call a connector makes. Records the 21 September review of the subprocessor list, re-measures row-level isolation and the protected route groups, and says /status runs its checks at most once a minute."
         },
         {
           "date": "2026-09-21",
@@ -428,9 +528,15 @@
       "page": "apps/web/app/mobile/legal/page.tsx",
       "versions": [
         {
+          "date": "2026-08-13",
+          "digest": "f74ceb8ba830da6c",
+          "note": "The version this site was serving on 2 October 2026, as the first record in publications shows: the production deployment printed this date and this text. Recorded that day so the text that applied stays readable once a deploy replaces it."
+        },
+        {
           "date": "2026-09-21",
           "digest": "e809c74693e2470f",
-          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date."
+          "note": "Recorded 2026-09-21 from the text main held that day, which printed this date. This site was still serving the version dated 2026-08-13 on 2 October 2026, so this version was replaced before it was published here.",
+          "summary": "Corrects the EU AI Act disclosures for the planned app: it will tell you it is an AI system on a first-run screen you accept before its first model request, and only its planned on-device data export, not the per-conversation export sheet, will mark chat transcripts with a machine-readable AI-generated marker."
         },
         {
           "date": "2026-09-21",
@@ -550,10 +656,15 @@
           "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
         },
         {
+          "date": "2026-09-02",
+          "digest": "b4c294f2d55a2404",
+          "note": "Re-fingerprints this date's text with the extractor that includes semicolon-bearing JSX prose, recorded 2026-10-02 so the archived text can be checked against it; under the earlier extractor that text's fingerprint is the one above. This entry changes no published wording or effective date."
+        },
+        {
           "date": "2026-09-22",
           "digest": "782677e1c104ce25",
           "note": "Updates the published website default authority to match the new account policy while retaining fail-closed and workspace boundaries.",
-          "summary": "Updates the website's default authority to match the account policy, keeping fail-closed checks and workspace boundaries."
+          "summary": "A new website account now starts on Skip approvals instead of Ask before every action: eligible reads, searches, sandboxed code and reversible actions run without a prompt, while destructive or unknown actions, your saved per-tool choices and workspace restrictions still apply, and the server asks when your setting cannot be read."
         },
         {
           "date": "2026-09-22",

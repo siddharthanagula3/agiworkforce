@@ -72,6 +72,21 @@ describe('SubprocessorsPage', () => {
     expect(flatCopy()).toMatch(/No MiniMax route is admitted for Managed Cloud traffic/);
   });
 
+  it('dates the last review of the list to the day the latest correction was found, not to the page revision', () => {
+    render(<SubprocessorsPage />);
+    const latestFinding = screen
+      .getAllByRole('heading', { level: 3, name: /found on \d{1,2} [A-Z][a-z]+ \d{4}$/ })[0]
+      ?.textContent?.match(/found on (\d{1,2} [A-Z][a-z]+) \d{4}$/)?.[1];
+    const lede =
+      screen
+        .getByText(/^Three reviews of what actually leaves this product/)
+        .textContent?.replace(/\s+/g, ' ') ?? '';
+
+    expect(latestFinding).toBe('21 September');
+    expect(lede).toContain(`12 September and ${latestFinding}, found this page had been wrong`);
+    expect(lede).not.toContain(POLICY_LAST_UPDATED.subprocessors);
+  });
+
   it('states when the page was last updated', () => {
     render(<SubprocessorsPage />);
 

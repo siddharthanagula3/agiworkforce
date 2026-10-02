@@ -1,10 +1,10 @@
 {
   "key": "mobile",
   "route": "/mobile/legal",
-  "date": "2026-09-21",
-  "replacedOn": "2026-09-29",
-  "commit": "72e972adf68846aad0207748f7d60a4a729881cf",
-  "committedAt": "2026-09-29T08:28:29-05:00",
+  "date": "2026-08-13",
+  "replacedOn": "2026-09-21",
+  "commit": "9633cf72ade7c60699e4b8b52fe9bfd98b983663",
+  "committedAt": "2026-09-21T08:04:57-05:00",
   "title": "Privacy policy and terms of service.",
   "blocks": [
     {
@@ -29,7 +29,7 @@
       "type": "paragraph",
       "content": [
         {
-          "text": "Effective 2026-09-21. Applies to AGI Mobile on iOS and Android. "
+          "text": "Effective 2026-08-13. Applies to AGI Mobile on iOS and Android. "
         },
         {
           "text": "AGI Mobile is not published. This page describes the planned Local and managed-cloud boundaries for a future release.",
@@ -225,7 +225,7 @@
       "type": "paragraph",
       "content": [
         {
-          "text": "The planned AGI Mobile release is a general-purpose AI assistant. Art. 50(1) of Regulation (EU) 2024/1689 requires that you be told you are interacting with an AI system, and the planned app carries that disclosure on a first-run screen you accept before it will make its first model request. Its planned on-device data export marks each chat transcript with a machine-readable Art. 50(2) marker; the per-conversation export sheet does not: its PDF, text, Markdown and copy-to-clipboard routes carry no marker today, and we would rather say so than let the first sentence cover both. AGI Mobile does not engage in practices prohibited under Art. 5, including subliminal manipulation; biometric categorisation to infer protected or sensitive attributes; real-time remote biometric identification in public spaces; social scoring; emotion inference in workplace or educational settings; or predictive policing based solely on automated profiling."
+          "text": "The planned AGI Mobile release is a general-purpose AI assistant. In compliance with Art. 50(1) of Regulation (EU) 2024/1689, the app will disclose clearly within the conversation interface that responses are AI-generated. Conversation exports include a machine-readable marker and a human-readable disclosure block per Art. 50(2). AGI Mobile does not engage in practices prohibited under Art. 5, including subliminal manipulation; biometric categorisation to infer protected or sensitive attributes; real-time remote biometric identification in public spaces; social scoring; emotion inference in workplace or educational settings; or predictive policing based solely on automated profiling."
         }
       ]
     },
@@ -315,7 +315,7 @@
       "type": "paragraph",
       "content": [
         {
-          "text": "These terms are a legal agreement between you and AGI Automation LLC (a United States limited liability company). “App” means AGI Mobile on iOS and Android. By installing or using the App, you agree to these terms. Effective date: 2026-09-21."
+          "text": "These terms are a legal agreement between you and AGI Automation LLC (a United States limited liability company). “App” means AGI Mobile on iOS and Android. By installing or using the App, you agree to these terms. Effective date: 2026-08-13."
         }
       ]
     },

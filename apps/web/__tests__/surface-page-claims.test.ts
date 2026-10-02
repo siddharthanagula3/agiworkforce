@@ -767,12 +767,13 @@ describe('/changelog, CLI v1.0 promises no install route the release cannot serv
     );
   });
 
-  it('says why neither install route reaches that release', () => {
+  it('says why neither install route reached that release, now that the release is gone', () => {
     const entries = collapsed('lib/changelog-entries.ts');
     expect(entries).toMatch(/the Homebrew tap repository is private/u);
     expect(entries).toMatch(
-      /install\.sh refuses to install without the signed checksum manifest the release does not carry/u,
+      /install\.sh refused to install without the signed checksum manifest that release did not carry/u,
     );
+    expect(entries).toMatch(/a GitHub release this repository no longer holds/u);
   });
 
   it('never presents the tap or the installer as a route a reader can take', () => {
@@ -792,9 +793,9 @@ describe('/changelog, desktop signing is a pipeline and is dated as one', () => 
     expect(workflow).toMatch(/target\/release\/bundle\/appimage\/\*\.AppImage\.sig/u);
   });
 
-  it('states that no signed installer has been published from it', () => {
+  it('states that no signed installer was published from it', () => {
     const entries = collapsed('lib/changelog-entries.ts');
-    expect(entries).toMatch(/No signed installer has been published from it yet/u);
+    expect(entries).toMatch(/No signed installer was published from it/u);
     expect(entries).toMatch(/\.AppImage, \.deb and \.rpm assets and no signature/u);
   });
 

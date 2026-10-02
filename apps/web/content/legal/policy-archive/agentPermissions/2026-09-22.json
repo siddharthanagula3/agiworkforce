@@ -3,8 +3,8 @@
   "route": "/agent-permissions",
   "date": "2026-09-22",
   "replacedOn": "2026-09-27",
-  "commit": "de2d18b31388e7315be16529b49b11d32664c11e",
-  "committedAt": "2026-09-27T15:32:44-05:00",
+  "commit": "dfd65aba68e22ac1c6320b375d6718acbe1b5f9f",
+  "committedAt": "2026-09-27T15:26:21-05:00",
   "title": "What the agent may do, and what it must ask.",
   "blocks": [
     {
@@ -525,7 +525,7 @@
       "level": 3,
       "content": [
         {
-          "text": "Pasted text is not counted"
+          "text": "Pasted and attached content is not counted"
         }
       ]
     },
@@ -533,7 +533,7 @@
       "type": "paragraph",
       "content": [
         {
-          "text": "Untrusted content is recognised when a tool fetched it (a web page, a search result, a pull-request diff), when you attach a file or image, and when a project knowledge file or connector context you selected enters the chat. Text you paste yourself is not counted, and that is a real injection vector this check does not see."
+          "text": "Untrusted content is recognised when a tool fetched it: a web page, a search result, a pull-request diff. Content you paste or attach yourself is not counted, and that is a real injection vector this check does not see."
         }
       ]
     },

@@ -3,8 +3,8 @@
   "route": "/acceptable-use",
   "date": "2026-09-22",
   "replacedOn": "2026-09-27",
-  "commit": "1eae297c6d1058a0c1d33726f9c55c52a23895de",
-  "committedAt": "2026-09-27T19:29:23-05:00",
+  "commit": "7119d8c80ae01fdfa69a0f1b70c65673aab284ac",
+  "committedAt": "2026-09-27T18:50:41-05:00",
   "title": "Acceptable use.",
   "blocks": [
     {
@@ -559,21 +559,14 @@
           "strong": true
         },
         {
-          "text": " If your account is suspended or banned and you believe it was wrong, sign in and appeal from the notice you see, or use the "
-        },
-        {
-          "text": "appeal form",
-          "href": "/appeal"
-        },
-        {
-          "text": " with the email address on the account if you cannot sign in. You can also email "
+          "text": " If your account is suspended or banned and you believe it was wrong, email "
         },
         {
           "text": "contact@agiworkforce.com",
           "href": "mailto:contact@agiworkforce.com?subject=Suspension%20appeal"
         },
         {
-          "text": " with the subject “Suspension appeal”. Each appeal gets a reference and a person replies. A suspension can be reversed by reinstatement; we will tell you what triggered it unless doing so would compromise an investigation or another person’s safety."
+          "text": " with the subject “Suspension appeal” and the email address on the account. A suspension can be reversed by reinstatement; we will tell you what triggered it unless doing so would compromise an investigation or another person’s safety."
         }
       ]
     },

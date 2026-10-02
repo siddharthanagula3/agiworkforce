@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance
-Last updated: 2026-08-28
+Last updated: 2026-10-02
 
 Verified platform and legal obligations: Apple, Google Play, Microsoft, Chrome
 Web Store, VS Code Marketplace, privacy regimes, and regional requirements.
@@ -67,11 +67,59 @@ per-document revision dates, canonical routes and their aliases) come from
    a fresh review of the whole page.
 8. Keep the replaced version readable. When a date moves, give the first entry
    of the new date a public `summary` of what changed, then run
-   `node scripts/archive-policy-versions.mjs`. It renders the text the page
-   last published under the old date and adds it to `/legal/archive`, where
-   every policy's version history lives. A version whose text no commit holds
-   gets `"archive": "not-retained"` on its first entry and is listed as not
-   kept. `scripts/check-policy-versions.mjs` fails until both are done.
+   `node scripts/archive-policy-versions.mjs`. It renders the last text
+   recorded under the old date, from the commit production served when a
+   publication record names one that holds it, otherwise from the newest
+   commit whose text matches, preferring one `origin/main` already holds, and
+   adds it to `/legal/archive`, where every policy's version history lives.
+   The commit an archive names must stay on the main line: CI fetches only
+   branches and tags, so it cannot read a commit left behind on a deleted,
+   squashed or rewritten branch. When the archiver warns that `origin/main`
+   does not hold the commit yet, bring the branch into main with a merge
+   commit. A version whose text no commit holds gets
+   `"archive": "not-retained"` on its first entry and is listed as not kept. A
+   new policy whose first version is dated after the registry's
+   `recordedSince`, the day these histories began, gets a `summary` on that
+   first version too, and `/changelog` lists it as introduced.
+   `scripts/check-policy-versions.mjs` fails until all of this is done, when an
+   archived text is not the last version recorded under its date, and when the
+   commit an archive names is not on the history of the branch it checks.
+9. Say whether each replaced version applied. Each record in `publications`
+   in `policy-versions.json` names the day production was checked, `served`,
+   a commit on main that prints the dates production served then, and `main`,
+   the commit carrying the replacement at that moment: main's head when main
+   has replaced the version, and otherwise the commit on the branch that
+   moves the date. A version production served applied until the next
+   version this site published replaced it; a version `main` had already
+   replaced while production still served an older one was settled and
+   replaced before it was published here, and its archive says so. When a
+   branch replaces a version that no record covers, commit the move, read the
+   dates production prints, add a record whose `main` is that commit and run
+   the archiver again. Main's head cannot clear it while it still prints the
+   date being replaced. `scripts/check-policy-versions.mjs` fails until then,
+   and when production served a version the history does not record. A
+   record's commits must stay on the main line, as an archive's must. If
+   production publishes the replaced version before the branch lands, add a
+   newer record: a version any record shows production serving reads as
+   applied.
+10. Announce every change to the subprocessor list. `/changelog` lists only the
+    first entry of each date, so a row added to, removed from or renamed on
+    `/subprocessors`, and a provider added to or removed from a row's
+    `registryProviderIds`, such as a new model provider in the Managed Cloud
+    row, moves its date. The entry that moves it records the page's names in
+    `subprocessorNames` and its provider ids, without the `_anthropic` dialect
+    suffix, in `subprocessorProviders`, and names each change in its `summary`.
+    A subprocessor counts as named when the summary spells its name up to any
+    parenthesis, and a provider when the summary spells its id or the label
+    the product shows for it, its `label` in
+    `packages/contracts/types/src/models.json` or a gateway's `displayName` in
+    the model registry. Both count only as whole words, ignoring case and the
+    spaces and punctuation between them, so OpenRouter names `open_router` and
+    Vercel AI Gateway names `vercel_gateway`, while metadata does not name
+    `meta` and Exposes does not name Expo.
+    `scripts/check-policy-versions.mjs` fails when the page's names or providers
+    differ from the newest recorded ones, or when they change under an entry
+    whose date did not move.
 
 `apps/web/app/__tests__/legal-policy-set.test.ts` enforces 1, parts of 2, 4 and 7
 mechanically, including a prohibited-claim guard that fails if a removed claim

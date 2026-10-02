@@ -250,6 +250,8 @@
   padding-bottom: 1px;
 }
 
+[data-design='agi'] .agi-ds-prose .agi-ds-link,
+[data-design='agi'] .agi-ds-ledger-value > .agi-ds-link,
 [data-design='agi'] .agi-ds-link:hover,
 [data-design='agi'] .agi-ds-link:focus-visible {
   background-size: 100% 1px;
@@ -499,6 +501,18 @@
   [data-design='agi'] .agi-ds-ledger-row {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--agi-space-1);
+  }
+}
+
+@media (pointer: coarse) {
+  [data-design='agi'] .agi-ds-ledger-value > .agi-ds-stack > .agi-ds-link {
+    position: relative;
+  }
+
+  [data-design='agi'] .agi-ds-ledger-value > .agi-ds-stack > .agi-ds-link::before {
+    content: '';
+    position: absolute;
+    inset: -11px 0;
   }
 }
 
