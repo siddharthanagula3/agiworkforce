@@ -10,7 +10,10 @@ const RUNBOOK_LINES = readFileSync(path.join(REPO_ROOT, RUNBOOK_FILE), 'utf8').s
 const CUSTOMER_AGREEMENT = 'https://www.qwencloud.com/legal/agreement';
 const MEMBERSHIP_AGREEMENT =
   'https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-membership-agreement';
-const OPEN_CLAUSES = '### Clauses the launch review did not settle';
+const TERMS_RESTED_ON = '### The terms it rests on';
+const OPEN_CLAUSES_TITLE = 'Clauses the launch review did not settle';
+const OPEN_CLAUSES = `#### ${OPEN_CLAUSES_TITLE}`;
+const READ_ON = 'read on 2026-10-02';
 
 function section(heading: string): string {
   const level = heading.indexOf(' ');
@@ -26,8 +29,8 @@ function section(heading: string): string {
 }
 
 describe('the free quota terms review record', () => {
-  it('quotes the general restrictions of both agreements the review rests on', () => {
-    const terms = section('## Terms review');
+  it('quotes the general restrictions of both agreements among the terms the review rests on', () => {
+    const terms = section(TERMS_RESTED_ON);
 
     expect(terms).toContain(CUSTOMER_AGREEMENT);
     expect(terms).toContain(MEMBERSHIP_AGREEMENT);
@@ -57,11 +60,19 @@ describe('the free quota terms review record', () => {
     expect(open).toContain('§3.2(j)');
   });
 
+  it('names where and when each quoted general restriction was read, beside the quote', () => {
+    const open = section(OPEN_CLAUSES);
+
+    expect(open).toContain(CUSTOMER_AGREEMENT);
+    expect(open).toContain(MEMBERSHIP_AGREEMENT);
+    expect(open).toContain(READ_ON);
+  });
+
   it('re-reads both general agreements and the open questions at every renewal', () => {
     const renewal = section('### Renewing it');
 
     expect(renewal).toContain('§3.2');
     expect(renewal).toContain('Membership Agreement');
-    expect(renewal).toContain(OPEN_CLAUSES.replace('### ', ''));
+    expect(renewal).toContain(OPEN_CLAUSES_TITLE);
   });
 });

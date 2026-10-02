@@ -45,8 +45,8 @@ and Alibaba Cloud's Membership Agreement, with the model terms in the Product
 Terms §4.48. All were read on 2026-10-02.
 
 **Qwen Cloud Customer Agreement**, https://www.qwencloud.com/legal/agreement
-("Updated: August 27, 2026"). Its general restrictions are quoted under Clauses
-the launch review did not settle. Its Models Supplemental:
+("Updated: August 27, 2026"). Its general restrictions are quoted below, under
+Clauses the launch review did not settle. Its Models Supplemental:
 
 - §2(b): "you and your end users may provide input to Models (“Input”), and
   receive generated content from the AI models and applications based on the
@@ -74,8 +74,8 @@ https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-we
 Member Content. The Model Studio related agreements page,
 https://www.alibabacloud.com/help/en/model-studio/related-agreements ("Last
 Updated: Sep 28, 2026"), lists both among "These agreements govern your use of
-Model Studio". The Membership Agreement's general restrictions are quoted under
-Clauses the launch review did not settle. Product Terms §4.48:
+Model Studio". The Membership Agreement's general restrictions are quoted below,
+under Clauses the launch review did not settle. Product Terms §4.48:
 
 - §4.48.1(b): "you and your end users may provide input to Model Studio
   (“Input”), and receive generated content from the AI models and applications
@@ -105,12 +105,15 @@ says preview is a Preview Product is not verified, so the stricter reading wins:
 a review never approves an offering whose model id contains "preview", and the
 schema in `apps/web/lib/server/free-pools.ts` refuses a file that does.
 
-### Clauses the launch review did not settle
+#### Clauses the launch review did not settle
 
 The launch review rested on the model terms above. It weighed only the resale
-half of §2(d)(v) and §4.48.1(d)(v), and none of the general restrictions below,
-which the Customer Agreement and the Membership Agreement carry word for word
-under the same numbers. §3.2 reads "You shall not (whether through your End
+half of §2(d)(v) and §4.48.1(d)(v), and none of the general restrictions below.
+Both general agreements carry them word for word under the same numbers: the
+Qwen Cloud Customer Agreement, https://www.qwencloud.com/legal/agreement, and
+the Membership Agreement,
+https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-membership-agreement,
+both read on 2026-10-02. §3.2 reads "You shall not (whether through your End
 Users or otherwise):" and lists, among others:
 
 - j) "access or use the Services in a way intended to avoid the relevant fees
