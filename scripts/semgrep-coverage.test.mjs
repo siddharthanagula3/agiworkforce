@@ -434,6 +434,28 @@ test('replays that together outlast one scanner deadline still qualify within th
   });
 });
 
+test('a replay that records several timeouts of its one rule still qualifies structurally', async () => {
+  assert.deepEqual(
+    await fixture(complexSingleton, 'replay-grouped-warning'),
+    structurallyQualified,
+  );
+  assert.deepEqual(await fixture(aggregate, 'replay-grouped-warning'), {
+    nativeWarnings: 1,
+    structurallyQualifiedPairs: 2,
+    convergedReplayPairs: 0,
+  });
+});
+
+test('an aggregate diagnostic may count more timeouts than there are applicable rules', async () => {
+  assert.deepEqual(
+    await fixture((state) => {
+      aggregate(state);
+      state.report.time.fixpoint_timeouts[0].message = '[rules: 5, first: fixture.other.taint]';
+    }),
+    { nativeWarnings: 1, structurallyQualifiedPairs: 0, convergedReplayPairs: 2 },
+  );
+});
+
 test('all coverage scanner commands share one ten-minute budget', async (t) => {
   const clock = [0, 1, 2, 90_000, 90_001, 600_001];
   t.mock.method(performance, 'now', () => clock.shift() ?? 600_001);
@@ -443,7 +465,6 @@ test('all coverage scanner commands share one ten-minute budget', async (t) => {
 for (const behavior of [
   'replay-unknown-warning',
   'replay-wrong-rule-warning',
-  'replay-grouped-warning',
   'replay-foreign-warning',
   'replay-finding',
   'replay-wrong-version',
@@ -571,12 +592,6 @@ for (const [name, change] of [
     'unknown rule',
     ({ report }) => {
       report.time.fixpoint_timeouts[0].message = '[rules: 1, first: unknown.rule]';
-    },
-  ],
-  [
-    'aggregate warning',
-    ({ report }) => {
-      report.time.fixpoint_timeouts[0].message = `[rules: 2, first: ${RULE}]`;
     },
   ],
   [

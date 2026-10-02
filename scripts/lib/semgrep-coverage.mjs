@@ -154,12 +154,7 @@ function warningDiagnostic(warning, selected) {
 }
 
 export function warningIdentity(warning, selected) {
-  const diagnostic = warningDiagnostic(warning, selected);
-  requireValue(
-    diagnostic.count === 1,
-    'Internal diagnostic must identify exactly one affected rule.',
-  );
-  const { path, line, rule } = diagnostic;
+  const { path, line, rule } = warningDiagnostic(warning, selected);
   return { path, line, rule };
 }
 
@@ -195,7 +190,7 @@ function replayTaintRules(rules, diagnostic) {
     applicable.push(rule);
   }
   requireValue(
-    applicable.length >= diagnostic.count && applicable.some((rule) => rule.id === diagnostic.rule),
+    applicable.some((rule) => rule.id === diagnostic.rule),
     'Aggregate diagnostic is not bound to the complete applicable taint rule set.',
   );
   return applicable;
