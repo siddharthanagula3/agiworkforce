@@ -69,15 +69,20 @@ per-document revision dates, canonical routes and their aliases) come from
    of the new date a public `summary` of what changed, then run
    `node scripts/archive-policy-versions.mjs`. It renders the text the page
    last published under the old date, taken from the newest commit whose text
-   matches the last version recorded under that date, and adds it to
-   `/legal/archive`, where every policy's version history lives. A version
-   whose text no commit holds gets `"archive": "not-retained"` on its first
-   entry and is listed as not kept. A new policy whose first version is dated
-   after the registry's `recordedSince`, the day these histories began, gets a
-   `summary` on that first version too, and `/changelog` lists it as
-   introduced. `scripts/check-policy-versions.mjs` fails until all of this is
-   done, and when an archived text is not the last version recorded under its
-   date.
+   matches the last version recorded under that date, preferring one
+   `origin/main` already holds, and adds it to `/legal/archive`, where every
+   policy's version history lives. The commit an archive names must stay on
+   the main line: CI fetches only branches and tags, so it cannot read a
+   commit left behind on a deleted, squashed or rewritten branch. When the
+   archiver warns that `origin/main` does not hold the commit yet, bring the
+   branch into main with a merge commit. A version whose text no commit holds gets
+   `"archive": "not-retained"` on its first entry and is listed as not kept. A
+   new policy whose first version is dated after the registry's
+   `recordedSince`, the day these histories began, gets a `summary` on that
+   first version too, and `/changelog` lists it as introduced.
+   `scripts/check-policy-versions.mjs` fails until all of this is done, when an
+   archived text is not the last version recorded under its date, and when the
+   commit an archive names is not on the history of the branch it checks.
 9. Announce every change to the subprocessor list. `/changelog` lists only the
    first entry of each date, so a row added to, removed from or renamed on
    `/subprocessors`, and a provider added to or removed from a row's

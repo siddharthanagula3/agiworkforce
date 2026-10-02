@@ -2,6 +2,7 @@
 // A published policy says when it last changed. This holds every canonical
 // policy page to a dated version history, so its text cannot move while the
 // date it prints stays behind.
+import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -279,6 +280,14 @@ export function runPolicyVersionsCheck(root) {
   return failures;
 }
 
+function onHistory(root, commit) {
+  return (
+    spawnSync('git', ['-C', root, 'merge-base', '--is-ancestor', commit, 'HEAD'], {
+      stdio: 'ignore',
+    }).status === 0
+  );
+}
+
 export function runPolicyArchiveSourceCheck(root, registry, routes) {
   const exists = (key, date) => fs.existsSync(path.join(root, archiveFile(key, date)));
   const sources = Object.entries(archiveExpectations(registry, routes, exists)).flatMap(
@@ -309,6 +318,12 @@ export function runPolicyArchiveSourceCheck(root, registry, routes) {
     if (page === null || constants === null) {
       failures.push(
         `${source.file}: names commit ${source.commit}, which this clone does not hold with ${source.page}; fetch the full history, or if that commit is gone, delete the file and run ${ARCHIVE_COMMAND}`,
+      );
+      continue;
+    }
+    if (!onHistory(root, source.commit)) {
+      failures.push(
+        `${source.file}: names commit ${source.commit}, which is not on the history of this branch, so a clone of the branch, such as the one CI checks, cannot read it once the branch that held it is gone; delete the file and run ${ARCHIVE_COMMAND}`,
       );
       continue;
     }

@@ -19,6 +19,13 @@ function identifier(key, date) {
   return `${key}_${date.replace(/-/g, '_')}`;
 }
 
+export function byArchivePreference(published, mainline) {
+  return (left, right) =>
+    Number(published.has(right.sha)) - Number(published.has(left.sha)) ||
+    Number(mainline.has(right.sha)) - Number(mainline.has(left.sha)) ||
+    right.time - left.time;
+}
+
 export function lastDigest(document, date) {
   return (document.versions ?? []).findLast((version) => version.date === date)?.digest ?? null;
 }

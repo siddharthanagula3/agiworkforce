@@ -18,6 +18,7 @@ import {
 import {
   archiveExpectations,
   archiveFile,
+  byArchivePreference,
   renderManifest,
   runPolicyArchiveCheck,
 } from './lib/policy-archive.mjs';
@@ -580,7 +581,7 @@ function archiveRepository(t) {
     return git('rev-parse', 'HEAD');
   };
   git('init', '--quiet');
-  return { root, write, commit };
+  return { root, git, write, commit };
 }
 
 test('fails when an archived version holds the text of the version that replaced it', (t) => {
@@ -626,6 +627,66 @@ test('fails when an archived version holds the text of the version that replaced
 
   archiveAt(published);
   assert.deepEqual(runPolicyArchiveSourceCheck(root, index, routes), []);
+});
+
+test('fails when an archived version names a commit this branch does not descend from', (t) => {
+  const settled = termsPage();
+  const revised = termsPage('We may cancel your account at any time.');
+  const { root, git, write, commit } = archiveRepository(t);
+  write(CONSTANTS, constants());
+  write(TERMS_PAGE, settled);
+  const published = commit('the 11 august terms');
+  const trunk = git('symbolic-ref', '--short', 'HEAD');
+  git('checkout', '--quiet', '-b', 'lane');
+  write('notes.txt', 'Work that never reaches the main line.\n');
+  const lane = commit('a lane commit that still prints the 11 august terms');
+  git('checkout', '--quiet', trunk);
+  git('branch', '--quiet', '-D', 'lane');
+  write(TERMS_PAGE, revised);
+  write(CONSTANTS, constants({ termsDate: '2026-09-21' }));
+  commit('the terms date moves');
+  const index = registry([
+    { date: '2026-08-11', digest: copyDigest(settled), note: 'Baseline recorded for the fixture.' },
+    {
+      date: '2026-09-21',
+      digest: copyDigest(revised),
+      summary: 'Lets us cancel an account at any time.',
+    },
+  ]);
+  const routes = { terms: '/terms' };
+  const archiveAt = (sha) =>
+    write(archiveFile('terms', '2026-08-11'), JSON.stringify({ commit: sha }));
+
+  archiveAt(lane);
+  const failures = runPolicyArchiveSourceCheck(root, index, routes);
+  assert.ok(
+    failures.some(
+      (failure) =>
+        failure.includes(archiveFile('terms', '2026-08-11')) &&
+        failure.includes(lane) &&
+        failure.includes('not on the history of this branch'),
+    ),
+    failures.join('\n'),
+  );
+
+  archiveAt(published);
+  assert.deepEqual(runPolicyArchiveSourceCheck(root, index, routes), []);
+});
+
+test('archives from a commit origin/main holds before a newer one only this branch holds', () => {
+  const commits = [
+    { sha: 'lane-tip', time: 50 },
+    { sha: 'merged-side', time: 40 },
+    { sha: 'main-tip', time: 30 },
+    { sha: 'main-earlier', time: 20 },
+    { sha: 'lane-side', time: 10 },
+  ];
+  const published = new Set(['merged-side', 'main-tip', 'main-earlier']);
+  const mainline = new Set(['lane-tip', 'main-tip', 'main-earlier']);
+  assert.deepEqual(
+    commits.sort(byArchivePreference(published, mainline)).map((commit) => commit.sha),
+    ['main-tip', 'main-earlier', 'merged-side', 'lane-tip', 'lane-side'],
+  );
 });
 
 test('the published policy set passes', () => {

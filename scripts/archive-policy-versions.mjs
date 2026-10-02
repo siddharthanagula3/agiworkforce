@@ -2,8 +2,8 @@
 // A replaced policy stays readable. For every dated version the history in
 // docs/compliance/policy-versions.json has moved past, this renders the text
 // the page last published under that date, at the newest commit that printed
-// that date with the text the history last records under it, and writes it
-// where /legal/archive reads it.
+// that date with the text the history last records under it, preferring one
+// origin/main already holds, and writes it where /legal/archive reads it.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -17,6 +17,7 @@ import {
   ARCHIVE_MANIFEST,
   archiveExpectations,
   archiveFile,
+  byArchivePreference,
   lastDigest,
   readGitObjects,
   renderIndex,
@@ -27,6 +28,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SPEC = 'scripts/lib/policy-archive-render-spec.mjs';
 const SPEC_NAME = 'policy-archive-render.test.ts';
 const SPARSE = ['/apps/web/', '/packages/', '/*.json', '/*.ts', '/*.mjs', '/*.yaml'];
+const MAIN_REF = 'origin/main';
 
 function git(args, input) {
   return execFileSync('git', ['-C', root, ...args], {
@@ -66,13 +68,22 @@ function datedCommits() {
   }));
 }
 
-function newestCommit(commits, mainline, target) {
+function reachable(ref, ...flags) {
+  const resolved = spawnSync('git', ['-C', root, 'rev-parse', '--verify', '--quiet', ref], {
+    stdio: 'ignore',
+  });
+  if (resolved.status !== 0) return new Set();
+  return new Set(
+    git(['rev-list', ...flags, ref])
+      .trim()
+      .split('\n'),
+  );
+}
+
+function newestCommit(commits, published, mainline, target) {
   const candidates = commits
     .filter((commit) => commit.dates[target.key] === target.date)
-    .sort(
-      (left, right) =>
-        Number(mainline.has(right.sha)) - Number(mainline.has(left.sha)) || right.time - left.time,
-    );
+    .sort(byArchivePreference(published, mainline));
   if (candidates.length === 0) return null;
   const pages = blobIds(candidates.map((commit) => `${commit.sha}:${target.page}`));
   const unique = [...new Set(pages.filter(Boolean))];
@@ -164,13 +175,19 @@ function main() {
   const unresolved = [];
   if (missing.length > 0) {
     const commits = datedCommits();
-    const mainline = new Set(git(['rev-list', '--first-parent', 'HEAD']).trim().split('\n'));
+    const published = reachable(MAIN_REF);
+    const mainline = reachable('HEAD', '--first-parent');
     const byCommit = new Map();
     for (const target of missing) {
-      const commit = newestCommit(commits, mainline, target);
+      const commit = newestCommit(commits, published, mainline, target);
       if (!commit) {
         unresolved.push(target);
         continue;
+      }
+      if (published.size > 0 && !published.has(commit.sha)) {
+        console.warn(
+          `${target.route} dated ${target.date}: archived from ${commit.sha}, which ${MAIN_REF} does not hold yet. Bring this branch into main with a merge commit: a squash or rebase leaves that commit behind, and check-policy-versions then fails on main.`,
+        );
       }
       const group = byCommit.get(commit.sha) ?? { commit, targets: [] };
       group.targets.push(target);
