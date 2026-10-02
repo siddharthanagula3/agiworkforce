@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ARTIFACT_CSP_CONTENT, extractMetaCspContent } from '@agiworkforce/types';
 import {
   PUBLISHED_SANDBOX_KINDS,
   buildPublishedFallbackSrcDoc,
@@ -6,6 +7,9 @@ import {
   buildPublishedSvgImageSrc,
   isSandboxedPublishedKind,
 } from './publishedArtifactRender';
+
+const EVERY_HOST_RESOURCE_SOURCE =
+  /\b(?:img|style|font)-src\b[^;"]*\s(?:https?:(?:\/\/\*)?|\*)(?=[\s;"]|$)/;
 
 describe('sandbox policy', () => {
   it('sandboxes exactly the kinds that execute author-supplied script', () => {
@@ -55,6 +59,20 @@ describe('buildPublishedFallbackSrcDoc', () => {
     expect(buildPublishedFallbackSrcDoc('react', 'const App = () => null;')).toContain(
       "connect-src 'none'",
     );
+  });
+
+  it('loads no image, stylesheet or font from an arbitrary https host on any published kind', () => {
+    const documents = [
+      buildPublishedSandboxPayload('html', '<p>x</p>').html ?? '',
+      ...(['html', 'react', 'mermaid', 'code', 'text'] as const).map((kind) =>
+        buildPublishedFallbackSrcDoc(kind, 'x'),
+      ),
+    ];
+    for (const doc of documents) {
+      const csp = extractMetaCspContent(doc);
+      expect(csp).toBe(ARTIFACT_CSP_CONTENT);
+      expect(csp).not.toMatch(EVERY_HOST_RESOURCE_SOURCE);
+    }
   });
 
   it('escapes mermaid source so markup in a diagram stays inert', () => {

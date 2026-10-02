@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import DOMPurify from 'dompurify';
+import { ARTIFACT_CSP_CONTENT, extractMetaCspContent } from '@agiworkforce/types';
 import {
   sanitizeHTML,
   sanitizeArtifact,
@@ -25,6 +26,9 @@ function hasBase(html: string): boolean {
 function hasMetaRefresh(html: string): boolean {
   return /<meta[^>]*http-equiv\s*=\s*['"]?refresh['"]?/i.test(html);
 }
+
+const EVERY_HOST_RESOURCE_SOURCE =
+  /\b(?:img|style|font)-src\b[^;"]*\s(?:https?:(?:\/\/\*)?|\*)(?=[\s;"]|$)/;
 
 describe('sanitizeHTML, strict path (no scripts, no handlers)', () => {
   it('strips <script> tags', () => {
@@ -326,6 +330,12 @@ describe('buildSandboxSrcDoc, full document input (no double-wrap)', () => {
     expect(result).toContain("connect-src 'none'");
     expect(result).toContain("script-src 'unsafe-inline' 'unsafe-eval'");
     expect(result).not.toContain("'self'");
+  });
+
+  it('loads no image, stylesheet or font from an arbitrary https host', () => {
+    const csp = extractMetaCspContent(buildSandboxSrcDoc(FULL_DOC_COUNTER));
+    expect(csp).toBe(ARTIFACT_CSP_CONTENT);
+    expect(csp).not.toMatch(EVERY_HOST_RESOURCE_SOURCE);
   });
 
   it('includes DOCTYPE', () => {

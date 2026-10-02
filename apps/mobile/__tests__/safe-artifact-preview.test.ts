@@ -1,9 +1,12 @@
-import { ARTIFACT_CSP_CONTENT } from '@agiworkforce/types';
+import { ARTIFACT_CSP_CONTENT, extractMetaCspContent } from '@agiworkforce/types';
 import {
   buildMermaidPreviewHtml,
   buildSandboxedArtifactHtml,
   parseArtifactPreviewError,
 } from '../src/features/chat/components/sandboxedArtifactHtml';
+
+const EVERY_HOST_RESOURCE_SOURCE =
+  /\b(?:img|style|font)-src\b[^;"]*\s(?:https?:(?:\/\/\*)?|\*)(?=[\s;"]|$)/;
 
 describe('buildSandboxedArtifactHtml', () => {
   it('runs HTML under the canonical artifact policy, which allows no network calls', () => {
@@ -12,6 +15,12 @@ describe('buildSandboxedArtifactHtml', () => {
     expect(html).toContain("default-src 'none'");
     expect(html).toContain("connect-src 'none'");
     expect(html).toContain("form-action 'none'");
+  });
+
+  it('loads no image, stylesheet or font from an arbitrary https host', () => {
+    const csp = extractMetaCspContent(buildSandboxedArtifactHtml('<p>hi</p>', 'html'));
+    expect(csp).toBe(ARTIFACT_CSP_CONTENT);
+    expect(csp).not.toMatch(EVERY_HOST_RESOURCE_SOURCE);
   });
 
   it('embeds the untrusted HTML content in the document body', () => {

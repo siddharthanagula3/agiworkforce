@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { ARTIFACT_CSP_CONTENT, extractMetaCspContent } from '@agiworkforce/types';
 import { buildSandboxedHtml, __ARTIFACT_SANDBOX_INTERNALS } from './artifact-sandbox';
 
 const { CSP_META } = __ARTIFACT_SANDBOX_INTERNALS;
+
+const EVERY_HOST_RESOURCE_SOURCE =
+  /\b(?:img|style|font)-src\b[^;"]*\s(?:https?:(?:\/\/\*)?|\*)(?=[\s;"]|$)/;
 
 function cspIsInsideHead(html: string): boolean {
   const headOpen = html.search(/<head\b[^>]*>/i);
@@ -37,5 +41,11 @@ describe('buildSandboxedHtml', () => {
     const out = buildSandboxedHtml(hostile);
     expect(out).not.toContain('default-src *');
     expect(cspIsInsideHead(out)).toBe(true);
+  });
+
+  it('loads no image, stylesheet or font from an arbitrary https host', () => {
+    const csp = extractMetaCspContent(buildSandboxedHtml('<p>x</p>'));
+    expect(csp).toBe(ARTIFACT_CSP_CONTENT);
+    expect(csp).not.toMatch(EVERY_HOST_RESOURCE_SOURCE);
   });
 });

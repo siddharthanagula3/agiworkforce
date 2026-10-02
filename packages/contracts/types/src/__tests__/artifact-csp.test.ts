@@ -14,8 +14,46 @@ import {
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const RENDERER_HTML_PATH = join(REPO_ROOT, 'infrastructure/sandbox/index.html');
+const SANDBOX_DEPLOYMENT_PATH = join(REPO_ROOT, 'infrastructure/sandbox/vercel.json');
 
 const rendererHtml = readFileSync(RENDERER_HTML_PATH, 'utf8');
+
+const SANDBOX_ORIGIN = 'https://sandbox.agiworkforce.com';
+const INJECTED_URL = 'https://attacker.example/pixel.png?d=conversation';
+const RESOURCE_DIRECTIVES = ['img-src', 'style-src', 'font-src'] as const;
+
+function deployedSandboxCsp(): string {
+  const config = JSON.parse(readFileSync(SANDBOX_DEPLOYMENT_PATH, 'utf8')) as {
+    headers: Array<{ headers: Array<{ key: string; value: string }> }>;
+  };
+  const header = config.headers
+    .flatMap((rule) => rule.headers)
+    .find(({ key }) => key.toLowerCase() === 'content-security-policy');
+  if (!header) throw new Error('infrastructure/sandbox/vercel.json sends no CSP header');
+  return header.value;
+}
+
+function sourceMatches(source: string, url: URL, selfOrigin: string | null): boolean {
+  if (source === "'self'") return selfOrigin !== null && url.origin === selfOrigin;
+  if (source === '*') return url.protocol === 'https:' || url.protocol === 'http:';
+  if (/^[a-z][a-z0-9+.-]*:$/i.test(source)) return url.protocol === source.toLowerCase();
+  const host = /^(?:([a-z][a-z0-9+.-]*):\/\/)?(\*|(?:\*\.)?[^/:']+)(?::\d+)?(?:\/.*)?$/i.exec(
+    source,
+  );
+  if (!host) return false;
+  const [, scheme, pattern = ''] = host;
+  if (scheme && `${scheme.toLowerCase()}:` !== url.protocol) return false;
+  if (pattern === '*') return true;
+  if (pattern.startsWith('*.')) return url.hostname.endsWith(pattern.slice(1));
+  return url.hostname === pattern.toLowerCase();
+}
+
+function allows(csp: string, directive: string, target: string, selfOrigin: string | null) {
+  const policy = directives(csp);
+  const sources = policy.get(directive) ?? policy.get('default-src') ?? [];
+  const url = new URL(target);
+  return sources.some((source) => sourceMatches(source, url, selfOrigin));
+}
 
 function directives(csp: string): Map<string, string[]> {
   return new Map(
@@ -79,5 +117,69 @@ describe('artifact CSP lockstep', () => {
       ...(directives(ARTIFACT_CSP_CONTENT).get('script-src') ?? []),
       'https://unpkg.com/x',
     ]);
+  });
+});
+
+describe('artifact CSP resource egress', () => {
+  const policies = [ARTIFACT_RENDERER_CSP_CONTENT, ARTIFACT_CSP_CONTENT, deployedSandboxCsp()];
+
+  it('loads images, stylesheets and fonts only from data:, blob:, its own origin and the vetted CDN hosts', () => {
+    const renderer = directives(ARTIFACT_RENDERER_CSP_CONTENT);
+    const hosts = [...ARTIFACT_SCRIPT_CDN_HOSTS];
+    expect(renderer.get('img-src')).toEqual(["'self'", 'data:', 'blob:', ...hosts]);
+    expect(renderer.get('style-src')).toEqual(["'self'", "'unsafe-inline'", ...hosts]);
+    expect(renderer.get('font-src')).toEqual(["'self'", 'data:', ...hosts]);
+  });
+
+  it('blocks an injected image, stylesheet or font on any other https host', () => {
+    for (const csp of policies) {
+      for (const directive of RESOURCE_DIRECTIVES) {
+        expect(allows(csp, directive, INJECTED_URL, SANDBOX_ORIGIN), `${directive} in ${csp}`).toBe(
+          false,
+        );
+        expect(allows(csp, directive, 'http://attacker.example/x', SANDBOX_ORIGIN)).toBe(false);
+      }
+      expect(allows(csp, 'connect-src', INJECTED_URL, SANDBOX_ORIGIN)).toBe(false);
+    }
+  });
+
+  it('still loads data:, blob: and same-origin images', () => {
+    for (const csp of [ARTIFACT_RENDERER_CSP_CONTENT, ARTIFACT_CSP_CONTENT]) {
+      expect(allows(csp, 'img-src', 'data:image/png;base64,iVBORw0KGgo=', null)).toBe(true);
+      expect(allows(csp, 'img-src', `blob:${SANDBOX_ORIGIN}/5f0c6b1e`, null)).toBe(true);
+    }
+    expect(
+      allows(
+        ARTIFACT_RENDERER_CSP_CONTENT,
+        'img-src',
+        `${SANDBOX_ORIGIN}/logo.png`,
+        SANDBOX_ORIGIN,
+      ),
+    ).toBe(true);
+  });
+
+  it('still loads scripts, stylesheets, images and fonts from every vetted CDN host', () => {
+    for (const csp of [ARTIFACT_RENDERER_CSP_CONTENT, ARTIFACT_CSP_CONTENT]) {
+      for (const host of ARTIFACT_SCRIPT_CDN_HOSTS) {
+        for (const directive of ['script-src', ...RESOURCE_DIRECTIVES]) {
+          expect(allows(csp, directive, `${host}/npm/lib@1.0.0/dist/file`, null), directive).toBe(
+            true,
+          );
+        }
+      }
+    }
+  });
+
+  it('serves the sandbox deployment header no laxer than the renderer policy', () => {
+    const renderer = directives(ARTIFACT_RENDERER_CSP_CONTENT);
+    for (const [name, values] of directives(deployedSandboxCsp())) {
+      if (name === 'frame-ancestors') continue;
+      const allowed = renderer.get(name);
+      expect(allowed, `${name} is missing from the renderer policy`).toBeDefined();
+      expect(
+        values.filter((value) => !allowed?.includes(value)),
+        name,
+      ).toEqual([]);
+    }
   });
 });

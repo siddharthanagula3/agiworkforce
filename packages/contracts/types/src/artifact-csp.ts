@@ -30,9 +30,9 @@ function artifactCspDirectives(ownOrigin: boolean, extraScriptSources: readonly 
       ...ARTIFACT_SCRIPT_CDN_HOSTS,
       ...extraScriptSources,
     ].join(' ')}`,
-    `style-src ${[...self, "'unsafe-inline'", 'https:'].join(' ')}`,
-    `img-src ${[...self, 'data:', 'blob:', 'https:'].join(' ')}`,
-    `font-src ${[...self, 'data:', 'https:'].join(' ')}`,
+    `style-src ${[...self, "'unsafe-inline'", ...ARTIFACT_SCRIPT_CDN_HOSTS].join(' ')}`,
+    `img-src ${[...self, 'data:', 'blob:', ...ARTIFACT_SCRIPT_CDN_HOSTS].join(' ')}`,
+    `font-src ${[...self, 'data:', ...ARTIFACT_SCRIPT_CDN_HOSTS].join(' ')}`,
     'media-src data: blob:',
     "connect-src 'none'",
     // The renderer mounts artifacts in a nested `<iframe srcdoc>`; `about:srcdoc`

