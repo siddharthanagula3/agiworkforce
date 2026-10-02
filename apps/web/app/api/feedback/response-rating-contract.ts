@@ -10,3 +10,5 @@ export const RESPONSE_RATING_REASONS = [
 export type ResponseRatingReason = (typeof RESPONSE_RATING_REASONS)[number];
 
 export const RESPONSE_RATING_COMMENT_MAX_CHARS = 2_000;
+
+export const RESPONSE_RATING_MESSAGE_MAX_CHARS = 200;

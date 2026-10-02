@@ -626,7 +626,7 @@ describe('run-following has a bucket of its own', () => {
   });
 });
 
-describe('response ratings have a bucket of their own', () => {
+describe('the feedback route has a ceiling wider than the report one', () => {
   beforeEach(() => {
     vi.resetModules();
     delete process.env['UPSTASH_REDIS_REST_URL'];
@@ -636,15 +636,13 @@ describe('response ratings have a bucket of their own', () => {
 
   // A thumbs-down with a reason is two requests, so sharing the general feedback
   // ceiling let a handful of ratings lock a user out of reporting a real bug.
-  it('allows more ratings than general feedback submissions', async () => {
+  it('admits more requests than general feedback submissions over the same window', async () => {
     const { rateLimitConfigs } = await import('../rate-limit');
 
-    expect(rateLimitConfigs['response-rating'].limit).toBeGreaterThan(
+    expect(rateLimitConfigs['feedback'].limit).toBeGreaterThan(
       rateLimitConfigs['mobile-feedback'].limit,
     );
-    expect(rateLimitConfigs['response-rating'].window).toBe(
-      rateLimitConfigs['mobile-feedback'].window,
-    );
+    expect(rateLimitConfigs['feedback'].window).toBe(rateLimitConfigs['mobile-feedback'].window);
   });
 
   it('counts separately from general feedback for one identifier', async () => {
@@ -653,7 +651,7 @@ describe('response ratings have a bucket of their own', () => {
     for (let call = 0; call < rateLimitConfigs['mobile-feedback'].limit; call++) {
       await checkRateLimit(req, 'mobile-feedback', 'user:rating-1');
     }
-    const rating = await checkRateLimit(req, 'response-rating', 'user:rating-1');
+    const rating = await checkRateLimit(req, 'feedback', 'user:rating-1');
 
     expect(rating.success).toBe(true);
   });

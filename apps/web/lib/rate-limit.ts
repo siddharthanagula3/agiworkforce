@@ -161,7 +161,7 @@ export const rateLimitConfigs = {
     window: '1 h', // 10 feedback submissions per hour, generous for real use, blocks spam
     failClosed: false, // Don't block a user's feedback submission if Redis fails
   },
-  'response-rating': {
+  feedback: {
     limit: 120,
     window: '1 h',
     failClosed: false,

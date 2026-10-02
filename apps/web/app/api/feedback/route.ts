@@ -14,6 +14,7 @@ import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server
 import { secureFilenameSegment } from '@/lib/secure-random';
 import {
   RESPONSE_RATING_COMMENT_MAX_CHARS,
+  RESPONSE_RATING_MESSAGE_MAX_CHARS,
   RESPONSE_RATING_REASONS,
 } from './response-rating-contract';
 
@@ -161,26 +162,43 @@ const FeedbackSchema = z.object({
   screenshot: z.object({ data_url: z.string().max(MAX_SCREENSHOT_DATA_URL_CHARS) }).nullish(),
 });
 
-const ResponseRatingProbe = z.object({
-  metadata: z.object({ feedback_context: z.literal('response_rating') }),
+const FeedbackPayloadSchema = FeedbackSchema.superRefine((feedback, context) => {
+  if (feedback.metadata.feedback_context !== 'response_rating') return;
+  if (feedback.message.length > RESPONSE_RATING_MESSAGE_MAX_CHARS) {
+    context.addIssue({
+      code: 'custom',
+      path: ['message'],
+      message: `a response rating's message is at most ${RESPONSE_RATING_MESSAGE_MAX_CHARS} characters`,
+    });
+  }
+  for (const field of ['logs', 'screenshot'] as const) {
+    if (feedback[field] != null) {
+      context.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `${field} cannot be sent with a response rating`,
+      });
+    }
+  }
 });
 
 async function handleSubmitFeedback(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
-  const body: unknown = await request.json().catch(() => null);
-  const rateLimitResponse = await withRateLimit(
-    request,
-    ResponseRatingProbe.safeParse(body).success ? 'response-rating' : 'mobile-feedback',
-  );
+  const rateLimitResponse = await withRateLimit(request, 'feedback');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const parsed = FeedbackSchema.safeParse(body);
+  const parsed = FeedbackPayloadSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     throw createError.badRequest('Invalid feedback payload', parsed.error.flatten());
   }
   const { subject, message, user_id: claimedUserId, metadata, logs, screenshot } = parsed.data;
+
+  if (metadata.feedback_context !== 'response_rating') {
+    const reportLimitResponse = await withRateLimit(request, 'mobile-feedback');
+    if (reportLimitResponse) return reportLimitResponse;
+  }
 
   const safeSubject = redactTranscriptText(subject);
   const safeMessage = redactTranscriptText(message);

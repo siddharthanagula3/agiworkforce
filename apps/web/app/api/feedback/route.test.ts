@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type ObjectStorageModule = typeof import('@/lib/server/object-storage');
+
 interface FakeDb {
   query: ReturnType<typeof vi.fn>;
   execute: ReturnType<typeof vi.fn>;
@@ -27,6 +29,8 @@ const feedbackRouteMocks = vi.hoisted(() => {
     ownerDb,
     scopedDb,
     claimScope: vi.fn((..._args: unknown[]) => scopedDb),
+    storageConfigured: vi.fn(() => true),
+    putPrivateObject: vi.fn(async ({ key }: { key: string }) => ({ key })),
   };
 });
 
@@ -62,10 +66,19 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: feedbackRouteMocks.claimScope,
 }));
 
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<ObjectStorageModule>()),
+  isPrivateObjectStorageConfigured: feedbackRouteMocks.storageConfigured,
+  putPrivateObject: feedbackRouteMocks.putPrivateObject,
+}));
+
 import { POST } from './route';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
-import { RESPONSE_RATING_COMMENT_MAX_CHARS } from './response-rating-contract';
+import {
+  RESPONSE_RATING_COMMENT_MAX_CHARS,
+  RESPONSE_RATING_MESSAGE_MAX_CHARS,
+} from './response-rating-contract';
 
 function request(body: unknown) {
   return new Request('http://localhost:3000/api/feedback', {
@@ -73,6 +86,10 @@ function request(body: unknown) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   }) as never;
+}
+
+function rateLimitKeys(): unknown[] {
+  return vi.mocked(withRateLimit).mock.calls.map(([, key]) => key);
 }
 
 describe('POST /api/feedback', () => {
@@ -254,6 +271,54 @@ describe('POST /api/feedback', () => {
     expect(storedMetadata).toContain('[redacted:api-key]');
     expect(storedMetadata).toContain('[redacted:bearer-token]');
   });
+
+  it('checks the feedback ceiling before it reads the body', async () => {
+    vi.mocked(withRateLimit).mockResolvedValueOnce(new Response(null, { status: 429 }) as never);
+    const flood = request({
+      subject: 'Desktop report',
+      message: 'Something happened.',
+      metadata: { platform: 'macos', version: '1.0.0', user_agent: 'AGI Desktop' },
+    }) as unknown as Request;
+    const readBody = vi.spyOn(flood, 'json');
+
+    const response = await POST(flood as never);
+
+    expect(response.status).toBe(429);
+    expect(rateLimitKeys()).toEqual(['feedback']);
+    expect(readBody).not.toHaveBeenCalled();
+    expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
+  });
+
+  it('counts a report against the report ceiling once it is past the feedback ceiling', async () => {
+    await POST(
+      request({
+        subject: 'Desktop report',
+        message: 'Something happened.',
+        metadata: { platform: 'macos', version: '1.0.0', user_agent: 'AGI Desktop' },
+      }),
+    );
+
+    expect(rateLimitKeys()).toEqual(['feedback', 'mobile-feedback']);
+  });
+
+  it('stores nothing when a report is over the report ceiling', async () => {
+    vi.mocked(withRateLimit)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(new Response(null, { status: 429 }) as never);
+
+    const response = await POST(
+      request({
+        subject: 'Desktop report',
+        message: 'Something happened.',
+        metadata: { platform: 'macos', version: '1.0.0', user_agent: 'AGI Desktop' },
+        screenshot: { data_url: `data:image/png;base64,${Buffer.from('png').toString('base64')}` },
+      }),
+    );
+
+    expect(response.status).toBe(429);
+    expect(feedbackRouteMocks.putPrivateObject).not.toHaveBeenCalled();
+    expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
+  });
 });
 
 // A rating that cannot be traced back to an answer is a number nobody can act
@@ -397,7 +462,7 @@ describe('task feedback', () => {
 describe('thumbs-down details', () => {
   const FEEDBACK_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
 
-  function rating(metadata: Record<string, unknown>) {
+  function rating(metadata: Record<string, unknown>, fields: Record<string, unknown> = {}) {
     return request({
       subject: 'Response rated down',
       message: 'An answer in web chat. The answer text is not attached.',
@@ -412,6 +477,7 @@ describe('thumbs-down details', () => {
         conversation_id: 'conversation-7',
         ...metadata,
       },
+      ...fields,
     });
   }
 
@@ -448,11 +514,10 @@ describe('thumbs-down details', () => {
     expect(insertParams[4]).toBe(FEEDBACK_ID);
   });
 
-  it('counts a rating against its own limit, not the general feedback one', async () => {
+  it('counts a rating against the feedback ceiling only', async () => {
     await POST(rating({ feedback_id: FEEDBACK_ID, reason: 'incomplete' }));
 
-    expect(vi.mocked(withRateLimit)).toHaveBeenCalledWith(expect.anything(), 'response-rating');
-    expect(vi.mocked(withRateLimit)).not.toHaveBeenCalledWith(expect.anything(), 'mobile-feedback');
+    expect(rateLimitKeys()).toEqual(['feedback']);
   });
 
   it("answers a conflict when a changed vote names a rating that is not the caller's", async () => {
@@ -580,5 +645,46 @@ describe('thumbs-down details', () => {
     );
 
     expect(response.status).toBe(400);
+  });
+
+  it('refuses a rating that carries a screenshot, and stores nothing', async () => {
+    const response = await POST(
+      rating(
+        { feedback_id: FEEDBACK_ID },
+        {
+          screenshot: {
+            data_url: `data:image/png;base64,${Buffer.from('png').toString('base64')}`,
+          },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect(feedbackRouteMocks.putPrivateObject).not.toHaveBeenCalled();
+    expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
+    expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses a rating that carries logs, and stores nothing', async () => {
+    const response = await POST(
+      rating({ feedback_id: FEEDBACK_ID }, { logs: 'ERROR the answer was wrong' }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
+    expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses a rating whose message is longer than a rating line', async () => {
+    const response = await POST(
+      rating(
+        { feedback_id: FEEDBACK_ID },
+        { message: 'x'.repeat(RESPONSE_RATING_MESSAGE_MAX_CHARS + 1) },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
+    expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
   });
 });
