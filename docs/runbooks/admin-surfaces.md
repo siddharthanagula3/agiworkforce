@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-17
+Last updated: 2026-10-02
 
 The three administrative surfaces in `apps/web`, who each one admits, and what
 can be done from it. Read this before granting anyone access to any of them: two
@@ -10,11 +10,11 @@ of the three look similar and admit entirely different populations.
 
 ## The three surfaces
 
-| Route                    | Admits                                        | Scope                            |
-| ------------------------ | --------------------------------------------- | -------------------------------- |
-| `/settings`              | any signed-in user                            | their own account                |
-| `/admin`                 | a platform operator on the allowlist          | platform-wide readiness controls |
-| `/operator`              | a platform operator on the allowlist          | every account on the platform    |
+| Route       | Admits                               | Scope                            |
+| ----------- | ------------------------------------ | -------------------------------- |
+| `/settings` | any signed-in user                   | their own account                |
+| `/admin`    | a platform operator on the allowlist | platform-wide readiness controls |
+| `/operator` | a platform operator on the allowlist | every account on the platform    |
 
 There is a fourth population that is easy to confuse with the second and third:
 an **organisation** owner or admin. `hasAdminConsoleAccess` in
@@ -58,32 +58,33 @@ Grant it to the smallest set that can run the platform. Everything behind
 console: teams, policy, identity, auditability and support posture, plus two live
 panels that act rather than report.
 
-| Panel                        | Does                                                      |
-| ---------------------------- | ---------------------------------------------------------- |
-| `SecurityOperationsPanel`    | platform security telemetry and account action             |
-| `ContentReportQueuePanel`    | the trust and safety report queue                          |
+| Panel                     | Does                                           |
+| ------------------------- | ---------------------------------------------- |
+| `SecurityOperationsPanel` | platform security telemetry and account action |
+| `ContentReportQueuePanel` | the trust and safety report queue              |
 
 ## What is on `/operator`
 
-`apps/web/features/admin/pages/OperatorDashboardPage.tsx`. Fourteen tabs, each
+`apps/web/features/admin/pages/OperatorDashboardPage.tsx`. Seventeen tabs, each
 addressable by location hash so a link can land on a control rather than on the
-overview: `overview`, `feedback`, `users`, `costs`, `routing`, `rollout`,
-`flags`, `services`, `routes`, `economics`, `content`, `privacy`, `support`,
-`jobs`.
+overview: `overview`, `feedback`, `users`, `product`, `costs`, `routing`,
+`rollout`, `quota`, `flags`, `services`, `dashboards`, `routes`, `economics`,
+`content`, `privacy`, `support`, `jobs`.
 
-| Tab         | Panel                     | What it is for                                      |
-| ----------- | ------------------------- | ---------------------------------------------------- |
-| `costs`     | `OperatorCostsPanel`      | spend against providers                              |
-| `routing`   | `RoutingHealthPanel`      | route health and breaker state                       |
-| `rollout`   | `ModelRolloutPanel`       | staged model rollout                                 |
-| `flags`     | `FeatureFlagsPanel`       | feature flag state                                   |
-| `services`  | `ServiceHealthPanel`      | dependency health                                    |
-| `routes`    | `RouteEconomicsPanel`     | per-route cost and margin                            |
-| `economics` | `EconomicsSummaryPanel`   | the aggregate economic picture                       |
-| `content`   | `ContentTakedownPanel`    | content takedown                                     |
-| `privacy`   | `PrivacyRequestsPanel`    | data subject access and erasure requests             |
-| `support`   | `SupportHandoffQueuePanel`| the support handoff queue                            |
-| `jobs`      | `BackgroundJobsPanel`     | background job state                                 |
+| Tab         | Panel                       | What it is for                                                                                |
+| ----------- | --------------------------- | --------------------------------------------------------------------------------------------- |
+| `costs`     | `OperatorCostsPanel`        | spend against providers                                                                       |
+| `routing`   | `RoutingHealthPanel`        | route health and breaker state                                                                |
+| `rollout`   | `ModelRolloutPanel`         | staged model rollout                                                                          |
+| `quota`     | `FreeQuotaAttestationPanel` | free quota model gates and the console check record; see `docs/runbooks/free-quota-models.md` |
+| `flags`     | `FeatureFlagsPanel`         | feature flag state                                                                            |
+| `services`  | `ServiceHealthPanel`        | dependency health                                                                             |
+| `routes`    | `RouteEconomicsPanel`       | per-route cost and margin                                                                     |
+| `economics` | `EconomicsSummaryPanel`     | the aggregate economic picture                                                                |
+| `content`   | `ContentTakedownPanel`      | content takedown                                                                              |
+| `privacy`   | `PrivacyRequestsPanel`      | data subject access and erasure requests                                                      |
+| `support`   | `SupportHandoffQueuePanel`  | the support handoff queue                                                                     |
+| `jobs`      | `BackgroundJobsPanel`       | background job state                                                                          |
 
 `/operator` deliberately does not sit under `/admin`. That tree's layout admits
 an organisation owner or admin, and nesting the operator dashboard inside it
