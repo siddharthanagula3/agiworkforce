@@ -6,7 +6,11 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { policyLiterals, scriptSourceOf } from './check-security-response-headers.mjs';
+import {
+  everyHostSources,
+  policyLiterals,
+  scriptSourceOf,
+} from './check-security-response-headers.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const guard = path.join(repoRoot, 'scripts/check-security-response-headers.mjs');
@@ -14,10 +18,14 @@ const guard = path.join(repoRoot, 'scripts/check-security-response-headers.mjs')
 const PROXY = `
 export function buildCsp(nonce: string): string {
   const devUnsafeEval = process.env['NODE_ENV'] === 'production' ? '' : " 'unsafe-eval'";
+  const uploadOrigins = process.env['UPLOAD_ORIGIN'] ? ' https://uploads.example.com' : '';
+  const sandboxFrameSrc = process.env['SANDBOX_ORIGIN'] ? ' https://sandbox.example.com' : '';
   return \`
     default-src 'self';
     script-src 'self' 'nonce-\${nonce}'\${devUnsafeEval} https://js.stripe.com;
     style-src 'self' 'unsafe-inline';
+    connect-src 'self'\${uploadOrigins} https://api.stripe.com;
+    frame-src 'self' https://js.stripe.com\${sandboxFrameSrc};
     object-src 'none';
   \`.trim();
 }
@@ -84,6 +92,69 @@ export function GET() {
 `,
     },
     (root) => assert.equal(runGuard(root).code, 0),
+  );
+});
+
+test('a directive that governs scripts, connections, frames, workers or objects fails when it admits every host', () => {
+  for (const [directive, source] of [
+    ['script-src', 'https:'],
+    ['connect-src', '*'],
+    ['frame-src', 'https://*'],
+    ['worker-src', 'http:'],
+    ['object-src', 'wss:'],
+    ['default-src', 'https:'],
+    ['script-src', 'https://*/assets/'],
+    ['connect-src', '*:443'],
+    ['frame-src', '*/embed'],
+    ['worker-src', 'wss://*:8443/socket'],
+  ]) {
+    withTree(
+      {
+        'apps/web/proxy.ts': PROXY.replace(
+          "object-src 'none';",
+          `object-src 'none';\n    ${directive} 'self' ${source};`,
+        ),
+      },
+      (root) => {
+        const { code, output } = runGuard(root);
+        assert.equal(code, 1, `${directive} ${source}`);
+        assert.ok(output.includes(`${directive} admits every host with ${source}`), output);
+      },
+    );
+  }
+});
+
+test('an every-host source typed against the interpolation after it still fails', () => {
+  for (const [directive, before, after] of [
+    ['script-src', "'nonce-${nonce}'${devUnsafeEval}", "'nonce-${nonce}' https:${devUnsafeEval}"],
+    ['connect-src', "'self'${uploadOrigins}", "'self' https:${uploadOrigins}"],
+    [
+      'frame-src',
+      'https://js.stripe.com${sandboxFrameSrc}',
+      'https://js.stripe.com https:${sandboxFrameSrc}',
+    ],
+  ]) {
+    assert.ok(PROXY.includes(before), before);
+    withTree({ 'apps/web/proxy.ts': PROXY.replace(before, after) }, (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 1, directive);
+      assert.ok(output.includes(`${directive} admits every host with https:`), output);
+    });
+  }
+});
+
+test('img-src, named hosts and wildcard subdomains are outside the every-host rule', () => {
+  withTree(
+    {
+      'apps/web/proxy.ts': PROXY.replace(
+        "object-src 'none';",
+        "object-src 'none';\n    img-src 'self' data: https:;\n    connect-src 'self' https://*.clerk.com *.clerk.accounts.dev wss://signal.agiworkforce.com;\n    frame-src https://js.stripe.com;",
+      ),
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 0, output);
+    },
   );
 });
 
@@ -164,6 +235,28 @@ test('a directive is bounded by its own semicolon', () => {
   );
   assert.equal(scriptSourceOf("default-src 'self'"), null);
   assert.match(scriptSourceOf("script-src 'self' 'unsafe-eval'; img-src *"), /unsafe-eval/);
+});
+
+test('every-host sources are read inside a meta policy and across an escaped newline', () => {
+  assert.deepEqual(
+    everyHostSources(
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src *">`,
+    ),
+    [{ directive: 'connect-src', source: '*' }],
+  );
+  assert.deepEqual(everyHostSources("default-src 'self';\\nscript-src 'self' https:"), [
+    { directive: 'script-src', source: 'https:' },
+  ]);
+});
+
+test('every-host sources are read with each template interpolation taken out', () => {
+  assert.deepEqual(everyHostSources("connect-src 'self' https:${uploadOrigins}${signal()};"), [
+    { directive: 'connect-src', source: 'https:' },
+  ]);
+  assert.deepEqual(
+    everyHostSources("script-src 'self' 'nonce-${nonce}'${devUnsafeEval} wss://${host};"),
+    [],
+  );
 });
 
 test('policyLiterals reads a template across its newlines and a string up to its quote', () => {

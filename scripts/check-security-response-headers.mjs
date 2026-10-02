@@ -27,6 +27,10 @@ const SKIPPED_DIRS = new Set(['node_modules', '.next', 'dist', 'build', 'coverag
 const CSP_HEADER = /Content-Security-Policy/i;
 const SCRIPT_SRC = /script-src([^;`'"]*(?:'[^']*'[^;`'"]*)*)/i;
 const SANDBOXED = /default-src\s+'none'/i;
+const HOST_BOUNDED_DIRECTIVE =
+  /(?<![\w-])(default-src|script-src|connect-src|frame-src|child-src|worker-src|object-src)\b([^;`"]*)/gi;
+const EVERY_HOST_SOURCE =
+  /^(?:(?:https?|wss?):|(?:(?:https?|wss?):\/\/)?\*(?::(?:\d+|\*))?(?:\/\S*)?)$/i;
 
 const CORS_ORIGIN = /['"]Access-Control-Allow-Origin['"]\s*:\s*(['"`])([^'"`]*)\1/g;
 const CORS_CREDENTIALS = /Access-Control-Allow-Credentials/;
@@ -59,6 +63,17 @@ function sourceFiles(dir, out = []) {
 export function scriptSourceOf(policy) {
   const match = SCRIPT_SRC.exec(policy);
   return match ? match[1] : null;
+}
+
+export function everyHostSources(policy) {
+  const found = [];
+  const text = policy.replace(/\\[nrt]/g, ' ').replace(/\$\{[^}]*\}/g, ' ');
+  for (const [, directive, sources] of text.matchAll(HOST_BOUNDED_DIRECTIVE)) {
+    for (const source of sources.trim().split(/\s+/)) {
+      if (EVERY_HOST_SOURCE.test(source)) found.push({ directive, source });
+    }
+  }
+  return found;
 }
 
 /**
@@ -117,6 +132,13 @@ function main() {
       const literals = policyLiterals(source);
       const sandboxed = literals.some((literal) => SANDBOXED.test(literal));
       for (const policy of literals) {
+        for (const { directive, source } of everyHostSources(policy)) {
+          failures.push(
+            `${rel} emits a Content-Security-Policy whose ${directive} admits every host with ${source}. ` +
+              `That directive decides where injected markup can load code, connect or frame content ` +
+              `from, so name the hosts instead.`,
+          );
+        }
         const directive = scriptSourceOf(policy);
         if (directive === null) continue;
         policies += 1;

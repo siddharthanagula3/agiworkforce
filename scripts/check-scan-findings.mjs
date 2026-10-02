@@ -20,9 +20,24 @@ const ZAP_RISK_SEVERITY = new Map([
   ['3', 'HIGH'],
 ]);
 
+const ENTRY_FIELDS = [
+  'id',
+  'scanner',
+  'owner',
+  'expires',
+  'reason',
+  'locations',
+  'otherinfo',
+  'evidence',
+];
+
 function severityRank(severity) {
   const index = SEVERITY_ORDER.indexOf(String(severity ?? '').toUpperCase());
   return index === -1 ? 0 : index;
+}
+
+function isText(value) {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 export function normalizeTrivyReport(report) {
@@ -65,19 +80,27 @@ export function normalizeTrivyReport(report) {
 export function normalizeZapReport(report) {
   const findings = [];
   for (const site of report?.site ?? []) {
+    const siteUrl = site?.['@name'] ?? '<unknown url>';
     for (const alert of site?.alerts ?? []) {
-      const instances = alert?.instances ?? [];
-      const location =
-        instances.length > 0
-          ? (instances[0]?.uri ?? site?.['@name'] ?? '<unknown url>')
-          : (site?.['@name'] ?? '<unknown url>');
-      findings.push({
-        id: alert?.pluginid ?? alert?.alertRef ?? '<unknown>',
-        location,
-        severity: ZAP_RISK_SEVERITY.get(String(alert?.riskcode ?? '0')) ?? 'UNKNOWN',
-        title: alert?.alert ?? alert?.name ?? '',
-        scanner: 'zap',
-      });
+      const instances = alert?.instances?.length > 0 ? alert.instances : [{}];
+      const seen = new Set();
+      for (const instance of instances) {
+        const location = instance?.uri ?? siteUrl;
+        const evidence = instance?.evidence ?? '';
+        const otherinfo = instance?.otherinfo ?? '';
+        const key = JSON.stringify([location, evidence, otherinfo]);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        findings.push({
+          id: alert?.alertRef ?? alert?.pluginid ?? '<unknown>',
+          location,
+          severity: ZAP_RISK_SEVERITY.get(String(alert?.riskcode ?? '0')) ?? 'UNKNOWN',
+          title: alert?.alert ?? alert?.name ?? '',
+          scanner: 'zap',
+          evidence,
+          otherinfo,
+        });
+      }
     }
   }
   return findings;
@@ -94,6 +117,13 @@ export function parseAllowlist(document, { allowlistPath, today, fail }) {
     const label = `${allowlistPath} entries[${index}]`;
     if (typeof entry?.id !== 'string' || entry.id.length === 0) {
       fail(`${label} must set "id" to the scanner finding id it accepts.`);
+      return;
+    }
+    const unread = Object.keys(entry).filter((key) => !ENTRY_FIELDS.includes(key));
+    if (unread.length > 0) {
+      fail(
+        `${label} (${entry.id}) sets ${unread.map((key) => `"${key}"`).join(', ')}, which the gate does not read. An entry takes only ${ENTRY_FIELDS.slice(0, -1).join(', ')} and ${ENTRY_FIELDS.at(-1)}, and a misspelled scope or pin would accept every instance of ${entry.id}.`,
+      );
       return;
     }
     if (typeof entry.scanner !== 'string' || !['trivy', 'zap'].includes(entry.scanner)) {
@@ -129,6 +159,30 @@ export function parseAllowlist(document, { allowlistPath, today, fail }) {
         );
         return;
       }
+      if (entry.scanner === 'zap' && entry.locations.some((value) => urlScope(value) === null)) {
+        fail(
+          `${label} (${entry.id}) "locations" for a zap entry must be absolute http or https URLs with no query or fragment.`,
+        );
+        return;
+      }
+    }
+    if (entry.otherinfo !== undefined && (entry.scanner !== 'zap' || !isText(entry.otherinfo))) {
+      fail(
+        `${label} (${entry.id}) "otherinfo" belongs to a zap entry and is the line of other info every instance has to carry.`,
+      );
+      return;
+    }
+    if (
+      entry.evidence !== undefined &&
+      (entry.scanner !== 'zap' ||
+        !Array.isArray(entry.evidence) ||
+        entry.evidence.length === 0 ||
+        !entry.evidence.every(isText))
+    ) {
+      fail(
+        `${label} (${entry.id}) "evidence" belongs to a zap entry and is a non-empty array of substrings, one of which every instance's evidence has to contain.`,
+      );
+      return;
     }
     parsed.push({ ...entry, matched: 0 });
   });
@@ -136,11 +190,43 @@ export function parseAllowlist(document, { allowlistPath, today, fail }) {
   return parsed;
 }
 
+function urlScope(value) {
+  if (!URL.canParse(value)) return null;
+  const url = new URL(value);
+  if (!['http:', 'https:'].includes(url.protocol) || url.search !== '' || url.hash !== '') {
+    return null;
+  }
+  return url;
+}
+
+function withinUrlScope(location, candidate) {
+  const scope = urlScope(candidate);
+  if (scope === null || !URL.canParse(location)) return false;
+  const url = new URL(location);
+  if (url.origin !== scope.origin) return false;
+  const below = scope.pathname.endsWith('/') ? scope.pathname : `${scope.pathname}/`;
+  return url.pathname === scope.pathname || url.pathname.startsWith(below);
+}
+
+function carriesPins(entry, finding) {
+  const lines = (finding.otherinfo ?? '').split('\n').map((line) => line.trim());
+  if (entry.otherinfo !== undefined && !lines.includes(entry.otherinfo.trim())) return false;
+  return (
+    entry.evidence === undefined ||
+    entry.evidence.some((value) => (finding.evidence ?? '').includes(value))
+  );
+}
+
 function matches(entry, finding) {
   if (entry.scanner !== finding.scanner) return false;
   if (entry.id !== finding.id) return false;
+  if (!carriesPins(entry, finding)) return false;
   if (entry.locations === undefined) return true;
-  return entry.locations.some((candidate) => finding.location.includes(candidate));
+  return entry.locations.some((candidate) =>
+    finding.scanner === 'zap'
+      ? withinUrlScope(finding.location, candidate)
+      : finding.location.includes(candidate),
+  );
 }
 
 export function gateFindings({ findings, allowlist, minSeverity, scanner, fail }) {
@@ -155,9 +241,10 @@ export function gateFindings({ findings, allowlist, minSeverity, scanner, fail }
       entry.matched += 1;
       continue;
     }
-    fail(
-      `unaccepted: ${finding.location} [${finding.severity}] ${finding.id}, ${finding.title}`.trim(),
-    );
+    const detail = (finding.otherinfo || finding.evidence || '').replace(/\s+/gu, ' ').trim();
+    const summary =
+      `unaccepted: ${finding.location} [${finding.severity}] ${finding.id}, ${finding.title}`.trim();
+    fail(detail ? `${summary} (${detail})` : summary);
   }
 
   for (const entry of allowlist) {
