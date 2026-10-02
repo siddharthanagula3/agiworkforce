@@ -1101,7 +1101,6 @@ const MessageBubbleComponent = function MessageBubble({
    * lands in public.feedback and shows up in the operator dashboard's existing
    * feedback counts with no new table.
    */
-  const ratingFeedbackIdRef = useRef<string | null>(null);
   const ratingRequestsRef = useRef<Promise<void>>(Promise.resolve());
   const thumbsDownRef = useRef<HTMLButtonElement>(null);
   const ratingDetailsRef = useRef<HTMLFormElement>(null);
@@ -1114,7 +1113,6 @@ const MessageBubbleComponent = function MessageBubble({
   }, []);
   const postResponseRating = useCallback(
     (rating: 'up' | 'down', details?: ResponseRatingDetailsInput): Promise<void> => {
-      const feedbackId = (ratingFeedbackIdRef.current ??= crypto.randomUUID());
       const send = async () => {
         const response = await fetch('/api/feedback', {
           method: 'POST',
@@ -1135,7 +1133,6 @@ const MessageBubbleComponent = function MessageBubble({
               rating,
               message_id: message.id,
               conversation_id: message.sessionId ?? activeConversationId ?? undefined,
-              feedback_id: feedbackId,
               ...(details?.reason ? { reason: details.reason } : {}),
               ...(details?.comment ? { comment: details.comment } : {}),
             },

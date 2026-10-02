@@ -88,6 +88,63 @@ function request(body: unknown) {
   }) as never;
 }
 
+interface StoredFeedback {
+  user_id: string | null;
+  subject: string;
+  message: string;
+  metadata: Record<string, unknown>;
+}
+
+function storedRating(
+  userId: string,
+  messageId: string,
+  rating: 'up' | 'down',
+  extra: Record<string, unknown> = {},
+): StoredFeedback {
+  return {
+    user_id: userId,
+    subject: `Response rated ${rating}`,
+    message: 'An answer in web chat. The answer text is not attached.',
+    metadata: { feedback_context: 'response_rating', message_id: messageId, rating, ...extra },
+  };
+}
+
+function feedbackTable(rows: StoredFeedback[] = []): StoredFeedback[] {
+  const run = async (sql: string, params: unknown[] = []): Promise<number> => {
+    if (sql.includes('pg_advisory_xact_lock')) return 1;
+    if (/^\s*delete from public\.feedback\b/.test(sql)) {
+      expect(sql).toMatch(/\buser_id = \$1\b/);
+      expect(sql).toContain("metadata->>'feedback_context' = 'response_rating'");
+      expect(sql).toMatch(/metadata->>'message_id' = \$2\b/);
+      const kept = rows.filter(
+        (row) =>
+          row.user_id !== params[0] ||
+          row.metadata['feedback_context'] !== 'response_rating' ||
+          row.metadata['message_id'] !== params[1],
+      );
+      const removed = rows.length - kept.length;
+      rows.splice(0, rows.length, ...kept);
+      return removed;
+    }
+    if (/^\s*insert into public\.feedback \(user_id, subject, message, metadata\)/.test(sql)) {
+      rows.push({
+        user_id: params[0] as string | null,
+        subject: String(params[1]),
+        message: String(params[2]),
+        metadata: JSON.parse(String(params[3])) as Record<string, unknown>,
+      });
+      return 1;
+    }
+    throw new Error(`unexpected statement: ${sql}`);
+  };
+  feedbackRouteMocks.execute.mockImplementation(run);
+  feedbackRouteMocks.query.mockImplementation(async (sql: string, params?: unknown[]) => {
+    await run(sql, params);
+    return [];
+  });
+  return rows;
+}
+
 function rateLimitKeys(): unknown[] {
   return vi.mocked(withRateLimit).mock.calls.map(([, key]) => key);
 }
@@ -433,6 +490,8 @@ describe('task feedback', () => {
   });
 
   it('keeps the verdict a rating carried, instead of dropping it on the way in', async () => {
+    const rows = feedbackTable();
+
     const response = await POST(
       request({
         subject: 'Response rated down',
@@ -449,158 +508,135 @@ describe('task feedback', () => {
     );
 
     expect(response.status).toBe(200);
-    const [, , , storedMetadata] = feedbackRouteMocks.query.mock.calls[0]?.[1] as [
-      string | null,
-      string,
-      string,
-      string,
-    ];
-    expect(storedMetadata).toContain('"rating":"down"');
+    expect(rows[0]?.metadata).toMatchObject({ rating: 'down' });
   });
 });
 
+function rating(metadata: Record<string, unknown>, fields: Record<string, unknown> = {}) {
+  return request({
+    subject: 'Response rated down',
+    message: 'An answer in web chat. The answer text is not attached.',
+    metadata: {
+      source: 'web',
+      platform: 'web',
+      version: 'web',
+      user_agent: 'test',
+      feedback_context: 'response_rating',
+      rating: 'down',
+      message_id: 'msg-1',
+      conversation_id: 'conversation-7',
+      ...metadata,
+    },
+    ...fields,
+  });
+}
+
 describe('thumbs-down details', () => {
-  const FEEDBACK_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
-
-  function rating(metadata: Record<string, unknown>, fields: Record<string, unknown> = {}) {
-    return request({
-      subject: 'Response rated down',
-      message: 'An answer in web chat. The answer text is not attached.',
-      metadata: {
-        source: 'web',
-        platform: 'web',
-        version: 'web',
-        user_agent: 'test',
-        feedback_context: 'response_rating',
-        rating: 'down',
-        message_id: 'msg-1',
-        conversation_id: 'conversation-7',
-        ...metadata,
-      },
-      ...fields,
-    });
-  }
-
   beforeEach(() => {
     vi.clearAllMocks();
     feedbackRouteMocks.optionalUser.mockResolvedValue({ userId: 'user-web' });
-    feedbackRouteMocks.query.mockResolvedValue([]);
-    feedbackRouteMocks.execute.mockResolvedValue(1);
   });
 
-  it('records a bare rating under the id the client minted, so a changed vote updates it', async () => {
-    const response = await POST(rating({ feedback_id: FEEDBACK_ID, rating: 'up' }));
+  it('keeps one rating per answer for the caller, however many pages sent one', async () => {
+    const rows = feedbackTable([
+      storedRating('user-web', 'msg-1', 'up'),
+      storedRating('user-web', 'msg-1', 'up'),
+      storedRating('user-web', 'msg-2', 'down'),
+      storedRating('user-other', 'msg-1', 'down'),
+    ]);
+
+    await POST(rating({ reason: 'inaccurate', comment: 'The year it gave is wrong.' }));
+    await POST(rating({ rating: 'up' }));
+
+    const mine = rows.filter(
+      (row) => row.user_id === 'user-web' && row.metadata['message_id'] === 'msg-1',
+    );
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.metadata).toMatchObject({ rating: 'up', message_id: 'msg-1' });
+    expect(mine[0]?.metadata).not.toHaveProperty('reason');
+    expect(JSON.stringify(rows)).not.toContain('The year it gave is wrong.');
+    expect(rows).toContainEqual(storedRating('user-web', 'msg-2', 'down'));
+    expect(rows).toContainEqual(storedRating('user-other', 'msg-1', 'down'));
+  });
+
+  it('replaces the rating under a lock on the answer, on a connection scoped to the caller', async () => {
+    feedbackTable();
+
+    const response = await POST(rating({ reason: 'incomplete' }));
 
     expect(response.status).toBe(200);
-    const [sql, params] = feedbackRouteMocks.execute.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('update public.feedback');
-    expect(sql).toContain("metadata->>'message_id' = $4::jsonb->>'message_id'");
-    expect(JSON.parse(String(params[3]))).toMatchObject({ rating: 'up', message_id: 'msg-1' });
-    expect(params[4]).toBe(FEEDBACK_ID);
-    expect(feedbackRouteMocks.execute).toHaveBeenCalledTimes(1);
-  });
-
-  it('inserts the rating when the caller has no row under that id yet', async () => {
-    feedbackRouteMocks.execute.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
-
-    const response = await POST(rating({ feedback_id: FEEDBACK_ID }));
-
-    expect(response.status).toBe(200);
-    const [insertSql, insertParams] = feedbackRouteMocks.execute.mock.calls[1] as [
-      string,
-      unknown[],
-    ];
-    expect(insertSql).toContain('on conflict (id) do nothing');
-    expect(insertParams[4]).toBe(FEEDBACK_ID);
-  });
-
-  it('counts a rating against the feedback ceiling only', async () => {
-    await POST(rating({ feedback_id: FEEDBACK_ID, reason: 'incomplete' }));
-
-    expect(rateLimitKeys()).toEqual(['feedback']);
-  });
-
-  it("answers a conflict when a changed vote names a rating that is not the caller's", async () => {
-    feedbackRouteMocks.execute.mockResolvedValue(0);
-
-    const response = await POST(rating({ feedback_id: FEEDBACK_ID }));
-
-    expect(response.status).toBe(409);
-  });
-
-  it("writes a signed-in caller's rating through a connection scoped to that caller", async () => {
-    await POST(rating({ feedback_id: FEEDBACK_ID, reason: 'incomplete' }));
-
     expect(feedbackRouteMocks.claimScope).toHaveBeenCalledWith(feedbackRouteMocks.ownerDb, {
       userId: 'user-web',
       organizationId: null,
     });
     expect(feedbackRouteMocks.scopedDb.transaction).toHaveBeenCalledTimes(1);
     expect(feedbackRouteMocks.ownerDb.transaction).not.toHaveBeenCalled();
+    const statements = feedbackRouteMocks.execute.mock.calls as [string, unknown[]][];
+    expect(statements.map(([sql]) => sql.trim().split(/\s+/)[0])).toEqual([
+      'select',
+      'delete',
+      'insert',
+    ]);
+    expect(statements[0]?.[0]).toContain('pg_advisory_xact_lock');
+    expect(String(statements[0]?.[1][0])).toContain('user-web');
+    expect(String(statements[0]?.[1][0])).toContain('msg-1');
   });
 
-  it('keeps the owner connection for a signed-out rating, which can only insert', async () => {
+  it('refuses a signed-out rating, and writes nothing', async () => {
     feedbackRouteMocks.optionalUser.mockResolvedValue(null);
+    feedbackTable();
 
-    const response = await POST(rating({ feedback_id: FEEDBACK_ID }));
+    const response = await POST(rating({}));
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(401);
     expect(feedbackRouteMocks.claimScope).not.toHaveBeenCalled();
-    expect(feedbackRouteMocks.execute).toHaveBeenCalledTimes(1);
-    const [sql, params] = feedbackRouteMocks.execute.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('on conflict (id) do nothing');
-    expect(sql).not.toContain('update');
-    expect(params[0]).toBeNull();
+    expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
+    expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
   });
 
-  it('completes the same rating with the reason and the comment', async () => {
+  it('counts a rating against the feedback ceiling only', async () => {
+    feedbackTable();
+
+    await POST(rating({ reason: 'incomplete' }));
+
+    expect(rateLimitKeys()).toEqual(['feedback']);
+  });
+
+  it('completes the rating with the reason and the comment', async () => {
+    const rows = feedbackTable();
+
     const response = await POST(
-      rating({
-        feedback_id: FEEDBACK_ID,
-        reason: 'inaccurate',
-        comment: '  The date it gave is a year off.  ',
-      }),
+      rating({ reason: 'inaccurate', comment: '  The date it gave is a year off.  ' }),
     );
 
     expect(response.status).toBe(200);
-    const [sql, params] = feedbackRouteMocks.execute.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('update public.feedback');
-    expect(sql).toContain('user_id = $1');
-    expect(params[0]).toBe('user-web');
-    expect(params[2]).toBe('The date it gave is a year off.');
-    expect(JSON.parse(String(params[3]))).toMatchObject({
-      feedback_context: 'response_rating',
-      rating: 'down',
-      reason: 'inaccurate',
-      message_id: 'msg-1',
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      user_id: 'user-web',
+      message: 'The date it gave is a year off.',
+      metadata: {
+        feedback_context: 'response_rating',
+        rating: 'down',
+        reason: 'inaccurate',
+        message_id: 'msg-1',
+      },
     });
-    expect(params[4]).toBe(FEEDBACK_ID);
-  });
-
-  it("answers a conflict instead of a silent success when the rating is not the caller's", async () => {
-    feedbackRouteMocks.execute.mockResolvedValue(0);
-
-    const response = await POST(rating({ feedback_id: FEEDBACK_ID, reason: 'incomplete' }));
-
-    expect(response.status).toBe(409);
   });
 
   it('redacts a secret pasted into the comment before it is stored', async () => {
     const apiKey = `sk-${'A'.repeat(40)}`;
+    const rows = feedbackTable();
 
-    await POST(rating({ feedback_id: FEEDBACK_ID, comment: `It echoed my key ${apiKey}` }));
+    await POST(rating({ comment: `It echoed my key ${apiKey}` }));
 
-    const params = feedbackRouteMocks.execute.mock.calls[0]?.[1] as unknown[];
-    expect(String(params[2])).not.toContain(apiKey);
-    expect(String(params[2])).toContain('[redacted:api-key]');
+    expect(rows[0]?.message).not.toContain(apiKey);
+    expect(rows[0]?.message).toContain('[redacted:api-key]');
   });
 
   it('keeps the comment out of the log when the write fails', async () => {
     feedbackRouteMocks.execute.mockRejectedValue(new Error('connection reset'));
 
-    const response = await POST(
-      rating({ feedback_id: FEEDBACK_ID, comment: 'My phone number is 555 0100' }),
-    );
+    const response = await POST(rating({ comment: 'My phone number is 555 0100' }));
 
     expect(response.status).toBe(500);
     expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('555 0100');
@@ -639,7 +675,6 @@ describe('thumbs-down details', () => {
           version: 'web',
           user_agent: 'test',
           reason: 'other',
-          feedback_id: FEEDBACK_ID,
         },
       }),
     );
@@ -648,9 +683,11 @@ describe('thumbs-down details', () => {
   });
 
   it('refuses a rating that carries a screenshot, and stores nothing', async () => {
+    feedbackTable();
+
     const response = await POST(
       rating(
-        { feedback_id: FEEDBACK_ID },
+        {},
         {
           screenshot: {
             data_url: `data:image/png;base64,${Buffer.from('png').toString('base64')}`,
@@ -666,9 +703,9 @@ describe('thumbs-down details', () => {
   });
 
   it('refuses a rating that carries logs, and stores nothing', async () => {
-    const response = await POST(
-      rating({ feedback_id: FEEDBACK_ID }, { logs: 'ERROR the answer was wrong' }),
-    );
+    feedbackTable();
+
+    const response = await POST(rating({}, { logs: 'ERROR the answer was wrong' }));
 
     expect(response.status).toBe(400);
     expect(feedbackRouteMocks.execute).not.toHaveBeenCalled();
@@ -676,11 +713,10 @@ describe('thumbs-down details', () => {
   });
 
   it('refuses a rating whose message is longer than a rating line', async () => {
+    feedbackTable();
+
     const response = await POST(
-      rating(
-        { feedback_id: FEEDBACK_ID },
-        { message: 'x'.repeat(RESPONSE_RATING_MESSAGE_MAX_CHARS + 1) },
-      ),
+      rating({}, { message: 'x'.repeat(RESPONSE_RATING_MESSAGE_MAX_CHARS + 1) }),
     );
 
     expect(response.status).toBe(400);

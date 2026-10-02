@@ -148,7 +148,7 @@ describe('rating an assistant response', () => {
     expect(onReact).toHaveBeenNthCalledWith(2, 'msg-1', null);
   });
 
-  it('records a changed vote on the same rating, and keeps it when the form is closed', async () => {
+  it('records a changed vote against the same answer, and keeps it when the form is closed', async () => {
     render(<MessageBubble message={assistantMessage()} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Good response' }));
@@ -159,9 +159,9 @@ describe('rating an assistant response', () => {
 
     const first = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body));
     const second = JSON.parse(String((fetchMock.mock.calls[1] as [string, RequestInit])[1].body));
-    expect(first.metadata.rating).toBe('up');
-    expect(second.metadata.rating).toBe('down');
-    expect(second.metadata.feedback_id).toBe(first.metadata.feedback_id);
+    expect(first.metadata).toMatchObject({ rating: 'up', message_id: 'msg-1' });
+    expect(second.metadata).toMatchObject({ rating: 'down', message_id: 'msg-1' });
+    expect(second.metadata).not.toHaveProperty('feedback_id');
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: 'Bad response' })).toHaveAttribute(
       'aria-pressed',
@@ -176,7 +176,6 @@ interface RatingBody {
   metadata: {
     rating: string;
     message_id: string;
-    feedback_id: string;
     reason?: string;
     comment?: string;
   };
@@ -279,14 +278,12 @@ describe('telling us why an answer was bad', () => {
     await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    const vote = sentBody(0);
-    const details = sentBody(1);
-    expect(details.metadata).toMatchObject({
+    expect(sentBody(0).metadata).toMatchObject({ rating: 'down', message_id: 'msg-1' });
+    expect(sentBody(1).metadata).toMatchObject({
       rating: 'down',
       message_id: 'msg-1',
       reason: 'inaccurate',
       comment: 'The date is a year off.',
-      feedback_id: vote.metadata.feedback_id,
     });
     await waitFor(() => expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull());
     expect(toastMock.success).toHaveBeenCalled();

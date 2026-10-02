@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -27,25 +26,12 @@ const SCREENSHOT_KEY_PREFIX = 'feedback';
 const INSERT_FEEDBACK_SQL = `insert into public.feedback (user_id, subject, message, metadata)
        values ($1, $2, $3, $4::jsonb)`;
 
-const UPDATE_RATING_SQL = `update public.feedback
-          set subject = $2, message = $3, metadata = $4::jsonb
-        where id = $5::uuid
-          and user_id = $1
+const LOCK_RESPONSE_RATING_SQL = 'select pg_advisory_xact_lock(hashtextextended($1, 0))';
+
+const DELETE_RESPONSE_RATING_SQL = `delete from public.feedback
+        where user_id = $1
           and metadata->>'feedback_context' = 'response_rating'
-          and metadata->>'message_id' = $4::jsonb->>'message_id'`;
-
-const INSERT_RATING_SQL = `insert into public.feedback (id, user_id, subject, message, metadata)
-       values ($5::uuid, $1, $2, $3, $4::jsonb)
-       on conflict (id) do nothing`;
-
-async function recordResponseRating(
-  db: DatabaseAdapter,
-  params: unknown[],
-  ownsRows: boolean,
-): Promise<boolean> {
-  if (ownsRows && (await db.execute(UPDATE_RATING_SQL, params)) > 0) return true;
-  return (await db.execute(INSERT_RATING_SQL, params)) > 0;
-}
+          and metadata->>'message_id' = $2`;
 
 async function storeScreenshot(dataUrl: string, userId: string | null): Promise<string | null> {
   const match = SCREENSHOT_DATA_URL.exec(dataUrl);
@@ -70,6 +56,10 @@ async function storeScreenshot(dataUrl: string, userId: string | null): Promise<
   return key;
 }
 
+const ResponseRatingTarget = z.object({
+  message_id: z.string().trim().min(1).max(200),
+});
+
 const FeedbackSchema = z.object({
   subject: z.string().trim().min(1).max(200),
   message: z.string().trim().min(1).max(10_000),
@@ -87,13 +77,12 @@ const FeedbackSchema = z.object({
       run_id: z.string().trim().max(200).optional(),
       finish_reason: z.enum(['refusal', 'content_filter']).optional(),
       rating: z.enum(['up', 'down']).optional(),
-      feedback_id: z.string().uuid().optional(),
       reason: z.enum(RESPONSE_RATING_REASONS).optional(),
       comment: z.string().trim().min(1).max(RESPONSE_RATING_COMMENT_MAX_CHARS).optional(),
     })
     .superRefine((metadata, context) => {
       if (metadata.feedback_context !== 'response_rating') {
-        for (const field of ['feedback_id', 'reason', 'comment'] as const) {
+        for (const field of ['reason', 'comment'] as const) {
           if (metadata[field] !== undefined) {
             context.addIssue({
               code: 'custom',
@@ -182,38 +171,24 @@ const FeedbackPayloadSchema = FeedbackSchema.superRefine((feedback, context) => 
   }
 });
 
-async function handleSubmitFeedback(request: NextRequest) {
-  const csrfResponse = await requireCsrfToken(request);
-  if (csrfResponse) return csrfResponse;
+type Feedback = z.infer<typeof FeedbackPayloadSchema>;
 
-  const rateLimitResponse = await withRateLimit(request, 'feedback');
-  if (rateLimitResponse) return rateLimitResponse;
+interface FeedbackAttachments {
+  logs: string | null;
+  screenshotKey: string | null;
+}
 
-  const parsed = FeedbackPayloadSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    throw createError.badRequest('Invalid feedback payload', parsed.error.flatten());
-  }
-  const { subject, message, user_id: claimedUserId, metadata, logs, screenshot } = parsed.data;
+const NO_ATTACHMENTS: FeedbackAttachments = { logs: null, screenshotKey: null };
 
-  if (metadata.feedback_context !== 'response_rating') {
-    const reportLimitResponse = await withRateLimit(request, 'mobile-feedback');
-    if (reportLimitResponse) return reportLimitResponse;
-  }
-
-  const safeSubject = redactTranscriptText(subject);
-  const safeMessage = redactTranscriptText(message);
-  const safeLogs =
-    typeof logs === 'string' ? redactTranscriptText(logs).slice(0, MAX_LOGS_CHARS) : null;
-
-  const userId = (await getOptionalAuthUser(request))?.userId ?? null;
-  const screenshotKey = screenshot
-    ? await storeScreenshot(screenshot.data_url, userId ?? null)
-    : null;
-
-  const params = [
-    userId ?? null,
-    safeSubject,
-    metadata.comment ? redactTranscriptText(metadata.comment) : safeMessage,
+function feedbackRow(
+  userId: string | null,
+  { subject, message, user_id: claimedUserId, metadata }: Feedback,
+  { logs, screenshotKey }: FeedbackAttachments,
+): unknown[] {
+  return [
+    userId,
+    redactTranscriptText(subject),
+    redactTranscriptText(metadata.comment ?? message),
     JSON.stringify({
       source: metadata.source ?? 'desktop',
       platform: metadata.platform,
@@ -228,42 +203,99 @@ async function handleSubmitFeedback(request: NextRequest) {
       ...(metadata.reason ? { reason: metadata.reason } : {}),
       ...(metadata.finish_reason ? { finish_reason: metadata.finish_reason } : {}),
       ...(claimedUserId ? { claimed_user_id: claimedUserId } : {}),
-      ...(safeLogs ? { logs: safeLogs } : {}),
+      ...(logs ? { logs } : {}),
       ...(screenshotKey ? { screenshot_key: screenshotKey } : {}),
     }),
   ];
+}
 
-  const ownerDb = getNeonDb();
-  const db = userId
-    ? createClaimedUserScopedDb(ownerDb, { userId, organizationId: null })
-    : ownerDb;
-  let stored = true;
+async function replaceResponseRating(
+  userId: string,
+  messageId: string,
+  replacement: unknown[],
+): Promise<void> {
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+  await db.transaction(async (tx) => {
+    await tx.execute(LOCK_RESPONSE_RATING_SQL, [`agi:response-rating:${userId}:${messageId}`]);
+    await tx.execute(DELETE_RESPONSE_RATING_SQL, [userId, messageId]);
+    await tx.execute(INSERT_FEEDBACK_SQL, replacement);
+  });
+}
+
+async function submitResponseRating(request: NextRequest, feedback: Feedback) {
+  const userId = (await getOptionalAuthUser(request))?.userId;
+  if (!userId) throw createError.unauthorized('Sign in to rate a response');
+  const { message_id: messageId } = ResponseRatingTarget.parse(feedback.metadata);
+
   try {
-    if (!metadata.feedback_id) {
-      await db.query(INSERT_FEEDBACK_SQL, params);
-    } else {
-      const ratingParams = [...params, metadata.feedback_id];
-      stored = await db.transaction((tx) =>
-        recordResponseRating(tx, ratingParams, userId !== null),
-      );
-    }
+    await replaceResponseRating(userId, messageId, feedbackRow(userId, feedback, NO_ATTACHMENTS));
   } catch (error) {
     logger.error(
       {
         error,
         userId,
-        feedbackContext: metadata.feedback_context ?? null,
-        source: metadata.source ?? 'desktop',
+        feedbackContext: 'response_rating',
+        source: feedback.metadata.source ?? 'desktop',
       },
       'Failed to store feedback',
     );
     throw createError.internal('Failed to submit feedback');
   }
-  if (!stored) {
-    throw createError.conflict('This rating could not be updated.');
+
+  return NextResponse.json({ success: true });
+}
+
+async function submitReport(request: NextRequest, feedback: Feedback) {
+  const reportLimitResponse = await withRateLimit(request, 'mobile-feedback');
+  if (reportLimitResponse) return reportLimitResponse;
+
+  const logs =
+    typeof feedback.logs === 'string'
+      ? redactTranscriptText(feedback.logs).slice(0, MAX_LOGS_CHARS)
+      : null;
+
+  const userId = (await getOptionalAuthUser(request))?.userId ?? null;
+  const screenshotKey = feedback.screenshot
+    ? await storeScreenshot(feedback.screenshot.data_url, userId)
+    : null;
+
+  const ownerDb = getNeonDb();
+  const db = userId
+    ? createClaimedUserScopedDb(ownerDb, { userId, organizationId: null })
+    : ownerDb;
+  try {
+    await db.query(INSERT_FEEDBACK_SQL, feedbackRow(userId, feedback, { logs, screenshotKey }));
+  } catch (error) {
+    logger.error(
+      {
+        error,
+        userId,
+        feedbackContext: feedback.metadata.feedback_context ?? null,
+        source: feedback.metadata.source ?? 'desktop',
+      },
+      'Failed to store feedback',
+    );
+    throw createError.internal('Failed to submit feedback');
   }
 
   return NextResponse.json({ success: true });
+}
+
+async function handleSubmitFeedback(request: NextRequest) {
+  const csrfResponse = await requireCsrfToken(request);
+  if (csrfResponse) return csrfResponse;
+
+  const rateLimitResponse = await withRateLimit(request, 'feedback');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const parsed = FeedbackPayloadSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    throw createError.badRequest('Invalid feedback payload', parsed.error.flatten());
+  }
+
+  return parsed.data.metadata.feedback_context === 'response_rating'
+    ? submitResponseRating(request, parsed.data)
+    : submitReport(request, parsed.data);
 }
 
 export const POST = withErrorHandler(handleSubmitFeedback);
