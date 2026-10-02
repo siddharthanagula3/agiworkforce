@@ -3968,7 +3968,11 @@ export function useChatStream(
       });
 
       let retriedEmptyTurn = false;
-      let freeLimitFallback: string | null = null;
+      let pendingFallback: {
+        reason: string;
+        requestedModel: string;
+        failure: ChatApiError;
+      } | null = null;
       try {
         if (localModel) {
           connectingTicker.stop();
@@ -4207,6 +4211,7 @@ export function useChatStream(
           connectingTicker.stop();
 
           if (!response.ok) {
+            if (pendingFallback) throw pendingFallback.failure;
             const failure = await chatApiErrorFromResponse(
               response,
               `Request failed: ${response.status}`,
@@ -4230,9 +4235,7 @@ export function useChatStream(
                 options.workMode === 'agiwork',
               ),
             };
-            const reason: string | null = freeLimitFallback
-              ? null
-              : freeLimitFallbackReason(fallbackTurn);
+            const reason = freeLimitFallbackReason(fallbackTurn);
             const fallbackModel = reason
               ? pickFreeLimitFallback(
                   await loadFreeQuotaCatalogue(abortController.signal).catch((catalogueError) => {
@@ -4243,23 +4246,20 @@ export function useChatStream(
                 )
               : null;
             if (reason && fallbackModel) {
-              freeLimitFallback = reason;
+              pendingFallback = { reason, requestedModel: model, failure };
               model = fallbackModel;
-              updateMessage(
-                assistantMessageId,
-                { model: fallbackModel, fallbackReason: reason },
-                conversationId,
-              );
               continue;
             }
             throw failure;
           }
+          const fallbackReason = pendingFallback?.reason;
+          pendingFallback = null;
 
           if (!isTemporaryConversation && !regenerateParentId) reportTurnCommitted();
 
           surfaceTermsNotice(response);
           const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
-          if (resolvedModel !== model) {
+          if (fallbackReason || resolvedModel !== model) {
             updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
           }
           const truncatedAttachments = readAttachmentTruncationHeader(
@@ -4278,7 +4278,7 @@ export function useChatStream(
             getAuthToken,
             ...(latencyTrace ? { latencyTrace } : {}),
             ...(assistantParentId ? { assistantParentId } : {}),
-            ...(freeLimitFallback ? { fallbackReason: freeLimitFallback } : {}),
+            ...(fallbackReason ? { fallbackReason } : {}),
             onRunHandle: (handle) => {
               if (handle) {
                 activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
@@ -4380,6 +4380,7 @@ export function useChatStream(
         }
       } catch (error) {
         latencyTrace?.cancel();
+        if (pendingFallback) model = pendingFallback.requestedModel;
         // CAP-040: a turn interrupted by an expired session was unrecoverable.
         // The composer clears on send, so by the time the 401 came back the
         // user's text survived only as a failed turn in the transcript, sign
