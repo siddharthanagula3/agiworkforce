@@ -167,7 +167,7 @@ function statusReads(): number {
 }
 
 async function confirmRecording(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('checkbox', { name: /I checked the console just now/ }));
+  await user.click(screen.getByRole('checkbox', { name: /I checked just now/ }));
   await user.click(screen.getByRole('button', { name: 'Record console check' }));
   await user.click(
     within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Record check' }),
@@ -528,6 +528,28 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
     );
   });
 
+  it('asks for the switch in Model Studio as well, whose endpoint the requests go to', async () => {
+    serve([configured({ attestation: { standing: 'missing', record: null } })]);
+    render(<FreeQuotaAttestationPanel />);
+
+    const steps = await screen.findByRole('list', { name: 'Console check steps' });
+    const qwenCloud = within(steps).getByRole('link', { name: 'Free Tier page' });
+    const modelStudio = within(steps).getByRole('link', { name: 'Free Quota tab of Model usage' });
+    expect(
+      qwenCloud.compareDocumentPosition(modelStudio) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const step = modelStudio.closest('li');
+    expect(step).toHaveTextContent('turn Free Quota Only on there for the same models');
+    expect(step).toHaveTextContent('Model Studio International endpoint');
+    expect(step).toHaveTextContent('whenever this account can open it');
+    expect(within(steps).queryByText(/If the key was issued in/)).toBeNull();
+    expect(
+      screen.getByRole('checkbox', {
+        name: /on the QwenCloud Free Tier page and, where this account can open it, in the Model Studio Free Quota tab/,
+      }),
+    ).not.toBeChecked();
+  });
+
   it('records nothing until coverage is chosen and the check is confirmed', async () => {
     const user = userEvent.setup();
     serve([configured({ attestation: { standing: 'missing', record: null } })]);
@@ -535,7 +557,7 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
 
     const button = await screen.findByRole('button', { name: 'Record console check' });
     expect(button).toBeDisabled();
-    await user.click(screen.getByRole('checkbox', { name: /I checked the console just now/ }));
+    await user.click(screen.getByRole('checkbox', { name: /I checked just now/ }));
     expect(button).toBeDisabled();
     await user.click(screen.getByRole('radio', { name: /Every model/ }));
     expect(button).toBeEnabled();
@@ -547,7 +569,7 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
     render(<FreeQuotaAttestationPanel />);
 
     await user.click(await screen.findByRole('radio', { name: /Every model/ }));
-    await user.click(screen.getByRole('checkbox', { name: /I checked the console just now/ }));
+    await user.click(screen.getByRole('checkbox', { name: /I checked just now/ }));
     await user.click(screen.getByRole('button', { name: 'Record console check' }));
 
     const dialog = await screen.findByRole('alertdialog');
@@ -584,9 +606,7 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
     });
     expect(network.posts[0]!.headers['x-csrf-token']).toBe(CSRF_TOKEN);
     expect(await screen.findByText(/The console check is valid until/)).toBeInTheDocument();
-    expect(
-      screen.getByRole('checkbox', { name: /I checked the console just now/ }),
-    ).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /I checked just now/ })).not.toBeChecked();
     expect(statusReads()).toBe(2);
   });
 
@@ -708,6 +728,6 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
       'The free quota inventory, the shared state store and the provider key must all be configured first.',
     );
     expect(screen.queryByText(/Console check recorded at/)).toBeNull();
-    expect(screen.getByRole('checkbox', { name: /I checked the console just now/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /I checked just now/ })).toBeChecked();
   });
 });

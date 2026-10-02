@@ -9,9 +9,9 @@ quota model serves only while two gates hold, and either one lapsing turns every
 free quota model off at once:
 
 1. **A terms review** recorded in code, in `apps/web/config/free-pools.json`.
-2. **A console check**: a platform admin confirmed in the provider console that
-   Free quota only is on, and recorded it in the operator console within the
-   last 30 days.
+2. **A console check**: a platform admin confirmed that Free quota only is on,
+   in QwenCloud and, where the account can open it, in Alibaba Cloud Model
+   Studio, and recorded it in the operator console within the last 30 days.
 
 Both gates, what is serving and why the rest is not, are on `/operator#quota`.
 The gate logic is `decideFreeQuotaOffering` in
@@ -141,10 +141,14 @@ result in overdue payment." QwenCloud also states "Currently, there is no
 notification mechanism" for a used-up quota, so our reminders are the only
 warning.
 
-### The same check in Alibaba Cloud Model Studio
+### Then the same switch in Alibaba Cloud Model Studio
 
-If the key was issued in Model Studio instead, use the Singapore console's
-Model usage page, Free Quota tab:
+This deployment sends its requests to the Model Studio International endpoint
+(`QWEN_DEFAULT_BASE_URL` in `packages/ai/providers/qwen/src/base-url.ts`), and
+neither console's documentation says the QwenCloud switch and the Model Studio
+switch are one setting. So whenever the account can open Model Studio, turn the
+switch on there as well, for the same models, on the Singapore console's Model
+usage page, Free Quota tab:
 https://modelstudio.console.alibabacloud.com/ap-southeast-1/costing-balance/free-quota.
 Source: https://www.alibabacloud.com/help/en/model-studio/new-free-quota (page
 last updated Sep 22, 2026), read on 2026-10-02.
@@ -158,8 +162,11 @@ last updated Sep 22, 2026), read on 2026-10-02.
 - Only Singapore-region models with the International deployment scope have a
   free quota.
 
-Neither page says the two consoles flip one shared switch. Check the console
-that issued the key.
+Whether QwenCloud's free quota is drawn through the endpoint we call is not
+verified. If it is not, our requests draw on Model Studio's quota, and only the
+Model Studio switch turns a spent quota into a refusal instead of a charge. If
+the account cannot open Model Studio, record the QwenCloud check and tell the
+owner, so the gap is known.
 
 ### Recording it
 

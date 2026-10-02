@@ -493,7 +493,10 @@ function ConfiguredView({
       <div className={`${CARD_CLASS} flex flex-col gap-4`}>
         <div>
           <h3 className="text-sm font-medium">Record a console check</h3>
-          <ol className="mt-2 flex list-decimal flex-col gap-1.5 ps-5 text-sm">
+          <ol
+            aria-label="Console check steps"
+            className="mt-2 flex list-decimal flex-col gap-1.5 ps-5 text-sm"
+          >
             <li>
               Sign in to {status.issuer} with the Alibaba Cloud International main account that owns
               this deployment&apos;s key and open the{' '}
@@ -515,17 +518,7 @@ function ConfiguredView({
               prices.
             </li>
             <li>
-              The change is not immediate and the page lags by several minutes. Reload it and
-              confirm every covered model shows the switch on.
-            </li>
-            <li>
-              A model whose free quota is used up or expired has no switch, so it cannot be on. If
-              any model shows that, choose Only the models I select and leave it out: a model left
-              out stays off here, while one recorded as on with its switch off bills the account
-              once its quota is gone.
-            </li>
-            <li>
-              If the key was issued in Alibaba Cloud Model Studio instead, use the{' '}
+              Then, with the same account, open the{' '}
               <a
                 href={MODEL_STUDIO_FREE_QUOTA_CONSOLE}
                 target="_blank"
@@ -534,8 +527,21 @@ function ConfiguredView({
               >
                 Free Quota tab of Model usage
               </a>{' '}
-              in the Singapore console: the Free Quota Only switch in the Actions column, or Free
-              Quota Only Batch Operation, Batch Enable, then Enable for All Models.
+              in the Alibaba Cloud Model Studio console (Singapore) and turn Free Quota Only on
+              there for the same models: the switch in the Actions column, or Free Quota Only Batch
+              Operation, Batch Enable, then Enable for All Models. This deployment sends its
+              requests to the Model Studio International endpoint, and neither console says the two
+              switches are one, so turn on both whenever this account can open it.
+            </li>
+            <li>
+              Neither change is immediate, and the QwenCloud page lags by several minutes. Reload
+              both pages and confirm every covered model shows the switch on.
+            </li>
+            <li>
+              A model whose free quota is used up or expired has no switch, so it cannot be on. If
+              any model shows that, choose Only the models I select and leave it out: a model left
+              out stays off here, while one recorded as on with its switch off bills the account
+              once its quota is gone.
             </li>
             <li>
               Record it here within {formatDurationMs(status.recordWindowMs)} of checking. The
@@ -642,8 +648,9 @@ function ConfiguredView({
             onChange={(event) => onConfirmed(event.target.checked)}
           />
           <span>
-            I checked the console just now, and Free quota only is on for every model this record
-            covers.
+            I checked just now that Free quota only is on for every model this record covers, on the{' '}
+            {status.issuer} Free Tier page and, where this account can open it, in the Model Studio
+            Free Quota tab.
           </span>
         </label>
 
