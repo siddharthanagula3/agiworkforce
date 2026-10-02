@@ -626,6 +626,39 @@ describe('run-following has a bucket of its own', () => {
   });
 });
 
+describe('response ratings have a bucket of their own', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    delete process.env['VERCEL_ENV'];
+  });
+
+  // A thumbs-down with a reason is two requests, so sharing the general feedback
+  // ceiling let a handful of ratings lock a user out of reporting a real bug.
+  it('allows more ratings than general feedback submissions', async () => {
+    const { rateLimitConfigs } = await import('../rate-limit');
+
+    expect(rateLimitConfigs['response-rating'].limit).toBeGreaterThan(
+      rateLimitConfigs['mobile-feedback'].limit,
+    );
+    expect(rateLimitConfigs['response-rating'].window).toBe(
+      rateLimitConfigs['mobile-feedback'].window,
+    );
+  });
+
+  it('counts separately from general feedback for one identifier', async () => {
+    const { checkRateLimit, rateLimitConfigs } = await import('../rate-limit');
+
+    for (let call = 0; call < rateLimitConfigs['mobile-feedback'].limit; call++) {
+      await checkRateLimit(req, 'mobile-feedback', 'user:rating-1');
+    }
+    const rating = await checkRateLimit(req, 'response-rating', 'user:rating-1');
+
+    expect(rating.success).toBe(true);
+  });
+});
+
 describe('non-production rate-limit scale', () => {
   const SCALE_ENV = 'AGI_RATE_LIMIT_SCALE';
   const SCALE = 50;

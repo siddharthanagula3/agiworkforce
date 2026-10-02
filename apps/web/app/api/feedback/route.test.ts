@@ -58,6 +58,7 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
 
 import { POST } from './route';
 import { logger } from '@/lib/logger';
+import { withRateLimit } from '@/lib/rate-limit';
 import { RESPONSE_RATING_COMMENT_MAX_CHARS } from './response-rating-contract';
 
 function request(body: unknown) {
@@ -136,6 +137,18 @@ describe('POST /api/feedback', () => {
     expect(response.status).toBe(200);
     expect(feedbackRouteMocks.claimScope).not.toHaveBeenCalled();
     expect(feedbackRouteMocks.query.mock.calls[0]?.[1]?.[0]).toBeNull();
+  });
+
+  it('counts general feedback against the feedback limit', async () => {
+    await POST(
+      request({
+        subject: 'Desktop report',
+        message: 'Something happened.',
+        metadata: { platform: 'macos', version: '1.0.0', user_agent: 'AGI Desktop' },
+      }),
+    );
+
+    expect(vi.mocked(withRateLimit)).toHaveBeenCalledWith(expect.anything(), 'mobile-feedback');
   });
 
   it('keeps existing desktop payloads backward compatible', async () => {
@@ -427,6 +440,13 @@ describe('thumbs-down details', () => {
     ];
     expect(insertSql).toContain('on conflict (id) do nothing');
     expect(insertParams[4]).toBe(FEEDBACK_ID);
+  });
+
+  it('counts a rating against its own limit, not the general feedback one', async () => {
+    await POST(rating({ feedback_id: FEEDBACK_ID, reason: 'incomplete' }));
+
+    expect(vi.mocked(withRateLimit)).toHaveBeenCalledWith(expect.anything(), 'response-rating');
+    expect(vi.mocked(withRateLimit)).not.toHaveBeenCalledWith(expect.anything(), 'mobile-feedback');
   });
 
   it("answers a conflict when a changed vote names a rating that is not the caller's", async () => {

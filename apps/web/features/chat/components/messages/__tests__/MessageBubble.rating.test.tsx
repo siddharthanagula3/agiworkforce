@@ -23,7 +23,10 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
 });
 
 import { MessageBubble } from '../MessageBubble';
-import { RESPONSE_RATING_SHARING_NOTE } from '../ResponseRatingDetails';
+import {
+  RESPONSE_RATING_RATE_LIMITED,
+  RESPONSE_RATING_SHARING_NOTE,
+} from '../ResponseRatingDetails';
 
 const fetchMock = vi.fn();
 
@@ -120,6 +123,15 @@ describe('rating an assistant response', () => {
 
     await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
     expect(up).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('says when too much feedback was sent recently, instead of asking for a retry', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 429, json: async () => ({}) });
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Good response' }));
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith(RESPONSE_RATING_RATE_LIMITED));
   });
 
   it('toggles the rating off when the same verdict is clicked again', async () => {
@@ -395,5 +407,18 @@ describe('telling us why an answer was bad', () => {
       'Could not send that. Please try again.',
     );
     expect(screen.getByRole('form', { name: 'Tell us more' })).toBeInTheDocument();
+  });
+
+  it('says when the details hit the hourly feedback limit', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({}) });
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Other' }));
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+
+    expect(await within(form).findByRole('alert')).toHaveTextContent(RESPONSE_RATING_RATE_LIMITED);
   });
 });

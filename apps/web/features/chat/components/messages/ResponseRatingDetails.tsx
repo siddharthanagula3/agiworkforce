@@ -32,6 +32,26 @@ export const RESPONSE_RATING_REASON_LABELS: Record<ResponseRatingReason, string>
 export const RESPONSE_RATING_SHARING_NOTE =
   'Your rating, reason and comment are saved with your account, this chat and response IDs, and your browser and device details. The response text is not attached.';
 
+export const RESPONSE_RATING_SEND_FAILED = 'Could not send that. Please try again.';
+
+export const RESPONSE_RATING_RATE_LIMITED =
+  "You've sent a lot of feedback in the last hour. Try again later.";
+
+export class ResponseRatingRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`Rating failed: ${status}`);
+    this.status = status;
+  }
+}
+
+export function responseRatingFailureMessage(error: unknown): string {
+  return error instanceof ResponseRatingRequestError && error.status === 429
+    ? RESPONSE_RATING_RATE_LIMITED
+    : RESPONSE_RATING_SEND_FAILED;
+}
+
 export interface ResponseRatingDetailsInput {
   reason: ResponseRatingReason | null;
   comment: string;
@@ -59,7 +79,7 @@ export function ResponseRatingDetails({
   const [reason, setReason] = useState<ResponseRatingReason | null>(null);
   const [comment, setComment] = useState('');
   const [sending, setSending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
   const trimmedComment = comment.trim();
   const hasDetails = reason !== null || trimmedComment.length > 0;
   const canSubmit = hasDetails && !sending;
@@ -72,13 +92,13 @@ export function ResponseRatingDetails({
     event.preventDefault();
     if (!canSubmit) return;
     setSending(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await onSubmit({ reason, comment: trimmedComment });
       toast.success('Thanks for your feedback.');
       onClose();
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailure(responseRatingFailureMessage(error));
       setSending(false);
     }
   };
@@ -127,7 +147,7 @@ export function ResponseRatingDetails({
               aria-pressed={selected}
               onClick={() => {
                 setReason(selected ? null : option);
-                setFailed(false);
+                setFailure(null);
               }}
               className={cn(
                 REASON_CHIP_CLASS,
@@ -151,7 +171,7 @@ export function ResponseRatingDetails({
           value={comment}
           onChange={(event) => {
             setComment(event.target.value);
-            setFailed(false);
+            setFailure(null);
           }}
           maxLength={RESPONSE_RATING_COMMENT_MAX_CHARS}
           rows={2}
@@ -162,9 +182,9 @@ export function ResponseRatingDetails({
       <p className="text-xs leading-relaxed text-[var(--chat-text-muted)]">
         {RESPONSE_RATING_SHARING_NOTE}
       </p>
-      {failed && (
+      {failure && (
         <p role="alert" className="text-xs text-[var(--chat-destructive-text)]">
-          Could not send that. Please try again.
+          {failure}
         </p>
       )}
       <div className="flex justify-end">

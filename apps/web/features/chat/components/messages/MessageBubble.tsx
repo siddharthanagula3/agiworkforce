@@ -73,6 +73,8 @@ import { variantDeleteConfirm } from './variantDeleteConfirm';
 import {
   RESPONSE_RATING_REASON_LABELS,
   ResponseRatingDetails,
+  ResponseRatingRequestError,
+  responseRatingFailureMessage,
   type ResponseRatingDetailsInput,
 } from './ResponseRatingDetails';
 import { VariantPager } from './VariantPager';
@@ -1139,7 +1141,7 @@ const MessageBubbleComponent = function MessageBubble({
             },
           }),
         });
-        if (!response.ok) throw new Error(`Rating failed: ${response.status}`);
+        if (!response.ok) throw new ResponseRatingRequestError(response.status);
       };
       const request = ratingRequestsRef.current.then(send);
       ratingRequestsRef.current = request.catch(() => undefined);
@@ -1153,10 +1155,10 @@ const MessageBubbleComponent = function MessageBubble({
       setRatingState(rating);
       try {
         await postResponseRating(rating);
-      } catch {
+      } catch (error) {
         // Leaving the button lit would claim a vote the server never took.
         setRatingState(previous);
-        toast.error('Could not send that. Please try again.');
+        toast.error(responseRatingFailureMessage(error));
       }
     },
     [postResponseRating, ratingState],

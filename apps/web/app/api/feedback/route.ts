@@ -161,14 +161,21 @@ const FeedbackSchema = z.object({
   screenshot: z.object({ data_url: z.string().max(MAX_SCREENSHOT_DATA_URL_CHARS) }).nullish(),
 });
 
+const ResponseRatingProbe = z.object({
+  metadata: z.object({ feedback_context: z.literal('response_rating') }),
+});
+
 async function handleSubmitFeedback(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'mobile-feedback');
+  const body: unknown = await request.json().catch(() => null);
+  const rateLimitResponse = await withRateLimit(
+    request,
+    ResponseRatingProbe.safeParse(body).success ? 'response-rating' : 'mobile-feedback',
+  );
   if (rateLimitResponse) return rateLimitResponse;
 
-  const body = await request.json().catch(() => null);
   const parsed = FeedbackSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.badRequest('Invalid feedback payload', parsed.error.flatten());
