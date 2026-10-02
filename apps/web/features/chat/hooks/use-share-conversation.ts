@@ -5,7 +5,10 @@ import {
   CONVERSATION_SHARES_PATH,
   ConversationShareAudienceResponseSchema,
   ConversationShareCreatedSchema,
+  ConversationShareListQuerySchema,
+  ConversationShareListResponseSchema,
   conversationSharePath,
+  conversationSharesPath,
   type ConversationShareVisibility,
 } from '@agiworkforce/cloud-contracts';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -42,6 +45,13 @@ interface InFlightShareRequest {
   timedOut: boolean;
 }
 
+interface ConversationLiveShares {
+  conversationId: string;
+  shares: ActiveConversationShare[];
+}
+
+const SHARE_LOOKUP_FAILED = 'Could not check whether this chat already has a shared link.';
+
 function readCreatedShare(value: unknown): ActiveConversationShare {
   const parsed = ConversationShareCreatedSchema.safeParse(value);
   if (!parsed.success) throw new Error('Invalid share response');
@@ -55,13 +65,36 @@ function readCreatedShare(value: unknown): ActiveConversationShare {
   };
 }
 
+async function readLiveShares(
+  conversationId: string,
+  signal: AbortSignal,
+): Promise<ActiveConversationShare[]> {
+  const res = await fetch(conversationSharesPath(conversationId), {
+    credentials: 'include',
+    signal,
+  });
+  if (!res.ok) throw new Error(SHARE_LOOKUP_FAILED);
+  const { shares, workspace } = ConversationShareListResponseSchema.parse(await res.json());
+  return shares
+    .filter((share) => !share.expired)
+    .map((share) => ({
+      url: share.shareUrl,
+      token: share.token,
+      expiresAt: share.expiresAt,
+      messageCount: share.messageCount,
+      audience: share.visibility,
+      workspace: workspace ?? null,
+    }));
+}
+
 export function useShareConversation(
   conversationTitle?: string,
   modelId?: string,
   conversationId?: string | null,
+  open = false,
 ) {
   const [isSharing, setIsSharing] = useState(false);
-  const [activeShare, setActiveShare] = useState<ActiveConversationShare | null>(null);
+  const [liveShares, setLiveShares] = useState<ConversationLiveShares | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inFlightRef = useRef<InFlightShareRequest | null>(null);
   const messages = useChatStore((s) => s.messages);
@@ -71,6 +104,36 @@ export function useShareConversation(
       : false,
   );
   const hasMessages = messages.length > 0;
+  const storedConversationId =
+    conversationId &&
+    !isTemporary &&
+    ConversationShareListQuerySchema.safeParse({ conversation_id: conversationId }).success
+      ? conversationId
+      : null;
+  const activeShare =
+    liveShares && liveShares.conversationId === conversationId
+      ? (liveShares.shares[0] ?? null)
+      : null;
+  const checkingShare =
+    open && storedConversationId !== null && liveShares?.conversationId !== storedConversationId;
+
+  useEffect(() => {
+    if (!open || !storedConversationId) return;
+    const controller = new AbortController();
+    readLiveShares(storedConversationId, controller.signal).then(
+      (shares) => {
+        if (!controller.signal.aborted) {
+          setLiveShares({ conversationId: storedConversationId, shares });
+        }
+      },
+      (caught: unknown) => {
+        if (controller.signal.aborted) return;
+        setLiveShares({ conversationId: storedConversationId, shares: [] });
+        setError(toUserMessage(caught, SHARE_LOOKUP_FAILED));
+      },
+    );
+    return () => controller.abort();
+  }, [open, storedConversationId]);
 
   const beginRequest = useCallback((): InFlightShareRequest | null => {
     if (inFlightRef.current) return null;
@@ -138,6 +201,7 @@ export function useShareConversation(
         setError('Add a message before creating a public link.');
         return false;
       }
+      const sharedConversationId = conversationId;
       if (isTemporary) {
         setError(TEMPORARY_CHAT_SHARE_REFUSAL);
         return false;
@@ -192,7 +256,14 @@ export function useShareConversation(
           const msg = (err as { error?: { message?: string } }).error?.message ?? 'Failed to share';
           throw new Error(msg);
         }
-        setActiveShare(readCreatedShare(await res.json()));
+        const created = readCreatedShare(await res.json());
+        setLiveShares((current) => ({
+          conversationId: sharedConversationId,
+          shares: [
+            created,
+            ...(current?.conversationId === sharedConversationId ? current.shares : []),
+          ],
+        }));
         return true;
       } catch (err) {
         showRequestError(request, err, 'Could not create the public link.');
@@ -228,7 +299,13 @@ export function useShareConversation(
       if (!res.ok) {
         throw new Error('Failed to revoke share link');
       }
-      setActiveShare(null);
+      setLiveShares(
+        (current) =>
+          current && {
+            ...current,
+            shares: current.shares.filter((share) => share.token !== activeShare.token),
+          },
+      );
       return true;
     } catch (err) {
       showRequestError(request, err, 'Could not revoke the public link.');
@@ -263,10 +340,14 @@ export function useShareConversation(
           throw new Error(msg);
         }
         const body = ConversationShareAudienceResponseSchema.parse(await res.json());
-        setActiveShare((current) =>
-          current?.token === activeShare.token
-            ? { ...current, audience: body.visibility }
-            : current,
+        setLiveShares(
+          (current) =>
+            current && {
+              ...current,
+              shares: current.shares.map((share) =>
+                share.token === activeShare.token ? { ...share, audience: body.visibility } : share,
+              ),
+            },
         );
         return true;
       } catch (err) {
@@ -287,6 +368,7 @@ export function useShareConversation(
     hasMessages,
     isTemporary,
     activeShare,
+    checkingShare,
     error,
     cancelPending,
     clearError: () => setError(null),

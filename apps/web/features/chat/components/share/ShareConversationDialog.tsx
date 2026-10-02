@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Spinner,
   translateUiPlural,
   useConfirmAction,
 } from '@agiworkforce/ui';
@@ -66,10 +67,11 @@ function ShareConversationDialogImpl({
     isSharing,
     isTemporary,
     activeShare,
+    checkingShare,
     error,
     cancelPending,
     clearError,
-  } = useShareConversation(conversationTitle, modelId, conversationId);
+  } = useShareConversation(conversationTitle, modelId, conversationId, open);
   const expiryLabel = useMemo(
     () => EXPIRY_OPTIONS.find((option) => option.days === expiryDays)?.label ?? '7 days',
     [expiryDays],
@@ -155,7 +157,12 @@ function ShareConversationDialogImpl({
             </DialogDescription>
           </DialogHeader>
 
-          {activeShare ? (
+          {checkingShare ? (
+            <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+              <Spinner size="sm" />
+              <span>Checking whether this chat is already shared</span>
+            </div>
+          ) : activeShare ? (
             <div className="space-y-4">
               <div className="flex gap-2">
                 <Input aria-label="Conversation link" readOnly value={activeShare.url} />
@@ -291,7 +298,10 @@ function ShareConversationDialogImpl({
                 <Button variant="outline" onClick={() => handleOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button onClick={() => void share(expiryDays)} disabled={isSharing || isTemporary}>
+                <Button
+                  onClick={() => void share(expiryDays)}
+                  disabled={isSharing || isTemporary || checkingShare}
+                >
                   {isSharing ? 'Creating…' : `Create public link · ${expiryLabel}`}
                 </Button>
               </>

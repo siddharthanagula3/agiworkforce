@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 type ScanModule0 = typeof import('@/lib/services/organization-policy-gate');
 
 const mocks = vi.hoisted(() => ({
@@ -123,6 +124,42 @@ describe('GET /api/share', () => {
     const response = await call();
     expect(response.status).toBe(200);
     expect((await response.json()).shares).toEqual([]);
+  });
+
+  it('reads one conversation’s links when asked, with the workspace they can be aimed at', async () => {
+    const organizationId = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from shared_sessions')) return [row()];
+      if (sql.includes('count(*) as member_count')) return [{ member_count: '3' }];
+      if (sql.includes('from public.organization_members')) {
+        return [{ organization_id: organizationId }];
+      }
+      return [];
+    });
+
+    const response = await GET(
+      new NextRequest(`https://agiworkforce.com/api/share?conversation_id=${CONVERSATION_ID}`, {
+        headers: { [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const [sql, params] = mocks.query.mock.calls[0]!;
+    expect(sql).toContain('owner_id = $1');
+    expect(sql).toContain('conversation_id = $2');
+    expect(params).toEqual(['user-1', CONVERSATION_ID]);
+    const body = await response.json();
+    expect(body.shares).toHaveLength(1);
+    expect(body.workspace).toEqual({ memberCount: 3 });
+  });
+
+  it('refuses a conversation filter that is not a conversation id', async () => {
+    const response = await GET(
+      new NextRequest('https://agiworkforce.com/api/share?conversation_id=conv-1'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.query).not.toHaveBeenCalled();
   });
 });
 

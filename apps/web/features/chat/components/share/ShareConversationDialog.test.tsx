@@ -370,3 +370,121 @@ describe('ShareConversationDialog audience', () => {
     expect(dialog).toHaveTextContent('cannot un-share a copy somebody has already taken');
   });
 });
+
+describe('ShareConversationDialog on a chat that is already shared', () => {
+  const SAVED_CONVERSATION_ID = '5d7f3c1a-9b2e-4f6d-8a1c-3e5b7d9f0a2c';
+
+  beforeEach(() => {
+    useChatStore.setState({
+      messages: [
+        {
+          id: 'fixture-message',
+          role: 'user',
+          content: 'Private planning notes',
+          createdAt: '2026-08-11T00:00:00.000Z',
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useChatStore.setState({ messages: [] });
+  });
+
+  function liveShare(token: string, extra: Record<string, unknown> = {}) {
+    return {
+      token,
+      title: 'Private plan',
+      shareUrl: `https://agiworkforce.com/share/${token}`,
+      modelId: null,
+      provider: null,
+      messageCount: 1,
+      visibility: 'public',
+      createdAt: '2026-08-11T00:00:00.000Z',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      expired: false,
+      ...extra,
+    };
+  }
+
+  function listed(shares: unknown[]) {
+    return new Response(JSON.stringify({ shares, workspace: null }), { status: 200 });
+  }
+
+  function renderSavedChat() {
+    render(
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId={SAVED_CONVERSATION_ID}
+        conversationTitle="Private plan"
+      />,
+    );
+  }
+
+  it('shows the live link with Copy and Revoke instead of offering a new one', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        listed([liveShare('live-token'), liveShare('lapsed-token', { expired: true })]),
+      );
+
+    renderSavedChat();
+
+    expect(
+      await screen.findByDisplayValue('https://agiworkforce.com/share/live-token'),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/share?conversation_id=${SAVED_CONVERSATION_ID}`,
+      expect.objectContaining({ credentials: 'include' }),
+    );
+    expect(screen.getByRole('heading', { name: 'Public link ready' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Revoke share' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /Create public link/ })).toBeNull();
+  });
+
+  it('offers no second link while it is still checking for the first', () => {
+    vi.spyOn(global, 'fetch').mockImplementationOnce(() => new Promise<Response>(() => {}));
+
+    renderSavedChat();
+
+    expect(screen.getByText('Checking whether this chat is already shared')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
+  });
+
+  it('shows the next live link to the chat once the one shown is revoked', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(listed([liveShare('newest-token'), liveShare('older-token')]))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
+
+    renderSavedChat();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke share' }));
+    expect(await screen.findByText('Revoke this share?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('alertdialog').querySelector('button:last-of-type')!);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        '/api/share/newest-token',
+        expect.objectContaining({ method: 'DELETE' }),
+      ),
+    );
+    expect(
+      await screen.findByDisplayValue('https://agiworkforce.com/share/older-token'),
+    ).toBeInTheDocument();
+  });
+
+  it('says when it could not check, and still lets the user create a link', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(new Response('{}', { status: 500 }));
+
+    renderSavedChat();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not check whether this chat already has a shared link.',
+    );
+    expect(screen.getByRole('button', { name: /Create public link/ })).toBeEnabled();
+  });
+});

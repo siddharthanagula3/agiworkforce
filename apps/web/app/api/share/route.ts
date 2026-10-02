@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
-import type {
-  ConversationShareCreated,
-  ConversationShareListResponse,
+import {
+  ConversationShareListQuerySchema,
+  type ConversationShareCreated,
+  type ConversationShareListResponse,
 } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -310,6 +311,13 @@ async function handleListShares(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);
+  const query = ConversationShareListQuerySchema.safeParse({
+    conversation_id: request.nextUrl.searchParams.get('conversation_id') ?? undefined,
+  });
+  if (!query.success) {
+    throw createError.validation('Invalid conversation id', query.error);
+  }
+  const conversationId = query.data.conversation_id ?? null;
   const db = getNeonDb();
 
   let rows: SharedSessionListRow[];
@@ -318,12 +326,13 @@ async function handleListShares(request: NextRequest) {
       `select token, title, model_id, provider, total_messages, visibility, expires_at, created_at
      from shared_sessions
      where owner_id = $1
+     ${conversationId ? 'and conversation_id = $2' : ''}
      order by created_at desc
      limit 200`,
-      [userId],
+      conversationId ? [userId, conversationId] : [userId],
     );
   } catch (error) {
-    if (!isConversationSharingSchemaUnavailable(error)) throw error;
+    if (conversationId || !isConversationSharingSchemaUnavailable(error)) throw error;
     rows = await db.query<SharedSessionListRow>(
       `select token, title, model_id, provider, total_messages, expires_at, created_at
      from shared_sessions
@@ -350,6 +359,14 @@ async function handleListShares(request: NextRequest) {
       expiresAt: row.expires_at,
       expired: new Date(row.expires_at).getTime() <= now,
     })),
+    ...(conversationId
+      ? {
+          workspace: await describeWorkspaceAudience(
+            db,
+            await resolveActiveOrganizationId(db, userId, request).catch(() => null),
+          ),
+        }
+      : {}),
   };
   return NextResponse.json(listed);
 }
