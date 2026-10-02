@@ -253,6 +253,53 @@ describe('useChatStream', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('saves a reached free limit with its card, so a reload keeps the reply and the resend guard', async () => {
+    const conversation = { ...TEMP_CONVERSATION, id: 'conv-free-limit', isTemporary: false };
+    useChatStore.setState({ activeConversationId: conversation.id, conversations: [conversation] });
+    const [limitedKey, limited] = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat',
+    )!;
+    const message = `${limited.displayName} has reached its free limit.`;
+    const saves: Array<Record<string, unknown>> = [];
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input).includes('/messages')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        saves.push(body);
+        return new Response(JSON.stringify({ message: { id: body['id'] } }), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: 'free_quota_exhausted',
+            message,
+            free_limit: { model: limitedKey, reason: 'allowance_used' },
+          },
+        }),
+        { status: 409 },
+      );
+    });
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: conversation.id,
+        model: limitedKey,
+      });
+    });
+
+    await vi.waitFor(() => expect(saves.some((body) => body['role'] === 'assistant')).toBe(true));
+    const saved = saves.find((body) => body['role'] === 'assistant')!;
+    expect(saved['content']).toBe(message);
+    expect(saved['metadata']).toMatchObject({
+      errorCode: 'free_quota_exhausted',
+      paywall: {
+        reason: message,
+        freeLimit: { modelId: limitedKey, reason: 'allowance_used' },
+      },
+    });
+    expect(saves.some((body) => body['role'] === 'user')).toBe(true);
+  });
+
   it('answers a spent Free Auto turn with a ready free model and says so', async () => {
     const freeRouter = getRoutingSlotModel('router_zero_cost');
     const [fallbackKey, fallback] = Object.entries(getProviderOfferings()).find(

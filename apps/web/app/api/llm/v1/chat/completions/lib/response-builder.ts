@@ -11,9 +11,14 @@ import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { settleJsonObjectCompletion, wantsJsonObject } from './json-object-mode';
 import { settleJsonSchemaCompletion, wantsJsonSchema } from './json-schema-mode';
-import { mapClassifiedUpstreamError, type UpstreamErrorShape } from './upstream-error-copy';
+import {
+  FREE_ALLOWANCE_EXHAUSTED_CODE,
+  mapClassifiedUpstreamError,
+  type UpstreamErrorShape,
+} from './upstream-error-copy';
 import { compactionUsageFields } from './context-window';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
+import { FREE_LANE_RECOVERY } from '@/lib/services/free-lane/stage';
 import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
 import {
   observeFreeLaneSettlement,
@@ -515,6 +520,7 @@ export function buildUpstreamErrorResponse(
         type: shape.type,
         code: shape.code,
         retryable: classified.retryable,
+        ...(shape.code === FREE_ALLOWANCE_EXHAUSTED_CODE ? { recovery: FREE_LANE_RECOVERY } : {}),
       },
     },
     { status: shape.status },

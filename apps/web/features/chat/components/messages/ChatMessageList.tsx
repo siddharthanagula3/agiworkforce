@@ -719,6 +719,7 @@ const MessageRow = memo(function MessageRow({
             ...(paywall.freeLimit.alternativeModel
               ? { alternativeModel: paywall.freeLimit.alternativeModel }
               : {}),
+            ...(paywall.freeLimit.byokHref ? { byokHref: paywall.freeLimit.byokHref } : {}),
             ...(onRegenerateWithModel ? { onSwitchModel: handlePaywallSwitchModel } : {}),
           }
         : undefined,

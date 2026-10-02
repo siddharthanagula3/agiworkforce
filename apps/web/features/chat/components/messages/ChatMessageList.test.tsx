@@ -743,6 +743,34 @@ describe('ChatMessageList actions', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('keeps the own-key option a saved shared free pool card carries', () => {
+    const messages = [
+      makeMessage({ id: 'pool-question', role: 'user', content: 'Hello' }),
+      makeMessage({
+        id: 'pool-reply',
+        role: 'assistant',
+        content: 'The free model has used up the allowance everyone on the Free plan shares.',
+        metadata: {
+          errorCode: 'free_allowance_exhausted',
+          paywall: {
+            feature: 'model_access',
+            requiredTier: 'basic',
+            reason: 'The free model has used up the allowance everyone on the Free plan shares.',
+            freeLimit: {
+              modelId: 'fixture-free-auto',
+              modelName: 'Fixture Free Auto',
+              reason: 'shared_pool_used',
+              byokHref: '/byok',
+            },
+          },
+        },
+      }),
+    ];
+    render(<ChatMessageList messages={messages} onRegenerate={vi.fn()} />);
+
+    expect(screen.getByRole('link', { name: 'Use your own key' })).toHaveAttribute('href', '/byok');
+  });
+
   it('calls onRegenerate with correct messageId for assistant messages', () => {
     const onRegenerate = vi.fn();
     const messages = [makeMessage({ id: 'msg-2', role: 'assistant', content: 'reply' })];

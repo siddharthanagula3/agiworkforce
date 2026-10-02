@@ -94,6 +94,18 @@ describe('InlinePaywallCard · free limit variant', () => {
     expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument();
   });
 
+  it('offers the reader’s own key when the server names where to add one', () => {
+    render(<InlinePaywallCard {...makeProps({ reason: 'shared_pool_used', byokHref: '/byok' })} />);
+
+    expect(screen.getByRole('link', { name: 'Use your own key' })).toHaveAttribute('href', '/byok');
+  });
+
+  it('offers no own-key link the server did not name', () => {
+    render(<InlinePaywallCard {...makeProps({ reason: 'shared_pool_used' })} />);
+
+    expect(screen.queryByRole('link', { name: 'Use your own key' })).toBeNull();
+  });
+
   it('says an ended free offer has ended rather than been used up', () => {
     render(<InlinePaywallCard {...makeProps({ reason: 'allowance_ended' })} />);
 

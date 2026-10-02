@@ -99,6 +99,7 @@ export interface FreeLimitRecovery {
   reason: FreeLimitReason;
   alternativeModel?: { id: string; name: string };
   onSwitchModel?: (modelId: string) => void;
+  byokHref?: string;
 }
 
 export interface InlinePaywallCardProps {
@@ -275,6 +276,8 @@ const CtaButtons = memo(function CtaButtons({
 });
 CtaButtons.displayName = 'CtaButtons';
 
+const BYOK_LABEL = 'Use your own key';
+
 const FREE_LIMIT_HEADLINE: Readonly<Record<FreeLimitReason, (modelName: string) => string>> = {
   allowance_used: (modelName) => `Free limit reached for ${modelName}`,
   allowance_ended: (modelName) => `The free offer for ${modelName} has ended`,
@@ -319,6 +322,12 @@ const FreeLimitActions = memo(function FreeLimitActions({
         </Button>
       ) : null}
 
+      {freeLimit.byokHref ? (
+        <Button asChild variant="outline" size="sm">
+          <a href={freeLimit.byokHref}>{BYOK_LABEL}</a>
+        </Button>
+      ) : null}
+
       <Button variant="ghost" size="sm" onClick={onDismiss}>
         {waitingHelps ? 'Try later' : 'Not now'}
       </Button>
@@ -329,7 +338,6 @@ FreeLimitActions.displayName = 'FreeLimitActions';
 
 const COUNTDOWN_TICK_MS = 1_000;
 const FREE_CAPACITY_HEADLINE = 'No free capacity right now';
-const FREE_CAPACITY_BYOK_LABEL = 'Use your own key';
 const FREE_CAPACITY_RETRY_LABEL = 'Try again';
 
 /**
@@ -402,7 +410,7 @@ const FreeCapacityActions = memo(function FreeCapacityActions({
 
       {freeCapacity.byokHref ? (
         <Button asChild variant="outline" size="sm">
-          <a href={freeCapacity.byokHref}>{FREE_CAPACITY_BYOK_LABEL}</a>
+          <a href={freeCapacity.byokHref}>{BYOK_LABEL}</a>
         </Button>
       ) : null}
 

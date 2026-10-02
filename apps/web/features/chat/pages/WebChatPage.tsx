@@ -4513,10 +4513,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             (candidate) => candidate.id === id,
           )
         : undefined;
-      const isPersistedMediaRefusal =
+      const isPersistedRefusal =
         message?.metadata?.toolType === 'image-generation' ||
-        message?.metadata?.toolType === 'video-generation';
-      if (isPersistedMediaRefusal) {
+        message?.metadata?.toolType === 'video-generation' ||
+        message?.metadata?.paywall?.freeLimit !== undefined;
+      if (isPersistedRefusal) {
         void deletePersistedMessages([id]);
         return;
       }

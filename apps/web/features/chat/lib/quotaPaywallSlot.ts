@@ -63,6 +63,7 @@ export function resolveQuotaPaywallSlot(input: {
     message: input.message,
     freeLimit: input.freeLimit,
     requestedModel: input.requestedModel,
+    recovery: input.recovery,
     planTier: input.planTier,
     resetAt: input.resetAt,
   });

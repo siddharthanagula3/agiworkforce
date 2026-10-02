@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   regenerateImage: undefined as
     undefined | ((messageId: string, options: ImageRevisionRequest) => Promise<string>),
   deleteMessage: undefined as undefined | ((messageId: string) => void),
+  paywallDismiss: undefined as undefined | ((messageId: string) => void),
   routerReplace: vi.fn(),
   openSettings: vi.fn(),
 }));
@@ -168,6 +169,7 @@ vi.mock('../../components/messages/ChatMessageList', async () => {
       messages,
       onRegenerateImage,
       onDelete,
+      onPaywallDismiss,
     }: {
       messages?: Array<{
         id: string;
@@ -178,9 +180,11 @@ vi.mock('../../components/messages/ChatMessageList', async () => {
       }>;
       onRegenerateImage?: typeof mocks.regenerateImage;
       onDelete?: typeof mocks.deleteMessage;
+      onPaywallDismiss?: typeof mocks.paywallDismiss;
     }) => {
       mocks.regenerateImage = onRegenerateImage;
       mocks.deleteMessage = onDelete;
+      mocks.paywallDismiss = onPaywallDismiss;
       return (
         <div data-testid="message-list">
           {messages?.map((message) => {
@@ -1087,5 +1091,70 @@ describe('WebChatPage paid image transcript recovery', () => {
     expect(mocks.generateImage).toHaveBeenCalledTimes(1);
     expect(assistantBodies).toHaveLength(failedSaveAttempts + 1);
     expect(assistantBodies.at(-1)?.['metadata']).toEqual(assistantBodies[0]?.['metadata']);
+  });
+});
+
+describe('WebChatPage saved free limit cards', () => {
+  const QUESTION_ID = '00000000-0000-4000-8000-000000000411';
+  const CARD_ID = '00000000-0000-4000-8000-000000000412';
+
+  beforeEach(() => {
+    mocks.temporaryConversation = false;
+    mocks.paywallDismiss = undefined;
+    useChatStore.getState().reset();
+    useChatStore.getState().setConversations([CONVERSATION]);
+    useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, [
+      {
+        id: QUESTION_ID,
+        role: 'user',
+        content: 'Hello',
+        createdAt: '2026-08-10T00:00:00.000Z',
+      },
+      {
+        id: CARD_ID,
+        role: 'assistant',
+        content: 'Fixture Free Model has reached its free limit.',
+        createdAt: '2026-08-10T00:00:01.000Z',
+        metadata: {
+          errorCode: 'free_quota_exhausted',
+          paywall: {
+            feature: 'model_access',
+            requiredTier: 'basic',
+            reason: 'Fixture Free Model has reached its free limit.',
+            freeLimit: {
+              modelId: 'fixture-free-model',
+              modelName: 'Fixture Free Model',
+              reason: 'allowance_used',
+            },
+          },
+        },
+      },
+    ]);
+  });
+
+  it('removes a dismissed free limit card from the saved conversation, not just the screen', async () => {
+    const requests: Array<{ url: string; method: string }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({ url: String(input), method: init?.method ?? 'GET' });
+        return jsonResponse(200, { success: true, activeLeafMessageId: QUESTION_ID });
+      }),
+    );
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.paywallDismiss).toBeTypeOf('function'));
+
+    act(() => mocks.paywallDismiss?.(CARD_ID));
+
+    await waitFor(() =>
+      expect(
+        useChatStore
+          .getState()
+          .messagesByConversation[CONVERSATION_ID]?.some((message) => message.id === CARD_ID),
+      ).toBe(false),
+    );
+    expect(requests).toContainEqual(
+      expect.objectContaining({ method: 'DELETE', url: expect.stringContaining(CARD_ID) }),
+    );
   });
 });

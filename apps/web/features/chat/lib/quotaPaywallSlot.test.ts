@@ -139,6 +139,36 @@ describe('resolveQuotaPaywallSlot · a reached free limit', () => {
     expect(slot?.showResetTime).toBe(false);
   });
 
+  it('carries the server’s own-key option onto a shared free pool card', () => {
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_allowance_exhausted',
+      message,
+      planTier: 'free',
+      subscriptionSource: null,
+      requestedModel: freeRouter,
+      recovery: [
+        { action: 'upgrade', href: '/pricing' },
+        { action: 'byok', href: '/byok' },
+      ],
+    });
+
+    expect(slot?.freeLimit).toMatchObject({ reason: 'shared_pool_used', byokHref: '/byok' });
+    expect(slot?.recoveryAction).toBe('upgrade');
+  });
+
+  it('never follows an own-key option off this site', () => {
+    const slot = resolveQuotaPaywallSlot({
+      code: 'free_allowance_exhausted',
+      message,
+      planTier: 'free',
+      subscriptionSource: null,
+      requestedModel: freeRouter,
+      recovery: [{ action: 'byok', href: 'https://elsewhere.example/byok' }],
+    });
+
+    expect(slot?.freeLimit?.byokHref).toBeUndefined();
+  });
+
   it('drops an alternative it cannot name instead of offering a blank switch', () => {
     const slot = resolveQuotaPaywallSlot({
       code: 'free_quota_exhausted',

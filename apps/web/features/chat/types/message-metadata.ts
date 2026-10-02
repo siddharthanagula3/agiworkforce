@@ -115,6 +115,7 @@ export interface FreeLimitSlot {
   modelName: string;
   reason: FreeLimitReason;
   alternativeModel?: { id: string; name: string };
+  byokHref?: string;
 }
 
 export interface PaywallSlot {

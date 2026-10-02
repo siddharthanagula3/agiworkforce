@@ -45,6 +45,29 @@ describe('buildUpstreamErrorResponse', () => {
     expect(body.error.message).not.toContain('RESOURCE_EXHAUSTED');
   });
 
+  it('names the free lane’s ways out when the shared free allowance is spent', async () => {
+    const response = buildUpstreamErrorResponse(
+      upstreamError('429 Rate limit exceeded: free-models-per-day', 429),
+      'open_router',
+      FIXTURE_MODEL_ID,
+      FIXTURE_MODEL_ID,
+      'user-1',
+      'request-1',
+      'streaming',
+    );
+
+    const body = (await response.json()) as {
+      error: { code: string; recovery?: Array<{ action: string; href: string }> };
+    };
+    expect(body.error.code).toBe('free_allowance_exhausted');
+    expect(body.error.recovery).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'upgrade' }),
+        expect.objectContaining({ action: 'byok' }),
+      ]),
+    );
+  });
+
   it('keeps a momentary rate limit distinct from an exhausted quota', async () => {
     const response = buildUpstreamErrorResponse(
       upstreamError('Google API rate limit exceeded (429)', 429),

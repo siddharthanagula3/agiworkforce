@@ -9,6 +9,11 @@ import {
 import { getModelMetadataById, getNextUpgradeTier, getProviderOffering } from '@agiworkforce/types';
 
 import type { PaywallSlot } from '@/features/chat/types/message-metadata';
+import {
+  BYOK_RECOVERY_ACTION,
+  findRecoveryHref,
+  type FreeCapacityRecoveryOption,
+} from './freeCapacityRecovery';
 
 const FREE_LIMIT_FEATURE = 'model_access';
 const DEFAULT_REQUIRED_TIER = 'basic';
@@ -41,6 +46,7 @@ export function resolveFreeLimitPaywallSlot(input: {
   message: string;
   freeLimit?: FreeLimit | undefined;
   requestedModel?: string | undefined;
+  recovery?: readonly FreeCapacityRecoveryOption[] | undefined;
   planTier: string | null | undefined;
   resetAt?: string | undefined;
 }): PaywallSlot | null {
@@ -50,6 +56,7 @@ export function resolveFreeLimitPaywallSlot(input: {
   if (!modelName) return null;
   const alternativeName = limit.alternative_model ? freeModelLabel(limit.alternative_model) : null;
   const resetAt = limit.resets_at ?? input.resetAt;
+  const byokHref = findRecoveryHref(input.recovery, BYOK_RECOVERY_ACTION);
   const nextTier = getNextUpgradeTier(input.planTier);
   return {
     feature: FREE_LIMIT_FEATURE,
@@ -67,6 +74,7 @@ export function resolveFreeLimitPaywallSlot(input: {
       ...(limit.alternative_model && alternativeName
         ? { alternativeModel: { id: limit.alternative_model, name: alternativeName } }
         : {}),
+      ...(byokHref ? { byokHref } : {}),
     },
   };
 }

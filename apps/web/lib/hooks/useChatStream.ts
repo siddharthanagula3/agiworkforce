@@ -5514,11 +5514,33 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     if (isAccountWideUsageBlock(paywall)) {
       useChatStore.getState().setAccountUsageBlock(paywall);
     }
+    const refusalMetadata: MessageMetadata =
+      paywall.freeLimit && errorCode ? { paywall, errorCode } : { paywall };
     updateMessage(
       assistantMessageId,
-      { isStreaming: false, content: '', error: false, metadata: { paywall } },
+      { isStreaming: false, content: '', error: false, metadata: refusalMetadata },
       conversationId,
     );
+    if (paywall.freeLimit && !isTemporaryConversation && userMessagePersisted) {
+      saveMessageToDb(
+        conversationId,
+        {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: errorMessage,
+          model,
+          metadata: refusalMetadata,
+          ...(currentMessage?.parentId ? { parentId: currentMessage.parentId } : {}),
+        },
+        getAuthToken,
+      )
+        .then((saved) => {
+          if (saved?.id && saved.id !== assistantMessageId) {
+            updateMessage(assistantMessageId, { id: saved.id }, conversationId);
+          }
+        })
+        .catch((err) => notifyPersistenceFailure('assistant', err));
+    }
     setError(errorMessage, conversationId);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
