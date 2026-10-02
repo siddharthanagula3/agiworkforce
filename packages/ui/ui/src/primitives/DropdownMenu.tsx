@@ -19,6 +19,7 @@ const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 const DIGIT_SHORTCUT = /^[1-9]$/;
+const MENU_CONTENT = '[data-radix-menu-content]';
 
 function isTextEntry(target: EventTarget): boolean {
   return (
@@ -28,12 +29,14 @@ function isTextEntry(target: EventTarget): boolean {
 }
 
 function selectItemByDigitShortcut(event: React.KeyboardEvent<HTMLDivElement>): void {
+  if (event.defaultPrevented) return;
   if (event.ctrlKey || event.metaKey || event.altKey || event.nativeEvent.isComposing) return;
   if (!DIGIT_SHORTCUT.test(event.key) || isTextEntry(event.target)) return;
-  const item = Array.from(
-    event.currentTarget.querySelectorAll<HTMLElement>('[role^="menuitem"]'),
-  ).find(
+  const menu = event.currentTarget;
+  if (!(event.target instanceof Element) || event.target.closest(MENU_CONTENT) !== menu) return;
+  const item = Array.from(menu.querySelectorAll<HTMLElement>('[role^="menuitem"]')).find(
     (candidate) =>
+      candidate.closest(MENU_CONTENT) === menu &&
       candidate.querySelector('[data-menu-shortcut]')?.textContent?.trim() === event.key,
   );
   if (!item || item.hasAttribute('data-disabled')) return;

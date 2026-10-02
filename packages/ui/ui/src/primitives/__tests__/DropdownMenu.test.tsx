@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   DropdownMenu,
@@ -7,6 +7,9 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../DropdownMenu';
 
@@ -109,4 +112,78 @@ describe('digit shortcuts in an open menu', () => {
 
     expect(onValueChange).not.toHaveBeenCalled();
   });
+
+  it('selects only the submenu item when the submenu holds the key', () => {
+    const onParent = vi.fn();
+    const onChild = vi.fn();
+    render(<MenuWithSubmenu onParent={onParent} onChild={onChild} childBadge />);
+
+    fireEvent.keyDown(submenu(), { key: '2' });
+
+    expect(onChild).toHaveBeenCalledTimes(1);
+    expect(onParent).not.toHaveBeenCalled();
+  });
+
+  it('does not reach past the submenu to an item the user is not looking at', () => {
+    const onParent = vi.fn();
+    const onChild = vi.fn();
+    render(<MenuWithSubmenu onParent={onParent} onChild={onChild} childBadge={false} />);
+
+    fireEvent.keyDown(submenu(), { key: '2' });
+
+    expect(onParent).not.toHaveBeenCalled();
+    expect(onChild).not.toHaveBeenCalled();
+  });
+
+  it('leaves a digit another handler already took', () => {
+    const onValueChange = vi.fn();
+    render(<ModeMenu onValueChange={onValueChange} />);
+    const menu = screen.getByRole('menu');
+    const event = new KeyboardEvent('keydown', { key: '2', bubbles: true, cancelable: true });
+    event.preventDefault();
+
+    fireEvent(menu, event);
+
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
 });
+
+function MenuWithSubmenu({
+  onParent,
+  onChild,
+  childBadge,
+}: {
+  onParent: () => void;
+  onChild: () => void;
+  childBadge: boolean;
+}) {
+  return (
+    <DropdownMenu defaultOpen>
+      <DropdownMenuTrigger>Mode</DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuItem onSelect={onParent}>
+          Parent item
+          <DropdownMenuShortcut>2</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuSub open>
+          <DropdownMenuSubTrigger>More</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem onSelect={onChild}>
+              Child item
+              {childBadge && <DropdownMenuShortcut>2</DropdownMenuShortcut>}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function submenu(): HTMLElement {
+  const menus = screen.getAllByRole('menu');
+  const inner = menus.find(
+    (menu) => within(menu).queryByText('Child item') && !within(menu).queryByText('Parent item'),
+  );
+  if (!inner) throw new Error('the submenu did not open');
+  return inner;
+}
