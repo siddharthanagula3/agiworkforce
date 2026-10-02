@@ -11,6 +11,7 @@ import {
   TEMPORARY_CHAT_END_CONFIRMATION,
   TEMPORARY_CHAT_END_LABEL,
   TEMPORARY_CHAT_PRIVACY_EXPLANATION,
+  TEMPORARY_CHAT_PROJECT_NOTICE,
 } from '@/lib/temporary-chat-policy';
 
 const { routerPush } = vi.hoisted(() => ({ routerPush: vi.fn() }));
@@ -299,6 +300,30 @@ describe('temporary chat inside a project', () => {
     openPlusMenu();
 
     expect(temporaryRow()).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('says a new project chat will be saved when new chats start temporary', () => {
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    render(<ChatComposerNew onSend={vi.fn()} projectId={PROJECT_ID} />);
+
+    expect(screen.getByText(TEMPORARY_CHAT_PROJECT_NOTICE)).toHaveAttribute('role', 'status');
+  });
+
+  it('says so when a temporary chat was armed before the project was picked', () => {
+    useChatStore.getState().setPendingTemporaryChat(true);
+    render(<ChatComposerNew onSend={vi.fn()} projectPicker={projectPicker} />);
+
+    expect(screen.getByText(TEMPORARY_CHAT_PROJECT_NOTICE)).toBeVisible();
+  });
+
+  it('stays quiet when temporary chat is off or the chat is outside a project', () => {
+    const { unmount } = render(<ChatComposerNew onSend={vi.fn()} projectId={PROJECT_ID} />);
+    expect(screen.queryByText(TEMPORARY_CHAT_PROJECT_NOTICE)).toBeNull();
+    unmount();
+
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    expect(screen.queryByText(TEMPORARY_CHAT_PROJECT_NOTICE)).toBeNull();
   });
 });
 

@@ -119,6 +119,7 @@ import { containsSecrets } from '@/lib/security/secrets-audit';
 import {
   LOCAL_MODEL_PROJECT_REFUSAL,
   TEMPORARY_CHAT_END_CONFIRMATION,
+  TEMPORARY_CHAT_PROJECT_NOTICE,
   resolveNewChatTemporary,
   temporaryChatAllowedIn,
 } from '@/lib/temporary-chat-policy';
@@ -1572,6 +1573,13 @@ const ChatComposerNewComponent = ({
     return id ? (s.conversations.find((c) => c.id === id)?.projectId ?? null) : newChatProjectId;
   });
   const temporaryChatAvailable = isIncognito || temporaryChatAllowedIn(chatProjectId);
+  const temporaryPreferenceSetAside = useChatStore(
+    (s) =>
+      conversationId === null &&
+      !localProjectConflict &&
+      !temporaryChatAllowedIn(newChatProjectId) &&
+      (s.pendingTemporaryChat ?? newChatsTemporary),
+  );
   const [isSavingIncognito, setIsSavingIncognito] = useState(false);
   const handleIncognitoToggle = useCallback(async () => {
     // No conversation exists yet: arm the flag createConversation reads at
@@ -4444,6 +4452,12 @@ const ChatComposerNewComponent = ({
             </button>
           </div>
         </div>
+      )}
+
+      {temporaryPreferenceSetAside && (
+        <p role="status" className="mb-2 px-2 text-xs text-muted-foreground">
+          {TEMPORARY_CHAT_PROJECT_NOTICE}
+        </p>
       )}
 
       {localAttachmentConflict && (

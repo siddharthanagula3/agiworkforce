@@ -4,7 +4,7 @@ title: Temporary chats
 path: /privacy
 category: chat
 tags: temporary chat, incognito, private chat, not saved, no history, off the record, end temporary chat, ephemeral
-updated: 2026-09-27
+updated: 2026-10-02
 scope: public
 ---
 
@@ -30,8 +30,8 @@ days until the hold is released.
 ## Turning it on
 
 The composer carries a **Temporary chat** control for the conversation you are
-in. To make every new conversation temporary, turn on "Start new chats as
-temporary" in Settings, Privacy.
+in. To make every new conversation outside a project temporary, turn on "Start
+new chats as temporary" in Settings, Privacy.
 
 ## Ending one
 
@@ -45,3 +45,10 @@ reopen or restore it. Copy out anything you still need before you confirm.
 A temporary chat cannot be shared. The share control refuses with "A temporary
 chat cannot be shared. Turn off temporary chat to keep it, then share it." Turn
 the control off first, which starts saving the conversation, and then share it.
+
+A temporary chat cannot be part of a project, so the composer does not offer
+**Temporary chat** inside one. A chat with a model on this device is always
+temporary, so it cannot be started inside a project. A chat you start inside a
+project is always saved to it, and when new chats would otherwise start
+temporary the composer says "Temporary chat isn't available in projects. This
+chat will be saved to the project."

@@ -618,7 +618,7 @@
       "doc": "temporary-chats",
       "section": "Turning it on",
       "kind": "prose",
-      "sentence": "To make every new conversation temporary, turn on \"Start new chats as temporary\" in Settings, Privacy.",
+      "sentence": "To make every new conversation outside a project temporary, turn on \"Start new chats as temporary\" in Settings, Privacy.",
       "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
       "proof": [
         {
@@ -670,6 +670,81 @@
           "kind": "copy",
           "file": "apps/web/lib/temporary-chat-policy.ts",
           "text": "A temporary chat cannot be shared. Turn off temporary chat to keep it, then share it."
+        }
+      ]
+    },
+    {
+      "id": "temporary-cannot-be-part-of-a-project",
+      "doc": "temporary-chats",
+      "section": "What you cannot do with one",
+      "kind": "prose",
+      "sentence": "A temporary chat cannot be part of a project, so the composer does not offer **Temporary chat** inside one.",
+      "implementation": [
+        "apps/web/app/api/chat/conversations/route.ts",
+        "apps/web/app/api/chat/conversations/[id]/route.ts",
+        "apps/web/features/chat/components/Composer/ChatComposerNew.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/api/chat-conversations.test.ts",
+          "name": "refuses a temporary chat that names a project, and writes nothing"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/api/chat-conversation-single.test.ts",
+          "name": "refuses moving a temporary chat into a project"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.temporaryChat.test.tsx",
+          "name": "is not offered for a new chat filed under a project"
+        }
+      ]
+    },
+    {
+      "id": "temporary-local-model-chats-stay-out-of-projects",
+      "doc": "temporary-chats",
+      "section": "What you cannot do with one",
+      "kind": "prose",
+      "sentence": "A chat with a model on this device is always temporary, so it cannot be started inside a project.",
+      "implementation": [
+        "apps/web/features/chat/pages/WebChatPage.tsx",
+        "apps/web/lib/temporary-chat-policy.ts#LOCAL_MODEL_PROJECT_REFUSAL"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/pages/__tests__/WebChatPage.local-model-project.test.tsx",
+          "name": "is refused before any conversation, title or draft reaches the server"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/pages/__tests__/WebChatPage.local-model-project.test.tsx",
+          "name": "starts a temporary chat filed under no project when no project is in scope"
+        }
+      ]
+    },
+    {
+      "id": "temporary-project-chats-always-saved",
+      "doc": "temporary-chats",
+      "section": "What you cannot do with one",
+      "kind": "prose",
+      "sentence": "A chat you start inside a project is always saved to it, and when new chats would otherwise start temporary the composer says \"Temporary chat isn't available in projects. This chat will be saved to the project.\"",
+      "implementation": [
+        "apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_PROJECT_NOTICE",
+        "apps/web/features/chat/components/Composer/ChatComposerNew.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.temporaryChat.test.tsx",
+          "name": "says a new project chat will be saved when new chats start temporary"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/temporary-chat-policy.ts",
+          "text": "Temporary chat isn't available in projects. This chat will be saved to the project."
         }
       ]
     },
@@ -1032,7 +1107,7 @@
       "doc": "privacy-controls",
       "section": "Temporary chats",
       "kind": "prose",
-      "sentence": "\"Start new chats as temporary\" makes every new conversation temporary: no message written to your history, no memory, and attachments kept out of the Library.",
+      "sentence": "\"Start new chats as temporary\" makes every new conversation outside a project temporary: no message written to your history, no memory, and attachments kept out of the Library.",
       "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
       "proof": [
         {
@@ -1054,6 +1129,26 @@
           "kind": "test",
           "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
           "name": "retires the files a temporary chat received on the same clock as the chat"
+        }
+      ]
+    },
+    {
+      "id": "privacy-project-chats-always-saved",
+      "doc": "privacy-controls",
+      "section": "Temporary chats",
+      "kind": "prose",
+      "sentence": "A chat you start inside a project is always saved to it.",
+      "implementation": ["apps/web/lib/temporary-chat-policy.ts#resolveNewChatTemporary"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/temporary-chat-policy.test.ts",
+          "name": "is never temporary, whatever the default or the armed choice says"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/hooks/useConversations.test.tsx",
+          "name": "starts a saved chat inside a project when temporary is only the default"
         }
       ]
     },

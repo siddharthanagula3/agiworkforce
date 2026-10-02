@@ -835,8 +835,9 @@ export function PrivacySection() {
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               No message from a temporary conversation is written to your history, and it never
-              shows up in search. The conversation and any attachment are removed after 30 days. You
-              can still turn a single chat back on from the composer.
+              shows up in search. The conversation and any attachment are removed after 30 days.
+              Chats you start inside a project are always saved to it. You can still turn a single
+              chat back on from the composer.
             </div>
           </div>
           <button

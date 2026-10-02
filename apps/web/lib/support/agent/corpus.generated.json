@@ -1735,7 +1735,7 @@
         "sell data",
         "anonymized usage"
       ],
-      "updated": "2026-09-20",
+      "updated": "2026-10-02",
       "source": "content/support/privacy-controls.md",
       "chunks": [
         {
@@ -1757,7 +1757,7 @@
           "ordinal": 2,
           "heading": "Temporary chats",
           "headingPath": "Privacy controls in Settings › Temporary chats",
-          "text": "\"Start new chats as temporary\" makes every new conversation temporary: no\nmessage written to your history, no memory, and attachments kept out of the\nLibrary. The conversation record and any attachment are held for up to 30 days\nand then removed. An individual conversation can still be switched."
+          "text": "\"Start new chats as temporary\" makes every new conversation outside a project\ntemporary: no message written to your history, no memory, and attachments kept\nout of the Library. The conversation record and any attachment are held for up\nto 30 days and then removed. An individual conversation can still be switched.\nA chat you start inside a project is always saved to it."
         },
         {
           "id": "privacy-controls#3",
@@ -2144,7 +2144,7 @@
         "end temporary chat",
         "ephemeral"
       ],
-      "updated": "2026-09-27",
+      "updated": "2026-10-02",
       "source": "content/support/temporary-chats.md",
       "chunks": [
         {
@@ -2159,7 +2159,7 @@
           "ordinal": 1,
           "heading": "Turning it on",
           "headingPath": "Temporary chats › Turning it on",
-          "text": "The composer carries a **Temporary chat** control for the conversation you are\nin. To make every new conversation temporary, turn on \"Start new chats as\ntemporary\" in Settings, Privacy."
+          "text": "The composer carries a **Temporary chat** control for the conversation you are\nin. To make every new conversation outside a project temporary, turn on \"Start\nnew chats as temporary\" in Settings, Privacy."
         },
         {
           "id": "temporary-chats#2",
@@ -2173,7 +2173,7 @@
           "ordinal": 3,
           "heading": "What you cannot do with one",
           "headingPath": "Temporary chats › What you cannot do with one",
-          "text": "A temporary chat cannot be shared. The share control refuses with \"A temporary\nchat cannot be shared. Turn off temporary chat to keep it, then share it.\" Turn\nthe control off first, which starts saving the conversation, and then share it."
+          "text": "A temporary chat cannot be shared. The share control refuses with \"A temporary\nchat cannot be shared. Turn off temporary chat to keep it, then share it.\" Turn\nthe control off first, which starts saving the conversation, and then share it.\n\nA temporary chat cannot be part of a project, so the composer does not offer\n**Temporary chat** inside one. A chat with a model on this device is always\ntemporary, so it cannot be started inside a project. A chat you start inside a\nproject is always saved to it, and when new chats would otherwise start\ntemporary the composer says \"Temporary chat isn't available in projects. This\nchat will be saved to the project.\""
         }
       ]
     },
