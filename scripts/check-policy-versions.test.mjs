@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -26,6 +26,17 @@ import {
 } from './lib/policy-archive.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const fixtureRoots = [];
+
+after(() => {
+  for (const root of fixtureRoots) fs.rmSync(root, { recursive: true, force: true });
+});
+
+function fixtureRoot(prefix) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  fixtureRoots.push(root);
+  return root;
+}
 const TERMS_PAGE = 'apps/web/app/terms/page.tsx';
 const INDEX_PAGE = 'apps/web/app/legal/page.tsx';
 
@@ -92,7 +103,7 @@ function registry(
 }
 
 function check({ constantsSource = constants(), page = termsPage(), index = registry() } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-versions-'));
+  const root = fixtureRoot('policy-versions-');
   const write = (relative, contents) => {
     fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
     fs.writeFileSync(path.join(root, relative), contents);
@@ -253,7 +264,7 @@ function checkSubprocessors({
   labels = {},
   gateways = {},
 }) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-versions-subprocessors-'));
+  const root = fixtureRoot('policy-versions-subprocessors-');
   const write = (relative, contents) => {
     fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
     fs.writeFileSync(path.join(root, relative), contents);
@@ -612,7 +623,7 @@ test('lists a policy first published after version histories began, and not one 
 });
 
 test('requires a summary on the first version of a policy published after version histories began', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-archive-'));
+  const root = fixtureRoot('policy-archive-');
   const failures = runPolicyArchiveCheck(root, introducedRegistry(null), INTRODUCED_ROUTES);
   assert.ok(
     failures.some(
