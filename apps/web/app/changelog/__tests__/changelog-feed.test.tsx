@@ -443,10 +443,17 @@ describe('/changelog lists policy changes', () => {
     ]);
   });
 
-  it('does not claim its dates are never earlier than publication', () => {
+  it('does not claim its dates are never earlier than publication, or that it never pre-announces while it lists forthcoming items', () => {
     render(<ChangelogPage />);
+    const copy = document.body.textContent ?? '';
+    const forthcoming = within(screen.getByRole('list', { name: 'Forthcoming' })).queryAllByRole(
+      'listitem',
+    );
 
-    expect(document.body.textContent).not.toMatch(/backdate/i);
+    expect(copy).not.toMatch(/backdate/i);
+    expect(forthcoming).not.toHaveLength(0);
+    expect(copy).not.toMatch(/pre-?announce/i);
+    expect(copy).toContain('Forthcoming items are listed separately, each with a target quarter');
   });
 
   it('says a policy date can precede publication, when the listed versions were first published, and when the objection window starts', () => {
