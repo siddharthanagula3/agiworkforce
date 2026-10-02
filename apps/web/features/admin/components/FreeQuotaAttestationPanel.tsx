@@ -566,8 +566,9 @@ function ConfiguredView({
               switches are one, so turn on both whenever this account can open it.
             </li>
             <li>
-              Neither change is immediate, and the QwenCloud page lags by several minutes. Reload
-              both pages and confirm every covered model shows the switch on.
+              A Model Studio change does not take effect immediately, and {status.issuer}&apos;s
+              quota figures lag by several minutes. Reload both pages and confirm every covered
+              model shows the switch on.
             </li>
             <li>
               A model whose free quota is used up or expired has no switch, so it cannot be on.

@@ -569,6 +569,9 @@ describe('FreeQuotaAttestationPanel, recording a console check', () => {
     expect(step).toHaveTextContent('Model Studio International endpoint');
     expect(step).toHaveTextContent('whenever this account can open it');
     expect(within(steps).queryByText(/If the key was issued in/)).toBeNull();
+    expect(within(steps).getByText(/does not take effect immediately/)).toHaveTextContent(
+      "A Model Studio change does not take effect immediately, and QwenCloud's quota figures lag by several minutes.",
+    );
     expect(
       screen.getByRole('checkbox', {
         name: /on the QwenCloud Free Tier page and, where this account can open it, in the Model Studio Free Quota tab/,
