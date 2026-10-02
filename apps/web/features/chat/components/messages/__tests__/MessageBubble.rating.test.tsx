@@ -164,6 +164,40 @@ function sentBody(call: number): RatingBody {
   return JSON.parse(String(init.body)) as RatingBody;
 }
 
+// jsdom keeps focus on a button that becomes disabled (and ignores blur() on it);
+// browsers apply the HTML focus fixup rule and move focus to the body, which is
+// what lost the user's place. A removed anchor puts jsdom in the same state.
+function applyFocusFixupRule(): MutationObserver {
+  const observer = new MutationObserver(() => {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLButtonElement) || !active.disabled) return;
+    const anchor = document.createElement('span');
+    anchor.tabIndex = -1;
+    document.body.append(anchor);
+    anchor.focus();
+    anchor.remove();
+  });
+  observer.observe(document.body, {
+    attributes: true,
+    attributeFilter: ['disabled'],
+    subtree: true,
+  });
+  return observer;
+}
+
+function pendingResponse(): { settle: (ok: boolean) => void } {
+  let settle!: (ok: boolean) => void;
+  fetchMock.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        settle = (ok) => resolve({ ok, status: ok ? 200 : 500, json: async () => ({}) });
+      }),
+  );
+  return {
+    settle: (ok) => settle(ok),
+  };
+}
+
 describe('telling us why an answer was bad', () => {
   it('does not send the answer text with a rating', async () => {
     render(<MessageBubble message={assistantMessage()} />);
@@ -260,6 +294,54 @@ describe('telling us why an answer was bad', () => {
 
     expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Bad response' })).toHaveFocus();
+  });
+
+  it('hands focus back to the thumbs-down button after the details are sent', async () => {
+    const focusFixup = applyFocusFixupRule();
+    try {
+      render(<MessageBubble message={assistantMessage()} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const form = screen.getByRole('form', { name: 'Tell us more' });
+      await userEvent.click(within(form).getByRole('button', { name: 'Other' }));
+      const submit = within(form).getByRole('button', { name: 'Submit' });
+      const details = pendingResponse();
+
+      submit.focus();
+      await userEvent.keyboard('{Enter}');
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+      expect(submit).toHaveFocus();
+      expect(submit).toHaveAttribute('aria-disabled', 'true');
+      details.settle(true);
+      await waitFor(() => expect(screen.queryByRole('form', { name: 'Tell us more' })).toBeNull());
+      expect(screen.getByRole('button', { name: 'Bad response' })).toHaveFocus();
+    } finally {
+      focusFixup.disconnect();
+    }
+  });
+
+  it('keeps focus on Submit when the details could not be sent', async () => {
+    const focusFixup = applyFocusFixupRule();
+    try {
+      render(<MessageBubble message={assistantMessage()} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const form = screen.getByRole('form', { name: 'Tell us more' });
+      await userEvent.click(within(form).getByRole('button', { name: 'Other' }));
+      const submit = within(form).getByRole('button', { name: 'Submit' });
+      const details = pendingResponse();
+
+      submit.focus();
+      await userEvent.keyboard('{Enter}');
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      details.settle(false);
+
+      expect(await within(form).findByRole('alert')).toBeInTheDocument();
+      expect(submit).toHaveFocus();
+    } finally {
+      focusFixup.disconnect();
+    }
   });
 
   it('waits for a reason or a comment before it can be sent', async () => {

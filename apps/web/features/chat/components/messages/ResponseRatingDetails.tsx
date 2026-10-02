@@ -61,7 +61,8 @@ export function ResponseRatingDetails({
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const trimmedComment = comment.trim();
-  const canSubmit = (reason !== null || trimmedComment.length > 0) && !sending;
+  const hasDetails = reason !== null || trimmedComment.length > 0;
+  const canSubmit = hasDetails && !sending;
 
   useEffect(() => {
     firstReasonRef.current?.focus();
@@ -171,8 +172,9 @@ export function ResponseRatingDetails({
           type="submit"
           size="sm"
           className="pointer-coarse:min-h-11"
-          disabled={!canSubmit}
-          isLoading={sending}
+          disabled={!hasDetails}
+          aria-disabled={!canSubmit || undefined}
+          aria-busy={sending || undefined}
         >
           {sending && <Spinner size="sm" aria-hidden="true" />}
           Submit
