@@ -113,6 +113,10 @@ const ROUTES_WITHOUT_A_LOADING_BOUNDARY: Record<string, string> = {
     'prerendered through generateStaticParams, so nothing resolves at request time',
   'open/[target]/[id]':
     'resolves to a redirect or a not-found answer and paints no page of its own',
+  'share/[token]':
+    'answers a revoked or expired link with a real 404, which a streamed loading boundary turns into a 200',
+  'share/schedules/[token]':
+    'answers a revoked link with a real 404, which a streamed loading boundary turns into a 200',
   'shared-artifact/[token]': 'fetches the published artifact with nothing shown while it resolves',
   'features/plugins':
     'force-dynamic and fetches the directory with nothing shown while it resolves',

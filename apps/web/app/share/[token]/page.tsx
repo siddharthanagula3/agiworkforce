@@ -4,7 +4,6 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { SharedSessionViewer } from '@/features/chat/components/share/SharedSessionViewer';
 import type { SharedSession } from '@/features/chat/components/share/SharedSessionViewer';
-import { ExpiredShareBanner } from '@/features/chat/components/share/ExpiredShareBanner';
 import { ReportContentLink } from '@/app/copyright/report/ReportContentLink';
 import {
   SHARE_TOKEN_REGEX,
@@ -62,6 +61,10 @@ function toViewerSession(session: OrgReadableSession, sharedBy: string | null): 
   };
 }
 
+function isLive(session: OrgReadableSession): boolean {
+  return new Date(session.expiresAt).getTime() > Date.now();
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
   if (!SHARE_TOKEN_REGEX.test(token)) {
@@ -69,12 +72,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const session = await getPublicSharedSessionByToken(getNeonDb(), token).catch(() => null);
+  const live = session && isLive(session) ? session : null;
 
   return {
-    title: session ? `${session.title} - AGI` : 'Shared Session - AGI',
-    description: session
-      ? `${session.messageCount} message conversation shared from AGI`
-      : undefined,
+    title: live ? `${live.title} - AGI` : 'Shared Session - AGI',
+    description: live ? `${live.messageCount} message conversation shared from AGI` : undefined,
     robots: { index: false, follow: false },
   };
 }
@@ -88,12 +90,8 @@ export default async function SharedSessionPage({ params }: Props) {
 
   const read = await readSessionForViewer(token);
 
-  if (!read) {
+  if (!read || !isLive(read.session)) {
     notFound();
-  }
-
-  if (new Date(read.session.expiresAt).getTime() <= Date.now()) {
-    return <ExpiredShareBanner />;
   }
 
   return (

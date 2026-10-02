@@ -1,9 +1,7 @@
 import Link from 'next/link';
 import { LockKeyhole } from 'lucide-react';
 
-export function ExpiredShareBanner({ reason = 'expired' }: { reason?: 'expired' | 'unavailable' }) {
-  const unavailable = reason === 'unavailable';
-
+export function ExpiredShareBanner() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="max-w-md px-6 text-center">
@@ -13,13 +11,10 @@ export function ExpiredShareBanner({ reason = 'expired' }: { reason?: 'expired' 
         >
           <LockKeyhole className="h-7 w-7" />
         </div>
-        <h1 className="mb-2 text-h1 text-foreground">
-          {unavailable ? 'Shared conversation unavailable' : 'Shared conversation expired'}
-        </h1>
+        <h1 className="mb-2 text-h1 text-foreground">Shared conversation unavailable</h1>
         <p className="mb-6 text-muted-foreground">
-          {unavailable
-            ? 'This link may have expired, been revoked, or been entered incorrectly. Ask the sender for a new link.'
-            : 'This read-only snapshot has reached its expiration date. Ask the sender to create a new link.'}
+          This link may have expired, been revoked, or been entered incorrectly. Ask the sender for
+          a new link.
         </p>
         {/*
          * Design-system tokens, not a literal colour. This is the first thing a
