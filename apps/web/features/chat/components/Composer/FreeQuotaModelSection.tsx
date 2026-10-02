@@ -31,8 +31,11 @@ const ACTIVE_ROW_CLASS = `${ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/
 const MUTED_ROW_CLASS = `${ROW_CLASS} cursor-default`;
 const NAME_CLASS = 'block truncate text-sm leading-5';
 const GUIDANCE_CLASS = 'block truncate text-xs leading-4 text-muted-foreground';
+const POOL_HEADING_CLASS = 'px-3 pb-1 pt-3 text-xs font-medium text-foreground';
 const SUBHEADING_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';
 const NOTE_CLASS = 'px-3 py-2 text-xs leading-5 text-muted-foreground';
+const PROMOTIONAL_DATA_USE =
+  'These models get only your messages, not your instructions or memory: their providers have not said they keep prompts out of training.';
 
 type PendingAvailability = 'loading' | 'error';
 
@@ -210,6 +213,23 @@ function UnavailableRow({
   );
 }
 
+function PoolHeading({ issuer, promotional }: { issuer: string; promotional: boolean }) {
+  if (!promotional) return <p className={POOL_HEADING_CLASS}>{issuer}</p>;
+  return (
+    <>
+      <p className={POOL_HEADING_CLASS}>{`${issuer} · Free`}</p>
+      <p className="px-3 text-xs leading-5 text-muted-foreground">{PROMOTIONAL_DATA_USE}</p>
+      <a
+        {...PICKER_ROW}
+        href="/privacy"
+        className="mx-3 inline-block text-xs text-muted-foreground underline"
+      >
+        Data use
+      </a>
+    </>
+  );
+}
+
 function Disclosure({
   label,
   count,
@@ -374,20 +394,7 @@ export function FreeQuotaModelSection({
           {listedPools.map((pool) => (
             <div key={pool.issuer} role="group" aria-label={`${pool.issuer} free models`}>
               {pool.issuer === promotionalIssuer && (
-                <>
-                  <p className={SUBHEADING_CLASS}>{`${pool.issuer} · Free`}</p>
-                  <p className="px-3 text-xs leading-5 text-muted-foreground">
-                    These models get only your messages, not your instructions or memory: their
-                    providers have not said they keep prompts out of training.
-                  </p>
-                  <a
-                    {...PICKER_ROW}
-                    href="/privacy"
-                    className="mx-3 inline-block text-xs text-muted-foreground underline"
-                  >
-                    Data use
-                  </a>
-                </>
+                <PoolHeading issuer={pool.issuer} promotional />
               )}
               {pool.featured.map(renderEntry)}
             </div>
@@ -414,14 +421,26 @@ export function FreeQuotaModelSection({
                       className="h-9 w-full rounded-md border border-[var(--chat-border)] bg-transparent px-2 text-sm text-foreground"
                     />
                   </div>
-                  {more.flatMap((group) =>
-                    lineRuns(group.entries).map((line) => (
-                      <div key={`${group.issuer}:${line[0]!.label.line}`}>
-                        <p className={SUBHEADING_CLASS}>{line[0]!.label.line}</p>
-                        {line.map(renderEntry)}
-                      </div>
-                    )),
-                  )}
+                  {more.map((group) => (
+                    <div
+                      key={group.issuer}
+                      role="group"
+                      aria-label={`More ${group.issuer} free models`}
+                    >
+                      {(groupedByIssuer || group.issuer === promotionalIssuer) && (
+                        <PoolHeading
+                          issuer={group.issuer}
+                          promotional={group.issuer === promotionalIssuer}
+                        />
+                      )}
+                      {lineRuns(group.entries).map((line) => (
+                        <div key={line[0]!.model.key}>
+                          <p className={SUBHEADING_CLASS}>{line[0]!.label.line}</p>
+                          {line.map(renderEntry)}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                   {more.length === 0 && <p className={NOTE_CLASS}>No free models match.</p>}
                 </div>
               )}
@@ -440,7 +459,7 @@ export function FreeQuotaModelSection({
                 <div id={unavailableId} role="group" aria-label="Unavailable free models">
                   {unavailable.map((pool) => (
                     <div key={pool.issuer}>
-                      {groupedByIssuer && <p className={SUBHEADING_CLASS}>{pool.issuer}</p>}
+                      {groupedByIssuer && <PoolHeading issuer={pool.issuer} promotional={false} />}
                       {pool.unavailable.map(renderEntry)}
                     </div>
                   ))}

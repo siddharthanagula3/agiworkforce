@@ -35,7 +35,9 @@ const datedKey = chatKeys.find((key) => {
     offering.displayName === offering.providerModelId
   );
 })!;
-const experientialKey = chatKeys.find((key) => offerings[key]!.provider === 'experientiallabs')!;
+const experientialKeys = chatKeys.filter((key) => offerings[key]!.provider === 'experientiallabs');
+const experientialKey = experientialKeys[0]!;
+const DATA_USE_NOTE = /providers have not said they keep prompts out of training/;
 const imageKeys = Object.entries(offerings)
   .filter(
     ([, offering]) => offering.category === 'image' && offering.quotaProbeProtocol === 'image-sync',
@@ -339,6 +341,74 @@ describe('Free section in the composer', () => {
     expect(screen.getByRole('button', { name: name(experientialKey) })).toHaveAccessibleDescription(
       'Free promotion · text chat · provider quota applies',
     );
+  });
+
+  it('heads each pool in More models and repeats the data-use note over Experiential Labs models', () => {
+    renderSection(
+      sources(
+        source('ready', catalogue(familyA.map((key) => model(key)))),
+        source(
+          'ready',
+          catalogue(
+            experientialKeys.map((key) => model(key)),
+            'Experiential Labs',
+          ),
+        ),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+    const more = screen.getByRole('group', { name: 'More free models' });
+    const cloud = within(more).getByRole('group', { name: `More ${ISSUER} free models` });
+    const labs = within(more).getByRole('group', { name: 'More Experiential Labs free models' });
+
+    expect(within(cloud).getByText(ISSUER)).toBeInTheDocument();
+    expect(within(cloud).queryByText(DATA_USE_NOTE)).not.toBeInTheDocument();
+    expect(within(labs).getByText(DATA_USE_NOTE)).toBeInTheDocument();
+    expect(within(labs).getByRole('link', { name: 'Data use' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+    const labsRows = within(more)
+      .getAllByRole('button')
+      .filter((row) =>
+        experientialKeys.some((key) => name(key) === row.getAttribute('aria-label')),
+      );
+    expect(labsRows.length).toBeGreaterThan(0);
+    for (const row of labsRows) expect(labs).toContainElement(row);
+  });
+
+  it('keeps the data-use note over an Experiential Labs model found by search', () => {
+    renderSection(
+      sources(
+        source('ready', catalogue(familyA.map((key) => model(key)))),
+        source(
+          'ready',
+          catalogue(
+            experientialKeys.map((key) => model(key)),
+            'Experiential Labs',
+          ),
+        ),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /More models/ }));
+    const more = screen.getByRole('group', { name: 'More free models' });
+    const found = within(
+      within(more).getByRole('group', { name: 'More Experiential Labs free models' }),
+    )
+      .getAllByRole('button')[0]!
+      .getAttribute('aria-label')!;
+
+    fireEvent.change(within(more).getByRole('searchbox', { name: 'Search free models' }), {
+      target: { value: found },
+    });
+
+    const labs = within(more).getByRole('group', { name: 'More Experiential Labs free models' });
+    expect(within(labs).getByRole('button', { name: found })).toBeInTheDocument();
+    expect(within(labs).getByText(DATA_USE_NOTE)).toBeInTheDocument();
+    expect(within(labs).getByRole('link', { name: 'Data use' })).toBeInTheDocument();
+    expect(
+      within(more).queryByRole('group', { name: `More ${ISSUER} free models` }),
+    ).not.toBeInTheDocument();
   });
 
   it('offers media categories only when the account receives media offerings', () => {
