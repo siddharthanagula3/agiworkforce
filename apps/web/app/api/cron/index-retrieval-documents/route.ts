@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { reserveDueRetrievalDocuments } from '@/lib/services/retrieval-index-service';
 import { dispatchRetrievalIndexWorkflows } from '@/lib/workflows/start-retrieval-index-workflow';
@@ -16,6 +17,9 @@ export async function GET(request: NextRequest) {
     logger.warn('Unauthorized cron request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const lowPower = lowPowerCronSkip();
+  if (lowPower) return lowPower;
 
   try {
     const due = await reserveDueRetrievalDocuments(getNeonDb());

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { consumePendingSecurityAnomalyCheck } from '@/lib/security-audit';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import {
   SecurityMonitoringService,
   type AlertStatus,
@@ -45,6 +46,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     logger.warn('Unauthorized security anomaly cron request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const lowPower = lowPowerCronSkip();
+  if (lowPower) return lowPower;
 
   const pendingActivity = await consumePendingSecurityAnomalyCheck();
   if (pendingActivity === false) {

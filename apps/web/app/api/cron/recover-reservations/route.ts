@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { CreditService } from '@/lib/services/credit-service';
 import { releaseExpiredFreeTrialReservations } from '@/lib/services/free-trial-service';
@@ -43,6 +44,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     logger.warn('Unauthorized reservation recovery cron request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const lowPower = lowPowerCronSkip();
+  if (lowPower) return lowPower;
 
   try {
     const db = getNeonDb();

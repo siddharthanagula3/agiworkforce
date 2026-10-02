@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-17
+Last updated: 2026-10-02
 
 What the system's limits are, which of them are measured, and how to measure the
 rest. `tools/load-test` holds the scenarios; this file holds the targets and the
@@ -66,6 +66,32 @@ Two of these are worth stating plainly rather than leaving implied:
 - **The key-value store is a hard dependency of the completion path.** When it
   is unreachable or over quota, every completion fails the same way. That is a
   capacity dimension even though it looks like an availability one.
+
+## Running on the Neon Free plan
+
+The Free plan caps two things a quiet deployment can still exhaust: public network
+transfer (5 GB a month, every byte Postgres sends to Vercel, CI or a script) and
+compute hours (a compute that never idles for five minutes never suspends).
+
+- **Transfer.** The connector directory snapshot is one row in
+  `mcp_response_cache`. It is stored brotli-compressed (`br64:` prefix), and a
+  legacy plain-JSON row converts itself on first read with a stamp check, so a
+  concurrent sync is never overwritten. The icon route reads the small
+  `connectors.directory.icon-index` row instead of the snapshot. Icons and the
+  public directory listing carry `Vercel-CDN-Cache-Control` with `Vary: Origin`,
+  so repeat visits are served by the CDN, not the database.
+- **Compute.** Set `AGI_DB_LOW_POWER=1` in Production. Crons that run more than
+  once an hour then do their work only in the first
+  `LOW_POWER_CRON_WINDOW_MINUTES` (15) minutes of each UTC hour and answer
+  `{"skipped":"db_low_power"}` otherwise, and every hourly or daily cron is
+  scheduled inside that window, so the database wakes once an hour.
+  `apps/web/__tests__/cron-low-power-window.test.ts` keeps new crons inside it.
+- **What users notice in low-power mode.** Scheduled tasks can start up to an
+  hour late; the missed-run grace widens to two hours, so a late run still
+  runs. Background jobs, reapers, reservation recovery and health probes run
+  hourly. Retrieval indexing on upload is unaffected (it runs as a workflow).
+- **Leaving low-power mode.** Remove the variable and redeploy once real traffic
+  arrives or the plan changes; the cron schedules need no edit.
 
 ## Running a load test
 

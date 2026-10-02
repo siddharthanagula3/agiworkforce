@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
+import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { reapStuckCloudCodeTurns } from '@/lib/services/cloud-code-turn-reaper';
 
@@ -22,6 +23,9 @@ export async function GET(request: NextRequest) {
     logger.warn('Unauthorized cron request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const lowPower = lowPowerCronSkip();
+  if (lowPower) return lowPower;
 
   try {
     const report = await reapStuckCloudCodeTurns(getNeonDb());
