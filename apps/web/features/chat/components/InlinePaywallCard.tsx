@@ -55,7 +55,7 @@ import {
 } from '@agiworkforce/types';
 
 export { normalizePaywallFeature };
-import type { FreeLimitReason } from '@agiworkforce/cloud-contracts';
+import { FreeLimitSchema, type FreeLimitReason } from '@agiworkforce/cloud-contracts';
 import { cn } from '@shared/lib/utils';
 import { formatCatalogPrice, planUsageComparisonLabel } from '@features/billing/lib/plan-display';
 import {
@@ -278,11 +278,18 @@ CtaButtons.displayName = 'CtaButtons';
 
 const BYOK_LABEL = 'Use your own key';
 
+const freeLimitReached = (modelName: string) => `Free limit reached for ${modelName}`;
+
 const FREE_LIMIT_HEADLINE: Readonly<Record<FreeLimitReason, (modelName: string) => string>> = {
-  allowance_used: (modelName) => `Free limit reached for ${modelName}`,
+  allowance_used: freeLimitReached,
   allowance_ended: (modelName) => `The free offer for ${modelName} has ended`,
-  shared_pool_used: (modelName) => `Free limit reached for ${modelName}`,
+  shared_pool_used: freeLimitReached,
 };
+
+function freeLimitHeadline({ reason, modelName }: FreeLimitRecovery): string {
+  const known = FreeLimitSchema.shape.reason.safeParse(reason);
+  return known.success ? FREE_LIMIT_HEADLINE[known.data](modelName) : freeLimitReached(modelName);
+}
 
 interface FreeLimitActionsProps {
   freeLimit: FreeLimitRecovery;
@@ -458,7 +465,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
   // your…", which would blame a user whose only mistake was arriving while a
   // shared pool was busy.
   const headline = freeLimit
-    ? FREE_LIMIT_HEADLINE[freeLimit.reason](freeLimit.modelName)
+    ? freeLimitHeadline(freeLimit)
     : freeCapacity
       ? FREE_CAPACITY_HEADLINE
       : !showUpgradeCta

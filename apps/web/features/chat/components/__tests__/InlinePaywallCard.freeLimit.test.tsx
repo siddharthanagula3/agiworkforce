@@ -114,6 +114,16 @@ describe('InlinePaywallCard · free limit variant', () => {
     );
   });
 
+  it('still renders a saved card whose reason this build does not know', () => {
+    const reason = 'account_window_used' as FreeLimitRecovery['reason'];
+    render(<InlinePaywallCard {...makeProps({ reason })} />);
+
+    expect(screen.getByRole('heading')).toHaveTextContent(
+      'Free limit reached for Qwen Fixture Max',
+    );
+    expect(screen.getByRole('button', { name: 'Switch to Qwen Fixture Plus' })).toBeInTheDocument();
+  });
+
   it('never shows provider payloads, error prefixes or a plan badge on the limit card', () => {
     const { container } = render(<InlinePaywallCard {...makeProps()} />);
     const text = container.textContent ?? '';
