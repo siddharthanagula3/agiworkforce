@@ -1,5 +1,13 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { basename, dirname, join, posix, sep } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
-import { EEA_COUNTRY_CODES, decideEuAccess, euBlockEnabled } from '../eu-access';
+import {
+  EEA_COUNTRY_CODES,
+  decideEuAccess,
+  euBlockEnabled,
+  isServerToServerRoute,
+} from '../eu-access';
 
 describe('euBlockEnabled', () => {
   it('is off unless explicitly switched on', () => {
@@ -50,5 +58,50 @@ describe('decideEuAccess', () => {
   it('excludes the UK and Switzerland, which are not EEA', () => {
     expect(decideEuAccess('GB', true)).toEqual({ blocked: false });
     expect(decideEuAccess('CH', true)).toEqual({ blocked: false });
+  });
+});
+
+describe('isServerToServerRoute', () => {
+  const apiRoutes = readdirSync(join(process.cwd(), 'app', 'api'), {
+    recursive: true,
+    encoding: 'utf8',
+  })
+    .filter((entry) => basename(entry) === 'route.ts')
+    .map((entry) => ({
+      file: join('app', 'api', entry),
+      path: posix.join('/api', dirname(entry).split(sep).join('/')),
+    }));
+  const admitted = apiRoutes.filter((route) =>
+    isServerToServerRoute(route.path.replace(/\[[^\]]+\]/gu, 'segment')),
+  );
+
+  it('reads the whole api route tree rather than an empty directory', () => {
+    expect(apiRoutes.length).toBeGreaterThan(200);
+  });
+
+  it('admits the signed webhook receivers and no other route outside cron', () => {
+    expect(
+      admitted
+        .filter((route) => !route.path.startsWith('/api/cron/'))
+        .map((route) => route.path)
+        .sort(),
+    ).toEqual([
+      '/api/github/webhook',
+      '/api/webhooks/connectors/[triggerId]',
+      '/api/webhooks/gmail',
+      '/api/webhooks/google-calendar',
+      '/api/webhooks/slack',
+    ]);
+  });
+
+  it('admits a cron job only when its handler refuses a caller without CRON_SECRET', () => {
+    const crons = admitted.filter((route) => route.path.startsWith('/api/cron/'));
+
+    expect(crons.length).toBeGreaterThan(0);
+    for (const cron of crons) {
+      expect(readFileSync(join(process.cwd(), cron.file), 'utf8'), cron.file).toMatch(
+        /if \(!verifyCronRequest\(request\)\)/u,
+      );
+    }
   });
 });

@@ -31,6 +31,17 @@ export const EEA_COUNTRY_CODES = new Set([
   'NO',
 ]);
 
+export const SERVER_TO_SERVER_ROUTES = [
+  /^\/api\/webhooks\/[\w-]+$/u,
+  /^\/api\/webhooks\/connectors\/[\w-]+$/u,
+  /^\/api\/github\/webhook$/u,
+  /^\/api\/cron\/[\w-]+$/u,
+] as const;
+
+export function isServerToServerRoute(pathname: string): boolean {
+  return SERVER_TO_SERVER_ROUTES.some((route) => route.test(pathname));
+}
+
 export type EuAccessDecision = { blocked: false } | { blocked: true; country: string };
 
 /**

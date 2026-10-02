@@ -11,7 +11,7 @@ import type { NextMiddleware, NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { withCorsAndSecurityHeaders } from './lib/cors';
 import { apiHostRewriteUsesClerk, isApiHostRewriteSource } from './lib/api-host-route-contract';
-import { decideEuAccess, euBlockEnabled } from './lib/eu-access';
+import { decideEuAccess, euBlockEnabled, isServerToServerRoute } from './lib/eu-access';
 import { getIdentityProvider } from './lib/server/identity';
 import { hasBrowserSessionCookie as isBrowserSessionCookiePresent } from './lib/session-cookie';
 import { plaidLinkContentSecurityOrigins } from './lib/connectors/plaid-config';
@@ -260,6 +260,7 @@ function euAccessBlock(request: NextRequest): NextResponse | null {
   );
   if (!decision.blocked) return null;
   if (request.nextUrl.pathname === UNAVAILABLE_PATH) return null;
+  if (isServerToServerRoute(request.nextUrl.pathname)) return null;
   const target = request.nextUrl.clone();
   target.pathname = UNAVAILABLE_PATH;
   target.search = '';
