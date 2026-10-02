@@ -488,7 +488,14 @@
     "codeTitle": "Código {{language}}",
     "codeBlockLabel": "Bloque de código {{language}}",
     "edit": "Editar",
-    "editLabel": "Editar este código junto al chat"
+    "editLabel": "Editar este código junto al chat",
+    "imageFrom": "Imagen de {{host}}",
+    "loadImage": "Cargar imagen",
+    "loadImageLabel": "Cargar imagen de {{host}}",
+    "imageFailed": "No se pudo cargar la imagen",
+    "imageFailedLabel": "No se pudo cargar la imagen: {{alt}}",
+    "openImage": "Abrir imagen en una pestaña nueva",
+    "openImageLabel": "Abrir imagen en una pestaña nueva: {{alt}}"
   },
   "streaming": {
     "reconnecting": "Reconectando…",

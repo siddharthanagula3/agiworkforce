@@ -1,10 +1,12 @@
-import React, { useContext, useMemo, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown, { defaultUrlTransform, type UrlTransform } from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { Button, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
+import { markdownImageSource, trustedImageKeys } from './markdownImageSources';
 import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
 import { reactNodeText } from './reactNodeText';
@@ -29,59 +31,119 @@ import {
 import { CitationChip, CitationsContext, useMarkdownCitations } from './CitationChip';
 import type { CitationItem, MarkdownCitation } from './CitationChip';
 import type { Components } from 'react-markdown';
-import { Check, ImageOff } from 'lucide-react';
+import { Check, Image as ImageIcon, ImageOff } from 'lucide-react';
 import 'katex/dist/katex.min.css';
 
-function isNavigableImageSource(src: string): boolean {
-  const trimmed = src.trim();
-  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed);
-  if (!scheme) return true;
-  const protocol = (scheme[1] ?? '').toLowerCase();
-  return protocol === 'http' || protocol === 'https';
-}
-
 const IMAGE_LOADING_PLACEHOLDER_CLASS = 'aspect-[4/3] w-full max-w-sm';
+const IMAGE_NOTICE_CLASS =
+  'my-2 inline-flex max-w-full items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground';
+const NO_TRUSTED_IMAGES: ReadonlySet<string> = new Set();
+const TrustedImagesContext = createContext<ReadonlySet<string>>(NO_TRUSTED_IMAGES);
+const LinkContentContext = createContext(false);
+const approvedImageKeys = new Set<string>();
+
+const UnavailableImage = ({ alt }: { alt?: string }) => {
+  const { t } = useUiTranslation('chat');
+  const failed = t('markdown.imageFailed', 'Image failed to load');
+  return (
+    <span
+      className={IMAGE_NOTICE_CLASS}
+      role="img"
+      aria-label={
+        alt ? t('markdown.imageFailedLabel', 'Image failed to load: {{alt}}', { alt }) : failed
+      }
+    >
+      <ImageOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="truncate">{alt || failed}</span>
+    </span>
+  );
+};
+
+const BlockedImage = ({
+  host,
+  alt,
+  onLoad,
+}: {
+  host: string;
+  alt?: string;
+  onLoad?: () => void;
+}) => {
+  const { t } = useUiTranslation('chat');
+  return (
+    <span className={cn(IMAGE_NOTICE_CLASS, 'flex-wrap gap-y-1.5')}>
+      <ImageIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      {alt ? <span className="min-w-0 truncate text-foreground">{alt}</span> : null}
+      <span className="min-w-0 break-words">
+        {t('markdown.imageFrom', 'Image from {{host}}', { host })}
+      </span>
+      {onLoad ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="pointer-coarse:min-h-11"
+          aria-label={t('markdown.loadImageLabel', 'Load image from {{host}}', { host })}
+          onClick={onLoad}
+        >
+          {t('markdown.loadImage', 'Load image')}
+        </Button>
+      ) : null}
+    </span>
+  );
+};
 
 const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?: string }) => {
+  const { t } = useUiTranslation('chat');
+  const trustedImages = useContext(TrustedImagesContext);
+  const insideLink = useContext(LinkContentContext);
+  const source = useMemo(() => (src ? markdownImageSource(src) : null), [src]);
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [approvedKey, setApprovedKey] = useState<string | null>(null);
+  const linkRef = useRef<HTMLAnchorElement>(null);
+  const focusAfterApproval = useRef(false);
+
+  useEffect(() => {
+    if (!approvedKey || !focusAfterApproval.current) return;
+    focusAfterApproval.current = false;
+    linkRef.current?.focus();
+  }, [approvedKey]);
 
   if (!src) return null;
+  if (!source || status === 'error') return <UnavailableImage alt={alt} />;
 
-  if (status === 'error') {
-    return (
-      <span
-        className="my-2 inline-flex max-w-full items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-        role="img"
-        aria-label={alt ? `Image failed to load: ${alt}` : 'Image failed to load'}
-      >
-        <ImageOff className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="truncate">{alt || 'Image failed to load'}</span>
-      </span>
-    );
+  const crossOrigin = source.kind === 'cross-origin';
+  if (crossOrigin && !trustedImages.has(source.key) && !approvedImageKeys.has(source.key)) {
+    const approve = () => {
+      approvedImageKeys.add(source.key);
+      focusAfterApproval.current = true;
+      setApprovedKey(source.key);
+    };
+    return <BlockedImage host={source.host} alt={alt} onLoad={insideLink ? undefined : approve} />;
   }
 
-  const navigable = isNavigableImageSource(src);
+  const opensInNewTab = source.kind !== 'embedded' && !insideLink;
 
   const picture = (
     <>
       {status === 'loading' && (
         <span
-          className="absolute inset-0 animate-pulse rounded-lg bg-muted/50"
+          className="absolute inset-0 animate-pulse rounded-lg bg-muted/50 motion-reduce:animate-none"
           aria-hidden="true"
         />
       )}
       {/* Data/blob and arbitrary remote sources cannot use a host-specific
           image optimizer safely, so this renderer intentionally uses img. */}
       <img
-        src={src}
+        src={source.src}
         alt={alt || ''}
         title={title}
         loading="lazy"
+        referrerPolicy={crossOrigin ? 'no-referrer' : undefined}
         onLoad={() => setStatus('loaded')}
         onError={() => setStatus('error')}
         className={cn(
           'max-h-[512px] max-w-full rounded-lg border border-border/50 object-contain',
-          navigable && 'cursor-zoom-in',
+          opensInNewTab && 'cursor-zoom-in',
         )}
       />
     </>
@@ -92,7 +154,7 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
     status === 'loading' && IMAGE_LOADING_PLACEHOLDER_CLASS,
   );
 
-  if (!navigable) {
+  if (!opensInNewTab) {
     return (
       <span className={wrapperClassName} title={title || alt}>
         {picture}
@@ -100,14 +162,18 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
     );
   }
 
+  const openLabel = t('markdown.openImage', 'Open image in a new tab');
   return (
     <a
-      href={src}
+      ref={linkRef}
+      href={source.src}
       target="_blank"
       rel="noopener noreferrer"
       className={cn(wrapperClassName, 'no-underline')}
-      title={title || alt || 'Open image in a new tab'}
-      aria-label={alt ? `Open image in a new tab: ${alt}` : 'Open image in a new tab'}
+      title={title || alt || openLabel}
+      aria-label={
+        alt ? t('markdown.openImageLabel', 'Open image in a new tab: {{alt}}', { alt }) : openLabel
+      }
     >
       {picture}
     </a>
@@ -210,7 +276,7 @@ const MarkdownLink = ({ href, children }: { href?: string; children?: React.Reac
       className="break-words text-primary hover:underline"
       {...(samePage ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
     >
-      {children}
+      <LinkContentContext.Provider value={true}>{children}</LinkContentContext.Provider>
     </a>
   );
 };
@@ -411,6 +477,16 @@ const markdownComponents: Components = {
 
 const EMPTY_CITATIONS: readonly MarkdownCitation[] = [];
 
+const IMAGE_ELEMENT = 'img';
+const IMAGE_SOURCE_ATTRIBUTE = 'src';
+
+const markdownUrlTransform: UrlTransform = (url, key, node) =>
+  key === IMAGE_SOURCE_ATTRIBUTE &&
+  node.tagName === IMAGE_ELEMENT &&
+  markdownImageSource(url)?.kind === 'embedded'
+    ? url
+    : defaultUrlTransform(url);
+
 const REHYPE_PLUGINS = [
   rehypeRaw,
   [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
@@ -422,6 +498,7 @@ export interface MarkdownContentProps {
   isStreaming?: boolean;
   skipPreprocess?: boolean;
   citations?: readonly MarkdownCitation[];
+  trustedImageUrls?: readonly string[];
   linkifyNumericCitations?: boolean;
   literalHtml?: boolean;
   onTaskToggle?: (index: number) => void;
@@ -459,10 +536,15 @@ function MarkdownContentImpl({
   isStreaming,
   skipPreprocess,
   citations,
+  trustedImageUrls,
   linkifyNumericCitations = true,
   literalHtml,
   onTaskToggle,
 }: MarkdownContentProps) {
+  const trustedImages = useMemo(
+    () => (trustedImageUrls?.length ? trustedImageKeys(trustedImageUrls) : NO_TRUSTED_IMAGES),
+    [trustedImageUrls],
+  );
   const mathContent = useMemo(
     () => (skipPreprocess ? content : preprocessMath(content)),
     [content, skipPreprocess],
@@ -483,15 +565,18 @@ function MarkdownContentImpl({
     <TaskToggleContext.Provider value={taskToggle}>
       <StreamTailContext.Provider value={Boolean(isStreaming)}>
         <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>
-          <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
-            <ReactMarkdown
-              remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
-              rehypePlugins={REHYPE_PLUGINS}
-              components={markdownComponents}
-            >
-              {processedContent}
-            </ReactMarkdown>
-          </Tooltip.Provider>
+          <TrustedImagesContext.Provider value={trustedImages}>
+            <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
+              <ReactMarkdown
+                remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
+                rehypePlugins={REHYPE_PLUGINS}
+                urlTransform={markdownUrlTransform}
+                components={markdownComponents}
+              >
+                {processedContent}
+              </ReactMarkdown>
+            </Tooltip.Provider>
+          </TrustedImagesContext.Provider>
         </CitationsContext.Provider>
         {isStreaming && content.trim() && (
           <span className="ms-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />

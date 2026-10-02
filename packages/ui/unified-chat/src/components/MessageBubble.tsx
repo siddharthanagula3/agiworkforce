@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Copy,
   Check,
@@ -660,6 +660,14 @@ export function MessageBubble({
   const [copied, setCopied] = useState(false);
   const renderedArtifacts = artifactProjection?.artifacts ?? message.artifacts;
   const bodyContent = artifactProjection?.displayContent ?? message.content;
+  const { citations, webSearchResults } = message;
+  const trustedImageUrls = useMemo(
+    () => [
+      ...(citations ?? []).map((citation) => citation.url),
+      ...(webSearchResults ?? []).flatMap((search) => search.results.map((result) => result.url)),
+    ],
+    [citations, webSearchResults],
+  );
   const trimmedMetadataFields = isUser ? [] : readTrimmedMetadataFields(message);
   const hostBridge = useHostBridge();
   const paywallBlock = isUser ? null : readMessagePaywall(message.metadata);
@@ -798,9 +806,14 @@ export function MessageBubble({
         ) : (
           <StreamAnnouncer text={bodyContent} isStreaming={isStreaming}>
             {isStreaming ? (
-              <StreamingMarkdownContent content={bodyContent} isStreaming announce={false} />
+              <StreamingMarkdownContent
+                content={bodyContent}
+                isStreaming
+                trustedImageUrls={trustedImageUrls}
+                announce={false}
+              />
             ) : (
-              <MarkdownContent content={bodyContent} />
+              <MarkdownContent content={bodyContent} trustedImageUrls={trustedImageUrls} />
             )}
           </StreamAnnouncer>
         )}

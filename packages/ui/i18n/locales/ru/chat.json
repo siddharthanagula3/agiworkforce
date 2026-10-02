@@ -624,7 +624,14 @@
     "codeTitle": "Код {{language}}",
     "codeBlockLabel": "Блок кода {{language}}",
     "edit": "Изменить",
-    "editLabel": "Изменить этот код рядом с чатом"
+    "editLabel": "Изменить этот код рядом с чатом",
+    "imageFrom": "Изображение с {{host}}",
+    "loadImage": "Загрузить изображение",
+    "loadImageLabel": "Загрузить изображение с {{host}}",
+    "imageFailed": "Не удалось загрузить изображение",
+    "imageFailedLabel": "Не удалось загрузить изображение: {{alt}}",
+    "openImage": "Открыть изображение в новой вкладке",
+    "openImageLabel": "Открыть изображение в новой вкладке: {{alt}}"
   },
   "streaming": {
     "reconnecting": "Переподключение…",

@@ -1657,6 +1657,10 @@ const MessageBubbleComponent = function MessageBubble({
           }),
     [isUser, metadataSearchResults, metadataCitations],
   );
+  const trustedImageUrls = useMemo(
+    () => [...searchSources, ...citationsByMarker].map((source) => source.url),
+    [searchSources, citationsByMarker],
+  );
 
   const { cleanedContent, canLinkNumericCitations } = useMemo(() => {
     // While an artifact block is streaming into the panel, hide the growing
@@ -2344,6 +2348,7 @@ const MessageBubbleComponent = function MessageBubble({
                       content={cleanedContent}
                       isStreaming
                       citations={citationsByMarker}
+                      trustedImageUrls={trustedImageUrls}
                       announce={false}
                     />
                   ) : (
@@ -2351,6 +2356,7 @@ const MessageBubbleComponent = function MessageBubble({
                       <MarkdownContent
                         content={cleanedContent}
                         citations={canLinkNumericCitations ? citationsByMarker : searchSources}
+                        trustedImageUrls={trustedImageUrls}
                         linkifyNumericCitations={canLinkNumericCitations}
                         literalHtml={isUser}
                       />

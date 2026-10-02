@@ -52,3 +52,12 @@ export function markdownImageSource(value: string): MarkdownImageSource | null {
     ? { kind: 'same-origin', src }
     : crossOrigin(parseUrl(src, PRIMARY_REFERENCE_BASE));
 }
+
+export function trustedImageKeys(urls: readonly string[]): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const value of urls) {
+    const url = parseUrl(value.trim());
+    if (url && REMOTE_PROTOCOLS.has(url.protocol)) keys.add(urlKey(url));
+  }
+  return keys;
+}

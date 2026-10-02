@@ -760,7 +760,14 @@
     "codeTitle": "كود {{language}}",
     "codeBlockLabel": "كتلة كود {{language}}",
     "edit": "تعديل",
-    "editLabel": "تعديل هذه الشيفرة بجانب المحادثة"
+    "editLabel": "تعديل هذه الشيفرة بجانب المحادثة",
+    "imageFrom": "صورة من {{host}}",
+    "loadImage": "تحميل الصورة",
+    "loadImageLabel": "تحميل الصورة من {{host}}",
+    "imageFailed": "تعذّر تحميل الصورة",
+    "imageFailedLabel": "تعذّر تحميل الصورة: {{alt}}",
+    "openImage": "فتح الصورة في علامة تبويب جديدة",
+    "openImageLabel": "فتح الصورة في علامة تبويب جديدة: {{alt}}"
   },
   "streaming": {
     "reconnecting": "جارٍ إعادة الاتصال…",

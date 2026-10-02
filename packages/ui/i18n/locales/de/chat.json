@@ -488,7 +488,14 @@
     "codeTitle": "{{language}}-Code",
     "codeBlockLabel": "{{language}}-Codeblock",
     "edit": "Bearbeiten",
-    "editLabel": "Diesen Code neben dem Chat bearbeiten"
+    "editLabel": "Diesen Code neben dem Chat bearbeiten",
+    "imageFrom": "Bild von {{host}}",
+    "loadImage": "Bild laden",
+    "loadImageLabel": "Bild laden: {{host}}",
+    "imageFailed": "Bild konnte nicht geladen werden",
+    "imageFailedLabel": "Bild konnte nicht geladen werden: {{alt}}",
+    "openImage": "Bild in neuem Tab öffnen",
+    "openImageLabel": "Bild in neuem Tab öffnen: {{alt}}"
   },
   "streaming": {
     "reconnecting": "Verbindung wird wiederhergestellt…",

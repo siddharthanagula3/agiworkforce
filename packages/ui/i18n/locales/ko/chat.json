@@ -488,7 +488,14 @@
     "codeTitle": "{{language}} 코드",
     "codeBlockLabel": "{{language}} 코드 블록",
     "edit": "편집",
-    "editLabel": "채팅 옆에서 이 코드 편집"
+    "editLabel": "채팅 옆에서 이 코드 편집",
+    "imageFrom": "{{host}}의 이미지",
+    "loadImage": "이미지 불러오기",
+    "loadImageLabel": "{{host}}에서 이미지 불러오기",
+    "imageFailed": "이미지를 불러오지 못했습니다",
+    "imageFailedLabel": "이미지를 불러오지 못했습니다: {{alt}}",
+    "openImage": "새 탭에서 이미지 열기",
+    "openImageLabel": "새 탭에서 이미지 열기: {{alt}}"
   },
   "streaming": {
     "reconnecting": "재연결 중…",

@@ -128,6 +128,7 @@ export interface StreamingMarkdownContentProps {
   content: string;
   isStreaming?: boolean;
   citations?: readonly MarkdownCitation[];
+  trustedImageUrls?: readonly string[];
   announce?: boolean;
 }
 
@@ -135,6 +136,7 @@ function StreamingMarkdownContentImpl({
   content,
   isStreaming = true,
   citations,
+  trustedImageUrls,
   announce = true,
 }: StreamingMarkdownContentProps) {
   const splitterRef = useRef<MarkdownBlockSplitter | null>(null);
@@ -180,6 +182,7 @@ function StreamingMarkdownContentImpl({
             content={block.source}
             skipPreprocess
             citations={citations}
+            trustedImageUrls={trustedImageUrls}
             linkifyNumericCitations={!isStreaming}
           />
           {UNIT_SEPARATOR}
@@ -190,6 +193,7 @@ function StreamingMarkdownContentImpl({
         isStreaming={isStreaming}
         skipPreprocess
         citations={citations}
+        trustedImageUrls={trustedImageUrls}
         linkifyNumericCitations={!isStreaming}
       />
     </>
