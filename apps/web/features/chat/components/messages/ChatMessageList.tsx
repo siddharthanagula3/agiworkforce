@@ -1081,9 +1081,12 @@ const RESEND_BLOCKED_ID_SEPARATOR = '\n';
 
 function replyBlocksResend(reply: ChatMessage | undefined): boolean {
   if (reply?.role !== 'assistant') return false;
+  const freeLimitReason = getMeta(reply)?.paywall?.freeLimit?.reason;
   return (
     MEDIA_GENERATION_TOOL_TYPES.has(reply.metadata?.['toolType']) ||
-    reply.metadata?.['errorCode'] === FREE_QUOTA_EXHAUSTED_CODE
+    reply.metadata?.['errorCode'] === FREE_QUOTA_EXHAUSTED_CODE ||
+    freeLimitReason === 'allowance_used' ||
+    freeLimitReason === 'allowance_ended'
   );
 }
 

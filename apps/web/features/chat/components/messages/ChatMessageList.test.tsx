@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { ChatMessageList, groupMessages, patchMessageGroups } from './ChatMessageList';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { getSelectableModels } from '@agiworkforce/types';
@@ -708,6 +708,39 @@ describe('ChatMessageList actions', () => {
     ];
     render(<ChatMessageList messages={messages} onRegenerate={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'regenerate' })).not.toBeInTheDocument();
+  });
+
+  it('offers the free limit card instead of resending to a model whose free allowance is spent', () => {
+    const messages = [
+      makeMessage({ id: 'limited-question', role: 'user', content: 'Hello' }),
+      makeMessage({
+        id: 'limited-reply',
+        role: 'assistant',
+        content: '',
+        metadata: {
+          paywall: {
+            feature: 'model_access',
+            requiredTier: 'basic',
+            reason: 'The free limit for this model is reached.',
+            freeLimit: {
+              modelId: 'fixture-limited',
+              modelName: 'Fixture Limited',
+              reason: 'allowance_used',
+            },
+          },
+        },
+      }),
+    ];
+    render(<ChatMessageList messages={messages} onRegenerate={vi.fn()} />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Free limit reached for Fixture Limited' }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('bubble-limited-question')).queryByRole('button', {
+        name: 'regenerate',
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it('calls onRegenerate with correct messageId for assistant messages', () => {
