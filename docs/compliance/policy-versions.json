@@ -252,6 +252,22 @@
             "Stripe",
             "Upstash",
             "Vercel"
+          ],
+          "subprocessorProviders": [
+            "anthropic",
+            "cheaperinference",
+            "deepseek",
+            "experientiallabs",
+            "google",
+            "moonshot",
+            "open_router",
+            "openai",
+            "perplexity",
+            "qwen",
+            "vercel_gateway",
+            "workers_ai",
+            "xai",
+            "zhipu"
           ]
         }
       ]

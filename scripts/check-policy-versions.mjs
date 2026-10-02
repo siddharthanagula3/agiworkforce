@@ -8,7 +8,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { recipientNames } from './check-subprocessor-coverage.mjs';
+import { declaredProviderIds, recipientNames } from './check-subprocessor-coverage.mjs';
 import {
   ARCHIVE_COMMAND,
   archiveExpectations,
@@ -95,49 +95,67 @@ function listChange(before, after) {
   };
 }
 
-function checkSubprocessorNames(page, source, versions, failures) {
+function compact(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+const SUBPROCESSOR_RECORDS = [
+  {
+    field: 'subprocessorNames',
+    subject: 'the subprocessor list',
+    listed: (source) => recipientNames(source),
+    display: listedName,
+    named: (summary, name) => summary.includes(listedName(name)),
+  },
+  {
+    field: 'subprocessorProviders',
+    subject: 'the set of providers the subprocessor list names',
+    listed: (source) =>
+      [...declaredProviderIds(source).declared].map((id) => id.replace(/_anthropic$/, '')),
+    display: (id) => id,
+    named: (summary, id) => compact(summary).includes(compact(id)),
+  },
+];
+
+function checkSubprocessorRecord(page, source, versions, record, failures) {
   const where = `${REGISTRY} "${SUBPROCESSOR_LIST}"`;
   let recorded = null;
   for (const [position, version] of versions.entries()) {
-    if (version.subprocessorNames === undefined) continue;
+    const values = version[record.field];
+    if (values === undefined) continue;
     const at = `${where} version ${position + 1}`;
-    if (
-      !Array.isArray(version.subprocessorNames) ||
-      !version.subprocessorNames.every((name) => typeof name === 'string')
-    ) {
-      failures.push(`${at}: subprocessorNames must list the names the page showed`);
+    if (!Array.isArray(values) || !values.every((value) => typeof value === 'string')) {
+      failures.push(`${at}: ${record.field} must list what the page showed`);
       continue;
     }
-    const names = [...new Set(version.subprocessorNames)].sort();
-    const change = recorded ? listChange(recorded, names) : null;
+    const listed = [...new Set(values)].sort();
+    const change = recorded ? listChange(recorded, listed) : null;
     if (change && change.names.length > 0) {
       if (version.date === versions[position - 1]?.date) {
         failures.push(
-          `${at}: the subprocessor list changed (${change.text}) under an entry whose date did not move, so /changelog never lists it; move POLICY_LAST_UPDATED.${SUBPROCESSOR_LIST} and record the names on the entry that moves it`,
+          `${at}: ${record.subject} changed (${change.text}) under an entry whose date did not move, so /changelog never lists it; move POLICY_LAST_UPDATED.${SUBPROCESSOR_LIST} and record ${record.field} on the entry that moves it`,
         );
       } else {
-        const unnamed = change.names.filter(
-          (name) => !(version.summary ?? '').includes(listedName(name)),
-        );
+        const unnamed = change.names.filter((value) => !record.named(version.summary ?? '', value));
         if (unnamed.length > 0) {
           failures.push(
-            `${at}: the summary does not name ${unnamed.map(listedName).join(', ')}, which this version ${change.text}`,
+            `${at}: the summary does not name ${unnamed.map(record.display).join(', ')}, which this version ${change.text}`,
           );
         }
       }
     }
-    recorded = names;
+    recorded = listed;
   }
   if (recorded === null) {
     failures.push(
-      `${where}: no version records subprocessorNames, so a change to the list cannot be held to a dated entry; record the names ${page} lists on its latest version`,
+      `${where}: no version records ${record.field}, so a change to ${record.subject} cannot be held to a dated entry; record what ${page} lists on its latest version`,
     );
     return;
   }
-  const change = listChange(recorded, [...new Set(recipientNames(source))].sort());
+  const change = listChange(recorded, [...new Set(record.listed(source))].sort());
   if (change.names.length > 0) {
     failures.push(
-      `${page}: the subprocessor list changed and the registry has not recorded it (${change.text}); append a version that moves the date, with subprocessorNames and a summary naming the change`,
+      `${page}: ${record.subject} changed and the registry has not recorded it (${change.text}); append a version that moves the date, with ${record.field} and a summary naming the change`,
     );
   }
 }
@@ -209,7 +227,11 @@ function checkDocument(root, key, route, date, entry, failures) {
       `${page}: the published text changed since its last recorded version. If the change is substantive, move POLICY_LAST_UPDATED.${key} to the day it ships; either way append {"date", "digest": "${digest}"} to ${REGISTRY}, with a note when the date does not move`,
     );
   }
-  if (key === SUBPROCESSOR_LIST) checkSubprocessorNames(page, source, versions, failures);
+  if (key === SUBPROCESSOR_LIST) {
+    for (const record of SUBPROCESSOR_RECORDS) {
+      checkSubprocessorRecord(page, source, versions, record, failures);
+    }
+  }
 }
 
 export function runPolicyVersionsCheck(root) {

@@ -214,18 +214,25 @@ test('fails on a date that belongs to no canonical route', () => {
 const SUBPROCESSORS_PAGE = 'apps/web/app/subprocessors/page.tsx';
 const LISTED = ['Alpha', 'Beta Cloud'];
 const ADDED = 'Gamma Labs (operated by Delta, Inc.)';
+const PROVIDERS = ['alpha', 'beta', 'beta_anthropic'];
 
-function subprocessorsPage(names) {
+function subprocessorsPage(names, providers = PROVIDERS) {
   return [
     "import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';",
     '',
     'const SUBS = [',
-    ...names.flatMap((name) => [
-      '  {',
-      `    name: '${name}',`,
-      "    purpose: 'Processes the requests you send.',",
-      '  },',
-    ]),
+    ...names.flatMap((name, index) => {
+      const ids = index === 0 ? providers : [];
+      return [
+        '  {',
+        `    name: '${name}',`,
+        index === 0
+          ? `    purpose: 'Serves the models of ${ids.join(' and ')}.',`
+          : "    purpose: 'Processes the requests you send.',",
+        `    registryProviderIds: [${ids.map((id) => `'${id}'`).join(', ')}],`,
+        '  },',
+      ];
+    }),
     '];',
     '',
     'export default function SubprocessorsPage() {',
@@ -235,7 +242,7 @@ function subprocessorsPage(names) {
   ].join('\n');
 }
 
-function checkSubprocessors({ names, date, versions }) {
+function checkSubprocessors({ names, providers = PROVIDERS, date, versions }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-versions-subprocessors-'));
   const write = (relative, contents) => {
     fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
@@ -254,7 +261,7 @@ function checkSubprocessors({ names, date, versions }) {
       '',
     ].join('\n'),
   );
-  write(SUBPROCESSORS_PAGE, subprocessorsPage(names));
+  write(SUBPROCESSORS_PAGE, subprocessorsPage(names, providers));
   write(
     REGISTRY,
     JSON.stringify(
@@ -275,6 +282,7 @@ const LISTED_VERSION = {
   digest: copyDigest(subprocessorsPage(LISTED)),
   note: 'Baseline recorded for the fixture.',
   subprocessorNames: LISTED,
+  subprocessorProviders: ['alpha', 'beta'],
 };
 
 test('passes when the latest version records the subprocessors the page lists', () => {
@@ -377,6 +385,104 @@ test('fails when no version records the subprocessors the page lists', () => {
   assert.ok(
     failures.some((failure) => failure.includes('no version records subprocessorNames')),
     failures.join('\n'),
+  );
+});
+
+test('fails when a provider is added inside an existing row and no version records it', () => {
+  const providers = [...PROVIDERS, 'gamma'];
+  const failures = checkSubprocessors({
+    names: LISTED,
+    providers,
+    date: '2026-09-28',
+    versions: [
+      LISTED_VERSION,
+      {
+        date: '2026-09-28',
+        digest: copyDigest(subprocessorsPage(LISTED, providers)),
+        note: 'Names Gamma among the model providers; wording only, date stays.',
+      },
+    ],
+  });
+  assert.ok(
+    failures.some(
+      (failure) =>
+        failure.includes(SUBPROCESSORS_PAGE) &&
+        failure.includes('the registry has not recorded') &&
+        failure.includes('added gamma'),
+    ),
+    failures.join('\n'),
+  );
+});
+
+test('fails when a provider added inside a row is recorded under an entry whose date did not move', () => {
+  const providers = [...PROVIDERS, 'gamma'];
+  const failures = checkSubprocessors({
+    names: LISTED,
+    providers,
+    date: '2026-09-28',
+    versions: [
+      LISTED_VERSION,
+      {
+        date: '2026-09-28',
+        digest: copyDigest(subprocessorsPage(LISTED, providers)),
+        note: 'Names Gamma among the model providers; wording only, date stays.',
+        subprocessorProviders: ['alpha', 'beta', 'gamma'],
+      },
+    ],
+  });
+  assert.ok(
+    failures.some(
+      (failure) =>
+        failure.includes('providers the subprocessor list names changed (added gamma)') &&
+        failure.includes('under an entry whose date did not move'),
+    ),
+    failures.join('\n'),
+  );
+});
+
+test('holds a provider added inside a row to a dated entry whose summary names it', () => {
+  const providers = [...PROVIDERS, 'gamma', 'gamma_anthropic'];
+  const moved = (summary) =>
+    checkSubprocessors({
+      names: LISTED,
+      providers,
+      date: '2026-10-05',
+      versions: [
+        LISTED_VERSION,
+        {
+          date: '2026-10-05',
+          digest: copyDigest(subprocessorsPage(LISTED, providers)),
+          summary,
+          subprocessorProviders: ['alpha', 'beta', 'gamma'],
+        },
+      ],
+    });
+
+  assert.ok(
+    moved('Rewords the model provider row for clarity.').some((failure) =>
+      failure.includes('the summary does not name gamma, which this version added gamma'),
+    ),
+  );
+  assert.deepEqual(moved('Gamma now serves Managed Cloud chat for the models it hosts.'), []);
+});
+
+test('does not count an Anthropic-dialect route of a listed provider as a new provider', () => {
+  const providers = [...PROVIDERS, 'alpha_anthropic'];
+  assert.deepEqual(
+    checkSubprocessors({
+      names: LISTED,
+      providers,
+      date: '2026-09-28',
+      versions: [
+        LISTED_VERSION,
+        {
+          date: '2026-09-28',
+          digest: copyDigest(subprocessorsPage(LISTED, providers)),
+          note: 'Adds the Anthropic-dialect route of a provider the row already names.',
+        },
+      ],
+    }),
+    [],
   );
 });
 

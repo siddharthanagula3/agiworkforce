@@ -80,11 +80,16 @@ per-document revision dates, canonical routes and their aliases) come from
    date.
 9. Announce every change to the subprocessor list. `/changelog` lists only the
    first entry of each date, so a row added to, removed from or renamed on
-   `/subprocessors` moves its date, and the entry that moves it records the
-   page's names in `subprocessorNames` and names each change in its `summary`.
-   `scripts/check-policy-versions.mjs` fails when the page's names differ from
-   the newest recorded ones, or when they change under an entry whose date did
-   not move.
+   `/subprocessors`, and a provider added to or removed from a row's
+   `registryProviderIds`, such as a new model provider in the Managed Cloud
+   row, moves its date. The entry that moves it records the page's names in
+   `subprocessorNames` and its provider ids, without the `_anthropic` dialect
+   suffix, in `subprocessorProviders`, and names each change in its `summary`;
+   a provider counts as named when the summary spells its id, ignoring case,
+   spaces and punctuation, so OpenRouter names `open_router`.
+   `scripts/check-policy-versions.mjs` fails when the page's names or providers
+   differ from the newest recorded ones, or when they change under an entry
+   whose date did not move.
 
 `apps/web/app/__tests__/legal-policy-set.test.ts` enforces 1, parts of 2, 4 and 7
 mechanically, including a prohibited-claim guard that fails if a removed claim
