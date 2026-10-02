@@ -1,142 +1,232 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { directoryRecord } from './fixtures';
-
-interface StoredRow {
-  value: string;
-  stamp: number;
-  expiresAt?: number;
-}
-
-const store = vi.hoisted(() => {
-  const rows = new Map<string, StoredRow>();
-  let nextStamp = 1;
-  const keyOf = (key: { method: string; params?: string }) => `${key.method}|${key.params ?? ''}`;
-  return {
-    rows,
-    keyOf,
-    stampMovesBeforeReplace: false,
-    reset() {
-      rows.clear();
-      nextStamp = 1;
-      this.stampMovesBeforeReplace = false;
-    },
-    seed(method: string, value: string) {
-      rows.set(`${method}|v1`, { value, stamp: nextStamp++ });
-    },
-    mint() {
-      return nextStamp++;
-    },
-  };
-});
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  execute: vi.fn(),
+}));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
-  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-}));
-vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
-  NeonMcpResponseCacheStore: class {
-    async getStamp(key: { method: string; params?: string }) {
-      return store.rows.get(store.keyOf(key))?.stamp ?? null;
-    }
-    async get(key: { method: string; params?: string }) {
-      const row = store.rows.get(store.keyOf(key));
-      return row ? { ...row } : undefined;
-    }
-    async set(
-      key: { method: string; params?: string },
-      entry: { value: string; expiresAt?: number },
-    ) {
-      const stamp = store.mint();
-      store.rows.set(store.keyOf(key), { value: entry.value, stamp, expiresAt: entry.expiresAt });
-      return stamp;
-    }
-    async replaceIfStamp(
-      key: { method: string; params?: string },
-      entry: { value: string; expiresAt?: number },
-      expectedStamp: number,
-    ) {
-      const row = store.rows.get(store.keyOf(key));
-      if (store.stampMovesBeforeReplace && row) row.stamp = store.mint();
-      if (!row || row.stamp !== expectedStamp) return null;
-      const stamp = store.mint();
-      store.rows.set(store.keyOf(key), { value: entry.value, stamp, expiresAt: entry.expiresAt });
-      return stamp;
-    }
-    async delete(key: { method: string; params?: string }) {
-      store.rows.delete(store.keyOf(key));
-    }
-  },
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: () => ({
+    query: (...args: unknown[]) => mocks.query(...args),
+    execute: (...args: unknown[]) => mocks.execute(...args),
+  }),
 }));
 
 import {
-  decodeStoredJson,
-  readIconIndex,
+  DEFAULT_SYNC_STATE,
+  clearIngestLease,
+  readIngestLease,
   readSnapshotRecords,
+  readSnapshotStamp,
+  readSyncState,
+  writeIngestLease,
   writeSnapshotRecords,
+  writeSyncState,
 } from '@/lib/connectors/directory/snapshot-cache';
 
-const SNAPSHOT = 'connectors.directory.snapshot';
-const ICON_INDEX = 'connectors.directory.icon-index';
+const NOW_MS = Date.parse('2026-09-05T06:15:00.000Z');
+const LEASE_TTL_MS = 60_000;
+const LEASE = {
+  startedAt: new Date(NOW_MS - LEASE_TTL_MS).toISOString(),
+  expiresAt: new Date(NOW_MS + LEASE_TTL_MS).toISOString(),
+};
 
-function directory(size: number) {
-  return Array.from({ length: size }, (_, index) =>
-    directoryRecord({
-      id: `io.github.example/server-${index}`,
-      iconUrl: index % 2 === 0 ? `https://cdn.example.com/icons/${index}.png` : null,
-    }),
-  );
+function leaseRow(expiresAtMs: number) {
+  return {
+    value: JSON.stringify(LEASE),
+    stamp: '1',
+    expires_at_ms: String(expiresAtMs),
+    scope: 'public',
+  };
 }
 
-describe('connector directory snapshot storage', () => {
-  beforeEach(() => store.reset());
+describe('readSnapshotStamp', () => {
+  beforeEach(() => vi.clearAllMocks());
 
-  it('stores the snapshot compressed, so a read moves a fraction of the plain JSON', async () => {
-    const records = directory(400);
-    await writeSnapshotRecords(records);
+  it('reads only the stamp column, never the value', async () => {
+    mocks.query.mockResolvedValueOnce([{ stamp: '9' }]);
 
-    const stored = store.rows.get(`${SNAPSHOT}|v1`)!.value;
-    expect(stored.startsWith('br64:')).toBe(true);
-    expect(stored.length).toBeLessThan(JSON.stringify(records).length / 4);
-    await expect(readSnapshotRecords()).resolves.toEqual(records);
+    await expect(readSnapshotStamp()).resolves.toBe(9);
+    expect(String(mocks.query.mock.calls[0]?.[0])).not.toContain('value');
+    expect((mocks.query.mock.calls[0]?.[1] as unknown[])[1]).toBe('v2');
   });
 
-  it('writes an icon index beside the snapshot with only the connectors that have icons', async () => {
-    const records = directory(4);
-    await writeSnapshotRecords(records);
+  it('falls back to the legacy row before the first compressed write', async () => {
+    mocks.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ stamp: '3' }]);
 
-    await expect(readIconIndex()).resolves.toEqual({
-      'io.github.example/server-0': 'https://cdn.example.com/icons/0.png',
-      'io.github.example/server-2': 'https://cdn.example.com/icons/2.png',
+    await expect(readSnapshotStamp()).resolves.toBe(3);
+    expect((mocks.query.mock.calls[1]?.[1] as unknown[])[1]).toBe('v1');
+  });
+
+  it('returns null when nothing has ever been ingested', async () => {
+    mocks.query.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await expect(readSnapshotStamp()).resolves.toBeNull();
+  });
+});
+
+describe('readSnapshotRecords and writeSnapshotRecords', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reads a legacy json row and copies it to the compressed row only if none exists yet', async () => {
+    mocks.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          value: JSON.stringify([{ id: 'notion' }]),
+          stamp: '1',
+          expires_at_ms: null,
+          scope: 'public',
+        },
+      ])
+      .mockResolvedValueOnce([{ stamp: '7' }])
+      .mockResolvedValueOnce([{ stamp: '8' }]);
+
+    await expect(readSnapshotRecords()).resolves.toEqual([{ id: 'notion' }]);
+
+    const insert = mocks.query.mock.calls[2];
+    expect(String(insert?.[0])).toContain('do nothing');
+    expect((insert?.[1] as unknown[])[1]).toBe('v2');
+    expect(String((insert?.[1] as unknown[])[3]).startsWith('br64:')).toBe(true);
+    expect((mocks.query.mock.calls[3]?.[1] as unknown[])[0]).toBe(
+      'connectors.directory.icon-index',
+    );
+  });
+
+  it('leaves a compressed row written meanwhile untouched and skips the icon index', async () => {
+    mocks.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          value: JSON.stringify([{ id: 'notion' }]),
+          stamp: '1',
+          expires_at_ms: null,
+          scope: 'public',
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await expect(readSnapshotRecords()).resolves.toEqual([{ id: 'notion' }]);
+    expect(mocks.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('returns null for an empty snapshot', async () => {
+    mocks.query.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await expect(readSnapshotRecords()).resolves.toBeNull();
+  });
+
+  it('writes the icon index, then the compressed row, then the legacy json row an older build reads', async () => {
+    mocks.query
+      .mockResolvedValueOnce([{ stamp: '4' }])
+      .mockResolvedValueOnce([{ stamp: '5' }])
+      .mockResolvedValueOnce([{ stamp: '6' }]);
+
+    await expect(writeSnapshotRecords([{ id: 'notion' } as never])).resolves.toBe(5);
+
+    const [index, compressed, legacy] = mocks.query.mock.calls.map((call) => call[1] as unknown[]);
+    expect(index?.[0]).toBe('connectors.directory.icon-index');
+    expect(compressed?.[1]).toBe('v2');
+    expect(String(compressed?.[3]).startsWith('br64:')).toBe(true);
+    expect(legacy?.[1]).toBe('v1');
+    expect(legacy?.[3]).toBe(JSON.stringify([{ id: 'notion' }]));
+  });
+});
+
+describe('readSyncState and writeSyncState', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns the default state when nothing has been synced yet', async () => {
+    mocks.query.mockResolvedValueOnce([]);
+    await expect(readSyncState()).resolves.toEqual({
+      nextIngestCursor: null,
+      bootstrapComplete: false,
+      bootstrapStartedAt: null,
+      lastSyncAt: null,
+      authProbeCursor: null,
+      siteIconCursor: null,
+    });
+    expect(DEFAULT_SYNC_STATE.authProbeCursor).toBeNull();
+    expect(DEFAULT_SYNC_STATE.siteIconCursor).toBeNull();
+  });
+
+  it('round-trips a written state', async () => {
+    const state = {
+      nextIngestCursor: 'cursor-1',
+      bootstrapComplete: true,
+      bootstrapStartedAt: '2026-08-31T00:00:00.000Z',
+      lastSyncAt: '2026-09-01T00:00:00.000Z',
+      authProbeCursor: 'io.github.someone/tool',
+      siteIconCursor: 'com.vendor/site',
+    };
+    mocks.query.mockResolvedValueOnce([
+      { value: JSON.stringify(state), stamp: '1', expires_at_ms: null, scope: 'public' },
+    ]);
+
+    await expect(readSyncState()).resolves.toEqual(state);
+  });
+
+  it('fills fields a state written by an older build did not know about', async () => {
+    const legacy = { nextIngestCursor: null, bootstrapComplete: true, lastSyncAt: null };
+    mocks.query.mockResolvedValueOnce([
+      { value: JSON.stringify(legacy), stamp: '1', expires_at_ms: null, scope: 'public' },
+    ]);
+
+    await expect(readSyncState()).resolves.toEqual({
+      ...legacy,
+      bootstrapStartedAt: null,
+      authProbeCursor: null,
+      siteIconCursor: null,
     });
   });
 
-  it('reads a snapshot stored as plain JSON and rewrites it compressed with its icon index', async () => {
-    const records = directory(6);
-    store.seed(SNAPSHOT, JSON.stringify(records));
+  it('writes state as a small json value distinct from the snapshot row', async () => {
+    mocks.query.mockResolvedValueOnce([{ stamp: '2' }]);
 
-    await expect(readSnapshotRecords()).resolves.toEqual(records);
+    await writeSyncState(DEFAULT_SYNC_STATE);
 
-    const rewritten = store.rows.get(`${SNAPSHOT}|v1`)!.value;
-    expect(rewritten.startsWith('br64:')).toBe(true);
-    expect(decodeStoredJson(rewritten)).toEqual(records);
-    expect(store.rows.has(`${ICON_INDEX}|v1`)).toBe(true);
+    const params = mocks.query.mock.calls[0]?.[1] as unknown[];
+    expect(params[0]).toBe('connectors.directory.sync-state');
+  });
+});
+
+describe('ingest lease', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reports no lease when no run holds one', async () => {
+    mocks.query.mockResolvedValueOnce([]);
+    await expect(readIngestLease(NOW_MS)).resolves.toBeNull();
   });
 
-  it('never overwrites a snapshot that a sync replaced while the plain copy was being read', async () => {
-    const records = directory(6);
-    store.seed(SNAPSHOT, JSON.stringify(records));
-    store.stampMovesBeforeReplace = true;
-
-    await expect(readSnapshotRecords()).resolves.toEqual(records);
-
-    expect(store.rows.get(`${SNAPSHOT}|v1`)!.value).toBe(JSON.stringify(records));
-    expect(store.rows.has(`${ICON_INDEX}|v1`)).toBe(false);
+  it('returns a lease that is still live', async () => {
+    mocks.query.mockResolvedValueOnce([leaseRow(NOW_MS + LEASE_TTL_MS)]);
+    await expect(readIngestLease(NOW_MS)).resolves.toEqual(LEASE);
   });
 
-  it('returns null rather than throwing when the stored value is corrupt', async () => {
-    store.seed(SNAPSHOT, 'br64:not-brotli');
+  it('treats a lease past its expiry as released, whatever the row still says', async () => {
+    mocks.query.mockResolvedValueOnce([leaseRow(NOW_MS - 1)]);
+    await expect(readIngestLease(NOW_MS)).resolves.toBeNull();
+  });
 
-    await expect(readSnapshotRecords()).resolves.toBeNull();
+  it('writes the lease under its own key and uses the lease expiry as the row ttl', async () => {
+    mocks.query.mockResolvedValueOnce([{ stamp: '3' }]);
+
+    await writeIngestLease(LEASE);
+
+    const params = mocks.query.mock.calls[0]?.[1] as unknown[];
+    expect(params[0]).toBe('connectors.directory.ingest-lease');
+    expect(params[3]).toBe(JSON.stringify(LEASE));
+    expect(params[4]).toBe(Date.parse(LEASE.expiresAt));
+  });
+
+  it('clears only the lease row', async () => {
+    mocks.execute.mockResolvedValueOnce(undefined);
+
+    await clearIngestLease();
+
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    expect(String(mocks.execute.mock.calls[0]?.[0])).toContain('delete');
+    expect((mocks.execute.mock.calls[0]?.[1] as unknown[])[0]).toBe(
+      'connectors.directory.ingest-lease',
+    );
   });
 });

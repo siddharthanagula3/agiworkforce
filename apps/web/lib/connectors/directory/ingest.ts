@@ -29,7 +29,7 @@ import {
   clearIngestLease,
   DEFAULT_SYNC_STATE,
   readIngestLease,
-  readSnapshotRecords,
+  readSnapshotRecordsForIngest,
   readSyncState,
   type DirectoryIngestLease,
   writeIngestLease,
@@ -374,7 +374,7 @@ async function runIngest(
   );
   const crawlEndedAtMs = now();
 
-  const existing = (await readSnapshotRecords()) ?? [];
+  const existing = (await readSnapshotRecordsForIngest()) ?? [];
   const existingRegistry = existing.filter((record) => record.sourceRegistry === REGISTRY_SOURCE);
   const removedIds = new Set(crawl.removedIds);
   const plan = planAuthProbes(

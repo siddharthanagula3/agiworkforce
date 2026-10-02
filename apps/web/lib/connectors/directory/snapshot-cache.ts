@@ -1,28 +1,41 @@
 import 'server-only';
 
-import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants } from 'node:zlib';
+import { promisify } from 'node:util';
+import { brotliCompress, brotliDecompress, constants as zlibConstants } from 'node:zlib';
 
 import { logger } from '@/lib/logger';
 import { NeonMcpResponseCacheStore } from '@/lib/connectors/mcp-runtime-cache';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 
 const SNAPSHOT_METHOD = 'connectors.directory.snapshot';
-const SNAPSHOT_PARAMS = 'v1';
+const LEGACY_SNAPSHOT_PARAMS = 'v1';
+const SNAPSHOT_PARAMS = 'v2';
 const ICON_INDEX_METHOD = 'connectors.directory.icon-index';
 const ICON_INDEX_PARAMS = 'v1';
-const COMPRESSED_VALUE_PREFIX = 'br64:';
-const SNAPSHOT_BROTLI_QUALITY = 9;
 const SYNC_STATE_METHOD = 'connectors.directory.sync-state';
 const SYNC_STATE_PARAMS = 'v1';
 const INGEST_LEASE_METHOD = 'connectors.directory.ingest-lease';
 const INGEST_LEASE_PARAMS = 'v1';
 const SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 const SYNC_STATE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
+const COMPRESSED_VALUE_PREFIX = 'br64:';
+const SNAPSHOT_BROTLI_QUALITY = 9;
+
+const compress = promisify(brotliCompress);
+const decompress = promisify(brotliDecompress);
 
 const cacheStore = new NeonMcpResponseCacheStore();
 
 function snapshotKey() {
   return { method: SNAPSHOT_METHOD, params: SNAPSHOT_PARAMS, partition: '' };
+}
+
+function legacySnapshotKey() {
+  return { method: SNAPSHOT_METHOD, params: LEGACY_SNAPSHOT_PARAMS, partition: '' };
+}
+
+function iconIndexKey() {
+  return { method: ICON_INDEX_METHOD, params: ICON_INDEX_PARAMS, partition: '' };
 }
 
 function syncStateKey() {
@@ -33,13 +46,16 @@ function ingestLeaseKey() {
   return { method: INGEST_LEASE_METHOD, params: INGEST_LEASE_PARAMS, partition: '' };
 }
 
-function iconIndexKey() {
-  return { method: ICON_INDEX_METHOD, params: ICON_INDEX_PARAMS, partition: '' };
+export class DirectorySnapshotUnreadableError extends Error {
+  constructor(version: string, cause: unknown) {
+    super(`Connector directory snapshot ${version} exists but could not be decoded`, { cause });
+    this.name = 'DirectorySnapshotUnreadableError';
+  }
 }
 
-export function encodeStoredJson(value: unknown): string {
+export async function encodeStoredJson(value: unknown): Promise<string> {
   const json = Buffer.from(JSON.stringify(value), 'utf8');
-  const compressed = brotliCompressSync(json, {
+  const compressed = await compress(json, {
     params: {
       [zlibConstants.BROTLI_PARAM_QUALITY]: SNAPSHOT_BROTLI_QUALITY,
       [zlibConstants.BROTLI_PARAM_SIZE_HINT]: json.length,
@@ -48,10 +64,10 @@ export function encodeStoredJson(value: unknown): string {
   return `${COMPRESSED_VALUE_PREFIX}${compressed.toString('base64')}`;
 }
 
-export function decodeStoredJson(value: string): unknown {
+export async function decodeStoredJson(value: string): Promise<unknown> {
   if (!value.startsWith(COMPRESSED_VALUE_PREFIX)) return JSON.parse(value);
   const compressed = Buffer.from(value.slice(COMPRESSED_VALUE_PREFIX.length), 'base64');
-  return JSON.parse(brotliDecompressSync(compressed).toString('utf8'));
+  return JSON.parse((await decompress(compressed)).toString('utf8'));
 }
 
 function iconIndexFor(records: readonly DirectoryRecord[]): Record<string, string> {
@@ -62,59 +78,86 @@ function iconIndexFor(records: readonly DirectoryRecord[]): Record<string, strin
   return index;
 }
 
-async function writeIconIndex(records: readonly DirectoryRecord[], expiresAt: number) {
-  await cacheStore.set(iconIndexKey(), {
-    value: encodeStoredJson(iconIndexFor(records)),
-    expiresAt,
-    scope: 'public',
-  });
-}
-
-async function compactLegacySnapshot(
+async function migrateLegacySnapshot(
   records: readonly DirectoryRecord[],
-  stamp: number,
   expiresAt: number | undefined,
 ): Promise<void> {
   const keepUntil = expiresAt ?? Date.now() + SNAPSHOT_TTL_MS;
   try {
-    const replaced = await cacheStore.replaceIfStamp(
-      snapshotKey(),
-      { value: encodeStoredJson(records), expiresAt: keepUntil, scope: 'public' },
-      stamp,
-    );
-    if (replaced !== null) await writeIconIndex(records, keepUntil);
+    const inserted = await cacheStore.insertIfAbsent(snapshotKey(), {
+      value: await encodeStoredJson(records),
+      expiresAt: keepUntil,
+      scope: 'public',
+    });
+    if (inserted === null) return;
+    await cacheStore.insertIfAbsent(iconIndexKey(), {
+      value: await encodeStoredJson(iconIndexFor(records)),
+      expiresAt: keepUntil,
+      scope: 'public',
+    });
   } catch (error) {
-    logger.warn({ error }, 'Connector directory snapshot compaction failed');
+    logger.warn({ error }, 'Connector directory snapshot migration failed');
   }
+}
+
+async function loadSnapshotRecords(): Promise<readonly DirectoryRecord[] | null> {
+  const current = await cacheStore.get(snapshotKey());
+  if (current) {
+    try {
+      return (await decodeStoredJson(current.value)) as DirectoryRecord[];
+    } catch (error) {
+      throw new DirectorySnapshotUnreadableError(SNAPSHOT_PARAMS, error);
+    }
+  }
+  const legacy = await cacheStore.get(legacySnapshotKey());
+  if (!legacy) return null;
+  let records: DirectoryRecord[];
+  try {
+    records = JSON.parse(legacy.value) as DirectoryRecord[];
+  } catch (error) {
+    throw new DirectorySnapshotUnreadableError(LEGACY_SNAPSHOT_PARAMS, error);
+  }
+  await migrateLegacySnapshot(records, legacy.expiresAt);
+  return records;
 }
 
 export async function readSnapshotStamp(): Promise<number | null> {
-  return cacheStore.getStamp(snapshotKey());
+  return (
+    (await cacheStore.getStamp(snapshotKey())) ?? (await cacheStore.getStamp(legacySnapshotKey()))
+  );
 }
 
 export async function readSnapshotRecords(): Promise<readonly DirectoryRecord[] | null> {
-  const entry = await cacheStore.get(snapshotKey());
-  if (!entry) return null;
-  let records: DirectoryRecord[];
   try {
-    records = decodeStoredJson(entry.value) as DirectoryRecord[];
-  } catch {
+    return await loadSnapshotRecords();
+  } catch (error) {
+    if (!(error instanceof DirectorySnapshotUnreadableError)) throw error;
+    logger.warn({ error }, 'Connector directory snapshot unreadable');
     return null;
   }
-  if (!entry.value.startsWith(COMPRESSED_VALUE_PREFIX) && typeof entry.stamp === 'number') {
-    await compactLegacySnapshot(records, entry.stamp, entry.expiresAt);
-  }
-  return records;
+}
+
+export async function readSnapshotRecordsForIngest(): Promise<readonly DirectoryRecord[] | null> {
+  return loadSnapshotRecords();
 }
 
 export async function writeSnapshotRecords(records: readonly DirectoryRecord[]): Promise<number> {
   const expiresAt = Date.now() + SNAPSHOT_TTL_MS;
-  const stamp = await cacheStore.set(snapshotKey(), {
-    value: encodeStoredJson(records),
+  await cacheStore.set(iconIndexKey(), {
+    value: await encodeStoredJson(iconIndexFor(records)),
     expiresAt,
     scope: 'public',
   });
-  await writeIconIndex(records, expiresAt);
+  const stamp = await cacheStore.set(snapshotKey(), {
+    value: await encodeStoredJson(records),
+    expiresAt,
+    scope: 'public',
+  });
+  await cacheStore.set(legacySnapshotKey(), {
+    value: JSON.stringify(records),
+    expiresAt,
+    scope: 'public',
+  });
   return stamp;
 }
 
@@ -126,7 +169,7 @@ export async function readIconIndex(): Promise<Readonly<Record<string, string>> 
   const entry = await cacheStore.get(iconIndexKey());
   if (!entry) return null;
   try {
-    return decodeStoredJson(entry.value) as Record<string, string>;
+    return (await decodeStoredJson(entry.value)) as Record<string, string>;
   } catch {
     return null;
   }
