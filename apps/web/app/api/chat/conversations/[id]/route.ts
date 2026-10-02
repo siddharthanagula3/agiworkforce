@@ -243,14 +243,23 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       [saved] = await db.query<{ id: string; draft_updated_at: string | Date | null }>(
         `update web_conversations
             set draft = case when is_temporary then null else $3::text end,
-                draft_updated_at = case when is_temporary then null else greatest(
-                  clock_timestamp(), draft_updated_at + interval '1 microsecond'
-                ) end
+                draft_updated_at = case
+                  when is_temporary then null
+                  when draft is not distinct from $3::text then draft_updated_at
+                  else greatest(
+                    date_trunc('milliseconds', clock_timestamp()),
+                    date_trunc('milliseconds', draft_updated_at) + interval '1 millisecond'
+                  )
+                end
           where id = $1
             and user_id = $2
             and organization_id is not distinct from $4
             and deleted_at is null
-            and draft_updated_at is not distinct from $5::timestamptz
+            and (
+              draft is not distinct from $3::text
+              or date_trunc('milliseconds', draft_updated_at)
+                is not distinct from date_trunc('milliseconds', $5::timestamptz)
+            )
           returning id, draft_updated_at`,
         [
           id,

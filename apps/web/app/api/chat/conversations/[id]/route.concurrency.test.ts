@@ -149,9 +149,11 @@ describe('conversation optimistic concurrency', () => {
 
   it('does not overwrite a newer draft with an older tab’s write', async () => {
     const expectedDraftRevision = '2026-08-02T00:00:00.000Z';
+    const draftRevisionCheck =
+      /is not distinct from date_trunc\('milliseconds', \$5::timestamptz\)/;
     mocks.query.mockImplementation(async (sql: string) => {
       if (/update web_conversations/.test(sql)) {
-        return /draft_updated_at is not distinct from/i.test(sql) ? [] : [{ id: CONVERSATION_ID }];
+        return draftRevisionCheck.test(sql) ? [] : [{ id: CONVERSATION_ID }];
       }
       return [
         {
@@ -168,7 +170,7 @@ describe('conversation optimistic concurrency', () => {
     );
 
     expect(response.status).toBe(409);
-    expect(updateCall()?.[0]).toMatch(/draft_updated_at is not distinct from/i);
+    expect(updateCall()?.[0]).toMatch(draftRevisionCheck);
     expect(updateCall()?.[1]).toContain(expectedDraftRevision);
   });
 

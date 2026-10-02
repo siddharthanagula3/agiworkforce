@@ -80,6 +80,27 @@ describe('conversation draft server revisions', () => {
     );
   });
 
+  it('counts an empty draft the server left unstamped as saved, and sends no revision next', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ saved: true, draftUpdatedAt: null }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ saved: true, draftUpdatedAt: NEXT_REVISION }), {
+          status: 200,
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await saveConversationDraft(CONVERSATION_ID, '', async () => ({}))).toBe('saved');
+    expect(await saveConversationDraft(CONVERSATION_ID, 'typed later', async () => ({}))).toBe(
+      'saved',
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[1]?.[1]?.body as string).draftUpdatedAt).toBeNull();
+  });
+
   it('does not let an older conversation GET roll back a saved draft revision', async () => {
     observeConversationDraftRevision(CONVERSATION_ID, NEXT_REVISION);
     observeConversationDraftRevision(CONVERSATION_ID, INITIAL_REVISION);

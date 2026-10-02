@@ -71,7 +71,10 @@ export async function saveConversationDraft(
       return 'failed';
     }
     const draftUpdatedAt = 'draftUpdatedAt' in payload ? payload.draftUpdatedAt : undefined;
-    if (typeof draftUpdatedAt !== 'string' || Number.isNaN(Date.parse(draftUpdatedAt))) {
+    if (
+      draftUpdatedAt !== null &&
+      (typeof draftUpdatedAt !== 'string' || Number.isNaN(Date.parse(draftUpdatedAt)))
+    ) {
       return 'failed';
     }
     observedDraftRevisions.set(conversationId, draftUpdatedAt);
