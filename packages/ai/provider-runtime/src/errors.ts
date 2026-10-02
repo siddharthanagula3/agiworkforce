@@ -507,6 +507,7 @@ export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
 export const FREE_TIER_ONLY_PROVIDER_HINT = 'free_tier_only';
 export const MODEL_STUDIO_ACCOUNT_BILLING_HINT = 'account_billing';
 export const MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT = 'model_access_denied';
+export const MODEL_STUDIO_MODEL_NOT_FOUND_HINT = 'model_not_found';
 export const MODEL_STUDIO_MODEL_RETIRED_HINT = 'model_retired';
 
 const MODEL_STUDIO_FREE_TIER_EXHAUSTED_MESSAGES: readonly string[] = [
@@ -1246,6 +1247,7 @@ export function classifyModelStudioError(err: unknown): ClassifiedError {
       fallbackable: true,
       ...withStatus,
       message,
+      providerHint: MODEL_STUDIO_MODEL_NOT_FOUND_HINT,
     };
   }
   return classifyError(err);

@@ -5,6 +5,8 @@ import { z } from 'zod';
 import type { KeyValueStore } from '@agiworkforce/key-value';
 import {
   MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+  MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+  MODEL_STUDIO_MODEL_NOT_FOUND_HINT,
   MODEL_STUDIO_MODEL_RETIRED_HINT,
   classifyModelStudioError,
 } from '@agiworkforce/provider-runtime';
@@ -438,6 +440,7 @@ export type FreeQuotaRefusal =
   | 'interrupted'
   | 'too_long'
   | 'unavailable'
+  | 'refused'
   | 'withdrawn'
   | 'blocked'
   | 'failed';
@@ -469,9 +472,15 @@ export function classifyFreeQuotaRefusal(failure: {
     case 'context_overflow':
       return 'too_long';
     case 'invalid_model':
-      return classified.providerHint === MODEL_STUDIO_MODEL_RETIRED_HINT
-        ? 'withdrawn'
-        : 'unavailable';
+      switch (classified.providerHint) {
+        case MODEL_STUDIO_MODEL_RETIRED_HINT:
+          return 'withdrawn';
+        case MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT:
+        case MODEL_STUDIO_MODEL_NOT_FOUND_HINT:
+          return 'refused';
+        default:
+          return 'unavailable';
+      }
     case 'safety':
     case 'content_blocked':
       return 'blocked';

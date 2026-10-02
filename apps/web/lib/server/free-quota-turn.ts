@@ -112,6 +112,7 @@ const REFUSAL_FAILURE: Readonly<Record<FreeQuotaRefusal, FreeQuotaFailure>> = {
   interrupted: 'interrupted',
   too_long: 'too_long',
   unavailable: 'unavailable',
+  refused: 'unavailable',
   withdrawn: 'expired',
   blocked: 'blocked',
   failed: 'provider_failed',
@@ -129,7 +130,7 @@ const HOLD_BY_REFUSAL: Readonly<Partial<Record<FreeQuotaRefusal, FreeQuotaHoldCa
   exhausted: 'exhausted',
   billing: 'billing',
   withdrawn: 'withdrawn',
-  unavailable: 'refused',
+  refused: 'refused',
 };
 
 const FREE_LIMIT_REASON: Readonly<Partial<Record<FreeQuotaFailure, FreeLimitReason>>> = {
@@ -267,10 +268,16 @@ async function recordRefusal(
       '[free-quota] provider reported an account billing state; every free model is withdrawn until a newer attestation',
     );
   }
-  if (refusal.kind === 'unavailable') {
+  if (refusal.kind === 'refused') {
     logger.warn(
       { offering: ledger.offeringKey, signal: refusal.signal },
       '[free-quota] provider refused this free model; it is withheld for every account until a newer attestation',
+    );
+  }
+  if (refusal.kind === 'unavailable') {
+    logger.warn(
+      { offering: ledger.offeringKey, signal: refusal.signal },
+      '[free-quota] provider refused this free model for one turn; it stays on offer',
     );
   }
 }

@@ -201,22 +201,31 @@ describe('provider refusals on a free model', () => {
       { status: 429, code: 'CommodityNotPurchased', message: 'Commodity has not purchased yet' },
       'account_billing',
     ],
-    [{ status: 403, code: 'Model.AccessDenied', message: 'Model access denied.' }, 'unavailable'],
-    [{ status: 403, code: 'AccessDenied', message: 'Access denied.' }, 'unavailable'],
-    [{ status: 403, code: 'access_denied', message: 'Access denied.' }, 'unavailable'],
+    [{ status: 403, code: 'Model.AccessDenied', message: 'Model access denied.' }, 'refused'],
+    [{ status: 403, code: 'AccessDenied', message: 'Access denied.' }, 'refused'],
+    [{ status: 403, code: 'access_denied', message: 'Access denied.' }, 'refused'],
     [
       {
         status: 403,
         code: 'AccessDenied',
         message: 'current user api does not support synchronous calls.',
       },
-      'unavailable',
+      'refused',
     ],
     [
       { status: 403, code: 'Endpoint.AccessDenied', message: 'Workspace endpoint access denied.' },
       'withdrawn',
     ],
-    [{ status: 404, code: 'model_not_found', message: 'Model can not be found.' }, 'unavailable'],
+    [{ status: 404, code: 'model_not_found', message: 'Model can not be found.' }, 'refused'],
+    [{ status: 400, code: 'InvalidParameter', message: 'Model not exist.' }, 'refused'],
+    [
+      {
+        status: 500,
+        code: 'InternalError.Algo',
+        message: "An error occurred in model serving, error message is: [Cluster 'xxx' not found!]",
+      },
+      'unavailable',
+    ],
     [
       {
         status: 400,

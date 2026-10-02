@@ -808,6 +808,33 @@ describe('Qwen free quota turns on the Free plan', () => {
     },
   );
 
+  it('refuses only the turn when the provider names the model in an error it gives no model code for', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            code: 'InternalError.Algo',
+            message:
+              "An error occurred in model serving, error message is: [Cluster 'xxx' not found!]",
+          },
+        },
+        { status: 500 },
+      ),
+    );
+    const response = await post();
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe('free_quota_unavailable');
+    expect((await sharedState()).holds.has(model!)).toBe(false);
+
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+    const again = await post(
+      { assistant_message_id: '92d14f7e-0b3d-40c7-952d-987e841033c5' },
+      'after-serving-error',
+    );
+    expect(again.status).toBe(200);
+    expect(mocks.stream).toHaveBeenCalledTimes(2);
+  });
+
   it('ends the free offer for every account when the provider retired the model endpoint', async () => {
     mocks.stream.mockResolvedValue(
       Response.json(

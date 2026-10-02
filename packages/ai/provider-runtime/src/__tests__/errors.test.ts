@@ -10,6 +10,7 @@ import {
   FREE_TIER_ONLY_PROVIDER_HINT,
   MODEL_STUDIO_ACCOUNT_BILLING_HINT,
   MODEL_STUDIO_MODEL_ACCESS_DENIED_HINT,
+  MODEL_STUDIO_MODEL_NOT_FOUND_HINT,
   MODEL_STUDIO_MODEL_RETIRED_HINT,
   SPENDING_CAP_PROVIDER_HINT,
   classifyError,
@@ -618,7 +619,22 @@ describe('classifyModelStudioError, the codes Model Studio documents', () => {
     [400, 'InvalidParameter', 'Model not exist.'],
   ])('reads %i %s as a model this account cannot reach', (status, code, message) => {
     const c = classifyModelStudioError(compatibleModeError(status, code, message));
-    expect(c).toMatchObject({ category: 'invalid_model', code: 'invalid_model' });
+    expect(c).toMatchObject({
+      category: 'invalid_model',
+      code: 'invalid_model',
+      providerHint: MODEL_STUDIO_MODEL_NOT_FOUND_HINT,
+    });
+  });
+
+  it('names no model refusal when only the wording of a serving error mentions the model', () => {
+    const c = classifyModelStudioError(
+      compatibleModeError(
+        500,
+        'InternalError.Algo',
+        "An error occurred in model serving, error message is: [Cluster 'xxx' not found!]",
+      ),
+    );
+    expect(c.providerHint).toBeUndefined();
   });
 
   it.each([
