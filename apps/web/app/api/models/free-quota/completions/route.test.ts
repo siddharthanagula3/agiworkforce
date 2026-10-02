@@ -2,7 +2,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
-import { getProviderOfferings } from '@agiworkforce/types';
+import { FreeLimitSchema } from '@agiworkforce/cloud-contracts';
+import {
+  getDefaultModelFor,
+  getProviderOfferings,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
 import {
   credentialSha256,
   readFreeQuotaState,
@@ -660,10 +665,69 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(response.status).toBe(409);
     const { error } = await response.json();
     expect(error.code).toBe('free_quota_exhausted');
-    expect(error.message).toContain(`${inventory.issuer}'s free allowance for ${modelName}`);
+    expect(error.message).toContain(`${modelName} has reached its free limit`);
+    expect(error.message).toContain(`free allowance from ${inventory.issuer}`);
     expect(error.message).toContain('not a limit on your account');
     expect(error.message).not.toContain('raw provider sentence');
     expect((await sharedState()).holds.get(model!)).toBe('exhausted');
+  });
+
+  it('states the free limit as data the chat can act on, with another free model to switch to', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        { error: { code: 'AllocationQuota.FreeTierOnly', message: 'raw provider sentence' } },
+        { status: 403 },
+      ),
+    );
+    const { error } = await (await post()).json();
+    const freeLimit = FreeLimitSchema.parse(error.free_limit);
+    expect(freeLimit).toMatchObject({ model, reason: 'allowance_used' });
+    expect(freeLimit.alternative_model).toBeDefined();
+    expect(freeLimit.alternative_model).not.toBe(model);
+    expect(getProviderOfferings()[freeLimit.alternative_model!]!.quotaProbeProtocol).toBe('chat');
+    expect(error.message).toContain(
+      `Choose ${getProviderOfferings()[freeLimit.alternative_model!]!.displayName} or another free model`,
+    );
+    expect(freeLimit.resets_at).toBeUndefined();
+  });
+
+  it('offers the Free plan default when no other free quota model is ready', async () => {
+    mocks.store = createMemoryKeyValueStore();
+    await attest([model!]);
+    mocks.stream.mockResolvedValue(
+      Response.json({ error: { code: 'AllocationQuota.FreeTierOnly' } }, { status: 403 }),
+    );
+    const { error } = await (await post()).json();
+    expect(FreeLimitSchema.parse(error.free_limit)).toEqual({
+      model,
+      reason: 'allowance_used',
+      alternative_model: getDefaultModelFor(normalizeBillingPlanTier(null), 'chat'),
+    });
+  });
+
+  it('marks an ended free offer as ended before any provider request', async () => {
+    const ended = inventory.entries.find(
+      (entry) =>
+        entry.providerStatus === 'expired' &&
+        getProviderOfferings()[entry.offeringKey]!.quotaProbeProtocol === 'chat',
+    )!.offeringKey;
+    const response = await post({ model: ended });
+    expect(response.status).toBe(410);
+    const { error } = await response.json();
+    expect(error.code).toBe('free_quota_expired');
+    expect(FreeLimitSchema.parse(error.free_limit)).toMatchObject({
+      model: ended,
+      reason: 'allowance_ended',
+    });
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('sends no free limit for a refusal that is not a spent or ended allowance', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json({ error: { code: 'Throttling.RateQuota' } }, { status: 429 }),
+    );
+    const { error } = await (await post()).json();
+    expect(error.free_limit).toBeUndefined();
   });
 
   it('keeps a model on offer when the provider only throttles tokens per minute', async () => {

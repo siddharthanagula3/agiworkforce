@@ -1,3 +1,5 @@
+import { FREE_QUOTA_EXHAUSTED_CODE, FREE_QUOTA_EXPIRED_CODE } from '@agiworkforce/cloud-contracts';
+
 export type FreeQuotaFailure =
   | 'exhausted'
   | 'expired'
@@ -41,8 +43,8 @@ const FAILURE_STATUS: Readonly<Record<FreeQuotaFailure, number>> = {
 };
 
 export const FREE_QUOTA_FAILURE_CODES: Readonly<Record<FreeQuotaFailure, string>> = {
-  exhausted: 'free_quota_exhausted',
-  expired: 'free_quota_expired',
+  exhausted: FREE_QUOTA_EXHAUSTED_CODE,
+  expired: FREE_QUOTA_EXPIRED_CODE,
   unavailable: 'free_quota_unavailable',
   busy: 'provider_rate_limited',
   interrupted: 'stream_interrupted',
@@ -65,9 +67,9 @@ function failureMessage(failure: FreeQuotaFailure, context: FreeQuotaFailureCont
   const { issuer, modelName } = context;
   switch (failure) {
     case 'exhausted':
-      return `${issuer}'s free allowance for ${modelName} is used up. It is the provider's allowance for this model, not a limit on your account, and it does not renew. ${nextStep(context)}`;
+      return `${modelName} has reached its free limit. Its free allowance from ${issuer} is shared by everyone and does not renew, so this is not a limit on your account. ${nextStep(context)}`;
     case 'expired':
-      return `${issuer}'s free allowance for ${modelName} ${
+      return `The free offer for ${modelName} from ${issuer} ${
         context.expiresOn ? `ended on ${context.expiresOn}` : 'has ended'
       }. ${nextStep(context)}`;
     case 'unavailable':

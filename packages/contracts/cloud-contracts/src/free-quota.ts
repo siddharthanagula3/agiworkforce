@@ -3,6 +3,23 @@ import { z } from 'zod';
 export const FREE_QUOTA_CATALOGUE_PATH = '/api/models/free-quota';
 export const FREE_QUOTA_COMPLETIONS_PATH = '/api/models/free-quota/completions';
 export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
+export const FREE_QUOTA_EXPIRED_CODE = 'free_quota_expired';
+
+export const FREE_LIMIT_REASONS = [
+  'allowance_used',
+  'allowance_ended',
+  'shared_pool_used',
+] as const;
+
+export const FreeLimitSchema = z.object({
+  model: z.string().min(1),
+  reason: z.enum(FREE_LIMIT_REASONS),
+  resets_at: z.string().datetime({ offset: true }).optional(),
+  alternative_model: z.string().min(1).optional(),
+});
+
+export type FreeLimit = z.infer<typeof FreeLimitSchema>;
+export type FreeLimitReason = FreeLimit['reason'];
 
 export type FreeQuotaMessageContent =
   string | Array<{ type: 'text'; text: string } | { type: 'file'; file: { asset_id: string } }>;

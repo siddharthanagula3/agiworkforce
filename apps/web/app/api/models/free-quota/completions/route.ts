@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import type { KeyValueStore } from '@agiworkforce/key-value';
 import { runQwenQuotaProbe, streamQwenQuotaChat } from '@agiworkforce/providers-factory';
+import type { FreeLimit, FreeLimitReason } from '@agiworkforce/cloud-contracts';
 import {
   getModelMetadataById,
   getProviderOffering,
@@ -47,6 +48,7 @@ import { loadFreePools } from '@/lib/server/free-pools';
 import {
   freeQuotaContextFor,
   freeQuotaPlanAllowsOffering,
+  resolveFreeQuotaAlternative,
   resolveFreeQuotaDecisions,
 } from '@/lib/server/free-quota-catalogue';
 import {
@@ -121,6 +123,11 @@ const DECISION_FAILURE: Readonly<
   unavailable: 'unavailable',
 };
 
+const FREE_LIMIT_REASON: Readonly<Partial<Record<FreeQuotaFailure, FreeLimitReason>>> = {
+  exhausted: 'allowance_used',
+  expired: 'allowance_ended',
+};
+
 interface CopyContext {
   issuer: string;
   modelName: string;
@@ -128,10 +135,20 @@ interface CopyContext {
   expiresOn: string | null;
 }
 
-function refuse(failure: FreeQuotaFailure, context: CopyContext) {
+function modelLabel(id: string): string | null {
+  return getProviderOffering(id)?.displayName ?? getModelMetadataById(id)?.name ?? null;
+}
+
+function refuse(failure: FreeQuotaFailure, context: CopyContext, freeLimit?: FreeLimit) {
   const body = freeQuotaFailure(failure, context);
   return NextResponse.json(
-    { error: { message: body.message, code: body.code } },
+    {
+      error: {
+        message: body.message,
+        code: body.code,
+        ...(freeLimit ? { free_limit: freeLimit } : {}),
+      },
+    },
     { status: body.status, headers: { 'Cache-Control': 'private, no-store' } },
   );
 }
@@ -467,6 +484,29 @@ async function handlePost(request: NextRequest): Promise<Response> {
     modelName: offering.displayName,
     expiresOn: endsOn,
   };
+  const refuseTurn = async (failure: FreeQuotaFailure) => {
+    const reason = FREE_LIMIT_REASON[failure];
+    if (!reason) return refuse(failure, copy);
+    const alternative =
+      (await resolveFreeQuotaAlternative(context, {
+        inventory,
+        refusedKey: entry.offeringKey,
+        needsImageInput: hasAttachmentReferences,
+      })) ??
+      (offering.quotaProbeProtocol === 'chat' && !hasAttachmentReferences
+        ? FREE_TRIAL_MODEL
+        : null);
+    const alternativeName = alternative ? modelLabel(alternative) : null;
+    return refuse(
+      failure,
+      { ...copy, alternativeName },
+      {
+        model: entry.offeringKey,
+        reason,
+        ...(alternative && alternativeName ? { alternative_model: alternative } : {}),
+      },
+    );
+  };
   if (decision.status !== 'ready') {
     logger.info(
       {
@@ -477,7 +517,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
       },
       '[free-quota] refused before any provider request',
     );
-    return refuse(DECISION_FAILURE[decision.status], copy);
+    return refuseTurn(DECISION_FAILURE[decision.status]);
   }
   const store = context.store;
   if (!store) return refuse('unavailable', copy);
@@ -687,7 +727,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
     return refuse('unavailable', copy);
   }
   if (!allowance) {
-    return refuse('exhausted', copy);
+    return refuseTurn('exhausted');
   }
 
   const ledger: TurnLedger = {
@@ -748,7 +788,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
         usage: null,
         refusal: { kind, signal: failure.code ?? `http_${upstream.status}` },
       });
-      return refuse(REFUSAL_FAILURE[kind], copy);
+      return refuseTurn(REFUSAL_FAILURE[kind]);
     }
     return new Response(
       validatePromotionalChatStream(meteredChatStream(upstream.body, ledger, copy), {
@@ -789,7 +829,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
         usage: null,
         refusal: { kind, signal: result.providerCode ?? 'generation_failed' },
       });
-      return refuse(REFUSAL_FAILURE[kind], copy);
+      return refuseTurn(REFUSAL_FAILURE[kind]);
     }
     const artifact = result.artifactUrl ? new URL(result.artifactUrl) : null;
     if (result.status !== 'succeeded' || artifact?.protocol !== 'https:') {

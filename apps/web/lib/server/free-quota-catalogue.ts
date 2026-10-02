@@ -182,6 +182,24 @@ export async function resolveFreeQuotaDecisions(
   };
 }
 
+export async function resolveFreeQuotaAlternative(
+  context: FreeQuotaContext,
+  input: { inventory: FreeQuotaInventory; refusedKey: string; needsImageInput: boolean },
+): Promise<string | null> {
+  const refused = getProviderOffering(input.refusedKey);
+  if (!refused) return null;
+  const decisions = await resolveFreeQuotaDecisions(context, { inventory: input.inventory });
+  const alternative = decisions?.offerings.find(
+    ({ entry, offering, decision }) =>
+      entry.offeringKey !== input.refusedKey &&
+      decision.status === 'ready' &&
+      offering.category === refused.category &&
+      offering.quotaProbeProtocol === refused.quotaProbeProtocol &&
+      (!input.needsImageInput || offering.quotaChatImageInput === true),
+  );
+  return alternative?.entry.offeringKey ?? null;
+}
+
 export function buildFreeQuotaCatalogue(decisions: FreeQuotaDecisions): FreeQuotaCatalogue {
   const { inventory } = decisions;
   const policy = loadFreeQuotaPolicy();
