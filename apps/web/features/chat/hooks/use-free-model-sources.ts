@@ -41,7 +41,7 @@ function useFreeModelSource(endpoint: string, enabled: boolean): FreeModelSource
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
-    setState(LOADING);
+    setState((current) => (current.status === 'ready' ? current : LOADING));
     readCatalogue(endpoint, controller.signal)
       .then((next) => {
         if (!controller.signal.aborted) setState(next);
