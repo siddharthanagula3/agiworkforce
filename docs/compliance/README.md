@@ -71,7 +71,10 @@ per-document revision dates, canonical routes and their aliases) come from
    last published under the old date and adds it to `/legal/archive`, where
    every policy's version history lives. A version whose text no commit holds
    gets `"archive": "not-retained"` on its first entry and is listed as not
-   kept. `scripts/check-policy-versions.mjs` fails until both are done.
+   kept. A new policy whose first version is dated after the registry's
+   `recordedSince`, the day these histories began, gets a `summary` on that
+   first version too, and `/changelog` lists it as introduced.
+   `scripts/check-policy-versions.mjs` fails until all of this is done.
 9. Announce every change to the subprocessor list. `/changelog` lists only the
    first entry of each date, so a row added to, removed from or renamed on
    `/subprocessors` moves its date, and the entry that moves it records the

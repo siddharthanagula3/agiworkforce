@@ -2,7 +2,11 @@ import Link from 'next/link';
 
 import { Header } from '@shared/components/layout/Header';
 import { releasePath } from '@/lib/changelog-entries';
-import { POLICY_PUBLICATION_FLOOR, policyChanges } from '@/lib/legal/policy-archive';
+import {
+  POLICY_PUBLICATION_FLOOR,
+  policyChangeTitle,
+  policyChanges,
+} from '@/lib/legal/policy-archive';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
@@ -91,12 +95,13 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
               <Prose>
                 We began keeping dated version histories for our policies on 21 September 2026.
                 Every revision after that day that moves a policy&rsquo;s date is listed here with
-                the date and what changed, and so are that day&rsquo;s revisions of the privacy
-                policy, the mobile app&rsquo;s terms and privacy policy, and the subprocessor list.
-                A correction that leaves a policy&rsquo;s date unchanged is not listed. The
-                subprocessor list is one of these policies, so a subprocessor added or replaced
-                since 21 September 2026 is listed here with the date the list changed. The Atom feed
-                carries these and the releases above.
+                the date and what changed, and so is the first version of every policy introduced
+                after that day, and so are that day&rsquo;s revisions of the privacy policy, the
+                mobile app&rsquo;s terms and privacy policy, and the subprocessor list. A correction
+                that leaves a policy&rsquo;s date unchanged is not listed. The subprocessor list is
+                one of these policies, so a subprocessor added or replaced since 21 September 2026
+                is listed here with the date the list changed. The Atom feed carries these and the
+                releases above.
               </Prose>
               <Prose>
                 A policy&rsquo;s date is the day its text was settled, not the day it was published
@@ -123,9 +128,9 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
                     <Link
                       href={change.href}
                       className="agi-ds-link"
-                      aria-label={`${change.history.label} updated ${change.date}`}
+                      aria-label={`${policyChangeTitle(change)} ${change.date}`}
                     >
-                      <strong>{change.history.label} updated</strong>
+                      <strong>{policyChangeTitle(change)}</strong>
                     </Link>
                     <span>{change.summary}</span>
                   </Stack>

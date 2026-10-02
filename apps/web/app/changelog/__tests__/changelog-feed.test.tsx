@@ -376,6 +376,30 @@ describe('/changelog lists policy changes', () => {
     });
   });
 
+  it('names a policy first published after version histories began as introduced, on the page and in the feed', async () => {
+    const introduced = Object.values(manifest.policies).flatMap((policy) => {
+      const first = policy.versions.at(-1);
+      return first?.summary && first.date > manifest.recordedSince
+        ? [{ route: policy.route, slug: policy.slug, date: first.date }]
+        : [];
+    });
+    const rows = policyRows();
+    const entries = atomChildren(await servedFeed(), 'entry');
+
+    expect(introduced.map((policy) => policy.route)).toContain('/referral-terms');
+    for (const policy of introduced) {
+      const row = rows.find((entry) => entry.date === policy.date && entry.href === policy.route);
+      const entry = entries.find(
+        (node) =>
+          categoryTerms(node).includes(policy.slug) &&
+          text(node, 'updated').startsWith(policy.date),
+      );
+      expect(row?.name, policy.route).toMatch(/ introduced$/);
+      expect(entry && text(entry, 'title'), policy.route).toBe(row?.name);
+    }
+    expect(rows.filter((row) => row.name.endsWith(' introduced'))).toHaveLength(introduced.length);
+  });
+
   it('names each change link by its policy and date, so no two links share a name', () => {
     const rows = policyRows();
     const list = within(screen.getByRole('list', { name: 'Policy changes' }));

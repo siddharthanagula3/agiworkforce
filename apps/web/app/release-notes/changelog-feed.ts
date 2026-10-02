@@ -3,6 +3,7 @@ import { LEGAL_ENTITY } from '@/lib/legal-constants';
 import {
   POLICY_PUBLICATION_FLOOR,
   archivedVersionHref,
+  policyChangeTitle,
   policyChanges,
   type PolicyChange,
 } from '@/lib/legal/policy-archive';
@@ -88,7 +89,7 @@ function publicationNotes(change: PolicyChange): string[] {
 function policyEntries(): FeedEntry[] {
   return policyChanges().map((change) => ({
     id: absoluteUrl(archivedVersionHref(change.history, change.date)),
-    title: `${change.history.label} updated`,
+    title: policyChangeTitle(change),
     updated: atomTimestamp(change.date),
     link: absoluteUrl(change.href),
     paragraphs: [

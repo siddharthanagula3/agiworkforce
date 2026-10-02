@@ -12,6 +12,11 @@ import {
   publishedCopy,
   runPolicyVersionsCheck,
 } from './check-policy-versions.mjs';
+import {
+  archiveExpectations,
+  renderManifest,
+  runPolicyArchiveCheck,
+} from './lib/policy-archive.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TERMS_PAGE = 'apps/web/app/terms/page.tsx';
@@ -62,6 +67,7 @@ function registry(
 ) {
   return {
     note: 'fixture',
+    recordedSince: '2026-08-11',
     documents: {
       terms: { page: TERMS_PAGE, versions },
       legalIndex: {
@@ -248,7 +254,11 @@ function checkSubprocessors({ names, date, versions }) {
   write(
     REGISTRY,
     JSON.stringify(
-      { note: 'fixture', documents: { subprocessors: { page: SUBPROCESSORS_PAGE, versions } } },
+      {
+        note: 'fixture',
+        recordedSince: '2026-09-28',
+        documents: { subprocessors: { page: SUBPROCESSORS_PAGE, versions } },
+      },
       null,
       2,
     ),
@@ -362,6 +372,67 @@ test('fails when no version records the subprocessors the page lists', () => {
   const failures = checkSubprocessors({ names: LISTED, date: '2026-09-28', versions: [unnamed] });
   assert.ok(
     failures.some((failure) => failure.includes('no version records subprocessorNames')),
+    failures.join('\n'),
+  );
+});
+
+test('fails when the registry does not say when version histories began', () => {
+  const index = registry();
+  delete index.recordedSince;
+  const failures = check({ index });
+  assert.ok(
+    failures.some((failure) => failure.includes('recordedSince')),
+    failures.join('\n'),
+  );
+});
+
+const INTRODUCED_ROUTES = { terms: '/terms', referralTerms: '/referral-terms' };
+
+function introducedRegistry(summary) {
+  return {
+    recordedSince: '2026-09-21',
+    documents: {
+      terms: {
+        versions: [
+          {
+            date: '2026-08-11',
+            digest: 'a'.repeat(16),
+            note: 'Baseline recorded for the fixture.',
+          },
+        ],
+      },
+      referralTerms: {
+        versions: [
+          {
+            date: '2026-09-27',
+            digest: 'b'.repeat(16),
+            note: 'First version of the fixture terms.',
+            ...(summary ? { summary } : {}),
+          },
+        ],
+      },
+    },
+  };
+}
+
+test('lists a policy first published after version histories began, and not one that predates them', () => {
+  const summary = 'The first version of the fixture referral terms.';
+  const policies = archiveExpectations(introducedRegistry(summary), INTRODUCED_ROUTES, () => false);
+
+  assert.deepEqual(Object.keys(policies), ['referralTerms']);
+  assert.deepEqual(policies.referralTerms.versions, [
+    { date: '2026-09-27', summary, status: 'current' },
+  ]);
+  assert.equal(JSON.parse(renderManifest(policies, '2026-09-21')).recordedSince, '2026-09-21');
+});
+
+test('requires a summary on the first version of a policy published after version histories began', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-archive-'));
+  const failures = runPolicyArchiveCheck(root, introducedRegistry(null), INTRODUCED_ROUTES);
+  assert.ok(
+    failures.some(
+      (failure) => failure.includes('"referralTerms" 2026-09-27') && failure.includes('"summary"'),
+    ),
     failures.join('\n'),
   );
 });

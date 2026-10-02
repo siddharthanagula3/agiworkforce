@@ -131,6 +131,7 @@ export interface PolicyChange {
   date: string;
   summary: string;
   href: string;
+  introduced: boolean;
 }
 
 function versionHref(history: PolicyHistory, version: PolicyVersionEntry): string {
@@ -140,7 +141,7 @@ function versionHref(history: PolicyHistory, version: PolicyVersionEntry): strin
 }
 
 const CHANGES: readonly PolicyChange[] = HISTORIES.flatMap((history) =>
-  history.versions.flatMap((version) =>
+  history.versions.flatMap((version, position) =>
     version.summary
       ? [
           {
@@ -148,6 +149,8 @@ const CHANGES: readonly PolicyChange[] = HISTORIES.flatMap((history) =>
             date: version.date,
             summary: version.summary,
             href: versionHref(history, version),
+            introduced:
+              position === history.versions.length - 1 && version.date > manifest.recordedSince,
           },
         ]
       : [],
@@ -156,4 +159,8 @@ const CHANGES: readonly PolicyChange[] = HISTORIES.flatMap((history) =>
 
 export function policyChanges(): readonly PolicyChange[] {
   return CHANGES;
+}
+
+export function policyChangeTitle(change: PolicyChange): string {
+  return `${change.history.label} ${change.introduced ? 'introduced' : 'updated'}`;
 }

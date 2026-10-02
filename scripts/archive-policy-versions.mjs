@@ -195,7 +195,10 @@ function main() {
   }
 
   const policies = archiveExpectations(registry, routes, exists);
-  fs.writeFileSync(path.join(root, ARCHIVE_MANIFEST), renderManifest(policies));
+  fs.writeFileSync(
+    path.join(root, ARCHIVE_MANIFEST),
+    renderManifest(policies, registry.recordedSince),
+  );
   fs.writeFileSync(path.join(root, ARCHIVE_INDEX), renderIndex(policies));
 
   for (const target of unresolved) {

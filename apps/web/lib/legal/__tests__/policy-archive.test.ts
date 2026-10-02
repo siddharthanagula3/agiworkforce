@@ -21,7 +21,10 @@ interface RegistryVersion {
   summary?: string;
 }
 
-const REGISTRY: { documents: Record<string, { versions: RegistryVersion[] }> } = JSON.parse(
+const REGISTRY: {
+  recordedSince: string;
+  documents: Record<string, { versions: RegistryVersion[] }>;
+} = JSON.parse(
   readFileSync(
     path.join(WEB_DIR, '..', '..', 'docs', 'compliance', 'policy-versions.json'),
     'utf8',
@@ -35,6 +38,16 @@ function datedRevisions(key: string): RegistryVersion[] {
     dates.add(version.date);
     return true;
   });
+}
+
+function introducedAfterHistoriesBegan(revision: RegistryVersion | undefined): boolean {
+  return Boolean(revision?.date && revision.date > REGISTRY.recordedSince);
+}
+
+function listedRevisions(key: string): RegistryVersion[] {
+  return datedRevisions(key).filter(
+    (revision, position) => position > 0 || introducedAfterHistoriesBegan(revision),
+  );
 }
 
 function listedDates(key: string): string[] {
@@ -91,12 +104,12 @@ describe('policy version history', () => {
 });
 
 describe('policy changes', () => {
-  it('lists every revision that moved a policy date, with the summary the registry records', () => {
+  it('lists every revision that moved a policy date, and every policy first published after histories began, with the summary the registry records', () => {
     const summaries = new Map(
       policyChanges().map((change) => [`${change.history.key} ${change.date}`, change.summary]),
     );
     for (const key of Object.keys(REGISTRY.documents)) {
-      for (const revision of datedRevisions(key).slice(1)) {
+      for (const revision of listedRevisions(key)) {
         const listed = `${key} ${revision.date}`;
         expect(revision.summary?.trim(), listed).toBeTruthy();
         expect(summaries.has(listed), listed).toBe(true);
@@ -122,6 +135,20 @@ describe('policy changes', () => {
 
     expect([...listed].sort()).toEqual(expected.sort());
     expect(dates).toEqual([...dates].sort().reverse());
+  });
+
+  it('marks as introduced exactly the policies first published after version histories began', () => {
+    const introduced = Object.keys(REGISTRY.documents).filter((key) =>
+      introducedAfterHistoriesBegan(datedRevisions(key)[0]),
+    );
+
+    expect(introduced).toContain('referralTerms');
+    expect(
+      policyChanges()
+        .filter((change) => change.introduced)
+        .map((change) => `${change.history.key} ${change.date}`)
+        .sort(),
+    ).toEqual(introduced.map((key) => `${key} ${datedRevisions(key)[0]?.date}`).sort());
   });
 
   it('never reports what a listed version did to accounts or visitors before it was published here', () => {

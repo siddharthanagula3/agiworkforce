@@ -225,6 +225,11 @@ export function runPolicyVersionsCheck(root) {
     return [`${REGISTRY} is not valid JSON: ${error.message}`];
   }
   const documents = registry.documents ?? {};
+  if (!DATE_SHAPE.test(registry.recordedSince ?? '')) {
+    failures.push(
+      `${REGISTRY}: recordedSince must be the date these version histories began, so a policy first published after it is listed on /changelog`,
+    );
+  }
 
   for (const key of Object.keys(dates)) {
     if (!(key in routes))

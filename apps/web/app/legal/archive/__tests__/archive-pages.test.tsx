@@ -6,6 +6,8 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
   MarketingFooter: () => null,
 }));
 
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
+
 import PolicyHistoryPage, { generateStaticParams as historyParams } from '../[policy]/page';
 import ArchivedPolicyPage, { generateStaticParams as versionParams } from '../[policy]/[date]/page';
 
@@ -43,5 +45,21 @@ describe('/legal/archive', () => {
     expect(historyParams()).toContainEqual({ policy: 'acceptable-use' });
     expect(versionParams()).toContainEqual({ policy: 'privacy', date: '2026-09-21' });
     expect(versionParams()).not.toContainEqual({ policy: 'terms', date: '2026-09-22' });
+  });
+
+  it('lists a policy introduced after version histories began, without offering previous versions it does not have', async () => {
+    render(await PolicyHistoryPage({ params: Promise.resolve({ policy: 'referral-terms' }) }));
+    expect(screen.getByRole('link', { name: 'Current version' })).toHaveAttribute(
+      'href',
+      '/referral-terms',
+    );
+
+    const { container } = render(<PolicyVersionsLink policy="referralTerms" />);
+    expect(container).toBeEmptyDOMElement();
+    render(<PolicyVersionsLink policy="privacy" />);
+    expect(screen.getByRole('link', { name: 'Previous versions' })).toHaveAttribute(
+      'href',
+      '/legal/archive/privacy',
+    );
   });
 });

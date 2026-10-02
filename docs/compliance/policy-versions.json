@@ -1,5 +1,6 @@
 {
-  "note": "The dated version history of every canonical policy page in apps/web/lib/legal-constants.ts. The last version of each must match the text the page publishes and the date it prints; scripts/check-policy-versions.mjs fails when either moves alone. A change that leaves the date where it is appends a version with a note saying why it is editorial. The workflow is in docs/compliance/README.md.",
+  "note": "The dated version history of every canonical policy page in apps/web/lib/legal-constants.ts. The last version of each must match the text the page publishes and the date it prints; scripts/check-policy-versions.mjs fails when either moves alone. A change that leaves the date where it is appends a version with a note saying why it is editorial. recordedSince is the day these histories began: a policy whose first version is dated after it is listed on /changelog with that version's summary. The workflow is in docs/compliance/README.md.",
+  "recordedSince": "2026-09-21",
   "documents": {
     "terms": {
       "page": "apps/web/app/terms/page.tsx",
@@ -327,7 +328,8 @@
         {
           "date": "2026-09-27",
           "digest": "5e63ba8ad8126ac1",
-          "note": "First published version of the referral program terms, adapted from Perplexity’s Refer-a-Friend terms and Anthropic’s credit terms; listed for a lawyer’s review."
+          "note": "First published version of the referral program terms, adapted from Perplexity’s Refer-a-Friend terms and Anthropic’s credit terms; listed for a lawyer’s review.",
+          "summary": "The first version of these terms: who can take part in the referral program, the friend's free trial, the bonus credits each of you can earn and when they expire, and the fair use checks against self-referral."
         }
       ]
     },
