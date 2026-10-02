@@ -1157,4 +1157,50 @@ describe('WebChatPage saved free limit cards', () => {
       expect.objectContaining({ method: 'DELETE', url: expect.stringContaining(CARD_ID) }),
     );
   });
+
+  it('dismisses a free limit card the conversation never saved', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'DELETE'
+          ? jsonResponse(404, { error: { message: 'Message not found' } })
+          : jsonResponse(200, {}),
+      ),
+    );
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.paywallDismiss).toBeTypeOf('function'));
+
+    act(() => mocks.paywallDismiss?.(CARD_ID));
+
+    await waitFor(() =>
+      expect(
+        useChatStore
+          .getState()
+          .messagesByConversation[CONVERSATION_ID]?.some((message) => message.id === CARD_ID),
+      ).toBe(false),
+    );
+    expect(useChatStore.getState().error).toBeNull();
+  });
+
+  it('keeps a free limit card and says so when the server could not delete it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+        init?.method === 'DELETE'
+          ? jsonResponse(503, { error: { message: 'Message could not be deleted' } })
+          : jsonResponse(200, {}),
+      ),
+    );
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.paywallDismiss).toBeTypeOf('function'));
+
+    act(() => mocks.paywallDismiss?.(CARD_ID));
+
+    await waitFor(() => expect(useChatStore.getState().error).not.toBeNull());
+    expect(
+      useChatStore
+        .getState()
+        .messagesByConversation[CONVERSATION_ID]?.some((message) => message.id === CARD_ID),
+    ).toBe(true);
+  });
 });

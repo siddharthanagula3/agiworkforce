@@ -763,6 +763,7 @@ async function deleteConversationMessage(params: {
   messageId: string;
   authToken: string;
   subtree?: boolean;
+  missingIsDeleted?: boolean;
 }): Promise<string | null> {
   const headers = await addCsrfHeaders({
     'Content-Type': 'application/json',
@@ -778,6 +779,7 @@ async function deleteConversationMessage(params: {
     },
   );
 
+  if (params.missingIsDeleted && response.status === 404) return null;
   if (!response.ok) {
     throw new Error(await readChatMutationError(response, 'Failed to delete message'));
   }
@@ -4302,7 +4304,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   ]);
 
   const deletePersistedMessages = useCallback(
-    async (ids: string[]): Promise<boolean> => {
+    async (ids: string[], options: { missingIsDeleted?: boolean } = {}): Promise<boolean> => {
       if (!displayedConversationId || ids.length === 0) return false;
       const conversationId = displayedConversationId;
       const mutationIds = [...new Set(ids)];
@@ -4336,6 +4338,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             conversationId,
             messageId,
             authToken,
+            ...(options.missingIsDeleted ? { missingIsDeleted: true } : {}),
           });
           // AUDIT-FIX ROOT-CAUSE: delete from the conversation the row belongs
           // to; the loop awaits a network call per message and the user can
@@ -4518,7 +4521,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         message?.metadata?.toolType === 'video-generation' ||
         message?.metadata?.paywall?.freeLimit !== undefined;
       if (isPersistedRefusal) {
-        void deletePersistedMessages([id]);
+        void deletePersistedMessages([id], { missingIsDeleted: true });
         return;
       }
       // Legacy chat-stream quota cards are synthetic and have no server row.
