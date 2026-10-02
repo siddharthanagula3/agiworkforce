@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
+import { providerOfferingDisplayName } from '@agiworkforce/types';
 import {
   credentialSha256,
   recordFreeQuotaHold,
@@ -101,6 +102,16 @@ it('answers a Free account in production, offering nothing until the setting is 
   expect(body.models.length).toBeGreaterThan(0);
   expect(body.models.every((model) => model.category === 'chat')).toBe(true);
   expect(ready(body)).toEqual([]);
+});
+
+it('names each model the way the picker does, never by its raw provider id', async () => {
+  const { body } = await catalogue();
+
+  expect(body.models.length).toBeGreaterThan(0);
+  for (const model of body.models) {
+    expect(model.displayName).toBe(providerOfferingDisplayName(model.key));
+    expect(model.displayName).not.toBe(model.providerModelId);
+  }
 });
 
 it('does not advertise promotional image or video generation to a Free account', async () => {

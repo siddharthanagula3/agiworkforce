@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import type { FreeQuotaCatalogue } from '@agiworkforce/cloud-contracts';
+import { providerOfferingDisplayName } from '@agiworkforce/types';
 import { assertAccountActive } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -27,7 +28,15 @@ const NO_STORE = { 'Cache-Control': 'private, no-store' };
 
 async function readCatalogue(context: FreeQuotaContext): Promise<FreeQuotaCatalogue | null> {
   const decisions = await resolveFreeQuotaDecisions(context);
-  return decisions ? buildFreeQuotaCatalogue(decisions) : null;
+  if (!decisions) return null;
+  const catalogue = buildFreeQuotaCatalogue(decisions);
+  return {
+    ...catalogue,
+    models: catalogue.models.map((model) => ({
+      ...model,
+      displayName: providerOfferingDisplayName(model.key) ?? model.displayName,
+    })),
+  };
 }
 
 function sharedCatalogue(context: FreeQuotaContext): Promise<FreeQuotaCatalogue | null> {
