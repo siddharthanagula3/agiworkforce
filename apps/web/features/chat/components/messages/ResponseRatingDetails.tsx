@@ -30,7 +30,7 @@ export const RESPONSE_RATING_REASON_LABELS: Record<ResponseRatingReason, string>
 };
 
 export const RESPONSE_RATING_SHARING_NOTE =
-  "Your rating, reason and comment go to the AGI team with this response's ID. The response text is not attached.";
+  "Your rating, reason and comment go to the AGI team with this response's ID and your browser type. The response text is not attached.";
 
 export interface ResponseRatingDetailsInput {
   reason: ResponseRatingReason | null;
@@ -167,7 +167,13 @@ export function ResponseRatingDetails({
         </p>
       )}
       <div className="flex justify-end">
-        <Button type="submit" size="sm" disabled={!canSubmit} isLoading={sending}>
+        <Button
+          type="submit"
+          size="sm"
+          className="pointer-coarse:min-h-11"
+          disabled={!canSubmit}
+          isLoading={sending}
+        >
           {sending && <Spinner size="sm" aria-hidden="true" />}
           Submit
         </Button>
