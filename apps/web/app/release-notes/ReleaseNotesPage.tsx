@@ -105,7 +105,11 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
                 label: change.date,
                 value: (
                   <Stack gap="tight">
-                    <Link href={change.href} className="agi-ds-link">
+                    <Link
+                      href={change.href}
+                      className="agi-ds-link"
+                      aria-label={`${change.history.label} updated ${change.date}`}
+                    >
                       <strong>{change.history.label} updated</strong>
                     </Link>
                     <span>{change.summary}</span>

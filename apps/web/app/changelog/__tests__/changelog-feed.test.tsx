@@ -285,6 +285,18 @@ describe('/changelog lists policy changes', () => {
     });
   });
 
+  it('names each change link by its policy and date, so no two links share a name', () => {
+    const rows = policyRows();
+    const list = within(screen.getByRole('list', { name: 'Policy changes' }));
+
+    for (const row of rows) {
+      expect(list.getByRole('link', { name: `${row.name} ${row.date}` })).toHaveAttribute(
+        'href',
+        row.href,
+      );
+    }
+  });
+
   it('says where the list begins and lists the revisions of that day it names', () => {
     const rows = policyRows();
     const section = screen.getByRole('region', { name: 'Policy changes, newest first.' });
