@@ -6,10 +6,10 @@ import { getProviderOfferings, getRoutingSlotModel } from '@agiworkforce/types';
 import {
   credentialSha256,
   readFreeQuotaState,
-  sharesManagedRoute,
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import { loadFreePools } from '@/lib/server/free-pools';
+import { freeQuotaFixtureNow, servableFreeQuotaOfferings } from '@/test/free-quota-fixtures';
 type ScanModule0 = typeof import('@/lib/server/key-value');
 type ScanModule1 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule2 = typeof import('@/lib/managed-compute-gate');
@@ -124,20 +124,13 @@ const ASSISTANT_ID = '62d14f7e-0b3d-40c7-952d-987e841033c5';
 const USER_MESSAGE_ID = '72d14f7e-0b3d-40c7-952d-987e841033c5';
 const ASSET_ID = 'a2d14f7e-0b3d-40c7-952d-987e841033c5';
 const inventory = loadFreePools().inventory!;
-const today = new Date().toISOString().slice(0, 10);
-const servableChat = inventory.entries
-  .map((entry) => ({ entry, offering: getProviderOfferings()[entry.offeringKey]! }))
-  .filter(
-    ({ entry, offering }) =>
-      entry.quotaOnlyObserved &&
-      entry.providerStatus === 'active' &&
-      (entry.expiresOn ?? '9999') > today &&
-      offering.quotaProbeProtocol === 'chat' &&
-      !sharesManagedRoute(offering),
-  );
+const NOW = freeQuotaFixtureNow(inventory);
+const servableChat = servableFreeQuotaOfferings(inventory, { apiKey: API_KEY, nowMs: NOW }).filter(
+  ({ offering }) => offering.quotaProbeProtocol === 'chat',
+);
 const textOnlyKeys = servableChat
   .filter(({ offering }) => offering.quotaChatImageInput !== true)
-  .map(({ entry }) => entry.offeringKey);
+  .map(({ key }) => key);
 
 function refusal(code: string, status = 429): Response {
   return Response.json({ error: { code, message: 'Free Auto could not answer.' } }, { status });
@@ -198,6 +191,7 @@ async function attest(quotaOnlyOfferings: 'all' | string[] = 'all') {
 }
 
 beforeEach(async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
   vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('QWEN_API_KEY', API_KEY);
   mocks.store = createMemoryKeyValueStore();
@@ -223,6 +217,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
 });
 
@@ -246,7 +241,7 @@ describe('Free Auto falls back to a ready free quota model on the server', () =>
     expect(served?.status).toBe(200);
     expect(served?.headers.get('X-AGI-Fallback-Reason')).toBe(reason);
     const resolved = served?.headers.get('X-AGI-Resolved-Model');
-    expect(servableChat.map(({ entry }) => entry.offeringKey)).toContain(resolved);
+    expect(servableChat.map(({ key }) => key)).toContain(resolved);
     expect(mocks.stream).toHaveBeenCalledTimes(1);
     expect(mocks.stream.mock.calls[0]![0]).toBe(resolved);
     expect(await served!.text()).toContain('Answered for free.');

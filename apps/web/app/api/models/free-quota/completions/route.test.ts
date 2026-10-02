@@ -12,7 +12,6 @@ import {
   credentialSha256,
   readFreeQuotaState,
   reserveFreeQuotaAllowance,
-  sharesManagedRoute,
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
@@ -23,6 +22,7 @@ import {
   chatSystemPromptSections,
 } from '@/lib/prompts/chat-system-prompt';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
+import { freeQuotaFixtureNow, servableFreeQuotaOfferings } from '@/test/free-quota-fixtures';
 type ScanModule0 = typeof import('@/lib/csrf');
 type ScanModule1 = typeof import('@/lib/api-auth');
 type ScanModule2 = typeof import('@/lib/rate-limit');
@@ -188,52 +188,23 @@ const { POST } = await import('./route');
 
 const API_KEY = 'fixture-provider-key';
 const inventory = loadFreePools().inventory!;
-const today = new Date().toISOString().slice(0, 10);
-const [model, second] = inventory.entries
-  .filter((entry) => {
-    const offering = getProviderOfferings()[entry.offeringKey]!;
-    return (
-      entry.quotaOnlyObserved &&
-      entry.providerStatus === 'active' &&
-      (entry.expiresOn ?? '9999') > today &&
-      offering.quotaProbeProtocol === 'chat' &&
-      !offering.quotaThinkingRequired &&
-      !sharesManagedRoute(offering)
-    );
-  })
-  .map((entry) => entry.offeringKey);
+const NOW = freeQuotaFixtureNow(inventory);
+const servable = servableFreeQuotaOfferings(inventory, { apiKey: API_KEY, nowMs: NOW });
+const [model, second] = servable
+  .filter(
+    ({ offering }) => offering.quotaProbeProtocol === 'chat' && !offering.quotaThinkingRequired,
+  )
+  .map(({ key }) => key);
 const modelName = getProviderOfferings()[model!]!.displayName;
-const visionModel = inventory.entries.find((entry) => {
-  const offering = getProviderOfferings()[entry.offeringKey]!;
-  return (
-    entry.quotaOnlyObserved &&
-    entry.providerStatus === 'active' &&
-    (entry.expiresOn ?? '9999') > today &&
-    offering.quotaProbeProtocol === 'chat' &&
-    offering.quotaChatImageInput === true &&
-    !sharesManagedRoute(offering)
-  );
-})!.offeringKey;
-const imageModel = inventory.entries.find((entry) => {
-  const offering = getProviderOfferings()[entry.offeringKey]!;
-  return (
-    entry.quotaOnlyObserved &&
-    entry.providerStatus === 'active' &&
-    (entry.expiresOn ?? '9999') > today &&
-    offering.quotaProbeProtocol === 'image-sync' &&
-    !sharesManagedRoute(offering)
-  );
-})!.offeringKey;
-const videoModel = inventory.entries.find((entry) => {
-  const offering = getProviderOfferings()[entry.offeringKey]!;
-  return (
-    entry.quotaOnlyObserved &&
-    entry.providerStatus === 'active' &&
-    (entry.expiresOn ?? '9999') > today &&
-    offering.quotaProbeProtocol === 'video-async' &&
-    !sharesManagedRoute(offering)
-  );
-})!.offeringKey;
+const visionModel = servable.find(
+  ({ offering }) => offering.quotaProbeProtocol === 'chat' && offering.quotaChatImageInput === true,
+)!.key;
+const imageModel = servable.find(
+  ({ offering }) => offering.quotaProbeProtocol === 'image-sync',
+)!.key;
+const videoModel = servable.find(
+  ({ offering }) => offering.quotaProbeProtocol === 'video-async',
+)!.key;
 const MEDIA_ASSET_ID = 'a2d14f7e-0b3d-40c7-952d-987e841033c5';
 const PROVIDER_ARTIFACT_URL = 'https://provider.example/generated/poster.png';
 
@@ -278,6 +249,7 @@ async function sharedState() {
 }
 
 beforeEach(async () => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
   vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('QWEN_API_KEY', API_KEY);
   vi.stubGlobal('fetch', mocks.fetch);
@@ -333,6 +305,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
