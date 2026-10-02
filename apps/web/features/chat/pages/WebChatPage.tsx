@@ -249,6 +249,7 @@ import { turnNeedsTwoFactor } from '../lib/turn-error-notice';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import { hasPendingApproval } from '../lib/pending-approval';
+import { savedMessageId } from '../lib/pending-message-saves';
 import {
   WorkSessionPanel,
   WorkSessionToggleButton,
@@ -4521,7 +4522,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         message?.metadata?.toolType === 'video-generation' ||
         message?.metadata?.paywall?.freeLimit !== undefined;
       if (isPersistedRefusal) {
-        void deletePersistedMessages([id], { missingIsDeleted: true });
+        void savedMessageId(id).then((savedId) =>
+          deletePersistedMessages([savedId], { missingIsDeleted: true }),
+        );
         return;
       }
       // Legacy chat-stream quota cards are synthetic and have no server row.

@@ -3,6 +3,7 @@
 import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
 import type { FreeLimit } from '@agiworkforce/cloud-contracts';
 import { readFreeLimit } from '@/features/chat/lib/freeLimitRecovery';
+import { trackMessageSave } from '@/features/chat/lib/pending-message-saves';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
 import {
   chatCompletionEndpoint,
@@ -5471,24 +5472,31 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
       conversationId,
     );
     if (paywall.freeLimit && !isTemporaryConversation && userMessagePersisted) {
-      saveMessageToDb(
-        conversationId,
-        {
-          id: assistantMessageId,
-          role: 'assistant',
-          content: errorMessage,
-          model,
-          metadata: refusalMetadata,
-          ...(currentMessage?.parentId ? { parentId: currentMessage.parentId } : {}),
-        },
-        getAuthToken,
-      )
-        .then((saved) => {
-          if (saved?.id && saved.id !== assistantMessageId) {
-            updateMessage(assistantMessageId, { id: saved.id }, conversationId);
-          }
-        })
-        .catch((err) => notifyPersistenceFailure('assistant', err));
+      trackMessageSave(
+        assistantMessageId,
+        saveMessageToDb(
+          conversationId,
+          {
+            id: assistantMessageId,
+            role: 'assistant',
+            content: errorMessage,
+            model,
+            metadata: refusalMetadata,
+            ...(currentMessage?.parentId ? { parentId: currentMessage.parentId } : {}),
+          },
+          getAuthToken,
+        )
+          .then((saved) => {
+            if (saved?.id && saved.id !== assistantMessageId) {
+              updateMessage(assistantMessageId, { id: saved.id }, conversationId);
+            }
+            return saved;
+          })
+          .catch((err) => {
+            notifyPersistenceFailure('assistant', err);
+            return null;
+          }),
+      );
     }
     setError(errorMessage, conversationId);
     stopStreaming(conversationId);

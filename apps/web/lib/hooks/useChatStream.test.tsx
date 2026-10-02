@@ -17,6 +17,7 @@ import {
   AGENT_EVENT_SCHEMA_VERSION,
 } from '@agiworkforce/types';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+import { savedMessageId } from '@/features/chat/lib/pending-message-saves';
 import { useChatStream, saveMessageToDb } from './useChatStream';
 import { IN_FLIGHT_TURN_RECHECK_MS } from './inFlightTurnRecovery';
 
@@ -299,6 +300,66 @@ describe('useChatStream', () => {
       },
     });
     expect(saves.some((body) => body['role'] === 'user')).toBe(true);
+  });
+
+  it('lets a dismissal of the free limit card wait until the card has been saved', async () => {
+    const conversation = { ...TEMP_CONVERSATION, id: 'conv-free-limit-save', isTemporary: false };
+    useChatStore.setState({ activeConversationId: conversation.id, conversations: [conversation] });
+    const [limitedKey, limited] = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat',
+    )!;
+    let answerCardSave!: () => void;
+    const cardSaveAnswered = new Promise<void>((resolve) => {
+      answerCardSave = resolve;
+    });
+    let cardSaveSent = false;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input).includes('/messages')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        if (body['role'] === 'assistant') {
+          cardSaveSent = true;
+          await cardSaveAnswered;
+        }
+        return new Response(JSON.stringify({ message: { id: body['id'] } }), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: 'free_quota_exhausted',
+            message: `${limited.displayName} has reached its free limit.`,
+            free_limit: { model: limitedKey, reason: 'allowance_used' },
+          },
+        }),
+        { status: 409 },
+      );
+    });
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: conversation.id,
+        model: limitedKey,
+      });
+    });
+    await vi.waitFor(() => expect(cardSaveSent).toBe(true));
+    const card = useChatStore
+      .getState()
+      .messagesByConversation[conversation.id]!.find(
+        (message) => message.metadata?.paywall?.freeLimit !== undefined,
+      )!;
+    let settled = false;
+    const saved = savedMessageId(card.id).then((id) => {
+      settled = true;
+      return id;
+    });
+
+    await act(async () => {
+      await new Promise((settle) => setTimeout(settle, 20));
+    });
+    expect(settled).toBe(false);
+
+    answerCardSave();
+    await expect(saved).resolves.toBe(card.id);
   });
 
   it('shows the answer a ready free model gave when Free Auto had reached its limit', async () => {

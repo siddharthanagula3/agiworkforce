@@ -345,6 +345,7 @@ vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () =
 import WebChatPage from '../WebChatPage';
 import { IMAGE_MODELS } from '../../lib/imageGenerationOptions';
 import { useImageTranscriptRecoveryStore } from '../../stores/image-transcript-recovery-store';
+import { trackMessageSave } from '../../lib/pending-message-saves';
 import { CHAT_MESSAGE_PERSISTENCE_TIMEOUT_MS } from '@shared/config/network';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { MediaGenerationApiError } from '@/lib/hooks/useMediaGeneration';
@@ -1180,6 +1181,88 @@ describe('WebChatPage saved free limit cards', () => {
       ).toBe(false),
     );
     expect(useChatStore.getState().error).toBeNull();
+  });
+
+  function cardShown(id: string): boolean {
+    return (
+      useChatStore
+        .getState()
+        .messagesByConversation[CONVERSATION_ID]?.some((message) => message.id === id) ?? false
+    );
+  }
+
+  function pendingSave() {
+    let resolve!: (saved: { id: string } | null) => void;
+    const promise = new Promise<{ id: string } | null>((onResolve) => {
+      resolve = onResolve;
+    });
+    return { promise, resolve };
+  }
+
+  it('waits for the card to finish saving before deleting it, so a dismissed card stays gone', async () => {
+    const save = pendingSave();
+    trackMessageSave(CARD_ID, save.promise);
+    let rowSaved = false;
+    const deletes: Array<{ url: string; rowSaved: boolean }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method !== 'DELETE') return jsonResponse(200, {});
+        deletes.push({ url: String(input), rowSaved });
+        return rowSaved
+          ? jsonResponse(200, { success: true, activeLeafMessageId: QUESTION_ID })
+          : jsonResponse(404, { error: { message: 'Message not found' } });
+      }),
+    );
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.paywallDismiss).toBeTypeOf('function'));
+
+    act(() => mocks.paywallDismiss?.(CARD_ID));
+    await act(async () => {
+      await new Promise((settle) => setTimeout(settle, 50));
+    });
+
+    expect(deletes).toEqual([]);
+    expect(cardShown(CARD_ID)).toBe(true);
+
+    rowSaved = true;
+    await act(async () => {
+      save.resolve({ id: CARD_ID });
+    });
+
+    await waitFor(() => expect(cardShown(CARD_ID)).toBe(false));
+    expect(deletes).toEqual([{ url: expect.stringContaining(CARD_ID), rowSaved: true }]);
+    expect(useChatStore.getState().error).toBeNull();
+  });
+
+  it('deletes the row the server kept when the save gave the card another id', async () => {
+    const SAVED_ID = '00000000-0000-4000-8000-000000000413';
+    const save = pendingSave();
+    trackMessageSave(
+      CARD_ID,
+      save.promise.then((saved) => {
+        useChatStore.getState().updateMessage(CARD_ID, { id: SAVED_ID }, CONVERSATION_ID);
+        return saved;
+      }),
+    );
+    const deletes: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'DELETE') deletes.push(String(input));
+        return jsonResponse(200, { success: true, activeLeafMessageId: QUESTION_ID });
+      }),
+    );
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.paywallDismiss).toBeTypeOf('function'));
+
+    act(() => mocks.paywallDismiss?.(CARD_ID));
+    await act(async () => {
+      save.resolve({ id: SAVED_ID });
+    });
+
+    await waitFor(() => expect(cardShown(SAVED_ID)).toBe(false));
+    expect(deletes).toEqual([expect.stringContaining(SAVED_ID)]);
   });
 
   it('keeps a free limit card and says so when the server could not delete it', async () => {
