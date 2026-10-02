@@ -857,6 +857,9 @@ export function ComposerFooter({
 
   const handlePickerTypeAhead = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (freePlanRef.current) return;
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
+      return;
+    }
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'Backspace') {
       event.stopPropagation();
@@ -881,6 +884,7 @@ export function ComposerFooter({
     panelRef: pickerPanelRef,
     triggerRef: modelTriggerRef,
     itemSelector: PICKER_ITEM_SELECTOR,
+    disabledItemsFocusable: true,
   });
 
   const selectedModelId = useModelStore((s) => s.selectedModelId);
