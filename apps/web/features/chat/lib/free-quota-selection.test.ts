@@ -11,6 +11,7 @@ import {
   useModelStore,
 } from '@shared/stores/model-store';
 import { CreateConversationSchema, CreateMessageSchema } from '@/lib/validations/chat';
+import { freeModelDisplayName } from '@/features/models/lib/free-model-label';
 
 const qwenOfferingKey = Object.entries(getProviderOfferings()).find(
   ([, entry]) => entry.provider === 'qwen' && entry.quotaProbeProtocol === 'chat',
@@ -58,7 +59,7 @@ describe('free model selection to transport', () => {
       useModelStore.getState().setSelectedModelId(offeringKey);
       expect(useModelStore.getState().selectedModelId).toBe(offeringKey);
       expect(useModelStore.getState().getSelectedModel().name).toBe(
-        getProviderOfferings()[offeringKey]!.displayName,
+        freeModelDisplayName(offeringKey),
       );
       expect(resolveSelectableModelId(offeringKey)).toBe(offeringKey);
       expect(CreateConversationSchema.safeParse({ model: offeringKey }).success).toBe(true);

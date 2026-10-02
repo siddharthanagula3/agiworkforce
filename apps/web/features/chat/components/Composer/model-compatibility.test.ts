@@ -8,6 +8,7 @@ import {
   MIN_CONTEXT_BUDGET_TOKENS,
   type ContextSizedMessage,
 } from './model-compatibility';
+import { freeModelDisplayName } from '@/features/models/lib/free-model-label';
 
 const models = getSelectableModels().filter((meta) => (meta.contextWindow ?? 0) > 0);
 
@@ -109,6 +110,19 @@ describe('evaluateModelCompatibility', () => {
         message: 'This free model accepts images only. Remove other files or use Free Auto.',
       },
     ]);
+  });
+
+  it('names a free promotion the way the picker does, never by its raw provider id', () => {
+    const uncurated = Object.entries(getProviderOfferings()).filter(
+      ([, offering]) =>
+        offering.quotaProbeProtocol === 'chat' && offering.displayName === offering.providerModelId,
+    );
+    expect(uncurated.length).toBeGreaterThan(0);
+    for (const [key, offering] of uncurated) {
+      const { modelName } = evaluateModelCompatibility(key, request());
+      expect(modelName).toBe(freeModelDisplayName(key));
+      expect(modelName).not.toBe(offering.providerModelId);
+    }
   });
 
   it('finds nothing wrong with a short conversation on a live model', () => {
