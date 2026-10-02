@@ -25,7 +25,7 @@ const HERO_FACTS = [
 ];
 
 const LEDE =
-  "Every release states which surfaces it reached and whether it is generally available, in beta or alpha. Every 'in progress' item is named openly. Forthcoming items are listed separately with their target, which stays to be announced until a date is set, and we do not list things we are not actively maintaining.";
+  'Every release states which surfaces it reached and whether it is generally available, in beta or alpha. Forthcoming items are listed separately with their target, which stays to be announced until a date is set, and we do not list things we are not actively maintaining.';
 
 const POLICY_CHANGES = policyChanges();
 

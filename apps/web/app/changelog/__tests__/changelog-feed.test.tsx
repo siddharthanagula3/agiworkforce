@@ -28,6 +28,8 @@ const RFC_3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\
 const FORTHCOMING_TARGET = /\bTarget: (.+)\.$/;
 const CALENDAR_QUARTER = /^Q[1-4] \d{4}$/;
 const QUARTER_CLAIM = /[^.]*\bquarters?\b[^.]*/gi;
+const IN_PROGRESS = /\bin progress\b/i;
+const IN_PROGRESS_CLAIM = /[^.]*\bin progress\b[^.]*/gi;
 
 const READER_TIME_ZONES = [
   'Pacific/Pago_Pago',
@@ -512,6 +514,15 @@ describe('/changelog lists policy changes', () => {
     expect(targets).toHaveLength(rows.length);
     if (!targets.every((target) => CALENDAR_QUARTER.test(target))) {
       expect(document.body.textContent?.match(QUARTER_CLAIM) ?? []).toEqual([]);
+    }
+  });
+
+  it("promises no 'in progress' items while no row shows that state", () => {
+    render(<ChangelogPage />);
+    const rows = screen.getAllByRole('listitem').map((row) => row.textContent ?? '');
+
+    if (!rows.some((row) => IN_PROGRESS.test(row))) {
+      expect(document.body.textContent?.match(IN_PROGRESS_CLAIM) ?? []).toEqual([]);
     }
   });
 
