@@ -34,8 +34,10 @@ Switching the audience after the fact asks first, naming the change: "Make this
 readable by anyone with the link?" or "Limit this to your workspace?".
 **Revoke share** removes access, and the confirmation says that anyone using the
 link will immediately lose access. A chat shared more than once revokes all of
-its live links together, and the confirmation says how many stop working. A
-revoked or expired link opens as a page that does not exist.
+its live links together, and the confirmation says how many stop working, or,
+when the dialog could not check for older links, that every live link to the
+chat stops working. A revoked or expired link opens as a page that does not
+exist.
 
 ## Find every link you have created
 

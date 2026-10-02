@@ -1385,7 +1385,7 @@
       "doc": "sharing-conversations",
       "section": "Change or revoke a link",
       "kind": "prose",
-      "sentence": "A chat shared more than once revokes all of its live links together, and the confirmation says how many stop working.",
+      "sentence": "A chat shared more than once revokes all of its live links together, and the confirmation says how many stop working, or, when the dialog could not check for older links, that every live link to the chat stops working.",
       "implementation": [
         "apps/web/app/api/share/route.ts#handleRevokeConversationShares",
         "apps/web/features/chat/components/share/ShareConversationDialog.tsx"
@@ -1395,6 +1395,11 @@
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
           "name": "revokes every live link to the chat at once, saying how many stop working"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "names every link to the chat when revoking after a check that failed"
         },
         {
           "kind": "test",
