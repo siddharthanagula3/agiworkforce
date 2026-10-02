@@ -123,7 +123,7 @@
     },
     {
       "path": "apps/web/app/api/share/route.ts",
-      "reason": "shared_sessions gives app_rls no insert or delete policy, so the owner connection writes it; every statement here is bound to the authenticated owner_id, the GET list, the POST refresh and insert, and the DELETE of a conversation's live links"
+      "reason": "shared_sessions gives app_rls no insert or delete policy, so the owner connection writes it; every statement here is bound to the authenticated owner_id, the GET list, the POST insert, the PUT refresh of the links the owner names, and the DELETE of a conversation's live links"
     },
     {
       "path": "apps/web/app/api/user/export/route.ts",

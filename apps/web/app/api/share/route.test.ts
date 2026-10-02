@@ -44,7 +44,7 @@ vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
   resolveSecretHandlingPolicy: (...a: unknown[]) => mocks.secretMode(...a),
 }));
 
-const { DELETE, GET, POST } = await import('./route');
+const { DELETE, GET, POST, PUT } = await import('./route');
 
 const CONVERSATION_ID = '4f0c2b8e-6a1d-4c3e-9b7a-2d5e8f1a3c6b';
 const FUTURE = new Date(Date.now() + 86_400_000).toISOString();
@@ -67,10 +67,14 @@ const call = () => GET(new NextRequest('https://agiworkforce.com/api/share'));
 
 const NEW_SHARE = { id: 'share-new', token: 'tok-new', expires_at: FUTURE, total_messages: 0 };
 
-function noLiveShareThenInsert(inserted: Record<string, unknown> = NEW_SHARE): void {
-  mocks.query.mockImplementation(async (sql: unknown) =>
-    /update shared_sessions/i.test(String(sql)) ? [] : [inserted],
-  );
+function insertReturns(inserted: Record<string, unknown> = NEW_SHARE): void {
+  mocks.query.mockResolvedValue([inserted]);
+}
+
+function sharedSessionWrites(): string[] {
+  return mocks.query.mock.calls
+    .map((call) => String(call[0]))
+    .filter((sql) => /(insert into|update|delete from) shared_sessions/i.test(sql));
 }
 
 describe('GET /api/share', () => {
@@ -179,7 +183,7 @@ describe('POST /api/share, link lifetime', () => {
   });
 
   function post(body: Record<string, unknown>) {
-    noLiveShareThenInsert();
+    insertReturns();
     return POST(
       new NextRequest('https://agiworkforce.com/api/share', {
         method: 'POST',
@@ -236,7 +240,7 @@ describe('POST /api/share, secret redaction', () => {
     vi.clearAllMocks();
     mocks.authUser.mockResolvedValue({ userId: 'user-1' });
     mocks.rateLimit.mockResolvedValue(null);
-    noLiveShareThenInsert();
+    insertReturns();
   });
 
   function insertedMessages(): Array<Record<string, unknown>> {
@@ -343,7 +347,7 @@ describe('POST /api/share, local path redaction', () => {
     vi.clearAllMocks();
     mocks.authUser.mockResolvedValue({ userId: 'user-1' });
     mocks.rateLimit.mockResolvedValue(null);
-    noLiveShareThenInsert();
+    insertReturns();
   });
 
   function insertedMessages(): Array<Record<string, unknown>> {
@@ -411,7 +415,6 @@ describe('POST /api/share, temporary chat policy', () => {
   function conversationLookup(rows: unknown[]) {
     mocks.query.mockImplementation(async (sql: unknown) => {
       if (/from web_conversations/i.test(String(sql))) return rows;
-      if (/update shared_sessions/i.test(String(sql))) return [];
       return [{ id: 'share-new', token: 'tok-new', expires_at: FUTURE, total_messages: 1 }];
     });
   }
@@ -479,24 +482,55 @@ describe('POST /api/share, temporary chat policy', () => {
 });
 
 describe('POST /api/share on a chat that is already shared', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.authUser.mockResolvedValue({ userId: 'user-1' });
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.query.mockImplementation(async (sql: unknown) => {
+      if (/from web_conversations/i.test(String(sql))) return [{ is_temporary: false }];
+      if (/insert into shared_sessions/i.test(String(sql))) {
+        return [{ ...NEW_SHARE, total_messages: 1, visibility: 'public' }];
+      }
+      if (/update shared_sessions/i.test(String(sql))) {
+        return [{ id: 'share-live', token: 'tok-live', created_at: '2026-09-01T00:00:00.000Z' }];
+      }
+      return [];
+    });
+  });
+
+  it('creates a new link and leaves the live one untouched, as a create-only client expects', async () => {
+    const response = await POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        body: JSON.stringify({
+          conversation_id: CONVERSATION_ID,
+          title: 'Session',
+          messages: [{ role: 'user', content: 'sent from the phone' }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({
+      token: 'tok-new',
+      shareUrl: expect.stringContaining('/share/tok-new'),
+      visibility: 'public',
+    });
+    expect(sharedSessionWrites()).toEqual([expect.stringMatching(/insert into shared_sessions/i)]);
+    const events = mocks.recordAuditEvent.mock.calls.map(
+      (call) => call[0] as { eventType: string; detail: Record<string, unknown> },
+    );
+    expect(events.map((event) => [event.eventType, event.detail['resourceId']])).toEqual([
+      ['share_link_created', 'share-new'],
+    ]);
+  });
+});
+
+describe('PUT /api/share?conversation_id, Update link', () => {
   const STRIPE_KEY = `sk_live_${'b'.repeat(30)}`;
-  const LIVE = [
-    {
-      id: 'share-newer',
-      token: 'tok-newer',
-      expires_at: FUTURE,
-      total_messages: 2,
-      visibility: 'public',
-      created_at: '2026-09-02T00:00:00.000Z',
-    },
-    {
-      id: 'share-older',
-      token: 'tok-older',
-      expires_at: FUTURE,
-      total_messages: 2,
-      visibility: 'public',
-      created_at: '2026-09-01T00:00:00.000Z',
-    },
+  const REFRESHED = [
+    { id: 'share-newer', token: 'tok-newer' },
+    { id: 'share-older', token: 'tok-older' },
   ];
 
   beforeEach(() => {
@@ -505,17 +539,20 @@ describe('POST /api/share on a chat that is already shared', () => {
     mocks.rateLimit.mockResolvedValue(null);
     mocks.query.mockImplementation(async (sql: unknown) => {
       if (/from web_conversations/i.test(String(sql))) return [{ is_temporary: false }];
-      if (/update shared_sessions/i.test(String(sql))) return LIVE;
+      if (/update shared_sessions/i.test(String(sql))) return REFRESHED;
       return [];
     });
   });
 
-  function publish(body: Record<string, unknown> = {}) {
-    return POST(
-      new NextRequest('https://agiworkforce.com/api/share', {
-        method: 'POST',
+  function update(
+    body: Record<string, unknown> = {},
+    url = `https://agiworkforce.com/api/share?conversation_id=${CONVERSATION_ID}`,
+  ) {
+    return PUT(
+      new NextRequest(url, {
+        method: 'PUT',
         body: JSON.stringify({
-          conversation_id: CONVERSATION_ID,
+          tokens: ['tok-newer', 'tok-older'],
           title: 'Session',
           messages: [
             { role: 'user', content: 'first' },
@@ -533,26 +570,23 @@ describe('POST /api/share on a chat that is already shared', () => {
     return found as [string, unknown[]];
   }
 
-  function inserted(): boolean {
-    return mocks.query.mock.calls.some((c) => /insert into shared_sessions/i.test(String(c[0])));
-  }
-
-  it('refreshes every live link of the chat in place and answers with the newest', async () => {
-    const response = await publish();
+  it('re-snapshots only the links the owner was shown, in place, and says which', async () => {
+    const response = await update();
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      token: 'tok-newer',
-      shareUrl: expect.stringContaining('/share/tok-newer'),
+    expect(await response.json()).toEqual({
+      refreshed: 2,
+      tokens: ['tok-newer', 'tok-older'],
       messageCount: 2,
     });
-    expect(inserted()).toBe(false);
     const [sql, params] = refreshCall();
     expect(sql).toMatch(/owner_id = \$1/);
     expect(sql).toMatch(/conversation_id = \$2/);
+    expect(sql).toMatch(/token = any\(\$3::text\[\]\)/);
     expect(sql).toMatch(/expires_at > now\(\)/);
-    expect(params.slice(0, 2)).toEqual(['user-1', CONVERSATION_ID]);
-    expect(params[7]).toBeNull();
+    expect(sql).not.toMatch(/expires_at\s*=/);
+    expect(params.slice(0, 3)).toEqual(['user-1', CONVERSATION_ID, ['tok-newer', 'tok-older']]);
+    expect(sharedSessionWrites()).toHaveLength(1);
     const updated = mocks.recordAuditEvent.mock.calls
       .map((call) => call[0] as { eventType: string; detail: Record<string, unknown> })
       .filter((event) => event.eventType === 'share_link_updated')
@@ -561,32 +595,63 @@ describe('POST /api/share on a chat that is already shared', () => {
   });
 
   it('redacts the refreshed snapshot exactly as it would a new one', async () => {
-    await publish({ messages: [{ role: 'user', content: `use ${STRIPE_KEY} to bill` }] });
+    await update({ messages: [{ role: 'user', content: `use ${STRIPE_KEY} to bill` }] });
 
-    const stored = String(refreshCall()[1][5]);
+    const stored = String(refreshCall()[1][6]);
     expect(stored).not.toContain(STRIPE_KEY);
     expect(stored).toContain('[REDACTED]');
   });
 
-  it('moves the expiry only when the caller names a lifetime', async () => {
-    await publish({ expires_in_days: 30 });
+  it('answers not found and creates nothing when none of the links is still live', async () => {
+    mocks.query.mockImplementation(async (sql: unknown) =>
+      /from web_conversations/i.test(String(sql)) ? [{ is_temporary: false }] : [],
+    );
 
-    const expiresAt = new Date(String(refreshCall()[1][7]));
-    expect(Math.round((expiresAt.getTime() - Date.now()) / 86_400_000)).toBe(30);
+    const response = await update();
+
+    expect(response.status).toBe(404);
+    const body = (await response.json()) as { error?: { message?: string } };
+    expect(body.error?.message).toMatch(/revoked or has expired/);
+    expect(sharedSessionWrites()).toEqual([expect.stringMatching(/update shared_sessions/i)]);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses an empty snapshot without touching any link', async () => {
+    const response = await update({ messages: [] });
+
+    expect(response.status).toBe(400);
+    expect(sharedSessionWrites()).toEqual([]);
+  });
+
+  it('refuses without naming the conversation', async () => {
+    const response = await update({}, 'https://agiworkforce.com/api/share');
+
+    expect(response.status).toBe(400);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('answers not found for a conversation the caller does not own', async () => {
+    mocks.query.mockImplementation(async (sql: unknown) =>
+      /from web_conversations/i.test(String(sql)) ? [] : REFRESHED,
+    );
+
+    const response = await update();
+
+    expect(response.status).toBe(404);
+    const lookup = mocks.query.mock.calls.find((c) => /from web_conversations/i.test(String(c[0])));
+    expect(lookup?.[1]).toEqual([CONVERSATION_ID, 'user-1']);
+    expect(sharedSessionWrites()).toEqual([]);
   });
 
   it('refreshes nothing when the workspace blocks the content', async () => {
     mocks.secretMode.mockResolvedValueOnce({ mode: 'block', organizationId: 'org-1' });
 
-    const response = await publish({
+    const response = await update({
       messages: [{ role: 'user', content: `use ${STRIPE_KEY} to bill` }],
     });
 
     expect(response.status).toBe(400);
-    expect(mocks.query.mock.calls.some((c) => /update shared_sessions/i.test(String(c[0])))).toBe(
-      false,
-    );
-    expect(inserted()).toBe(false);
+    expect(sharedSessionWrites()).toEqual([]);
   });
 });
 

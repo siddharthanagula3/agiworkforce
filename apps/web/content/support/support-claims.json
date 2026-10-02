@@ -1290,7 +1290,7 @@
         {
           "kind": "test",
           "file": "apps/web/app/api/share/route.test.ts",
-          "name": "refreshes every live link of the chat in place and answers with the newest"
+          "name": "re-snapshots only the links the owner was shown, in place, and says which"
         }
       ]
     },
@@ -1300,12 +1300,17 @@
       "section": "Change or revoke a link",
       "kind": "prose",
       "sentence": "**Update link** replaces the snapshot with the chat as it is now, and the address does not change.",
-      "implementation": ["apps/web/app/api/share/route.ts#handleCreateShare"],
+      "implementation": ["apps/web/app/api/share/route.ts#handleRefreshConversationShares"],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
           "name": "updates the chat’s link in place, keeping its address and expiry"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/share/route.test.ts",
+          "name": "re-snapshots only the links the owner was shown, in place, and says which"
         }
       ]
     },

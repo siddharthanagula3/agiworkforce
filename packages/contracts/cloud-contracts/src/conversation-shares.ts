@@ -77,6 +77,13 @@ export const ConversationSharesRevokedSchema = z.object({
 });
 export type ConversationSharesRevoked = z.input<typeof ConversationSharesRevokedSchema>;
 
+export const ConversationSharesRefreshedSchema = z.object({
+  refreshed: z.number().int().positive(),
+  tokens: z.array(z.string().min(1)).min(1),
+  messageCount: z.number().int().positive(),
+});
+export type ConversationSharesRefreshed = z.input<typeof ConversationSharesRefreshedSchema>;
+
 export const SharedConversationSchema = z.object({
   id: z.string(),
   token: z.string().min(1),

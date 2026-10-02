@@ -511,12 +511,9 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            shareUrl: 'https://agiworkforce.com/share/newest-token',
-            token: 'newest-token',
-            expiresAt: '2099-01-01T00:00:00.000Z',
+            refreshed: 2,
+            tokens: ['newest-token', 'older-token'],
             messageCount: 2,
-            visibility: 'public',
-            workspace: null,
           }),
           { status: 200 },
         ),
@@ -528,10 +525,10 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     const [url, init] = fetchMock.mock.calls[1]!;
-    expect(url).toBe('/api/share');
-    expect(init).toEqual(expect.objectContaining({ method: 'POST' }));
+    expect(url).toBe(`/api/share?conversation_id=${SAVED_CONVERSATION_ID}`);
+    expect(init).toEqual(expect.objectContaining({ method: 'PUT' }));
     const body = JSON.parse(init?.body as string);
-    expect(body.conversation_id).toBe(SAVED_CONVERSATION_ID);
+    expect(body.tokens).toEqual(['newest-token', 'older-token']);
     expect(body.messages).toHaveLength(2);
     expect('expires_in_days' in body).toBe(false);
     expect(await screen.findByText(/this 2-message snapshot/)).toBeInTheDocument();
