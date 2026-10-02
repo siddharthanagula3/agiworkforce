@@ -11,7 +11,7 @@ import { spawn, execFileSync } from 'node:child_process';
 const MAX_REPORT_BYTES = 192 * 1024 * 1024;
 const MAX_STREAM_BYTES = 64 * 1024 * 1024;
 const SCANNER_DEADLINE_MS = 120_000;
-const COVERAGE_BUDGET_MS = 600_000;
+const COVERAGE_BUDGET_MS = 900_000;
 const TAINT_LANGUAGES = ['js', 'ts', 'javascript', 'typescript'];
 const DEFAULT_LABEL = '__SOURCE__';
 const FORMULA_KEYS = ['pattern', 'patterns', 'pattern-either', 'pattern-regex'];

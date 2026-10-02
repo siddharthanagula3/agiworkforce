@@ -456,9 +456,19 @@ test('an aggregate diagnostic may count more timeouts than there are applicable 
   );
 });
 
-test('all coverage scanner commands share one ten-minute budget', async (t) => {
-  const clock = [0, 1, 2, 90_000, 90_001, 600_001];
-  t.mock.method(performance, 'now', () => clock.shift() ?? 600_001);
+test('replays and structural scans that need twelve minutes finish within the coverage budget', async (t) => {
+  const clock = [0, 1, 2, 90_000, 90_001, 720_000];
+  t.mock.method(performance, 'now', () => clock.shift() ?? 720_001);
+  assert.deepEqual(await fixture(aggregate), {
+    nativeWarnings: 1,
+    structurallyQualifiedPairs: 0,
+    convergedReplayPairs: 2,
+  });
+});
+
+test('all coverage scanner commands share one fifteen-minute budget', async (t) => {
+  const clock = [0, 1, 2, 90_000, 90_001, 900_001];
+  t.mock.method(performance, 'now', () => clock.shift() ?? 900_001);
   await assert.rejects(fixture(aggregate), /Aggregate coverage deadline exceeded/);
 });
 
