@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   CONVERSATION_SHARES_PATH,
   ConversationShareAudienceResponseSchema,
@@ -95,6 +95,7 @@ export function useShareConversation(
 ) {
   const [isSharing, setIsSharing] = useState(false);
   const [liveShares, setLiveShares] = useState<ConversationLiveShares | null>(null);
+  const [lookupPending, setLookupPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlightRef = useRef<InFlightShareRequest | null>(null);
   const messages = useChatStore((s) => s.messages);
@@ -110,25 +111,32 @@ export function useShareConversation(
     ConversationShareListQuerySchema.safeParse({ conversation_id: conversationId }).success
       ? conversationId
       : null;
+  const checkingShare =
+    open &&
+    storedConversationId !== null &&
+    (lookupPending || liveShares?.conversationId !== storedConversationId);
   const activeShare =
-    liveShares && liveShares.conversationId === conversationId
+    !checkingShare && liveShares && liveShares.conversationId === conversationId
       ? (liveShares.shares[0] ?? null)
       : null;
-  const checkingShare =
-    open && storedConversationId !== null && liveShares?.conversationId !== storedConversationId;
+
+  useLayoutEffect(() => {
+    if (open) setLookupPending(true);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !storedConversationId) return;
     const controller = new AbortController();
     readLiveShares(storedConversationId, controller.signal).then(
       (shares) => {
-        if (!controller.signal.aborted) {
-          setLiveShares({ conversationId: storedConversationId, shares });
-        }
+        if (controller.signal.aborted) return;
+        setLiveShares({ conversationId: storedConversationId, shares });
+        setLookupPending(false);
       },
       (caught: unknown) => {
         if (controller.signal.aborted) return;
         setLiveShares({ conversationId: storedConversationId, shares: [] });
+        setLookupPending(false);
         setError(toUserMessage(caught, SHARE_LOOKUP_FAILED));
       },
     );

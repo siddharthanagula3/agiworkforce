@@ -477,6 +477,30 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
     ).toBeInTheDocument();
   });
 
+  it('waits for the check made on reopening before offering a link again', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(listed([]))
+      .mockImplementationOnce(() => new Promise<Response>(() => {}));
+    const view = (open: boolean) => (
+      <ShareConversationDialog
+        open={open}
+        onOpenChange={vi.fn()}
+        conversationId={SAVED_CONVERSATION_ID}
+        conversationTitle="Private plan"
+      />
+    );
+    const { rerender } = render(view(true));
+    expect(await screen.findByRole('button', { name: /Create public link/ })).toBeEnabled();
+
+    rerender(view(false));
+    rerender(view(true));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Checking whether this chat is already shared')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
+  });
+
   it('says when it could not check, and still lets the user create a link', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValueOnce(new Response('{}', { status: 500 }));
 
