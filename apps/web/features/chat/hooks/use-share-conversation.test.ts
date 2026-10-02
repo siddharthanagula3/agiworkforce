@@ -45,12 +45,12 @@ describe('useShareConversation', () => {
   });
 
   beforeEach(() => {
-    useChatStore.setState({ messages: [MESSAGE] });
+    useChatStore.setState({ activeConversationId: 'conv-1', messages: [MESSAGE] });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    useChatStore.setState({ messages: [] });
+    useChatStore.setState({ activeConversationId: null, messages: [] });
   });
 
   it('posts to /api/share (not the legacy /api/shared route) and stores the returned token', async () => {

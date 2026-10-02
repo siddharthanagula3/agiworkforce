@@ -17,6 +17,7 @@ vi.mock('@/lib/client/csrf', () => ({
 describe('ShareConversationDialog', () => {
   beforeEach(() => {
     useChatStore.setState({
+      activeConversationId: 'conv-1',
       messages: [
         {
           id: 'fixture-message',
@@ -30,7 +31,7 @@ describe('ShareConversationDialog', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    useChatStore.setState({ messages: [] });
+    useChatStore.setState({ activeConversationId: null, messages: [] });
   });
 
   it('does not publish until explicit confirmation and sends the selected expiry', async () => {
@@ -185,6 +186,7 @@ describe('ShareConversationDialog temporary chat', () => {
 describe('ShareConversationDialog audience', () => {
   beforeEach(() => {
     useChatStore.setState({
+      activeConversationId: 'conv-1',
       messages: [
         {
           id: 'fixture-message',
@@ -198,7 +200,7 @@ describe('ShareConversationDialog audience', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    useChatStore.setState({ messages: [] });
+    useChatStore.setState({ activeConversationId: null, messages: [] });
   });
 
   function createdShare(extra: Record<string, unknown>) {
@@ -378,6 +380,7 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
 
   beforeEach(() => {
     useChatStore.setState({
+      activeConversationId: SAVED_CONVERSATION_ID,
       messages: [
         {
           id: 'fixture-message',
@@ -391,7 +394,7 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    useChatStore.setState({ messages: [] });
+    useChatStore.setState({ activeConversationId: null, messages: [] });
   });
 
   function liveShare(token: string, extra: Record<string, unknown> = {}) {
@@ -789,5 +792,192 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
       'Could not check whether this chat already has a shared link.',
     );
     expect(screen.getByRole('button', { name: /Create public link/ })).toBeEnabled();
+  });
+});
+
+describe('ShareConversationDialog on a chat the store has not opened', () => {
+  const OPEN_CHAT_ID = '0b8e2f4a-6c1d-4e3f-9a5b-7d2c4e6f8a1b';
+  const SHARED_CHAT_ID = '9c4a6e2b-1d3f-4b5a-8e7c-2f4a6b8d0c3e';
+  const openChatMessages = [
+    {
+      id: 'open-question',
+      role: 'user' as const,
+      content: 'Open chat: salary numbers, never share',
+      createdAt: '2026-10-01T00:00:00.000Z',
+    },
+    {
+      id: 'open-answer',
+      role: 'assistant' as const,
+      content: 'Open chat: noted',
+      createdAt: '2026-10-01T00:00:01.000Z',
+    },
+  ];
+  const sharedChatMessages = [
+    {
+      id: 'shared-question',
+      role: 'user' as const,
+      content: 'Shared chat: question',
+      createdAt: '2026-10-01T00:00:00.000Z',
+    },
+    {
+      id: 'shared-answer',
+      role: 'assistant' as const,
+      content: 'Shared chat: answer',
+      createdAt: '2026-10-01T00:00:01.000Z',
+    },
+  ];
+
+  beforeEach(() => {
+    useChatStore.setState({
+      activeConversationId: OPEN_CHAT_ID,
+      messagesByConversation: { [OPEN_CHAT_ID]: openChatMessages },
+      messages: openChatMessages,
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useChatStore.setState({ activeConversationId: null, messagesByConversation: {}, messages: [] });
+  });
+
+  function listed(tokens: string[]) {
+    return new Response(
+      JSON.stringify({
+        shares: tokens.map((token) => ({
+          token,
+          title: 'Shared chat',
+          shareUrl: `https://agiworkforce.com/share/${token}`,
+          modelId: null,
+          provider: null,
+          messageCount: 1,
+          visibility: 'public',
+          createdAt: '2026-10-01T00:00:00.000Z',
+          expiresAt: '2099-01-01T00:00:00.000Z',
+          expired: false,
+        })),
+        workspace: null,
+      }),
+      { status: 200 },
+    );
+  }
+
+  function renderSharedChat() {
+    render(
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId={SHARED_CHAT_ID}
+        conversationTitle="Shared chat"
+      />,
+    );
+  }
+
+  function openSharedChat() {
+    act(() => {
+      useChatStore
+        .getState()
+        .setActiveConversationWithMessages(SHARED_CHAT_ID, sharedChatMessages, null);
+    });
+  }
+
+  async function settle() {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+  }
+
+  function sentBodies(fetchMock: { mock: { calls: Array<[unknown, RequestInit?]> } }) {
+    return fetchMock.mock.calls
+      .filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT')
+      .map(
+        ([, init]) => JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> },
+      );
+  }
+
+  it('holds Update link until the named chat loads, then sends only that chat', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(listed(['shared-token']))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ refreshed: 1, tokens: ['shared-token'], messageCount: 2 }), {
+          status: 200,
+        }),
+      );
+
+    renderSharedChat();
+    await settle();
+
+    expect(screen.getByText('Checking whether this chat is already shared')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Update link' })).toBeNull();
+
+    openSharedChat();
+    fireEvent.click(await screen.findByRole('button', { name: 'Update link' }));
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(confirmation).toHaveTextContent('including 1 message added since it was shared');
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Update link' }));
+
+    await waitFor(() => expect(sentBodies(fetchMock)).toHaveLength(1));
+    expect(sentBodies(fetchMock)[0]?.messages.map((message) => message.content)).toEqual([
+      'Shared chat: question',
+      'Shared chat: answer',
+    ]);
+  });
+
+  it('holds Create public link until the named chat loads, then publishes only that chat', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(listed([]))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            shareUrl: 'https://agiworkforce.com/share/new-token',
+            token: 'new-token',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            messageCount: 2,
+          }),
+          { status: 201 },
+        ),
+      );
+
+    renderSharedChat();
+    await settle();
+
+    expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
+
+    openSharedChat();
+    const create = screen.getByRole('button', { name: /Create public link/ });
+    await waitFor(() => expect(create).toBeEnabled());
+    fireEvent.click(create);
+
+    await waitFor(() => expect(sentBodies(fetchMock)).toHaveLength(1));
+    expect(sentBodies(fetchMock)[0]?.messages.map((message) => message.content)).toEqual([
+      'Shared chat: question',
+      'Shared chat: answer',
+    ]);
+  });
+
+  it('refuses an update confirmed after the store moved to another chat', async () => {
+    openSharedChat();
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(listed(['shared-token']))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ refreshed: 1, tokens: ['shared-token'], messageCount: 2 }), {
+          status: 200,
+        }),
+      );
+
+    renderSharedChat();
+    fireEvent.click(await screen.findByRole('button', { name: 'Update link' }));
+    const confirmation = await screen.findByRole('alertdialog');
+    act(() => {
+      useChatStore
+        .getState()
+        .setActiveConversationWithMessages(OPEN_CHAT_ID, openChatMessages, null);
+    });
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Update link' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This chat is still loading.');
+    expect(sentBodies(fetchMock)).toEqual([]);
   });
 });

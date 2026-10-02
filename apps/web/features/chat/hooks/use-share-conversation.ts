@@ -59,7 +59,18 @@ interface ConversationLiveShares {
 }
 
 const SHARE_LOOKUP_FAILED = 'Could not check whether this chat already has a shared link.';
+const TRANSCRIPT_NOT_READY = 'This chat is still loading. Try again in a moment.';
 const NO_SHARES: ActiveConversationShare[] = [];
+const NO_MESSAGES: Message[] = [];
+
+type ChatStoreState = ReturnType<typeof useChatStore.getState>;
+
+function transcriptOf(
+  state: ChatStoreState,
+  conversationId: string | null | undefined,
+): Message[] | null {
+  return conversationId && state.activeConversationId === conversationId ? state.messages : null;
+}
 
 function readCreatedShare(value: unknown): ActiveConversationShare {
   const parsed = ConversationShareCreatedSchema.safeParse(value);
@@ -144,13 +155,13 @@ export function useShareConversation(
   const [lookupPending, setLookupPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlightRef = useRef<InFlightShareRequest | null>(null);
-  const messages = useChatStore((s) => s.messages);
+  const transcript = useChatStore((s) => transcriptOf(s, conversationId));
   const isTemporary = useChatStore((s) =>
     conversationId
       ? (s.conversations.find((c) => c.id === conversationId)?.isTemporary ?? false)
       : false,
   );
-  const messageCount = messages.length;
+  const messageCount = (transcript ?? NO_MESSAGES).length;
   const hasMessages = messageCount > 0;
   const storedConversationId =
     conversationId &&
@@ -161,7 +172,7 @@ export function useShareConversation(
   const checkingShare =
     open &&
     storedConversationId !== null &&
-    (lookupPending || liveShares?.conversationId !== storedConversationId);
+    (lookupPending || liveShares?.conversationId !== storedConversationId || transcript === null);
   const shownShares =
     !checkingShare && liveShares && liveShares.conversationId === conversationId
       ? liveShares.shares
@@ -269,13 +280,22 @@ export function useShareConversation(
 
   const share = useCallback(
     async (expiresInDays: ShareExpiryDays): Promise<boolean> => {
-      if (!hasMessages || !conversationId) {
+      if (!conversationId) {
         setError('Add a message before creating a public link.');
         return false;
       }
       const sharedConversationId = conversationId;
       if (isTemporary) {
         setError(TEMPORARY_CHAT_SHARE_REFUSAL);
+        return false;
+      }
+      const sharedMessages = transcriptOf(useChatStore.getState(), sharedConversationId);
+      if (!sharedMessages) {
+        setError(TRANSCRIPT_NOT_READY);
+        return false;
+      }
+      if (sharedMessages.length === 0) {
+        setError('Add a message before creating a public link.');
         return false;
       }
       const request = beginRequest();
@@ -290,7 +310,7 @@ export function useShareConversation(
             title: conversationTitle || 'Shared Session',
             model_id: modelId,
             expires_in_days: expiresInDays,
-            messages: snapshotMessages(sharedConversationId, messages),
+            messages: snapshotMessages(sharedConversationId, sharedMessages),
           }),
           signal: request.controller.signal,
         });
@@ -315,8 +335,6 @@ export function useShareConversation(
       conversationTitle,
       modelId,
       conversationId,
-      messages,
-      hasMessages,
       isTemporary,
       beginRequest,
       finishRequest,
@@ -326,11 +344,16 @@ export function useShareConversation(
 
   const updateLink = useCallback(async (): Promise<boolean> => {
     if (!activeShare || !conversationId) return false;
-    if (!hasMessages) {
+    const sharedConversationId = conversationId;
+    const sharedMessages = transcriptOf(useChatStore.getState(), sharedConversationId);
+    if (!sharedMessages) {
+      setError(TRANSCRIPT_NOT_READY);
+      return false;
+    }
+    if (sharedMessages.length === 0) {
       setError('Add a message before updating the link.');
       return false;
     }
-    const sharedConversationId = conversationId;
     const request = beginRequest();
     if (!request) return false;
     try {
@@ -342,7 +365,7 @@ export function useShareConversation(
           tokens: shownShares.map((link) => link.token),
           title: conversationTitle || 'Shared Session',
           model_id: modelId,
-          messages: snapshotMessages(sharedConversationId, messages),
+          messages: snapshotMessages(sharedConversationId, sharedMessages),
         }),
         signal: request.controller.signal,
       });
@@ -367,8 +390,6 @@ export function useShareConversation(
     conversationTitle,
     modelId,
     conversationId,
-    messages,
-    hasMessages,
     beginRequest,
     finishRequest,
     showRequestError,
