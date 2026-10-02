@@ -193,7 +193,7 @@ function attestationNotice(status: ConfiguredStatus, nowMs: number): Notice {
         tone: 'danger',
         text: status.billingSignalUnreadable
           ? `A billing signal record for this key cannot be read, so every free model is withdrawn and a new console check cannot clear it. Check the account's billing, then remove the record as ${RUNBOOK_FILE} describes under Billing signal, and record a new check.`
-          : "The provider answered a request with an account billing code after the last console check, so every free model is withdrawn. Check the account's billing and that Free quota only is on, then record a new check.",
+          : "The provider answered a request with an account billing code, and no console check has been recorded since, so every free model is withdrawn. Check the account's billing and that Free quota only is on, then record a new check.",
       };
   }
 }
