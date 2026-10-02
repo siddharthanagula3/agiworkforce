@@ -312,6 +312,33 @@ describe('Free section in the composer', () => {
     expect(screen.getByRole('button', { name: 'Retry loading free models' })).toBeInTheDocument();
   });
 
+  it('keeps a selected free model its catalogue no longer lists in view and says why', () => {
+    const selected = familyB[0]!;
+    const onSelect = renderSection(sources(source('ready', catalogue([model(familyA[0]!)]))), {
+      selectedId: selected,
+    });
+
+    const row = screen.getByRole('button', { name: name(selected) });
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    expect(row).toHaveAccessibleDescription(/Not available right now$/);
+    fireEvent.click(row);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `${name(selected)} is not available right now. Choose ${FALLBACK} or another free model.`,
+    );
+  });
+
+  it('keeps a selected Experiential Labs model in view once its promotion is no longer offered', () => {
+    renderSection(sources(source('ready', catalogue([model(familyA[0]!)])), source('hidden')), {
+      selectedId: experientialKey,
+    });
+
+    const row = screen.getByRole('button', { name: name(experientialKey) });
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    expect(row).toHaveAccessibleDescription(/Not available right now$/);
+  });
+
   it('renders the rest of the section while free models load', () => {
     renderSection(sources(source('loading'), source('loading')));
 

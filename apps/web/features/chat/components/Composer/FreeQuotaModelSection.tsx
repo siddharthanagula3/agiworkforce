@@ -12,7 +12,10 @@ import {
   FREE_QUOTA_CATEGORIES,
   FREE_QUOTA_STATUS_LABELS,
 } from '@/features/models/lib/free-quota-types';
-import type { FreeModelSources } from '@features/chat/hooks/use-free-model-sources';
+import type {
+  FreeModelSource,
+  FreeModelSources,
+} from '@features/chat/hooks/use-free-model-sources';
 import {
   presentFreeModels,
   type FreeModelEntry,
@@ -37,11 +40,12 @@ const NOTE_CLASS = 'px-3 py-2 text-xs leading-5 text-muted-foreground';
 const PROMOTIONAL_DATA_USE =
   'These models get only your messages, not your instructions or memory: their providers have not said they keep prompts out of training.';
 
-type PendingAvailability = 'loading' | 'error';
+type PendingAvailability = 'loading' | 'error' | 'unlisted';
 
 const PENDING_REASONS: Record<PendingAvailability, string> = {
   loading: 'Checking availability…',
   error: 'Availability could not be checked',
+  unlisted: FREE_QUOTA_STATUS_LABELS.unavailable,
 };
 
 interface PendingSelection {
@@ -89,18 +93,35 @@ function unavailableReason(entry: FreeModelEntry): string {
   );
 }
 
+function nextStepAfter(fallbackModelName: string | null): string {
+  return fallbackModelName
+    ? `Choose ${fallbackModelName} or another free model.`
+    : 'Choose another free model.';
+}
+
+function pendingAvailability(
+  source: FreeModelSource,
+  selectedId: string,
+): PendingAvailability | null {
+  if (source.catalogue) {
+    return source.catalogue.models.some((model) => model.key === selectedId) ? null : 'unlisted';
+  }
+  return source.status === 'loading' || source.status === 'error' ? source.status : 'unlisted';
+}
+
 function pendingExplanation({ label, availability, fallbackModelName }: PendingSelection): string {
   if (availability === 'loading') {
     return `${label.displayName} stays selected while its availability is checked.`;
   }
-  return `${label.displayName} could not be checked. Retry, or choose ${fallbackModelName ?? 'another free model'}.`;
+  if (availability === 'error') {
+    return `${label.displayName} could not be checked. Retry, or choose ${fallbackModelName ?? 'another free model'}.`;
+  }
+  return `${label.displayName} is not available right now. ${nextStepAfter(fallbackModelName)}`;
 }
 
 function unavailableExplanation(entry: FreeModelEntry, fallbackModelName: string | null): string {
   const { issuer, model, label } = entry;
-  const nextStep = fallbackModelName
-    ? `Choose ${fallbackModelName} or another free model.`
-    : 'Choose another free model.';
+  const nextStep = nextStepAfter(fallbackModelName);
   if (model.status === 'exhausted') {
     return `${issuer}'s free allowance for ${label.displayName} is used up. It is the provider's allowance, not a limit on your account. ${nextStep}`;
   }
@@ -311,14 +332,12 @@ export function FreeQuotaModelSection({
   const selection = freeQuotaSelection(selectedId);
   const selectionSource = isExperientialFreeOffering(selectedId) ? experiential : quota;
   const selectionLabel = selection ? providerOfferingLabel(selectedId) : null;
+  const selectionAvailability = selection ? pendingAvailability(selectionSource, selectedId) : null;
   const pending: PendingSelection | null =
-    selection &&
-    selectionLabel &&
-    !selectionSource.catalogue &&
-    (selectionSource.status === 'loading' || selectionSource.status === 'error')
+    selection && selectionLabel && selectionAvailability
       ? {
           label: selectionLabel,
-          availability: selectionSource.status,
+          availability: selectionAvailability,
           fallbackModelName: selection.category === 'chat' ? fallbackModelName : null,
         }
       : null;
