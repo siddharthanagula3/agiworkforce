@@ -6,6 +6,7 @@ import {
   POLICY_PUBLICATION_FLOOR,
   policyChangeTitle,
   policyChanges,
+  unpublishedStanding,
 } from '@/lib/legal/policy-archive';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
@@ -121,21 +122,25 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
             </div>
             <Ledger
               caption="Policy changes"
-              rows={POLICY_CHANGES.map((change) => ({
-                label: change.date,
-                value: (
-                  <Stack gap="tight">
-                    <Link
-                      href={change.href}
-                      className="agi-ds-link"
-                      aria-label={`${policyChangeTitle(change)} ${change.date}`}
-                    >
-                      <strong>{policyChangeTitle(change)}</strong>
-                    </Link>
-                    <span>{change.summary}</span>
-                  </Stack>
-                ),
-              }))}
+              rows={POLICY_CHANGES.map((change) => {
+                const unpublished = unpublishedStanding(change);
+                return {
+                  label: change.date,
+                  value: (
+                    <Stack gap="tight">
+                      <Link
+                        href={change.href}
+                        className="agi-ds-link"
+                        aria-label={`${policyChangeTitle(change)} ${change.date}`}
+                      >
+                        <strong>{policyChangeTitle(change)}</strong>
+                      </Link>
+                      <span>{change.summary}</span>
+                      {unpublished ? <span>{unpublished}</span> : null}
+                    </Stack>
+                  ),
+                };
+              })}
             />
           </Stack>
         </Section>

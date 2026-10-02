@@ -5,6 +5,7 @@ import {
   archivedVersionHref,
   policyChangeTitle,
   policyChanges,
+  unpublishedStanding,
   type PolicyChange,
 } from '@/lib/legal/policy-archive';
 import { SITE_NAME, absoluteUrl } from '@/lib/seo/site';
@@ -72,12 +73,19 @@ function releaseEntries(): FeedEntry[] {
 
 const SUBPROCESSOR_LIST = 'subprocessors';
 
+function publicationStanding(change: PolicyChange): string[] {
+  const unpublished = unpublishedStanding(change);
+  if (unpublished) return [unpublished];
+  if (change.date < POLICY_PUBLICATION_FLOOR.date) {
+    return [`Not published on this site before ${POLICY_PUBLICATION_FLOOR.label}.`];
+  }
+  return [];
+}
+
 function publicationNotes(change: PolicyChange): string[] {
   return [
     "This policy's date is the day its text was settled, not the day it was published on this site, which can be later.",
-    ...(change.date < POLICY_PUBLICATION_FLOOR.date
-      ? [`Not published on this site before ${POLICY_PUBLICATION_FLOOR.label}.`]
-      : []),
+    ...publicationStanding(change),
     ...(change.history.key === SUBPROCESSOR_LIST
       ? [
           `The window to object to a new subprocessor, set in section 05 of our data processing addendum, runs from the day this change is first published on ${absoluteUrl(change.history.route)}, not from this date.`,

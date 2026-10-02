@@ -64,7 +64,7 @@ const SUBPROCESSOR_REVISIONS = (REGISTRY.documents['subprocessors']?.versions ??
   .reverse();
 
 const DESCRIBED_VERSIONS = Object.entries(manifest.policies).flatMap(([key, policy]) =>
-  policy.versions.flatMap((version) =>
+  policy.versions.flatMap((version, position) =>
     version.summary
       ? [
           {
@@ -72,6 +72,8 @@ const DESCRIBED_VERSIONS = Object.entries(manifest.policies).flatMap(([key, poli
             slug: policy.slug,
             date: version.date,
             summary: version.summary,
+            published: version.published,
+            replacedOn: policy.versions[position - 1]?.date ?? null,
             href:
               version.status === 'current'
                 ? policy.route
@@ -83,6 +85,10 @@ const DESCRIBED_VERSIONS = Object.entries(manifest.policies).flatMap(([key, poli
       : [],
   ),
 );
+
+const NEVER_PUBLISHED = DESCRIBED_VERSIONS.filter((version) => version.published === false);
+
+const REPLACED_BEFORE_PUBLICATION = /\breplaced on \S+ before it was published on this site\./;
 
 function parseXml(xml: string): Document {
   const parsed = new DOMParser().parseFromString(xml, 'application/xml');
@@ -243,6 +249,9 @@ describe('/changelog/feed.xml', () => {
       const date = text(entry, 'updated').slice(0, 10);
       const lines = paragraphs(entry);
       const where = `${categoryTerms(entry).join(' ')} ${date}`;
+      const neverPublished = NEVER_PUBLISHED.some(
+        (version) => version.date === date && categoryTerms(entry).includes(version.slug),
+      );
 
       expect(
         lines.some((line) =>
@@ -252,7 +261,9 @@ describe('/changelog/feed.xml', () => {
         ),
         where,
       ).toBe(true);
-      expect(lines.includes(floor), where).toBe(date < POLICY_PUBLICATION_FLOOR.date);
+      expect(lines.includes(floor), where).toBe(
+        date < POLICY_PUBLICATION_FLOOR.date && !neverPublished,
+      );
       expect(
         lines.some((line) =>
           /window to object to a new subprocessor\b.* runs from the day this change is first published on https?:\/\/\S+\/subprocessors, not from this date\./.test(
@@ -404,6 +415,39 @@ describe('/changelog lists policy changes', () => {
       expect(entry && text(entry, 'title'), policy.route).toBe(row?.name);
     }
     expect(rows.filter((row) => row.name.endsWith(' introduced'))).toHaveLength(introduced.length);
+  });
+
+  it('says on the page and in the feed that a listed version this site never published was replaced before it was published', async () => {
+    const rows = policyRows();
+    const entries = atomChildren(await servedFeed(), 'entry');
+    const floor = `Not published on this site before ${POLICY_PUBLICATION_FLOOR.label}.`;
+
+    expect(NEVER_PUBLISHED.map((version) => `${version.key} ${version.date}`)).toEqual(
+      expect.arrayContaining(['subprocessors 2026-09-21', 'terms 2026-09-22']),
+    );
+    for (const version of NEVER_PUBLISHED) {
+      const where = `${version.key} ${version.date}`;
+      const standing = `This version was settled on ${version.date} and replaced on ${version.replacedOn} before it was published on this site.`;
+      const row = rows.find((entry) => entry.date === version.date && entry.href === version.href);
+      const entry = entries.find(
+        (node) =>
+          categoryTerms(node).includes(version.slug) &&
+          text(node, 'updated').startsWith(version.date),
+      );
+      const lines = entry ? paragraphs(entry) : [];
+
+      expect(row?.text, where).toContain(standing);
+      expect(lines, where).toContain(standing);
+      expect(lines, where).not.toContain(floor);
+    }
+    expect(rows.filter((row) => REPLACED_BEFORE_PUBLICATION.test(row.text))).toHaveLength(
+      NEVER_PUBLISHED.length,
+    );
+    expect(
+      entries.filter((entry) =>
+        paragraphs(entry).some((line) => REPLACED_BEFORE_PUBLICATION.test(line)),
+      ),
+    ).toHaveLength(NEVER_PUBLISHED.length);
   });
 
   it('names each change link by its policy and date, so no two links share a name', () => {
