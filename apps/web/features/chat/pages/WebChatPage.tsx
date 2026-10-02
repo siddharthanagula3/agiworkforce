@@ -1308,6 +1308,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [conversationLoadFailure, setConversationLoadFailure] = useState<{
+    conversationId: string;
+    message: string;
+  } | null>(null);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -1987,20 +1991,20 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         } else {
           void loadConversation(urlConversationId).then((ok) => {
             if (!ok) {
-              const reason = getConversationLoadError();
+              const message =
+                getConversationLoadError() ||
+                "Couldn't load this conversation. Check your connection and try again.";
+              setConversationLoadFailure({ conversationId: urlConversationId, message });
               setBareChatSessionId(null);
               setActiveConversation(null);
               router.replace(surfaceRootHref);
-              toast.error(
-                reason || "Couldn't load this conversation. Check your connection and try again.",
-                {
-                  id: `conversation-unavailable-${urlConversationId}`,
-                  action: {
-                    label: 'Retry',
-                    onClick: () => router.push(surfaceConversationHref(urlConversationId)),
-                  },
+              toast.error(message, {
+                id: `conversation-unavailable-${urlConversationId}`,
+                action: {
+                  label: 'Retry',
+                  onClick: () => router.push(surfaceConversationHref(urlConversationId)),
                 },
-              );
+              });
             }
           });
         }
@@ -6642,6 +6646,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         onOpenChange={setShareDialogOpen}
         conversationTitle={activeConversationTitle}
         conversationId={displayedConversationId}
+        conversationLoadError={
+          conversationLoadFailure?.conversationId === displayedConversationId
+            ? conversationLoadFailure.message
+            : null
+        }
       />
       <EnhancedExportDialog
         open={exportDialogOpen}

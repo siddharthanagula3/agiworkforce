@@ -986,6 +986,39 @@ describe('ShareConversationDialog on a chat the store has not opened', () => {
       );
   }
 
+  it('says the chat is still loading once the share check is done, not that it is checking', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(listed(['shared-token']));
+
+    renderSharedChat();
+    await settle();
+
+    expect(screen.getByRole('status')).toHaveTextContent('Loading this chat');
+    expect(screen.queryByText('Checking whether this chat is already shared')).toBeNull();
+    expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
+  });
+
+  it('shows why the chat could not load instead of a status that never ends', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(listed(['shared-token']));
+
+    render(
+      <ShareConversationDialog
+        open
+        onOpenChange={vi.fn()}
+        conversationId={SHARED_CHAT_ID}
+        conversationTitle="Shared chat"
+        conversationLoadError="This conversation is unavailable. It may have been deleted."
+      />,
+    );
+    await settle();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This conversation is unavailable. It may have been deleted.',
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Update link' })).toBeNull();
+    expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
+  });
+
   it('holds Update link until the named chat loads, then sends only that chat', async () => {
     const fetchMock = vi
       .spyOn(global, 'fetch')
@@ -999,7 +1032,7 @@ describe('ShareConversationDialog on a chat the store has not opened', () => {
     renderSharedChat();
     await settle();
 
-    expect(screen.getByText('Checking whether this chat is already shared')).toBeInTheDocument();
+    expect(screen.getByText('Loading this chat')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Update link' })).toBeNull();
 
     openSharedChat();

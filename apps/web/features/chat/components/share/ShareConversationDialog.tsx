@@ -36,6 +36,7 @@ export interface ShareConversationDialogProps {
   conversationTitle?: string;
   modelId?: string;
   conversationId?: string | null;
+  conversationLoadError?: string | null;
 }
 
 function formatExpiry(value: string): string {
@@ -56,6 +57,7 @@ function ShareConversationDialogImpl({
   conversationTitle,
   modelId,
   conversationId,
+  conversationLoadError,
 }: ShareConversationDialogProps) {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [expiryDays, setExpiryDays] = useState<ShareExpiryDays>(7);
@@ -72,9 +74,17 @@ function ShareConversationDialogImpl({
     isTemporary,
     activeShare,
     checkingShare,
+    loadingChat,
     error,
     cancelPending,
   } = useShareConversation(conversationTitle, modelId, conversationId, open);
+  const chatLoadError = loadingChat ? (conversationLoadError ?? null) : null;
+  const shownError = chatLoadError ?? error;
+  const pendingStatus = checkingShare
+    ? 'Checking whether this chat is already shared'
+    : loadingChat && !chatLoadError
+      ? 'Loading this chat'
+      : null;
   const expiryLabel = useMemo(
     () => EXPIRY_OPTIONS.find((option) => option.days === expiryDays)?.label ?? '7 days',
     [expiryDays],
@@ -234,15 +244,15 @@ function ShareConversationDialogImpl({
             </DialogDescription>
           </DialogHeader>
 
-          {checkingShare ? (
+          {pendingStatus ? (
             <div
               role="status"
               className="flex items-center gap-2 py-2 text-sm text-muted-foreground"
             >
               <Spinner size="sm" aria-hidden="true" />
-              <span>Checking whether this chat is already shared</span>
+              <span>{pendingStatus}</span>
             </div>
-          ) : activeShare ? (
+          ) : loadingChat ? null : activeShare ? (
             <div className="space-y-4">
               <div className="flex gap-2">
                 <Input autoFocus aria-label="Conversation link" readOnly value={activeShare.url} />
@@ -349,9 +359,9 @@ function ShareConversationDialogImpl({
             </div>
           )}
 
-          {error ? (
+          {shownError ? (
             <p role="alert" className="text-sm text-danger">
-              {error}
+              {shownError}
             </p>
           ) : null}
 
@@ -377,7 +387,7 @@ function ShareConversationDialogImpl({
                 </Button>
                 <Button
                   onClick={() => void share(expiryDays)}
-                  disabled={isSharing || isTemporary || checkingShare}
+                  disabled={isSharing || isTemporary || checkingShare || loadingChat}
                 >
                   {isSharing ? 'Creating…' : `Create public link · ${expiryLabel}`}
                 </Button>

@@ -174,9 +174,10 @@ export function useShareConversation(
   const checkingShare =
     open &&
     storedConversationId !== null &&
-    (lookupPending || liveShares?.conversationId !== storedConversationId || transcript === null);
+    (lookupPending || liveShares?.conversationId !== storedConversationId);
+  const loadingChat = open && storedConversationId !== null && transcript === null;
   const shownLiveShares =
-    !checkingShare && liveShares && liveShares.conversationId === conversationId
+    !checkingShare && !loadingChat && liveShares && liveShares.conversationId === conversationId
       ? liveShares
       : null;
   const shownShares = shownLiveShares?.shares ?? NO_SHARES;
@@ -484,6 +485,7 @@ export function useShareConversation(
     isTemporary,
     activeShare,
     checkingShare,
+    loadingChat,
     error,
     cancelPending,
   };
