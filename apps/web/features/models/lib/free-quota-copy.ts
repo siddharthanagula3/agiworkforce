@@ -6,6 +6,7 @@ export type FreeQuotaFailure =
   | 'interrupted'
   | 'too_long'
   | 'provider_failed'
+  | 'blocked'
   | 'plan'
   | 'unsupported_prompt'
   | 'duplicate'
@@ -32,6 +33,7 @@ const FAILURE_STATUS: Readonly<Record<FreeQuotaFailure, number>> = {
   interrupted: 502,
   too_long: 400,
   provider_failed: 502,
+  blocked: 422,
   plan: 403,
   unsupported_prompt: 400,
   duplicate: 409,
@@ -46,6 +48,7 @@ export const FREE_QUOTA_FAILURE_CODES: Readonly<Record<FreeQuotaFailure, string>
   interrupted: 'stream_interrupted',
   too_long: 'context_length_exceeded',
   provider_failed: 'provider_unreachable',
+  blocked: 'content_filter',
   plan: 'model_not_available',
   unsupported_prompt: 'free_quota_prompt_unsupported',
   duplicate: 'free_quota_duplicate',
@@ -77,6 +80,8 @@ function failureMessage(failure: FreeQuotaFailure, context: FreeQuotaFailureCont
       return `This conversation is too long for ${modelName}. Start a new chat, or choose another free model.`;
     case 'provider_failed':
       return `${issuer} could not answer with ${modelName} just now, and no other model was used. Send your message again, or choose another free model.`;
+    case 'blocked':
+      return `${issuer}'s safety system stopped ${modelName} from answering this message. Rephrase it, or choose another free model.`;
     case 'plan':
       return `${issuer} free models are part of the Free plan. Choose a model your plan includes.`;
     case 'unsupported_prompt':

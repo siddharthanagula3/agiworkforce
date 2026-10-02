@@ -107,6 +107,8 @@ const REFUSAL_FAILURE: Readonly<Record<FreeQuotaRefusal, FreeQuotaFailure>> = {
   busy: 'busy',
   interrupted: 'interrupted',
   too_long: 'too_long',
+  unavailable: 'unavailable',
+  blocked: 'blocked',
   failed: 'provider_failed',
 };
 

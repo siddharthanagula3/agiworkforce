@@ -666,6 +666,25 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect((await sharedState()).holds.get(model!)).toBe('exhausted');
   });
 
+  it('keeps a model on offer when the provider only throttles tokens per minute', async () => {
+    mocks.stream.mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            code: 'insufficient_quota',
+            type: 'insufficient_quota',
+            message: 'You exceeded your current quota, please check your plan and billing details.',
+          },
+        },
+        { status: 429 },
+      ),
+    );
+    const response = await post();
+    expect(response.status).toBe(429);
+    expect((await response.json()).error.code).toBe('provider_rate_limited');
+    expect((await sharedState()).holds.has(model!)).toBe(false);
+  });
+
   it('withdraws a model for every account on a billing signal and never calls it again', async () => {
     mocks.stream.mockResolvedValue(
       Response.json({ error: { message: 'Payment required' } }, { status: 402 }),

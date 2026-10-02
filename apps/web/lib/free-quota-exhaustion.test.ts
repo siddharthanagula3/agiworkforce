@@ -166,7 +166,38 @@ describe('provider refusals on a free model', () => {
         code: 'insufficient_quota',
         message: 'You exceeded your current quota, please check your plan and billing details.',
       },
-      'billing',
+      'busy',
+    ],
+    [
+      {
+        status: 429,
+        code: 'Throttling.AllocationQuota',
+        message: 'Allocated quota exceeded, please increase your quota limit.',
+      },
+      'busy',
+    ],
+    [
+      { status: 429, code: 'limit_requests', message: 'You have exceeded your request limit.' },
+      'busy',
+    ],
+    [
+      { status: 429, code: 'Throttling.BurstRate', message: 'Request rate increased too quickly.' },
+      'busy',
+    ],
+    [{ status: 429, code: 'PrepaidBillOverdue', message: 'bill overdue' }, 'account_billing'],
+    [
+      { status: 429, code: 'CommodityNotPurchased', message: 'Commodity has not purchased yet' },
+      'account_billing',
+    ],
+    [{ status: 403, code: 'Model.AccessDenied', message: 'Model access denied.' }, 'unavailable'],
+    [{ status: 404, code: 'model_not_found', message: 'Model can not be found.' }, 'unavailable'],
+    [
+      {
+        status: 400,
+        code: 'DataInspectionFailed',
+        message: 'Input or output data may contain inappropriate content.',
+      },
+      'blocked',
     ],
     [
       { status: 400, code: 'Arrearage', message: 'account not in good standing' },

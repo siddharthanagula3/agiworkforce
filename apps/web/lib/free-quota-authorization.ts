@@ -3,7 +3,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import type { KeyValueStore } from '@agiworkforce/key-value';
-import { classifyError } from '@agiworkforce/provider-runtime';
+import {
+  MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+  classifyModelStudioError,
+} from '@agiworkforce/provider-runtime';
 import {
   getProviderOffering,
   listCanonicalModels,
@@ -403,27 +406,22 @@ export async function settleFreeQuotaAllowance(
 }
 
 export type FreeQuotaRefusal =
-  'exhausted' | 'billing' | 'account_billing' | 'busy' | 'interrupted' | 'too_long' | 'failed';
-
-// Model Studio's account-level billing refusals (error-code reference, read 2026-09-21): each
-// proves the account carries charges or arrears, so no free model on it can be trusted as free.
-const ACCOUNT_BILLING_SIGNALS: ReadonlySet<string> = new Set([
-  'arrearage',
-  'budgetlimitexceeded',
-  'prepaidbilloverdue',
-  'postpaidbilloverdue',
-  'commoditynotpurchased',
-]);
+  | 'exhausted'
+  | 'billing'
+  | 'account_billing'
+  | 'busy'
+  | 'interrupted'
+  | 'too_long'
+  | 'unavailable'
+  | 'blocked'
+  | 'failed';
 
 export function classifyFreeQuotaRefusal(failure: {
   status?: number;
   code?: string;
   message?: string;
 }): FreeQuotaRefusal {
-  if (failure.code && ACCOUNT_BILLING_SIGNALS.has(failure.code.trim().toLowerCase())) {
-    return 'account_billing';
-  }
-  const classified = classifyError({
+  const classified = classifyModelStudioError({
     ...(failure.status === undefined ? {} : { status: failure.status }),
     ...(failure.code === undefined ? {} : { code: failure.code }),
     message: failure.message ?? '',
@@ -432,7 +430,9 @@ export function classifyFreeQuotaRefusal(failure: {
     case 'quota_exhausted':
       return 'exhausted';
     case 'billing_exhausted':
-      return 'billing';
+      return classified.providerHint === MODEL_STUDIO_ACCOUNT_BILLING_HINT
+        ? 'account_billing'
+        : 'billing';
     case 'rate_limit':
     case 'server_overload':
       return 'busy';
@@ -442,6 +442,11 @@ export function classifyFreeQuotaRefusal(failure: {
       return 'interrupted';
     case 'context_overflow':
       return 'too_long';
+    case 'invalid_model':
+      return 'unavailable';
+    case 'safety':
+    case 'content_blocked':
+      return 'blocked';
     default:
       return 'failed';
   }
