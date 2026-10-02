@@ -10,6 +10,8 @@ import { spawn, execFileSync } from 'node:child_process';
 
 const MAX_REPORT_BYTES = 192 * 1024 * 1024;
 const MAX_STREAM_BYTES = 64 * 1024 * 1024;
+const SCANNER_DEADLINE_MS = 120_000;
+const COVERAGE_BUDGET_MS = 600_000;
 export class CoverageError extends Error {}
 const CONTROLS = `function positiveDocument(value) {
   document.write(value);
@@ -224,9 +226,12 @@ async function stopGroup(pid) {
   requireValue(!alive(), 'Owned scanner process group remains active.');
 }
 
-export async function runCoverageScanner(argv, { cwd, env, directory, timeoutMs = 120_000 }) {
+export async function runCoverageScanner(
+  argv,
+  { cwd, env, directory, timeoutMs = SCANNER_DEADLINE_MS },
+) {
   requireValue(
-    Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 120_000,
+    Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= SCANNER_DEADLINE_MS,
     'Coverage scanner deadline is invalid.',
   );
   const stderr = fs.openSync(path.join(directory, 'scanner.stderr.private'), 'a', 0o600);
@@ -475,11 +480,11 @@ export async function qualifyInternalCoverage({
     PYTHONDONTWRITEBYTECODE: '1',
   };
   if (process.env.SSL_CERT_FILE) env.SSL_CERT_FILE = process.env.SSL_CERT_FILE;
-  const deadline = performance.now() + 120_000;
+  const deadline = performance.now() + COVERAGE_BUDGET_MS;
   const convergedPairs = new Set();
   const replayedPairs = new Set();
   const scanCoverage = async (argv) => {
-    const timeoutMs = Math.ceil(deadline - performance.now());
+    const timeoutMs = Math.min(SCANNER_DEADLINE_MS, Math.ceil(deadline - performance.now()));
     requireValue(timeoutMs > 0, 'Aggregate coverage deadline exceeded.');
     const result = await execute(argv, { cwd: root, env, directory, timeoutMs });
     requireValue(performance.now() < deadline, 'Aggregate coverage deadline exceeded.');

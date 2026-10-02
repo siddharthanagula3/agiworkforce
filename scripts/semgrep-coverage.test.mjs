@@ -317,9 +317,19 @@ test('a replay retains its exact native warning and requires the existing calibr
   });
 });
 
-test('all aggregate replay commands share the existing 120-second deadline', async (t) => {
-  const clock = [0, 1, 2, 90_000, 90_001, 120_001];
-  t.mock.method(performance, 'now', () => clock.shift() ?? 120_001);
+test('replays that together outlast one scanner deadline still qualify within the coverage budget', async (t) => {
+  const clock = [0, 1, 2, 90_000, 90_001, 150_000];
+  t.mock.method(performance, 'now', () => clock.shift() ?? 150_001);
+  assert.deepEqual(await fixture(aggregate), {
+    nativeWarnings: 1,
+    structurallyQualifiedPairs: 0,
+    convergedReplayPairs: 2,
+  });
+});
+
+test('all coverage scanner commands share one ten-minute budget', async (t) => {
+  const clock = [0, 1, 2, 90_000, 90_001, 600_001];
+  t.mock.method(performance, 'now', () => clock.shift() ?? 600_001);
   await assert.rejects(fixture(aggregate), /Aggregate coverage deadline exceeded/);
 });
 
