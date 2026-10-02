@@ -181,11 +181,13 @@ interface FeedbackAttachments {
 
 const NO_ATTACHMENTS: FeedbackAttachments = { logs: null, screenshotKey: null };
 
+function isWebResponseRating(metadata: Feedback['metadata']): boolean {
+  return metadata.feedback_context === 'response_rating' && metadata.source === 'web';
+}
+
 function storedMessage({ message, metadata }: Feedback): string {
   if (metadata.comment) return metadata.comment;
-  return metadata.feedback_context === 'response_rating' && metadata.source === 'web'
-    ? WEB_RESPONSE_RATING_MESSAGE
-    : message;
+  return isWebResponseRating(metadata) ? WEB_RESPONSE_RATING_MESSAGE : message;
 }
 
 function feedbackRow(
@@ -210,6 +212,9 @@ function feedbackRow(
       ...(metadata.run_id ? { run_id: metadata.run_id } : {}),
       ...(metadata.rating ? { rating: metadata.rating } : {}),
       ...(metadata.reason ? { reason: metadata.reason } : {}),
+      ...(isWebResponseRating(metadata)
+        ? { message_source: metadata.comment ? 'comment' : 'note' }
+        : {}),
       ...(metadata.finish_reason ? { finish_reason: metadata.finish_reason } : {}),
       ...(claimedUserId ? { claimed_user_id: claimedUserId } : {}),
       ...(logs ? { logs } : {}),

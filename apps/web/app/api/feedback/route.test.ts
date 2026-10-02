@@ -634,6 +634,22 @@ describe('thumbs-down details', () => {
     expect(JSON.stringify(rows)).not.toContain('Paris is the capital of France.');
   });
 
+  it('marks every web rating it stores with whether the message is its note or the comment', async () => {
+    const rows = feedbackTable();
+
+    await POST(rating({ rating: 'up' }, { message: 'Paris is the capital of France.' }));
+    await POST(rating({ message_id: 'msg-2', reason: 'incomplete' }));
+    await POST(
+      rating({ message_id: 'msg-3', reason: 'other', comment: 'It named the wrong city.' }),
+    );
+
+    expect(rows.map(({ message, metadata }) => [message, metadata['message_source']])).toEqual([
+      [WEB_RESPONSE_RATING_MESSAGE, 'note'],
+      [WEB_RESPONSE_RATING_MESSAGE, 'note'],
+      ['It named the wrong city.', 'comment'],
+    ]);
+  });
+
   it('redacts a secret pasted into the comment before it is stored', async () => {
     const apiKey = `sk-${'A'.repeat(40)}`;
     const rows = feedbackTable();
