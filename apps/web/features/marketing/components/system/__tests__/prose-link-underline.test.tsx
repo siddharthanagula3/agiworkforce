@@ -2,10 +2,19 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@shared/components/layout/Header', () => ({ Header: () => null }));
+vi.mock('@/features/marketing/components/MarketingFooter', () => ({
+  MarketingFooter: () => null,
+}));
+
+import PolicyHistoryPage from '@/app/legal/archive/[policy]/page';
 
 import { PageHero } from '../../pages/surfaces/shared';
+import { Ledger } from '../Ledger';
 import { Prose } from '../Prose';
+import { Stack } from '../Stack';
 
 const STYLESHEET = readFileSync(resolve(__dirname, '..', 'system.css'), 'utf8');
 
@@ -83,5 +92,43 @@ describe('marketing links in running text', () => {
     expect(
       restingBackgroundSize(screen.getByRole('link', { name: 'Subscribe with the Atom feed' })),
     ).toBe('100% 1px');
+  });
+
+  it('underlines the links in a version history row at rest, where they follow the summary text', async () => {
+    render(await PolicyHistoryPage({ params: Promise.resolve({ policy: 'terms' }) }));
+
+    expect(restingBackgroundSize(screen.getByRole('link', { name: 'Current version' }))).toBe(
+      '100% 1px',
+    );
+    expect(restingBackgroundSize(screen.getByRole('link', { name: 'Read this version' }))).toBe(
+      '100% 1px',
+    );
+  });
+
+  it('leaves a ledger headline link that stands on its own line to underline on hover', () => {
+    render(
+      <div data-design="agi">
+        <Ledger
+          caption="Releases"
+          rows={[
+            {
+              label: '2026-09-21',
+              value: (
+                <Stack gap="tight">
+                  <a className="agi-ds-link" href="/release-notes#release">
+                    A release headline
+                  </a>
+                  <span>What shipped.</span>
+                </Stack>
+              ),
+            },
+          ]}
+        />
+      </div>,
+    );
+
+    expect(
+      restingBackgroundSize(screen.getByRole('link', { name: 'A release headline' })),
+    ).not.toBe('100% 1px');
   });
 });
