@@ -98,11 +98,14 @@ function lockfileDependents(lockfile, waivedPackage) {
   return [...dependents].sort();
 }
 
-function lockfileImportersReaching(lockfile, waivedPackage) {
-  const reaches = (start) => {
+function walkImporters(lockfile, waivedPackage) {
+  const reaching = [];
+  const unresolved = new Set();
+  for (const start of Object.keys(lockfile.importers)) {
     const pending = [];
     const seenImporters = new Set();
     const seenSnapshots = new Set();
+    let reaches = false;
     const visitImporter = (importer, fields) => {
       if (seenImporters.has(importer)) return;
       seenImporters.add(importer);
@@ -122,12 +125,17 @@ function lockfileImportersReaching(lockfile, waivedPackage) {
       const key = pending.pop();
       if (seenSnapshots.has(key)) continue;
       seenSnapshots.add(key);
-      if (lockfilePackageName(key) === waivedPackage) return true;
-      pending.push(...snapshotDependencies(lockfile.snapshots[key]));
+      if (lockfilePackageName(key) === waivedPackage) {
+        reaches = true;
+      } else if (Object.hasOwn(lockfile.snapshots, key)) {
+        pending.push(...snapshotDependencies(lockfile.snapshots[key]));
+      } else {
+        unresolved.add(key);
+      }
     }
-    return false;
-  };
-  return Object.keys(lockfile.importers).filter(reaches).sort();
+    if (reaches) reaching.push(start);
+  }
+  return { reaching: reaching.sort(), unresolved: [...unresolved].sort() };
 }
 
 function auditWaiverScopeFailures(entry, lockfile) {
@@ -146,6 +154,17 @@ function auditWaiverScopeFailures(entry, lockfile) {
       `exclusion ${entry.id} cannot be scoped without the importers and snapshots of ${LOCKFILE_PATH}`,
     ];
   }
+  const named = (key) => lockfilePackageName(key) === entry.package;
+  if (
+    !Object.keys(lockfile.snapshots).some(named) &&
+    !Object.keys(lockfile.importers).some((importer) =>
+      importerDependencyKeys(lockfile, importer).some(named),
+    )
+  ) {
+    return [
+      `exclusion ${entry.id} waives ${entry.package}, which ${LOCKFILE_PATH} does not contain; correct the name or delete the waiver`,
+    ];
+  }
   const failures = [];
   for (const dependent of lockfileDependents(lockfile, entry.package)) {
     if (!scope.packages.includes(dependent)) {
@@ -154,12 +173,18 @@ function auditWaiverScopeFailures(entry, lockfile) {
       );
     }
   }
-  for (const importer of lockfileImportersReaching(lockfile, entry.package)) {
+  const { reaching, unresolved } = walkImporters(lockfile, entry.package);
+  for (const importer of reaching) {
     if (!scope.importers.includes(importer)) {
       failures.push(
         `exclusion ${entry.id} waives ${entry.package} for ${scope.importers.join(', ')} only, but ${importer} also reaches it in ${LOCKFILE_PATH}`,
       );
     }
+  }
+  for (const key of unresolved) {
+    failures.push(
+      `exclusion ${entry.id} cannot finish its walk: ${LOCKFILE_PATH} reaches ${key} but has no snapshot for it`,
+    );
   }
   return failures;
 }
