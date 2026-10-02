@@ -623,6 +623,16 @@ describe('telling us why an answer was bad', () => {
     await waitFor(() => expect(down).toHaveAttribute('aria-pressed', 'true'));
   });
 
+  it('sets the comment box in 16px type on touch screens, so iOS does not zoom into it', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+
+    expect(screen.getByRole('textbox', { name: 'Details (optional)' })).toHaveClass(
+      'pointer-coarse:text-base',
+    );
+  });
+
   it('waits for a reason or a comment before it can be sent', async () => {
     render(<MessageBubble message={assistantMessage()} />);
 

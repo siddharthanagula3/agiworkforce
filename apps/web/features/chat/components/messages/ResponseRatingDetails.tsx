@@ -186,7 +186,7 @@ export function ResponseRatingDetails({
           maxLength={RESPONSE_RATING_COMMENT_MAX_CHARS}
           rows={2}
           placeholder="What was wrong with this response?"
-          className="min-h-16 resize-y border-[var(--chat-border)] bg-[var(--chat-input-bg)] text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)]"
+          className="min-h-16 resize-y border-[var(--chat-border)] bg-[var(--chat-input-bg)] text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] pointer-coarse:text-base"
         />
       </div>
       <p className="text-xs leading-relaxed text-[var(--chat-text-muted)]">
