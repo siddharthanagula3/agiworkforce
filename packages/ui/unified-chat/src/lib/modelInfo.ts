@@ -1,7 +1,7 @@
 import {
   getModelMetadataById,
-  getProviderOffering,
   getRetiredModelMetadataById,
+  providerOfferingDisplayName,
   type ModelAvailability,
   type ModelQualityTier,
 } from '@agiworkforce/types';
@@ -58,7 +58,7 @@ export function getModelPresentationLabel(modelId: string | null | undefined): s
 
   return (
     getModelMetadataById(normalizedModelId)?.name ??
-    getProviderOffering(normalizedModelId)?.displayName ??
+    providerOfferingDisplayName(normalizedModelId) ??
     normalizedModelId
   );
 }
@@ -86,7 +86,7 @@ export function getManagedModelPresentationLabel(
   const retired = getRetiredModelMetadataById(normalizedModelId);
   const name = normalizedModelId
     ? (getModelMetadataById(normalizedModelId)?.name ??
-      getProviderOffering(normalizedModelId)?.displayName ??
+      providerOfferingDisplayName(normalizedModelId) ??
       (retired?.metadataPreserved === true ? retired.name : UNAVAILABLE_MODEL_LABEL))
     : UNAVAILABLE_MODEL_LABEL;
 

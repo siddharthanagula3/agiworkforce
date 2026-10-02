@@ -39,6 +39,7 @@ import {
   sharedFreeQuotaStore,
   type FreeQuotaDecisions,
 } from '@/lib/server/free-quota-catalogue';
+import { expireFreeQuotaCatalogue } from '@/lib/server/free-quota-catalogue-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -280,6 +281,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
     quotaOnlyOfferings: covered,
     attestedBy: userId,
   });
+  expireFreeQuotaCatalogue();
   for (let start = 0; start < covered.length; start += AUDIT_DETAIL_ARRAY_LIMIT) {
     const scopes = covered.slice(start, start + AUDIT_DETAIL_ARRAY_LIMIT);
     await recordAuditEvent({

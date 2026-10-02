@@ -24,6 +24,8 @@ export const RENDER_CACHE_TAGS = {
   sloAttainment: 'slo-attainment',
   pluginCatalog: 'plugin-catalog',
   pluginEntry: (id: string) => `plugin-entry:${id}`,
+  freeQuotaCatalogue: 'free-quota-catalogue',
+  experientialFreeCatalogue: 'experiential-free-catalogue',
 } as const;
 
 /**
@@ -36,6 +38,13 @@ export const RENDER_CACHE_SECONDS = {
   /** Catalogue content that only changes when someone publishes. */
   catalog: 300,
 } as const;
+
+const MS_PER_SECOND = 1_000;
+
+interface DecidedRenderInput<TResult> {
+  value: TResult;
+  decidedAtMs: number;
+}
 
 export function renderCacheKey(parts: readonly string[]): string[] {
   return [...parts, `locale=${SERVER_RENDER_LOCALE}`];
@@ -65,5 +74,30 @@ export function cachedRenderInput<TArgs extends unknown[], TResult>(
       if (!isMissingIncrementalCache(error)) throw error;
       return compute(...args);
     }
+  };
+}
+
+export function boundedRenderInput<TResult>(
+  compute: () => Promise<TResult>,
+  options: {
+    keyParts: readonly string[];
+    tags: readonly string[];
+    revalidate: number;
+    nowMs: number;
+  },
+): () => Promise<TResult> {
+  const { nowMs, ...cacheOptions } = options;
+  const read = cachedRenderInput(
+    async (): Promise<DecidedRenderInput<TResult>> => ({
+      value: await compute(),
+      decidedAtMs: nowMs,
+    }),
+    cacheOptions,
+  );
+  return async (): Promise<TResult> => {
+    const decided = await read();
+    return nowMs - decided.decidedAtMs <= options.revalidate * MS_PER_SECOND
+      ? decided.value
+      : compute();
   };
 }

@@ -21,6 +21,7 @@ export function useMenuKeyboard({
   triggerRef,
   itemSelector = '[role="menuitem"]',
   autoFocusFirstItem = true,
+  disabledItemsFocusable = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -29,14 +30,17 @@ export function useMenuKeyboard({
   itemSelector?: string;
   /** Off when the panel opens onto its own search field, which owns the keystrokes that follow. */
   autoFocusFirstItem?: boolean;
+  disabledItemsFocusable?: boolean;
 }): void {
   const items = useCallback((): HTMLElement[] => {
     const panel = panelRef.current;
     if (!panel) return [];
     return Array.from(panel.querySelectorAll<HTMLElement>(itemSelector)).filter(
-      (el) => !el.hasAttribute('disabled') && el.getAttribute('aria-disabled') !== 'true',
+      (el) =>
+        !el.hasAttribute('disabled') &&
+        (disabledItemsFocusable || el.getAttribute('aria-disabled') !== 'true'),
     );
-  }, [panelRef, itemSelector]);
+  }, [panelRef, itemSelector, disabledItemsFocusable]);
 
   const focusItem = useCallback(
     (index: number) => {

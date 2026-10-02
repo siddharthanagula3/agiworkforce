@@ -60,6 +60,8 @@ export * from './provider';
 
 export * from './model-catalog';
 
+export * from './provider-offering-label';
+
 export * from './flagship-routing';
 
 export * from './harness-protocol';

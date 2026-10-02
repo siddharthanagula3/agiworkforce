@@ -10,10 +10,44 @@ import { freeQuotaPlanAllows } from '@/lib/server/free-quota-catalogue';
 import {
   experientialFreeConfiguration,
   loadExperientialFreeOfferings,
+  type ExperientialFreeConfiguration,
+  type ExperientialFreeOffering,
 } from '@/lib/server/experiential-free';
+import {
+  RENDER_CACHE_SECONDS,
+  RENDER_CACHE_TAGS,
+  boundedRenderInput,
+} from '@/lib/server/render-cache';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
 
 export const runtime = 'nodejs';
+
+class UnverifiedPromotions extends Error {}
+
+async function verifiedOfferings(
+  config: ExperientialFreeConfiguration,
+): Promise<ExperientialFreeOffering[]> {
+  const offerings = await loadExperientialFreeOfferings(config);
+  if (!offerings) throw new UnverifiedPromotions('Provider promotions could not be verified.');
+  return offerings;
+}
+
+async function sharedOfferings(
+  config: ExperientialFreeConfiguration,
+  nowMs: number,
+): Promise<ExperientialFreeOffering[] | null> {
+  try {
+    return await boundedRenderInput(() => verifiedOfferings(config), {
+      keyParts: [RENDER_CACHE_TAGS.experientialFreeCatalogue],
+      tags: [RENDER_CACHE_TAGS.experientialFreeCatalogue],
+      revalidate: RENDER_CACHE_SECONDS.liveSignal,
+      nowMs,
+    })();
+  } catch (error) {
+    if (error instanceof UnverifiedPromotions) return null;
+    throw error;
+  }
+}
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const limit = await withRateLimit(request, 'model-catalog');
@@ -27,7 +61,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const config = experientialFreeConfiguration();
   if (!config)
     return NextResponse.json(null, { headers: { 'Cache-Control': 'private, no-store' } });
-  const offerings = await loadExperientialFreeOfferings(config);
+  const nowMs = Date.now();
+  const offerings = await sharedOfferings(config, nowMs);
   if (!offerings) {
     return NextResponse.json(
       { error: 'Provider promotions could not be verified.' },
@@ -36,7 +71,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   }
   const result: FreeQuotaCatalogue = {
     issuer: 'Experiential Labs',
-    observedOn: new Date().toISOString().slice(0, 10),
+    observedOn: new Date(nowMs).toISOString().slice(0, 10),
     evidenceUrl: new URL('/api/models', config.baseUrl).href,
     reportedEligible: offerings.filter((entry) => entry.promotional).length,
     reportedUnavailable: offerings.filter((entry) => !entry.promotional).length,

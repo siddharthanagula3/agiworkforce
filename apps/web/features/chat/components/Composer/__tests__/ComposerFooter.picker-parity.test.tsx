@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 type ScanModule0 = typeof import('@shared/config/llm');
 type ScanModule1 = typeof import('@agiworkforce/ui');
 type ScanModule2 = typeof import('zustand/middleware');
@@ -203,6 +203,15 @@ vi.mock('zustand/middleware', async () => {
 import { MODEL_PICKER_GUIDANCE } from '@agiworkforce/unified-chat/model-picker';
 import { ComposerFooter } from '../ComposerFooter';
 
+const EMPTY_FREE_CATALOGUE = {
+  issuer: 'Fixture Cloud',
+  observedOn: '2026-10-01',
+  evidenceUrl: 'https://provider.example/free',
+  reportedEligible: 0,
+  reportedUnavailable: 0,
+  models: [],
+};
+
 const useRoster = (models: Record<string, unknown>[]) => {
   MODELS.splice(0, MODELS.length, ...models);
 };
@@ -378,7 +387,10 @@ describe('ComposerFooter · picker keyboard', () => {
   beforeEach(() => {
     sel.id = 'fixture-primary-model';
     useRoster(BASE_MODELS);
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify(EMPTY_FREE_CATALOGUE)));
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('focuses the first row on open, walks rows with the arrow keys, and closes on Escape', async () => {
     const dialog = mountAndOpen();

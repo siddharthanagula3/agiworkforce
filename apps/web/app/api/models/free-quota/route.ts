@@ -8,12 +8,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
-  buildFreeQuotaCatalogue,
   freeQuotaContextFor,
   freeQuotaPlanAllows,
   freeQuotaPlanAllowsOffering,
-  resolveFreeQuotaDecisions,
 } from '@/lib/server/free-quota-catalogue';
+import { readSharedFreeQuotaCatalogue } from '@/lib/server/free-quota-catalogue-cache';
 
 export const runtime = 'nodejs';
 
@@ -36,10 +35,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       { status: 403, headers: NO_STORE },
     );
   }
-  const decisions = await resolveFreeQuotaDecisions(
+  const catalogue = await readSharedFreeQuotaCatalogue(
     freeQuotaContextFor({ url: request.url, userId: scoped.userId }),
   );
-  const catalogue = decisions ? buildFreeQuotaCatalogue(decisions) : null;
   const offered: FreeQuotaCatalogue | null = catalogue
     ? {
         ...catalogue,

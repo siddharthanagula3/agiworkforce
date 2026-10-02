@@ -29,6 +29,7 @@ const {
   RENDER_CACHE_SECONDS,
   RENDER_CACHE_TAGS,
   SERVER_RENDER_LOCALE,
+  boundedRenderInput,
   cachedRenderInput,
   renderCacheKey,
 } = await import('../server/render-cache');
@@ -98,6 +99,68 @@ describe('render cache keys', () => {
 
     await expect(cached()).rejects.toThrow('registry exploded');
     expect(compute).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves a bounded input from the cache while its decision is inside the window', async () => {
+    const nowMs = Date.parse('2026-10-01T12:00:00Z');
+    const windowMs = RENDER_CACHE_SECONDS.liveSignal * 1_000;
+    unstableCache.mockImplementationOnce(() => async () => ({
+      value: 'cached',
+      decidedAtMs: nowMs - windowMs,
+    }));
+    const compute = vi.fn(async () => 'fresh');
+
+    const read = boundedRenderInput(compute, {
+      keyParts: ['bounded'],
+      tags: [],
+      revalidate: RENDER_CACHE_SECONDS.liveSignal,
+      nowMs,
+    });
+
+    await expect(read()).resolves.toBe('cached');
+    expect(compute).not.toHaveBeenCalled();
+  });
+
+  it('decides again when the cache hands back a stale decision', async () => {
+    const nowMs = Date.parse('2026-10-01T12:00:00Z');
+    const windowMs = RENDER_CACHE_SECONDS.liveSignal * 1_000;
+    unstableCache.mockImplementationOnce(() => async () => ({
+      value: 'stale',
+      decidedAtMs: nowMs - windowMs - 1,
+    }));
+    const compute = vi.fn(async () => 'fresh');
+
+    const read = boundedRenderInput(compute, {
+      keyParts: ['bounded-stale'],
+      tags: [],
+      revalidate: RENDER_CACHE_SECONDS.liveSignal,
+      nowMs,
+    });
+
+    await expect(read()).resolves.toBe('fresh');
+    expect(compute).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a failed fresh decision instead of the stale value', async () => {
+    const nowMs = Date.parse('2026-10-01T12:00:00Z');
+    unstableCache.mockImplementationOnce(() => async () => ({
+      value: 'stale',
+      decidedAtMs: nowMs - RENDER_CACHE_SECONDS.liveSignal * 1_000 - 1,
+    }));
+
+    const read = boundedRenderInput(
+      async () => {
+        throw new Error('shared state timed out');
+      },
+      {
+        keyParts: ['bounded-failure'],
+        tags: [],
+        revalidate: RENDER_CACHE_SECONDS.liveSignal,
+        nowMs,
+      },
+    );
+
+    await expect(read()).rejects.toThrow('shared state timed out');
   });
 
   it('names a tag per plugin so one entry can be dropped without the catalogue', () => {

@@ -1,5 +1,9 @@
 import { estimateTokens } from '@agiworkforce/routing';
-import { getModelMetadataById, getProviderOffering } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getProviderOffering,
+  providerOfferingDisplayName,
+} from '@agiworkforce/types';
 
 export const CONTEXT_RESERVE_TOKENS = 2_048;
 export const MIN_CONTEXT_BUDGET_TOKENS = 1_024;
@@ -95,7 +99,7 @@ export function evaluateModelCompatibility(
   if (offering?.quotaProbeProtocol) {
     return {
       modelId: modelId!,
-      modelName: offering.displayName,
+      modelName: providerOfferingDisplayName(modelId!) ?? offering.displayName,
       findings: [
         ...(request.hasAttachments &&
         (!offering.quotaChatImageInput || request.hasNonImageAttachments)

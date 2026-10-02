@@ -51,6 +51,7 @@ import {
 } from '@shared/stores/model-store';
 import { FreeQuotaModelSection } from './FreeQuotaModelSection';
 import { freeQuotaSelection } from '@features/chat/lib/free-quota-selection';
+import { useFreeModelSources } from '@features/chat/hooks/use-free-model-sources';
 import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { StyleSelector } from './StyleSelector';
 import { ModelCompatibilityNotice } from './ModelCompatibilityNotice';
@@ -141,7 +142,7 @@ const PICKER_ROW_ATTR = 'data-picker-row';
 const PICKER_ITEM_SELECTOR = `[${PICKER_ROW_ATTR}]`;
 const PICKER_FOCUSABLE_SELECTOR = 'button:not([disabled]), input, a[href], [tabindex="0"]';
 const PICKER_ROW_CLASS =
-  'flex h-12 w-full shrink-0 items-center gap-2.5 rounded-md px-3 text-start transition-colors focus-visible:outline-none';
+  'flex h-12 w-full shrink-0 items-center gap-2.5 rounded-md px-3 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--chat-focus-ring)]';
 const PICKER_ROW_NAME_CLASS = 'block truncate text-sm leading-5';
 const PICKER_ROW_GUIDANCE_CLASS = 'block truncate text-xs leading-4 text-muted-foreground';
 const PICKER_ROW_WRAPPED_GUIDANCE_CLASS = 'block text-xs leading-4 text-muted-foreground';
@@ -856,6 +857,9 @@ export function ComposerFooter({
 
   const handlePickerTypeAhead = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (freePlanRef.current) return;
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
+      return;
+    }
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'Backspace') {
       event.stopPropagation();
@@ -880,6 +884,7 @@ export function ComposerFooter({
     panelRef: pickerPanelRef,
     triggerRef: modelTriggerRef,
     itemSelector: PICKER_ITEM_SELECTOR,
+    disabledItemsFocusable: true,
   });
 
   const selectedModelId = useModelStore((s) => s.selectedModelId);
@@ -1065,6 +1070,7 @@ export function ComposerFooter({
     : `${lockedDisplayModel.name} ${TRIAL_SLOT_SUFFIX}`;
 
   const catalogue = useModelCatalogue(open);
+  const freeModelSources = useFreeModelSources(open);
   const { favouriteModelIds, toggleFavourite } = useModelFavourites();
 
   const lockOverrides = useMemo(() => {
@@ -1422,15 +1428,21 @@ export function ComposerFooter({
                       ) : (
                         <>
                           <FreeQuotaModelSection
-                            enabled={open}
+                            sources={freeModelSources}
                             selectedId={selectedModelId}
+                            fallback={
+                              freeDefaultModel
+                                ? {
+                                    name: freeDefaultModel.name,
+                                    row: renderModelRow(freeDefaultModel),
+                                  }
+                                : null
+                            }
                             onSelect={(id) => {
                               const model = findSelectableModel(id);
                               if (model && !modelChangePending) handleSelectModel(model);
                             }}
-                          >
-                            {freeDefaultModel ? renderModelRow(freeDefaultModel) : null}
-                          </FreeQuotaModelSection>
+                          />
 
                           {!freePlan && shortList.auto && (
                             <AutoRow

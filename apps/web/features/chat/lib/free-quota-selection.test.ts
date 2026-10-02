@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getProviderOfferings } from '@agiworkforce/types';
+import { getProviderOfferings, providerOfferingDisplayName } from '@agiworkforce/types';
 import {
   chatCompletionEndpoint,
   freeQuotaSelection,
@@ -58,7 +58,7 @@ describe('free model selection to transport', () => {
       useModelStore.getState().setSelectedModelId(offeringKey);
       expect(useModelStore.getState().selectedModelId).toBe(offeringKey);
       expect(useModelStore.getState().getSelectedModel().name).toBe(
-        getProviderOfferings()[offeringKey]!.displayName,
+        providerOfferingDisplayName(offeringKey),
       );
       expect(resolveSelectableModelId(offeringKey)).toBe(offeringKey);
       expect(CreateConversationSchema.safeParse({ model: offeringKey }).success).toBe(true);

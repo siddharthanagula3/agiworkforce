@@ -10,6 +10,7 @@ import {
   recordFreeQuotaSuspension,
 } from '@/lib/free-quota-authorization';
 import { loadFreePools, type FreeQuotaTermsReview } from '@/lib/server/free-pools';
+import { RENDER_CACHE_TAGS } from '@/lib/server/render-cache';
 import { sanitizeAuditDetail, type AuditEvent } from '@/lib/security-audit';
 type ScanModule0 = typeof import('@/lib/auth-guards');
 type ScanModule1 = typeof import('@/lib/csrf');
@@ -17,6 +18,7 @@ type ScanModule2 = typeof import('@/lib/rate-limit');
 type ScanModule3 = typeof import('@/lib/security-audit');
 type ScanModule4 = typeof import('@/lib/server/key-value');
 type ScanModule5 = typeof import('@/lib/server/free-pools');
+type ScanModule6 = typeof import('next/cache');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
@@ -24,6 +26,12 @@ const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   csrf: vi.fn(),
   termsReview: undefined as FreeQuotaTermsReview | null | undefined,
+  revalidateTag: vi.fn(),
+}));
+
+vi.mock('next/cache', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule6>()),
+  revalidateTag: mocks.revalidateTag,
 }));
 
 vi.mock('@/lib/auth-guards', async (importOriginal) => ({
@@ -158,6 +166,10 @@ it('binds a recent console check to the server key and records who made it', asy
   expect(mocks.audit).toHaveBeenCalledWith(
     expect.objectContaining({ eventType: 'admin_policy_changed', userId: 'fixture-operator' }),
   );
+  expect(mocks.revalidateTag).toHaveBeenCalledExactlyOnceWith(
+    RENDER_CACHE_TAGS.freeQuotaCatalogue,
+    { expire: 0 },
+  );
   const after = await configuredStatus();
   expect(after.attestation.record).toMatchObject({ checkedAtMs, boundToCurrentKey: true });
 });
@@ -251,6 +263,7 @@ it.each([
   expect((await attest(body)).status).toBe(400);
   expect(await stored()).toBeNull();
   expect(mocks.audit).not.toHaveBeenCalled();
+  expect(mocks.revalidateTag).not.toHaveBeenCalled();
 });
 
 it('stores nothing when the deployment holds no provider key', async () => {

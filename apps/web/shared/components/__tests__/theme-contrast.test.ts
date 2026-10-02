@@ -578,6 +578,18 @@ describe('WCAG 2.1 AA contrast ratios · large text and graphics (>= 3:1)', () =
     const ratio = contrastRatio(LIGHT_BG, focusRingLight);
     expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
   });
+
+  for (const theme of ['light', 'dark'] as const) {
+    for (const ground of ['--popover', '--background']) {
+      it(`${theme}: the focus ring on a model picker row clears 3:1 on ${ground} and on the row's muted fill`, () => {
+        const ring = colorToken(web[theme], '--focus-ring');
+        const surface = colorToken(web[theme], ground);
+        const focusedFill = tint(colorToken(web[theme], '--muted'), 0.6, surface);
+        expect(contrastRatio(ring, surface)).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+        expect(contrastRatio(ring, focusedFill)).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+      });
+    }
+  }
 });
 
 describe('the marketing design-system palette clears AA in both themes', () => {

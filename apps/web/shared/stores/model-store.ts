@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   isRoutingProfileChoice,
+  providerOfferingDisplayName,
   type ModelAvailability,
   type ModelEnvironment,
   type RoutingProfileChoice,
@@ -256,7 +257,7 @@ export function findSelectableModel(modelId: string | null | undefined): AIModel
   if (free)
     return {
       id: modelId,
-      name: free.displayName,
+      name: providerOfferingDisplayName(modelId) ?? free.displayName,
       provider: PROVIDER_LABELS[free.provider] ?? free.provider,
       providerKey: free.provider,
       description: `Free quota · ${PROVIDER_LABELS[free.provider] ?? free.provider}`,
