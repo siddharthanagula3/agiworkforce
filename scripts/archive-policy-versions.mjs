@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-// A replaced policy stays readable. For every dated version the history in
-// docs/compliance/policy-versions.json has moved past, this renders the text
-// the history last records under that date, at the commit production served
-// when a publication record names one that holds it, otherwise at the newest
-// commit that printed that date with that text, preferring one origin/main
-// already holds, and writes it where /legal/archive reads it.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
