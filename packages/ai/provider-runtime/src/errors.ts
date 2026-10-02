@@ -498,17 +498,42 @@ export const FREE_POOL_PROVIDER_HINT = 'free_pool_window';
 
 /**
  * Alibaba Model Studio answers an exhausted promotional allocation with
- * `AllocationQuota.FreeTierOnly` (HTTP 403 when "free quota only" is on) and an
- * exceeded paid allocation with `Throttling.AllocationQuota` (HTTP 429). Both
- * are quota facts about one model's pool, never credential facts: a 403 read as
+ * `AllocationQuota.FreeTierOnly` (HTTP 403 when "free quota only" is on). It is a
+ * quota fact about one model's pool, never a credential fact: a 403 read as
  * `auth` would park every route on the provider over one spent allocation.
  */
-const ALLOCATION_QUOTA_CODES: ReadonlySet<string> = new Set([
-  'allocationquota.freetieronly',
-  'throttling.allocationquota',
-]);
+const ALLOCATION_QUOTA_CODES: ReadonlySet<string> = new Set(['allocationquota.freetieronly']);
 export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
 export const FREE_TIER_ONLY_PROVIDER_HINT = 'free_tier_only';
+export const MODEL_STUDIO_ACCOUNT_BILLING_HINT = 'account_billing';
+
+const MODEL_STUDIO_FREE_TIER_EXHAUSTED_MESSAGE = 'free tier of the model has been exhausted';
+const MODEL_STUDIO_THROTTLING_CODES: ReadonlySet<string> = new Set([
+  'throttling',
+  'throttling.ratequota',
+  'throttling.burstrate',
+  'throttling.allocationquota',
+  'limit_requests',
+  'limit_burst_rate',
+  'insufficient_quota',
+]);
+const MODEL_STUDIO_ACCOUNT_BILLING_CODES: ReadonlySet<string> = new Set([
+  'arrearage',
+  'budgetlimitexceeded',
+  'prepaidbilloverdue',
+  'postpaidbilloverdue',
+  'commoditynotpurchased',
+]);
+const MODEL_STUDIO_MODEL_NOT_FOUND_CODES: ReadonlySet<string> = new Set([
+  'modelnotfound',
+  'model_not_found',
+]);
+const MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE = 'model not exist';
+const MODEL_STUDIO_MODEL_ACCESS_DENIED_CODE = 'model.accessdenied';
+const MODEL_STUDIO_CONTENT_INSPECTION_CODES: ReadonlySet<string> = new Set([
+  'datainspectionfailed',
+  'data_inspection_failed',
+]);
 
 /**
  * A discounted-capacity marketplace refuses a request whose required discount
@@ -1124,6 +1149,87 @@ export function classifyError(err: unknown): ClassifiedError {
     fallbackable: false,
     message,
   };
+}
+
+export function classifyModelStudioError(err: unknown): ClassifiedError {
+  const carried = readCarriedClassification(err);
+  if (carried) return carried;
+  const e = asSDKError(err);
+  const codes = errorCodeFields(e);
+  const status = extractStatus(e);
+  const message = extractMessage(e);
+  const lower = message.toLowerCase();
+  const withStatus = typeof status === 'number' ? { status } : {};
+  const named = (set: ReadonlySet<string>) => codes.some((code) => set.has(code));
+
+  if (named(ALLOCATION_QUOTA_CODES) || lower.includes(MODEL_STUDIO_FREE_TIER_EXHAUSTED_MESSAGE)) {
+    return {
+      category: 'quota_exhausted',
+      code: FREE_QUOTA_EXHAUSTED_CODE,
+      retryable: false,
+      fallbackable: true,
+      ...withStatus,
+      message,
+      providerHint: FREE_TIER_ONLY_PROVIDER_HINT,
+    };
+  }
+  if (named(MODEL_STUDIO_ACCOUNT_BILLING_CODES)) {
+    return {
+      category: 'billing_exhausted',
+      code: 'provider_account_billing',
+      retryable: false,
+      fallbackable: false,
+      ...withStatus,
+      message,
+      providerHint: MODEL_STUDIO_ACCOUNT_BILLING_HINT,
+    };
+  }
+  if (named(MODEL_STUDIO_THROTTLING_CODES)) {
+    const retryAfterSeconds = extractRetryAfterSeconds(e);
+    return {
+      category: 'rate_limit',
+      code: 'rate_limit_429',
+      retryable: true,
+      fallbackable: true,
+      ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+      ...withStatus,
+      message,
+    };
+  }
+  if (named(MODEL_STUDIO_CONTENT_INSPECTION_CODES)) {
+    return {
+      category: 'safety',
+      code: 'safety_refusal',
+      retryable: false,
+      fallbackable: true,
+      ...withStatus,
+      message,
+    };
+  }
+  if (codes.includes(MODEL_STUDIO_MODEL_ACCESS_DENIED_CODE)) {
+    return {
+      category: 'invalid_model',
+      code: 'model_tier_restricted',
+      retryable: false,
+      fallbackable: true,
+      ...withStatus,
+      message,
+    };
+  }
+  if (
+    named(MODEL_STUDIO_MODEL_NOT_FOUND_CODES) ||
+    lower.includes(MODEL_STUDIO_MODEL_NOT_FOUND_MESSAGE)
+  ) {
+    return {
+      category: 'invalid_model',
+      code: 'invalid_model',
+      retryable: false,
+      fallbackable: true,
+      ...withStatus,
+      message,
+    };
+  }
+  return classifyError(err);
 }
 
 export function parseContextOverflow(

@@ -124,3 +124,55 @@ describe('createQwenAdapter fallbackEndpoints (pre-first-byte fail-over)', () =>
     expect(hosts.some((h) => h.includes('mulerouter'))).toBe(false);
   }, 20_000);
 });
+
+describe('createQwenAdapter Model Studio refusals', () => {
+  function refusal(status: number, code: string, message: string): typeof fetch {
+    return vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ error: { message, type: code, param: null, code }, request_id: 'r-1' }),
+          {
+            status,
+            headers: { 'content-type': 'application/json', 'x-should-retry': 'false' },
+          },
+        ),
+    ) as unknown as typeof fetch;
+  }
+
+  async function firstError(fetchImpl: typeof fetch) {
+    const adapter = createQwenAdapter({ apiKey: 'fixture-key', fetch: fetchImpl as never });
+    for await (const chunk of adapter.stream(
+      { model: QWEN_DEFAULT_MODEL_ID, messages: [{ role: 'user', content: 'hi' }] } as never,
+      new AbortController().signal,
+    )) {
+      if (chunk.type === 'error') return chunk;
+    }
+    throw new Error('The adapter finished without an error chunk');
+  }
+
+  it('reports a per-minute token throttle as a rate limit, not as an unfunded account', async () => {
+    const chunk = await firstError(
+      refusal(
+        429,
+        'insufficient_quota',
+        'You exceeded your current quota, please check your plan and billing details.',
+      ),
+    );
+    expect(chunk.classification?.category).toBe('rate_limit');
+    expect(chunk.retryable).toBe(true);
+  });
+
+  it('reports a spent free tier as that model’s exhausted quota', async () => {
+    const chunk = await firstError(
+      refusal(
+        403,
+        'AllocationQuota.FreeTierOnly',
+        'The free tier of the model has been exhausted.',
+      ),
+    );
+    expect(chunk.classification).toMatchObject({
+      category: 'quota_exhausted',
+      providerHint: 'free_tier_only',
+    });
+  });
+});

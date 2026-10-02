@@ -29,6 +29,7 @@ export {
   ROUTE_BUDGET_EXHAUSTED_ERROR_NAME,
   ERROR_CATEGORIES,
   classifyError,
+  classifyModelStudioError,
   isErrorCategory,
   networkConditionForErrorCategory,
   toStreamErrorClassification,
@@ -36,6 +37,8 @@ export {
   DATA_POLICY_NO_ENDPOINT_CODE,
   SPENDING_CAP_PROVIDER_HINT,
   FREE_POOL_PROVIDER_HINT,
+  FREE_TIER_ONLY_PROVIDER_HINT,
+  MODEL_STUDIO_ACCOUNT_BILLING_HINT,
   type ClassifiedError,
   type ErrorCategory,
 } from './errors';
